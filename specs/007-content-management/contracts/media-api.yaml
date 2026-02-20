@@ -1,0 +1,342 @@
+openapi: 3.1.0
+info:
+  title: Media Management API
+  description: |
+    Auth0-protected REST API for uploading images and managing the media library.
+    All endpoints require a valid Auth0 JWT bearer token. Uploaded images are
+    automatically processed to generate size variants (thumbnail, small, medium, large).
+  version: 1.0.0
+  contact:
+    name: Simon Rowe
+    email: simon.rowe@gmail.com
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://simonrowe.dev
+    description: Production
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Media
+    description: Image upload and media library operations
+
+paths:
+  /api/admin/media:
+    get:
+      tags: [Media]
+      summary: List media assets
+      description: |
+        Returns a paginated list of all uploaded media assets with their variant
+        metadata. Used to populate the media library selection UI.
+      operationId: listMedia
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Page number (0-indexed)
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 24
+          description: Page size (default 24 for 6x4 grid)
+        - name: mimeType
+          in: query
+          schema:
+            type: string
+          description: Filter by MIME type (e.g., "image/jpeg")
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by file name (case-insensitive contains)
+      responses:
+        '200':
+          description: Media assets retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Media]
+      summary: Upload an image
+      description: |
+        Uploads a single image file and triggers automatic generation of size variants
+        (thumbnail 150px, small 300px, medium 600px, large 1200px). The response
+        includes the created MediaAsset with variant metadata once processing completes.
+
+        **Supported formats**: JPEG, PNG, GIF, WebP, SVG
+        **Maximum file size**: 10 MB
+      operationId: uploadMedia
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file to upload
+            encoding:
+              file:
+                contentType: image/jpeg, image/png, image/gif, image/webp, image/svg+xml
+      responses:
+        '201':
+          description: Image uploaded and variants generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaAsset'
+        '400':
+          description: Invalid file (unsupported format or exceeds size limit)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File too large (exceeds 10 MB)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/media/{id}:
+    get:
+      tags: [Media]
+      summary: Get a media asset by ID
+      operationId: getMediaAsset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MediaAsset ID
+      responses:
+        '200':
+          description: Media asset retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaAsset'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Media]
+      summary: Delete a media asset
+      description: |
+        Deletes the media asset record and all associated files (original + variants)
+        from the filesystem. Returns 409 Conflict if the media asset is currently
+        referenced by any content entity.
+      operationId: deleteMediaAsset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MediaAsset ID
+      responses:
+        '204':
+          description: Media asset and files deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Media asset is referenced by content entities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ──────────────────────────────────────────────
+  # PUBLIC MEDIA SERVING
+  # ──────────────────────────────────────────────
+  /media/{id}/{variant}:
+    get:
+      tags: [Media]
+      summary: Serve a media file
+      description: |
+        Public endpoint (no authentication required) that serves image files.
+        This endpoint is handled by Spring Boot static resource serving and
+        does not go through the admin API layer.
+      operationId: serveMedia
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MediaAsset ID
+        - name: variant
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - original
+              - thumbnail
+              - small
+              - medium
+              - large
+          description: Image variant to serve
+      responses:
+        '200':
+          description: Image file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/gif:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            image/svg+xml:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Image not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Auth0 JWT access token
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    VariantInfo:
+      type: object
+      properties:
+        path:
+          type: string
+          description: Relative path to variant file
+        url:
+          type: string
+          format: uri
+          description: Public URL to serve the variant
+        width:
+          type: integer
+          description: Variant width in pixels
+        height:
+          type: integer
+          description: Variant height in pixels
+        fileSize:
+          type: integer
+          format: int64
+          description: Variant file size in bytes
+
+    MediaAsset:
+      type: object
+      properties:
+        id:
+          type: string
+        fileName:
+          type: string
+          description: Original file name
+        mimeType:
+          type: string
+          description: MIME type of the original file
+        fileSize:
+          type: integer
+          format: int64
+          description: Original file size in bytes
+        originalUrl:
+          type: string
+          format: uri
+          description: Public URL to serve the original image
+        variants:
+          type: object
+          description: Map of variant name to variant metadata
+          properties:
+            thumbnail:
+              $ref: '#/components/schemas/VariantInfo'
+            small:
+              $ref: '#/components/schemas/VariantInfo'
+            medium:
+              $ref: '#/components/schemas/VariantInfo'
+            large:
+              $ref: '#/components/schemas/VariantInfo'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    MediaListResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaAsset'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer

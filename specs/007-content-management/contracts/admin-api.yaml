@@ -1,0 +1,1404 @@
+openapi: 3.1.0
+info:
+  title: Content Management Admin API
+  description: |
+    Auth0-protected REST API for managing website content. All endpoints require
+    a valid Auth0 JWT bearer token. Accessible only to authenticated administrators.
+  version: 1.0.0
+  contact:
+    name: Simon Rowe
+    email: simon.rowe@gmail.com
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://simonrowe.dev
+    description: Production
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Blogs
+    description: Blog post CRUD operations
+  - name: Jobs
+    description: Employment entry CRUD operations
+  - name: Skills
+    description: Skill CRUD and ordering operations
+  - name: Skill Groups
+    description: Skill group CRUD and ordering operations
+  - name: Profile
+    description: Profile single-entity management
+  - name: Social Media
+    description: Social media link CRUD operations
+  - name: Tags
+    description: Tag CRUD and bulk operations
+  - name: Tour Steps
+    description: Tour step CRUD and ordering operations
+
+paths:
+  # ──────────────────────────────────────────────
+  # BLOGS
+  # ──────────────────────────────────────────────
+  /api/admin/blogs:
+    get:
+      tags: [Blogs]
+      summary: List all blog posts
+      description: Returns all blog posts (both published and draft) for admin management.
+      operationId: listBlogs
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - name: published
+          in: query
+          schema:
+            type: boolean
+          description: Filter by publication state
+      responses:
+        '200':
+          description: Blog list retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Blogs]
+      summary: Create a new blog post
+      operationId: createBlog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogRequest'
+      responses:
+        '201':
+          description: Blog post created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Blog'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/blogs/{id}:
+    get:
+      tags: [Blogs]
+      summary: Get a blog post by ID
+      operationId: getBlog
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Blog post retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Blog'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Blogs]
+      summary: Update a blog post
+      operationId: updateBlog
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogRequest'
+      responses:
+        '200':
+          description: Blog post updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Blog'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Blogs]
+      summary: Delete a blog post
+      operationId: deleteBlog
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Blog post deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ──────────────────────────────────────────────
+  # JOBS
+  # ──────────────────────────────────────────────
+  /api/admin/jobs:
+    get:
+      tags: [Jobs]
+      summary: List all employment entries
+      operationId: listJobs
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - name: education
+          in: query
+          schema:
+            type: boolean
+          description: Filter by education flag
+      responses:
+        '200':
+          description: Job list retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Jobs]
+      summary: Create a new employment entry
+      operationId: createJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobRequest'
+      responses:
+        '201':
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/jobs/{id}:
+    get:
+      tags: [Jobs]
+      summary: Get an employment entry by ID
+      operationId: getJob
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Job retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Jobs]
+      summary: Update an employment entry
+      operationId: updateJob
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobRequest'
+      responses:
+        '200':
+          description: Job updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Jobs]
+      summary: Delete an employment entry
+      operationId: deleteJob
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Job deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ──────────────────────────────────────────────
+  # SKILLS
+  # ──────────────────────────────────────────────
+  /api/admin/skills:
+    get:
+      tags: [Skills]
+      summary: List all skills
+      operationId: listSkills
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+      responses:
+        '200':
+          description: Skill list retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Skills]
+      summary: Create a new skill
+      operationId: createSkill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillRequest'
+      responses:
+        '201':
+          description: Skill created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Skill'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/skills/{id}:
+    get:
+      tags: [Skills]
+      summary: Get a skill by ID
+      operationId: getSkill
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Skill retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Skill'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Skills]
+      summary: Update a skill
+      operationId: updateSkill
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillRequest'
+      responses:
+        '200':
+          description: Skill updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Skill'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Skills]
+      summary: Delete a skill
+      operationId: deleteSkill
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Skill deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/skills/reorder:
+    patch:
+      tags: [Skills]
+      summary: Reorder skills within a skill group
+      description: |
+        Accepts an ordered list of skill IDs representing the new display order.
+        Updates the `order` field on each skill accordingly.
+      operationId: reorderSkills
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderRequest'
+      responses:
+        '200':
+          description: Skills reordered
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # SKILL GROUPS
+  # ──────────────────────────────────────────────
+  /api/admin/skill-groups:
+    get:
+      tags: [Skill Groups]
+      summary: List all skill groups
+      operationId: listSkillGroups
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+      responses:
+        '200':
+          description: Skill group list retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillGroupListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Skill Groups]
+      summary: Create a new skill group
+      operationId: createSkillGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillGroupRequest'
+      responses:
+        '201':
+          description: Skill group created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillGroup'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/skill-groups/{id}:
+    get:
+      tags: [Skill Groups]
+      summary: Get a skill group by ID
+      operationId: getSkillGroup
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Skill group retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillGroup'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Skill Groups]
+      summary: Update a skill group
+      operationId: updateSkillGroup
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillGroupRequest'
+      responses:
+        '200':
+          description: Skill group updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillGroup'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Skill Groups]
+      summary: Delete a skill group
+      operationId: deleteSkillGroup
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Skill group deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/skill-groups/reorder:
+    patch:
+      tags: [Skill Groups]
+      summary: Reorder skill groups
+      operationId: reorderSkillGroups
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderRequest'
+      responses:
+        '200':
+          description: Skill groups reordered
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # PROFILE
+  # ──────────────────────────────────────────────
+  /api/admin/profile:
+    get:
+      tags: [Profile]
+      summary: Get the profile
+      description: Returns the single profile entity.
+      operationId: getProfile
+      responses:
+        '200':
+          description: Profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Profile not yet created
+    put:
+      tags: [Profile]
+      summary: Create or update the profile
+      description: Upserts the single profile entity.
+      operationId: upsertProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # SOCIAL MEDIA
+  # ──────────────────────────────────────────────
+  /api/admin/social-media:
+    get:
+      tags: [Social Media]
+      summary: List all social media links
+      operationId: listSocialMedia
+      responses:
+        '200':
+          description: Social media links retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SocialMediaLink'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Social Media]
+      summary: Create a social media link
+      operationId: createSocialMedia
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialMediaRequest'
+      responses:
+        '201':
+          description: Social media link created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialMediaLink'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/social-media/{id}:
+    put:
+      tags: [Social Media]
+      summary: Update a social media link
+      operationId: updateSocialMedia
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialMediaRequest'
+      responses:
+        '200':
+          description: Social media link updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialMediaLink'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Social Media]
+      summary: Delete a social media link
+      operationId: deleteSocialMedia
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Social media link deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ──────────────────────────────────────────────
+  # TAGS
+  # ──────────────────────────────────────────────
+  /api/admin/tags:
+    get:
+      tags: [Tags]
+      summary: List all tags
+      operationId: listTags
+      responses:
+        '200':
+          description: Tag list retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Tags]
+      summary: Create a new tag
+      operationId: createTag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+      responses:
+        '201':
+          description: Tag created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Tag with same name already exists
+
+  /api/admin/tags/{id}:
+    put:
+      tags: [Tags]
+      summary: Rename a tag
+      operationId: updateTag
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+      responses:
+        '200':
+          description: Tag renamed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Tag with same name already exists
+    delete:
+      tags: [Tags]
+      summary: Delete a tag
+      description: |
+        Deletes the tag and removes it from all blog posts that reference it.
+      operationId: deleteTag
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Tag deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/tags/bulk:
+    post:
+      tags: [Tags]
+      summary: Bulk create tags
+      description: Creates multiple tags at once. Skips tags that already exist.
+      operationId: bulkCreateTags
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - names
+              properties:
+                names:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of tag names to create
+      responses:
+        '201':
+          description: Tags created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────────
+  # TOUR STEPS
+  # ──────────────────────────────────────────────
+  /api/admin/tour-steps:
+    get:
+      tags: [Tour Steps]
+      summary: List all tour steps
+      operationId: listTourSteps
+      responses:
+        '200':
+          description: Tour steps retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TourStep'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Tour Steps]
+      summary: Create a tour step
+      operationId: createTourStep
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TourStepRequest'
+      responses:
+        '201':
+          description: Tour step created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TourStep'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/tour-steps/{id}:
+    put:
+      tags: [Tour Steps]
+      summary: Update a tour step
+      operationId: updateTourStep
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TourStepRequest'
+      responses:
+        '200':
+          description: Tour step updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TourStep'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Tour Steps]
+      summary: Delete a tour step
+      operationId: deleteTourStep
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Tour step deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/tour-steps/reorder:
+    patch:
+      tags: [Tour Steps]
+      summary: Reorder tour steps
+      operationId: reorderTourSteps
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderRequest'
+      responses:
+        '200':
+          description: Tour steps reordered
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Auth0 JWT access token
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: MongoDB ObjectId
+
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: Page number (0-indexed)
+
+    SizeParam:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Page size
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+
+  schemas:
+    # ──────────────────────────────────────────────
+    # COMMON
+    # ──────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 400
+        error:
+          type: string
+          example: Bad Request
+        message:
+          type: string
+          example: Validation failed
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ReorderRequest:
+      type: object
+      required:
+        - orderedIds
+      properties:
+        orderedIds:
+          type: array
+          items:
+            type: string
+          description: Ordered list of entity IDs representing new display order
+
+    # ──────────────────────────────────────────────
+    # BLOG
+    # ──────────────────────────────────────────────
+    BlogRequest:
+      type: object
+      required:
+        - title
+        - shortDescription
+        - content
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        shortDescription:
+          type: string
+          maxLength: 500
+        content:
+          type: string
+          description: Blog content in Markdown format
+        published:
+          type: boolean
+          default: false
+        featuredImage:
+          type: string
+          nullable: true
+          description: MediaAsset ID
+        tags:
+          type: array
+          items:
+            type: string
+          description: Array of Tag IDs
+        skills:
+          type: array
+          items:
+            type: string
+          description: Array of Skill IDs
+
+    Blog:
+      allOf:
+        - $ref: '#/components/schemas/BlogRequest'
+        - type: object
+          properties:
+            id:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    BlogListResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/Blog'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    # ──────────────────────────────────────────────
+    # JOB
+    # ──────────────────────────────────────────────
+    JobRequest:
+      type: object
+      required:
+        - title
+        - company
+        - startDate
+        - shortDescription
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        company:
+          type: string
+          maxLength: 200
+        companyUrl:
+          type: string
+          format: uri
+          nullable: true
+        companyImage:
+          type: string
+          nullable: true
+          description: MediaAsset ID
+        startDate:
+          type: string
+          format: date
+          description: ISO date (YYYY-MM-DD)
+        endDate:
+          type: string
+          format: date
+          nullable: true
+          description: ISO date or null for current position
+        location:
+          type: string
+          nullable: true
+        shortDescription:
+          type: string
+        longDescription:
+          type: string
+          nullable: true
+          description: Full description in Markdown format
+        education:
+          type: boolean
+          default: false
+        includeOnResume:
+          type: boolean
+          default: true
+        skills:
+          type: array
+          items:
+            type: string
+          description: Array of Skill IDs
+
+    Job:
+      allOf:
+        - $ref: '#/components/schemas/JobRequest'
+        - type: object
+          properties:
+            id:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    JobListResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/Job'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    # ──────────────────────────────────────────────
+    # SKILL
+    # ──────────────────────────────────────────────
+    SkillRequest:
+      type: object
+      required:
+        - name
+        - rating
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        rating:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+        description:
+          type: string
+          nullable: true
+          description: Skill description in Markdown
+        image:
+          type: string
+          nullable: true
+          description: MediaAsset ID
+        order:
+          type: integer
+          minimum: 0
+          default: 0
+
+    Skill:
+      allOf:
+        - $ref: '#/components/schemas/SkillRequest'
+        - type: object
+          properties:
+            id:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    SkillListResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/Skill'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    # ──────────────────────────────────────────────
+    # SKILL GROUP
+    # ──────────────────────────────────────────────
+    SkillGroupRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        rating:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        image:
+          type: string
+          nullable: true
+          description: MediaAsset ID
+        order:
+          type: integer
+          minimum: 0
+          default: 0
+        skills:
+          type: array
+          items:
+            type: string
+          description: Ordered array of Skill IDs
+
+    SkillGroup:
+      allOf:
+        - $ref: '#/components/schemas/SkillGroupRequest'
+        - type: object
+          properties:
+            id:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    SkillGroupListResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkillGroup'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    # ──────────────────────────────────────────────
+    # PROFILE
+    # ──────────────────────────────────────────────
+    ProfileRequest:
+      type: object
+      required:
+        - name
+        - title
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        title:
+          type: string
+          maxLength: 100
+        headline:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+          description: Professional bio in Markdown
+        location:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        primaryEmail:
+          type: string
+          format: email
+          nullable: true
+        secondaryEmail:
+          type: string
+          format: email
+          nullable: true
+        profileImage:
+          type: string
+          nullable: true
+          description: MediaAsset ID
+        sidebarImage:
+          type: string
+          nullable: true
+          description: MediaAsset ID
+        backgroundImage:
+          type: string
+          nullable: true
+          description: MediaAsset ID
+        mobileBackgroundImage:
+          type: string
+          nullable: true
+          description: MediaAsset ID
+
+    Profile:
+      allOf:
+        - $ref: '#/components/schemas/ProfileRequest'
+        - type: object
+          properties:
+            id:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    # ──────────────────────────────────────────────
+    # SOCIAL MEDIA
+    # ──────────────────────────────────────────────
+    SocialMediaRequest:
+      type: object
+      required:
+        - type
+        - link
+        - name
+      properties:
+        type:
+          type: string
+          enum:
+            - github
+            - linkedin
+            - twitter
+            - website
+            - stackoverflow
+            - medium
+            - other
+        link:
+          type: string
+          format: uri
+        name:
+          type: string
+          maxLength: 100
+        includeOnResume:
+          type: boolean
+          default: false
+
+    SocialMediaLink:
+      allOf:
+        - $ref: '#/components/schemas/SocialMediaRequest'
+        - type: object
+          properties:
+            id:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    # ──────────────────────────────────────────────
+    # TAG
+    # ──────────────────────────────────────────────
+    TagRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 100
+
+    Tag:
+      allOf:
+        - $ref: '#/components/schemas/TagRequest'
+        - type: object
+          properties:
+            id:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    # ──────────────────────────────────────────────
+    # TOUR STEP
+    # ──────────────────────────────────────────────
+    TourStepRequest:
+      type: object
+      required:
+        - title
+        - selector
+        - description
+        - position
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        selector:
+          type: string
+          description: CSS selector for the target page element
+        description:
+          type: string
+          description: Instructional text (supports Markdown)
+        titleImage:
+          type: string
+          nullable: true
+          description: MediaAsset ID
+        position:
+          type: string
+          enum:
+            - top
+            - bottom
+            - left
+            - right
+            - center
+        order:
+          type: integer
+          minimum: 0
+          default: 0
+
+    TourStep:
+      allOf:
+        - $ref: '#/components/schemas/TourStepRequest'
+        - type: object
+          properties:
+            id:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time

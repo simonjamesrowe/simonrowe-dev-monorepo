@@ -1,0 +1,165 @@
+openapi: 3.1.0
+info:
+  title: Resume API
+  description: >
+    REST API for generating and downloading a professional PDF resume.
+    Compiles profile data, employment history, education, and skills
+    into a formatted document. Supports the resume download feature (P4).
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: Application API base path
+
+paths:
+  /resume:
+    get:
+      operationId: downloadResume
+      summary: Download generated PDF resume
+      description: >
+        Generates and returns a PDF resume document compiled from current
+        profile, employment, education, and skills data. The PDF features
+        a two-column layout with a sidebar (contact info, links, key skills
+        with star ratings) and a main content area (professional summary,
+        employment history, education). Only jobs with includeOnResume=true
+        are included. Employment appears in reverse chronological order.
+        Education entries (isEducation=true) appear in a dedicated section.
+
+
+        The response is a binary PDF file with Content-Disposition header
+        set to trigger a file download.
+      tags:
+        - Resume
+      responses:
+        '200':
+          description: Generated PDF resume file
+          headers:
+            Content-Disposition:
+              description: Attachment filename for browser download
+              schema:
+                type: string
+              example: 'attachment; filename="simon-rowe-resume.pdf"'
+            Cache-Control:
+              description: Caching directive
+              schema:
+                type: string
+              example: 'no-cache, no-store, must-revalidate'
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '500':
+          description: >
+            Internal server error. Possible causes include missing profile
+            data or PDF generation failure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - message
+        - status
+      properties:
+        message:
+          type: string
+        status:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+
+  # The following schemas document the internal data assembled for PDF
+  # generation. They are not exposed as JSON responses but describe
+  # the data contract between services.
+
+    ResumeData:
+      type: object
+      description: >
+        Internal data model assembled by ResumeService for PDF generation.
+        Not returned as a JSON response. Documented here for contract clarity.
+      properties:
+        profile:
+          $ref: '#/components/schemas/ResumeProfile'
+        employment:
+          type: array
+          description: Jobs with includeOnResume=true and isEducation=false, reverse chronological
+          items:
+            $ref: '#/components/schemas/ResumeJob'
+        education:
+          type: array
+          description: Jobs with isEducation=true, reverse chronological
+          items:
+            $ref: '#/components/schemas/ResumeJob'
+        skillGroups:
+          type: array
+          description: All skill groups with nested skills for sidebar display
+          items:
+            $ref: '#/components/schemas/ResumeSkillGroup'
+
+    ResumeProfile:
+      type: object
+      description: Profile data for the resume sidebar (sourced from profiles collection, Spec 002)
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        location:
+          type: string
+        linkedIn:
+          type: string
+          format: uri
+        github:
+          type: string
+          format: uri
+        website:
+          type: string
+          format: uri
+
+    ResumeJob:
+      type: object
+      description: Job entry for the resume main content area
+      properties:
+        title:
+          type: string
+        company:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+          nullable: true
+        location:
+          type: string
+        longDescription:
+          type: string
+          description: Markdown content converted to PDF styled text
+
+    ResumeSkillGroup:
+      type: object
+      description: Skill group for the resume sidebar
+      properties:
+        name:
+          type: string
+        skills:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              rating:
+                type: number
+                description: Used to render filled/empty stars (0-10 scale)

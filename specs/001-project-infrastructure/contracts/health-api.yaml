@@ -1,0 +1,309 @@
+openapi: 3.1.0
+info:
+  title: simonrowe.dev Management API
+  description: |
+    Health check and monitoring endpoints exposed on the dedicated management port (8081).
+    These endpoints are provided by Spring Boot Actuator and run separately from
+    the application traffic port (8080).
+
+    This API is intended for infrastructure monitoring tools (Prometheus, load balancers,
+    Docker health checks) and operators -- not for end-user consumption.
+  version: 1.0.0
+  contact:
+    name: Simon Rowe
+    url: https://simonrowe.dev
+
+servers:
+  - url: http://localhost:8081
+    description: Local development management port
+  - url: http://backend:8081
+    description: Production (Docker internal network)
+
+paths:
+  /actuator/health:
+    get:
+      operationId: getHealth
+      summary: Service health check
+      description: |
+        Returns the aggregate health status of the backend service and all its
+        downstream dependencies (MongoDB, Kafka, Elasticsearch, disk space).
+
+        Used by Docker Compose health checks, load balancers, and monitoring dashboards.
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Service is healthy. All components are UP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: UP
+                components:
+                  mongo:
+                    status: UP
+                    details:
+                      maxWireVersion: 21
+                  kafka:
+                    status: UP
+                    details:
+                      clusterId: MkU3OEVBNTcwNTJENDM2Qk
+                      brokerId: "1"
+                  elasticsearch:
+                    status: UP
+                    details:
+                      cluster_name: docker-cluster
+                      status: green
+                      number_of_nodes: 1
+                  diskSpace:
+                    status: UP
+                    details:
+                      total: 107374182400
+                      free: 53687091200
+                      threshold: 10485760
+                      path: "/app/."
+                      exists: true
+        "503":
+          description: Service is unhealthy. One or more components are DOWN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: DOWN
+                components:
+                  mongo:
+                    status: DOWN
+                    details:
+                      error: "org.springframework.dao.DataAccessResourceFailureException: Timed out"
+                  kafka:
+                    status: UP
+                  elasticsearch:
+                    status: UP
+
+  /actuator/health/liveness:
+    get:
+      operationId: getLiveness
+      summary: Kubernetes liveness probe
+      description: |
+        Returns whether the application is alive and not in a broken state.
+        This endpoint does NOT check downstream dependencies -- it only verifies
+        the application process itself is responsive.
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Application is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimpleHealthResponse"
+              example:
+                status: UP
+
+  /actuator/health/readiness:
+    get:
+      operationId: getReadiness
+      summary: Kubernetes readiness probe
+      description: |
+        Returns whether the application is ready to receive traffic.
+        Checks that all downstream dependencies (MongoDB, Kafka, Elasticsearch)
+        are reachable and healthy.
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Application is ready to receive traffic.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimpleHealthResponse"
+              example:
+                status: UP
+        "503":
+          description: Application is not ready -- one or more dependencies are unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimpleHealthResponse"
+              example:
+                status: OUT_OF_SERVICE
+
+  /actuator/prometheus:
+    get:
+      operationId: getPrometheusMetrics
+      summary: Prometheus metrics endpoint
+      description: |
+        Exposes application metrics in Prometheus text exposition format for scraping
+        by a Prometheus server. Metrics include JVM statistics, HTTP request metrics,
+        MongoDB operation metrics, Kafka consumer/producer metrics, and custom
+        application metrics.
+
+        This endpoint is scraped by Prometheus at a configurable interval (default: 15s).
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: Prometheus metrics in text exposition format.
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP jvm_memory_used_bytes The amount of used memory
+                # TYPE jvm_memory_used_bytes gauge
+                jvm_memory_used_bytes{area="heap",id="G1 Eden Space"} 1.048576E7
+                jvm_memory_used_bytes{area="heap",id="G1 Old Gen"} 5242880.0
+                # HELP http_server_requests_seconds Duration of HTTP server request handling
+                # TYPE http_server_requests_seconds summary
+                http_server_requests_seconds_count{method="GET",status="200",uri="/api/health"} 42
+                http_server_requests_seconds_sum{method="GET",status="200",uri="/api/health"} 0.126
+                # HELP spring_data_mongodb_connections_active Active MongoDB connections
+                # TYPE spring_data_mongodb_connections_active gauge
+                spring_data_mongodb_connections_active 3
+
+  /actuator/info:
+    get:
+      operationId: getInfo
+      summary: Application information
+      description: |
+        Returns application metadata including version, build time, Git commit,
+        and Java runtime information. Useful for identifying which version is
+        deployed in each environment.
+      tags:
+        - Info
+      responses:
+        "200":
+          description: Application information.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InfoResponse"
+              example:
+                app:
+                  name: simonrowe-backend
+                  version: 1.0.0
+                build:
+                  time: "2026-02-21T10:30:00Z"
+                  artifact: simonrowe-backend
+                  group: com.simonrowe
+                git:
+                  branch: main
+                  commit:
+                    id: "a1b2c3d"
+                    time: "2026-02-21T10:00:00Z"
+                java:
+                  version: "25"
+                  vendor: "Eclipse Adoptium"
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - UP
+            - DOWN
+            - OUT_OF_SERVICE
+            - UNKNOWN
+          description: Aggregate health status of the service.
+        components:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ComponentHealth"
+          description: Health status of individual components/dependencies.
+
+    ComponentHealth:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - UP
+            - DOWN
+            - OUT_OF_SERVICE
+            - UNKNOWN
+          description: Health status of this component.
+        details:
+          type: object
+          additionalProperties: true
+          description: Component-specific health details.
+
+    SimpleHealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - UP
+            - DOWN
+            - OUT_OF_SERVICE
+          description: Simple health status without component breakdown.
+
+    InfoResponse:
+      type: object
+      properties:
+        app:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Application name.
+            version:
+              type: string
+              description: Application version.
+        build:
+          type: object
+          properties:
+            time:
+              type: string
+              format: date-time
+              description: Build timestamp.
+            artifact:
+              type: string
+              description: Build artifact name.
+            group:
+              type: string
+              description: Build group ID.
+        git:
+          type: object
+          properties:
+            branch:
+              type: string
+              description: Git branch name.
+            commit:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: Abbreviated commit SHA.
+                time:
+                  type: string
+                  format: date-time
+                  description: Commit timestamp.
+        java:
+          type: object
+          properties:
+            version:
+              type: string
+              description: Java runtime version.
+            vendor:
+              type: string
+              description: Java vendor name.
+
+tags:
+  - name: Health
+    description: Service health and dependency status endpoints.
+  - name: Metrics
+    description: Prometheus-compatible metrics endpoints.
+  - name: Info
+    description: Application metadata and build information.

@@ -1,0 +1,294 @@
+openapi: 3.1.0
+info:
+  title: Profile & Homepage API
+  description: |
+    REST API for the simonrowe.dev Profile & Homepage feature.
+    Serves the site owner's professional profile data including contact details,
+    images, and social media links. This API supports the single-page homepage
+    frontend rendering.
+  version: 1.0.0
+  contact:
+    name: Simon Rowe
+    email: simon.rowe@gmail.com
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://api.simonjamesrowe.com
+    description: Production
+
+paths:
+  /api/profile:
+    get:
+      operationId: getProfile
+      summary: Get the site owner's profile
+      description: |
+        Returns the complete profile for the site owner, including personal
+        information, contact details, image references, and all associated
+        social media links. This endpoint always returns a single profile
+        (the one-and-only profile for the site).
+      tags:
+        - Profile
+      responses:
+        "200":
+          description: Profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+              example:
+                name: "Simon Rowe"
+                firstName: "Simon"
+                lastName: "Rowe"
+                title: "Engineering Leader"
+                headline: "PASSIONATE ABOUT AI NATIVE DEV, CLOUD NATIVE APPLICATIONS, AND EMPOWERING ENGINEERING TEAMS."
+                description: "I am driven to achieve real business value by incrementally delivering features..."
+                profileImage:
+                  url: "/uploads/profile_photo.jpg"
+                  name: "profile-photo.jpg"
+                  width: 400
+                  height: 400
+                  mime: "image/jpeg"
+                  formats:
+                    small:
+                      url: "/uploads/small_profile_photo.jpg"
+                      width: 250
+                      height: 250
+                sidebarImage:
+                  url: "/uploads/sidebar_avatar.jpg"
+                  name: "sidebar-avatar.jpg"
+                  width: 100
+                  height: 100
+                  mime: "image/jpeg"
+                backgroundImage:
+                  url: "/uploads/background.jpg"
+                  name: "background.jpg"
+                  width: 1920
+                  height: 1080
+                  mime: "image/jpeg"
+                  formats:
+                    large:
+                      url: "/uploads/large_background.jpg"
+                      width: 1920
+                      height: 1080
+                mobileBackgroundImage:
+                  url: "/uploads/mobile_background.jpg"
+                  name: "mobile-background.jpg"
+                  width: 750
+                  height: 1334
+                  mime: "image/jpeg"
+                location: "London"
+                phoneNumber: "+447909083522"
+                primaryEmail: "simon.rowe@gmail.com"
+                secondaryEmail: ""
+                cvUrl: "/api/resume"
+                socialMediaLinks:
+                  - type: "github"
+                    name: "Personal Github Account"
+                    url: "https://github.com/simonrowe"
+                    includeOnResume: true
+                  - type: "linkedin"
+                    name: "Linkedin"
+                    url: "https://www.linkedin.com/in/simon-rowe-2a94ab1/"
+                    includeOnResume: false
+                  - type: "twitter"
+                    name: "Simon Rowe - Twitter"
+                    url: "https://twitter.com/rowe_simon"
+                    includeOnResume: false
+        "404":
+          description: No profile configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                status: 404
+                message: "No profile found"
+                timestamp: "2026-02-21T10:30:00Z"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                status: 500
+                message: "An unexpected error occurred"
+                timestamp: "2026-02-21T10:30:00Z"
+
+components:
+  schemas:
+    ProfileResponse:
+      type: object
+      required:
+        - name
+        - firstName
+        - lastName
+        - title
+        - headline
+        - description
+        - profileImage
+        - sidebarImage
+        - backgroundImage
+        - mobileBackgroundImage
+        - location
+        - phoneNumber
+        - primaryEmail
+        - socialMediaLinks
+      properties:
+        name:
+          type: string
+          description: Full display name of the site owner
+          example: "Simon Rowe"
+        firstName:
+          type: string
+          description: First name
+          example: "Simon"
+        lastName:
+          type: string
+          description: Last name
+          example: "Rowe"
+        title:
+          type: string
+          description: Professional title
+          example: "Engineering Leader"
+        headline:
+          type: string
+          description: Headline message displayed prominently on the homepage
+          example: "PASSIONATE ABOUT AI NATIVE DEV, CLOUD NATIVE APPLICATIONS, AND EMPOWERING ENGINEERING TEAMS."
+        description:
+          type: string
+          description: About section content in Markdown format. Supports bold, italic, links, lists, and paragraphs.
+          example: "I am driven to achieve real business value..."
+        profileImage:
+          $ref: "#/components/schemas/Image"
+        sidebarImage:
+          $ref: "#/components/schemas/Image"
+        backgroundImage:
+          $ref: "#/components/schemas/Image"
+        mobileBackgroundImage:
+          $ref: "#/components/schemas/Image"
+        location:
+          type: string
+          description: Geographic location
+          example: "London"
+        phoneNumber:
+          type: string
+          description: Contact phone number
+          example: "+447909083522"
+        primaryEmail:
+          type: string
+          format: email
+          description: Primary contact email address
+          example: "simon.rowe@gmail.com"
+        secondaryEmail:
+          type: string
+          format: email
+          description: Secondary contact email address. May be empty string if not configured.
+          example: ""
+        cvUrl:
+          type: string
+          description: URL path for downloading the CV/resume PDF. Generation owned by Spec 004.
+          example: "/api/resume"
+          nullable: true
+        socialMediaLinks:
+          type: array
+          description: List of social media profile links
+          items:
+            $ref: "#/components/schemas/SocialMediaLink"
+
+    SocialMediaLink:
+      type: object
+      required:
+        - type
+        - name
+        - url
+      properties:
+        type:
+          type: string
+          description: Platform identifier
+          enum:
+            - github
+            - linkedin
+            - twitter
+          example: "github"
+        name:
+          type: string
+          description: Display name or description of the social media link
+          example: "Personal Github Account"
+        url:
+          type: string
+          format: uri
+          description: Full URL to the external profile
+          example: "https://github.com/simonrowe"
+        includeOnResume:
+          type: boolean
+          description: Whether this link should appear on the generated resume (consumed by Spec 004)
+          default: false
+          example: true
+
+    Image:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: Image URL (relative to API base or absolute)
+          example: "/uploads/profile_photo.jpg"
+        name:
+          type: string
+          description: Original filename
+          example: "profile-photo.jpg"
+        width:
+          type: integer
+          description: Image width in pixels
+          example: 400
+        height:
+          type: integer
+          description: Image height in pixels
+          example: 400
+        mime:
+          type: string
+          description: MIME type of the image
+          example: "image/jpeg"
+        formats:
+          $ref: "#/components/schemas/ImageFormats"
+
+    ImageFormats:
+      type: object
+      description: Pre-generated responsive image variants
+      properties:
+        thumbnail:
+          $ref: "#/components/schemas/Image"
+        small:
+          $ref: "#/components/schemas/Image"
+        medium:
+          $ref: "#/components/schemas/Image"
+        large:
+          $ref: "#/components/schemas/Image"
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - message
+        - timestamp
+      properties:
+        status:
+          type: integer
+          description: HTTP status code
+          example: 404
+        message:
+          type: string
+          description: Human-readable error description
+          example: "No profile found"
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when the error occurred
+          example: "2026-02-21T10:30:00Z"
+
+tags:
+  - name: Profile
+    description: Profile and homepage data endpoints

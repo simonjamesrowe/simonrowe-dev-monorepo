@@ -1,0 +1,206 @@
+openapi: 3.1.0
+info:
+  title: Contact Form API
+  description: |
+    API for submitting contact form messages on simonrowe.dev.
+    Validates input, verifies reCAPTCHA, and sends email notification to the site owner.
+  version: 1.0.0
+  contact:
+    name: Simon Rowe
+    email: simon.rowe@gmail.com
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://simonrowe.dev
+    description: Production
+
+paths:
+  /api/contact-us:
+    post:
+      operationId: submitContactForm
+      summary: Submit a contact form message
+      description: |
+        Accepts a contact form submission, validates all fields, verifies the
+        reCAPTCHA token with Google, and sends an email notification to the site
+        owner containing all submission details including the HTTP Referer header
+        value (if present).
+      tags:
+        - Contact
+      parameters:
+        - name: Referer
+          in: header
+          required: false
+          description: |
+            The URL of the page the visitor submitted the form from.
+            Captured automatically by the browser. Included in the email
+            notification to provide context about where the visitor came from.
+          schema:
+            type: string
+            format: uri
+            example: https://simonrowe.dev/
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactRequest"
+            examples:
+              validSubmission:
+                summary: Valid contact form submission
+                value:
+                  firstName: Jane
+                  lastName: Doe
+                  email: jane.doe@example.com
+                  subject: Job opportunity
+                  message: "Hi Simon, I came across your profile and would love to discuss a potential opportunity."
+                  recaptchaToken: "03AGdBq24PBgF..."
+      responses:
+        "200":
+          description: |
+            Contact form submitted successfully. The email notification has been
+            dispatched to the site owner.
+        "400":
+          description: |
+            Validation failed. Either required fields are missing/invalid, the
+            email format is incorrect, or the reCAPTCHA verification failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+              examples:
+                missingFields:
+                  summary: Missing required fields
+                  value:
+                    errors:
+                      - field: firstName
+                        message: must not be blank
+                      - field: email
+                        message: must not be blank
+                invalidEmail:
+                  summary: Invalid email format
+                  value:
+                    errors:
+                      - field: email
+                        message: must be a well-formed email address
+                recaptchaFailed:
+                  summary: reCAPTCHA verification failed
+                  value:
+                    errors:
+                      - field: recaptchaToken
+                        message: reCAPTCHA verification failed
+        "500":
+          description: |
+            Email delivery failed. The submission was valid and reCAPTCHA passed,
+            but the email could not be sent. The visitor should retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                emailFailed:
+                  summary: Email delivery failure
+                  value:
+                    error: "Failed to send message. Please try again later."
+        "503":
+          description: |
+            The reCAPTCHA verification service is temporarily unavailable.
+            The visitor should retry later.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                recaptchaUnavailable:
+                  summary: reCAPTCHA service unavailable
+                  value:
+                    error: "Verification service temporarily unavailable. Please try again later."
+
+components:
+  schemas:
+    ContactRequest:
+      type: object
+      description: Contact form submission payload
+      required:
+        - firstName
+        - lastName
+        - email
+        - subject
+        - message
+        - recaptchaToken
+      properties:
+        firstName:
+          type: string
+          description: Visitor's first name
+          minLength: 1
+          maxLength: 100
+          example: Jane
+        lastName:
+          type: string
+          description: Visitor's last name
+          minLength: 1
+          maxLength: 100
+          example: Doe
+        email:
+          type: string
+          format: email
+          description: Visitor's email address (RFC 5321 compliant)
+          minLength: 1
+          maxLength: 254
+          example: jane.doe@example.com
+        subject:
+          type: string
+          description: Message subject line
+          minLength: 1
+          maxLength: 200
+          example: Job opportunity
+        message:
+          type: string
+          description: Message content
+          minLength: 1
+          maxLength: 5000
+          example: "Hi Simon, I came across your profile and would love to discuss a potential opportunity."
+        recaptchaToken:
+          type: string
+          description: Google reCAPTCHA v2 verification token obtained from the client-side widget
+          minLength: 1
+          example: "03AGdBq24PBgF..."
+
+    ValidationErrorResponse:
+      type: object
+      description: Response body for validation failures (HTTP 400)
+      required:
+        - errors
+      properties:
+        errors:
+          type: array
+          description: List of field-level validation errors
+          items:
+            $ref: "#/components/schemas/FieldError"
+
+    FieldError:
+      type: object
+      description: A single field validation error
+      required:
+        - field
+        - message
+      properties:
+        field:
+          type: string
+          description: The name of the field that failed validation
+          example: email
+        message:
+          type: string
+          description: Human-readable error message
+          example: must be a well-formed email address
+
+    ErrorResponse:
+      type: object
+      description: Response body for server errors (HTTP 500, 503)
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Failed to send message. Please try again later."
