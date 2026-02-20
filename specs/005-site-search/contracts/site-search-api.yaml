@@ -1,0 +1,127 @@
+openapi: 3.1.0
+info:
+  title: Site-Wide Search API
+  description: |
+    Global search endpoint for simonrowe.dev. Returns results across all content
+    types (blogs, jobs, skills) grouped by category. Powers the homepage typeahead
+    search dropdown.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://api.simonrowe.dev
+    description: Production
+
+paths:
+  /api/search:
+    get:
+      operationId: siteSearch
+      summary: Search across all content types
+      description: |
+        Performs a full-text search across blogs, jobs, and skills. Results are
+        returned grouped by content type. Each group contains up to 5 results
+        sorted by relevance. Groups with zero matching results are omitted from
+        the response.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: |
+            Search query string. Minimum 2 characters. Queries shorter than 2
+            characters return an empty response. Queries longer than 200 characters
+            are truncated. Searches across name, short description, and long
+            description fields.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 500
+          example: "java"
+      responses:
+        "200":
+          description: |
+            Grouped search results. Each group key (`blogs`, `jobs`, `skills`) is
+            present only if there are matching results for that content type. An
+            empty query or a query with no matches returns an object with no group
+            keys (empty object).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupedSearchResponse"
+              examples:
+                multipleGroups:
+                  summary: Results across multiple categories
+                  value:
+                    blogs:
+                      - name: "Building Microservices with Java"
+                        image: "/images/blogs/microservices.jpg"
+                        url: "/blogs/building-microservices"
+                      - name: "Java 25 New Features"
+                        image: "/images/blogs/java25.jpg"
+                        url: "/blogs/java-25-features"
+                    jobs:
+                      - name: "Senior Java Developer at Acme Corp"
+                        image: "/images/jobs/acme.png"
+                        url: "/employment"
+                    skills:
+                      - name: "Java"
+                        image: "/images/skills/java.png"
+                        url: "/skills"
+                singleGroup:
+                  summary: Results in only one category
+                  value:
+                    skills:
+                      - name: "Docker"
+                        image: "/images/skills/docker.png"
+                        url: "/skills"
+                noResults:
+                  summary: No matching results
+                  value: {}
+
+components:
+  schemas:
+    GroupedSearchResponse:
+      type: object
+      description: |
+        Search results grouped by content type. Only groups with at least one
+        result are included. An empty response indicates no matches found.
+      properties:
+        blogs:
+          type: array
+          description: Matching blog post results. Omitted if no blogs match.
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        jobs:
+          type: array
+          description: Matching job results. Omitted if no jobs match.
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        skills:
+          type: array
+          description: Matching skill results. Omitted if no skills match.
+          items:
+            $ref: "#/components/schemas/SearchResult"
+
+    SearchResult:
+      type: object
+      required:
+        - name
+        - url
+      properties:
+        name:
+          type: string
+          description: Display name of the content item.
+          example: "Building Microservices with Java"
+        image:
+          type: string
+          nullable: true
+          description: |
+            URL path to the thumbnail/featured image. Null if the content item
+            has no associated image.
+          example: "/images/blogs/microservices.jpg"
+        url:
+          type: string
+          description: |
+            Relative URL path to the content detail page. Used for client-side
+            navigation when the user clicks a result.
+          example: "/blogs/building-microservices"

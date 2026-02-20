@@ -1,0 +1,114 @@
+openapi: 3.1.0
+info:
+  title: Blog Search API
+  description: |
+    Blog-specific search endpoint for simonrowe.dev. Returns matching blog posts
+    with metadata suitable for the blog listing page search experience. Searches
+    across title, short description, full content, tags, and skills.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://api.simonrowe.dev
+    description: Production
+
+paths:
+  /api/search/blogs:
+    get:
+      operationId: searchBlogs
+      summary: Search blog posts
+      description: |
+        Performs a full-text search across blog posts only. Searches the title
+        (boosted 3x), tags (boosted 2x), short description (boosted 2x), full
+        content body, and associated skills. Returns up to 20 results sorted by
+        relevance score.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: |
+            Search query string. Minimum 2 characters. Queries shorter than 2
+            characters return an empty array. Queries longer than 200 characters
+            are truncated. Searches across title, short description, content,
+            tags, and skills fields.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 500
+          example: "microservices"
+      responses:
+        "200":
+          description: |
+            Array of matching blog posts sorted by relevance. Returns an empty
+            array if no blogs match the query or if the query is too short.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BlogSearchResult"
+              examples:
+                multipleResults:
+                  summary: Multiple matching blog posts
+                  value:
+                    - title: "Building Microservices with Spring Boot"
+                      shortDescription: "A comprehensive guide to building production-ready microservices using Spring Boot and Docker."
+                      image: "/images/blogs/microservices.jpg"
+                      publishedDate: "2025-11-15T00:00:00Z"
+                      url: "/blogs/building-microservices"
+                    - title: "Microservices vs Monolith Architecture"
+                      shortDescription: "Comparing architectural approaches for modern applications."
+                      image: "/images/blogs/architecture.jpg"
+                      publishedDate: "2025-09-22T00:00:00Z"
+                      url: "/blogs/microservices-vs-monolith"
+                singleResult:
+                  summary: Single matching blog post
+                  value:
+                    - title: "Getting Started with Kubernetes"
+                      shortDescription: "Deploy your first application to a Kubernetes cluster."
+                      image: "/images/blogs/kubernetes.jpg"
+                      publishedDate: "2025-08-10T00:00:00Z"
+                      url: "/blogs/getting-started-kubernetes"
+                noResults:
+                  summary: No matching blog posts
+                  value: []
+
+components:
+  schemas:
+    BlogSearchResult:
+      type: object
+      required:
+        - title
+        - url
+        - publishedDate
+      properties:
+        title:
+          type: string
+          description: Blog post title.
+          example: "Building Microservices with Spring Boot"
+        shortDescription:
+          type: string
+          nullable: true
+          description: Brief summary of the blog post.
+          example: "A comprehensive guide to building production-ready microservices using Spring Boot and Docker."
+        image:
+          type: string
+          nullable: true
+          description: |
+            URL path to the blog featured image. Null if the blog post has no
+            featured image.
+          example: "/images/blogs/microservices.jpg"
+        publishedDate:
+          type: string
+          format: date-time
+          description: |
+            Publication date in ISO-8601 format. The frontend is responsible for
+            formatting this into a human-readable display format.
+          example: "2025-11-15T00:00:00Z"
+        url:
+          type: string
+          description: |
+            Relative URL path to the blog detail page. Used for client-side
+            navigation when the user clicks a result.
+          example: "/blogs/building-microservices"

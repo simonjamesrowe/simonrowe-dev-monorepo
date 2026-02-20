@@ -1,0 +1,176 @@
+openapi: 3.1.0
+info:
+  title: Interactive Tour API
+  description: |
+    API for retrieving tour step configuration for the interactive guided tour
+    on simonrowe.dev. Tour steps are returned in display order and rendered
+    by the frontend as an overlay-based walkthrough of the homepage.
+  version: 1.0.0
+  contact:
+    name: Simon Rowe
+    url: https://simonrowe.dev
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://simonrowe.dev
+    description: Production
+
+paths:
+  /api/tour/steps:
+    get:
+      operationId: getTourSteps
+      summary: List all tour steps
+      description: |
+        Returns all configured tour steps ordered by their `order` field
+        in ascending sequence. Each step contains the information needed
+        to render a spotlight overlay and tooltip on the frontend:
+        target element selector, title, optional title image, markdown
+        description, and tooltip position.
+
+        The response is always the complete list of active tour steps.
+        There is no pagination -- the expected dataset is small (5-15 steps).
+      tags:
+        - Tour
+      responses:
+        "200":
+          description: Ordered list of tour steps
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TourStep"
+              example:
+                - id: "665a1b2c3d4e5f6a7b8c9d01"
+                  order: 1
+                  targetSelector: ".homepage-banner"
+                  title: "Welcome to My Site"
+                  titleImage: "/images/tour/welcome.png"
+                  description: "This is the **homepage banner** where you can see:\n\n- My professional title\n- A brief introduction\n\nClick *Next* to continue the tour."
+                  position: "bottom"
+                - id: "665a1b2c3d4e5f6a7b8c9d02"
+                  order: 2
+                  targetSelector: "#about-section"
+                  title: "About Me"
+                  titleImage: null
+                  description: "Here you can learn about my **professional background** and experience."
+                  position: "top"
+                - id: "665a1b2c3d4e5f6a7b8c9d03"
+                  order: 3
+                  targetSelector: ".tour-search"
+                  title: "Site Search"
+                  titleImage: "/images/tour/search-icon.png"
+                  description: "Use the **search bar** to find content across the entire site.\n\nWatch as we demonstrate a search for you!"
+                  position: "bottom"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                status: 500
+                error: "Internal Server Error"
+                message: "Failed to retrieve tour steps"
+                timestamp: "2026-02-21T10:30:00Z"
+
+components:
+  schemas:
+    TourStep:
+      type: object
+      description: |
+        A single step in the interactive guided tour. Each step identifies
+        a target DOM element to highlight, provides instructional content
+        for the tooltip, and specifies the tooltip placement.
+      required:
+        - id
+        - order
+        - targetSelector
+        - title
+        - description
+        - position
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the tour step (MongoDB ObjectId as string)
+          example: "665a1b2c3d4e5f6a7b8c9d01"
+        order:
+          type: integer
+          minimum: 1
+          description: |
+            Display sequence number. Steps are presented in ascending order
+            by this field. Must be unique across all tour steps.
+          example: 1
+        targetSelector:
+          type: string
+          minLength: 1
+          description: |
+            CSS selector identifying the DOM element to highlight during
+            this tour step. The frontend resolves this using
+            `document.querySelector()`. Examples: `.tour-search`,
+            `#about-section`, `[data-tour="skills"]`.
+          example: ".homepage-banner"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Short heading displayed at the top of the tooltip
+          example: "Welcome to My Site"
+        titleImage:
+          type: string
+          nullable: true
+          description: |
+            URL path to an image displayed alongside the title in the
+            tooltip header. Relative to the backend API base URL.
+            Null when no image is configured for this step.
+          example: "/images/tour/welcome.png"
+        description:
+          type: string
+          minLength: 1
+          description: |
+            Instructional text displayed in the tooltip body. Supports
+            Markdown formatting including bold, italic, unordered lists,
+            ordered lists, paragraphs, and inline links. Rendered by
+            react-markdown on the frontend.
+          example: "This is the **homepage banner** where you can see:\n\n- My professional title\n- A brief introduction"
+        position:
+          type: string
+          enum:
+            - top
+            - bottom
+            - left
+            - right
+            - center
+          description: |
+            Tooltip placement relative to the highlighted element.
+            Determines where the tooltip appears adjacent to the
+            spotlight cutout on the overlay.
+          example: "bottom"
+
+    ErrorResponse:
+      type: object
+      description: Standard error response format
+      required:
+        - status
+        - error
+        - message
+        - timestamp
+      properties:
+        status:
+          type: integer
+          description: HTTP status code
+          example: 500
+        error:
+          type: string
+          description: HTTP status text
+          example: "Internal Server Error"
+        message:
+          type: string
+          description: Human-readable error description
+          example: "Failed to retrieve tour steps"
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when the error occurred
+          example: "2026-02-21T10:30:00Z"

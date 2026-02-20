@@ -1,0 +1,350 @@
+openapi: 3.1.0
+info:
+  title: Blog System API
+  description: |
+    REST API for the simonrowe.dev blog system. Provides endpoints for
+    listing published blog posts, retrieving individual blog articles,
+    fetching latest posts for the homepage preview, and searching blog
+    content via Elasticsearch.
+  version: 1.0.0
+  contact:
+    name: Simon Rowe
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+paths:
+  /api/blogs:
+    get:
+      operationId: listPublishedBlogs
+      summary: List all published blog posts
+      description: |
+        Returns all published blog posts sorted by creation date (newest first).
+        Unpublished posts are excluded (FR-003). Each blog includes resolved
+        tag and skill references for display in listing cards (FR-001).
+      tags:
+        - Blogs
+      responses:
+        "200":
+          description: List of published blog posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BlogSummary"
+              example:
+                - id: "5f0215c69d8081001fd38fa1"
+                  title: "Creating a rich web app that can be hosted from home"
+                  shortDescription: "A quick introduction into the various components of my personal website..."
+                  featuredImageUrl: "/images/blogs/web-app-from-home.jpg"
+                  createdDate: "2020-07-05T17:29:26.731Z"
+                  tags:
+                    - name: "Kubernetes"
+                    - name: "Jenkins"
+                    - name: "Docker"
+                  skills:
+                    - id: "5f635c2e5ee4c9001d2b963c"
+                      name: "Kubernetes"
+
+  /api/blogs/latest:
+    get:
+      operationId: getLatestBlogs
+      summary: Get the most recently published blog posts
+      description: |
+        Returns the N most recently published blog posts for the homepage
+        preview section (FR-012). Defaults to 3 posts. Only published posts
+        are returned.
+      tags:
+        - Blogs
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of posts to return. Defaults to 3.
+          required: false
+          schema:
+            type: integer
+            default: 3
+            minimum: 1
+            maximum: 10
+      responses:
+        "200":
+          description: List of latest published blog posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BlogSummary"
+        "400":
+          description: Invalid limit parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/blogs/{id}:
+    get:
+      operationId: getBlogById
+      summary: Get a single blog post by ID
+      description: |
+        Returns the full blog post including Markdown content for rendering
+        on the detail page (FR-004, FR-006). Only published posts are
+        accessible. Requesting an unpublished or non-existent post returns 404.
+      tags:
+        - Blogs
+      parameters:
+        - name: id
+          in: path
+          description: MongoDB ObjectId of the blog post
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-fA-F0-9]{24}$"
+      responses:
+        "200":
+          description: Full blog post with Markdown content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogDetail"
+              example:
+                id: "5f0215c69d8081001fd38fa1"
+                title: "Creating a rich web app that can be hosted from home"
+                shortDescription: "A quick introduction into the various components of my personal website..."
+                content: "I'm the kind of person that learns by doing..."
+                featuredImageUrl: "/images/blogs/web-app-from-home.jpg"
+                createdDate: "2020-07-05T17:29:26.731Z"
+                tags:
+                  - name: "Kubernetes"
+                  - name: "Jenkins"
+                skills:
+                  - id: "5f635c2e5ee4c9001d2b963c"
+                    name: "Kubernetes"
+        "404":
+          description: Blog post not found or not published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                status: 404
+                message: "Blog post not found"
+                timestamp: "2026-02-21T10:30:00Z"
+
+  /api/search/blogs:
+    get:
+      operationId: searchBlogs
+      summary: Search blog posts via typeahead
+      description: |
+        Searches published blog posts against Elasticsearch index matching
+        on title, short description, and full content (FR-009). Returns
+        lightweight results for the typeahead dropdown (FR-010, FR-011).
+        Results are sorted by relevance score.
+      tags:
+        - Search
+      parameters:
+        - name: q
+          in: query
+          description: |
+            Search query string. Minimum 2 characters. Matched against
+            title (3x boost), short description (2x boost), and content.
+          required: true
+          schema:
+            type: string
+            minLength: 2
+      responses:
+        "200":
+          description: Search results matching the query
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BlogSearchResult"
+              example:
+                - id: "5f0215c69d8081001fd38fa1"
+                  title: "Creating a rich web app that can be hosted from home"
+                  thumbnailImage: "/images/blogs/web-app-from-home-thumb.jpg"
+                  createdDate: "2020-07-05T17:29:26.731Z"
+                - id: "5feed1c867bdd6001e9c12cb"
+                  title: "Spring Boot Integration Testing with Testcontainers"
+                  thumbnailImage: "/images/blogs/testcontainers-thumb.jpg"
+                  createdDate: "2021-01-01T10:00:51.082Z"
+        "400":
+          description: Query parameter missing or too short
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    BlogSummary:
+      type: object
+      description: Blog post summary for listing pages and homepage preview
+      required:
+        - id
+        - title
+        - shortDescription
+        - createdDate
+        - tags
+      properties:
+        id:
+          type: string
+          description: MongoDB ObjectId
+          example: "5f0215c69d8081001fd38fa1"
+        title:
+          type: string
+          description: Blog post title
+          example: "Creating a rich web app that can be hosted from home"
+        shortDescription:
+          type: string
+          description: Brief summary for preview display
+          example: "A quick introduction into the various components of my personal website..."
+        featuredImageUrl:
+          type: string
+          nullable: true
+          description: URL to the featured image. Null if no image is set.
+          example: "/images/blogs/web-app-from-home.jpg"
+        createdDate:
+          type: string
+          format: date-time
+          description: Publication date in ISO 8601 format
+          example: "2020-07-05T17:29:26.731Z"
+        tags:
+          type: array
+          description: Associated topic tags. May be empty.
+          items:
+            $ref: "#/components/schemas/TagRef"
+        skills:
+          type: array
+          description: Associated skills for cross-referencing. May be empty.
+          items:
+            $ref: "#/components/schemas/SkillRef"
+
+    BlogDetail:
+      type: object
+      description: Full blog post including Markdown content
+      required:
+        - id
+        - title
+        - shortDescription
+        - content
+        - createdDate
+        - tags
+      properties:
+        id:
+          type: string
+          description: MongoDB ObjectId
+        title:
+          type: string
+          description: Blog post title
+        shortDescription:
+          type: string
+          description: Brief summary
+        content:
+          type: string
+          description: |
+            Full article content in Markdown format. The frontend is
+            responsible for rendering this to HTML with appropriate
+            formatting, syntax highlighting, and link handling.
+        featuredImageUrl:
+          type: string
+          nullable: true
+          description: URL to the featured image
+        createdDate:
+          type: string
+          format: date-time
+          description: Publication date in ISO 8601 format
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/TagRef"
+        skills:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkillRef"
+
+    BlogSearchResult:
+      type: object
+      description: Lightweight blog result for typeahead search dropdown
+      required:
+        - id
+        - title
+        - createdDate
+      properties:
+        id:
+          type: string
+          description: MongoDB ObjectId for navigation to detail page
+          example: "5f0215c69d8081001fd38fa1"
+        title:
+          type: string
+          description: Blog post title
+          example: "Creating a rich web app that can be hosted from home"
+        thumbnailImage:
+          type: string
+          nullable: true
+          description: URL to thumbnail image for search result display
+          example: "/images/blogs/web-app-from-home-thumb.jpg"
+        createdDate:
+          type: string
+          format: date-time
+          description: Publication date for display in search results
+          example: "2020-07-05T17:29:26.731Z"
+
+    TagRef:
+      type: object
+      description: Tag reference with display name
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Tag display name
+          example: "Kubernetes"
+
+    SkillRef:
+      type: object
+      description: Skill reference for cross-linking to Spec 004
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Skill document ObjectId
+          example: "5f635c2e5ee4c9001d2b963c"
+        name:
+          type: string
+          description: Skill display name
+          example: "Kubernetes"
+
+    ErrorResponse:
+      type: object
+      description: Standard error response
+      required:
+        - status
+        - message
+        - timestamp
+      properties:
+        status:
+          type: integer
+          description: HTTP status code
+          example: 404
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Blog post not found"
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp in ISO 8601 format
+          example: "2026-02-21T10:30:00Z"
+
+tags:
+  - name: Blogs
+    description: Blog post CRUD and listing operations
+  - name: Search
+    description: Elasticsearch-powered blog search

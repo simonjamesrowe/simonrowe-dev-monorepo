@@ -1,0 +1,272 @@
+openapi: 3.1.0
+info:
+  title: Jobs API
+  description: >
+    REST API for browsing employment and education entries.
+    Supports the employment timeline (P2) and skill-job correlation (P3) features.
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: Application API base path
+
+paths:
+  /jobs:
+    get:
+      operationId: getAllJobs
+      summary: Get all jobs in reverse chronological order
+      description: >
+        Returns all employment and education entries sorted by startDate
+        descending (most recent first). Used to render the employment
+        timeline on the homepage. Includes lightweight skill references
+        (IDs and names only, no full skill details).
+      tags:
+        - Jobs
+      responses:
+        '200':
+          description: List of all jobs in reverse chronological order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JobSummary'
+              example:
+                - id: "5e53704f11c196001d06f914"
+                  title: "Software Engineering Lead"
+                  company: "Upp Technologies"
+                  companyUrl: "https://upp.ai"
+                  startDate: "2019-04-15"
+                  endDate: "2020-05-01"
+                  location: "London"
+                  shortDescription: "Hands-on lead engineer in a small cross-functional team."
+                  isEducation: false
+                  companyImage:
+                    url: "/uploads/upp-logo.png"
+                    formats:
+                      thumbnail:
+                        url: "/uploads/thumbnail_upp-logo.png"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/{id}:
+    get:
+      operationId: getJobById
+      summary: Get job detail with resolved skills
+      description: >
+        Returns a single job by ID with full details including the long
+        description (markdown), and fully resolved skill objects (not just
+        IDs). Used for the job detail drawer with About and Skills tabs.
+      tags:
+        - Jobs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Job document ID
+          schema:
+            type: string
+          example: "5e53704f11c196001d06f914"
+      responses:
+        '200':
+          description: Job detail with resolved skills
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobDetail'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    JobSummary:
+      type: object
+      description: Job entry for timeline display (no long description, no resolved skills)
+      required:
+        - id
+        - title
+        - company
+        - startDate
+        - shortDescription
+        - isEducation
+        - includeOnResume
+      properties:
+        id:
+          type: string
+          description: MongoDB document ID
+        title:
+          type: string
+          description: Job title / position name
+        company:
+          type: string
+          description: Company or institution name
+        companyUrl:
+          type: string
+          format: uri
+          description: Company website URL
+        companyImage:
+          $ref: '#/components/schemas/Image'
+        startDate:
+          type: string
+          format: date
+          description: Position start date (YYYY-MM-DD)
+        endDate:
+          type: string
+          format: date
+          nullable: true
+          description: Position end date. Null for current/ongoing positions.
+        location:
+          type: string
+          description: Geographic location
+        shortDescription:
+          type: string
+          description: Brief description for timeline display
+        isEducation:
+          type: boolean
+          description: True if this is an educational experience
+        includeOnResume:
+          type: boolean
+          description: True if this job should appear in the generated PDF resume
+
+    JobDetail:
+      type: object
+      description: Full job detail with resolved skill objects
+      required:
+        - id
+        - title
+        - company
+        - startDate
+        - shortDescription
+        - longDescription
+        - isEducation
+        - includeOnResume
+        - skills
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        company:
+          type: string
+        companyUrl:
+          type: string
+          format: uri
+        companyImage:
+          $ref: '#/components/schemas/Image'
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+          nullable: true
+        location:
+          type: string
+        shortDescription:
+          type: string
+        longDescription:
+          type: string
+          description: Full position description in markdown format
+        isEducation:
+          type: boolean
+        includeOnResume:
+          type: boolean
+        skills:
+          type: array
+          description: >
+            Fully resolved skill objects used in this position.
+            Sorted alphabetically by name.
+          items:
+            $ref: '#/components/schemas/SkillReference'
+
+    SkillReference:
+      type: object
+      description: Skill summary shown within job detail Skills tab
+      required:
+        - id
+        - name
+        - rating
+        - skillGroupId
+      properties:
+        id:
+          type: string
+          description: Skill unique identifier
+        name:
+          type: string
+        rating:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+        image:
+          $ref: '#/components/schemas/Image'
+        skillGroupId:
+          type: string
+          description: >
+            Parent skill group ID. Used for bidirectional navigation:
+            clicking a skill navigates to /skills-groups/{skillGroupId}#{id}
+
+    Image:
+      type: object
+      nullable: true
+      description: Image with optional format variants
+      properties:
+        url:
+          type: string
+        name:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        mime:
+          type: string
+        formats:
+          type: object
+          properties:
+            thumbnail:
+              $ref: '#/components/schemas/ImageFormat'
+            small:
+              $ref: '#/components/schemas/ImageFormat'
+            medium:
+              $ref: '#/components/schemas/ImageFormat'
+            large:
+              $ref: '#/components/schemas/ImageFormat'
+
+    ImageFormat:
+      type: object
+      properties:
+        url:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+        - status
+      properties:
+        message:
+          type: string
+        status:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time

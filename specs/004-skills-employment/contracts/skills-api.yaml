@@ -1,0 +1,306 @@
+openapi: 3.1.0
+info:
+  title: Skills API
+  description: >
+    REST API for browsing skill category groups and individual skills.
+    Supports the skills grid (P1) and skill-job correlation (P3) features.
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: Application API base path
+
+paths:
+  /skills:
+    get:
+      operationId: getAllSkillGroups
+      summary: Get all skill groups with nested skills
+      description: >
+        Returns all skill category groups sorted by displayOrder, each containing
+        its embedded skills array also sorted by displayOrder. Used to render
+        the skills grid on the homepage.
+      tags:
+        - Skills
+      responses:
+        '200':
+          description: List of all skill groups with nested skills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SkillGroupSummary'
+              example:
+                - id: "5f6359e55ee4c9001d2b9628"
+                  name: "Spring"
+                  rating: 9.5
+                  displayOrder: 2
+                  image:
+                    url: "/uploads/spring-logo.png"
+                    formats:
+                      thumbnail:
+                        url: "/uploads/thumbnail_spring-logo.png"
+                  skills:
+                    - id: "5f635b7e5ee4c9001d2b9633"
+                      name: "Spring Boot"
+                      rating: 10
+                      displayOrder: 1
+                      image:
+                        url: "/uploads/spring-boot.png"
+                        formats:
+                          thumbnail:
+                            url: "/uploads/thumbnail_spring-boot.png"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /skills/{id}:
+    get:
+      operationId: getSkillGroupById
+      summary: Get skill group detail with related jobs
+      description: >
+        Returns a single skill group by ID with full details including
+        description, all nested skills with their descriptions, and for
+        each skill, the list of jobs that utilized that skill. Used for
+        the skill group detail drawer and skill-job correlation display.
+      tags:
+        - Skills
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Skill group document ID
+          schema:
+            type: string
+          example: "5f6359e55ee4c9001d2b9628"
+      responses:
+        '200':
+          description: Skill group detail with correlated jobs per skill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillGroupDetail'
+        '404':
+          description: Skill group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    SkillGroupSummary:
+      type: object
+      description: Skill category group with nested skills (no job correlations)
+      required:
+        - id
+        - name
+        - rating
+        - displayOrder
+        - skills
+      properties:
+        id:
+          type: string
+          description: MongoDB document ID
+        name:
+          type: string
+          description: Category group name
+        rating:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+          description: Aggregated proficiency rating from child skills
+        displayOrder:
+          type: integer
+          description: Sort order for grid display
+        description:
+          type: string
+          nullable: true
+          description: Category description (markdown)
+        image:
+          $ref: '#/components/schemas/Image'
+        skills:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkillSummary'
+
+    SkillGroupDetail:
+      type: object
+      description: Full skill group detail with job correlations per skill
+      required:
+        - id
+        - name
+        - rating
+        - displayOrder
+        - skills
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        rating:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+        displayOrder:
+          type: integer
+        description:
+          type: string
+          nullable: true
+        image:
+          $ref: '#/components/schemas/Image'
+        skills:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkillDetail'
+
+    SkillSummary:
+      type: object
+      description: Individual skill without job correlations
+      required:
+        - id
+        - name
+        - rating
+        - displayOrder
+      properties:
+        id:
+          type: string
+          description: Skill unique identifier
+        name:
+          type: string
+        rating:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+        displayOrder:
+          type: integer
+        description:
+          type: string
+          nullable: true
+          description: Skill description (markdown)
+        image:
+          $ref: '#/components/schemas/Image'
+
+    SkillDetail:
+      type: object
+      description: Individual skill with correlated jobs
+      required:
+        - id
+        - name
+        - rating
+        - displayOrder
+        - jobs
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        rating:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+        displayOrder:
+          type: integer
+        description:
+          type: string
+          nullable: true
+        image:
+          $ref: '#/components/schemas/Image'
+        jobs:
+          type: array
+          description: Jobs that utilized this skill, in chronological order
+          items:
+            $ref: '#/components/schemas/JobReference'
+
+    JobReference:
+      type: object
+      description: Lightweight job reference shown within skill detail
+      required:
+        - id
+        - title
+        - company
+        - startDate
+      properties:
+        id:
+          type: string
+          description: Job document ID
+        title:
+          type: string
+        company:
+          type: string
+        startDate:
+          type: string
+          format: date
+          description: ISO date (YYYY-MM-DD)
+        endDate:
+          type: string
+          format: date
+          nullable: true
+          description: Null for current positions
+        companyImage:
+          $ref: '#/components/schemas/Image'
+
+    Image:
+      type: object
+      nullable: true
+      description: Image with optional format variants
+      properties:
+        url:
+          type: string
+          description: Primary image URL
+        name:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        mime:
+          type: string
+        formats:
+          type: object
+          properties:
+            thumbnail:
+              $ref: '#/components/schemas/ImageFormat'
+            small:
+              $ref: '#/components/schemas/ImageFormat'
+            medium:
+              $ref: '#/components/schemas/ImageFormat'
+            large:
+              $ref: '#/components/schemas/ImageFormat'
+
+    ImageFormat:
+      type: object
+      properties:
+        url:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+        - status
+      properties:
+        message:
+          type: string
+        status:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
