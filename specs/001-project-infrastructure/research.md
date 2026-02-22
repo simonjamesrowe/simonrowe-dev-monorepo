@@ -6,25 +6,25 @@
 
 ---
 
-## 1. Spring Boot 4 + Java 25 Setup
+## 1. Spring Boot 3.5.x + Java 21 Setup
 
 ### Decision
 
-Use Spring Boot 4.x with Java 25 as the backend runtime. Enable virtual threads by default via `spring.threads.virtual.enabled=true` in application configuration. Use the Spring Boot 4 baseline which requires Java 17+ and has first-class support for Java 21+ features including virtual threads, pattern matching, records, and sealed classes.
+Use Spring Boot 3.5.x with Java 21 (current LTS) as the backend runtime. Enable virtual threads by default via `spring.threads.virtual.enabled=true` in application configuration. Java 21 provides virtual threads (stable), pattern matching, records, and sealed classes. Spring Boot 3.5.x has mature support for GraalVM native images via `bootBuildImage` and the `org.graalvm.buildtools.native` plugin (see section 13).
 
 ### Rationale
 
-- Spring Boot 4 is the current major release line with long-term support and active development.
-- Java 25 provides virtual threads (Project Loom, stable since Java 21), enabling high-throughput I/O-bound workloads (MongoDB queries, Elasticsearch calls, Kafka interactions) without reactive programming complexity.
+- Spring Boot 3.5.x is the current stable release line with long-term support and active development.
+- Java 21 is the current LTS release providing virtual threads (Project Loom), enabling high-throughput I/O-bound workloads (MongoDB queries, Elasticsearch calls, Kafka interactions) without reactive programming complexity.
 - Virtual threads eliminate the need for WebFlux/reactive stack while achieving comparable scalability for I/O-bound work, aligning with the Simplicity principle.
-- Pattern matching for `switch` and `instanceof`, record patterns, and string templates improve code clarity.
-- Spring Boot 4 includes built-in support for GraalVM native images if needed in the future (YAGNI -- not configured now).
+- Pattern matching for `switch` and `instanceof`, record patterns improve code clarity.
+- Spring Boot 3.5.x includes built-in support for GraalVM native images via `bootBuildImage` and the `org.graalvm.buildtools.native` plugin (see section 13).
 
 ### Alternatives Considered
 
 | Alternative | Reason Rejected |
 |------------|-----------------|
-| Spring Boot 3.x + Java 21 | Spring Boot 4 is current; Java 25 provides latest language features without maintenance burden of older version. |
+| Spring Boot 4.x | Not yet released as stable. Spring Boot 3.5.x is the current stable line with full GraalVM native image support. |
 | Spring WebFlux (reactive) | Virtual threads provide equivalent concurrency benefits with simpler imperative programming model. Constitution Principle V (Simplicity) favors this approach. |
 | Quarkus / Micronaut | Spring Boot has the largest ecosystem, most extensive documentation, and best integration with Spring Data MongoDB, Spring Kafka, and Spring Data Elasticsearch. No concrete requirement justifies switching frameworks. |
 | Kotlin (JVM) | Java is specified in the constitution. Kotlin DSL is used for Gradle builds only. |
@@ -166,26 +166,39 @@ management:
 
 ---
 
-## 6. OpenTelemetry Integration with Spring Boot 4
+## 6. OpenTelemetry Integration via Spring Boot Starter
 
 ### Decision
 
-Use the OpenTelemetry Java Agent for automatic instrumentation of the Spring Boot backend. The agent is attached at runtime via JVM arguments in the Dockerfile. Traces are exported using the OTLP protocol to an OpenTelemetry Collector sidecar in the production Docker Compose stack.
+Use the OpenTelemetry Spring Boot Starter for compile-time instrumentation of the Spring Boot backend. The Java Agent CANNOT be used because the backend is compiled to a GraalVM native image, which does not support `-javaagent` bytecode instrumentation.
 
-For local development, tracing is configured but exports to a no-op endpoint (or optionally to Jaeger if the developer starts it).
-
-Configuration via environment variables:
+Dependencies in `backend/build.gradle.kts`:
+```kotlin
+implementation("io.opentelemetry.instrumentation:opentelemetry-spring-boot-starter")
+implementation("io.opentelemetry:opentelemetry-exporter-otlp")
 ```
-OTEL_SERVICE_NAME=simonrowe-backend
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
-OTEL_METRICS_EXPORTER=none  # Prometheus handles metrics
-OTEL_LOGS_EXPORTER=none     # Structured logging handles logs
+
+Traces are exported using the OTLP protocol to an OpenTelemetry Collector sidecar in the production Docker Compose stack.
+
+Configuration via `application.yml`:
+```yaml
+otel:
+  service:
+    name: simonrowe-backend
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+  metrics:
+    exporter: none
+  logs:
+    exporter: none
 ```
 
 ### Rationale
 
-- OpenTelemetry Java Agent provides zero-code instrumentation for Spring Boot, JDBC, HTTP clients, Kafka, and Elasticsearch.
-- Agent-based approach requires no code changes and automatically captures spans for all supported libraries.
+- GraalVM native images perform ahead-of-time (AOT) compilation; Java agents that rely on runtime bytecode manipulation are fundamentally incompatible.
+- The OpenTelemetry Spring Boot Starter provides compile-time auto-configuration that works with Spring AOT and native images.
+- The starter integrates with Spring's auto-configuration system and provides instrumentation for Spring MVC, Spring Data, Spring Kafka, and RestClient.
 - OTLP is the standard export protocol, compatible with any OpenTelemetry-compatible backend (Jaeger, Zipkin, Grafana Tempo, etc.).
 - Disabling OTel metrics and logs exporters avoids duplication with Prometheus (metrics) and structured logging (logs).
 
@@ -193,10 +206,10 @@ OTEL_LOGS_EXPORTER=none     # Structured logging handles logs
 
 | Alternative | Reason Rejected |
 |------------|-----------------|
-| Micrometer Tracing (Spring Boot native) | OpenTelemetry provides richer auto-instrumentation and is vendor-neutral. Micrometer Tracing's bridge to OTel adds an unnecessary layer. |
-| Manual instrumentation | Agent-based approach is simpler and covers more surface area automatically. Manual instrumentation can be added later for custom spans if needed. |
+| OpenTelemetry Java Agent | Incompatible with GraalVM native images. Requires runtime bytecode instrumentation that AOT compilation eliminates. |
+| Micrometer Tracing with OTel bridge | Viable alternative but adds an extra abstraction layer. The OTel Spring Boot Starter provides more direct OpenTelemetry integration with better community support for native images. |
+| Manual instrumentation | Too much boilerplate. The starter provides automatic instrumentation for all Spring-supported libraries. |
 | Jaeger client directly | Jaeger recommends migrating to OpenTelemetry. OTel is the industry standard. |
-| OpenTelemetry SDK (no agent) | Agent provides automatic instrumentation with zero code changes. SDK requires manual configuration of each instrumentation library. |
 
 ---
 
@@ -435,19 +448,68 @@ services:
 
 ---
 
+## 13. GraalVM Native Image via bootBuildImage
+
+### Decision
+
+Compile the backend to a GraalVM native image using the `org.graalvm.buildtools.native` Gradle plugin. The container image is produced by `./gradlew bootBuildImage` using Cloud Native Buildpacks (Paketo). No `Dockerfile.backend` is used.
+
+Configuration in `backend/build.gradle.kts`:
+```kotlin
+plugins {
+    id("org.graalvm.buildtools.native")
+}
+```
+
+Build the native image container:
+```bash
+./gradlew bootBuildImage \
+  --imageName=ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:latest
+```
+
+### Rationale
+
+- Constitution Principle I mandates that the backend container MUST be built via `bootBuildImage` (Cloud Native Buildpacks), not a Dockerfile.
+- Constitution Principle II mandates GraalVM native image compilation via the `org.graalvm.buildtools.native` plugin.
+- Native images provide sub-second startup time (~0.08s vs ~5-10s for JVM), significantly improving production deployment speed and container orchestration responsiveness.
+- No JVM in the runtime image reduces container size and attack surface.
+- Cloud Native Buildpacks (Paketo) handle all build complexity: GraalVM installation, AOT processing, native compilation, and minimal container creation.
+- Spring Boot 3.5.x has mature native image support with AOT processing that generates reflection/proxy/resource configurations automatically.
+
+### Implications
+
+- **No `-javaagent`**: OpenTelemetry Java Agent cannot be used. The OpenTelemetry Spring Boot Starter provides compile-time instrumentation instead (see section 6).
+- **No `Dockerfile.backend`**: The `bootBuildImage` task replaces the multi-stage Dockerfile. The Paketo builder produces a minimal OCI image.
+- **AOT processing**: Spring AOT generates metadata at build time. `@Profile` and runtime bean definition changes have restrictions.
+- **Build time**: Native image compilation is significantly slower than JVM compilation (~3-5 minutes vs ~30 seconds). This is acceptable for CI/CD but developers use `bootRun` (JVM mode) for local development.
+- **Docker required**: `bootBuildImage` uses Docker to run the Buildpack builder. Docker must be running for the build.
+- **Memory**: The Buildpack builder requires ~8GB RAM during native compilation. CI runners and Docker Desktop must be configured accordingly.
+
+### Alternatives Considered
+
+| Alternative | Reason Rejected |
+|------------|-----------------|
+| Multi-stage Dockerfile with JDK/JRE | Constitution mandates `bootBuildImage`. Dockerfiles are more error-prone and require manual base image management. |
+| JVM-mode `bootBuildImage` (no native) | Constitution mandates GraalVM native image. JVM mode would still work with `bootBuildImage` but misses the startup/size benefits. |
+| Buildpacks without GraalVM | Constitution mandates native image compilation. Standard Buildpacks produce JVM-based images. |
+| GraalVM native-image CLI directly | `bootBuildImage` with Paketo abstracts all GraalVM toolchain management. Direct CLI use requires manual installation and configuration. |
+
+---
+
 ## Summary of Key Decisions
 
 | # | Decision | Key Technology | Constitution Alignment |
 |---|----------|---------------|----------------------|
-| 1 | Spring Boot 4 + Java 25 with virtual threads | Spring Boot 4.x, Java 25 | Principle II |
+| 1 | Spring Boot 3.5.x + Java 21 with virtual threads | Spring Boot 3.5.x, Java 21 | Principle II |
 | 2 | Gradle Kotlin DSL multi-project with Version Catalog | Gradle, Kotlin DSL | Principle II |
 | 3 | Docker Compose with separate dev/prod configs | Docker Compose | Principle I |
 | 4 | Dual GitHub Actions workflows (CI + Publish) | GitHub Actions, ghcr.io | Principle I, III |
 | 5 | Actuator on separate management port | Spring Boot Actuator | Principle II, IV |
-| 6 | OpenTelemetry Java Agent for tracing | OpenTelemetry, OTLP | Principle IV |
+| 6 | OpenTelemetry Spring Boot Starter for tracing | OpenTelemetry Starter, OTLP | Principle IV |
 | 7 | Testcontainers for integration tests | Testcontainers, JUnit 5 | Principle III |
 | 8 | Checkstyle with Google Java Style config | Checkstyle | Principle III |
 | 9 | JaCoCo with 80% minimum coverage | JaCoCo | Principle III |
 | 10 | CycloneDX Gradle plugin for SBOM | CycloneDX | Principle III |
 | 11 | SonarCloud for hosted static analysis | SonarQube/SonarCloud | Principle III |
 | 12 | Pinggy container for production tunneling | Pinggy | Principle I |
+| 13 | GraalVM native image via bootBuildImage | GraalVM, Buildpacks, Paketo | Principle I, II |

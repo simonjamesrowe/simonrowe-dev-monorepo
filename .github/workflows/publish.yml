@@ -1,0 +1,67 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-backend:
+    name: Publish Backend Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend native image
+        run: |
+          ./gradlew :backend:bootBuildImage \
+            --imageName=ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:${{ github.sha }}
+
+      - name: Tag and push images
+        run: |
+          docker tag ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:${{ github.sha }} \
+            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:latest
+          docker push ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:${{ github.sha }}
+          docker push ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:latest
+
+  publish-frontend:
+    name: Publish Frontend Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.frontend
+          push: true
+          tags: |
+            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-frontend:latest
+            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-frontend:${{ github.sha }}
