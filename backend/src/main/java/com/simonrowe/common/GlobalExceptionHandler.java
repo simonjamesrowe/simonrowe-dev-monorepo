@@ -5,18 +5,33 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.server.ResponseStatusException;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
   @ExceptionHandler(ResourceNotFoundException.class)
-  public ResponseEntity<ErrorResponseDto> handleNotFound(ResourceNotFoundException ex) {
+  public ResponseEntity<ErrorResponseDto> handleNotFound(
+      ResourceNotFoundException ex
+  ) {
     ErrorResponseDto error = new ErrorResponseDto(
         ex.getMessage(),
         HttpStatus.NOT_FOUND.value(),
         Instant.now()
     );
     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+  }
+
+  @ExceptionHandler(ResponseStatusException.class)
+  public ResponseEntity<ErrorResponseDto> handleResponseStatus(
+      ResponseStatusException ex
+  ) {
+    ErrorResponseDto error = new ErrorResponseDto(
+        ex.getReason(),
+        ex.getStatusCode().value(),
+        Instant.now()
+    );
+    return ResponseEntity.status(ex.getStatusCode()).body(error);
   }
 
   @ExceptionHandler(Exception.class)
