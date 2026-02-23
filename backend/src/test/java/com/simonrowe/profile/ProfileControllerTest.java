@@ -12,8 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,10 +34,10 @@ class ProfileControllerTest {
   @Container
   static MongoDBContainer mongodb = new MongoDBContainer("mongo:8");
 
-  @MockBean
+  @MockitoBean
   private ElasticsearchOperations elasticsearchOperations;
 
-  @MockBean
+  @MockitoBean
   private BlogSearchRepository blogSearchRepository;
 
   @Autowired
