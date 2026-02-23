@@ -2,6 +2,7 @@ plugins {
     java
     id("org.springframework.boot") version libs.versions.springBoot.get() apply false
     id("io.spring.dependency-management") version libs.versions.springDependencyManagement.get() apply false
+    alias(libs.plugins.cyclonedx)
     alias(libs.plugins.sonarqube)
 }
 

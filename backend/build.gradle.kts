@@ -4,7 +4,6 @@ plugins {
     alias(libs.plugins.graalvm.native)
     checkstyle
     jacoco
-    alias(libs.plugins.cyclonedx)
 }
 
 group = "com.simonrowe"
@@ -46,12 +45,6 @@ tasks.check {
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
     runImage.set("paketobuildpacks/run-noble-base:latest")
-}
-
-tasks.cyclonedxBom {
-    setIncludeConfigs(listOf("runtimeClasspath"))
-    setSkipConfigs(listOf("testCompileClasspath", "testRuntimeClasspath"))
-    destination = layout.buildDirectory.dir("reports/bom").get().asFile
 }
 
 dependencies {

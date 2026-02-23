@@ -36,7 +36,7 @@ jobs:
         run: ./gradlew :backend:jacocoTestCoverageVerification
 
       - name: Generate CycloneDX BOM
-        run: ./gradlew :backend:cyclonedxBom
+        run: ./gradlew cyclonedxBom
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -48,7 +48,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cyclonedx-bom
-          path: backend/build/reports/bom/
+          path: build/reports/
 
       - name: SonarCloud analysis
         if: env.SONAR_TOKEN != ''
