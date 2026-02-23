@@ -1,10 +1,17 @@
 import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
 import App from '../src/App'
 
+vi.mock('../src/pages/HomePage', () => ({
+  HomePage: () => <h1>Homepage</h1>,
+}))
+
 describe('App', () => {
-  it('renders the heading', () => {
+  it('routes / to HomePage', () => {
+    window.history.pushState({}, '', '/')
     render(<App />)
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('simonrowe.dev')
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Homepage')
   })
 })
