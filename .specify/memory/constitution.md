@@ -1,30 +1,27 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 0.0.0 (template) → 1.0.0 (initial ratification)
+  Version change: 1.1.0 → 1.2.0 (MINOR)
 
-  Modified principles: N/A (first fill from template)
-
-  Added sections:
-    - Principle I: Monorepo with Separate Containers
+  Modified principles:
     - Principle II: Modern Java & React Stack
-    - Principle III: Quality Gates (NON-NEGOTIABLE)
+      Changed: Java 25 → Java 21 (current LTS with virtual threads)
+      Changed: Spring Boot 4 → Spring Boot 3.5.x (current stable)
     - Principle IV: Observability & Operability
-    - Principle V: Simplicity & Incremental Delivery
-    - Section: Technology Stack Constraints
-    - Section: Development Workflow
-    - Section: Governance
+      Added: OpenTelemetry MUST use the Spring Boot Starter,
+      not the Java Agent (incompatible with GraalVM native images)
+
+  Added sections: None
 
   Removed sections: None
 
   Templates requiring updates:
     ✅ .specify/templates/plan-template.md — no changes needed,
-       Constitution Check section is generic and will pick up these principles
+       Constitution Check section is generic
     ✅ .specify/templates/spec-template.md — no changes needed,
        structure is technology-agnostic
     ✅ .specify/templates/tasks-template.md — no changes needed,
        phase structure accommodates these principles
-    ✅ No command files exist in .specify/templates/commands/
 
   Follow-up TODOs: None
 -->
@@ -37,22 +34,35 @@
 
 All source code for simonrowe.dev MUST live in a single monorepo.
 The backend and frontend MUST be built and deployed as separate
-Docker containers. Shared configuration (Docker Compose, CI
-workflows) lives at the repository root.
+containers. Shared configuration (Docker Compose, CI workflows)
+lives at the repository root.
 
 - Backend and frontend MUST NOT share a runtime container.
+- The backend container MUST be built using Spring Boot's
+  `bootBuildImage` Gradle task (Cloud Native Buildpacks). A
+  traditional multi-stage Dockerfile MUST NOT be used for the
+  backend.
+- The frontend container MUST be built using a multi-stage
+  Dockerfile (Node.js build + Nginx runtime).
 - Docker Compose MUST be the local and production orchestration
   mechanism (with Pinggy for public exposure).
 - Images MUST be published to GitHub Container Registry (ghcr.io).
 
 ### II. Modern Java & React Stack
 
-The backend MUST use Java 25, Spring Boot 4, Gradle, MongoDB,
+The backend MUST use Java 21, Spring Boot 3.5.x, Gradle, MongoDB,
 Kafka, and Elasticsearch. The frontend MUST use the latest stable
 React release. No CMS — content is managed through application
 code and MongoDB persistence.
 
 - Backend build tool MUST be Gradle (Kotlin DSL preferred).
+- The backend MUST be compiled to a GraalVM native image using
+  the `org.graalvm.buildtools.native` Gradle plugin. The
+  `bootBuildImage` task produces a container with the native
+  executable — no JVM is included in the runtime image.
+- Java 21 is the minimum required version (virtual threads,
+  pattern matching, records). Upgrade to a newer LTS when
+  Buildpack base images and Spring Boot officially support it.
 - MongoDB MUST be the primary persistence store.
 - Kafka MUST be used for asynchronous messaging.
 - Elasticsearch MUST be used for search functionality.
@@ -82,7 +92,10 @@ Debugging MUST NOT require SSH access or log tailing on hosts.
 
 - Prometheus metrics MUST be exposed via a dedicated actuator port
   for scraping.
-- OpenTelemetry MUST be integrated for distributed tracing.
+- OpenTelemetry MUST be integrated for distributed tracing using
+  the OpenTelemetry Spring Boot Starter. The OpenTelemetry Java
+  Agent MUST NOT be used because it is incompatible with GraalVM
+  native images.
 - Structured logging MUST be used across all services.
 
 ### V. Simplicity & Incremental Delivery
@@ -101,24 +114,27 @@ when a concrete requirement demands it. YAGNI applies.
 
 | Layer        | Technology                        | Version/Notes         |
 |--------------|-----------------------------------|-----------------------|
-| Language     | Java                              | 25                    |
-| Framework    | Spring Boot                       | 4.x                  |
-| Build        | Gradle (Kotlin DSL)               | Latest stable         |
-| Database     | MongoDB                           | Latest stable         |
-| Messaging    | Apache Kafka                      | Latest stable         |
-| Search       | Elasticsearch                     | Latest stable         |
-| Frontend     | React                             | Latest stable         |
-| Auth         | Auth0                             | Managed service       |
-| CI/CD        | GitHub Actions                    | Build, test, publish  |
-| Registry     | GitHub Container Registry (ghcr)  | Docker images         |
-| Orchestration| Docker Compose                    | Local + production    |
-| Exposure     | Pinggy                            | Production tunneling  |
-| Metrics      | Prometheus + OpenTelemetry        | Separate actuator port|
-| Coverage     | JaCoCo                            | Enforced thresholds   |
-| Analysis     | SonarQube                         | PR-level analysis     |
-| SBOM         | CycloneDX                         | Dependency tracking   |
-| Testing      | Testcontainers                    | Integration/slice     |
-| Style        | Google Java Style Guide           | Enforced via linter   |
+| Language     | Java                              | 21 (LTS)              |
+| Framework    | Spring Boot                       | 3.5.x                 |
+| Build        | Gradle (Kotlin DSL)               | Latest stable          |
+| Native Image | GraalVM Native Image              | Via buildtools plugin  |
+| Packaging    | Cloud Native Buildpacks           | Via bootBuildImage     |
+| Database     | MongoDB                           | Latest stable          |
+| Messaging    | Apache Kafka                      | Latest stable          |
+| Search       | Elasticsearch                     | Latest stable          |
+| Frontend     | React                             | Latest stable          |
+| Auth         | Auth0                             | Managed service        |
+| CI/CD        | GitHub Actions                    | Build, test, publish   |
+| Registry     | GitHub Container Registry (ghcr)  | Docker images          |
+| Orchestration| Docker Compose                    | Local + production     |
+| Exposure     | Pinggy                            | Production tunneling   |
+| Tracing      | OpenTelemetry Spring Boot Starter | Compile-time instrumentation |
+| Metrics      | Prometheus via Actuator           | Separate actuator port |
+| Coverage     | JaCoCo                            | Enforced thresholds    |
+| Analysis     | SonarQube                         | PR-level analysis      |
+| SBOM         | CycloneDX                         | Dependency tracking    |
+| Testing      | Testcontainers                    | Integration/slice      |
+| Style        | Google Java Style Guide           | Enforced via linter    |
 
 ## Development Workflow
 
@@ -128,7 +144,12 @@ when a concrete requirement demands it. YAGNI applies.
 - Commits MUST follow semantic versioning prefixes
   (`feat:`, `fix:`, `chore:`, etc.) and include Jira ticket
   numbers where applicable.
-- Docker images MUST be built and published as part of CI on
+- The backend Docker image MUST be built via
+  `./gradlew bootBuildImage` and published as part of CI on
+  successful merge to main. A Dockerfile MUST NOT be used for
+  the backend.
+- The frontend Docker image MUST be built via `docker build` with
+  a multi-stage Dockerfile and published as part of CI on
   successful merge to main.
 - The existing website at `/Users/simonrowe/workspace/simonjamesrowe/react-ui`
   serves as the design reference for the frontend rebuild.
@@ -152,4 +173,4 @@ defined above.
   principles. Violations MUST be resolved before merge unless
   explicitly justified in a Complexity Tracking table.
 
-**Version**: 1.0.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-21
+**Version**: 1.2.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-22

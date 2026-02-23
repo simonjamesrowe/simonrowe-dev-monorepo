@@ -12,7 +12,7 @@ Install the following before starting:
 
 | Tool | Version | Verification Command |
 |------|---------|---------------------|
-| JDK | 25 | `java -version` |
+| JDK | 21 | `java -version` |
 | Node.js | LTS (22.x) | `node --version` |
 | npm | Bundled with Node.js | `npm --version` |
 | Docker | Latest stable | `docker --version` |
@@ -164,10 +164,18 @@ npm test
 
 ## 7. Build Container Images
 
-Build the backend and frontend Docker images locally:
+Build the backend native image using Spring Boot Buildpacks:
 
 ```bash
-docker build -f Dockerfile.backend -t simonrowe-backend:local .
+./gradlew :backend:bootBuildImage --imageName=simonrowe-backend:local
+```
+
+Note: This compiles the backend to a GraalVM native image inside a Buildpack
+container. Requires Docker running and ~8GB RAM available. Build takes 3-5 minutes.
+
+Build the frontend Docker image:
+
+```bash
 docker build -f Dockerfile.frontend -t simonrowe-frontend:local .
 ```
 

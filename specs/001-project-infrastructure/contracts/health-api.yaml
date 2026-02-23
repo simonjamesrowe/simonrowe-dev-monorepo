@@ -194,7 +194,7 @@ paths:
                     id: "a1b2c3d"
                     time: "2026-02-21T10:00:00Z"
                 java:
-                  version: "25"
+                  version: "21"
                   vendor: "Eclipse Adoptium"
 
 components:

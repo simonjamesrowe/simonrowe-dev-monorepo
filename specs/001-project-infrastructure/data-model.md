@@ -30,7 +30,11 @@ All services are configured exclusively via environment variables (FR-014). No f
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | *(not set)* | `http://otel-collector:4317` | OTLP exporter endpoint |
 | `OTEL_METRICS_EXPORTER` | `none` | `none` | Disabled (Prometheus handles metrics) |
 | `OTEL_LOGS_EXPORTER` | `none` | `none` | Disabled (structured logging handles logs) |
-| `JAVA_TOOL_OPTIONS` | *(not set)* | `-javaagent:/app/opentelemetry-javaagent.jar` | OTel agent attachment |
+
+Note: The backend runs as a GraalVM native image. The OpenTelemetry Java Agent
+(`-javaagent`) is NOT used because it is incompatible with native images.
+Tracing is provided by the OpenTelemetry Spring Boot Starter, which is compiled
+into the native image at build time.
 
 ### Frontend Service Environment Variables
 
@@ -249,7 +253,6 @@ services:
       SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
       MANAGEMENT_SERVER_PORT: "8081"
       SPRING_THREADS_VIRTUAL_ENABLED: "true"
-      JAVA_TOOL_OPTIONS: "-javaagent:/app/opentelemetry-javaagent.jar"
       OTEL_SERVICE_NAME: simonrowe-backend
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_METRICS_EXPORTER: none

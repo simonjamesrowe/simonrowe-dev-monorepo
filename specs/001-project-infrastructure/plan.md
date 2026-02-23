@@ -1,35 +1,37 @@
 # Implementation Plan: Project Infrastructure
 
-**Branch**: `001-project-infrastructure` | **Date**: 2026-02-21 | **Spec**: [spec.md](./spec.md)
+**Branch**: `001-project-infrastructure` | **Date**: 2026-02-22 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `/specs/001-project-infrastructure/spec.md`
 
 ## Summary
 
-Infrastructure scaffolding for the simonrowe.dev monorepo providing a complete development and deployment foundation. This includes a Gradle multi-project build (Kotlin DSL) for the Java 25 / Spring Boot 4 backend, a React frontend project, Docker Compose orchestration for both local development and production, GitHub Actions CI/CD pipelines with full quality gate enforcement, and production deployment via Pinggy tunneling. The plan delivers all three user stories: local development bootstrap (P1), automated quality verification (P2), and production deployment (P3).
+Set up the foundational monorepo infrastructure for simonrowe.dev: a Gradle Kotlin DSL multi-project build with Spring Boot 3.5.x backend (Java 21, GraalVM native image via `bootBuildImage`), React frontend (Vite), Docker Compose for local/production orchestration, GitHub Actions CI/CD, and full observability (OpenTelemetry Spring Boot Starter, Prometheus via Actuator, structured logging). Quality gates include Checkstyle (Google Java Style), JaCoCo (80% minimum), SonarCloud, and CycloneDX BOM generation.
 
 ## Technical Context
 
-**Language/Version**: Java 25 (backend), TypeScript/JavaScript (frontend)
-**Primary Dependencies**: Spring Boot 4.x, Spring Data MongoDB, Spring Kafka, Spring Data Elasticsearch, Spring Boot Actuator, OpenTelemetry, React (latest stable)
-**Storage**: MongoDB (primary persistence), Elasticsearch (search), Kafka (messaging)
-**Testing**: JUnit 5 + Testcontainers (backend integration), Jest/Vitest (frontend), JaCoCo (coverage)
-**Target Platform**: Docker containers on Linux (production via Docker Compose + Pinggy)
-**Project Type**: Web application (backend + frontend monorepo)
-**Performance Goals**: CI pipeline completes in under 10 minutes; local environment starts in under 5 minutes; production deployment accessible in under 15 minutes
-**Constraints**: All quality gates must pass before merge; Prometheus metrics on dedicated management port; no mocked infrastructure in integration tests
-**Scale/Scope**: Single backend service, single frontend application, 3 infrastructure services (MongoDB, Kafka, Elasticsearch), single production deployment target
+**Language/Version**: Java 21 (LTS) for backend, TypeScript/JavaScript (latest stable) for frontend
+**Primary Dependencies**: Spring Boot 3.5.x, Spring Data MongoDB, Spring Kafka, Spring Data Elasticsearch, Spring Boot Actuator, OpenTelemetry Spring Boot Starter, React (latest stable), Vite
+**Storage**: MongoDB (primary persistence), Elasticsearch (search), Kafka (async messaging)
+**Testing**: JUnit 5 + Testcontainers (backend), Vitest (frontend)
+**Target Platform**: Docker containers (GraalVM native image for backend, Nginx for frontend)
+**Project Type**: Web application (backend + frontend)
+**Performance Goals**: Backend native image startup < 1s, CI pipeline < 10 minutes, local bootstrap < 5 minutes
+**Constraints**: No Dockerfile for backend (must use bootBuildImage), OTel Java Agent prohibited (native image incompatible)
+**Scale/Scope**: Single developer, single deployment target via Docker Compose + Pinggy
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-| # | Principle | Status | Justification |
-|---|-----------|--------|---------------|
-| I | Monorepo with Separate Containers | PASS | Single repository with `backend/` and `frontend/` directories. Separate Dockerfiles produce independent container images. Docker Compose at repo root for orchestration. Images published to ghcr.io. |
-| II | Modern Java & React Stack | PASS | Java 25, Spring Boot 4, Gradle Kotlin DSL, MongoDB, Kafka, Elasticsearch for backend. React latest stable for frontend. Auth0 configured but not implemented until feature specs require it. Spring Boot Actuator on separate management port. |
-| III | Quality Gates (NON-NEGOTIABLE) | PASS | Google Java Style via Checkstyle plugin. JaCoCo with enforced coverage thresholds. SonarQube analysis on every PR. CycloneDX BOM generation. Testcontainers for integration tests. Frontend test infrastructure established. |
-| IV | Observability & Operability | PASS | Prometheus metrics via Spring Boot Actuator on dedicated port. OpenTelemetry integration for distributed tracing. Structured JSON logging configured for all services. |
-| V | Simplicity & Incremental Delivery | PASS | Minimal scaffolding with no premature abstractions. No application entities or business logic -- only infrastructure. Three user stories delivered incrementally by priority. YAGNI applied throughout. |
+| Principle | Requirement | Status |
+|-----------|------------|--------|
+| I. Monorepo with Separate Containers | Backend + frontend in single repo, separate containers. Backend via `bootBuildImage`, frontend via multi-stage Dockerfile. Docker Compose for orchestration. Images to ghcr.io. | PASS |
+| II. Modern Java & React Stack | Java 21, Spring Boot 3.5.x, Gradle Kotlin DSL, MongoDB, Kafka, Elasticsearch. GraalVM native image via `org.graalvm.buildtools.native`. Virtual threads enabled. Actuator on separate port. | PASS |
+| III. Quality Gates | Checkstyle (Google Java Style), JaCoCo (enforced thresholds), SonarQube on every PR, CycloneDX BOM, Testcontainers for integration tests, frontend tests for critical paths. | PASS |
+| IV. Observability & Operability | Prometheus metrics via actuator port, OpenTelemetry via Spring Boot Starter (NOT Java Agent), structured logging. | PASS |
+| V. Simplicity & Incremental Delivery | Start with simplest working solution. No premature abstractions. Features as independently testable increments. | PASS |
+
+All gates pass. No violations requiring justification.
 
 ## Project Structure
 
@@ -38,85 +40,104 @@ Infrastructure scaffolding for the simonrowe.dev monorepo providing a complete d
 ```text
 specs/001-project-infrastructure/
 ├── plan.md              # This file
-├── research.md          # Phase 0: Technology research and decisions
-├── data-model.md        # Phase 1: Infrastructure configuration model
-├── quickstart.md        # Phase 1: Developer quickstart guide
-├── contracts/           # Phase 1: API contracts
-│   └── health-api.yaml  # Actuator health/metrics OpenAPI spec
-├── checklists/
-│   └── requirements.md  # Specification quality checklist
-└── tasks.md             # Phase 2 output (created by /speckit.tasks)
+├── research.md          # Technology decisions and rationale
+├── data-model.md        # Infrastructure configuration model
+├── quickstart.md        # Developer setup guide
+├── contracts/
+│   └── health-api.yaml  # Management API OpenAPI spec
+└── tasks.md             # Task breakdown (generated by /speckit.tasks)
 ```
 
 ### Source Code (repository root)
 
 ```text
 backend/
-├── build.gradle.kts                    # Backend build configuration
 ├── src/
 │   ├── main/
-│   │   ├── java/com/simonrowe/
-│   │   │   └── Application.java        # Spring Boot entry point
+│   │   ├── java/com/simonrowe/backend/
+│   │   │   └── BackendApplication.java
 │   │   └── resources/
-│   │       ├── application.yml          # Application configuration
-│   │       └── logback-spring.xml       # Structured logging config
+│   │       ├── application.yml
+│   │       └── application-dev.yml
 │   └── test/
-│       ├── java/com/simonrowe/
-│       │   └── ApplicationTests.java    # Smoke test with Testcontainers
-│       └── resources/
-│           └── application-test.yml     # Test configuration overrides
+│       └── java/com/simonrowe/backend/
+│           └── BackendApplicationTests.java
+├── build.gradle.kts
+└── (no Dockerfile -- uses bootBuildImage)
 
 frontend/
-├── package.json                        # Dependencies and scripts
-├── tsconfig.json                       # TypeScript configuration
-├── vite.config.ts                      # Vite build configuration
-├── Dockerfile                          # Frontend container build
 ├── src/
-│   ├── App.tsx                         # Root application component
-│   ├── main.tsx                        # Entry point
-│   ├── components/                     # Shared components
-│   ├── pages/                          # Page components
-│   └── services/                       # API client services
+│   ├── App.tsx
+│   ├── main.tsx
+│   ├── components/
+│   ├── pages/
+│   └── services/
 ├── public/
-│   └── index.html                      # HTML template
-└── tests/
-    └── App.test.tsx                    # Basic smoke test
+├── index.html
+├── package.json
+├── vite.config.ts
+├── tsconfig.json
+└── vitest.config.ts
 
-build.gradle.kts                        # Root build file (plugins, shared config)
-settings.gradle.kts                     # Multi-project settings (includes backend)
-gradle.properties                       # Gradle configuration properties
+Dockerfile.frontend              # Multi-stage: Node build + Nginx runtime
+
 gradle/
-├── wrapper/
-│   ├── gradle-wrapper.jar
-│   └── gradle-wrapper.properties
-└── libs.versions.toml                  # Version catalog
+├── libs.versions.toml           # Version Catalog
+└── wrapper/
+    ├── gradle-wrapper.jar
+    └── gradle-wrapper.properties
 
-docker-compose.yml                      # Local development orchestration
-docker-compose.prod.yml                 # Production orchestration with Pinggy
-Dockerfile.backend                      # Backend container build (multi-stage)
-Dockerfile.frontend                     # Frontend container build (multi-stage)
-
-.github/
-└── workflows/
-    ├── ci.yml                          # PR quality gates (build, test, lint, analyze)
-    └── publish.yml                     # Main branch: build + publish to ghcr.io
+build.gradle.kts                 # Root: shared plugin config
+settings.gradle.kts              # Multi-project includes
+gradlew / gradlew.bat
 
 config/
 ├── checkstyle/
-│   └── google_checks.xml              # Google Java Style checkstyle config
+│   └── google_checks.xml        # Google Java Style rules
 └── otel/
-    └── otel-collector-config.yaml     # OpenTelemetry Collector config (production)
+    └── otel-collector-config.yaml  # OTel Collector config (prod)
 
-.editorconfig                           # Editor configuration
-.gitignore                              # Git ignore rules
+docker-compose.yml               # Local dev: MongoDB, Kafka, Elasticsearch
+docker-compose.prod.yml          # Production: all services + Pinggy
+
+.github/workflows/
+├── ci.yml                       # PR quality gates
+└── publish.yml                  # Main branch image publishing
+
+.gitignore
+README.md
 ```
 
-**Structure Decision**: Option 2 (Web application) selected. The `backend/` directory contains the Gradle subproject for the Spring Boot 4 API service. The `frontend/` directory contains the React application as an independent npm project. Root-level Gradle files configure the multi-project build. Docker Compose files and Dockerfiles live at the repository root for shared orchestration. GitHub Actions workflows live in `.github/workflows/`.
+**Structure Decision**: Web application structure with `backend/` (Gradle subproject, Spring Boot 3.5.x) and `frontend/` (standalone npm/Vite project). Backend container built via `bootBuildImage` (Cloud Native Buildpacks with GraalVM native image). Frontend container built via multi-stage Dockerfile (Node build + Nginx).
+
+## Key Design Decisions
+
+### 1. GraalVM Native Image via bootBuildImage (Constitution I, II)
+
+The backend is compiled to a GraalVM native image using:
+- `org.graalvm.buildtools.native` Gradle plugin
+- `./gradlew bootBuildImage` produces a minimal OCI container
+- No `Dockerfile.backend` -- Paketo Buildpacks handle everything
+- Sub-second startup, smaller container, no JVM in runtime
+
+### 2. OpenTelemetry Spring Boot Starter (Constitution IV)
+
+The OpenTelemetry Java Agent is incompatible with GraalVM native images (runtime bytecode instrumentation vs AOT compilation). Instead:
+- `io.opentelemetry.instrumentation:opentelemetry-spring-boot-starter`
+- Compile-time auto-configuration compatible with Spring AOT
+- OTLP export to OTel Collector sidecar in production
+
+### 3. Spring Boot 3.5.x + Java 21 LTS (Constitution II)
+
+- Java 21 is the current LTS with virtual threads, pattern matching, records
+- Spring Boot 3.5.x provides mature GraalVM native image support
+- Virtual threads enabled via `spring.threads.virtual.enabled=true`
+
+### 4. Dual Docker Compose Configurations (Constitution I)
+
+- `docker-compose.yml`: Infrastructure only (MongoDB, Kafka, Elasticsearch) for local dev with host-based hot-reload
+- `docker-compose.prod.yml`: All services containerized including backend (native image), frontend (Nginx), OTel Collector, and Pinggy tunnel
 
 ## Complexity Tracking
 
-No constitution violations. All principles pass without exception.
-
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| *None* | *N/A* | *N/A* |
+No violations. All design decisions align with constitution v1.2.0.

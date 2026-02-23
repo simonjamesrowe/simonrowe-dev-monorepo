@@ -1,0 +1,34 @@
+[versions]
+springBoot = "3.5.9"
+springDependencyManagement = "1.1.7"
+graalvmNative = "0.11.3"
+opentelemetryInstrumentation = "2.25.0"
+testcontainers = "1.20.4"
+checkstyle = "10.21.4"
+jacoco = "0.8.12"
+cyclonedx = "2.1.0"
+sonarqube = "6.0.1.5171"
+
+[libraries]
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-starter-data-mongodb = { module = "org.springframework.boot:spring-boot-starter-data-mongodb" }
+spring-boot-starter-data-elasticsearch = { module = "org.springframework.boot:spring-boot-starter-data-elasticsearch" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+spring-boot-devtools = { module = "org.springframework.boot:spring-boot-devtools" }
+spring-kafka = { module = "org.springframework.kafka:spring-kafka" }
+spring-kafka-test = { module = "org.springframework.kafka:spring-kafka-test" }
+micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
+opentelemetry-spring-boot-starter = { module = "io.opentelemetry.instrumentation:opentelemetry-spring-boot-starter", version.ref = "opentelemetryInstrumentation" }
+testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter" }
+testcontainers-mongodb = { module = "org.testcontainers:mongodb" }
+testcontainers-kafka = { module = "org.testcontainers:kafka" }
+testcontainers-elasticsearch = { module = "org.testcontainers:elasticsearch" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "springDependencyManagement" }
+graalvm-native = { id = "org.graalvm.buildtools.native", version.ref = "graalvmNative" }
+cyclonedx = { id = "org.cyclonedx.bom", version.ref = "cyclonedx" }
+sonarqube = { id = "org.sonarqube", version.ref = "sonarqube" }
