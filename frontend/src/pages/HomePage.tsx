@@ -5,6 +5,7 @@ import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { MobileMenu } from '../components/layout/MobileMenu'
 import { ScrollToTop } from '../components/layout/ScrollToTop'
 import { Sidebar, type NavigationItem } from '../components/layout/Sidebar'
+import { HomepageBlogPreview } from '../components/blog/HomepageBlogPreview'
 import { AboutSection } from '../components/profile/AboutSection'
 import { ContactDetails } from '../components/profile/ContactDetails'
 import { ProfileBanner } from '../components/profile/ProfileBanner'
@@ -77,18 +78,7 @@ export function HomePage() {
             <li>Team leadership, mentoring, delivery planning</li>
           </ul>
         </section>
-        <section className="panel" id="blog">
-          <h3>Blog</h3>
-          <p>
-            Notes and case studies on engineering strategy, architecture decisions,
-            and product outcomes.
-          </p>
-          <ul className="section-list">
-            <li>Architecture trade-offs from real projects</li>
-            <li>Delivery practices for high-performing teams</li>
-            <li>Pragmatic AI-native development patterns</li>
-          </ul>
-        </section>
+        <HomepageBlogPreview />
         <ContactDetails
           location={profile.location}
           onToggle={(expanded) => trackHomepageEvent('contact_expand', String(expanded))}
