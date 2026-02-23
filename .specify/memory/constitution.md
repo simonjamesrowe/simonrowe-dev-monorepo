@@ -1,27 +1,25 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.1.0 → 1.2.0 (MINOR)
+  Version change: 1.2.0 → 1.2.1 (PATCH)
 
   Modified principles:
-    - Principle II: Modern Java & React Stack
-      Changed: Java 25 → Java 21 (current LTS with virtual threads)
-      Changed: Spring Boot 4 → Spring Boot 3.5.x (current stable)
-    - Principle IV: Observability & Operability
-      Added: OpenTelemetry MUST use the Spring Boot Starter,
-      not the Java Agent (incompatible with GraalVM native images)
+    - Principle III: Quality Gates
+      Clarified: Testcontainers rule now explicitly permits
+      @MockitoBean for infrastructure components a test does not
+      exercise, provided a dedicated Testcontainer-backed test
+      exists for that component. Also notes @MockitoBean
+      (Spring Framework 6.2+) as the required replacement for
+      the deprecated @MockBean.
 
   Added sections: None
 
   Removed sections: None
 
   Templates requiring updates:
-    ✅ .specify/templates/plan-template.md — no changes needed,
-       Constitution Check section is generic
-    ✅ .specify/templates/spec-template.md — no changes needed,
-       structure is technology-agnostic
-    ✅ .specify/templates/tasks-template.md — no changes needed,
-       phase structure accommodates these principles
+    ✅ .specify/templates/plan-template.md — no changes needed
+    ✅ .specify/templates/spec-template.md — no changes needed
+    ✅ .specify/templates/tasks-template.md — no changes needed
 
   Follow-up TODOs: None
 -->
@@ -83,6 +81,13 @@ Manual overrides of quality gates are prohibited.
 - CycloneDX (CDX) BOM MUST be generated for dependency tracking.
 - Testcontainers MUST be used for slice and integration tests —
   no mocked infrastructure for integration-level verification.
+  Exception: `@MockitoBean` (Spring Framework 6.2+, preferred over
+  the deprecated `@MockBean`) MAY be used to suppress an
+  infrastructure component that a test does not exercise, provided
+  that component has its own dedicated Testcontainer-backed
+  integration test (e.g., mock Elasticsearch in a MongoDB-only
+  controller test when a separate SearchControllerTest uses a real
+  Elasticsearch container).
 - Frontend tests MUST exist for critical user journeys.
 
 ### IV. Observability & Operability
@@ -173,4 +178,4 @@ defined above.
   principles. Violations MUST be resolved before merge unless
   explicitly justified in a Complexity Tracking table.
 
-**Version**: 1.2.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-22
+**Version**: 1.2.1 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-24

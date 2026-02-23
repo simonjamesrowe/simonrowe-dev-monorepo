@@ -50,6 +50,7 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("boot
 dependencies {
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.actuator)
+    implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.data.mongodb)
     implementation(libs.spring.boot.starter.data.elasticsearch)
     implementation(libs.spring.kafka)
