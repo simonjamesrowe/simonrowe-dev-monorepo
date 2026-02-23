@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
+import com.simonrowe.common.Image;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

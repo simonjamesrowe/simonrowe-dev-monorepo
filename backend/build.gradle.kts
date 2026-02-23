@@ -56,6 +56,8 @@ dependencies {
     implementation(libs.spring.kafka)
     implementation(libs.micrometer.registry.prometheus)
     implementation(libs.opentelemetry.spring.boot.starter)
+    implementation(libs.openpdf)
+    implementation(libs.commonmark)
 
     developmentOnly(libs.spring.boot.devtools)
 

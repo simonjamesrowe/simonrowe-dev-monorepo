@@ -1,7 +1,11 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
+import { ResumeDownloadButton } from '../components/common/ResumeDownloadButton'
+import { ExperienceSection } from '../components/employment/ExperienceSection'
+import { JobDetail } from '../components/employment/JobDetail'
 import { MobileMenu } from '../components/layout/MobileMenu'
 import { ScrollToTop } from '../components/layout/ScrollToTop'
 import { Sidebar, type NavigationItem } from '../components/layout/Sidebar'
@@ -10,6 +14,8 @@ import { AboutSection } from '../components/profile/AboutSection'
 import { ContactDetails } from '../components/profile/ContactDetails'
 import { ProfileBanner } from '../components/profile/ProfileBanner'
 import { SocialLinks } from '../components/profile/SocialLinks'
+import { SkillGroupDetail } from '../components/skills/SkillGroupDetail'
+import { SkillsSection } from '../components/skills/SkillsSection'
 import { useProfile } from '../hooks/useProfile'
 import { trackHomepageEvent, trackPageView } from '../services/analytics'
 
@@ -23,10 +29,34 @@ const navigationItems: NavigationItem[] = [
 
 export function HomePage() {
   const { profile, loading, error, retry } = useProfile()
+  const navigate = useNavigate()
+  const params = useParams<{ groupId?: string; jobId?: string }>()
+
+  const groupId = params.groupId
+  const jobId = params.jobId
 
   useEffect(() => {
     trackPageView(window.location.pathname)
   }, [])
+
+  const handleGroupClick = useCallback((id: string) => {
+    trackHomepageEvent('skill_group_click', id)
+    void navigate(`/skills-groups/${id}`)
+  }, [navigate])
+
+  const handleJobClick = useCallback((id: string) => {
+    trackHomepageEvent('job_click', id)
+    void navigate(`/jobs/${id}`)
+  }, [navigate])
+
+  const handleSkillClick = useCallback((skillGroupId: string, skillId: string) => {
+    trackHomepageEvent('skill_click', `${skillGroupId}#${skillId}`)
+    void navigate(`/skills-groups/${skillGroupId}#${skillId}`)
+  }, [navigate])
+
+  const handleDrawerClose = useCallback(() => {
+    void navigate('/')
+  }, [navigate])
 
   if (loading) {
     return <LoadingIndicator />
@@ -54,30 +84,13 @@ export function HomePage() {
           profile={profile}
         />
         <AboutSection description={profile.description} />
-        <section className="panel" id="experience">
-          <h3>Experience</h3>
-          <p>
-            Cross-functional delivery across cloud-native platforms, developer experience,
-            and product engineering.
-          </p>
-          <ul className="section-list">
-            <li>Scaled distributed systems and developer platforms.</li>
-            <li>Led roadmap execution across engineering and product teams.</li>
-            <li>Established delivery standards for reliability and observability.</li>
-          </ul>
-        </section>
-        <section className="panel" id="skills">
-          <h3>Skills</h3>
-          <p>
-            Applied strengths in architecture, technical leadership, and practical
-            AI-assisted software delivery.
-          </p>
-          <ul className="section-list">
-            <li>Java, TypeScript, Spring Boot, React</li>
-            <li>Cloud-native systems, distributed tracing, metrics</li>
-            <li>Team leadership, mentoring, delivery planning</li>
-          </ul>
-        </section>
+        <ExperienceSection onJobClick={handleJobClick} />
+        <SkillsSection onGroupClick={handleGroupClick} />
+        <div className="resume-section">
+          <ResumeDownloadButton
+            onDownload={() => trackHomepageEvent('download_resume', 'homepage')}
+          />
+        </div>
         <HomepageBlogPreview />
         <ContactDetails
           location={profile.location}
@@ -92,6 +105,22 @@ export function HomePage() {
         />
       </main>
       <ScrollToTop onScrollToTop={() => trackHomepageEvent('scroll_to_top', 'homepage')} />
+
+      {groupId && (
+        <SkillGroupDetail
+          groupId={groupId}
+          onClose={handleDrawerClose}
+          onJobClick={handleJobClick}
+        />
+      )}
+
+      {jobId && (
+        <JobDetail
+          jobId={jobId}
+          onClose={handleDrawerClose}
+          onSkillClick={handleSkillClick}
+        />
+      )}
     </div>
   )
 }

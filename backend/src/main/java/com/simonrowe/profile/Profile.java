@@ -1,5 +1,6 @@
 package com.simonrowe.profile;
 
+import com.simonrowe.common.Image;
 import java.time.Instant;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;

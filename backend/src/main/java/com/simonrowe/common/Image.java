@@ -1,4 +1,4 @@
-package com.simonrowe.profile;
+package com.simonrowe.common;
 
 public record Image(
     String url,
