@@ -13,15 +13,15 @@ public record SkillDetailDto(
     List<JobReferenceDto> jobs
 ) {
 
-    public static SkillDetailDto fromEntity(Skill skill, List<JobReferenceDto> jobs) {
-        return new SkillDetailDto(
-            skill.id(),
-            skill.name(),
-            skill.rating(),
-            skill.displayOrder(),
-            skill.description(),
-            skill.image(),
-            jobs
-        );
-    }
+  public static SkillDetailDto fromEntity(Skill skill, List<JobReferenceDto> jobs) {
+    return new SkillDetailDto(
+        skill.id(),
+        skill.name(),
+        skill.rating(),
+        skill.displayOrder(),
+        skill.description(),
+        skill.image(),
+        jobs
+    );
+  }
 }

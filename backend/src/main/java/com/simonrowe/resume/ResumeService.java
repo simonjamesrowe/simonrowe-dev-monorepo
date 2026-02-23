@@ -18,102 +18,102 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ResumeService {
 
-    private final ProfileRepository profileRepository;
-    private final SocialMediaLinkRepository socialMediaLinkRepository;
-    private final JobRepository jobRepository;
-    private final SkillGroupRepository skillGroupRepository;
+  private final ProfileRepository profileRepository;
+  private final SocialMediaLinkRepository socialMediaLinkRepository;
+  private final JobRepository jobRepository;
+  private final SkillGroupRepository skillGroupRepository;
 
-    public ResumeService(
-        ProfileRepository profileRepository,
-        SocialMediaLinkRepository socialMediaLinkRepository,
-        JobRepository jobRepository,
-        SkillGroupRepository skillGroupRepository
-    ) {
-        this.profileRepository = profileRepository;
-        this.socialMediaLinkRepository = socialMediaLinkRepository;
-        this.jobRepository = jobRepository;
-        this.skillGroupRepository = skillGroupRepository;
-    }
+  public ResumeService(
+      ProfileRepository profileRepository,
+      SocialMediaLinkRepository socialMediaLinkRepository,
+      JobRepository jobRepository,
+      SkillGroupRepository skillGroupRepository
+  ) {
+    this.profileRepository = profileRepository;
+    this.socialMediaLinkRepository = socialMediaLinkRepository;
+    this.jobRepository = jobRepository;
+    this.skillGroupRepository = skillGroupRepository;
+  }
 
-    public ResumeData assembleResumeData() {
-        Profile profile = profileRepository.findFirstBy()
-            .orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "No profile data available for resume generation"));
+  public ResumeData assembleResumeData() {
+    Profile profile = profileRepository.findFirstBy()
+        .orElseThrow(() ->
+            new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "No profile data available for resume generation"));
 
-        List<SocialMediaLink> socialLinks = socialMediaLinkRepository.findAll();
+    List<SocialMediaLink> socialLinks = socialMediaLinkRepository.findAll();
 
-        ResumeProfile resumeProfile = buildResumeProfile(profile, socialLinks);
+    ResumeProfile resumeProfile = buildResumeProfile(profile, socialLinks);
 
-        List<Job> allJobs = jobRepository.findAllByOrderByStartDateDesc();
+    List<Job> allJobs = jobRepository.findAllByOrderByStartDateDesc();
 
-        List<ResumeJob> employment = allJobs.stream()
-            .filter(job -> Boolean.TRUE.equals(job.includeOnResume())
-                && !Boolean.TRUE.equals(job.isEducation()))
-            .map(this::toResumeJob)
+    List<ResumeJob> employment = allJobs.stream()
+        .filter(job -> Boolean.TRUE.equals(job.includeOnResume())
+            && !Boolean.TRUE.equals(job.isEducation()))
+        .map(this::toResumeJob)
+        .toList();
+
+    List<ResumeJob> education = allJobs.stream()
+        .filter(job -> Boolean.TRUE.equals(job.isEducation()))
+        .map(this::toResumeJob)
+        .toList();
+
+    List<ResumeSkillGroup> skillGroups =
+        skillGroupRepository.findAllByOrderByDisplayOrderAsc().stream()
+            .map(this::toResumeSkillGroup)
             .toList();
 
-        List<ResumeJob> education = allJobs.stream()
-            .filter(job -> Boolean.TRUE.equals(job.isEducation()))
-            .map(this::toResumeJob)
+    return new ResumeData(resumeProfile, employment, education, skillGroups);
+  }
+
+  private ResumeProfile buildResumeProfile(
+      Profile profile, List<SocialMediaLink> socialLinks
+  ) {
+    String linkedIn = findSocialLink(socialLinks, "linkedin");
+    String github = findSocialLink(socialLinks, "github");
+    String website = findSocialLink(socialLinks, "website");
+
+    return new ResumeProfile(
+        profile.name(),
+        profile.title(),
+        profile.primaryEmail(),
+        profile.phoneNumber(),
+        profile.location(),
+        linkedIn,
+        github,
+        website
+    );
+  }
+
+  private String findSocialLink(List<SocialMediaLink> links, String type) {
+    return links.stream()
+        .filter(link -> type.equalsIgnoreCase(link.type())
+            && Boolean.TRUE.equals(link.includeOnResume()))
+        .map(SocialMediaLink::link)
+        .findFirst()
+        .orElse(null);
+  }
+
+  private ResumeJob toResumeJob(Job job) {
+    return new ResumeJob(
+        job.title(),
+        job.company(),
+        job.startDate(),
+        job.endDate(),
+        job.location(),
+        job.longDescription()
+    );
+  }
+
+  private ResumeSkillGroup toResumeSkillGroup(SkillGroup group) {
+    List<ResumeSkill> skills = group.skills() == null
+        ? List.of()
+        : group.skills().stream()
+            .sorted(Comparator.comparingInt(
+                s -> s.displayOrder() != null ? s.displayOrder() : 0))
+            .map(skill -> new ResumeSkill(skill.name(), skill.rating()))
             .toList();
 
-        List<ResumeSkillGroup> skillGroups =
-            skillGroupRepository.findAllByOrderByDisplayOrderAsc().stream()
-                .map(this::toResumeSkillGroup)
-                .toList();
-
-        return new ResumeData(resumeProfile, employment, education, skillGroups);
-    }
-
-    private ResumeProfile buildResumeProfile(
-        Profile profile, List<SocialMediaLink> socialLinks
-    ) {
-        String linkedIn = findSocialLink(socialLinks, "linkedin");
-        String github = findSocialLink(socialLinks, "github");
-        String website = findSocialLink(socialLinks, "website");
-
-        return new ResumeProfile(
-            profile.name(),
-            profile.title(),
-            profile.primaryEmail(),
-            profile.phoneNumber(),
-            profile.location(),
-            linkedIn,
-            github,
-            website
-        );
-    }
-
-    private String findSocialLink(List<SocialMediaLink> links, String type) {
-        return links.stream()
-            .filter(link -> type.equalsIgnoreCase(link.type())
-                && Boolean.TRUE.equals(link.includeOnResume()))
-            .map(SocialMediaLink::link)
-            .findFirst()
-            .orElse(null);
-    }
-
-    private ResumeJob toResumeJob(Job job) {
-        return new ResumeJob(
-            job.title(),
-            job.company(),
-            job.startDate(),
-            job.endDate(),
-            job.location(),
-            job.longDescription()
-        );
-    }
-
-    private ResumeSkillGroup toResumeSkillGroup(SkillGroup group) {
-        List<ResumeSkill> skills = group.skills() == null
-            ? List.of()
-            : group.skills().stream()
-                .sorted(Comparator.comparingInt(
-                    s -> s.displayOrder() != null ? s.displayOrder() : 0))
-                .map(skill -> new ResumeSkill(skill.name(), skill.rating()))
-                .toList();
-
-        return new ResumeSkillGroup(group.name(), skills);
-    }
+    return new ResumeSkillGroup(group.name(), skills);
+  }
 }

@@ -11,29 +11,29 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/resume")
 public class ResumeController {
 
-    private final ResumeService resumeService;
-    private final ResumePdfRenderer pdfRenderer;
+  private final ResumeService resumeService;
+  private final ResumePdfRenderer pdfRenderer;
 
-    public ResumeController(
-        ResumeService resumeService,
-        ResumePdfRenderer pdfRenderer
-    ) {
-        this.resumeService = resumeService;
-        this.pdfRenderer = pdfRenderer;
-    }
+  public ResumeController(
+      ResumeService resumeService,
+      ResumePdfRenderer pdfRenderer
+  ) {
+    this.resumeService = resumeService;
+    this.pdfRenderer = pdfRenderer;
+  }
 
-    @GetMapping
-    public ResponseEntity<byte[]> downloadResume() {
-        ResumeData data = resumeService.assembleResumeData();
-        byte[] pdf = pdfRenderer.render(data);
+  @GetMapping
+  public ResponseEntity<byte[]> downloadResume() {
+    ResumeData data = resumeService.assembleResumeData();
+    byte[] pdf = pdfRenderer.render(data);
 
-        return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename=\"simon-rowe-resume.pdf\"")
-            .header(HttpHeaders.CACHE_CONTROL,
-                "no-cache, no-store, must-revalidate")
-            .contentType(MediaType.APPLICATION_PDF)
-            .contentLength(pdf.length)
-            .body(pdf);
-    }
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"simon-rowe-resume.pdf\"")
+        .header(HttpHeaders.CACHE_CONTROL,
+            "no-cache, no-store, must-revalidate")
+        .contentType(MediaType.APPLICATION_PDF)
+        .contentLength(pdf.length)
+        .body(pdf);
+  }
 }

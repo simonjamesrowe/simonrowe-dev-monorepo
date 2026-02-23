@@ -13,18 +13,18 @@ public record SkillGroupDetailDto(
     List<SkillDetailDto> skills
 ) {
 
-    public static SkillGroupDetailDto fromEntity(
-        SkillGroup group,
-        List<SkillDetailDto> skills
-    ) {
-        return new SkillGroupDetailDto(
-            group.id(),
-            group.name(),
-            group.rating(),
-            group.displayOrder(),
-            group.description(),
-            group.image(),
-            skills
-        );
-    }
+  public static SkillGroupDetailDto fromEntity(
+      SkillGroup group,
+      List<SkillDetailDto> skills
+  ) {
+    return new SkillGroupDetailDto(
+        group.id(),
+        group.name(),
+        group.rating(),
+        group.displayOrder(),
+        group.description(),
+        group.image(),
+        skills
+    );
+  }
 }

@@ -11,14 +11,14 @@ public record SkillSummaryDto(
     Image image
 ) {
 
-    public static SkillSummaryDto fromEntity(Skill skill) {
-        return new SkillSummaryDto(
-            skill.id(),
-            skill.name(),
-            skill.rating(),
-            skill.displayOrder(),
-            skill.description(),
-            skill.image()
-        );
-    }
+  public static SkillSummaryDto fromEntity(Skill skill) {
+    return new SkillSummaryDto(
+        skill.id(),
+        skill.name(),
+        skill.rating(),
+        skill.displayOrder(),
+        skill.description(),
+        skill.image()
+    );
+  }
 }

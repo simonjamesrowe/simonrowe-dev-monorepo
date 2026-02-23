@@ -5,7 +5,7 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface JobRepository extends MongoRepository<Job, String> {
 
-    List<Job> findAllByOrderByStartDateDesc();
+  List<Job> findAllByOrderByStartDateDesc();
 
-    List<Job> findBySkillsIn(List<String> skillIds);
+  List<Job> findBySkillsIn(List<String> skillIds);
 }

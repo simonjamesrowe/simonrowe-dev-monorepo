@@ -19,21 +19,21 @@ public record JobDetailDto(
     List<SkillReferenceDto> skills
 ) {
 
-    public static JobDetailDto fromEntity(Job job, List<SkillReferenceDto> resolvedSkills) {
-        return new JobDetailDto(
-            job.id(),
-            job.title(),
-            job.company(),
-            job.companyUrl(),
-            job.companyImage(),
-            job.startDate(),
-            job.endDate(),
-            job.location(),
-            job.shortDescription(),
-            job.longDescription(),
-            job.isEducation(),
-            job.includeOnResume(),
-            resolvedSkills
-        );
-    }
+  public static JobDetailDto fromEntity(Job job, List<SkillReferenceDto> resolvedSkills) {
+    return new JobDetailDto(
+        job.id(),
+        job.title(),
+        job.company(),
+        job.companyUrl(),
+        job.companyImage(),
+        job.startDate(),
+        job.endDate(),
+        job.location(),
+        job.shortDescription(),
+        job.longDescription(),
+        job.isEducation(),
+        job.includeOnResume(),
+        resolvedSkills
+    );
+  }
 }

@@ -10,19 +10,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/skills")
 public class SkillGroupController {
 
-    private final SkillGroupService skillGroupService;
+  private final SkillGroupService skillGroupService;
 
-    public SkillGroupController(SkillGroupService skillGroupService) {
-        this.skillGroupService = skillGroupService;
-    }
+  public SkillGroupController(SkillGroupService skillGroupService) {
+    this.skillGroupService = skillGroupService;
+  }
 
-    @GetMapping
-    public List<SkillGroupSummaryDto> getAllSkillGroups() {
-        return skillGroupService.getAllSkillGroups();
-    }
+  @GetMapping
+  public List<SkillGroupSummaryDto> getAllSkillGroups() {
+    return skillGroupService.getAllSkillGroups();
+  }
 
-    @GetMapping("/{id}")
-    public SkillGroupDetailDto getSkillGroupById(@PathVariable String id) {
-        return skillGroupService.getSkillGroupById(id);
-    }
+  @GetMapping("/{id}")
+  public SkillGroupDetailDto getSkillGroupById(@PathVariable String id) {
+    return skillGroupService.getSkillGroupById(id);
+  }
 }

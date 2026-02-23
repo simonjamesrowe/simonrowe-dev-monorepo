@@ -16,19 +16,19 @@ public record JobSummaryDto(
     Boolean includeOnResume
 ) {
 
-    public static JobSummaryDto fromEntity(Job job) {
-        return new JobSummaryDto(
-            job.id(),
-            job.title(),
-            job.company(),
-            job.companyUrl(),
-            job.companyImage(),
-            job.startDate(),
-            job.endDate(),
-            job.location(),
-            job.shortDescription(),
-            job.isEducation(),
-            job.includeOnResume()
-        );
-    }
+  public static JobSummaryDto fromEntity(Job job) {
+    return new JobSummaryDto(
+        job.id(),
+        job.title(),
+        job.company(),
+        job.companyUrl(),
+        job.companyImage(),
+        job.startDate(),
+        job.endDate(),
+        job.location(),
+        job.shortDescription(),
+        job.isEducation(),
+        job.includeOnResume()
+    );
+  }
 }
