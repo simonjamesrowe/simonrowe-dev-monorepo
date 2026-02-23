@@ -35,28 +35,28 @@ No tasks in this phase.
 
 ### Backend
 
-- [ ] T001 [P] Create Image embedded record in backend/src/main/java/com/simonrowe/profile/Image.java -- fields: url, name, width, height, mime, formats (see data-model.md Image subdocument)
-- [ ] T002 [P] Create ImageFormats embedded record in backend/src/main/java/com/simonrowe/profile/ImageFormats.java -- fields: thumbnail, small, medium, large (each of type Image)
-- [ ] T003 [P] Create SocialMediaLink MongoDB document record in backend/src/main/java/com/simonrowe/profile/SocialMediaLink.java -- @Document(collection = "social_medias"), fields: id, type, name, link, includeOnResume, createdAt, updatedAt
-- [ ] T004 Create Profile MongoDB document record in backend/src/main/java/com/simonrowe/profile/Profile.java -- @Document(collection = "profiles"), fields: id, name, title, headline, description, profileImage, sidebarImage, backgroundImage, mobileBackgroundImage, location, phoneNumber, primaryEmail, secondaryEmail, cvUrl, createdAt, updatedAt (depends on T001, T002)
-- [ ] T005 [P] Create SocialMediaLinkResponse DTO record in backend/src/main/java/com/simonrowe/profile/SocialMediaLinkResponse.java -- fields: type, name, url (mapped from link), includeOnResume; include static factory method fromEntity(SocialMediaLink)
-- [ ] T006 Create ProfileResponse DTO record in backend/src/main/java/com/simonrowe/profile/ProfileResponse.java -- all profile fields plus socialMediaLinks list; include static factory method fromEntities(Profile, List<SocialMediaLink>) per contracts/profile-api.yaml schema (depends on T001, T002, T005)
-- [ ] T007 [P] Create ProfileRepository interface in backend/src/main/java/com/simonrowe/profile/ProfileRepository.java -- extends MongoRepository<Profile, String> with Optional<Profile> findFirstBy()
-- [ ] T008 [P] Create SocialMediaLinkRepository interface in backend/src/main/java/com/simonrowe/profile/SocialMediaLinkRepository.java -- extends MongoRepository<SocialMediaLink, String>
-- [ ] T009 Create ProfileService in backend/src/main/java/com/simonrowe/profile/ProfileService.java -- getProfile() method calls ProfileRepository.findFirstBy() and SocialMediaLinkRepository.findAll(), assembles ProfileResponse; throws ResponseStatusException(404) if no profile found (depends on T006, T007, T008)
-- [ ] T010 Create ProfileController in backend/src/main/java/com/simonrowe/profile/ProfileController.java -- @RestController, GET /api/profile endpoint returning ProfileResponse; delegates to ProfileService (depends on T009)
+- [X] T001 [P] Create Image embedded record in backend/src/main/java/com/simonrowe/profile/Image.java -- fields: url, name, width, height, mime, formats (see data-model.md Image subdocument)
+- [X] T002 [P] Create ImageFormats embedded record in backend/src/main/java/com/simonrowe/profile/ImageFormats.java -- fields: thumbnail, small, medium, large (each of type Image)
+- [X] T003 [P] Create SocialMediaLink MongoDB document record in backend/src/main/java/com/simonrowe/profile/SocialMediaLink.java -- @Document(collection = "social_medias"), fields: id, type, name, link, includeOnResume, createdAt, updatedAt
+- [X] T004 Create Profile MongoDB document record in backend/src/main/java/com/simonrowe/profile/Profile.java -- @Document(collection = "profiles"), fields: id, name, title, headline, description, profileImage, sidebarImage, backgroundImage, mobileBackgroundImage, location, phoneNumber, primaryEmail, secondaryEmail, cvUrl, createdAt, updatedAt (depends on T001, T002)
+- [X] T005 [P] Create SocialMediaLinkResponse DTO record in backend/src/main/java/com/simonrowe/profile/SocialMediaLinkResponse.java -- fields: type, name, url (mapped from link), includeOnResume; include static factory method fromEntity(SocialMediaLink)
+- [X] T006 Create ProfileResponse DTO record in backend/src/main/java/com/simonrowe/profile/ProfileResponse.java -- all profile fields plus socialMediaLinks list; include static factory method fromEntities(Profile, List<SocialMediaLink>) per contracts/profile-api.yaml schema (depends on T001, T002, T005)
+- [X] T007 [P] Create ProfileRepository interface in backend/src/main/java/com/simonrowe/profile/ProfileRepository.java -- extends MongoRepository<Profile, String> with Optional<Profile> findFirstBy()
+- [X] T008 [P] Create SocialMediaLinkRepository interface in backend/src/main/java/com/simonrowe/profile/SocialMediaLinkRepository.java -- extends MongoRepository<SocialMediaLink, String>
+- [X] T009 Create ProfileService in backend/src/main/java/com/simonrowe/profile/ProfileService.java -- getProfile() method calls ProfileRepository.findFirstBy() and SocialMediaLinkRepository.findAll(), assembles ProfileResponse; throws ResponseStatusException(404) if no profile found (depends on T006, T007, T008)
+- [X] T010 Create ProfileController in backend/src/main/java/com/simonrowe/profile/ProfileController.java -- @RestController, GET /api/profile endpoint returning ProfileResponse; delegates to ProfileService (depends on T009)
 
 ### Backend Tests
 
-- [ ] T011 [P] Create ProfileServiceTest unit test in backend/src/test/java/com/simonrowe/profile/ProfileServiceTest.java -- mock repositories, test happy path returns assembled ProfileResponse, test 404 when no profile exists
-- [ ] T012 [P] Create ProfileControllerTest integration test in backend/src/test/java/com/simonrowe/profile/ProfileControllerTest.java -- @SpringBootTest with Testcontainers MongoDB, seed test data, verify GET /api/profile returns 200 with correct JSON shape, verify 404 when collection empty
+- [X] T011 [P] Create ProfileServiceTest unit test in backend/src/test/java/com/simonrowe/profile/ProfileServiceTest.java -- mock repositories, test happy path returns assembled ProfileResponse, test 404 when no profile exists
+- [X] T012 [P] Create ProfileControllerTest integration test in backend/src/test/java/com/simonrowe/profile/ProfileControllerTest.java -- @SpringBootTest with Testcontainers MongoDB, seed test data, verify GET /api/profile returns 200 with correct JSON shape, verify 404 when collection empty
 
 ### Frontend
 
-- [ ] T013 [P] Create Profile TypeScript interface in frontend/src/types/Profile.ts -- match ProfileResponse schema from contracts/profile-api.yaml including Image, ImageFormats, nested types
-- [ ] T014 [P] Create SocialMediaLink TypeScript interface in frontend/src/types/SocialMediaLink.ts -- fields: type ('github' | 'linkedin' | 'twitter'), name, url, includeOnResume
-- [ ] T015 Create profileApi service in frontend/src/services/profileApi.ts -- fetchProfile() function calling GET /api/profile, returns Promise<Profile>; handle errors gracefully (depends on T013, T014)
-- [ ] T016 Create useProfile custom hook in frontend/src/hooks/useProfile.ts -- manages loading, error, and profile data state; calls profileApi.fetchProfile() on mount; returns { profile, loading, error } (depends on T015)
+- [X] T013 [P] Create Profile TypeScript interface in frontend/src/types/Profile.ts -- match ProfileResponse schema from contracts/profile-api.yaml including Image, ImageFormats, nested types
+- [X] T014 [P] Create SocialMediaLink TypeScript interface in frontend/src/types/SocialMediaLink.ts -- fields: type ('github' | 'linkedin' | 'twitter'), name, url, includeOnResume
+- [X] T015 Create profileApi service in frontend/src/services/profileApi.ts -- fetchProfile() function calling GET /api/profile, returns Promise<Profile>; handle errors gracefully (depends on T013, T014)
+- [X] T016 Create useProfile custom hook in frontend/src/hooks/useProfile.ts -- manages loading, error, and profile data state; calls profileApi.fetchProfile() on mount; returns { profile, loading, error } (depends on T015)
 
 **Checkpoint**: Backend serves GET /api/profile with full profile + social media links. Frontend can fetch and hold profile data in state. All user stories can now begin.
 
@@ -73,22 +73,22 @@ No tasks in this phase.
 
 ### Implementation for User Story 1
 
-- [ ] T017 [P] [US1] Install react-markdown dependency in frontend/package.json -- npm install react-markdown rehype-sanitize (per RD-004)
-- [ ] T018 [US1] Create ProfileBanner component in frontend/src/components/profile/ProfileBanner.tsx -- displays name, professional title, headline message, background image (desktop), mobile background image (via CSS media query per RD-003/FR-009), profile photograph; receives profile data as props (depends on T013)
-- [ ] T019 [US1] Create AboutSection component in frontend/src/components/profile/AboutSection.tsx -- renders profile.description using react-markdown with rehype-sanitize; custom 'a' component override opens links in new tab with target="_blank" rel="noopener noreferrer" (per RD-004, FR-003, FR-020) (depends on T017)
-- [ ] T020 [US1] Create ContactDetails component in frontend/src/components/profile/ContactDetails.tsx -- expand/collapse panel (useState toggle) showing location, primaryEmail (mailto link), secondaryEmail (if non-empty), phoneNumber; collapse/expand within 200ms (SC-007, FR-004, FR-005)
-- [ ] T021 [US1] Create a loading indicator component or inline loading state in frontend/src/components/common/LoadingIndicator.tsx -- spinner or skeleton displayed while useProfile.loading is true; appears within 100ms of page load (SC-009, FR-016)
-- [ ] T022 [US1] Create an error state component or inline error display in frontend/src/components/common/ErrorMessage.tsx -- displayed when useProfile.error is truthy; shows user-friendly message and optional retry action (FR-019)
-- [ ] T023 [US1] Create HomePage container in frontend/src/pages/HomePage.tsx -- uses useProfile hook; renders LoadingIndicator while loading, ErrorMessage on error, otherwise renders ProfileBanner, AboutSection, ContactDetails; assigns section id attributes for anchor navigation (depends on T016, T018, T019, T020, T021, T022)
-- [ ] T024 [US1] Add HomePage route to frontend/src/App.tsx -- configure React Router with "/" route pointing to HomePage (depends on T023)
-- [ ] T025 [US1] Create CSS/styles for ProfileBanner, AboutSection, ContactDetails -- responsive layout for desktop (>991px), tablet (768px), mobile (375px) per FR-018; background image swap via CSS media query for mobile (FR-009, RD-003); contact panel transition within 200ms
+- [X] T017 [P] [US1] Install react-markdown dependency in frontend/package.json -- npm install react-markdown rehype-sanitize (per RD-004)
+- [X] T018 [US1] Create ProfileBanner component in frontend/src/components/profile/ProfileBanner.tsx -- displays name, professional title, headline message, background image (desktop), mobile background image (via CSS media query per RD-003/FR-009), profile photograph; receives profile data as props (depends on T013)
+- [X] T019 [US1] Create AboutSection component in frontend/src/components/profile/AboutSection.tsx -- renders profile.description using react-markdown with rehype-sanitize; custom 'a' component override opens links in new tab with target="_blank" rel="noopener noreferrer" (per RD-004, FR-003, FR-020) (depends on T017)
+- [X] T020 [US1] Create ContactDetails component in frontend/src/components/profile/ContactDetails.tsx -- expand/collapse panel (useState toggle) showing location, primaryEmail (mailto link), secondaryEmail (if non-empty), phoneNumber; collapse/expand within 200ms (SC-007, FR-004, FR-005)
+- [X] T021 [US1] Create a loading indicator component or inline loading state in frontend/src/components/common/LoadingIndicator.tsx -- spinner or skeleton displayed while useProfile.loading is true; appears within 100ms of page load (SC-009, FR-016)
+- [X] T022 [US1] Create an error state component or inline error display in frontend/src/components/common/ErrorMessage.tsx -- displayed when useProfile.error is truthy; shows user-friendly message and optional retry action (FR-019)
+- [X] T023 [US1] Create HomePage container in frontend/src/pages/HomePage.tsx -- uses useProfile hook; renders LoadingIndicator while loading, ErrorMessage on error, otherwise renders ProfileBanner, AboutSection, ContactDetails; assigns section id attributes for anchor navigation (depends on T016, T018, T019, T020, T021, T022)
+- [X] T024 [US1] Add HomePage route to frontend/src/App.tsx -- configure React Router with "/" route pointing to HomePage (depends on T023)
+- [X] T025 [US1] Create CSS/styles for ProfileBanner, AboutSection, ContactDetails -- responsive layout for desktop (>991px), tablet (768px), mobile (375px) per FR-018; background image swap via CSS media query for mobile (FR-009, RD-003); contact panel transition within 200ms
 
 ### Frontend Tests for User Story 1
 
-- [ ] T026 [P] [US1] Create ProfileBanner test in frontend/tests/components/ProfileBanner.test.tsx -- verify name, title, headline rendered; verify background image present
-- [ ] T027 [P] [US1] Create AboutSection test in frontend/tests/components/AboutSection.test.tsx -- verify Markdown rendered to HTML (bold, links, lists); verify links open in new tab
-- [ ] T028 [P] [US1] Create ContactDetails test in frontend/tests/components/ContactDetails.test.tsx -- verify collapsed by default; verify expand/collapse toggle shows/hides details; verify email, phone, location displayed
-- [ ] T029 [P] [US1] Create HomePage test in frontend/tests/pages/HomePage.test.tsx -- mock useProfile hook; verify loading state shown; verify error state shown; verify all profile sections rendered on success
+- [X] T026 [P] [US1] Create ProfileBanner test in frontend/tests/components/ProfileBanner.test.tsx -- verify name, title, headline rendered; verify background image present
+- [X] T027 [P] [US1] Create AboutSection test in frontend/tests/components/AboutSection.test.tsx -- verify Markdown rendered to HTML (bold, links, lists); verify links open in new tab
+- [X] T028 [P] [US1] Create ContactDetails test in frontend/tests/components/ContactDetails.test.tsx -- verify collapsed by default; verify expand/collapse toggle shows/hides details; verify email, phone, location displayed
+- [X] T029 [P] [US1] Create HomePage test in frontend/tests/pages/HomePage.test.tsx -- mock useProfile hook; verify loading state shown; verify error state shown; verify all profile sections rendered on success
 
 **Checkpoint**: Homepage loads and displays the full professional profile. Visitor sees name, title, headline, images, formatted about text, and expandable contact details. User Story 1 is independently functional and testable.
 
@@ -105,16 +105,16 @@ No tasks in this phase.
 
 ### Implementation for User Story 2
 
-- [ ] T030 [US2] Create Sidebar component in frontend/src/components/layout/Sidebar.tsx -- fixed-position sidebar on desktop (>991px) with navigation items: About, Experience, Skills, Blog, Contact; each item has an icon (FR-010); sidebar displays sidebarImage avatar at top; onClick uses document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' }) per RD-001; sidebar hidden on mobile via CSS (depends on T013)
-- [ ] T031 [US2] Create MobileMenu component in frontend/src/components/layout/MobileMenu.tsx -- hamburger toggle button visible on mobile (<991px); useState for isMenuOpen; toggles sidebar visibility with CSS transform translateX and 300ms transition per RD-002/SC-006; tapping a nav item closes menu and scrolls to section (depends on T030)
-- [ ] T032 [US2] Create ScrollToTop component in frontend/src/components/layout/ScrollToTop.tsx -- button appears after scrolling past 600px (tracked via scroll event listener or IntersectionObserver); onClick scrolls to top with window.scrollTo({ top: 0, behavior: 'smooth' }); returns to top within 1 second (SC-008, FR-012)
-- [ ] T033 [US2] Integrate Sidebar, MobileMenu, and ScrollToTop into HomePage in frontend/src/pages/HomePage.tsx -- add section id anchors for each navigation target (about, experience, skills, blog, contact); render Sidebar and MobileMenu in the page layout; render ScrollToTop globally (depends on T030, T031, T032)
-- [ ] T034 [US2] Create CSS/styles for Sidebar, MobileMenu, ScrollToTop -- fixed sidebar positioning; mobile off-screen transform with 300ms ease transition; scroll-to-top button positioning and fade-in; responsive breakpoints at 991px
+- [X] T030 [US2] Create Sidebar component in frontend/src/components/layout/Sidebar.tsx -- fixed-position sidebar on desktop (>991px) with navigation items: About, Experience, Skills, Blog, Contact; each item has an icon (FR-010); sidebar displays sidebarImage avatar at top; onClick uses document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' }) per RD-001; sidebar hidden on mobile via CSS (depends on T013)
+- [X] T031 [US2] Create MobileMenu component in frontend/src/components/layout/MobileMenu.tsx -- hamburger toggle button visible on mobile (<991px); useState for isMenuOpen; toggles sidebar visibility with CSS transform translateX and 300ms transition per RD-002/SC-006; tapping a nav item closes menu and scrolls to section (depends on T030)
+- [X] T032 [US2] Create ScrollToTop component in frontend/src/components/layout/ScrollToTop.tsx -- button appears after scrolling past 600px (tracked via scroll event listener or IntersectionObserver); onClick scrolls to top with window.scrollTo({ top: 0, behavior: 'smooth' }); returns to top within 1 second (SC-008, FR-012)
+- [X] T033 [US2] Integrate Sidebar, MobileMenu, and ScrollToTop into HomePage in frontend/src/pages/HomePage.tsx -- add section id anchors for each navigation target (about, experience, skills, blog, contact); render Sidebar and MobileMenu in the page layout; render ScrollToTop globally (depends on T030, T031, T032)
+- [X] T034 [US2] Create CSS/styles for Sidebar, MobileMenu, ScrollToTop -- fixed sidebar positioning; mobile off-screen transform with 300ms ease transition; scroll-to-top button positioning and fade-in; responsive breakpoints at 991px
 
 ### Frontend Tests for User Story 2
 
-- [ ] T035 [P] [US2] Create Sidebar test in frontend/tests/components/Sidebar.test.tsx -- verify navigation items rendered with correct labels; verify icons present; verify sidebarImage displayed; verify click triggers scrollIntoView
-- [ ] T036 [P] [US2] Create ScrollToTop test in frontend/tests/components/ScrollToTop.test.tsx -- verify button hidden initially; verify button appears on scroll; verify click scrolls to top
+- [X] T035 [P] [US2] Create Sidebar test in frontend/tests/components/Sidebar.test.tsx -- verify navigation items rendered with correct labels; verify icons present; verify sidebarImage displayed; verify click triggers scrollIntoView
+- [X] T036 [P] [US2] Create ScrollToTop test in frontend/tests/components/ScrollToTop.test.tsx -- verify button hidden initially; verify button appears on scroll; verify click scrolls to top
 
 **Checkpoint**: Desktop visitors see a fixed sidebar with icons and avatar. Mobile visitors use a hamburger menu that slides in/out within 300ms. Clicking navigation items smoothly scrolls to the target section. Scroll-to-top button appears after scrolling down. User Story 2 is independently functional.
 
@@ -133,7 +133,7 @@ No tasks in this phase.
 
 ### Implementation for User Story 3
 
-- [ ] T037 [US3] Add Download CV button to ProfileBanner or AboutSection in frontend/src/components/profile/ProfileBanner.tsx (or AboutSection.tsx) -- renders an anchor/button linking to profile.cvUrl (/api/resume); only rendered if cvUrl is non-null/non-empty; styled consistently with the profile section (depends on T018 or T019)
+- [X] T037 [US3] Add Download CV button to ProfileBanner or AboutSection in frontend/src/components/profile/ProfileBanner.tsx (or AboutSection.tsx) -- renders an anchor/button linking to profile.cvUrl (/api/resume); only rendered if cvUrl is non-null/non-empty; styled consistently with the profile section (depends on T018 or T019)
 
 **Checkpoint**: Download CV button is visible on the homepage and links to the correct endpoint. Button is hidden if cvUrl is not configured. The endpoint itself may return 404 until Spec 004 is implemented.
 
@@ -150,12 +150,12 @@ No tasks in this phase.
 
 ### Implementation for User Story 4
 
-- [ ] T038 [US4] Create SocialLinks component in frontend/src/components/profile/SocialLinks.tsx -- renders a list of social media links from profile.socialMediaLinks; displays platform-specific icon for each type (github, linkedin, twitter); each link opens in new tab with target="_blank" rel="noopener noreferrer" (FR-015); only renders links that exist in the array (depends on T014)
-- [ ] T039 [US4] Integrate SocialLinks into the homepage layout in frontend/src/pages/HomePage.tsx -- render SocialLinks in the profile section and/or sidebar; pass socialMediaLinks from profile data (depends on T038, T023)
+- [X] T038 [US4] Create SocialLinks component in frontend/src/components/profile/SocialLinks.tsx -- renders a list of social media links from profile.socialMediaLinks; displays platform-specific icon for each type (github, linkedin, twitter); each link opens in new tab with target="_blank" rel="noopener noreferrer" (FR-015); only renders links that exist in the array (depends on T014)
+- [X] T039 [US4] Integrate SocialLinks into the homepage layout in frontend/src/pages/HomePage.tsx -- render SocialLinks in the profile section and/or sidebar; pass socialMediaLinks from profile data (depends on T038, T023)
 
 ### Frontend Tests for User Story 4
 
-- [ ] T040 [P] [US4] Create SocialLinks test in frontend/tests/components/SocialLinks.test.tsx -- verify correct icons rendered for each platform type; verify links have target="_blank"; verify correct href URLs; verify handles empty array gracefully
+- [X] T040 [P] [US4] Create SocialLinks test in frontend/tests/components/SocialLinks.test.tsx -- verify correct icons rendered for each platform type; verify links have target="_blank"; verify correct href URLs; verify handles empty array gracefully
 
 **Checkpoint**: Social media links are displayed with platform icons. Clicking a link opens the external profile in a new tab. All links from the API response are rendered. User Story 4 is independently functional.
 
@@ -165,12 +165,12 @@ No tasks in this phase.
 
 **Purpose**: Analytics integration, error handling improvements, and final quality pass across all user stories.
 
-- [ ] T041 [P] Install and configure Google Analytics 4 via react-ga4 in frontend/src/main.tsx -- initialize GA4 with measurement ID from environment variable (per RD-005, FR-017)
-- [ ] T042 [P] Add GA4 page view tracking to HomePage in frontend/src/pages/HomePage.tsx -- fire page_view event on mount
-- [ ] T043 [P] Add GA4 custom event tracking across components -- navigate_section event in Sidebar/MobileMenu onClick; download_cv event on CV button click; social_media_click event on SocialLinks click; contact_expand event on ContactDetails toggle; scroll_to_top event on ScrollToTop click (per RD-005)
-- [ ] T044 [P] Add error boundary or fallback handling for missing/broken images in ProfileBanner -- placeholder image or graceful hiding when image URL returns 404 (edge case from spec.md)
-- [ ] T045 [P] Verify responsive layout at 320px, 375px, 768px, and >991px viewports -- ensure all content readable, no horizontal scrolling, text wraps/truncates gracefully for long content (edge cases from spec.md, FR-018)
-- [ ] T046 Run quickstart.md verification checklist (Steps 1-8) -- validate all profile elements, navigation, mobile responsive view, social media links, Download CV button, and error handling scenarios end-to-end
+- [X] T041 [P] Install and configure Google Analytics 4 via react-ga4 in frontend/src/main.tsx -- initialize GA4 with measurement ID from environment variable (per RD-005, FR-017)
+- [X] T042 [P] Add GA4 page view tracking to HomePage in frontend/src/pages/HomePage.tsx -- fire page_view event on mount
+- [X] T043 [P] Add GA4 custom event tracking across components -- navigate_section event in Sidebar/MobileMenu onClick; download_cv event on CV button click; social_media_click event on SocialLinks click; contact_expand event on ContactDetails toggle; scroll_to_top event on ScrollToTop click (per RD-005)
+- [X] T044 [P] Add error boundary or fallback handling for missing/broken images in ProfileBanner -- placeholder image or graceful hiding when image URL returns 404 (edge case from spec.md)
+- [X] T045 [P] Verify responsive layout at 320px, 375px, 768px, and >991px viewports -- ensure all content readable, no horizontal scrolling, text wraps/truncates gracefully for long content (edge cases from spec.md, FR-018)
+- [X] T046 Run quickstart.md verification checklist (Steps 1-8) -- validate all profile elements, navigation, mobile responsive view, social media links, Download CV button, and error handling scenarios end-to-end
 
 ---
 
