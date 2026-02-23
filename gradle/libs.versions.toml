@@ -8,6 +8,8 @@ checkstyle = "10.21.4"
 jacoco = "0.8.12"
 cyclonedx = "2.1.0"
 sonarqube = "6.0.1.5171"
+openpdf = "2.0.3"
+commonmark = "0.24.0"
 
 [libraries]
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
@@ -25,6 +27,8 @@ testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter" }
 testcontainers-mongodb = { module = "org.testcontainers:mongodb" }
 testcontainers-kafka = { module = "org.testcontainers:kafka" }
 testcontainers-elasticsearch = { module = "org.testcontainers:elasticsearch" }
+openpdf = { module = "com.github.librepdf:openpdf", version.ref = "openpdf" }
+commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

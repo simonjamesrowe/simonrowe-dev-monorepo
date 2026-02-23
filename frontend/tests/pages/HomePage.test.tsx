@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { HomePage } from '../../src/pages/HomePage'
@@ -13,6 +14,26 @@ vi.mock('../../src/hooks/useProfile', () => ({
 vi.mock('../../src/services/analytics', () => ({
   trackHomepageEvent: vi.fn(),
   trackPageView: vi.fn(),
+}))
+
+vi.mock('../../src/components/employment/ExperienceSection', () => ({
+  ExperienceSection: () => <div data-testid="experience-section">Experience</div>,
+}))
+
+vi.mock('../../src/components/skills/SkillsSection', () => ({
+  SkillsSection: () => <div data-testid="skills-section">Skills</div>,
+}))
+
+vi.mock('../../src/components/skills/SkillGroupDetail', () => ({
+  SkillGroupDetail: () => <div data-testid="skill-group-detail">Skill Group Detail</div>,
+}))
+
+vi.mock('../../src/components/employment/JobDetail', () => ({
+  JobDetail: () => <div data-testid="job-detail">Job Detail</div>,
+}))
+
+vi.mock('../../src/components/common/ResumeDownloadButton', () => ({
+  ResumeDownloadButton: () => <div data-testid="resume-download">Resume</div>,
 }))
 
 const profile: Profile = {
@@ -48,7 +69,11 @@ describe('HomePage', () => {
       retry: vi.fn(),
     })
 
-    render(<HomePage />)
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    )
 
     expect(screen.getByText('Loading profile...')).toBeInTheDocument()
   })
@@ -61,7 +86,11 @@ describe('HomePage', () => {
       retry: vi.fn(),
     })
 
-    render(<HomePage />)
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    )
 
     expect(screen.getByRole('alert')).toHaveTextContent('boom')
   })
@@ -74,10 +103,17 @@ describe('HomePage', () => {
       retry: vi.fn(),
     })
 
-    render(<HomePage />)
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    )
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Simon Rowe')
     expect(screen.getByRole('heading', { level: 3, name: 'About' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 3, name: 'Contact' })).toBeInTheDocument()
+    expect(screen.getByTestId('experience-section')).toBeInTheDocument()
+    expect(screen.getByTestId('skills-section')).toBeInTheDocument()
+    expect(screen.getByTestId('resume-download')).toBeInTheDocument()
   })
 })

@@ -7,6 +7,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<HomePage />} path="/" />
+        <Route element={<HomePage />} path="/skills-groups/:groupId" />
+        <Route element={<HomePage />} path="/jobs/:jobId" />
       </Routes>
     </BrowserRouter>
   )

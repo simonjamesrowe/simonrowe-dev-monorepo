@@ -1,5 +1,6 @@
 package com.simonrowe.profile;
 
+import com.simonrowe.common.Image;
 import java.util.List;
 
 public record ProfileResponse(
