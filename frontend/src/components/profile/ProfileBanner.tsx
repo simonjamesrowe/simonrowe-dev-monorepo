@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 
 import type { Profile } from '../../types/Profile'
+import { SiteSearch } from '../search/SiteSearch'
 
 interface ProfileBannerProps {
   profile: Profile
@@ -21,6 +22,7 @@ export function ProfileBanner({ profile, onDownloadCv }: ProfileBannerProps) {
         <h1>{profile.name}</h1>
         <h2>{profile.title}</h2>
         <p className="profile-banner__headline">{profile.headline}</p>
+        <SiteSearch />
         {profile.cvUrl ? (
           <a
             className="button"

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { BlogGrid } from '../components/blog/BlogGrid'
-import { BlogSearch } from '../components/blog/BlogSearch'
+import { BlogSearch } from '../components/search/BlogSearch'
 import { fetchBlogs } from '../services/blogApi'
 import type { BlogSummary } from '../types/blog'
 
