@@ -36,6 +36,14 @@ vi.mock('../../src/components/common/ResumeDownloadButton', () => ({
   ResumeDownloadButton: () => <div data-testid="resume-download">Resume</div>,
 }))
 
+vi.mock('../../src/components/tour/TourButton', () => ({
+  TourButton: () => <div data-testid="tour-button">Tour</div>,
+}))
+
+vi.mock('../../src/components/tour/TourOverlay', () => ({
+  TourOverlay: () => null,
+}))
+
 const profile: Profile = {
   name: 'Simon Rowe',
   firstName: 'Simon',

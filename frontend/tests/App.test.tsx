@@ -7,6 +7,10 @@ vi.mock('../src/pages/HomePage', () => ({
   HomePage: () => <h1>Homepage</h1>,
 }))
 
+vi.mock('../src/components/tour/TourProvider', () => ({
+  TourProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
 describe('App', () => {
   it('routes / to HomePage', () => {
     window.history.pushState({}, '', '/')
