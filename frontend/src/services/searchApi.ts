@@ -18,8 +18,10 @@ export interface GroupedSearchResponse {
   skills?: SearchResult[]
 }
 
-const SITE_SEARCH_ENDPOINT = '/api/search'
-const BLOG_SEARCH_ENDPOINT = '/api/search/blogs'
+import { API_BASE_URL } from '../config/api'
+
+const SITE_SEARCH_ENDPOINT = `${API_BASE_URL}/api/search`
+const BLOG_SEARCH_ENDPOINT = `${API_BASE_URL}/api/search/blogs`
 
 export async function siteSearch(
   query: string,

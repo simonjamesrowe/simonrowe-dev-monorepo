@@ -1,6 +1,7 @@
+import { API_BASE_URL } from '../config/api'
 import type { ContactFormData } from '../components/contact/contactFormSchema'
 
-const CONTACT_ENDPOINT = '/api/contact-us'
+const CONTACT_ENDPOINT = `${API_BASE_URL}/api/contact-us`
 
 export interface ValidationError {
   field: string

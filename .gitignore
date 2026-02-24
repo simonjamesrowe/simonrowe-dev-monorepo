@@ -38,6 +38,9 @@ Thumbs.db
 # Docker volumes
 docker-data/
 
+# Uploaded media files (restored from backup)
+backend/uploads/
+
 # Logs
 *.log
 

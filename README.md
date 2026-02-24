@@ -50,6 +50,50 @@ npm run dev
 
 Open http://localhost:5173
 
+### 4. Restore seed data (first time only)
+
+The app requires data in MongoDB to display content. Restore from a Strapi backup:
+
+```bash
+./scripts/restore-backup.sh
+```
+
+This finds the latest `strapi-backup-*.tar.gz` in `~/backups`, transforms the Strapi data to match the Spring Boot schema, and copies images to `backend/uploads/`. Restart the backend after restoring.
+
+To use a different backup directory:
+
+```bash
+./scripts/restore-backup.sh /path/to/backups
+```
+
+## Data Backup & Restore
+
+### Create a backup
+
+Dumps the current MongoDB data and uploads into a timestamped tarball:
+
+```bash
+./scripts/create-backup.sh
+```
+
+Backups are saved to `~/backups` by default. To specify a different directory:
+
+```bash
+./scripts/create-backup.sh /path/to/backups
+```
+
+### Restore a backup
+
+```bash
+./scripts/restore-backup.sh
+```
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/restore-backup.sh` | Extract, transform, and load a Strapi backup into MongoDB + copy images |
+| `scripts/create-backup.sh` | Dump current MongoDB data + images into a backup tarball |
+| `scripts/migrate-strapi-data.js` | Mongosh script that transforms Strapi collections to Spring Boot schema (used by restore) |
+
 ## Running Tests
 
 ### Backend
@@ -108,6 +152,7 @@ docker compose -f docker-compose.prod.yml logs pinggy
 ```
 backend/             Java/Spring Boot API service
 frontend/            React/TypeScript SPA
+scripts/             Backup and restore scripts
 config/
   checkstyle/        Google Java Style config
   otel/              OpenTelemetry Collector config
