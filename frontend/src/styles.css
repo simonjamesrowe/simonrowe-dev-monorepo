@@ -992,3 +992,120 @@ a {
     padding-right: 0.9rem;
   }
 }
+
+/* Tour */
+.tour-button {
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 767px) {
+  .tour-button {
+    display: none;
+  }
+}
+
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  cursor: pointer;
+}
+
+.tour-spotlight {
+  position: relative;
+  z-index: 9999;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.tour-tooltip {
+  position: fixed;
+  z-index: 10000;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  width: min(380px, calc(100vw - 32px));
+  padding: 1rem;
+}
+
+.tour-tooltip__header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+.tour-tooltip__image {
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: contain;
+  border-radius: 0.25rem;
+  flex-shrink: 0;
+}
+
+.tour-tooltip__title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.tour-tooltip__body {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  margin-bottom: 0.75rem;
+}
+
+.tour-tooltip__body p {
+  margin: 0 0 0.5rem;
+}
+
+.tour-tooltip__body p:last-child {
+  margin-bottom: 0;
+}
+
+.tour-tooltip__body ul,
+.tour-tooltip__body ol {
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 1.2rem;
+}
+
+.tour-tooltip__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.tour-tooltip__progress {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.tour-tooltip__actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.tour-tooltip__btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.tour-tooltip__btn--primary {
+  background: var(--color-accent);
+  color: white;
+}
+
+.tour-tooltip__btn--secondary {
+  background: transparent;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+}

@@ -16,6 +16,8 @@ import { ProfileBanner } from '../components/profile/ProfileBanner'
 import { SocialLinks } from '../components/profile/SocialLinks'
 import { SkillGroupDetail } from '../components/skills/SkillGroupDetail'
 import { SkillsSection } from '../components/skills/SkillsSection'
+import { TourButton } from '../components/tour/TourButton'
+import { TourOverlay } from '../components/tour/TourOverlay'
 import { useProfile } from '../hooks/useProfile'
 import { trackHomepageEvent, trackPageView } from '../services/analytics'
 
@@ -83,6 +85,7 @@ export function HomePage() {
           onDownloadCv={() => trackHomepageEvent('download_cv', profile.cvUrl ?? 'missing')}
           profile={profile}
         />
+        <TourButton />
         <AboutSection description={profile.description} />
         <ExperienceSection onJobClick={handleJobClick} />
         <SkillsSection onGroupClick={handleGroupClick} />
@@ -105,6 +108,7 @@ export function HomePage() {
         />
       </main>
       <ScrollToTop onScrollToTop={() => trackHomepageEvent('scroll_to_top', 'homepage')} />
+      <TourOverlay />
 
       {groupId && (
         <SkillGroupDetail
