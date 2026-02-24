@@ -58,6 +58,7 @@ dependencies {
     implementation(libs.opentelemetry.spring.boot.starter)
     implementation(libs.openpdf)
     implementation(libs.commonmark)
+    implementation(libs.spring.boot.starter.mail)
 
     developmentOnly(libs.spring.boot.devtools)
 
