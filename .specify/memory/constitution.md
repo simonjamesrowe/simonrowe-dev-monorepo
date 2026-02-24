@@ -1,18 +1,22 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.2.0 → 1.2.1 (PATCH)
+  Version change: 1.2.1 → 1.3.0 (MINOR)
 
   Modified principles:
-    - Principle III: Quality Gates
-      Clarified: Testcontainers rule now explicitly permits
-      @MockitoBean for infrastructure components a test does not
-      exercise, provided a dedicated Testcontainer-backed test
-      exists for that component. Also notes @MockitoBean
-      (Spring Framework 6.2+) as the required replacement for
-      the deprecated @MockBean.
+    - Principle II: Modern Java & React Stack
+      Added: Email transport standard (Spring Boot Starter Mail +
+      Brevo SMTP relay). Added: Frontend form validation standard
+      (React Hook Form + Zod).
+    - Principle V: Simplicity & Incremental Delivery
+      Added: Transient data policy — data that is only forwarded
+      and not queried MUST NOT be persisted to MongoDB.
 
-  Added sections: None
+  Added sections:
+    - Technology Stack Constraints: new rows for Email, Spam
+      Protection, Form Validation (frontend), and reCAPTCHA.
+    - Development Workflow: note on VITE_* env vars being baked
+      into the frontend image at build time via Docker build args.
 
   Removed sections: None
 
@@ -68,6 +72,18 @@ code and MongoDB persistence.
   registration — users are provisioned directly in Auth0.
 - Spring Boot Actuator/management endpoints MUST run on a
   separate port from application traffic.
+- Transactional email MUST be sent via Spring Boot Starter Mail
+  using the Brevo SMTP relay (smtp-relay.brevo.com:587). No
+  third-party email SDK (e.g. SendGrid Java SDK) MAY be
+  introduced; the standard JavaMailSender abstraction is
+  sufficient.
+- Frontend forms MUST use React Hook Form for state management
+  and Zod for schema-based validation. Both client-side (Zod)
+  and server-side (Jakarta Bean Validation) constraints MUST be
+  defined and kept in sync.
+- Google reCAPTCHA v2 ("I'm not a robot" checkbox) MUST be used
+  on all public-facing forms that submit data to the backend, to
+  prevent automated submissions.
 
 ### III. Quality Gates (NON-NEGOTIABLE)
 
@@ -114,6 +130,10 @@ when a concrete requirement demands it. YAGNI applies.
 - Content creation/editing functionality is a future concern; the
   architecture MUST accommodate it but MUST NOT implement it until
   explicitly requested.
+- Data that is only forwarded (e.g. contact form submissions sent
+  via email) and never queried MUST NOT be persisted to MongoDB.
+  Persistence MUST only be introduced when a concrete read
+  requirement exists.
 
 ## Technology Stack Constraints
 
@@ -140,6 +160,9 @@ when a concrete requirement demands it. YAGNI applies.
 | SBOM         | CycloneDX                         | Dependency tracking    |
 | Testing      | Testcontainers                    | Integration/slice      |
 | Style        | Google Java Style Guide           | Enforced via linter    |
+| Email        | Spring Boot Starter Mail + Brevo  | SMTP relay, port 587   |
+| Spam protect | Google reCAPTCHA v2               | All public forms       |
+| Form state   | React Hook Form + Zod             | Frontend forms         |
 
 ## Development Workflow
 
@@ -156,6 +179,10 @@ when a concrete requirement demands it. YAGNI applies.
 - The frontend Docker image MUST be built via `docker build` with
   a multi-stage Dockerfile and published as part of CI on
   successful merge to main.
+- `VITE_*` environment variables are baked into the frontend
+  bundle at build time and MUST be passed as Docker build args
+  (e.g. `--build-arg VITE_RECAPTCHA_SITE_KEY=...`). They CANNOT
+  be injected at container runtime.
 - The existing website at `/Users/simonrowe/workspace/simonjamesrowe/react-ui`
   serves as the design reference for the frontend rebuild.
 - MongoDB backup data at `/Users/simonrowe/backups` MUST be
@@ -178,4 +205,4 @@ defined above.
   principles. Violations MUST be resolved before merge unless
   explicitly justified in a Complexity Tracking table.
 
-**Version**: 1.2.1 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-24
+**Version**: 1.3.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-24

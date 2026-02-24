@@ -35,6 +35,17 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  mail:
+    host: smtp-relay.brevo.com
+    port: 587
+    username: a13da4001@smtp-brevo.com
+    password: ${BREVO_SMTP_PASSWORD:xxxxxx}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 search:
   sync:
@@ -45,3 +56,11 @@ search:
     max-results: 20
   query:
     max-length: 200
+
+contact:
+  email:
+    from: contact-us@simonrowe.dev
+    to: simon.rowe@gmail.com
+  recaptcha:
+    secret-key: ${RECAPTCHA_SECRET_KEY:}
+    verify-url: https://www.google.com/recaptcha/api/siteverify
