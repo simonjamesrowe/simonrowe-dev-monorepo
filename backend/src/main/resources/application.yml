@@ -26,6 +26,15 @@ spring:
     uris: http://localhost:9200
   kafka:
     bootstrap-servers: localhost:9092
+    consumer:
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.simonrowe.events
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
   mail:
     host: smtp-relay.brevo.com
     port: 587
@@ -37,6 +46,16 @@ spring:
           auth: true
           starttls:
             enable: true
+
+search:
+  sync:
+    cron: "0 0 */4 * * *"
+  site:
+    max-results-per-group: 5
+  blog:
+    max-results: 20
+  query:
+    max-length: 200
 
 contact:
   email:
