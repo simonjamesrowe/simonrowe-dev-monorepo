@@ -78,7 +78,7 @@ export function SiteSearch() {
   )
 
   return (
-    <div className="site-search" ref={containerRef}>
+    <div className="site-search tour-search" ref={containerRef}>
       <input
         aria-label="Search across all content"
         className="site-search__input"

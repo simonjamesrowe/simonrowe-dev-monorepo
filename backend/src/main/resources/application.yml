@@ -4,6 +4,9 @@ server:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
+uploads:
+  path: ${UPLOADS_PATH:backend/uploads/}
+
 management:
   server:
     port: 8081

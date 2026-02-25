@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import type { NavigationItem } from './Sidebar'
 
@@ -10,14 +11,19 @@ interface MobileMenuProps {
 
 export function MobileMenu({ aboutImageUrl, items, onNavigate }: MobileMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const navigate = useNavigate()
 
   const toggleMenu = () => {
     setIsMenuOpen((value) => !value)
   }
 
-  const navigateTo = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
-    onNavigate?.(id)
+  const navigateTo = (item: NavigationItem) => {
+    if (item.route) {
+      void navigate(item.route)
+    } else {
+      document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth' })
+    }
+    onNavigate?.(item.id)
     setIsMenuOpen(false)
   }
 
@@ -31,7 +37,7 @@ export function MobileMenu({ aboutImageUrl, items, onNavigate }: MobileMenuProps
           <ul>
             {items.map((item) => (
               <li key={item.id}>
-                <button onClick={() => navigateTo(item.id)} type="button">
+                <button onClick={() => navigateTo(item)} type="button">
                   {item.id === 'about' ? <img alt="About" src={aboutImageUrl} /> : null}
                   <span>{item.label}</span>
                 </button>

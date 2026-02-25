@@ -1,5 +1,6 @@
 package com.simonrowe;
 
+import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -12,7 +13,7 @@ public class WebConfig implements WebMvcConfigurer {
   @Value("${cors.allowed-origins:}")
   private String allowedOrigins;
 
-  @Value("${uploads.path:uploads/}")
+  @Value("${uploads.path:backend/uploads/}")
   private String uploadsPath;
 
   @Override
@@ -26,7 +27,8 @@ public class WebConfig implements WebMvcConfigurer {
 
   @Override
   public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    String location = Path.of(uploadsPath).toAbsolutePath().toUri().toString();
     registry.addResourceHandler("/uploads/**")
-        .addResourceLocations("file:" + uploadsPath);
+        .addResourceLocations(location);
   }
 }

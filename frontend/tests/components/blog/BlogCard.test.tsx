@@ -15,10 +15,10 @@ const blog: BlogSummary = {
 }
 
 describe('BlogCard', () => {
-  it('renders vertical card with title and description', () => {
+  it('renders card with title and description', () => {
     render(
       <MemoryRouter>
-        <BlogCard blog={blog} variant="vertical" />
+        <BlogCard blog={blog} imagePosition="left" />
       </MemoryRouter>,
     )
 
@@ -29,7 +29,7 @@ describe('BlogCard', () => {
   it('renders tags for a blog with tags', () => {
     render(
       <MemoryRouter>
-        <BlogCard blog={blog} variant="vertical" />
+        <BlogCard blog={blog} imagePosition="left" />
       </MemoryRouter>,
     )
 
@@ -41,7 +41,7 @@ describe('BlogCard', () => {
     const noTagBlog = { ...blog, tags: [] }
     render(
       <MemoryRouter>
-        <BlogCard blog={noTagBlog} variant="vertical" />
+        <BlogCard blog={noTagBlog} imagePosition="left" />
       </MemoryRouter>,
     )
 
@@ -52,18 +52,18 @@ describe('BlogCard', () => {
     const noImageBlog = { ...blog, featuredImageUrl: null }
     render(
       <MemoryRouter>
-        <BlogCard blog={noImageBlog} variant="vertical" />
+        <BlogCard blog={noImageBlog} imagePosition="left" />
       </MemoryRouter>,
     )
 
     const img = screen.getByRole('img', { name: 'My Blog Post' })
-    expect(img).toHaveAttribute('src', '/images/blogs/placeholder.jpg')
+    expect(img).toHaveAttribute('src', '/images/blogs/placeholder.svg')
   })
 
   it('links to the blog detail page', () => {
     render(
       <MemoryRouter>
-        <BlogCard blog={blog} variant="vertical" />
+        <BlogCard blog={blog} imagePosition="left" />
       </MemoryRouter>,
     )
 
@@ -71,10 +71,10 @@ describe('BlogCard', () => {
     expect(link).toHaveAttribute('href', '/blogs/b-1')
   })
 
-  it('renders horizontal-right variant', () => {
+  it('renders with image on the right', () => {
     render(
       <MemoryRouter>
-        <BlogCard blog={blog} variant="horizontal-right" />
+        <BlogCard blog={blog} imagePosition="right" />
       </MemoryRouter>,
     )
 

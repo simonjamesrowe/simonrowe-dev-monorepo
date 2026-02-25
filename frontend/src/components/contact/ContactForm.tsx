@@ -4,12 +4,15 @@ import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { ContactApiError, submitContactForm } from '../../services/contactApi'
-import { contactFormSchema, type ContactFormData } from './contactFormSchema'
+import { buildContactFormSchema, type ContactFormData } from './contactFormSchema'
 import { FormField } from './FormField'
 
-const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string
+function getRecaptchaSiteKey(): string {
+  return (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string) || ''
+}
 
 export function ContactForm() {
+  const recaptchaSiteKey = getRecaptchaSiteKey()
   const recaptchaRef = useRef<ReCAPTCHA>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
@@ -21,7 +24,7 @@ export function ContactForm() {
     reset,
     formState: { errors, isSubmitting },
   } = useForm<ContactFormData>({
-    resolver: zodResolver(contactFormSchema),
+    resolver: zodResolver(buildContactFormSchema(!!recaptchaSiteKey)),
     defaultValues: {
       firstName: '',
       lastName: '',
@@ -106,18 +109,20 @@ export function ContactForm() {
         error={errors.message}
       />
 
-      <div className="contact-form__recaptcha">
-        <ReCAPTCHA
-          ref={recaptchaRef}
-          sitekey={RECAPTCHA_SITE_KEY}
-          onChange={onRecaptchaChange}
-        />
-        {errors.recaptchaToken && (
-          <span className="form-field__error" role="alert">
-            {errors.recaptchaToken.message}
-          </span>
-        )}
-      </div>
+      {recaptchaSiteKey && (
+        <div className="contact-form__recaptcha">
+          <ReCAPTCHA
+            ref={recaptchaRef}
+            sitekey={recaptchaSiteKey}
+            onChange={onRecaptchaChange}
+          />
+          {errors.recaptchaToken && (
+            <span className="form-field__error" role="alert">
+              {errors.recaptchaToken.message}
+            </span>
+          )}
+        </div>
+      )}
 
       <button
         type="submit"

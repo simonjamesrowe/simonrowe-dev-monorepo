@@ -5,7 +5,7 @@ import { fetchLatestBlogs } from '../../services/blogApi'
 import type { BlogSummary } from '../../types/blog'
 import { formatDate } from '../../utils/dateFormat'
 
-const PLACEHOLDER_IMAGE = '/images/blogs/placeholder.jpg'
+const PLACEHOLDER_IMAGE = '/images/blogs/placeholder.svg'
 
 export function HomepageBlogPreview() {
   const [blogs, setBlogs] = useState<BlogSummary[]>([])
@@ -23,7 +23,7 @@ export function HomepageBlogPreview() {
   }
 
   return (
-    <section className="panel homepage-blog-preview" id="blog">
+    <section className="panel homepage-blog-preview tour-blogs" id="blog">
       <h3>Latest from the Blog</h3>
       <ul className="homepage-blog-preview__list">
         {blogs.map((blog) => {

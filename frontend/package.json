@@ -16,6 +16,7 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/react-google-recaptcha": "^2.1.9",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "lucide-react": "^0.575.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-ga4": "^2.1.0",

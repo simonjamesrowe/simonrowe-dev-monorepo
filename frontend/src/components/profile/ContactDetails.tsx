@@ -24,7 +24,7 @@ export function ContactDetails({
   }
 
   return (
-    <section className="panel" id="contact">
+    <section className="panel tour-contact" id="contact">
       <div className="contact-details__header">
         <h3>Contact</h3>
         <button

@@ -7,7 +7,7 @@ import { formatDate } from '../../utils/dateFormat'
 
 const DEBOUNCE_MS = 300
 const MIN_QUERY_LENGTH = 2
-const PLACEHOLDER_IMAGE = '/images/blogs/placeholder.jpg'
+const PLACEHOLDER_IMAGE = '/images/blogs/placeholder.svg'
 
 export function BlogSearch() {
   const [query, setQuery] = useState('')

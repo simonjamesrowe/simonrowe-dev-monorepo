@@ -1,22 +1,21 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.2.1 → 1.3.0 (MINOR)
+  Version change: 1.3.0 → 1.4.0 (MINOR)
 
   Modified principles:
     - Principle II: Modern Java & React Stack
-      Added: Email transport standard (Spring Boot Starter Mail +
-      Brevo SMTP relay). Added: Frontend form validation standard
-      (React Hook Form + Zod).
-    - Principle V: Simplicity & Incremental Delivery
-      Added: Transient data policy — data that is only forwarded
-      and not queried MUST NOT be persisted to MongoDB.
+      Added: Frontend styling standard (plain CSS with BEM naming,
+      CSS custom properties, no CSS framework). Added: Typography
+      standard (Inter body, Space Grotesk headings via Google Fonts).
+      Added: User-uploaded media serving standard (Spring Boot
+      ResourceHandlerRegistry with UPLOADS_PATH env var).
 
   Added sections:
-    - Technology Stack Constraints: new rows for Email, Spam
-      Protection, Form Validation (frontend), and reCAPTCHA.
-    - Development Workflow: note on VITE_* env vars being baked
-      into the frontend image at build time via Docker build args.
+    - Technology Stack Constraints: new rows for CSS Approach,
+      Typography, and Static Media Serving.
+    - Development Workflow: note on data restore scripts for local
+      development seeding from Strapi backups.
 
   Removed sections: None
 
@@ -84,6 +83,21 @@ code and MongoDB persistence.
 - Google reCAPTCHA v2 ("I'm not a robot" checkbox) MUST be used
   on all public-facing forms that submit data to the backend, to
   prevent automated submissions.
+- Frontend styling MUST use plain CSS with BEM naming conventions
+  and CSS custom properties (variables) for theming. No CSS
+  framework (Bootstrap, Tailwind, etc.) or CSS-in-JS library
+  (styled-components, Emotion) MAY be introduced. All styles MUST
+  reside in a single `styles.css` file.
+- Typography MUST use Inter (body text) and Space Grotesk
+  (headings), loaded via Google Fonts with `display=swap` for
+  performance. Font declarations MUST use CSS custom properties
+  (`--font-main`, `--font-heading`).
+- User-uploaded media (images, PDFs) MUST be served by the backend
+  via Spring Boot's `ResourceHandlerRegistry` at the `/uploads/**`
+  path. The uploads directory MUST be configurable via the
+  `UPLOADS_PATH` environment variable (default: `uploads/`
+  relative to the backend module). The resource handler MUST
+  resolve the path to an absolute URI at startup.
 
 ### III. Quality Gates (NON-NEGOTIABLE)
 
@@ -163,6 +177,9 @@ when a concrete requirement demands it. YAGNI applies.
 | Email        | Spring Boot Starter Mail + Brevo  | SMTP relay, port 587   |
 | Spam protect | Google reCAPTCHA v2               | All public forms       |
 | Form state   | React Hook Form + Zod             | Frontend forms         |
+| CSS approach | Plain CSS + BEM + custom props    | Single styles.css      |
+| Typography   | Inter + Space Grotesk             | Google Fonts, swap     |
+| Media serving| Spring ResourceHandlerRegistry    | /uploads/**, UPLOADS_PATH env |
 
 ## Development Workflow
 
@@ -187,6 +204,11 @@ when a concrete requirement demands it. YAGNI applies.
   serves as the design reference for the frontend rebuild.
 - MongoDB backup data at `/Users/simonrowe/backups` MUST be
   consulted for data model and content migration decisions.
+- Local development seeding MUST use the restore script
+  (`scripts/restore-backup.sh`) which auto-detects Strapi vs
+  native backup format, transforms data to the Spring Boot schema
+  via `scripts/migrate-strapi-data.js`, and copies uploaded media
+  to `backend/uploads/`.
 
 ## Governance
 
@@ -205,4 +227,4 @@ defined above.
   principles. Violations MUST be resolved before merge unless
   explicitly justified in a Complexity Tracking table.
 
-**Version**: 1.3.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-24
+**Version**: 1.4.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-25

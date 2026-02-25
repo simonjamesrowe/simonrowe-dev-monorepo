@@ -130,7 +130,7 @@ public class IndexService {
         job.shortDescription(),
         job.longDescription(),
         imageUrl,
-        "/employment"
+        "/jobs/" + job.id()
     );
   }
 
@@ -143,7 +143,7 @@ public class IndexService {
         skill.description(),
         null,
         imageUrl,
-        "/skills"
+        "/skills-groups/" + skillGroupId
     );
   }
 

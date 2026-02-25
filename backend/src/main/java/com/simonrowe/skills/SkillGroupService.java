@@ -3,6 +3,7 @@ package com.simonrowe.skills;
 import com.simonrowe.common.ResourceNotFoundException;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -32,13 +33,25 @@ public class SkillGroupService {
         .orElseThrow(() -> new ResourceNotFoundException(
             "Skill group not found with id: " + id));
 
-    List<String> skillIds = group.skills() == null
+    List<String> skillIdentifiers = group.skills() == null
         ? List.of()
-        : group.skills().stream().map(Skill::id).toList();
+        : group.skills().stream()
+            .flatMap(skill -> {
+              List<String> ids = new ArrayList<>();
+              if (skill.id() != null) {
+                ids.add(skill.id());
+              }
+              if (skill.name() != null) {
+                ids.add(skill.name());
+              }
+              return ids.stream();
+            })
+            .distinct()
+            .toList();
 
-    List<Job> relatedJobs = skillIds.isEmpty()
+    List<Job> relatedJobs = skillIdentifiers.isEmpty()
         ? List.of()
-        : jobRepository.findBySkillsIn(skillIds);
+        : jobRepository.findBySkillsIn(skillIdentifiers);
 
     List<SkillDetailDto> skillDetails = group.skills() == null
         ? List.of()
@@ -48,7 +61,8 @@ public class SkillGroupService {
             .map(skill -> {
               List<JobReferenceDto> jobRefs = relatedJobs.stream()
                   .filter(job -> job.skills() != null
-                      && job.skills().contains(skill.id()))
+                      && (job.skills().contains(skill.id())
+                          || job.skills().contains(skill.name())))
                   .sorted(Comparator.comparing(
                       Job::startDate,
                       Comparator.nullsLast(Comparator.reverseOrder())))
