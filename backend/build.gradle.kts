@@ -43,6 +43,10 @@ tasks.check {
     dependsOn(tasks.jacocoTestCoverageVerification)
 }
 
+tasks.test {
+    systemProperty("auth0.jwt.enabled", "false")
+}
+
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
     runImage.set("paketobuildpacks/run-noble-base:latest")
 }
@@ -59,10 +63,13 @@ dependencies {
     implementation(libs.openpdf)
     implementation(libs.commonmark)
     implementation(libs.spring.boot.starter.mail)
+    implementation(libs.spring.boot.starter.oauth2.resource.server)
+    implementation(libs.thumbnailator)
 
     developmentOnly(libs.spring.boot.devtools)
 
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.spring.security.test)
     testImplementation(libs.spring.kafka.test)
     testImplementation(platform(libs.testcontainers.bom))
     testImplementation(libs.testcontainers.junit.jupiter)

@@ -25,6 +25,16 @@ spring:
   threads:
     virtual:
       enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://${AUTH0_DOMAIN:your-tenant.auth0.com}/
+          audiences: ${AUTH0_AUDIENCE:https://api.simonrowe.dev}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
   data:
     mongodb:
       uri: mongodb://localhost:27017/simonrowe
