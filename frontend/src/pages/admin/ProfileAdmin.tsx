@@ -160,7 +160,7 @@ export function ProfileAdmin() {
   const handleEditSave = async (id: string) => {
     try {
       setEditSaving(true)
-      await updateAdminSocialMedia(getAccessToken, id, editForm as Record<string, unknown>)
+      await updateAdminSocialMedia(getAccessToken, id, editForm as unknown as Record<string, unknown>)
       setEditingId(null)
       await loadSocialMedia()
     } catch (err) {
@@ -201,7 +201,7 @@ export function ProfileAdmin() {
     e.preventDefault()
     try {
       setAddSaving(true)
-      await createAdminSocialMedia(getAccessToken, addForm as Record<string, unknown>)
+      await createAdminSocialMedia(getAccessToken, addForm as unknown as Record<string, unknown>)
       setAddForm(emptySocialMediaForm())
       setShowAddForm(false)
       await loadSocialMedia()

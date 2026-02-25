@@ -21,15 +21,23 @@ jacoco {
     toolVersion = libs.versions.jacoco.get()
 }
 
+val jacocoExcludes = listOf("com/simonrowe/migration/**")
+
+val jacocoClassDirectories = sourceSets.main.get().output.asFileTree.matching {
+    exclude(jacocoExcludes)
+}
+
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
     reports {
         xml.required.set(true)
         html.required.set(true)
     }
+    classDirectories.setFrom(jacocoClassDirectories)
 }
 
 tasks.jacocoTestCoverageVerification {
+    classDirectories.setFrom(jacocoClassDirectories)
     violationRules {
         rule {
             limit {
