@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.simonrowe.SharedMongoContainer;
 import com.simonrowe.blog.BlogSearchRepository;
 import java.time.Instant;
 import java.util.List;
@@ -23,9 +24,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.MongoDBContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest(properties = {
     "management.health.kafka.enabled=false",
@@ -36,11 +34,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
     "spring.security.oauth2.resourceserver.jwt.audiences=https://test-api"
 })
 @AutoConfigureMockMvc
-@Testcontainers
 class AdminTagControllerTest {
-
-  @Container
-  static MongoDBContainer mongodb = new MongoDBContainer("mongo:8");
 
   @MockitoBean
   private JwtDecoder jwtDecoder;
@@ -59,7 +53,7 @@ class AdminTagControllerTest {
 
   @DynamicPropertySource
   static void configureProperties(final DynamicPropertyRegistry registry) {
-    registry.add("spring.data.mongodb.uri", mongodb::getReplicaSetUrl);
+    SharedMongoContainer.configureProperties(registry);
   }
 
   @BeforeEach

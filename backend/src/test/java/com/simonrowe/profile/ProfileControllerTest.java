@@ -4,6 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.simonrowe.SharedMongoContainer;
 import com.simonrowe.blog.BlogSearchRepository;
 import com.simonrowe.common.Image;
 import java.time.Instant;
@@ -18,9 +19,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.MongoDBContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest(properties = {
     "management.health.kafka.enabled=false",
@@ -29,11 +27,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
     "spring.elasticsearch.uris=http://localhost:9200"
 })
 @AutoConfigureMockMvc
-@Testcontainers
 class ProfileControllerTest {
-
-  @Container
-  static MongoDBContainer mongodb = new MongoDBContainer("mongo:8");
 
   @MockitoBean
   private ElasticsearchOperations elasticsearchOperations;
@@ -52,7 +46,7 @@ class ProfileControllerTest {
 
   @DynamicPropertySource
   static void configureProperties(DynamicPropertyRegistry registry) {
-    registry.add("spring.data.mongodb.uri", mongodb::getReplicaSetUrl);
+    SharedMongoContainer.configureProperties(registry);
   }
 
   @BeforeEach
