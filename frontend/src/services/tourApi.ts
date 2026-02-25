@@ -1,6 +1,7 @@
+import { API_BASE_URL } from '../config/api'
 import type { TourStep } from '../types/tour'
 
-const TOUR_ENDPOINT = '/api/tour/steps'
+const TOUR_ENDPOINT = `${API_BASE_URL}/api/tour/steps`
 
 export async function fetchTourSteps(): Promise<TourStep[]> {
   const response = await fetch(TOUR_ENDPOINT)

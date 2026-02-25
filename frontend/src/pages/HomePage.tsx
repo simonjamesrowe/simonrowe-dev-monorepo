@@ -10,10 +10,9 @@ import { MobileMenu } from '../components/layout/MobileMenu'
 import { ScrollToTop } from '../components/layout/ScrollToTop'
 import { Sidebar, type NavigationItem } from '../components/layout/Sidebar'
 import { HomepageBlogPreview } from '../components/blog/HomepageBlogPreview'
+import { ContactSection } from '../components/contact/ContactSection'
 import { AboutSection } from '../components/profile/AboutSection'
-import { ContactDetails } from '../components/profile/ContactDetails'
 import { ProfileBanner } from '../components/profile/ProfileBanner'
-import { SocialLinks } from '../components/profile/SocialLinks'
 import { SkillGroupDetail } from '../components/skills/SkillGroupDetail'
 import { SkillsSection } from '../components/skills/SkillsSection'
 import { TourButton } from '../components/tour/TourButton'
@@ -22,10 +21,11 @@ import { useProfile } from '../hooks/useProfile'
 import { trackHomepageEvent, trackPageView } from '../services/analytics'
 
 const navigationItems: NavigationItem[] = [
+  { id: 'profile', label: 'Profile', route: '/' },
   { id: 'about', label: 'About' },
   { id: 'experience', label: 'Experience' },
   { id: 'skills', label: 'Skills' },
-  { id: 'blog', label: 'Blog' },
+  { id: 'blog', label: 'Blog', route: '/blogs' },
   { id: 'contact', label: 'Contact' },
 ]
 
@@ -40,6 +40,12 @@ export function HomePage() {
   useEffect(() => {
     trackPageView(window.location.pathname)
   }, [])
+
+  useEffect(() => {
+    if (profile) {
+      document.title = `${profile.name} | ${profile.title}`
+    }
+  }, [profile])
 
   const handleGroupClick = useCallback((id: string) => {
     trackHomepageEvent('skill_group_click', id)
@@ -74,19 +80,31 @@ export function HomePage() {
         aboutImageUrl={profile.sidebarImage.url}
         items={navigationItems}
         onNavigate={(section) => trackHomepageEvent('navigate_section', section)}
+        socialLinks={profile.socialMediaLinks}
+        onSocialClick={(type) => trackHomepageEvent('social_media_click', type)}
       />
       <MobileMenu
         aboutImageUrl={profile.sidebarImage.url}
         items={navigationItems}
         onNavigate={(section) => trackHomepageEvent('navigate_section', section)}
       />
+      <TourButton />
       <main className="homepage__content">
         <ProfileBanner
           onDownloadCv={() => trackHomepageEvent('download_cv', profile.cvUrl ?? 'missing')}
           profile={profile}
         />
-        <TourButton />
-        <AboutSection description={profile.description} />
+        <AboutSection
+          description={profile.description}
+          profileImageUrl={profile.profileImage.url}
+          profileName={profile.name}
+          location={profile.location}
+          primaryEmail={profile.primaryEmail}
+          secondaryEmail={profile.secondaryEmail}
+          phoneNumber={profile.phoneNumber}
+          socialLinks={profile.socialMediaLinks}
+          onSocialClick={(type) => trackHomepageEvent('social_media_click', type)}
+        />
         <ExperienceSection onJobClick={handleJobClick} />
         <SkillsSection onGroupClick={handleGroupClick} />
         <div className="resume-section">
@@ -95,17 +113,7 @@ export function HomePage() {
           />
         </div>
         <HomepageBlogPreview />
-        <ContactDetails
-          location={profile.location}
-          onToggle={(expanded) => trackHomepageEvent('contact_expand', String(expanded))}
-          phoneNumber={profile.phoneNumber}
-          primaryEmail={profile.primaryEmail}
-          secondaryEmail={profile.secondaryEmail}
-        />
-        <SocialLinks
-          links={profile.socialMediaLinks}
-          onSocialClick={(type) => trackHomepageEvent('social_media_click', type)}
-        />
+        <ContactSection />
       </main>
       <ScrollToTop onScrollToTop={() => trackHomepageEvent('scroll_to_top', 'homepage')} />
       <TourOverlay />

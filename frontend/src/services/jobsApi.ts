@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config/api'
 import type { IJob, IJobDetail } from '../types/job'
 
 async function parseErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -14,7 +15,7 @@ async function parseErrorMessage(response: Response, fallback: string): Promise<
 }
 
 export async function fetchJobs(): Promise<IJob[]> {
-  const response = await fetch('/api/jobs')
+  const response = await fetch(`${API_BASE_URL}/api/jobs`)
 
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response, 'Unable to load jobs data.'))
@@ -24,7 +25,7 @@ export async function fetchJobs(): Promise<IJob[]> {
 }
 
 export async function fetchJob(id: string): Promise<IJobDetail> {
-  const response = await fetch(`/api/jobs/${id}`)
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${id}`)
 
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response, 'Unable to load job.'))

@@ -8,11 +8,6 @@ interface TimelineProps {
   onJobClick: (jobId: string) => void
 }
 
-function getEntrySide(index: number): 'left' | 'right' {
-  const group = Math.floor(index / 2)
-  return group % 2 === 0 ? 'left' : 'right'
-}
-
 export function Timeline({ onJobClick }: TimelineProps) {
   const [jobs, setJobs] = useState<IJob[]>([])
   const [loading, setLoading] = useState(true)
@@ -49,7 +44,6 @@ export function Timeline({ onJobClick }: TimelineProps) {
       <div className="timeline timeline--loading" role="list">
         {Array.from({ length: 4 }).map((_, i) => (
           <div className="timeline-entry timeline-entry--skeleton" key={i}>
-            <div className="skeleton-text skeleton-pulse" />
             <div className="skeleton-card skeleton-pulse" />
           </div>
         ))}
@@ -65,10 +59,10 @@ export function Timeline({ onJobClick }: TimelineProps) {
     <div aria-label="Employment timeline" className="timeline" role="list">
       {jobs.map((job, index) => (
         <TimelineEntry
+          extraClassName={index === 0 ? 'tour-experience-1' : undefined}
           job={job}
           key={job.id}
           onClick={onJobClick}
-          side={getEntrySide(index)}
         />
       ))}
     </div>

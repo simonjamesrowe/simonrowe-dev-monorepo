@@ -90,7 +90,7 @@ class IndexServiceTest {
     assertThat(doc.shortDescription()).isEqualTo("Short desc");
     assertThat(doc.longDescription()).isEqualTo("Long desc");
     assertThat(doc.image()).isEqualTo("/images/acme.png");
-    assertThat(doc.url()).isEqualTo("/employment");
+    assertThat(doc.url()).isEqualTo("/jobs/job1");
   }
 
   @Test
@@ -118,7 +118,7 @@ class IndexServiceTest {
     assertThat(doc.shortDescription()).isEqualTo("Java language");
     assertThat(doc.longDescription()).isNull();
     assertThat(doc.image()).isEqualTo("/images/java.png");
-    assertThat(doc.url()).isEqualTo("/skills");
+    assertThat(doc.url()).isEqualTo("/skills-groups/g1");
   }
 
   @Test

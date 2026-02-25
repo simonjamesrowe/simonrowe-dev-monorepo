@@ -1,7 +1,8 @@
+import { API_BASE_URL } from '../config/api'
 import type { BlogDetail, BlogSearchResult, BlogSummary } from '../types/blog'
 
-const BLOGS_ENDPOINT = '/api/blogs'
-const SEARCH_ENDPOINT = '/api/search/blogs'
+const BLOGS_ENDPOINT = `${API_BASE_URL}/api/blogs`
+const SEARCH_ENDPOINT = `${API_BASE_URL}/api/search/blogs`
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {

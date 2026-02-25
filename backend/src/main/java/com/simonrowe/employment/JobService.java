@@ -39,8 +39,8 @@ public class JobService {
     return JobDetailDto.fromEntity(job, resolvedSkills);
   }
 
-  private List<SkillReferenceDto> resolveSkills(List<String> skillIds) {
-    if (skillIds == null || skillIds.isEmpty()) {
+  private List<SkillReferenceDto> resolveSkills(List<String> skillIdentifiers) {
+    if (skillIdentifiers == null || skillIdentifiers.isEmpty()) {
       return List.of();
     }
 
@@ -52,8 +52,9 @@ public class JobService {
         continue;
       }
       for (Skill skill : group.skills()) {
-        if (skillIds.contains(skill.id())) {
-          skillMap.put(skill.id(), new SkillReferenceDto(
+        if (skillIdentifiers.contains(skill.id())
+            || skillIdentifiers.contains(skill.name())) {
+          skillMap.putIfAbsent(skill.name(), new SkillReferenceDto(
               skill.id(),
               skill.name(),
               skill.rating(),
@@ -64,8 +65,12 @@ public class JobService {
       }
     }
 
-    return skillIds.stream()
-        .map(skillMap::get)
+    return skillIdentifiers.stream()
+        .map(identifier -> skillMap.values().stream()
+            .filter(ref -> ref.id().equals(identifier)
+                || ref.name().equals(identifier))
+            .findFirst()
+            .orElse(null))
         .filter(ref -> ref != null)
         .sorted(Comparator.comparing(
             SkillReferenceDto::name, String::compareToIgnoreCase))

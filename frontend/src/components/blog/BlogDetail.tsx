@@ -2,7 +2,7 @@ import type { BlogDetail as BlogDetailType } from '../../types/blog'
 import { formatDate } from '../../utils/dateFormat'
 import { MarkdownRenderer } from './MarkdownRenderer'
 
-const PLACEHOLDER_IMAGE = '/images/blogs/placeholder.jpg'
+const PLACEHOLDER_IMAGE = '/images/blogs/placeholder.svg'
 
 interface BlogDetailProps {
   blog: BlogDetailType

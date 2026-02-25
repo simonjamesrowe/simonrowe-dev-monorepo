@@ -1,17 +1,29 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
+import { Sidebar, type NavigationItem } from '../components/layout/Sidebar'
 import { BlogDetail } from '../components/blog/BlogDetail'
+import { useProfile } from '../hooks/useProfile'
 import { fetchBlogById } from '../services/blogApi'
 import type { BlogDetail as BlogDetailType } from '../types/blog'
+
+const navigationItems: NavigationItem[] = [
+  { id: 'profile', label: 'Profile', route: '/' },
+  { id: 'about', label: 'About' },
+  { id: 'experience', label: 'Experience' },
+  { id: 'skills', label: 'Skills' },
+  { id: 'blog', label: 'Blog', route: '/blogs' },
+  { id: 'contact', label: 'Contact' },
+]
 
 export function BlogDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [blog, setBlog] = useState<BlogDetailType | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { profile } = useProfile()
 
   useEffect(() => {
     if (!id) {
@@ -53,8 +65,18 @@ export function BlogDetailPage() {
   }
 
   return (
-    <main className="page blog-detail-page">
-      <BlogDetail blog={blog} />
-    </main>
+    <div className="blog-page-layout">
+      {profile && (
+        <Sidebar
+          aboutImageUrl={profile.sidebarImage.url}
+          items={navigationItems}
+          socialLinks={profile.socialMediaLinks}
+        />
+      )}
+      <main className="blog-page-layout__content">
+        <Link className="page__back-link" to="/blogs">&larr; Back to Blog</Link>
+        <BlogDetail blog={blog} />
+      </main>
+    </div>
   )
 }

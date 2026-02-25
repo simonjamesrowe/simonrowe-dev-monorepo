@@ -69,7 +69,7 @@ describe('BlogDetail', () => {
     )
 
     const img = screen.getByRole('img', { name: 'My Blog Post' })
-    expect(img).toHaveAttribute('src', '/images/blogs/placeholder.jpg')
+    expect(img).toHaveAttribute('src', '/images/blogs/placeholder.svg')
   })
 
   it('renders without tags list when blog has no tags', () => {

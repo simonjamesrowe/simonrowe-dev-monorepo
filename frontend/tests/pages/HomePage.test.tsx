@@ -119,7 +119,6 @@ describe('HomePage', () => {
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Simon Rowe')
     expect(screen.getByRole('heading', { level: 3, name: 'About' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 3, name: 'Contact' })).toBeInTheDocument()
     expect(screen.getByTestId('experience-section')).toBeInTheDocument()
     expect(screen.getByTestId('skills-section')).toBeInTheDocument()
     expect(screen.getByTestId('resume-download')).toBeInTheDocument()

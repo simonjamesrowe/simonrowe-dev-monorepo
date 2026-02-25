@@ -27,6 +27,7 @@ const mockSubmit = vi.mocked(submitContactForm)
 describe('ContactForm', () => {
   beforeEach(() => {
     mockSubmit.mockReset()
+    vi.stubEnv('VITE_RECAPTCHA_SITE_KEY', 'test-site-key')
   })
 
   it('renders all five form fields and reCAPTCHA', () => {

@@ -3,16 +3,14 @@ import { Link } from 'react-router-dom'
 import type { BlogSummary } from '../../types/blog'
 import { formatDate } from '../../utils/dateFormat'
 
-const PLACEHOLDER_IMAGE = '/images/blogs/placeholder.jpg'
-
-type CardVariant = 'vertical' | 'horizontal-right' | 'horizontal-left'
+const PLACEHOLDER_IMAGE = '/images/blogs/placeholder.svg'
 
 interface BlogCardProps {
   blog: BlogSummary
-  variant: CardVariant
+  imagePosition: 'left' | 'right'
 }
 
-export function BlogCard({ blog, variant }: BlogCardProps) {
+export function BlogCard({ blog, imagePosition }: BlogCardProps) {
   const imageUrl = blog.featuredImageUrl ?? PLACEHOLDER_IMAGE
   const formattedDate = formatDate(blog.createdDate)
 
@@ -49,21 +47,10 @@ export function BlogCard({ blog, variant }: BlogCardProps) {
     </div>
   )
 
-  if (variant === 'vertical') {
-    return (
-      <article className="blog-card blog-card--vertical">
-        <Link aria-label={blog.title} className="blog-card__link" to={`/blogs/${blog.id}`}>
-          {imageEl}
-          {contentEl}
-        </Link>
-      </article>
-    )
-  }
-
   return (
-    <article className={`blog-card blog-card--horizontal blog-card--${variant}`}>
+    <article className={`blog-card blog-card--image-${imagePosition}`}>
       <Link aria-label={blog.title} className="blog-card__link" to={`/blogs/${blog.id}`}>
-        {variant === 'horizontal-right' ? (
+        {imagePosition === 'left' ? (
           <>
             {imageEl}
             {contentEl}

@@ -71,7 +71,8 @@ class SkillGroupServiceTest {
         List.of("s-1"));
 
     given(skillGroupRepository.findById("g-1")).willReturn(Optional.of(group));
-    given(jobRepository.findBySkillsIn(List.of("s-1", "s-2")))
+    given(jobRepository.findBySkillsIn(
+        List.of("s-1", "Spring Boot", "s-2", "Spring MVC")))
         .willReturn(List.of(job1, job2));
 
     SkillGroupDetailDto result = skillGroupService.getSkillGroupById("g-1");

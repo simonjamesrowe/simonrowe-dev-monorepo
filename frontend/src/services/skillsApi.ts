@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config/api'
 import type { ISkillGroup, ISkillGroupDetail } from '../types/skill'
 
 async function parseErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -14,7 +15,7 @@ async function parseErrorMessage(response: Response, fallback: string): Promise<
 }
 
 export async function fetchSkillGroups(): Promise<ISkillGroup[]> {
-  const response = await fetch('/api/skills')
+  const response = await fetch(`${API_BASE_URL}/api/skills`)
 
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response, 'Unable to load skills data.'))
@@ -24,7 +25,7 @@ export async function fetchSkillGroups(): Promise<ISkillGroup[]> {
 }
 
 export async function fetchSkillGroup(id: string): Promise<ISkillGroupDetail> {
-  const response = await fetch(`/api/skills/${id}`)
+  const response = await fetch(`${API_BASE_URL}/api/skills/${id}`)
 
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response, 'Unable to load skill group.'))

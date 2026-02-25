@@ -1,6 +1,7 @@
+import { API_BASE_URL } from '../config/api'
 import type { Profile } from '../types/Profile'
 
-const PROFILE_ENDPOINT = '/api/profile'
+const PROFILE_ENDPOINT = `${API_BASE_URL}/api/profile`
 
 export async function fetchProfile(): Promise<Profile> {
   const response = await fetch(PROFILE_ENDPOINT)
