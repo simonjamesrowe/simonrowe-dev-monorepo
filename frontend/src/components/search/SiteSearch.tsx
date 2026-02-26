@@ -5,7 +5,11 @@ import { SearchDropdown } from './SearchDropdown'
 const DEBOUNCE_MS = 300
 const MIN_QUERY_LENGTH = 2
 
-export function SiteSearch() {
+interface SiteSearchProps {
+  onChatStart?: (query: string) => void
+}
+
+export function SiteSearch({ onChatStart }: SiteSearchProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<GroupedSearchResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -63,8 +67,14 @@ export function SiteSearch() {
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       setOpen(false)
+    } else if (e.key === 'Enter' && query.length >= 1) {
+      if (onChatStart) {
+        onChatStart(query)
+        setOpen(false)
+        setQuery('')
+      }
     }
-  }, [])
+  }, [query, onChatStart])
 
   const handleResultClick = useCallback(() => {
     setOpen(false)

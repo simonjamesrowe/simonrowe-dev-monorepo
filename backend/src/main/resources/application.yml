@@ -52,6 +52,18 @@ spring:
           auth: true
           starttls:
             enable: true
+  ai:
+    openai:
+      api-key: ${GROQ_API_KEY:not-set}
+      base-url: https://api.groq.com/openai
+      chat:
+        options:
+          model: llama-3.3-70b-versatile
+    mcp:
+      server:
+        type: SYNC
+        annotation-scanner:
+          enabled: true
 
 search:
   sync:
@@ -70,3 +82,19 @@ contact:
   recaptcha:
     secret-key: ${RECAPTCHA_SECRET_KEY:}
     verify-url: https://www.google.com/recaptcha/api/siteverify
+
+chat:
+  session:
+    cleanup-interval-minutes: 5
+    max-inactive-minutes: 30
+  system-prompt: >
+    You are a helpful assistant on Simon Rowe's personal portfolio website.
+    You can answer questions about Simon's profile, blog posts, employment history,
+    and technical skills. Use the available tools to look up accurate information.
+    Be concise, friendly, and professional.
+
+rate-limit:
+  chat:
+    requests-per-minute: 20
+  mcp:
+    requests-per-minute: 60

@@ -72,6 +72,52 @@ describe('SiteSearch', () => {
     )
   })
 
+  it('calls onChatStart with query when Enter is pressed with non-empty query', async () => {
+    const onChatStart = vi.fn()
+
+    render(
+      <MemoryRouter>
+        <SiteSearch onChatStart={onChatStart} />
+      </MemoryRouter>,
+    )
+
+    const input = screen.getByLabelText('Search across all content')
+    await userEvent.type(input, 'spring')
+    await userEvent.keyboard('{Enter}')
+
+    expect(onChatStart).toHaveBeenCalledWith('spring')
+  })
+
+  it('does not call onChatStart when Enter is pressed with empty query', async () => {
+    const onChatStart = vi.fn()
+
+    render(
+      <MemoryRouter>
+        <SiteSearch onChatStart={onChatStart} />
+      </MemoryRouter>,
+    )
+
+    const input = screen.getByLabelText('Search across all content')
+    await userEvent.click(input)
+    await userEvent.keyboard('{Enter}')
+
+    expect(onChatStart).not.toHaveBeenCalled()
+  })
+
+  it('does not call onChatStart when no callback provided', async () => {
+    render(
+      <MemoryRouter>
+        <SiteSearch />
+      </MemoryRouter>,
+    )
+
+    const input = screen.getByLabelText('Search across all content')
+    await userEvent.type(input, 'spring')
+    await userEvent.keyboard('{Enter}')
+
+    // No error thrown when onChatStart is undefined
+  })
+
   it('closes dropdown on Escape key', async () => {
     vi.mocked(siteSearch).mockResolvedValue(mockResults)
 
