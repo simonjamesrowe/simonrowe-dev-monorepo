@@ -122,6 +122,59 @@ class SkillGroupControllerTest {
         .andExpect(jsonPath("$.message").value("Skill group not found with id: nonexistent"));
   }
 
+  @Test
+  void getAiSkillGroupAppearsWithCorrectDisplayOrderAndSkills() throws Exception {
+    Skill claudeCode = new Skill("s-ai-1", "Claude Code", 8.0, 1, "AI coding assistant", null);
+    Skill copilot = new Skill("s-ai-2", "GitHub Copilot", 8.0, 2, "AI pair programming", null);
+    Skill aiDev = new Skill("s-ai-3", "AI-Assisted Development", 9.0, 3, "AI workflows", null);
+    Skill prompts = new Skill("s-ai-4", "Prompt Engineering", 8.0, 4, "LLM prompts", null);
+    Skill mcp = new Skill("s-ai-5", "MCP", 7.0, 5, "Model Context Protocol", null);
+
+    SkillGroup aiGroup = new SkillGroup(
+        "g-ai", "Artificial Intelligence",
+        "Artificial intelligence tools and practices for AI-assisted software development.",
+        8.0, 1, null,
+        List.of(claudeCode, copilot, aiDev, prompts, mcp));
+
+    SkillGroup springGroup = new SkillGroup(
+        "g-spring", "Spring", "Spring framework", 9.5, 3,
+        sampleImage(), List.of(new Skill("s-1", "Spring Boot", 10.0, 1, "Boot desc", null)));
+
+    skillGroupRepository.saveAll(List.of(aiGroup, springGroup));
+
+    mockMvc.perform(get("/api/skills"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(2))
+        .andExpect(jsonPath("$[0].name").value("Artificial Intelligence"))
+        .andExpect(jsonPath("$[0].displayOrder").value(1))
+        .andExpect(jsonPath("$[0].rating").value(8.0))
+        .andExpect(jsonPath("$[0].skills.length()").value(5))
+        .andExpect(jsonPath("$[0].skills[0].name").value("Claude Code"))
+        .andExpect(jsonPath("$[0].skills[4].name").value("MCP"));
+  }
+
+  @Test
+  void getAiSkillGroupByIdShowsGlobalJobCorrelation() throws Exception {
+    Skill claudeCode = new Skill("s-ai-1", "Claude Code", 8.0, 1, "AI coding assistant", null);
+    SkillGroup aiGroup = new SkillGroup(
+        "g-ai", "Artificial Intelligence", "AI tools", 8.0, 1, null, List.of(claudeCode));
+    skillGroupRepository.save(aiGroup);
+
+    Job globalJob = new Job(
+        "j-global", "Head of Engineering", "Global", "https://global.com", null,
+        "2021-08-01", null, "Holborn, London",
+        "Short desc", "Long desc", false, true, List.of("s-ai-1"));
+    jobRepository.save(globalJob);
+
+    mockMvc.perform(get("/api/skills/g-ai"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.name").value("Artificial Intelligence"))
+        .andExpect(jsonPath("$.skills[0].name").value("Claude Code"))
+        .andExpect(jsonPath("$.skills[0].jobs.length()").value(1))
+        .andExpect(jsonPath("$.skills[0].jobs[0].title").value("Head of Engineering"))
+        .andExpect(jsonPath("$.skills[0].jobs[0].company").value("Global"));
+  }
+
   private static Image sampleImage() {
     ImageFormat thumbnail = new ImageFormat("/uploads/thumbnail_spring.png", 50, 50);
     ImageFormats formats = new ImageFormats(thumbnail, null, null, null);

@@ -21,6 +21,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-21
 - MongoDB 8 (document store), Elasticsearch 8.17 (search), (001-project-infrastructure)
 - Java 21 (LTS) for backend, TypeScript/JavaScript (latest stable) for frontend + Spring Boot 3.5.x, Spring Data MongoDB, Spring Kafka, Spring Data Elasticsearch, Spring Boot Actuator, OpenTelemetry Spring Boot Starter, React (latest stable), Vite (001-project-infrastructure)
 - MongoDB (primary persistence), Elasticsearch (search), Kafka (async messaging) (001-project-infrastructure)
+- Java 21 (backend), TypeScript (frontend), JavaScript (migration script) + Spring Boot 3.5.x, Spring Data MongoDB, React (latest stable) (009-global-job)
+- MongoDB (existing `jobs` and `skill_groups` collections) (009-global-job)
 
 - Java 25 (backend), TypeScript/JavaScript (frontend) + Spring Boot 4.x, Spring Data MongoDB, Spring Kafka, Spring Data Elasticsearch, Spring Boot Actuator, OpenTelemetry, React (latest stable) (001-project-infrastructure)
 
@@ -40,9 +42,9 @@ npm test && npm run lint
 Java 25 (backend), TypeScript/JavaScript (frontend): Follow standard conventions
 
 ## Recent Changes
+- 009-global-job: Added Java 21 (backend), TypeScript (frontend), JavaScript (migration script) + Spring Boot 3.5.x, Spring Data MongoDB, React (latest stable)
 - 001-project-infrastructure: Added Java 21 (LTS) for backend, TypeScript/JavaScript (latest stable) for frontend + Spring Boot 3.5.x, Spring Data MongoDB, Spring Kafka, Spring Data Elasticsearch, Spring Boot Actuator, OpenTelemetry Spring Boot Starter, React (latest stable), Vite
 - 001-project-infrastructure: Added Java 21 (LTS) for backend, TypeScript/JavaScript (latest stable) for frontend + Spring Boot 3.5.x, Spring Data MongoDB, Spring Kafka, Spring Data Elasticsearch, Spring Boot Actuator, OpenTelemetry Spring Boot Starter, React (latest stable), Vite
-- 001-project-infrastructure: Added Java 21 (backend), TypeScript/React latest stable (frontend) + Spring Boot 3.4.x, Spring Data MongoDB, Spring Kafka,
 
 
 <!-- MANUAL ADDITIONS START -->
