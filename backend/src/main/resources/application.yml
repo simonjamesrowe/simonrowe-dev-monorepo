@@ -53,12 +53,12 @@ spring:
           starttls:
             enable: true
   ai:
-    openai:
-      api-key: ${GROQ_API_KEY:not-set}
-      base-url: https://api.groq.com/openai
-      chat:
-        options:
-          model: llama-3.3-70b-versatile
+    google:
+      genai:
+        api-key: ${GOOGLE_GENAI_API_KEY:not-set}
+        chat:
+          options:
+            model: gemini-3.1-pro-preview
     mcp:
       server:
         type: SYNC

@@ -65,7 +65,7 @@ dependencies {
     implementation(libs.openpdf)
     implementation(libs.commonmark)
     implementation(libs.spring.boot.starter.mail)
-    implementation(libs.spring.ai.starter.model.openai)
+    implementation(libs.spring.ai.starter.model.google.genai)
     implementation(libs.spring.ai.starter.mcp.server.webmvc)
     implementation(libs.spring.boot.starter.websocket)
     implementation(libs.bucket4j.core)
