@@ -21,6 +21,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-21
 - MongoDB 8 (document store), Elasticsearch 8.17 (search), (001-project-infrastructure)
 - Java 21 (LTS) for backend, TypeScript/JavaScript (latest stable) for frontend + Spring Boot 3.5.x, Spring Data MongoDB, Spring Kafka, Spring Data Elasticsearch, Spring Boot Actuator, OpenTelemetry Spring Boot Starter, React (latest stable), Vite (001-project-infrastructure)
 - MongoDB (primary persistence), Elasticsearch (search), Kafka (async messaging) (001-project-infrastructure)
+- Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, Spring AI 1.1.2 (OpenAI starter for Groq, MCP Server WebMVC, Chat Memory), Spring WebSocket (STOMP), Bucket4j, React 19, @stomp/stompjs (009-profile-chat)
+- MongoDB (existing — no new collections), In-memory `ConcurrentHashMap` for chat sessions (009-profile-chat)
 
 - Java 25 (backend), TypeScript/JavaScript (frontend) + Spring Boot 4.x, Spring Data MongoDB, Spring Kafka, Spring Data Elasticsearch, Spring Boot Actuator, OpenTelemetry, React (latest stable) (001-project-infrastructure)
 
@@ -40,9 +42,9 @@ npm test && npm run lint
 Java 25 (backend), TypeScript/JavaScript (frontend): Follow standard conventions
 
 ## Recent Changes
+- 009-profile-chat: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, Spring AI 1.1.2 (OpenAI starter for Groq, MCP Server WebMVC, Chat Memory), Spring WebSocket (STOMP), Bucket4j, React 19, @stomp/stompjs
 - 001-project-infrastructure: Added Java 21 (LTS) for backend, TypeScript/JavaScript (latest stable) for frontend + Spring Boot 3.5.x, Spring Data MongoDB, Spring Kafka, Spring Data Elasticsearch, Spring Boot Actuator, OpenTelemetry Spring Boot Starter, React (latest stable), Vite
 - 001-project-infrastructure: Added Java 21 (LTS) for backend, TypeScript/JavaScript (latest stable) for frontend + Spring Boot 3.5.x, Spring Data MongoDB, Spring Kafka, Spring Data Elasticsearch, Spring Boot Actuator, OpenTelemetry Spring Boot Starter, React (latest stable), Vite
-- 001-project-infrastructure: Added Java 21 (backend), TypeScript/React latest stable (frontend) + Spring Boot 3.4.x, Spring Data MongoDB, Spring Kafka,
 
 
 <!-- MANUAL ADDITIONS START -->
