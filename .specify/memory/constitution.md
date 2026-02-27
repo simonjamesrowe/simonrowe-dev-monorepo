@@ -1,10 +1,10 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.4.0 → 1.5.0 (MINOR)
+  Version change: 1.5.0 → 1.6.0 (MINOR)
 
   Modified principles:
-    - Principle II: Modern Java & React Stack
+    - Principle II: Modern Java & React Stack (prior)
       Added: Lucide React as the icon library standard. Added:
       Frontend routing conventions for jobs, skill groups, and blogs.
       Clarified: reCAPTCHA MUST be conditionally rendered based on
@@ -14,8 +14,16 @@
       Added: Sidebar navigation standard (collapsed by default,
       icon-based nav with profile photo for home).
 
+  Added principles:
+    - Principle VI: Shell Scripting Standards (new)
+      All shell scripts MUST use bash (#!/usr/bin/env bash) with
+      set -euo pipefail. MongoDB migration scripts (.js) MUST have
+      a companion shell wrapper script that handles container
+      discovery, file copying, and execution.
+
   Added sections:
-    - Technology Stack Constraints: new rows for Icons and Routing.
+    - Technology Stack Constraints: new rows for Icons, Routing,
+      and Scripting.
 
   Removed sections: None
 
@@ -166,6 +174,26 @@ when a concrete requirement demands it. YAGNI applies.
   Persistence MUST only be introduced when a concrete read
   requirement exists.
 
+### VI. Shell Scripting Standards
+
+All shell scripts MUST use bash with `#!/usr/bin/env bash` shebang
+and `set -euo pipefail` for strict error handling. No PowerShell,
+fish, or other shell languages MAY be used for project scripts.
+
+- Scripts MUST resolve `SCRIPT_DIR` and `PROJECT_DIR` using
+  `$(cd "$(dirname "$0")" && pwd)` for portable path resolution.
+- MongoDB migration scripts (`.js` files) MUST have a companion
+  shell wrapper script (`.sh`) that handles: container discovery,
+  file copying into the container, `mongosh` execution, and
+  cleanup. The `.js` file MUST NOT be run directly.
+- Shell wrapper scripts MUST validate preconditions (container
+  running, source files exist) and exit with clear error messages
+  on failure.
+- Temporary files copied into containers MUST be cleaned up after
+  execution.
+- Scripts MUST use `docker cp` and `docker exec` for interacting
+  with containerised services (not volume mounts for scripts).
+
 ## Technology Stack Constraints
 
 | Layer        | Technology                        | Version/Notes         |
@@ -199,6 +227,7 @@ when a concrete requirement demands it. YAGNI applies.
 | Media serving| Spring ResourceHandlerRegistry    | /uploads/**, UPLOADS_PATH env |
 | Icons        | Lucide React                      | All frontend icons     |
 | Routing      | React Router                      | /jobs/{id}, /skills-groups/{id}, /blogs/{slug} |
+| Scripting    | Bash (#!/usr/bin/env bash)        | set -euo pipefail, strict mode |
 
 ## Development Workflow
 
@@ -246,4 +275,4 @@ defined above.
   principles. Violations MUST be resolved before merge unless
   explicitly justified in a Complexity Tracking table.
 
-**Version**: 1.5.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-25
+**Version**: 1.6.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-27
