@@ -10,6 +10,8 @@ cyclonedx = "2.1.0"
 sonarqube = "6.0.1.5171"
 openpdf = "2.0.3"
 commonmark = "0.24.0"
+springAi = "1.1.2"
+bucket4j = "8.16.1"
 
 [libraries]
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
@@ -31,6 +33,11 @@ testcontainers-kafka = { module = "org.testcontainers:kafka" }
 testcontainers-elasticsearch = { module = "org.testcontainers:elasticsearch" }
 openpdf = { module = "com.github.librepdf:openpdf", version.ref = "openpdf" }
 commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
+spring-ai-bom = { module = "org.springframework.ai:spring-ai-bom", version.ref = "springAi" }
+spring-ai-starter-model-google-genai = { module = "org.springframework.ai:spring-ai-starter-model-google-genai" }
+spring-ai-starter-mcp-server-webmvc = { module = "org.springframework.ai:spring-ai-starter-mcp-server-webmvc" }
+spring-boot-starter-websocket = { module = "org.springframework.boot:spring-boot-starter-websocket" }
+bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

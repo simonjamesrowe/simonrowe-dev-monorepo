@@ -11,6 +11,12 @@ version = "0.0.1-SNAPSHOT"
 
 ext["opentelemetry.version"] = "1.59.0"
 
+dependencyManagement {
+    imports {
+        mavenBom(libs.spring.ai.bom.get().toString())
+    }
+}
+
 checkstyle {
     toolVersion = libs.versions.checkstyle.get()
     configFile = rootProject.file("config/checkstyle/google_checks.xml")
@@ -59,6 +65,10 @@ dependencies {
     implementation(libs.openpdf)
     implementation(libs.commonmark)
     implementation(libs.spring.boot.starter.mail)
+    implementation(libs.spring.ai.starter.model.google.genai)
+    implementation(libs.spring.ai.starter.mcp.server.webmvc)
+    implementation(libs.spring.boot.starter.websocket)
+    implementation(libs.bucket4j.core)
 
     developmentOnly(libs.spring.boot.devtools)
 

@@ -2,3 +2,7 @@ spring:
   kafka:
     consumer:
       auto-offset-reset: earliest
+  ai:
+    google:
+      genai:
+        api-key: test-dummy-key
