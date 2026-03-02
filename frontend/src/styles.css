@@ -1707,6 +1707,26 @@ a:hover {
   line-height: 1.75;
 }
 
+.mermaid-diagram {
+  margin: 1.5rem 0;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-error {
+  background: #fff3f3;
+  border: 1px solid #e0b0b0;
+  border-radius: 0.25rem;
+  padding: 1rem;
+  font-size: 0.85rem;
+  color: #a00;
+}
+
 .blog-detail__back {
   display: inline-flex;
   align-items: center;

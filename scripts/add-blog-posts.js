@@ -162,9 +162,7 @@ print('--- Preparing blog post content ---');
 // Post 1: From Zero to Specification
 // ---------------------------------------------------------------------------
 
-const post1Content = `# From Zero to Specification: How I Used AI to Plan My Entire Website Rebuild
-
-Every developer has that personal website. The one you built years ago, maybe with a CMS you no longer love, running on infrastructure you'd rather not maintain. Mine was built on Strapi with a React frontend — functional, but creaking at the seams. When I decided to rebuild it from scratch using a modern Spring Boot + React stack, I faced a familiar question: **where do you even start?**
+const post1Content = `Every developer has that personal website. The one you built years ago, maybe with a CMS you no longer love, running on infrastructure you'd rather not maintain. Mine was built on Strapi with a React frontend — functional, but creaking at the seams. When I decided to rebuild it from scratch using a modern Spring Boot + React stack, I faced a familiar question: **where do you even start?**
 
 The answer, it turns out, wasn't writing code. It was writing specifications.
 
@@ -192,6 +190,23 @@ I needed something better. I needed a spec-driven approach.
 \`\`\`
 
 Each command builds on the previous one, creating a chain of artifacts that give AI agents the context they need to write consistent, well-architected code.
+
+\`\`\`mermaid
+flowchart LR
+    A["/speckit.specify"] --> B["/speckit.plan"]
+    B --> C["/speckit.tasks"]
+    C --> D["/speckit.implement"]
+
+    A -.- A1["spec.md<br/><em>WHAT &amp; WHY</em>"]
+    B -.- B1["plan.md<br/><em>HOW</em>"]
+    C -.- C1["tasks.md<br/><em>Executable steps</em>"]
+    D -.- D1["Code<br/><em>Working feature</em>"]
+
+    style A fill:#2563eb,color:#fff,stroke:none
+    style B fill:#2563eb,color:#fff,stroke:none
+    style C fill:#2563eb,color:#fff,stroke:none
+    style D fill:#2563eb,color:#fff,stroke:none
+\`\`\`
 
 ## Planning Nine Features
 
@@ -259,6 +274,29 @@ After specifying all nine features, I had:
 - **Clear integration points** (site search knows about blogs, skills, and jobs because the specs define it)
 - **A dependency graph** showing which features can be built in parallel
 
+\`\`\`mermaid
+flowchart TD
+    INFRA["001 Infrastructure"] --> PROFILE["002 Profile Homepage"]
+    INFRA --> BLOG["003 Blog System"]
+    INFRA --> SKILLS["004 Skills &amp; Employment"]
+    BLOG --> SEARCH["005 Site Search"]
+    SKILLS --> SEARCH
+    INFRA --> CONTACT["006 Contact Form"]
+    BLOG --> CMS["007 Content Management"]
+    INFRA --> TOUR["008 Interactive Tour"]
+    SKILLS --> JOB["009 Global Job"]
+
+    style INFRA fill:#1e3a5f,color:#fff,stroke:none
+    style PROFILE fill:#2563eb,color:#fff,stroke:none
+    style BLOG fill:#2563eb,color:#fff,stroke:none
+    style SKILLS fill:#2563eb,color:#fff,stroke:none
+    style SEARCH fill:#3b82f6,color:#fff,stroke:none
+    style CONTACT fill:#2563eb,color:#fff,stroke:none
+    style CMS fill:#3b82f6,color:#fff,stroke:none
+    style TOUR fill:#2563eb,color:#fff,stroke:none
+    style JOB fill:#3b82f6,color:#fff,stroke:none
+\`\`\`
+
 None of this required writing a single line of code. But it saved enormous amounts of time when the coding started, because every AI agent had the same architectural context.
 
 ## The Specification as a Contract
@@ -286,9 +324,7 @@ The key takeaway: **invest time in planning, and the implementation becomes almo
 // Post 2: Building the Foundation
 // ---------------------------------------------------------------------------
 
-const post2Content = `# Building the Foundation: Infrastructure and First Features in a Weekend
-
-With nine feature specifications written (see [Part 1](/blogs)), it was time to start building. Over the weekend of February 23-24, I went from an empty repository to a fully functional monorepo with a profile homepage and blog system — all powered by AI coding agents and [Conductor](https://www.conductor.build/).
+const post2Content = `With nine feature specifications written (see [Part 1](/blogs)), it was time to start building. Over the weekend of February 23-24, I went from an empty repository to a fully functional monorepo with a profile homepage and blog system — all powered by AI coding agents and [Conductor](https://www.conductor.build/).
 
 ## The Monorepo Decision
 
@@ -299,6 +335,36 @@ The first architectural decision was the project structure. A monorepo with \`ba
 - **Infrastructure**: MongoDB 8, Elasticsearch 8.17, Kafka (for future event-driven features)
 
 Everything runs locally via Docker Compose, making the development experience simple and reproducible.
+
+\`\`\`mermaid
+flowchart TB
+    subgraph Frontend["Frontend (React + Vite)"]
+        UI["React Components"]
+        MD["react-markdown"]
+        RR["React Router"]
+    end
+
+    subgraph Backend["Backend (Spring Boot 3.5)"]
+        API["REST Controllers"]
+        SVC["Service Layer"]
+        REPO["Spring Data Repositories"]
+    end
+
+    subgraph Data["Data Layer (Docker Compose)"]
+        MONGO[("MongoDB 8")]
+        ES[("Elasticsearch 8.17")]
+    end
+
+    UI --> API
+    API --> SVC
+    SVC --> REPO
+    REPO --> MONGO
+    REPO --> ES
+
+    style Frontend fill:#f0f4ff,stroke:#2563eb
+    style Backend fill:#f0fdf4,stroke:#16a34a
+    style Data fill:#fef3c7,stroke:#d97706
+\`\`\`
 
 ## The Blog Entity: Java Records Meet MongoDB
 
@@ -434,9 +500,7 @@ The foundation was solid, but the real test was coming. In [Part 3](/blogs), I'l
 // Post 3: Shipping Six Features in a Day
 // ---------------------------------------------------------------------------
 
-const post3Content = `# Shipping Six Features in a Day: Parallel AI Agents with Conductor
-
-February 24th was the most productive single day of the entire rebuild. Six pull requests landed — skills and employment history, the blog system, site search with Elasticsearch, a contact form, test infrastructure, and more. All built by AI agents running in parallel through [Conductor](https://www.conductor.build/).
+const post3Content = `February 24th was the most productive single day of the entire rebuild. Six pull requests landed — skills and employment history, the blog system, site search with Elasticsearch, a contact form, test infrastructure, and more. All built by AI agents running in parallel through [Conductor](https://www.conductor.build/).
 
 ## The Morning Sprint
 
@@ -448,6 +512,32 @@ The day started with four Conductor workspaces running simultaneously:
 - **Workspace 4**: Contact form (PR #8) — email validation, reCAPTCHA, server-side spam protection
 
 Each workspace had its own isolated git worktree. Each agent had the full specification context. They worked independently, and I reviewed PRs as they completed.
+
+\`\`\`mermaid
+gantt
+    title February 24th — Parallel Agent Timeline
+    dateFormat HH:mm
+    axisFormat %H:%M
+
+    section Workspace 1
+    Skills &amp; Employment (PR #4)  :w1, 09:00, 3h
+    Review &amp; merge              :after w1, 1h
+
+    section Workspace 2
+    Blog Enhancements (PR #5)   :w2, 09:00, 2h
+    Review &amp; merge              :after w2, 1h
+
+    section Workspace 3
+    Site Search (PR #7)         :w3, 10:00, 4h
+    Review &amp; merge              :after w3, 1h
+
+    section Workspace 4
+    Contact Form (PR #8)        :w4, 09:30, 3h
+    Review &amp; merge              :after w4, 1h
+
+    section Chore
+    Test Infrastructure (PR #6) :w5, 11:00, 2h
+\`\`\`
 
 ## Elasticsearch Integration
 
@@ -600,9 +690,7 @@ Six features in a day sounds impressive, but the work wasn't done. In [Part 4](/
 // Post 4: Interactive Tours, Data Migration, and the Finishing Touches
 // ---------------------------------------------------------------------------
 
-const post4Content = `# Interactive Tours, Data Migration, and the Finishing Touches
-
-After the whirlwind of shipping six features in a day (see [Part 3](/blogs)), the next phase was about polish and integration. This meant building an interactive tour for first-time visitors, migrating 18 existing blog posts from Strapi, fixing the inevitable CORS issues, and adding the final job position with AI skills. This is the messy, real-world part that AI agents sometimes struggle with.
+const post4Content = `After the whirlwind of shipping six features in a day (see [Part 3](/blogs)), the next phase was about polish and integration. This meant building an interactive tour for first-time visitors, migrating 18 existing blog posts from Strapi, fixing the inevitable CORS issues, and adding the final job position with AI skills. This is the messy, real-world part that AI agents sometimes struggle with.
 
 ## The Interactive Tour (PR #9)
 
@@ -659,6 +747,38 @@ The key decision was making CORS configurable via \`cors.allowed-origins\` in \`
 ## Migrating from Strapi
 
 The biggest data challenge was migrating 18 existing blog posts from my old Strapi CMS to the new Spring Boot stack. The Strapi data lived in a MongoDB backup with a different schema — different field names, different relationship formats, different image handling.
+
+\`\`\`mermaid
+flowchart LR
+    subgraph Strapi["Strapi CMS (Old)"]
+        SB[("blogs")]
+        ST[("tags")]
+        SS[("skills")]
+        SI[("upload_file")]
+    end
+
+    SCRIPT["migrate-strapi-data.js<br/><em>Transform &amp; map</em>"]
+
+    subgraph SpringBoot["Spring Boot (New)"]
+        NB[("blogs")]
+        NT[("tags")]
+        NS[("skills")]
+        NU["uploads/"]
+    end
+
+    SB --> SCRIPT
+    ST --> SCRIPT
+    SS --> SCRIPT
+    SI --> SCRIPT
+    SCRIPT --> NB
+    SCRIPT --> NT
+    SCRIPT --> NS
+    SCRIPT --> NU
+
+    style Strapi fill:#fee2e2,stroke:#dc2626
+    style SpringBoot fill:#f0fdf4,stroke:#16a34a
+    style SCRIPT fill:#2563eb,color:#fff,stroke:none
+\`\`\`
 
 The migration script transformed each blog post from Strapi's format to the new schema:
 
@@ -738,9 +858,7 @@ With the tour, data migration, CORS fixes, and final job position all in place, 
 // Post 5: Lessons Learned
 // ---------------------------------------------------------------------------
 
-const post5Content = `# Lessons Learned: What Worked, What Didn't, and What's Next
-
-This is the honest retrospective. After rebuilding simonrowe.dev from scratch using AI coding agents, [SpecKit](https://github.com/github/spec-kit) for specification-driven development, and [Conductor](https://www.conductor.build/) for parallel agent workspaces, here's what I've learned — the wins, the struggles, and the roadmap ahead.
+const post5Content = `This is the honest retrospective. After rebuilding simonrowe.dev from scratch using AI coding agents, [SpecKit](https://github.com/github/spec-kit) for specification-driven development, and [Conductor](https://www.conductor.build/) for parallel agent workspaces, here's what I've learned — the wins, the struggles, and the roadmap ahead.
 
 ## By the Numbers
 
@@ -760,6 +878,25 @@ Duration                  5 days
 \`\`\`
 
 Nine features, from infrastructure to interactive tours, built and deployed in under a week. Not all of these were complex — some were straightforward CRUD — but the aggregate output is significant for a solo developer.
+
+\`\`\`mermaid
+timeline
+    title Project Timeline
+    Day 1 : Wrote 9 feature specifications using SpecKit
+          : Defined user stories and acceptance criteria
+    Day 2 : Infrastructure skeleton (PR #2)
+          : Profile homepage (PR #3)
+    Day 3 : Skills &amp; Employment (PR #4)
+          : Blog system (PR #5)
+          : Test infrastructure (PR #6)
+          : Site search (PR #7)
+          : Contact form (PR #8)
+    Day 4 : Interactive tour (PR #9)
+          : CORS fix (PR #10)
+          : Strapi data migration
+    Day 5 : Global job position (PR #12)
+          : Final polish and blog content
+\`\`\`
 
 ## What Worked Well
 
@@ -940,7 +1077,7 @@ const posts = [
     title: 'From Zero to Specification: How I Used AI to Plan My Entire Website Rebuild',
     shortDescription: 'How SpecKit and spec-driven development helped plan 9 features for simonrowe.dev before writing a single line of code.',
     content: post1Content,
-    featuredImageUrl: '/uploads/blog-rebuild-1-specification.png',
+    featuredImageUrl: '/uploads/blog-rebuild-1-specification.jpg',
     createdDate: ISODate('2026-02-27T08:00:00Z'),
     tags: [tagRef('SpecKit'), tagRef('Spec-Driven Development'), tagRef('AI')],
     skills: []
@@ -949,7 +1086,7 @@ const posts = [
     title: 'Building the Foundation: Infrastructure and First Features in a Weekend',
     shortDescription: 'Setting up a Spring Boot + React monorepo with MongoDB, building a profile homepage and blog system in two days using Claude Code and Conductor.',
     content: post2Content,
-    featuredImageUrl: '/uploads/blog-rebuild-2-foundation.png',
+    featuredImageUrl: '/uploads/blog-rebuild-2-foundation.jpg',
     createdDate: ISODate('2026-02-27T09:00:00Z'),
     tags: [tagRef('Spring'), tagRef('React'), tagRef('MongoDB'), tagRef('Conductor'), tagRef('AI')],
     skills: [skillRef('Java 21'), skillRef('Spring Boot'), skillRef('React'), skillRef('MongoDB'), skillRef('Docker'), skillRef('Typescript')]
@@ -958,7 +1095,7 @@ const posts = [
     title: 'Shipping Six Features in a Day: Parallel AI Agents with Conductor',
     shortDescription: "How Conductor's parallel workspace model enabled shipping skills, blog system, site search, and contact form features all in a single day.",
     content: post3Content,
-    featuredImageUrl: '/uploads/blog-rebuild-3-parallel.png',
+    featuredImageUrl: '/uploads/blog-rebuild-3-parallel.jpg',
     createdDate: ISODate('2026-02-27T10:00:00Z'),
     tags: [tagRef('Conductor'), tagRef('AI Productivity'), tagRef('Parallel Development')],
     skills: [skillRef('React'), skillRef('Elastic Search'), skillRef('Java 21'), skillRef('Spring Boot'), skillRef('MongoDB')]
@@ -967,7 +1104,7 @@ const posts = [
     title: 'Interactive Tours, Data Migration, and the Finishing Touches',
     shortDescription: 'Migrating 18 blog posts from Strapi, building an interactive tour system, and solving real-world integration challenges with AI agents.',
     content: post4Content,
-    featuredImageUrl: '/uploads/blog-rebuild-4-migration.png',
+    featuredImageUrl: '/uploads/blog-rebuild-4-migration.jpg',
     createdDate: ISODate('2026-02-27T11:00:00Z'),
     tags: [tagRef('Data Migration'), tagRef('AI')],
     skills: [skillRef('MongoDB'), skillRef('Docker'), skillRef('React'), skillRef('Javascript')]
@@ -976,7 +1113,7 @@ const posts = [
     title: "Lessons Learned: What Worked, What Didn't, and What's Next",
     shortDescription: 'Honest retrospective on rebuilding a personal website with AI coding agents — the wins, the struggles, and the roadmap ahead.',
     content: post5Content,
-    featuredImageUrl: '/uploads/blog-rebuild-5-lessons.png',
+    featuredImageUrl: '/uploads/blog-rebuild-5-lessons.jpg',
     createdDate: ISODate('2026-02-27T12:00:00Z'),
     tags: [tagRef('SpecKit'), tagRef('Conductor'), tagRef('Retrospective'), tagRef('AI Productivity')],
     skills: [skillRef('Java 21'), skillRef('Spring Boot'), skillRef('React'), skillRef('MongoDB'), skillRef('Elastic Search'), skillRef('Docker')]

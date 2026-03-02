@@ -12,11 +12,11 @@ ATTACHMENTS_DIR="${PROJECT_DIR}/specs/010-blog-posts/attachments"
 UPLOADS_DIR="${PROJECT_DIR}/backend/uploads"
 
 IMAGES=(
-  "blog-rebuild-1-specification.png"
-  "blog-rebuild-2-foundation.png"
-  "blog-rebuild-3-parallel.png"
-  "blog-rebuild-4-migration.png"
-  "blog-rebuild-5-lessons.png"
+  "blog-rebuild-1-specification.jpg"
+  "blog-rebuild-2-foundation.jpg"
+  "blog-rebuild-3-parallel.jpg"
+  "blog-rebuild-4-migration.jpg"
+  "blog-rebuild-5-lessons.jpg"
 )
 
 for img in "${IMAGES[@]}"; do
