@@ -6,10 +6,8 @@ import com.simonrowe.profile.Profile;
 import com.simonrowe.profile.ProfileRepository;
 import com.simonrowe.profile.SocialMediaLink;
 import com.simonrowe.profile.SocialMediaLinkRepository;
-import com.simonrowe.skills.Skill;
 import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
-import java.util.Comparator;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -51,6 +49,7 @@ public class ResumeService {
         .filter(job -> Boolean.TRUE.equals(job.includeOnResume())
             && !Boolean.TRUE.equals(job.isEducation()))
         .map(this::toResumeJob)
+        .limit(5)
         .toList();
 
     List<ResumeJob> education = allJobs.stream()
@@ -76,6 +75,7 @@ public class ResumeService {
     return new ResumeProfile(
         profile.name(),
         profile.title(),
+        profile.headline(),
         profile.primaryEmail(),
         profile.phoneNumber(),
         profile.location(),
@@ -106,14 +106,6 @@ public class ResumeService {
   }
 
   private ResumeSkillGroup toResumeSkillGroup(SkillGroup group) {
-    List<ResumeSkill> skills = group.skills() == null
-        ? List.of()
-        : group.skills().stream()
-            .sorted(Comparator.comparingInt(
-                s -> s.displayOrder() != null ? s.displayOrder() : 0))
-            .map(skill -> new ResumeSkill(skill.name(), skill.rating()))
-            .toList();
-
-    return new ResumeSkillGroup(group.name(), skills);
+    return new ResumeSkillGroup(group.name(), group.rating());
   }
 }

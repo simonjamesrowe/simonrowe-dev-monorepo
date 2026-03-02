@@ -25,7 +25,7 @@ class ResumePdfRendererTest {
   @Test
   void renderHandlesEmptyCollections() {
     ResumeData data = new ResumeData(
-        new ResumeProfile("Name", "Title", "email", "phone",
+        new ResumeProfile("Name", "Title", "Headline", "email", "phone",
             "London", null, null, null),
         List.of(), List.of(), List.of());
 
@@ -40,7 +40,7 @@ class ResumePdfRendererTest {
         "Lead", "Company", "2020-01-01", null, "London",
         "**Bold** text and _italic_ with `code`");
     ResumeData data = new ResumeData(
-        new ResumeProfile("Name", "Title", "email", "phone",
+        new ResumeProfile("Name", "Title", "Headline", "email", "phone",
             "London", null, null, null),
         List.of(job), List.of(), List.of());
 
@@ -52,6 +52,7 @@ class ResumePdfRendererTest {
   private static ResumeData sampleResumeData() {
     ResumeProfile profile = new ResumeProfile(
         "Simon Rowe", "Engineering Leader",
+        "Passionate about building cloud native apps",
         "simon@test.com", "+44123456", "London",
         "https://linkedin.com/in/simon",
         "https://github.com/simon",
@@ -67,8 +68,7 @@ class ResumePdfRendererTest {
         "2008-09-01", "2011-06-01", "Leeds",
         "First class honours degree.");
 
-    ResumeSkill skill = new ResumeSkill("Spring Boot", 10.0);
-    ResumeSkillGroup group = new ResumeSkillGroup("Spring", List.of(skill));
+    ResumeSkillGroup group = new ResumeSkillGroup("Spring", 9.5);
 
     return new ResumeData(profile, List.of(employment),
         List.of(education), List.of(group));
