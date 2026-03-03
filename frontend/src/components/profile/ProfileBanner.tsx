@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { useState } from 'react'
 import { Download } from 'lucide-react'
 
+import { API_BASE_URL } from '../../config/api'
 import type { Profile } from '../../types/Profile'
 import { SiteSearch } from '../search/SiteSearch'
 import { ChatPanel } from '../chat/ChatPanel'
@@ -34,18 +35,16 @@ export function ProfileBanner({ profile, onDownloadCv }: ProfileBannerProps) {
         <div className="profile-banner__search-row">
           <SiteSearch onChatStart={handleChatStart} />
         </div>
-        {profile.cvUrl ? (
-          <a
-            className="profile-banner__cv-link tour-download-cv"
-            href={profile.cvUrl}
-            onClick={onDownloadCv}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Download size={14} />
-            Download CV
-          </a>
-        ) : null}
+        <a
+          className="profile-banner__cv-link tour-download-cv"
+          href={`${API_BASE_URL}/api/resume`}
+          onClick={onDownloadCv}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Download size={14} />
+          Download CV
+        </a>
       </div>
       {chatOpen && (
         <ChatPanel

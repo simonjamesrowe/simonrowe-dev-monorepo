@@ -1,19 +1,26 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.5.0 → 1.6.0 (MINOR)
+  Version change: 1.7.0 → 1.8.0 (MINOR)
 
   Modified principles:
+    - Principle I: Monorepo with Separate Containers
+      Added: Frontend Nginx MUST serve SPA deep-link fallbacks and
+      proxy `/api/` and `/uploads/` traffic to the backend.
     - Principle II: Modern Java & React Stack
       Added: Spring AI 1.1.2 with Google Gemini as the LLM provider
       for AI-powered chat. Spring WebSocket (STOMP) for real-time
       streaming. @stomp/stompjs as frontend WebSocket client.
       Bucket4j for API rate limiting. Chat sessions use in-memory
       storage (no MongoDB persistence).
+      Added: Markdown rendering standard for trusted content using
+      React Markdown with GFM, syntax-highlighted code blocks, and
+      Mermaid diagrams. Clarified: raw HTML rendering is allowed
+      only for trusted first-party content, never arbitrary user input.
 
   Added sections:
     - Technology Stack Constraints: new rows for AI/LLM, WebSocket,
-      Rate Limiting, and Frontend WebSocket.
+      Rate Limiting, Frontend WebSocket, Content rendering.
 
   Removed sections: None
 
@@ -43,6 +50,10 @@ lives at the repository root.
   backend.
 - The frontend container MUST be built using a multi-stage
   Dockerfile (Node.js build + Nginx runtime).
+- The frontend Nginx configuration MUST proxy `/api/` and
+  `/uploads/` requests to the backend container and MUST serve
+  `/index.html` as a fallback for client-side routes so direct
+  navigation to React Router URLs works in production.
 - Docker Compose MUST be the local and production orchestration
   mechanism (with Pinggy for public exposure).
 - Images MUST be published to GitHub Container Registry (ghcr.io).
@@ -125,6 +136,12 @@ code and MongoDB persistence.
 - Chat sessions MUST be stored in-memory (`ConcurrentHashMap`) with
   scheduled cleanup. Chat sessions MUST NOT be persisted to MongoDB
   unless a concrete read/recovery requirement exists.
+- Markdown content rendered in the frontend MUST use React Markdown
+  with GitHub Flavored Markdown support. Fenced code blocks MUST be
+  syntax highlighted, and `mermaid` code fences MAY render diagrams.
+  Raw HTML rendering MAY only be enabled for trusted first-party
+  content managed by the repository or authenticated admin tooling;
+  it MUST NOT be enabled for arbitrary user-submitted content.
 
 ### III. Quality Gates (NON-NEGOTIABLE)
 
@@ -176,6 +193,26 @@ when a concrete requirement demands it. YAGNI applies.
   Persistence MUST only be introduced when a concrete read
   requirement exists.
 
+### VI. Shell Scripting Standards
+
+All shell scripts MUST use bash with `#!/usr/bin/env bash` shebang
+and `set -euo pipefail` for strict error handling. No PowerShell,
+fish, or other shell languages MAY be used for project scripts.
+
+- Scripts MUST resolve `SCRIPT_DIR` and `PROJECT_DIR` using
+  `$(cd "$(dirname "$0")" && pwd)` for portable path resolution.
+- MongoDB migration scripts (`.js` files) MUST have a companion
+  shell wrapper script (`.sh`) that handles: container discovery,
+  file copying into the container, `mongosh` execution, and
+  cleanup. The `.js` file MUST NOT be run directly.
+- Shell wrapper scripts MUST validate preconditions (container
+  running, source files exist) and exit with clear error messages
+  on failure.
+- Temporary files copied into containers MUST be cleaned up after
+  execution.
+- Scripts MUST use `docker cp` and `docker exec` for interacting
+  with containerised services (not volume mounts for scripts).
+
 ## Technology Stack Constraints
 
 | Layer        | Technology                        | Version/Notes         |
@@ -213,6 +250,8 @@ when a concrete requirement demands it. YAGNI applies.
 | WebSocket    | Spring WebSocket (STOMP)          | Real-time chat streaming         |
 | FE WebSocket | @stomp/stompjs                    | Frontend STOMP client            |
 | Rate Limiting| Bucket4j                          | 8.16.x, token-bucket algorithm   |
+| Content render| React Markdown + Mermaid + Prism | Trusted first-party markdown only |
+| Scripting    | Bash (#!/usr/bin/env bash)        | set -euo pipefail, strict mode |
 
 ## Development Workflow
 
@@ -260,4 +299,4 @@ defined above.
   principles. Violations MUST be resolved before merge unless
   explicitly justified in a Complexity Tracking table.
 
-**Version**: 1.6.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-27
+**Version**: 1.8.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-03-03

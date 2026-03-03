@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.simonrowe.blog.BlogSearchRepository;
+import com.simonrowe.common.Image;
 import com.simonrowe.skills.Skill;
 import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
@@ -135,5 +136,73 @@ class JobControllerTest {
     mockMvc.perform(get("/api/jobs"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].longDescription").doesNotExist());
+  }
+
+  @Test
+  void getGlobalJobAppearsInJobListWithCorrectFields() throws Exception {
+    Image globalLogo = new Image(
+        "/uploads/global-logo.jpg", "global-logo.jpg", null, null, "image/jpeg", null);
+    Job globalJob = new Job(
+        "j-global", "Head of Engineering", "Global", "https://global.com", globalLogo,
+        "2021-08-01", null, "Holborn, London",
+        "Head of Engineering for Commercial Technology at Global.",
+        "## Role Overview\n\nFull markdown description",
+        false, true, List.of("s-ai-1", "s-cloud-1"));
+
+    Skill claudeCode = new Skill("s-ai-1", "Claude Code", 8.0, 1, "AI coding assistant", null);
+    SkillGroup aiGroup = new SkillGroup(
+        "g-ai", "AI", "AI tools", 8.0, 1, null, List.of(claudeCode));
+
+    Skill terraform = new Skill("s-cloud-1", "Terraform", 7.0, 16, "IaC tool", null);
+    SkillGroup cloudGroup = new SkillGroup(
+        "g-cloud", "Cloud", "Cloud skills", 7.0, 4, null, List.of(terraform));
+
+    skillGroupRepository.saveAll(List.of(aiGroup, cloudGroup));
+    jobRepository.save(globalJob);
+
+    mockMvc.perform(get("/api/jobs"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].title").value("Head of Engineering"))
+        .andExpect(jsonPath("$[0].company").value("Global"))
+        .andExpect(jsonPath("$[0].startDate").value("2021-08-01"))
+        .andExpect(jsonPath("$[0].endDate").isEmpty())
+        .andExpect(jsonPath("$[0].location").value("Holborn, London"))
+        .andExpect(jsonPath("$[0].companyImage.url").value("/uploads/global-logo.jpg"));
+  }
+
+  @Test
+  void getGlobalJobByIdReturnsResolvedSkillsFromMultipleGroups() throws Exception {
+    Skill claudeCode = new Skill("s-ai-1", "Claude Code", 8.0, 1, "AI coding assistant", null);
+    Skill copilot = new Skill("s-ai-2", "GitHub Copilot", 8.0, 2, "AI pair programming", null);
+    SkillGroup aiGroup = new SkillGroup(
+        "g-ai", "AI", "AI tools", 8.0, 1, null, List.of(claudeCode, copilot));
+
+    Skill terraform = new Skill("s-cloud-1", "Terraform", 7.0, 16, "IaC tool", null);
+    Skill springBoot = new Skill("s-spring-1", "Spring Boot", 10.0, 1, "Boot framework", null);
+    SkillGroup cloudGroup = new SkillGroup(
+        "g-cloud", "Cloud", null, 7.0, 4, null, List.of(terraform));
+    SkillGroup springGroup = new SkillGroup(
+        "g-spring", "Spring", null, 10.0, 3, null, List.of(springBoot));
+
+    Skill react = new Skill("s-web-1", "React", 8.0, 1, "UI library", null);
+    SkillGroup webGroup = new SkillGroup(
+        "g-web", "Web", null, 8.0, 8, null, List.of(react));
+
+    skillGroupRepository.saveAll(List.of(aiGroup, cloudGroup, springGroup, webGroup));
+
+    Job globalJob = new Job(
+        "j-global", "Head of Engineering", "Global", "https://global.com", null,
+        "2021-08-01", null, "Holborn, London",
+        "Short desc", "Long desc",
+        false, true,
+        List.of("s-ai-1", "s-ai-2", "s-cloud-1", "s-spring-1", "s-web-1"));
+    jobRepository.save(globalJob);
+
+    mockMvc.perform(get("/api/jobs/j-global"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.title").value("Head of Engineering"))
+        .andExpect(jsonPath("$.company").value("Global"))
+        .andExpect(jsonPath("$.skills.length()").value(5))
+        .andExpect(jsonPath("$.longDescription").exists());
   }
 }
