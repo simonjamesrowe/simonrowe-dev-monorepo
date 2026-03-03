@@ -109,7 +109,7 @@ export function HomePage() {
         <SkillsSection onGroupClick={handleGroupClick} />
         <div className="resume-section">
           <ResumeDownloadButton
-            onDownload={() => trackHomepageEvent('download_resume', 'homepage')}
+            onDownload={() => trackHomepageEvent('download_cv', 'homepage')}
           />
         </div>
         <HomepageBlogPreview />

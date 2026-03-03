@@ -6,6 +6,7 @@ public record ResumeJob(
     String startDate,
     String endDate,
     String location,
+    String shortDescription,
     String longDescription
 ) {
 }
