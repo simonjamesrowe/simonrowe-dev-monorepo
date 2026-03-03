@@ -61,8 +61,12 @@ class ResumePdfRendererTest {
         sampleEmployment("Role 3", "2017-01-01", "Detailed role 3", "Full detail 3"),
         sampleEmployment("Role 4", "2016-01-01", "Detailed role 4", "Full detail 4"),
         sampleEmployment("Role 5", "2015-01-01", "Detailed role 5", "Full detail 5"),
-        sampleEmployment("Role 6", "2014-01-01", "Compact role summary", "Older full detail should not be used"),
-        sampleEmployment("Role 7", "2013-01-01", "Another compact role summary", "Another older full detail")
+        sampleEmployment(
+            "Role 6", "2014-01-01", "Compact role summary",
+            "Older full detail should not be used"),
+        sampleEmployment(
+            "Role 7", "2013-01-01", "Another compact role summary",
+            "Another older full detail")
     );
     ResumeData data = new ResumeData(
         new ResumeProfile("Name", "Title", "Headline", "email", "phone",
