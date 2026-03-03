@@ -285,6 +285,19 @@ public class ResumePdfRenderer {
   }
 
   private void addJobBlock(ColumnText ct, ResumeJob job) {
+    addJobHeader(ct, job);
+
+    if (job.longDescription() != null && !job.longDescription().isBlank()) {
+      String plainText = markdownToPlainText(job.longDescription());
+      Paragraph desc = new Paragraph(plainText, JOB_DESC_FONT);
+      desc.setSpacingBefore(0);
+      desc.setSpacingAfter(10);
+      desc.setIndentationLeft(2);
+      ct.addElement(desc);
+    }
+  }
+
+  private void addJobHeader(ColumnText ct, ResumeJob job) {
     PdfPTable titleRow = new PdfPTable(2);
     titleRow.setWidthPercentage(100);
     try {
@@ -323,30 +336,10 @@ public class ResumePdfRenderer {
     dateParagraph.setSpacingAfter(2);
     dateParagraph.setIndentationLeft(2);
     ct.addElement(dateParagraph);
-
-    if (job.longDescription() != null && !job.longDescription().isBlank()) {
-      String plainText = markdownToPlainText(job.longDescription());
-      Paragraph desc = new Paragraph(plainText, JOB_DESC_FONT);
-      desc.setSpacingBefore(0);
-      desc.setSpacingAfter(10);
-      desc.setIndentationLeft(2);
-      ct.addElement(desc);
-    }
   }
 
   private void addCompactJobBlock(ColumnText ct, ResumeJob job) {
-    Paragraph title = new Paragraph(job.title(), JOB_TITLE_FONT);
-    title.setSpacingBefore(0);
-    title.setSpacingAfter(2);
-    ct.addElement(title);
-
-    String dateRange = formatDate(job.startDate()) + " - "
-        + (job.endDate() != null ? formatDate(job.endDate()) : "Present");
-    Paragraph dateParagraph = new Paragraph(dateRange, JOB_DATE_FONT);
-    dateParagraph.setSpacingBefore(0);
-    dateParagraph.setSpacingAfter(2);
-    dateParagraph.setIndentationLeft(2);
-    ct.addElement(dateParagraph);
+    addJobHeader(ct, job);
 
     String compactSummary = compactSummary(job);
     if (compactSummary != null) {

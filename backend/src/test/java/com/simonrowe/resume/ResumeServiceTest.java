@@ -61,9 +61,10 @@ class ResumeServiceTest {
     assertThat(result.profile().name()).isEqualTo("Simon Rowe");
     assertThat(result.profile().linkedIn()).isEqualTo("https://linkedin.com/in/simon");
     assertThat(result.profile().github()).isEqualTo("https://github.com/simon");
-    assertThat(result.employment()).hasSize(1);
+    assertThat(result.employment()).hasSize(2);
     assertThat(result.employment().get(0).title()).isEqualTo("Lead");
     assertThat(result.employment().get(0).shortDescription()).isEqualTo("Short");
+    assertThat(result.employment().get(1).title()).isEqualTo("Intern");
     assertThat(result.education()).hasSize(1);
     assertThat(result.education().get(0).title()).isEqualTo("BSc CS");
     assertThat(result.skillGroups()).hasSize(1);
@@ -80,7 +81,7 @@ class ResumeServiceTest {
   }
 
   @Test
-  void assembleResumeDataIncludesAllResumeJobs() {
+  void assembleResumeDataIncludesAllNonEducationJobs() {
     given(profileRepository.findFirstBy())
         .willReturn(Optional.of(sampleProfile()));
     given(socialMediaLinkRepository.findAll()).willReturn(List.of());
@@ -104,7 +105,7 @@ class ResumeServiceTest {
   }
 
   @Test
-  void assembleResumeDataExcludesJobsNotOnResume() {
+  void assembleResumeDataIncludesJobsNotMarkedForResume() {
     given(profileRepository.findFirstBy())
         .willReturn(Optional.of(sampleProfile()));
     given(socialMediaLinkRepository.findAll()).willReturn(List.of());
@@ -116,7 +117,8 @@ class ResumeServiceTest {
 
     ResumeData result = resumeService.assembleResumeData();
 
-    assertThat(result.employment()).isEmpty();
+    assertThat(result.employment()).hasSize(1);
+    assertThat(result.employment().get(0).title()).isEqualTo("Lead");
   }
 
   private static Profile sampleProfile() {

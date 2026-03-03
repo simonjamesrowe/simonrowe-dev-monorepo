@@ -77,6 +77,8 @@ class ResumePdfRendererTest {
     String extractedText = extractText(pdf);
 
     assertThat(extractedText).contains("Role 6");
+    assertThat(extractedText).contains("Company");
+    assertThat(extractedText).contains("London");
     assertThat(extractedText).contains("Compact role summary");
     assertThat(extractedText).doesNotContain("Older full detail should not be used");
   }

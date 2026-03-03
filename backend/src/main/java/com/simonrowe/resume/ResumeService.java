@@ -46,8 +46,7 @@ public class ResumeService {
     List<Job> allJobs = jobRepository.findAllByOrderByStartDateDesc();
 
     List<ResumeJob> employment = allJobs.stream()
-        .filter(job -> Boolean.TRUE.equals(job.includeOnResume())
-            && !Boolean.TRUE.equals(job.isEducation()))
+        .filter(job -> !Boolean.TRUE.equals(job.isEducation()))
         .map(this::toResumeJob)
         .toList();
 
