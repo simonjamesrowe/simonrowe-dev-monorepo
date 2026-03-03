@@ -49,7 +49,6 @@ public class ResumeService {
         .filter(job -> Boolean.TRUE.equals(job.includeOnResume())
             && !Boolean.TRUE.equals(job.isEducation()))
         .map(this::toResumeJob)
-        .limit(5)
         .toList();
 
     List<ResumeJob> education = allJobs.stream()
@@ -101,6 +100,7 @@ public class ResumeService {
         job.startDate(),
         job.endDate(),
         job.location(),
+        job.shortDescription(),
         job.longDescription()
     );
   }

@@ -63,6 +63,7 @@ class ResumeServiceTest {
     assertThat(result.profile().github()).isEqualTo("https://github.com/simon");
     assertThat(result.employment()).hasSize(1);
     assertThat(result.employment().get(0).title()).isEqualTo("Lead");
+    assertThat(result.employment().get(0).shortDescription()).isEqualTo("Short");
     assertThat(result.education()).hasSize(1);
     assertThat(result.education().get(0).title()).isEqualTo("BSc CS");
     assertThat(result.skillGroups()).hasSize(1);
@@ -79,7 +80,7 @@ class ResumeServiceTest {
   }
 
   @Test
-  void assembleResumeDataLimitsEmploymentToFiveJobs() {
+  void assembleResumeDataIncludesAllResumeJobs() {
     given(profileRepository.findFirstBy())
         .willReturn(Optional.of(sampleProfile()));
     given(socialMediaLinkRepository.findAll()).willReturn(List.of());
@@ -97,9 +98,9 @@ class ResumeServiceTest {
 
     ResumeData result = resumeService.assembleResumeData();
 
-    assertThat(result.employment()).hasSize(5);
+    assertThat(result.employment()).hasSize(7);
     assertThat(result.employment().get(0).title()).isEqualTo("Job 1");
-    assertThat(result.employment().get(4).title()).isEqualTo("Job 5");
+    assertThat(result.employment().get(6).title()).isEqualTo("Job 7");
   }
 
   @Test
