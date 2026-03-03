@@ -12,7 +12,7 @@ export function ResumeDownloadButton({ onDownload }: ResumeDownloadButtonProps) 
 
   return (
     <button className="button resume-download-button" onClick={handleClick} type="button">
-      Download Resume
+      Download CV
     </button>
   )
 }

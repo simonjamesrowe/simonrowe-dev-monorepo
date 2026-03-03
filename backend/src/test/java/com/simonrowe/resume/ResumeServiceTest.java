@@ -10,7 +10,6 @@ import com.simonrowe.profile.Profile;
 import com.simonrowe.profile.ProfileRepository;
 import com.simonrowe.profile.SocialMediaLink;
 import com.simonrowe.profile.SocialMediaLinkRepository;
-import com.simonrowe.skills.Skill;
 import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
 import java.time.Instant;
@@ -62,12 +61,15 @@ class ResumeServiceTest {
     assertThat(result.profile().name()).isEqualTo("Simon Rowe");
     assertThat(result.profile().linkedIn()).isEqualTo("https://linkedin.com/in/simon");
     assertThat(result.profile().github()).isEqualTo("https://github.com/simon");
-    assertThat(result.employment()).hasSize(1);
+    assertThat(result.employment()).hasSize(2);
     assertThat(result.employment().get(0).title()).isEqualTo("Lead");
+    assertThat(result.employment().get(0).shortDescription()).isEqualTo("Short");
+    assertThat(result.employment().get(1).title()).isEqualTo("Intern");
     assertThat(result.education()).hasSize(1);
     assertThat(result.education().get(0).title()).isEqualTo("BSc CS");
     assertThat(result.skillGroups()).hasSize(1);
-    assertThat(result.skillGroups().get(0).skills()).hasSize(1);
+    assertThat(result.skillGroups().get(0).name()).isEqualTo("Spring");
+    assertThat(result.skillGroups().get(0).rating()).isEqualTo(9.5);
   }
 
   @Test
@@ -79,7 +81,31 @@ class ResumeServiceTest {
   }
 
   @Test
-  void assembleResumeDataExcludesJobsNotOnResume() {
+  void assembleResumeDataIncludesAllNonEducationJobs() {
+    given(profileRepository.findFirstBy())
+        .willReturn(Optional.of(sampleProfile()));
+    given(socialMediaLinkRepository.findAll()).willReturn(List.of());
+    given(jobRepository.findAllByOrderByStartDateDesc())
+        .willReturn(List.of(
+            sampleJob("j-1", "Job 1", "Co1", false, true),
+            sampleJob("j-2", "Job 2", "Co2", false, true),
+            sampleJob("j-3", "Job 3", "Co3", false, true),
+            sampleJob("j-4", "Job 4", "Co4", false, true),
+            sampleJob("j-5", "Job 5", "Co5", false, true),
+            sampleJob("j-6", "Job 6", "Co6", false, true),
+            sampleJob("j-7", "Job 7", "Co7", false, true)));
+    given(skillGroupRepository.findAllByOrderByDisplayOrderAsc())
+        .willReturn(List.of());
+
+    ResumeData result = resumeService.assembleResumeData();
+
+    assertThat(result.employment()).hasSize(7);
+    assertThat(result.employment().get(0).title()).isEqualTo("Job 1");
+    assertThat(result.employment().get(6).title()).isEqualTo("Job 7");
+  }
+
+  @Test
+  void assembleResumeDataIncludesJobsNotMarkedForResume() {
     given(profileRepository.findFirstBy())
         .willReturn(Optional.of(sampleProfile()));
     given(socialMediaLinkRepository.findAll()).willReturn(List.of());
@@ -91,7 +117,8 @@ class ResumeServiceTest {
 
     ResumeData result = resumeService.assembleResumeData();
 
-    assertThat(result.employment()).isEmpty();
+    assertThat(result.employment()).hasSize(1);
+    assertThat(result.employment().get(0).title()).isEqualTo("Lead");
   }
 
   private static Profile sampleProfile() {
@@ -122,7 +149,6 @@ class ResumeServiceTest {
   }
 
   private static SkillGroup sampleSkillGroup() {
-    Skill skill = new Skill("s-1", "Spring Boot", 10.0, 1, null, null);
-    return new SkillGroup("g-1", "Spring", null, 9.5, 1, null, List.of(skill));
+    return new SkillGroup("g-1", "Spring", null, 9.5, 1, null, null);
   }
 }

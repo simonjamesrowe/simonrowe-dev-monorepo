@@ -29,7 +29,7 @@ public class ResumeController {
 
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION,
-            "attachment; filename=\"simon-rowe-resume.pdf\"")
+            "attachment; filename=\"simon-rowe-cv.pdf\"")
         .header(HttpHeaders.CACHE_CONTROL,
             "no-cache, no-store, must-revalidate")
         .contentType(MediaType.APPLICATION_PDF)

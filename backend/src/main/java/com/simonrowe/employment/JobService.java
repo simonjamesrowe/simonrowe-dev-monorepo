@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -67,8 +68,8 @@ public class JobService {
 
     return skillIdentifiers.stream()
         .map(identifier -> skillMap.values().stream()
-            .filter(ref -> ref.id().equals(identifier)
-                || ref.name().equals(identifier))
+            .filter(ref -> Objects.equals(ref.id(), identifier)
+                || Objects.equals(ref.name(), identifier))
             .findFirst()
             .orElse(null))
         .filter(ref -> ref != null)
