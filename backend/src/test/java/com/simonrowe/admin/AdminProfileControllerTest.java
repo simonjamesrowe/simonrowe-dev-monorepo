@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.simonrowe.SharedMongoContainer;
 import com.simonrowe.blog.BlogSearchRepository;
+import com.simonrowe.common.Image;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -158,7 +159,7 @@ class AdminProfileControllerTest {
         "+441234567890",
         "simon@example.com",
         null,
-        "/uploads/profile.jpg",
+        new Image("/uploads/profile.jpg", null, null, null, null, null),
         null,
         null,
         null,

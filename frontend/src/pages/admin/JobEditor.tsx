@@ -233,11 +233,6 @@ export function JobEditor() {
                   setForm({ ...form, companyImage: url ? { url } : null })
                   setDirty(true)
                 }}
-                onUpload={async (file) => {
-                  const asset = await uploadAdminMedia(getAccessToken, file)
-                  return asset.originalPath
-                }}
-                onBrowse={() => setShowMediaLibrary(true)}
               />
             </div>
           </div>

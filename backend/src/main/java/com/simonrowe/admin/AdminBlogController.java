@@ -168,7 +168,9 @@ public class AdminBlogController {
   }
 
   private List<Tag> resolveTagsByIds(final List<String> ids) {
-    if (ids == null || ids.isEmpty()) return List.of();
+    if (ids == null || ids.isEmpty()) {
+      return List.of();
+    }
     return ids.stream()
         .map(id -> tagRepository.findById(id).orElse(null))
         .filter(t -> t != null)
@@ -176,7 +178,9 @@ public class AdminBlogController {
   }
 
   private List<Skill> resolveSkillsByIds(final List<String> ids) {
-    if (ids == null || ids.isEmpty()) return List.of();
+    if (ids == null || ids.isEmpty()) {
+      return List.of();
+    }
     return ids.stream()
         .map(id -> skillRepository.findById(id).orElse(null))
         .filter(s -> s != null)
