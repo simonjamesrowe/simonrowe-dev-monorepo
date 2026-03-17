@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-
+import { GripVertical, Pencil, Trash2 } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
 import {
   fetchAdminTourSteps,
@@ -17,8 +17,9 @@ export function TourStepsAdmin() {
   const [steps, setSteps] = useState<AdminTourStep[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [reordering, setReordering] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+  const dragIndex = useRef<number | null>(null)
+  const [overIndex, setOverIndex] = useState<number | null>(null)
 
   const loadSteps = useCallback(async () => {
     try {
@@ -38,29 +39,6 @@ export function TourStepsAdmin() {
     loadSteps()
   }, [loadSteps])
 
-  const moveStep = async (index: number, direction: 'up' | 'down') => {
-    const newSteps = [...steps]
-    const targetIndex = direction === 'up' ? index - 1 : index + 1
-    if (targetIndex < 0 || targetIndex >= newSteps.length) return
-
-    const temp = newSteps[index]
-    newSteps[index] = newSteps[targetIndex]
-    newSteps[targetIndex] = temp
-
-    const orderedIds = newSteps.map((step) => step.id)
-
-    try {
-      setReordering(true)
-      setError(null)
-      await reorderAdminTourSteps(getAccessToken, { orderedIds })
-      await loadSteps()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reorder tour steps')
-    } finally {
-      setReordering(false)
-    }
-  }
-
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return
     try {
@@ -72,6 +50,44 @@ export function TourStepsAdmin() {
       setError(err instanceof Error ? err.message : 'Failed to delete tour step')
       setDeleteTarget(null)
     }
+  }
+
+  const handleDragStart = (index: number) => {
+    dragIndex.current = index
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    setOverIndex(index)
+  }
+
+  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault()
+    const from = dragIndex.current
+    if (from === null || from === dropIndex) {
+      dragIndex.current = null
+      setOverIndex(null)
+      return
+    }
+
+    const newSteps = [...steps]
+    const [moved] = newSteps.splice(from, 1)
+    newSteps.splice(dropIndex, 0, moved)
+    setSteps(newSteps)
+    dragIndex.current = null
+    setOverIndex(null)
+
+    try {
+      await reorderAdminTourSteps(getAccessToken, { orderedIds: newSteps.map((s) => s.id) })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reorder tour steps')
+      loadSteps()
+    }
+  }
+
+  const handleDragEnd = () => {
+    dragIndex.current = null
+    setOverIndex(null)
   }
 
   return (
@@ -95,7 +111,7 @@ export function TourStepsAdmin() {
         <table className="admin-table">
           <thead>
             <tr>
-              <th className="admin-table__th">Order</th>
+              <th style={{ width: 40 }}></th>
               <th className="admin-table__th">Title</th>
               <th className="admin-table__th">Selector</th>
               <th className="admin-table__th">Position</th>
@@ -111,47 +127,39 @@ export function TourStepsAdmin() {
               </tr>
             )}
             {steps.map((step, index) => (
-              <tr key={step.id} className="admin-table__row">
-                <td className="admin-table__td admin-table__td--order">
-                  <div className="admin-reorder">
-                    <button
-                      aria-label="Move up"
-                      className="admin-btn admin-btn--sm admin-btn--icon"
-                      disabled={index === 0 || reordering}
-                      onClick={() => moveStep(index, 'up')}
-                      type="button"
-                    >
-                      Up
-                    </button>
-                    <span className="admin-reorder__number">{step.order}</span>
-                    <button
-                      aria-label="Move down"
-                      className="admin-btn admin-btn--sm admin-btn--icon"
-                      disabled={index === steps.length - 1 || reordering}
-                      onClick={() => moveStep(index, 'down')}
-                      type="button"
-                    >
-                      Down
-                    </button>
-                  </div>
+              <tr
+                key={step.id}
+                draggable
+                onDragStart={() => handleDragStart(index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                className={overIndex === index ? 'admin-table__row--drag-over' : ''}
+              >
+                <td>
+                  <span className="admin-table__grip">
+                    <GripVertical size={16} />
+                  </span>
                 </td>
                 <td className="admin-table__td">{step.title}</td>
                 <td className="admin-table__td admin-table__td--mono">{step.selector}</td>
                 <td className="admin-table__td">{step.position ?? '-'}</td>
                 <td className="admin-table__td admin-table__td--actions">
                   <button
-                    className="admin-btn admin-btn--sm"
+                    className="admin-btn admin-btn--icon"
                     onClick={() => navigate(`/admin/tour-steps/${step.id}`)}
+                    title="Edit"
                     type="button"
                   >
-                    Edit
+                    <Pencil size={16} />
                   </button>
                   <button
-                    className="admin-btn admin-btn--sm admin-btn--danger"
+                    className="admin-btn admin-btn--icon admin-btn--danger-icon"
                     onClick={() => setDeleteTarget({ id: step.id, name: step.title })}
+                    title="Delete"
                     type="button"
                   >
-                    Delete
+                    <Trash2 size={16} />
                   </button>
                 </td>
               </tr>

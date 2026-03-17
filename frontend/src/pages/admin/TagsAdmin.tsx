@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { Pencil, Trash2 } from 'lucide-react'
+
 import { useAuth } from '../../auth/useAuth'
 import {
   fetchAdminTags,
@@ -254,18 +256,20 @@ export function TagsAdmin() {
                     </td>
                     <td className="admin-table__td admin-table__td--actions">
                       <button
-                        className="admin-btn admin-btn--sm"
+                        className="admin-btn admin-btn--icon"
                         onClick={() => handleEditStart(tag)}
+                        title="Edit"
                         type="button"
                       >
-                        Edit
+                        <Pencil size={16} />
                       </button>
                       <button
-                        className="admin-btn admin-btn--sm admin-btn--danger"
+                        className="admin-btn admin-btn--icon admin-btn--danger-icon"
                         onClick={() => setDeleteTarget({ id: tag.id, name: tag.name })}
+                        title="Delete"
                         type="button"
                       >
-                        Delete
+                        <Trash2 size={16} />
                       </button>
                     </td>
                   </tr>
