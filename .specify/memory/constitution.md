@@ -1,20 +1,18 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.6.0 → 1.7.0 (MINOR)
+  Version change: 1.7.0 → 1.8.0 (MINOR)
 
   Modified principles:
-    - Principle I: Monorepo with Separate Containers
-      Added: Frontend Nginx MUST serve SPA deep-link fallbacks and
-      proxy `/api/` and `/uploads/` traffic to the backend.
-    - Principle II: Modern Java & React Stack
-      Added: Markdown rendering standard for trusted content using
-      React Markdown with GFM, syntax-highlighted code blocks, and
-      Mermaid diagrams. Clarified: raw HTML rendering is allowed
-      only for trusted first-party content, never arbitrary user input.
+    - Principle V: Removed "content creation is a future concern"
+      clause — content management is now implemented (Feature 007).
 
   Added sections:
-    - Technology Stack Constraints: new row for Content rendering.
+    - Principle VI: Admin CMS UX Standards — layout, icon, drawer,
+      and DBRef DTO patterns for the content management UI.
+    - Principle VII: Backup & Restore — simplified backup/restore
+      scripts replacing the legacy Strapi migration workflow.
+    - Renumbered Shell Scripting Standards to Principle VIII.
 
   Removed sections: None
 
@@ -167,15 +165,55 @@ when a concrete requirement demands it. YAGNI applies.
 - Features MUST be delivered as independently testable increments.
 - No premature abstractions — three similar lines are better than
   an unjustified abstraction.
-- Content creation/editing functionality is a future concern; the
-  architecture MUST accommodate it but MUST NOT implement it until
-  explicitly requested.
 - Data that is only forwarded (e.g. contact form submissions sent
   via email) and never queried MUST NOT be persisted to MongoDB.
   Persistence MUST only be introduced when a concrete read
   requirement exists.
 
-### VI. Shell Scripting Standards
+### VI. Admin CMS UX Standards
+
+The admin CMS MUST follow consistent UX patterns for content
+management pages. These patterns ensure a professional, efficient
+editing experience.
+
+- Admin list pages MUST use Lucide React icons for status indicators
+  (e.g. `CheckCircle`/`XCircle` for published state) and action
+  buttons (e.g. `Pencil` for edit, `Trash2` for delete) instead of
+  text labels.
+- The blog editor layout MUST use a two-column top section: Title
+  and Short Description on the left half, Featured Image picker on
+  the right half. Tags and Skills selectors MUST appear above the
+  content editor.
+- The MDXEditor markdown content area MUST have a reduced
+  `min-height` of 250px to avoid excessive whitespace.
+- The Media Library picker MUST render as a right-side sliding
+  drawer (using the existing `.drawer`/`.drawer-overlay` CSS
+  pattern) rather than a centered modal dialog.
+- Blog entities in MongoDB MUST use `@DBRef` for tags and skills
+  references. The admin API MUST use a DTO pattern to convert
+  between `@DBRef` entity references (backend) and plain string
+  IDs (frontend API).
+
+### VII. Backup & Restore
+
+Data backup and restore MUST use simple shell scripts that capture
+the current MongoDB state and uploaded media assets as a single
+tarball archive.
+
+- `scripts/backup.sh` MUST dump the `simonrowe` database via
+  `mongodump` and copy the `backend/uploads/` directory into a
+  timestamped `backup-YYYYMMDD_HHMMSS.tar.gz` archive.
+- `scripts/restore.sh` MUST find the latest `backup-*.tar.gz`,
+  restore MongoDB via `mongorestore --drop`, and copy uploads back
+  to `backend/uploads/`.
+- Legacy Strapi migration scripts (`migrate-strapi-data.js`,
+  `run-migration.sh`, `restore-backup.sh`) are retained for
+  reference but the new `backup.sh`/`restore.sh` pair is the
+  canonical mechanism going forward.
+- Backup archives MUST be stored in `/Users/simonrowe/backups/`
+  by default (configurable via first argument).
+
+### VIII. Shell Scripting Standards
 
 All shell scripts MUST use bash with `#!/usr/bin/env bash` shebang
 and `set -euo pipefail` for strict error handling. No PowerShell,
@@ -277,4 +315,4 @@ defined above.
   principles. Violations MUST be resolved before merge unless
   explicitly justified in a Complexity Tracking table.
 
-**Version**: 1.7.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-03-03
+**Version**: 1.8.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-03-15

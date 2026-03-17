@@ -9,7 +9,6 @@ import org.springframework.boot.actuate.health.Status;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -18,9 +17,6 @@ import org.testcontainers.kafka.ConfluentKafkaContainer;
 @SpringBootTest
 @Testcontainers
 class ApplicationTests {
-
-  @Container
-  static MongoDBContainer mongodb = new MongoDBContainer("mongo:8");
 
   @Container
   static ConfluentKafkaContainer kafka =
@@ -33,7 +29,7 @@ class ApplicationTests {
 
   @DynamicPropertySource
   static void configureProperties(DynamicPropertyRegistry registry) {
-    registry.add("spring.data.mongodb.uri", mongodb::getReplicaSetUrl);
+    SharedMongoContainer.configureProperties(registry);
     registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
     registry.add("spring.elasticsearch.uris", elasticsearch::getHttpHostAddress);
   }

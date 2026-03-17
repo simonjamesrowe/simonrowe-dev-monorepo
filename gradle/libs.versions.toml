@@ -10,6 +10,7 @@ cyclonedx = "2.1.0"
 sonarqube = "6.0.1.5171"
 openpdf = "2.0.3"
 commonmark = "0.24.0"
+thumbnailator = "0.4.20"
 
 [libraries]
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
@@ -31,6 +32,9 @@ testcontainers-kafka = { module = "org.testcontainers:kafka" }
 testcontainers-elasticsearch = { module = "org.testcontainers:elasticsearch" }
 openpdf = { module = "com.github.librepdf:openpdf", version.ref = "openpdf" }
 commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
+spring-boot-starter-oauth2-resource-server = { module = "org.springframework.boot:spring-boot-starter-oauth2-resource-server" }
+spring-security-test = { module = "org.springframework.security:spring-security-test" }
+thumbnailator = { module = "net.coobird:thumbnailator", version.ref = "thumbnailator" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

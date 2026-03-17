@@ -94,6 +94,10 @@ Backups are saved to `~/backups` by default. To specify a different directory:
 | `scripts/create-backup.sh` | Dump current MongoDB data + images into a backup tarball |
 | `scripts/migrate-strapi-data.js` | Mongosh script that transforms Strapi collections to Spring Boot schema (used by restore) |
 
+## Content Management (Admin Panel)
+
+The site includes an authenticated admin panel at `/admin` for managing blogs, jobs, skills, media, and other content. It requires Auth0 for authentication — see the [Auth0 Setup Guide](docs/auth0-setup.md) for configuration instructions.
+
 ## Running Tests
 
 ### Backend
