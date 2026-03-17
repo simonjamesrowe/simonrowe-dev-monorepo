@@ -2,6 +2,7 @@ package com.simonrowe.tour;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.simonrowe.SharedMongoContainer;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -9,23 +10,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.data.mongo.DataMongoTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MongoDBContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 @DataMongoTest
-@Testcontainers
 class TourStepRepositoryTest {
-
-  @Container
-  static MongoDBContainer mongodb = new MongoDBContainer("mongo:8");
 
   @Autowired
   private TourStepRepository tourStepRepository;
 
   @DynamicPropertySource
   static void configureProperties(final DynamicPropertyRegistry registry) {
-    registry.add("spring.data.mongodb.uri", mongodb::getReplicaSetUrl);
+    SharedMongoContainer.configureProperties(registry);
   }
 
   @BeforeEach

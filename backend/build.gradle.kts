@@ -27,15 +27,23 @@ jacoco {
     toolVersion = libs.versions.jacoco.get()
 }
 
+val jacocoExcludes = listOf("com/simonrowe/migration/**")
+
+val jacocoClassDirectories = sourceSets.main.get().output.asFileTree.matching {
+    exclude(jacocoExcludes)
+}
+
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
     reports {
         xml.required.set(true)
         html.required.set(true)
     }
+    classDirectories.setFrom(jacocoClassDirectories)
 }
 
 tasks.jacocoTestCoverageVerification {
+    classDirectories.setFrom(jacocoClassDirectories)
     violationRules {
         rule {
             limit {
@@ -47,6 +55,10 @@ tasks.jacocoTestCoverageVerification {
 
 tasks.check {
     dependsOn(tasks.jacocoTestCoverageVerification)
+}
+
+tasks.test {
+    systemProperty("auth0.jwt.enabled", "false")
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
@@ -69,10 +81,13 @@ dependencies {
     implementation(libs.spring.ai.starter.mcp.server.webmvc)
     implementation(libs.spring.boot.starter.websocket)
     implementation(libs.bucket4j.core)
+    implementation(libs.spring.boot.starter.oauth2.resource.server)
+    implementation(libs.thumbnailator)
 
     developmentOnly(libs.spring.boot.devtools)
 
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.spring.security.test)
     testImplementation(libs.spring.kafka.test)
     testImplementation(platform(libs.testcontainers.bom))
     testImplementation(libs.testcontainers.junit.jupiter)

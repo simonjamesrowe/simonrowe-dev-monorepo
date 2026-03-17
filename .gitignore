@@ -1,6 +1,7 @@
 # Gradle
 .gradle/
 build/
+target/
 
 # Java
 *.class
@@ -47,6 +48,12 @@ backend/uploads/
 # Coverage and reports
 coverage/
 *.lcov
+
+# Playwright MCP
+.playwright-mcp/
+
+# Screenshots
+*.png
 
 # Misc
 *.tmp

@@ -12,6 +12,7 @@ openpdf = "2.0.3"
 commonmark = "0.24.0"
 springAi = "1.1.2"
 bucket4j = "8.16.1"
+thumbnailator = "0.4.20"
 
 [libraries]
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
@@ -38,6 +39,9 @@ spring-ai-starter-model-google-genai = { module = "org.springframework.ai:spring
 spring-ai-starter-mcp-server-webmvc = { module = "org.springframework.ai:spring-ai-starter-mcp-server-webmvc" }
 spring-boot-starter-websocket = { module = "org.springframework.boot:spring-boot-starter-websocket" }
 bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }
+spring-boot-starter-oauth2-resource-server = { module = "org.springframework.boot:spring-boot-starter-oauth2-resource-server" }
+spring-security-test = { module = "org.springframework.security:spring-security-test" }
+thumbnailator = { module = "net.coobird:thumbnailator", version.ref = "thumbnailator" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
