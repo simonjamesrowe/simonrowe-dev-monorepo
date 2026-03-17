@@ -49,6 +49,12 @@ backend/uploads/
 coverage/
 *.lcov
 
+# Playwright MCP
+.playwright-mcp/
+
+# Screenshots
+*.png
+
 # Misc
 *.tmp
 *.bak
