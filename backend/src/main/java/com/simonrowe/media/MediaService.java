@@ -78,7 +78,7 @@ public class MediaService {
           originalFileName,
           contentType,
           file.getSize(),
-          assetId + "/" + storedFileName,
+          "/uploads/" + assetId + "/" + storedFileName,
           variants,
           now,
           now,

@@ -1,5 +1,6 @@
 package com.simonrowe.admin;
 
+import com.simonrowe.common.Image;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,10 +66,10 @@ public class AdminProfileController {
         (String) body.get("phoneNumber"),
         (String) body.get("primaryEmail"),
         (String) body.get("secondaryEmail"),
-        (String) body.get("profileImage"),
-        (String) body.get("sidebarImage"),
-        (String) body.get("backgroundImage"),
-        (String) body.get("mobileBackgroundImage"),
+        parseImage(body.get("profileImage")),
+        parseImage(body.get("sidebarImage")),
+        parseImage(body.get("backgroundImage")),
+        parseImage(body.get("mobileBackgroundImage")),
         existing != null ? existing.createdAt() : now,
         now
     );
@@ -77,6 +78,16 @@ public class AdminProfileController {
     LOG.info("Updated profile: id={}, user={}",
         saved.id(), jwt.getSubject());
     return saved;
+  }
+
+  private Image parseImage(final Object value) {
+    if (value instanceof Map<?, ?> map) {
+      return new Image(
+          (String) map.get("url"), null, null, null, null, null);
+    } else if (value instanceof String url && !url.isBlank()) {
+      return new Image(url, null, null, null, null, null);
+    }
+    return null;
   }
 
   private List<ValidationErrorResponse.FieldError> validateProfile(

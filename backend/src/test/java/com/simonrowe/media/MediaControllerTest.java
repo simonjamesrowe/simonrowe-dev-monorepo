@@ -157,7 +157,7 @@ class MediaControllerTest {
         fileName,
         mimeType,
         1024L,
-        id + "/original.jpg",
+        "/uploads/" + id + "/original.jpg",
         Map.of(),
         java.time.Instant.parse("2026-01-01T10:00:00Z"),
         java.time.Instant.parse("2026-01-01T10:00:00Z"),

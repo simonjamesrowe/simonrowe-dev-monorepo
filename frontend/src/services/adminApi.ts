@@ -12,7 +12,7 @@ export interface AdminBlog {
   shortDescription: string
   content: string
   published: boolean
-  featuredImage: string | null
+  featuredImageUrl: string | null
   tags: string[]
   skills: string[]
   createdAt: string
@@ -24,7 +24,7 @@ export interface AdminJob {
   title: string
   company: string
   companyUrl: string | null
-  companyImage: string | null
+  companyImage: { url: string } | null
   startDate: string
   endDate: string | null
   location: string | null
@@ -42,7 +42,7 @@ export interface AdminSkill {
   name: string
   rating: number | null
   description: string | null
-  image: string | null
+  image: { url: string } | null
   order: number
   createdAt: string
   updatedAt: string
@@ -53,7 +53,7 @@ export interface AdminSkillGroup {
   name: string
   rating: number | null
   description: string | null
-  image: string | null
+  image: { url: string } | null
   order: number
   skills: string[]
   createdAt: string
@@ -70,10 +70,10 @@ export interface AdminProfile {
   phoneNumber: string | null
   primaryEmail: string | null
   secondaryEmail: string | null
-  profileImage: string | null
-  sidebarImage: string | null
-  backgroundImage: string | null
-  mobileBackgroundImage: string | null
+  profileImage: { url: string } | null
+  sidebarImage: { url: string } | null
+  backgroundImage: { url: string } | null
+  mobileBackgroundImage: { url: string } | null
   createdAt: string
   updatedAt: string
 }
@@ -130,7 +130,7 @@ export interface PageResponse<T> {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-type GetAccessToken = () => Promise<string>
+export type GetAccessToken = () => Promise<string>
 
 async function authFetch(url: string, token: string, options?: RequestInit): Promise<Response> {
   return fetch(url, {

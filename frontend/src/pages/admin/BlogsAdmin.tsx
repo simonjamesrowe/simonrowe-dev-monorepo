@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { CheckCircle, XCircle, Pencil, Trash2 } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
 import {
@@ -70,12 +71,18 @@ export function BlogsAdmin() {
               <td>
                 <Link to={`/admin/blogs/${blog.id}`}>{blog.title}</Link>
               </td>
-              <td>{blog.published ? 'Yes' : 'No'}</td>
+              <td>
+                {blog.published
+                  ? <CheckCircle size={18} className="icon-published" />
+                  : <XCircle size={18} className="icon-draft" />}
+              </td>
               <td>{new Date(blog.createdAt).toLocaleDateString()}</td>
               <td>
-                <button onClick={() => navigate(`/admin/blogs/${blog.id}`)}>Edit</button>
-                <button onClick={() => setDeleteTarget({ id: blog.id, name: blog.title })}>
-                  Delete
+                <button className="admin-btn admin-btn--icon" onClick={() => navigate(`/admin/blogs/${blog.id}`)} title="Edit">
+                  <Pencil size={16} />
+                </button>
+                <button className="admin-btn admin-btn--icon admin-btn--danger-icon" onClick={() => setDeleteTarget({ id: blog.id, name: blog.title })} title="Delete">
+                  <Trash2 size={16} />
                 </button>
               </td>
             </tr>

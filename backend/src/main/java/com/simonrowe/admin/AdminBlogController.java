@@ -2,6 +2,7 @@ package com.simonrowe.admin;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -32,28 +33,39 @@ public class AdminBlogController {
       LoggerFactory.getLogger(AdminBlogController.class);
 
   private final AdminBlogRepository blogRepository;
+  private final AdminTagRepository tagRepository;
+  private final AdminSkillRepository skillRepository;
 
-  public AdminBlogController(final AdminBlogRepository blogRepository) {
+  public AdminBlogController(
+      final AdminBlogRepository blogRepository,
+      final AdminTagRepository tagRepository,
+      final AdminSkillRepository skillRepository
+  ) {
     this.blogRepository = blogRepository;
+    this.tagRepository = tagRepository;
+    this.skillRepository = skillRepository;
   }
 
   @GetMapping
-  public Page<Blog> list(
+  public Page<Map<String, Object>> list(
       @RequestParam(defaultValue = "0") final int page,
       @RequestParam(defaultValue = "20") final int size,
       @RequestParam(required = false) final Boolean published
   ) {
     PageRequest pageRequest = PageRequest.of(page, size,
-        Sort.by(Sort.Direction.DESC, "createdAt"));
+        Sort.by(Sort.Direction.DESC, "createdDate"));
+    Page<Blog> blogs;
     if (published != null) {
-      return blogRepository.findByPublished(published, pageRequest);
+      blogs = blogRepository.findByPublished(published, pageRequest);
+    } else {
+      blogs = blogRepository.findAll(pageRequest);
     }
-    return blogRepository.findAll(pageRequest);
+    return blogs.map(this::toDto);
   }
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public Blog create(
+  public Map<String, Object> create(
       @RequestBody final Map<String, Object> body,
       @AuthenticationPrincipal final Jwt jwt
   ) {
@@ -69,32 +81,31 @@ public class AdminBlogController {
         (String) body.get("shortDescription"),
         (String) body.get("content"),
         Boolean.TRUE.equals(body.get("published")),
-        (String) body.get("featuredImage"),
-        toStringList(body.get("tags")),
-        toStringList(body.get("skills")),
+        (String) body.get("featuredImageUrl"),
+        resolveTagsByIds(toStringList(body.get("tags"))),
+        resolveSkillsByIds(toStringList(body.get("skills"))),
         now, now, null
     );
 
     Blog saved = blogRepository.save(blog);
     LOG.info("Created blog: id={}, title={}, user={}",
         saved.id(), saved.title(), jwt.getSubject());
-    return saved;
+    return toDto(saved);
   }
 
   @GetMapping("/{id}")
-  public Blog getById(@PathVariable final String id) {
-    return blogRepository.findById(id)
-        .orElseThrow(() -> new ResponseStatusException(
-            HttpStatus.NOT_FOUND, "Blog not found"));
+  public Map<String, Object> getById(@PathVariable final String id) {
+    Blog blog = findById(id);
+    return toDto(blog);
   }
 
   @PutMapping("/{id}")
-  public Blog update(
+  public Map<String, Object> update(
       @PathVariable final String id,
       @RequestBody final Map<String, Object> body,
       @AuthenticationPrincipal final Jwt jwt
   ) {
-    Blog existing = getById(id);
+    Blog existing = findById(id);
 
     List<ValidationErrorResponse.FieldError> errors = validateBlog(body);
     if (!errors.isEmpty()) {
@@ -107,9 +118,9 @@ public class AdminBlogController {
         (String) body.get("shortDescription"),
         (String) body.get("content"),
         Boolean.TRUE.equals(body.get("published")),
-        (String) body.get("featuredImage"),
-        toStringList(body.get("tags")),
-        toStringList(body.get("skills")),
+        (String) body.get("featuredImageUrl"),
+        resolveTagsByIds(toStringList(body.get("tags"))),
+        resolveSkillsByIds(toStringList(body.get("skills"))),
         existing.createdAt(),
         Instant.now(),
         existing.legacyId()
@@ -117,7 +128,7 @@ public class AdminBlogController {
 
     Blog saved = blogRepository.save(updated);
     LOG.info("Updated blog: id={}, user={}", id, jwt.getSubject());
-    return saved;
+    return toDto(saved);
   }
 
   @DeleteMapping("/{id}")
@@ -126,9 +137,50 @@ public class AdminBlogController {
       @PathVariable final String id,
       @AuthenticationPrincipal final Jwt jwt
   ) {
-    Blog blog = getById(id);
+    Blog blog = findById(id);
     blogRepository.delete(blog);
     LOG.info("Deleted blog: id={}, user={}", id, jwt.getSubject());
+  }
+
+  private Blog findById(final String id) {
+    return blogRepository.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(
+            HttpStatus.NOT_FOUND, "Blog not found"));
+  }
+
+  private Map<String, Object> toDto(final Blog blog) {
+    Map<String, Object> dto = new LinkedHashMap<>();
+    dto.put("id", blog.id());
+    dto.put("title", blog.title());
+    dto.put("shortDescription", blog.shortDescription());
+    dto.put("content", blog.content());
+    dto.put("published", blog.published());
+    dto.put("featuredImageUrl", blog.featuredImageUrl());
+    dto.put("tags", blog.tags() != null
+        ? blog.tags().stream().map(Tag::id).toList()
+        : List.of());
+    dto.put("skills", blog.skills() != null
+        ? blog.skills().stream().map(Skill::id).toList()
+        : List.of());
+    dto.put("createdAt", blog.createdAt());
+    dto.put("updatedAt", blog.updatedAt());
+    return dto;
+  }
+
+  private List<Tag> resolveTagsByIds(final List<String> ids) {
+    if (ids == null || ids.isEmpty()) return List.of();
+    return ids.stream()
+        .map(id -> tagRepository.findById(id).orElse(null))
+        .filter(t -> t != null)
+        .toList();
+  }
+
+  private List<Skill> resolveSkillsByIds(final List<String> ids) {
+    if (ids == null || ids.isEmpty()) return List.of();
+    return ids.stream()
+        .map(id -> skillRepository.findById(id).orElse(null))
+        .filter(s -> s != null)
+        .toList();
   }
 
   private List<ValidationErrorResponse.FieldError> validateBlog(

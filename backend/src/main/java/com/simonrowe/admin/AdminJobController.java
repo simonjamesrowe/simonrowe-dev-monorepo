@@ -1,5 +1,6 @@
 package com.simonrowe.admin;
 
+import com.simonrowe.common.Image;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -122,12 +123,21 @@ public class AdminJobController {
         ? list.stream().map(Object::toString).toList()
         : List.of();
 
+    Object imgVal = body.get("companyImage");
+    Image companyImage = null;
+    if (imgVal instanceof Map<?, ?> map) {
+      companyImage = new Image(
+          (String) map.get("url"), null, null, null, null, null);
+    } else if (imgVal instanceof String url && !url.isBlank()) {
+      companyImage = new Image(url, null, null, null, null, null);
+    }
+
     return new Job(
         id,
         (String) body.get("title"),
         (String) body.get("company"),
         (String) body.get("companyUrl"),
-        (String) body.get("companyImage"),
+        companyImage,
         (String) body.get("startDate"),
         (String) body.get("endDate"),
         (String) body.get("location"),

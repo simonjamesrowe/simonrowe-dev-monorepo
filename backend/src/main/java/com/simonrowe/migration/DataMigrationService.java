@@ -9,6 +9,7 @@ import com.simonrowe.admin.AdminSocialMediaRepository;
 import com.simonrowe.admin.AdminTagRepository;
 import com.simonrowe.admin.AdminTourStepRepository;
 import com.simonrowe.admin.Blog;
+import com.simonrowe.common.Image;
 import com.simonrowe.admin.Job;
 import com.simonrowe.admin.Profile;
 import com.simonrowe.admin.Skill;
@@ -165,7 +166,7 @@ public class DataMigrationService implements ApplicationRunner {
             getString(doc, "name"),
             getDouble(doc, "rating"),
             getString(doc, "description"),
-            getString(doc, "image"),
+            new Image(getString(doc, "image"), null, null, null, null, null),
             getInt(doc, "order"),
             toInstant(doc.get("createdAt")),
             toInstant(doc.get("updatedAt")),
@@ -178,7 +179,7 @@ public class DataMigrationService implements ApplicationRunner {
             getString(doc, "name"),
             getDouble(doc, "rating"),
             getString(doc, "description"),
-            getString(doc, "image"),
+            new Image(getString(doc, "image"), null, null, null, null, null),
             getInt(doc, "order"),
             toInstant(doc.get("createdAt")),
             toInstant(doc.get("updatedAt")),
@@ -218,7 +219,7 @@ public class DataMigrationService implements ApplicationRunner {
             getString(doc, "name"),
             getDouble(doc, "rating"),
             getString(doc, "description"),
-            getString(doc, "image"),
+            new Image(getString(doc, "image"), null, null, null, null, null),
             getInt(doc, "order"),
             skillIds,
             toInstant(doc.get("createdAt")),
@@ -232,7 +233,7 @@ public class DataMigrationService implements ApplicationRunner {
             getString(doc, "name"),
             getDouble(doc, "rating"),
             getString(doc, "description"),
-            getString(doc, "image"),
+            new Image(getString(doc, "image"), null, null, null, null, null),
             getInt(doc, "order"),
             skillIds,
             toInstant(doc.get("createdAt")),
@@ -269,10 +270,10 @@ public class DataMigrationService implements ApplicationRunner {
             getString(doc, "phoneNumber"),
             getString(doc, "primaryEmail"),
             getString(doc, "secondaryEmail"),
-            getString(doc, "profileImage"),
-            getString(doc, "sidebarImage"),
-            getString(doc, "backgroundImage"),
-            getString(doc, "mobileBackgroundImage"),
+            toImage(getString(doc, "profileImage")),
+            toImage(getString(doc, "sidebarImage")),
+            toImage(getString(doc, "backgroundImage")),
+            toImage(getString(doc, "mobileBackgroundImage")),
             createdAt,
             updatedAt
         );
@@ -288,10 +289,10 @@ public class DataMigrationService implements ApplicationRunner {
             getString(doc, "phoneNumber"),
             getString(doc, "primaryEmail"),
             getString(doc, "secondaryEmail"),
-            getString(doc, "profileImage"),
-            getString(doc, "sidebarImage"),
-            getString(doc, "backgroundImage"),
-            getString(doc, "mobileBackgroundImage"),
+            toImage(getString(doc, "profileImage")),
+            toImage(getString(doc, "sidebarImage")),
+            toImage(getString(doc, "backgroundImage")),
+            toImage(getString(doc, "mobileBackgroundImage")),
             createdAt,
             updatedAt
         );
@@ -374,7 +375,7 @@ public class DataMigrationService implements ApplicationRunner {
             getString(doc, "title"),
             getString(doc, "company"),
             getString(doc, "companyUrl"),
-            getString(doc, "companyImage"),
+            new Image(getString(doc, "companyImage"), null, null, null, null, null),
             getString(doc, "startDate"),
             getString(doc, "endDate"),
             getString(doc, "location"),
@@ -394,7 +395,7 @@ public class DataMigrationService implements ApplicationRunner {
             getString(doc, "title"),
             getString(doc, "company"),
             getString(doc, "companyUrl"),
-            getString(doc, "companyImage"),
+            new Image(getString(doc, "companyImage"), null, null, null, null, null),
             getString(doc, "startDate"),
             getString(doc, "endDate"),
             getString(doc, "location"),
@@ -434,6 +435,14 @@ public class DataMigrationService implements ApplicationRunner {
 
       List<String> tagIds = mapIds(getLegacyRefIds(doc, "tags"), tagIdMap);
       List<String> skillIds = mapIds(getLegacyRefIds(doc, "skills"), skillIdMap);
+      List<Tag> tags = tagIds.stream()
+          .map(id -> tagRepository.findById(id).orElse(null))
+          .filter(t -> t != null)
+          .toList();
+      List<Skill> skills = skillIds.stream()
+          .map(id -> skillRepository.findById(id).orElse(null))
+          .filter(s -> s != null)
+          .toList();
       Optional<Blog> existing = blogRepository.findByLegacyId(legacyId);
 
       if (existing.isPresent()) {
@@ -444,8 +453,8 @@ public class DataMigrationService implements ApplicationRunner {
             getString(doc, "content"),
             getBoolean(doc, "published"),
             getString(doc, "featuredImage"),
-            tagIds,
-            skillIds,
+            tags,
+            skills,
             toInstant(doc.get("createdAt")),
             toInstant(doc.get("updatedAt")),
             legacyId
@@ -459,8 +468,8 @@ public class DataMigrationService implements ApplicationRunner {
             getString(doc, "content"),
             getBoolean(doc, "published"),
             getString(doc, "featuredImage"),
-            tagIds,
-            skillIds,
+            tags,
+            skills,
             toInstant(doc.get("createdAt")),
             toInstant(doc.get("updatedAt")),
             legacyId
@@ -587,6 +596,13 @@ public class DataMigrationService implements ApplicationRunner {
       return null;
     }
     return id.toString();
+  }
+
+  private Image toImage(final String url) {
+    if (url == null || url.isBlank()) {
+      return null;
+    }
+    return new Image(url, null, null, null, null, null);
   }
 
   private String getString(final Document doc, final String key) {

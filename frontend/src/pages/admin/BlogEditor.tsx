@@ -1,5 +1,29 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import {
+  MDXEditor,
+  headingsPlugin,
+  listsPlugin,
+  quotePlugin,
+  thematicBreakPlugin,
+  linkPlugin,
+  linkDialogPlugin,
+  imagePlugin,
+  codeBlockPlugin,
+  codeMirrorPlugin,
+  markdownShortcutPlugin,
+  toolbarPlugin,
+  BoldItalicUnderlineToggles,
+  BlockTypeSelect,
+  CreateLink,
+  InsertImage,
+  InsertCodeBlock,
+  ListsToggle,
+  CodeToggle,
+  type MDXEditorMethods,
+} from '@mdxeditor/editor'
+import '@mdxeditor/editor/style.css'
+import { FolderOpen } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
 import {
   createAdminBlog,
@@ -7,17 +31,22 @@ import {
   fetchAdminSkills,
   fetchAdminTags,
   updateAdminBlog,
+  uploadAdminMedia,
   type AdminSkill,
   type AdminTag,
 } from '../../services/adminApi'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
+import { TogglePill } from '../../components/admin/TogglePill'
+import { TagInput } from '../../components/admin/TagInput'
+import { ImagePicker } from '../../components/admin/ImagePicker'
+import { MediaLibrary } from '../../components/admin/MediaLibrary'
 
 interface BlogFormState {
   title: string
   shortDescription: string
   content: string
   published: boolean
-  featuredImage: string
+  featuredImageUrl: string
   tags: string[]
   skills: string[]
 }
@@ -27,13 +56,9 @@ const emptyForm: BlogFormState = {
   shortDescription: '',
   content: '',
   published: false,
-  featuredImage: '',
+  featuredImageUrl: '',
   tags: [],
   skills: [],
-}
-
-function toggleArrayItem(arr: string[], item: string): string[] {
-  return arr.includes(item) ? arr.filter((i) => i !== item) : [...arr, item]
 }
 
 export function BlogEditor() {
@@ -41,6 +66,7 @@ export function BlogEditor() {
   const isNew = !id || id === 'new'
   const navigate = useNavigate()
   const { getAccessToken } = useAuth()
+  const editorRef = useRef<MDXEditorMethods>(null)
   const [loading, setLoading] = useState(!isNew)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,6 +74,8 @@ export function BlogEditor() {
   const [skills, setSkills] = useState<AdminSkill[]>([])
   const [form, setForm] = useState<BlogFormState>(emptyForm)
   const [dirty, setDirty] = useState(false)
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false)
+  const [editorKey, setEditorKey] = useState(0)
 
   useUnsavedChanges(dirty)
 
@@ -77,10 +105,11 @@ export function BlogEditor() {
         shortDescription: blog.shortDescription,
         content: blog.content ?? '',
         published: blog.published,
-        featuredImage: blog.featuredImage ?? '',
+        featuredImageUrl: blog.featuredImageUrl ?? '',
         tags: blog.tags ?? [],
         skills: blog.skills ?? [],
       })
+      setEditorKey((k) => k + 1)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load blog')
     } finally {
@@ -92,17 +121,23 @@ export function BlogEditor() {
     loadBlog()
   }, [loadBlog])
 
+  const imageUploadHandler = useCallback(async (file: File) => {
+    const asset = await uploadAdminMedia(getAccessToken, file)
+    return asset.originalPath
+  }, [getAccessToken])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       setSaving(true)
       setError(null)
+      const content = editorRef.current?.getMarkdown() ?? form.content
       const payload = {
         title: form.title,
         shortDescription: form.shortDescription,
-        content: form.content,
+        content,
         published: form.published,
-        featuredImage: form.featuredImage,
+        featuredImageUrl: form.featuredImageUrl,
         tags: form.tags,
         skills: form.skills,
       }
@@ -120,99 +155,167 @@ export function BlogEditor() {
     }
   }
 
+  const handleInsertFromLibrary = () => {
+    setShowMediaLibrary(true)
+  }
+
   if (loading) return <div>Loading...</div>
 
   return (
-    <div>
-      <h1>{isNew ? 'New Blog' : 'Edit Blog'}</h1>
-      {error && <div className="error">{error}</div>}
+    <div className="blog-editor">
+      <div className="blog-editor__header">
+        <h1>{isNew ? 'New Blog' : 'Edit Blog'}</h1>
+        <TogglePill
+          checked={form.published}
+          onChange={(checked) => { setForm({ ...form, published: checked }); setDirty(true) }}
+        />
+      </div>
+
+      {error && <div className="admin-error-banner">{error}</div>}
+
       <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label>Title</label>
-          <input
-            type="text"
-            value={form.title}
-            onChange={(e) => { setForm({ ...form, title: e.target.value }); setDirty(true) }}
-            required
-          />
+        <div className="blog-editor__top-row">
+          <div className="blog-editor__top-left">
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label">Title</label>
+              <input
+                type="text"
+                className="admin-form__input"
+                value={form.title}
+                onChange={(e) => { setForm({ ...form, title: e.target.value }); setDirty(true) }}
+                required
+              />
+            </div>
+
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label">Short Description</label>
+              <textarea
+                className="admin-form__input admin-form__textarea"
+                value={form.shortDescription}
+                onChange={(e) => { setForm({ ...form, shortDescription: e.target.value }); setDirty(true) }}
+                required
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="blog-editor__top-right">
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label">Featured Image</label>
+              <ImagePicker
+                value={form.featuredImageUrl || null}
+                onChange={(url) => { setForm({ ...form, featuredImageUrl: url }); setDirty(true) }}
+              />
+            </div>
+          </div>
         </div>
-        <div className="form-group">
-          <label>Short Description</label>
-          <textarea
-            value={form.shortDescription}
-            onChange={(e) => { setForm({ ...form, shortDescription: e.target.value }); setDirty(true) }}
-            required
-            rows={3}
-          />
-        </div>
-        <div className="form-group">
-          <label>Content (Markdown)</label>
-          <textarea
-            value={form.content}
-            onChange={(e) => { setForm({ ...form, content: e.target.value }); setDirty(true) }}
-            rows={20}
-          />
-        </div>
-        <div className="form-group">
-          <label>Featured Image URL</label>
-          <input
-            type="text"
-            value={form.featuredImage}
-            onChange={(e) => { setForm({ ...form, featuredImage: e.target.value }); setDirty(true) }}
-          />
-        </div>
-        <div className="form-group">
-          <label>
-            <input
-              type="checkbox"
-              checked={form.published}
-              onChange={(e) => { setForm({ ...form, published: e.target.checked }); setDirty(true) }}
+
+        <div className="blog-editor__section blog-editor__two-col">
+          <div>
+            <label className="blog-editor__section-label">Tags</label>
+            <TagInput
+              options={tags.map((t) => ({ id: t.id, name: t.name }))}
+              selected={form.tags}
+              onChange={(selected) => { setForm({ ...form, tags: selected }); setDirty(true) }}
+              placeholder="Search tags..."
             />
-            {' '}Published
-          </label>
-        </div>
-        <div className="form-group">
-          <label>Tags</label>
-          <div className="checkbox-list">
-            {tags.map((tag) => (
-              <label key={tag.id}>
-                <input
-                  type="checkbox"
-                  checked={form.tags.includes(tag.id)}
-                  onChange={() => { setForm({ ...form, tags: toggleArrayItem(form.tags, tag.id) }); setDirty(true) }}
-                />
-                {' '}{tag.name}
-              </label>
-            ))}
+          </div>
+          <div>
+            <label className="blog-editor__section-label">Skills</label>
+            <TagInput
+              options={skills.map((s) => ({ id: s.id, name: s.name }))}
+              selected={form.skills}
+              onChange={(selected) => { setForm({ ...form, skills: selected }); setDirty(true) }}
+              placeholder="Search skills..."
+            />
           </div>
         </div>
-        <div className="form-group">
-          <label>Skills</label>
-          <div className="checkbox-list">
-            {skills.map((skill) => (
-              <label key={skill.id}>
-                <input
-                  type="checkbox"
-                  checked={form.skills.includes(skill.id)}
-                  onChange={() => {
-                    setForm({ ...form, skills: toggleArrayItem(form.skills, skill.id) })
-                    setDirty(true)
-                  }}
-                />
-                {' '}{skill.name}
-              </label>
-            ))}
-          </div>
+
+        <div className="blog-editor__section blog-editor__content">
+          <label className="blog-editor__section-label">Content</label>
+          <MDXEditor
+            key={editorKey}
+            ref={editorRef}
+            markdown={form.content}
+            onChange={(val) => { setForm((f) => ({ ...f, content: val })); setDirty(true) }}
+            plugins={[
+              headingsPlugin(),
+              listsPlugin(),
+              quotePlugin(),
+              thematicBreakPlugin(),
+              linkPlugin(),
+              linkDialogPlugin(),
+              imagePlugin({ imageUploadHandler }),
+              codeBlockPlugin({ defaultCodeBlockLanguage: '' }),
+              codeMirrorPlugin({
+                codeBlockLanguages: {
+                  '': 'Plain Text',
+                  js: 'JavaScript',
+                  ts: 'TypeScript',
+                  tsx: 'TSX',
+                  jsx: 'JSX',
+                  java: 'Java',
+                  kotlin: 'Kotlin',
+                  python: 'Python',
+                  css: 'CSS',
+                  html: 'HTML',
+                  json: 'JSON',
+                  yaml: 'YAML',
+                  bash: 'Bash',
+                  shell: 'Shell',
+                  sql: 'SQL',
+                  xml: 'XML',
+                  dockerfile: 'Dockerfile',
+                  groovy: 'Groovy',
+                },
+              }),
+              markdownShortcutPlugin(),
+              toolbarPlugin({
+                toolbarContents: () => (
+                  <>
+                    <BoldItalicUnderlineToggles />
+                    <BlockTypeSelect />
+                    <ListsToggle />
+                    <CodeToggle />
+                    <CreateLink />
+                    <InsertImage />
+                    <InsertCodeBlock />
+                    <button
+                      className="mdx-library-btn"
+                      type="button"
+                      title="Insert from Media Library"
+                      onClick={handleInsertFromLibrary}
+                    >
+                      <FolderOpen size={16} />
+                      Library
+                    </button>
+                  </>
+                ),
+              }),
+            ]}
+          />
         </div>
+
         <div className="form-actions">
-          <button type="submit" disabled={saving}>
+          <button type="submit" className="admin-btn admin-btn--primary" disabled={saving}>
             {saving ? 'Saving...' : 'Save'}
           </button>
-          <button type="button" onClick={() => navigate('/admin/blogs')}>
+          <button type="button" className="admin-btn" onClick={() => navigate('/admin/blogs')}>
             Cancel
           </button>
         </div>
       </form>
+
+      {showMediaLibrary && (
+        <MediaLibrary
+          onSelect={(asset) => {
+            editorRef.current?.insertMarkdown(`![${asset.fileName}](${asset.originalPath})`)
+            setShowMediaLibrary(false)
+            setDirty(true)
+          }}
+          onClose={() => setShowMediaLibrary(false)}
+        />
+      )}
     </div>
   )
 }

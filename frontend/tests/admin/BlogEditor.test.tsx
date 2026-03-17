@@ -4,12 +4,57 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { BlogEditor } from '../../src/pages/admin/BlogEditor'
 
+vi.mock('@mdxeditor/editor', () => {
+  const React = require('react')
+  return {
+    MDXEditor: React.forwardRef(function MockMDXEditor(
+      { markdown, onChange }: { markdown: string; onChange?: (val: string) => void },
+      ref: React.Ref<{ getMarkdown: () => string; insertMarkdown: () => void }>,
+    ) {
+      const valueRef = React.useRef(markdown)
+      React.useImperativeHandle(ref, () => ({
+        getMarkdown: () => valueRef.current,
+        insertMarkdown: () => {},
+        setMarkdown: (v: string) => { valueRef.current = v },
+        focus: () => {},
+      }))
+      return React.createElement('textarea', {
+        'data-testid': 'mdx-editor',
+        value: valueRef.current,
+        onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+          valueRef.current = e.target.value
+          onChange?.(e.target.value)
+        },
+      })
+    }),
+    headingsPlugin: () => ({}),
+    listsPlugin: () => ({}),
+    quotePlugin: () => ({}),
+    thematicBreakPlugin: () => ({}),
+    linkPlugin: () => ({}),
+    linkDialogPlugin: () => ({}),
+    imagePlugin: () => ({}),
+    codeBlockPlugin: () => ({}),
+    codeMirrorPlugin: () => ({}),
+    markdownShortcutPlugin: () => ({}),
+    toolbarPlugin: () => ({}),
+    BoldItalicUnderlineToggles: () => null,
+    BlockTypeSelect: () => null,
+    CreateLink: () => null,
+    InsertImage: () => null,
+    InsertCodeBlock: () => null,
+    ListsToggle: () => null,
+    CodeToggle: () => null,
+  }
+})
+
 vi.mock('../../src/services/adminApi', () => ({
   createAdminBlog: vi.fn(),
   updateAdminBlog: vi.fn(),
   fetchAdminBlogById: vi.fn(),
   fetchAdminTags: vi.fn(),
   fetchAdminSkills: vi.fn(),
+  uploadAdminMedia: vi.fn(),
 }))
 
 vi.mock('../../src/auth/useAuth', () => ({
@@ -56,7 +101,6 @@ function renderEditBlog(id: string) {
   )
 }
 
-// The BlogEditor labels are not associated with htmlFor so we query by text content
 function getTitleInput() {
   return document.querySelector('input[type="text"]') as HTMLInputElement
 }
@@ -98,16 +142,13 @@ describe('BlogEditor', () => {
       expect(screen.getByRole('heading', { name: 'New Blog' })).toBeInTheDocument()
     })
 
-    // Labels exist even though they are not associated via htmlFor
     expect(screen.getByText('Title')).toBeInTheDocument()
     expect(screen.getByText('Short Description')).toBeInTheDocument()
-    expect(screen.getByText('Content (Markdown)')).toBeInTheDocument()
-    expect(screen.getByText('Published')).toBeInTheDocument()
+    expect(screen.getByText('Content')).toBeInTheDocument()
+    expect(screen.getByText('Draft')).toBeInTheDocument()
 
-    // The form itself contains the inputs
     expect(document.querySelector('input[type="text"]')).toBeInTheDocument()
     expect(document.querySelector('input[type="checkbox"]')).toBeInTheDocument()
-    expect(document.querySelectorAll('textarea').length).toBeGreaterThanOrEqual(2)
   })
 
   it('renders save and cancel buttons', async () => {

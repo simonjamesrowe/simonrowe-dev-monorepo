@@ -133,7 +133,7 @@ public class AdminTourStepController {
       TourStep reordered = new TourStep(
           existing.id(), existing.title(), existing.selector(),
           existing.description(), existing.titleImage(),
-          existing.position(), i,
+          existing.position(), i + 1,
           existing.createdAt(), Instant.now(), existing.legacyId()
       );
       tourStepRepository.save(reordered);

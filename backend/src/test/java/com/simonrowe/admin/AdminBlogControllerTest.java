@@ -51,6 +51,9 @@ class AdminBlogControllerTest {
   @Autowired
   private AdminBlogRepository adminBlogRepository;
 
+  @Autowired
+  private AdminTagRepository adminTagRepository;
+
   @DynamicPropertySource
   static void configureProperties(final DynamicPropertyRegistry registry) {
     SharedMongoContainer.configureProperties(registry);
@@ -59,6 +62,7 @@ class AdminBlogControllerTest {
   @BeforeEach
   void setup() {
     adminBlogRepository.deleteAll();
+    adminTagRepository.deleteAll();
   }
 
   @Test
@@ -123,7 +127,9 @@ class AdminBlogControllerTest {
             .with(jwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value("b-1"))
-        .andExpect(jsonPath("$.title").value("My Blog Post"));
+        .andExpect(jsonPath("$.title").value("My Blog Post"))
+        .andExpect(jsonPath("$.tags.length()").value(1))
+        .andExpect(jsonPath("$.tags[0]").isString());
   }
 
   @Test
@@ -167,8 +173,9 @@ class AdminBlogControllerTest {
         .andExpect(status().isNoContent());
   }
 
-  private static Blog sampleBlog(final String id, final String title, final boolean published) {
+  private Blog sampleBlog(final String id, final String title, final boolean published) {
     Instant now = Instant.parse("2024-06-01T10:00:00Z");
+    Tag tag = adminTagRepository.save(new Tag(null, "java-" + id, now, now, null));
     return new Blog(
         id,
         title,
@@ -176,7 +183,7 @@ class AdminBlogControllerTest {
         "Full content here.",
         published,
         null,
-        List.of("java"),
+        List.of(tag),
         List.of(),
         now,
         now,

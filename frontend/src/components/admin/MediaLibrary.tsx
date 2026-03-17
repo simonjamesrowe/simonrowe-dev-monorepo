@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 
 import { useAuth } from '../../auth/useAuth'
 import { fetchAdminMedia, type MediaAsset, type PageResponse } from '../../services/adminApi'
@@ -83,32 +84,32 @@ export function MediaLibrary({ onSelect, onClose }: MediaLibraryProps) {
   }
 
   return (
-    <div className="media-library-overlay" onClick={onClose} role="dialog" aria-modal="true">
+    <div className="drawer-overlay" onClick={onClose} role="dialog" aria-modal="true">
       <div
-        className="media-library"
+        className="drawer"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="media-library__header">
-          <h2 className="media-library__title">Media Library</h2>
+        <div className="drawer__header">
+          <h2 className="drawer__title">Media Library</h2>
           <button
-            className="admin-btn admin-btn--sm"
+            className="drawer__close"
             onClick={onClose}
             type="button"
             aria-label="Close media library"
           >
-            Close
+            <X size={18} />
           </button>
         </div>
 
-        <div className="media-library__controls">
+        <div className="media-library-drawer__controls">
           <input
-            className="media-library__search"
+            className="admin-form__input"
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by file name..."
             type="search"
             value={search}
           />
-          <div className="media-library__mime-filters">
+          <div className="media-library-drawer__mime-filters">
             {MIME_FILTERS.map((f) => (
               <button
                 className={`admin-btn admin-btn--sm${mimeFilter === f.value ? ' admin-btn--primary' : ''}`}
@@ -122,7 +123,7 @@ export function MediaLibrary({ onSelect, onClose }: MediaLibraryProps) {
           </div>
         </div>
 
-        <div className="media-library__body">
+        <div className="media-library-drawer__body">
           {error && <div className="admin-error-banner">{error}</div>}
 
           {loading ? (

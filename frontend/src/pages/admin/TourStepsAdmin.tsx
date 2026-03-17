@@ -47,12 +47,12 @@ export function TourStepsAdmin() {
     newSteps[index] = newSteps[targetIndex]
     newSteps[targetIndex] = temp
 
-    const reordered = newSteps.map((step, i) => ({ id: step.id, order: i + 1 }))
+    const orderedIds = newSteps.map((step) => step.id)
 
     try {
       setReordering(true)
       setError(null)
-      await reorderAdminTourSteps(getAccessToken, { steps: reordered })
+      await reorderAdminTourSteps(getAccessToken, { orderedIds })
       await loadSteps()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reorder tour steps')

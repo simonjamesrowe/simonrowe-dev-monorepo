@@ -5,7 +5,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-@Document(collection = "social_media_links")
+@Document(collection = "social_medias")
 public record SocialMediaLink(
     @Id String id,
     @Indexed String type,

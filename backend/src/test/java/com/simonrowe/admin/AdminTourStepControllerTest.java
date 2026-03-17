@@ -52,6 +52,9 @@ class AdminTourStepControllerTest {
   @Autowired
   private AdminTourStepRepository adminTourStepRepository;
 
+  @Autowired
+  private com.simonrowe.tour.TourStepRepository tourStepRepository;
+
   @DynamicPropertySource
   static void configureProperties(final DynamicPropertyRegistry registry) {
     SharedMongoContainer.configureProperties(registry);
@@ -60,6 +63,7 @@ class AdminTourStepControllerTest {
   @BeforeEach
   void setup() {
     adminTourStepRepository.deleteAll();
+    tourStepRepository.deleteAll();
   }
 
   @Test
@@ -80,6 +84,39 @@ class AdminTourStepControllerTest {
         .andExpect(jsonPath("$[1].title").value("Contact"))
         .andExpect(jsonPath("$[2].order").value(3))
         .andExpect(jsonPath("$[2].title").value("Welcome"));
+  }
+
+  @Test
+  void listTourStepsReturnsStepsStoredByPublicTourRepository() throws Exception {
+    tourStepRepository.saveAll(List.of(
+        new com.simonrowe.tour.TourStep(
+            null,
+            2,
+            ".about",
+            "About",
+            null,
+            "About section",
+            "bottom"
+        ),
+        new com.simonrowe.tour.TourStep(
+            null,
+            1,
+            ".banner",
+            "Welcome",
+            null,
+            "Welcome banner",
+            "top"
+        )
+    ));
+
+    mockMvc.perform(get("/api/admin/tour-steps")
+            .with(jwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(2))
+        .andExpect(jsonPath("$[0].title").value("Welcome"))
+        .andExpect(jsonPath("$[0].selector").value(".banner"))
+        .andExpect(jsonPath("$[1].title").value("About"))
+        .andExpect(jsonPath("$[1].selector").value(".about"));
   }
 
   @Test
@@ -199,11 +236,11 @@ class AdminTourStepControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(3))
         .andExpect(jsonPath("$[0].id").value(thirdId))
-        .andExpect(jsonPath("$[0].order").value(0))
+        .andExpect(jsonPath("$[0].order").value(1))
         .andExpect(jsonPath("$[1].id").value(firstId))
-        .andExpect(jsonPath("$[1].order").value(1))
+        .andExpect(jsonPath("$[1].order").value(2))
         .andExpect(jsonPath("$[2].id").value(secondId))
-        .andExpect(jsonPath("$[2].order").value(2));
+        .andExpect(jsonPath("$[2].order").value(3));
   }
 
   private static TourStep sampleTourStep(

@@ -1,16 +1,14 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { AuthProvider } from './auth/AuthProvider'
 import { AdminLayout } from './components/admin/AdminLayout'
 import { TourProvider } from './components/tour/TourProvider'
-import { AdminDashboard } from './pages/admin/AdminDashboard'
 import { BlogEditor } from './pages/admin/BlogEditor'
 import { BlogsAdmin } from './pages/admin/BlogsAdmin'
 import { JobEditor } from './pages/admin/JobEditor'
 import { JobsAdmin } from './pages/admin/JobsAdmin'
 import { MediaAdmin } from './pages/admin/MediaAdmin'
 import { ProfileAdmin } from './pages/admin/ProfileAdmin'
-import { SkillEditor } from './pages/admin/SkillEditor'
 import { SkillGroupEditor } from './pages/admin/SkillGroupEditor'
 import { SkillsAdmin } from './pages/admin/SkillsAdmin'
 import { TagsAdmin } from './pages/admin/TagsAdmin'
@@ -38,13 +36,12 @@ function App() {
               </AuthProvider>
             }
           >
-            <Route index element={<AdminDashboard />} />
+            <Route index element={<Navigate to="/admin/blogs" replace />} />
             <Route path="blogs" element={<BlogsAdmin />} />
             <Route path="blogs/:id" element={<BlogEditor />} />
             <Route path="jobs" element={<JobsAdmin />} />
             <Route path="jobs/:id" element={<JobEditor />} />
             <Route path="skills" element={<SkillsAdmin />} />
-            <Route path="skills/:id" element={<SkillEditor />} />
             <Route path="skill-groups/:id" element={<SkillGroupEditor />} />
             <Route path="profile" element={<ProfileAdmin />} />
             <Route path="tags" element={<TagsAdmin />} />

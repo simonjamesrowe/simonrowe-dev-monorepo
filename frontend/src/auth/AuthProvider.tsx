@@ -1,9 +1,9 @@
 import { Auth0Provider } from '@auth0/auth0-react'
 import type { ReactNode } from 'react'
 
-const domain = import.meta.env.VITE_AUTH0_DOMAIN ?? ''
-const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID ?? ''
-const audience = import.meta.env.VITE_AUTH0_AUDIENCE ?? ''
+const domain = 'dev-igsu3mpz.us.auth0.com'
+const clientId = 'UiV5ijJH99uVE88BZzNcrKeefVgLqYi7'
+const audience = 'https://api.simonrowe.dev'
 
 interface AuthProviderProps {
   children: ReactNode

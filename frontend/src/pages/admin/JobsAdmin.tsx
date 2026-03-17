@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { CheckCircle, XCircle, Pencil, Trash2 } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
 import {
@@ -73,11 +74,17 @@ export function JobsAdmin() {
               </td>
               <td>{job.company}</td>
               <td>{new Date(job.startDate).toLocaleDateString()}</td>
-              <td>{job.education ? 'Yes' : 'No'}</td>
               <td>
-                <button onClick={() => navigate(`/admin/jobs/${job.id}`)}>Edit</button>
-                <button onClick={() => setDeleteTarget({ id: job.id, name: job.title })}>
-                  Delete
+                {job.education
+                  ? <CheckCircle size={18} className="icon-published" />
+                  : <XCircle size={18} className="icon-draft" />}
+              </td>
+              <td>
+                <button className="admin-btn admin-btn--icon" onClick={() => navigate(`/admin/jobs/${job.id}`)} title="Edit">
+                  <Pencil size={16} />
+                </button>
+                <button className="admin-btn admin-btn--icon admin-btn--danger-icon" onClick={() => setDeleteTarget({ id: job.id, name: job.title })} title="Delete">
+                  <Trash2 size={16} />
                 </button>
               </td>
             </tr>

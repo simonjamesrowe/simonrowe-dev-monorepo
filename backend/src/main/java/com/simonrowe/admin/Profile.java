@@ -1,5 +1,6 @@
 package com.simonrowe.admin;
 
+import com.simonrowe.common.Image;
 import java.time.Instant;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -15,10 +16,10 @@ public record Profile(
     String phoneNumber,
     String primaryEmail,
     String secondaryEmail,
-    String profileImage,
-    String sidebarImage,
-    String backgroundImage,
-    String mobileBackgroundImage,
+    Image profileImage,
+    Image sidebarImage,
+    Image backgroundImage,
+    Image mobileBackgroundImage,
     Instant createdAt,
     Instant updatedAt
 ) {

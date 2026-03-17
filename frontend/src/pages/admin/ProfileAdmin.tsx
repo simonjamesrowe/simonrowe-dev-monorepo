@@ -1,5 +1,28 @@
-import { useCallback, useEffect, useState } from 'react'
-
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  MDXEditor,
+  headingsPlugin,
+  listsPlugin,
+  quotePlugin,
+  thematicBreakPlugin,
+  linkPlugin,
+  linkDialogPlugin,
+  imagePlugin,
+  codeBlockPlugin,
+  codeMirrorPlugin,
+  markdownShortcutPlugin,
+  toolbarPlugin,
+  BoldItalicUnderlineToggles,
+  BlockTypeSelect,
+  CreateLink,
+  InsertImage,
+  InsertCodeBlock,
+  ListsToggle,
+  CodeToggle,
+  type MDXEditorMethods,
+} from '@mdxeditor/editor'
+import '@mdxeditor/editor/style.css'
+import { CheckCircle, XCircle, Pencil, Trash2 } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
 import {
   fetchAdminProfile,
@@ -8,11 +31,13 @@ import {
   createAdminSocialMedia,
   updateAdminSocialMedia,
   deleteAdminSocialMedia,
+  uploadAdminMedia,
   type AdminProfile,
   type AdminSocialMedia,
 } from '../../services/adminApi'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
+import { ImagePicker } from '../../components/admin/ImagePicker'
 
 interface SocialMediaFormState {
   type: string
@@ -30,6 +55,7 @@ const emptySocialMediaForm = (): SocialMediaFormState => ({
 
 export function ProfileAdmin() {
   const { getAccessToken } = useAuth()
+  const editorRef = useRef<MDXEditorMethods>(null)
 
   const [profile, setProfile] = useState<AdminProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
@@ -37,6 +63,7 @@ export function ProfileAdmin() {
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profileSuccess, setProfileSuccess] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [editorKey, setEditorKey] = useState(0)
 
   useUnsavedChanges(dirty)
 
@@ -49,10 +76,10 @@ export function ProfileAdmin() {
     phoneNumber: '',
     primaryEmail: '',
     secondaryEmail: '',
-    profileImage: '',
-    sidebarImage: '',
-    backgroundImage: '',
-    mobileBackgroundImage: '',
+    profileImage: null,
+    sidebarImage: null,
+    backgroundImage: null,
+    mobileBackgroundImage: null,
   })
 
   const [socialMedia, setSocialMedia] = useState<AdminSocialMedia[]>([])
@@ -84,11 +111,12 @@ export function ProfileAdmin() {
         phoneNumber: data.phoneNumber ?? '',
         primaryEmail: data.primaryEmail ?? '',
         secondaryEmail: data.secondaryEmail ?? '',
-        profileImage: data.profileImage ?? '',
-        sidebarImage: data.sidebarImage ?? '',
-        backgroundImage: data.backgroundImage ?? '',
-        mobileBackgroundImage: data.mobileBackgroundImage ?? '',
+        profileImage: data.profileImage ?? null,
+        sidebarImage: data.sidebarImage ?? null,
+        backgroundImage: data.backgroundImage ?? null,
+        mobileBackgroundImage: data.mobileBackgroundImage ?? null,
       })
+      setEditorKey((k) => k + 1)
     } catch (err) {
       setProfileError(err instanceof Error ? err.message : 'Failed to load profile')
     } finally {
@@ -114,6 +142,11 @@ export function ProfileAdmin() {
     loadSocialMedia()
   }, [loadProfile, loadSocialMedia])
 
+  const updateField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+    setDirty(true)
+  }
+
   const handleProfileChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
@@ -122,13 +155,19 @@ export function ProfileAdmin() {
     setDirty(true)
   }
 
+  const imageUploadHandler = useCallback(async (file: File) => {
+    const asset = await uploadAdminMedia(getAccessToken, file)
+    return asset.originalPath
+  }, [getAccessToken])
+
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       setProfileSaving(true)
       setProfileError(null)
       setProfileSuccess(false)
-      const updated = await updateAdminProfile(getAccessToken, form as Record<string, unknown>)
+      const description = editorRef.current?.getMarkdown() ?? form.description
+      const updated = await updateAdminProfile(getAccessToken, { ...form, description } as Record<string, unknown>)
       setProfile(updated)
       setProfileSuccess(true)
       setDirty(false)
@@ -237,154 +276,182 @@ export function ProfileAdmin() {
         {profileError && <div className="admin-error-banner">{profileError}</div>}
         {profileSuccess && <div className="admin-success-banner">Profile saved successfully.</div>}
 
-        <form className="admin-form" onSubmit={handleProfileSubmit}>
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="name">Name</label>
-            <input
-              className="admin-form__input"
-              id="name"
-              name="name"
-              onChange={handleProfileChange}
-              type="text"
-              value={form.name}
+        <form className="blog-editor" onSubmit={handleProfileSubmit}>
+          <div className="blog-editor__top-row">
+            <div className="blog-editor__top-left">
+              <div className="blog-editor__section">
+                <label className="blog-editor__section-label">Name</label>
+                <input
+                  className="admin-form__input"
+                  name="name"
+                  onChange={handleProfileChange}
+                  type="text"
+                  value={form.name}
+                />
+              </div>
+              <div className="blog-editor__section">
+                <label className="blog-editor__section-label">Title</label>
+                <input
+                  className="admin-form__input"
+                  name="title"
+                  onChange={handleProfileChange}
+                  type="text"
+                  value={form.title}
+                />
+              </div>
+              <div className="blog-editor__section">
+                <label className="blog-editor__section-label">Headline</label>
+                <input
+                  className="admin-form__input"
+                  name="headline"
+                  onChange={handleProfileChange}
+                  type="text"
+                  value={form.headline ?? ''}
+                />
+              </div>
+            </div>
+            <div className="blog-editor__top-right">
+              <div className="blog-editor__section">
+                <label className="blog-editor__section-label">Profile Image</label>
+                <ImagePicker
+                  value={form.profileImage?.url ?? null}
+                  onChange={(url) => updateField('profileImage', url ? { url } : null)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="blog-editor__two-col">
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label">Location</label>
+              <input
+                className="admin-form__input"
+                name="location"
+                onChange={handleProfileChange}
+                type="text"
+                value={form.location ?? ''}
+              />
+            </div>
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label">Phone Number</label>
+              <input
+                className="admin-form__input"
+                name="phoneNumber"
+                onChange={handleProfileChange}
+                type="text"
+                value={form.phoneNumber ?? ''}
+              />
+            </div>
+          </div>
+
+          <div className="blog-editor__two-col">
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label">Primary Email</label>
+              <input
+                className="admin-form__input"
+                name="primaryEmail"
+                onChange={handleProfileChange}
+                type="email"
+                value={form.primaryEmail ?? ''}
+              />
+            </div>
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label">Secondary Email</label>
+              <input
+                className="admin-form__input"
+                name="secondaryEmail"
+                onChange={handleProfileChange}
+                type="email"
+                value={form.secondaryEmail ?? ''}
+              />
+            </div>
+          </div>
+
+          <div className="blog-editor__section blog-editor__content">
+            <label className="blog-editor__section-label">Description</label>
+            <MDXEditor
+              key={editorKey}
+              ref={editorRef}
+              markdown={form.description ?? ''}
+              onChange={(val) => { setForm((f) => ({ ...f, description: val })); setDirty(true) }}
+              plugins={[
+                headingsPlugin(),
+                listsPlugin(),
+                quotePlugin(),
+                thematicBreakPlugin(),
+                linkPlugin(),
+                linkDialogPlugin(),
+                imagePlugin({ imageUploadHandler }),
+                codeBlockPlugin({ defaultCodeBlockLanguage: '' }),
+                codeMirrorPlugin({
+                  codeBlockLanguages: {
+                    '': 'Plain Text',
+                    js: 'JavaScript',
+                    ts: 'TypeScript',
+                    tsx: 'TSX',
+                    jsx: 'JSX',
+                    java: 'Java',
+                    kotlin: 'Kotlin',
+                    python: 'Python',
+                    css: 'CSS',
+                    html: 'HTML',
+                    json: 'JSON',
+                    yaml: 'YAML',
+                    bash: 'Bash',
+                    shell: 'Shell',
+                    sql: 'SQL',
+                    xml: 'XML',
+                    dockerfile: 'Dockerfile',
+                    groovy: 'Groovy',
+                  },
+                }),
+                markdownShortcutPlugin(),
+                toolbarPlugin({
+                  toolbarContents: () => (
+                    <>
+                      <BoldItalicUnderlineToggles />
+                      <BlockTypeSelect />
+                      <ListsToggle />
+                      <CodeToggle />
+                      <CreateLink />
+                      <InsertImage />
+                      <InsertCodeBlock />
+                    </>
+                  ),
+                }),
+              ]}
             />
           </div>
 
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="title">Title</label>
-            <input
-              className="admin-form__input"
-              id="title"
-              name="title"
-              onChange={handleProfileChange}
-              type="text"
-              value={form.title}
-            />
+          <h3 className="blog-editor__section-label" style={{ marginTop: '1rem' }}>Images</h3>
+          <div className="blog-editor__two-col">
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label">Sidebar Image</label>
+              <ImagePicker
+                value={form.sidebarImage?.url ?? null}
+                onChange={(url) => updateField('sidebarImage', url ? { url } : null)}
+              />
+            </div>
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label">Background Image</label>
+              <ImagePicker
+                value={form.backgroundImage?.url ?? null}
+                onChange={(url) => updateField('backgroundImage', url ? { url } : null)}
+              />
+            </div>
+          </div>
+          <div className="blog-editor__two-col">
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label">Mobile Background Image</label>
+              <ImagePicker
+                value={form.mobileBackgroundImage?.url ?? null}
+                onChange={(url) => updateField('mobileBackgroundImage', url ? { url } : null)}
+              />
+            </div>
+            <div className="blog-editor__section" />
           </div>
 
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="headline">Headline</label>
-            <input
-              className="admin-form__input"
-              id="headline"
-              name="headline"
-              onChange={handleProfileChange}
-              type="text"
-              value={form.headline ?? ''}
-            />
-          </div>
-
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="description">Description</label>
-            <textarea
-              className="admin-form__textarea"
-              id="description"
-              name="description"
-              onChange={handleProfileChange}
-              rows={6}
-              value={form.description ?? ''}
-            />
-          </div>
-
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="location">Location</label>
-            <input
-              className="admin-form__input"
-              id="location"
-              name="location"
-              onChange={handleProfileChange}
-              type="text"
-              value={form.location ?? ''}
-            />
-          </div>
-
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="phoneNumber">Phone Number</label>
-            <input
-              className="admin-form__input"
-              id="phoneNumber"
-              name="phoneNumber"
-              onChange={handleProfileChange}
-              type="text"
-              value={form.phoneNumber ?? ''}
-            />
-          </div>
-
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="primaryEmail">Primary Email</label>
-            <input
-              className="admin-form__input"
-              id="primaryEmail"
-              name="primaryEmail"
-              onChange={handleProfileChange}
-              type="email"
-              value={form.primaryEmail ?? ''}
-            />
-          </div>
-
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="secondaryEmail">Secondary Email</label>
-            <input
-              className="admin-form__input"
-              id="secondaryEmail"
-              name="secondaryEmail"
-              onChange={handleProfileChange}
-              type="email"
-              value={form.secondaryEmail ?? ''}
-            />
-          </div>
-
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="profileImage">Profile Image URL</label>
-            <input
-              className="admin-form__input"
-              id="profileImage"
-              name="profileImage"
-              onChange={handleProfileChange}
-              type="text"
-              value={form.profileImage ?? ''}
-            />
-          </div>
-
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="sidebarImage">Sidebar Image URL</label>
-            <input
-              className="admin-form__input"
-              id="sidebarImage"
-              name="sidebarImage"
-              onChange={handleProfileChange}
-              type="text"
-              value={form.sidebarImage ?? ''}
-            />
-          </div>
-
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="backgroundImage">Background Image URL</label>
-            <input
-              className="admin-form__input"
-              id="backgroundImage"
-              name="backgroundImage"
-              onChange={handleProfileChange}
-              type="text"
-              value={form.backgroundImage ?? ''}
-            />
-          </div>
-
-          <div className="admin-form__field">
-            <label className="admin-form__label" htmlFor="mobileBackgroundImage">
-              Mobile Background Image URL
-            </label>
-            <input
-              className="admin-form__input"
-              id="mobileBackgroundImage"
-              name="mobileBackgroundImage"
-              onChange={handleProfileChange}
-              type="text"
-              value={form.mobileBackgroundImage ?? ''}
-            />
-          </div>
-
-          <div className="admin-form__actions">
+          <div className="form-actions">
             <button
               className="admin-btn admin-btn--primary"
               disabled={profileSaving}
@@ -556,25 +623,35 @@ export function ProfileAdmin() {
                 ) : (
                   <tr key={item.id} className="admin-table__row">
                     <td className="admin-table__td">{item.type}</td>
-                    <td className="admin-table__td">{item.link}</td>
+                    <td className="admin-table__td">
+                      <a href={item.link} target="_blank" rel="noopener noreferrer">
+                        {item.link}
+                      </a>
+                    </td>
                     <td className="admin-table__td">{item.name ?? '-'}</td>
-                    <td className="admin-table__td">{item.includeOnResume ? 'Yes' : 'No'}</td>
+                    <td className="admin-table__td">
+                      {item.includeOnResume
+                        ? <CheckCircle size={18} className="icon-published" />
+                        : <XCircle size={18} className="icon-draft" />}
+                    </td>
                     <td className="admin-table__td admin-table__td--actions">
                       <button
-                        className="admin-btn admin-btn--sm"
+                        className="admin-btn admin-btn--icon"
                         onClick={() => handleEditStart(item)}
                         type="button"
+                        title="Edit"
                       >
-                        Edit
+                        <Pencil size={16} />
                       </button>
                       <button
-                        className="admin-btn admin-btn--sm admin-btn--danger"
+                        className="admin-btn admin-btn--icon admin-btn--danger-icon"
                         onClick={() =>
                           setDeleteTarget({ id: item.id, name: item.type })
                         }
                         type="button"
+                        title="Delete"
                       >
-                        Delete
+                        <Trash2 size={16} />
                       </button>
                     </td>
                   </tr>

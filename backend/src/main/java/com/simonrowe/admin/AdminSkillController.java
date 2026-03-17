@@ -1,5 +1,6 @@
 package com.simonrowe.admin;
 
+import com.simonrowe.common.Image;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -64,7 +65,7 @@ public class AdminSkillController {
         (String) body.get("name"),
         toDouble(body.get("rating")),
         (String) body.get("description"),
-        (String) body.get("image"),
+        new Image((String) body.get("image"), null, null, null, null, null),
         toInt(body.get("order"), 0),
         now, now, null
     );
@@ -101,8 +102,8 @@ public class AdminSkillController {
         (String) body.get("name"),
         toDouble(body.get("rating")),
         (String) body.get("description"),
-        (String) body.get("image"),
-        toInt(body.get("order"), existing.order()),
+        new Image((String) body.get("image"), null, null, null, null, null),
+        toInt(body.get("order"), existing.order() != null ? existing.order() : 0),
         existing.createdAt(),
         Instant.now(),
         existing.legacyId()

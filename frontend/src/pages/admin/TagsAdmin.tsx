@@ -226,7 +226,7 @@ export function TagsAdmin() {
                       />
                     </td>
                     <td className="admin-table__td">
-                      {new Date(tag.createdAt).toLocaleDateString()}
+                      {tag.createdAt ? new Date(tag.createdAt).toLocaleDateString() : '-'}
                     </td>
                     <td className="admin-table__td admin-table__td--actions">
                       <button
@@ -250,7 +250,7 @@ export function TagsAdmin() {
                   <tr key={tag.id} className="admin-table__row">
                     <td className="admin-table__td">{tag.name}</td>
                     <td className="admin-table__td">
-                      {new Date(tag.createdAt).toLocaleDateString()}
+                      {tag.createdAt ? new Date(tag.createdAt).toLocaleDateString() : '-'}
                     </td>
                     <td className="admin-table__td admin-table__td--actions">
                       <button

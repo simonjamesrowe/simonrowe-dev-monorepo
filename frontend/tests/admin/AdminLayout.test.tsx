@@ -36,12 +36,13 @@ describe('AdminLayout', () => {
     expect(screen.getByText('Loading...')).toBeInTheDocument()
   })
 
-  it('shows login button when not authenticated', () => {
+  it('redirects to login when not authenticated', () => {
+    const loginFn = vi.fn()
     mockUseAuth.mockReturnValue({
       isAuthenticated: false,
       isLoading: false,
       user: undefined,
-      login: vi.fn(),
+      login: loginFn,
       logout: vi.fn(),
       getAccessToken: vi.fn(),
     })
@@ -52,8 +53,8 @@ describe('AdminLayout', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole('button', { name: 'Sign In' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 1, name: 'Admin Login' })).toBeInTheDocument()
+    expect(loginFn).toHaveBeenCalled()
+    expect(screen.getByText('Redirecting to login...')).toBeInTheDocument()
   })
 
   it('shows sidebar navigation when authenticated', () => {
@@ -111,7 +112,6 @@ describe('AdminLayout', () => {
     )
 
     const expectedLabels = [
-      'Dashboard',
       'Blogs',
       'Jobs',
       'Skills',

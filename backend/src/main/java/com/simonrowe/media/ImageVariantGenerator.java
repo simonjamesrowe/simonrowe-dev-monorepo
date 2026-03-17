@@ -57,7 +57,7 @@ public class ImageVariantGenerator {
       int height = resultImage != null ? resultImage.getHeight() : 0;
       long variantFileSize = outputFile.length();
 
-      String relativePath = assetId + "/" + variantFileName;
+      String relativePath = "/uploads/" + assetId + "/" + variantFileName;
       variants.put(variantName, new MediaAsset.VariantInfo(
           relativePath, width, height, variantFileSize));
     }
