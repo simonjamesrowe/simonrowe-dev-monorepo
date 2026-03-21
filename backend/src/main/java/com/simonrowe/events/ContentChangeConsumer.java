@@ -7,8 +7,10 @@ import com.simonrowe.employment.JobRepository;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangeEvent.EventType;
 import com.simonrowe.search.IndexService;
+import com.simonrowe.skills.Skill;
 import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
+import com.simonrowe.skills.SkillRepository;
 import java.io.IOException;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -28,17 +30,20 @@ public class ContentChangeConsumer {
   private final BlogRepository blogRepository;
   private final JobRepository jobRepository;
   private final SkillGroupRepository skillGroupRepository;
+  private final SkillRepository skillRepository;
 
   public ContentChangeConsumer(
       final IndexService indexService,
       final BlogRepository blogRepository,
       final JobRepository jobRepository,
-      final SkillGroupRepository skillGroupRepository
+      final SkillGroupRepository skillGroupRepository,
+      final SkillRepository skillRepository
   ) {
     this.indexService = indexService;
     this.blogRepository = blogRepository;
     this.jobRepository = jobRepository;
     this.skillGroupRepository = skillGroupRepository;
+    this.skillRepository = skillRepository;
   }
 
   @RetryableTopic(
@@ -102,18 +107,20 @@ public class ContentChangeConsumer {
 
   private void handleSkillCreateOrUpdate(final String contentId) throws IOException {
     for (SkillGroup group : skillGroupRepository.findAllByOrderByDisplayOrderAsc()) {
-      if (group.skills() == null) {
+      if (group.skills() == null || !group.skills().contains(contentId)) {
         continue;
       }
-      for (com.simonrowe.skills.Skill skill : group.skills()) {
-        if (contentId.equals(skill.id()) || contentId.equals(group.id())) {
-          indexService.indexSkillContent(skill, group.id());
-          LOG.info("Indexed skill {} from group {} in search index", skill.id(), group.id());
-          return;
-        }
+      Optional<Skill> skillOpt = skillRepository.findById(contentId);
+      if (skillOpt.isPresent()) {
+        indexService.indexSkillContent(skillOpt.get(), group.id());
+        LOG.info("Indexed skill {} from group {} in search index", contentId, group.id());
+      } else {
+        indexService.deleteSkillContent(contentId);
+        LOG.info("Skill {} not found, removed from search index", contentId);
       }
+      return;
     }
     indexService.deleteSkillContent(contentId);
-    LOG.info("Skill {} not found, removed from search index", contentId);
+    LOG.info("Skill {} not found in any group, removed from search index", contentId);
   }
 }

@@ -18,6 +18,7 @@ import com.simonrowe.search.IndexService;
 import com.simonrowe.skills.Skill;
 import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
+import com.simonrowe.skills.SkillRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +31,7 @@ class ContentChangeConsumerTest {
   private BlogRepository blogRepository;
   private JobRepository jobRepository;
   private SkillGroupRepository skillGroupRepository;
+  private SkillRepository skillRepository;
   private ContentChangeConsumer consumer;
 
   @BeforeEach
@@ -38,8 +40,9 @@ class ContentChangeConsumerTest {
     blogRepository = mock(BlogRepository.class);
     jobRepository = mock(JobRepository.class);
     skillGroupRepository = mock(SkillGroupRepository.class);
+    skillRepository = mock(SkillRepository.class);
     consumer = new ContentChangeConsumer(
-        indexService, blogRepository, jobRepository, skillGroupRepository);
+        indexService, blogRepository, jobRepository, skillGroupRepository, skillRepository);
   }
 
   @Test
@@ -130,9 +133,10 @@ class ContentChangeConsumerTest {
     Skill skill = new Skill("s1", "Java", 4.0, 1, "Java language", null);
     SkillGroup group = new SkillGroup(
         "g1", "Languages", "Programming languages",
-        4.0, 1, null, List.of(skill));
+        4.0, 1, null, List.of("s1"));
     when(skillGroupRepository.findAllByOrderByDisplayOrderAsc())
         .thenReturn(List.of(group));
+    when(skillRepository.findById("s1")).thenReturn(Optional.of(skill));
 
     ContentChangeEvent event = new ContentChangeEvent(
         EventType.CREATED, ContentType.SKILL, "s1", Instant.now());
@@ -142,23 +146,7 @@ class ContentChangeConsumerTest {
   }
 
   @Test
-  void handleSkillCreatedByGroupIdIndexesSkill() throws Exception {
-    Skill skill = new Skill("s1", "Java", 4.0, 1, "Java language", null);
-    SkillGroup group = new SkillGroup(
-        "g1", "Languages", "Programming languages",
-        4.0, 1, null, List.of(skill));
-    when(skillGroupRepository.findAllByOrderByDisplayOrderAsc())
-        .thenReturn(List.of(group));
-
-    ContentChangeEvent event = new ContentChangeEvent(
-        EventType.CREATED, ContentType.SKILL, "g1", Instant.now());
-    consumer.handleContentChange(event);
-
-    verify(indexService).indexSkillContent(skill, "g1");
-  }
-
-  @Test
-  void handleSkillCreatedDeletesWhenNotFound() throws Exception {
+  void handleSkillCreatedDeletesWhenNotFoundInAnyGroup() throws Exception {
     SkillGroup group = new SkillGroup(
         "g1", "Languages", "Programming languages",
         4.0, 1, null, List.of());
@@ -187,9 +175,10 @@ class ContentChangeConsumerTest {
         "g1", "Empty", "No skills", 1.0, 1, null, null);
     Skill skill = new Skill("s1", "Java", 4.0, 1, "Java", null);
     SkillGroup groupWithSkill = new SkillGroup(
-        "g2", "Languages", "Programming", 4.0, 2, null, List.of(skill));
+        "g2", "Languages", "Programming", 4.0, 2, null, List.of("s1"));
     when(skillGroupRepository.findAllByOrderByDisplayOrderAsc())
         .thenReturn(List.of(groupWithNull, groupWithSkill));
+    when(skillRepository.findById("s1")).thenReturn(Optional.of(skill));
 
     ContentChangeEvent event = new ContentChangeEvent(
         EventType.CREATED, ContentType.SKILL, "s1", Instant.now());

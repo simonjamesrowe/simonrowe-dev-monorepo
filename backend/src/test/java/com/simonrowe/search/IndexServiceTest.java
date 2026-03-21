@@ -23,6 +23,7 @@ import com.simonrowe.search.elasticsearch.BlogSearchDocument;
 import com.simonrowe.search.elasticsearch.SiteSearchDocument;
 import com.simonrowe.skills.Skill;
 import com.simonrowe.skills.SkillGroupRepository;
+import com.simonrowe.skills.SkillRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.function.Function;
@@ -40,8 +41,9 @@ class IndexServiceTest {
     BlogRepository blogRepository = mock(BlogRepository.class);
     JobRepository jobRepository = mock(JobRepository.class);
     SkillGroupRepository skillGroupRepository = mock(SkillGroupRepository.class);
+    SkillRepository skillRepository = mock(SkillRepository.class);
     indexService = new IndexService(
-        esClient, blogRepository, jobRepository, skillGroupRepository);
+        esClient, blogRepository, jobRepository, skillGroupRepository, skillRepository);
   }
 
   @Test

@@ -14,10 +14,10 @@ public record SkillGroupSummaryDto(
     List<SkillSummaryDto> skills
 ) {
 
-  public static SkillGroupSummaryDto fromEntity(SkillGroup group) {
-    List<SkillSummaryDto> mappedSkills = group.skills() == null
+  public static SkillGroupSummaryDto fromEntity(SkillGroup group, List<Skill> skills) {
+    List<SkillSummaryDto> mappedSkills = skills == null
         ? List.of()
-        : group.skills().stream()
+        : skills.stream()
             .sorted(Comparator.comparingInt(
                 s -> s.displayOrder() != null ? s.displayOrder() : 0))
             .map(SkillSummaryDto::fromEntity)

@@ -2,12 +2,14 @@ package com.simonrowe.employment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 import com.simonrowe.common.ResourceNotFoundException;
 import com.simonrowe.skills.Skill;
 import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
+import com.simonrowe.skills.SkillRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,9 @@ class JobServiceTest {
 
   @Mock
   private SkillGroupRepository skillGroupRepository;
+
+  @Mock
+  private SkillRepository skillRepository;
 
   @InjectMocks
   private JobService jobService;
@@ -55,10 +60,12 @@ class JobServiceTest {
     Skill springMvc = new Skill("s-2", "Spring MVC", 9.0, 2, null, null);
     SkillGroup springGroup = new SkillGroup(
         "g-1", "Spring", null, 9.5, 1, null,
-        List.of(springBoot, springMvc));
+        List.of("s-1", "s-2"));
 
     given(jobRepository.findById("j-1")).willReturn(Optional.of(job));
     given(skillGroupRepository.findAll()).willReturn(List.of(springGroup));
+    given(skillRepository.findAllByIdIn(List.of("s-1", "s-2")))
+        .willReturn(List.of(springBoot, springMvc));
 
     JobDetailDto result = jobService.getJobById("j-1");
 
@@ -106,10 +113,11 @@ class JobServiceTest {
 
     Skill springBoot = new Skill("s-1", "Spring Boot", 10.0, 1, null, null);
     SkillGroup group = new SkillGroup(
-        "g-1", "Spring", null, 9.5, 1, null, List.of(springBoot));
+        "g-1", "Spring", null, 9.5, 1, null, List.of("s-1", "s-nonexistent"));
 
     given(jobRepository.findById("j-1")).willReturn(Optional.of(job));
     given(skillGroupRepository.findAll()).willReturn(List.of(group));
+    given(skillRepository.findAllByIdIn(any())).willReturn(List.of(springBoot));
 
     JobDetailDto result = jobService.getJobById("j-1");
 

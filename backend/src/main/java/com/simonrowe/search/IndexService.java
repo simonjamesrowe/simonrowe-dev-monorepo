@@ -15,11 +15,13 @@ import com.simonrowe.search.elasticsearch.SiteSearchDocument;
 import com.simonrowe.skills.Skill;
 import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
+import com.simonrowe.skills.SkillRepository;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -33,17 +35,20 @@ public class IndexService {
   private final BlogRepository blogRepository;
   private final JobRepository jobRepository;
   private final SkillGroupRepository skillGroupRepository;
+  private final SkillRepository skillRepository;
 
   public IndexService(
       final ElasticsearchClient client,
       final BlogRepository blogRepository,
       final JobRepository jobRepository,
-      final SkillGroupRepository skillGroupRepository
+      final SkillGroupRepository skillGroupRepository,
+      final SkillRepository skillRepository
   ) {
     this.client = client;
     this.blogRepository = blogRepository;
     this.jobRepository = jobRepository;
     this.skillGroupRepository = skillGroupRepository;
+    this.skillRepository = skillRepository;
   }
 
   public void indexSiteDocument(final SiteSearchDocument document) throws IOException {
@@ -189,10 +194,18 @@ public class IndexService {
     jobDocs.forEach(doc -> indexedIds.add(doc.id()));
 
     List<SkillGroup> skillGroups = skillGroupRepository.findAllByOrderByDisplayOrderAsc();
+    List<String> allSkillIds = skillGroups.stream()
+        .filter(g -> g.skills() != null)
+        .flatMap(g -> g.skills().stream())
+        .distinct()
+        .toList();
+    Map<String, Skill> skillMap = skillRepository.findAllByIdIn(allSkillIds).stream()
+        .collect(Collectors.toMap(Skill::id, s -> s));
     List<SiteSearchDocument> skillDocs = skillGroups.stream()
-        .flatMap(group -> group.skills() == null
-            ? java.util.stream.Stream.empty()
-            : group.skills().stream().map(skill -> skillToSiteDocument(skill, group.id())))
+        .filter(g -> g.skills() != null)
+        .flatMap(group -> group.skills().stream()
+            .filter(skillMap::containsKey)
+            .map(skillId -> skillToSiteDocument(skillMap.get(skillId), group.id())))
         .toList();
     bulkIndexSiteDocuments(skillDocs);
     skillDocs.forEach(doc -> indexedIds.add(doc.id()));
