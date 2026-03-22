@@ -13,6 +13,6 @@ public record SkillGroup(
     Double rating,
     Integer displayOrder,
     Image image,
-    List<Skill> skills
+    List<String> skills
 ) {
 }

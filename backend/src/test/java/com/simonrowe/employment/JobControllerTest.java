@@ -7,9 +7,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.simonrowe.SharedMongoContainer;
 import com.simonrowe.blog.BlogSearchRepository;
 import com.simonrowe.common.Image;
+import com.simonrowe.media.ImageVariantGenerator;
 import com.simonrowe.skills.Skill;
 import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
+import com.simonrowe.skills.SkillRepository;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,25 +19,29 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = {
-    "management.health.kafka.enabled=false",
-    "management.health.elasticsearch.enabled=false",
-    "spring.kafka.bootstrap-servers=localhost:9092",
-    "spring.elasticsearch.uris=http://localhost:9200"
-})
+@SpringBootTest
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 class JobControllerTest {
+
+  @MockitoBean
+  private JwtDecoder jwtDecoder;
 
   @MockitoBean
   private ElasticsearchOperations elasticsearchOperations;
 
   @MockitoBean
   private BlogSearchRepository blogSearchRepository;
+
+  @MockitoBean
+  private ImageVariantGenerator imageVariantGenerator;
 
   @Autowired
   private MockMvc mockMvc;
@@ -46,6 +52,9 @@ class JobControllerTest {
   @Autowired
   private SkillGroupRepository skillGroupRepository;
 
+  @Autowired
+  private SkillRepository skillRepository;
+
   @DynamicPropertySource
   static void configureProperties(DynamicPropertyRegistry registry) {
     SharedMongoContainer.configureProperties(registry);
@@ -55,6 +64,7 @@ class JobControllerTest {
   void setup() {
     jobRepository.deleteAll();
     skillGroupRepository.deleteAll();
+    skillRepository.deleteAll();
   }
 
   @Test
@@ -89,8 +99,9 @@ class JobControllerTest {
   @Test
   void getJobByIdReturnsDetailWithResolvedSkills() throws Exception {
     Skill springBoot = new Skill("s-1", "Spring Boot", 10.0, 1, null, null);
+    skillRepository.save(springBoot);
     SkillGroup group = new SkillGroup(
-        "g-1", "Spring", null, 9.5, 1, null, List.of(springBoot));
+        "g-1", "Spring", null, 9.5, 1, null, List.of("s-1"));
     skillGroupRepository.save(group);
 
     Job job = new Job(
@@ -144,14 +155,15 @@ class JobControllerTest {
         false, true, List.of("s-ai-1", "s-cloud-1"));
 
     Skill claudeCode = new Skill("s-ai-1", "Claude Code", 8.0, 1, "AI coding assistant", null);
-    SkillGroup aiGroup = new SkillGroup(
-        "g-ai", "AI", "AI tools", 8.0, 1, null, List.of(claudeCode));
-
     Skill terraform = new Skill("s-cloud-1", "Terraform", 7.0, 16, "IaC tool", null);
-    SkillGroup cloudGroup = new SkillGroup(
-        "g-cloud", "Cloud", "Cloud skills", 7.0, 4, null, List.of(terraform));
+    skillRepository.saveAll(List.of(claudeCode, terraform));
 
+    SkillGroup aiGroup = new SkillGroup(
+        "g-ai", "AI", "AI tools", 8.0, 1, null, List.of("s-ai-1"));
+    SkillGroup cloudGroup = new SkillGroup(
+        "g-cloud", "Cloud", "Cloud skills", 7.0, 4, null, List.of("s-cloud-1"));
     skillGroupRepository.saveAll(List.of(aiGroup, cloudGroup));
+
     jobRepository.save(globalJob);
 
     mockMvc.perform(get("/api/jobs"))
@@ -168,20 +180,19 @@ class JobControllerTest {
   void getGlobalJobByIdReturnsResolvedSkillsFromMultipleGroups() throws Exception {
     Skill claudeCode = new Skill("s-ai-1", "Claude Code", 8.0, 1, "AI coding assistant", null);
     Skill copilot = new Skill("s-ai-2", "GitHub Copilot", 8.0, 2, "AI pair programming", null);
-    SkillGroup aiGroup = new SkillGroup(
-        "g-ai", "AI", "AI tools", 8.0, 1, null, List.of(claudeCode, copilot));
-
     Skill terraform = new Skill("s-cloud-1", "Terraform", 7.0, 16, "IaC tool", null);
     Skill springBoot = new Skill("s-spring-1", "Spring Boot", 10.0, 1, "Boot framework", null);
-    SkillGroup cloudGroup = new SkillGroup(
-        "g-cloud", "Cloud", null, 7.0, 4, null, List.of(terraform));
-    SkillGroup springGroup = new SkillGroup(
-        "g-spring", "Spring", null, 10.0, 3, null, List.of(springBoot));
-
     Skill react = new Skill("s-web-1", "React", 8.0, 1, "UI library", null);
-    SkillGroup webGroup = new SkillGroup(
-        "g-web", "Web", null, 8.0, 8, null, List.of(react));
+    skillRepository.saveAll(List.of(claudeCode, copilot, terraform, springBoot, react));
 
+    SkillGroup aiGroup = new SkillGroup(
+        "g-ai", "AI", "AI tools", 8.0, 1, null, List.of("s-ai-1", "s-ai-2"));
+    SkillGroup cloudGroup = new SkillGroup(
+        "g-cloud", "Cloud", null, 7.0, 4, null, List.of("s-cloud-1"));
+    SkillGroup springGroup = new SkillGroup(
+        "g-spring", "Spring", null, 10.0, 3, null, List.of("s-spring-1"));
+    SkillGroup webGroup = new SkillGroup(
+        "g-web", "Web", null, 8.0, 8, null, List.of("s-web-1"));
     skillGroupRepository.saveAll(List.of(aiGroup, cloudGroup, springGroup, webGroup));
 
     Job globalJob = new Job(

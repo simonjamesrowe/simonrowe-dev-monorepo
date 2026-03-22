@@ -4,6 +4,7 @@ import com.simonrowe.common.ResourceNotFoundException;
 import com.simonrowe.skills.Skill;
 import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
+import com.simonrowe.skills.SkillRepository;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -16,13 +17,16 @@ public class JobService {
 
   private final JobRepository jobRepository;
   private final SkillGroupRepository skillGroupRepository;
+  private final SkillRepository skillRepository;
 
   public JobService(
       JobRepository jobRepository,
-      SkillGroupRepository skillGroupRepository
+      SkillGroupRepository skillGroupRepository,
+      SkillRepository skillRepository
   ) {
     this.jobRepository = jobRepository;
     this.skillGroupRepository = skillGroupRepository;
+    this.skillRepository = skillRepository;
   }
 
   public List<JobSummaryDto> getAllJobs() {
@@ -49,10 +53,11 @@ public class JobService {
     List<SkillGroup> allGroups = skillGroupRepository.findAll();
 
     for (SkillGroup group : allGroups) {
-      if (group.skills() == null) {
+      if (group.skills() == null || group.skills().isEmpty()) {
         continue;
       }
-      for (Skill skill : group.skills()) {
+      List<Skill> groupSkills = skillRepository.findAllByIdIn(group.skills());
+      for (Skill skill : groupSkills) {
         if (skillIdentifiers.contains(skill.id())
             || skillIdentifiers.contains(skill.name())) {
           skillMap.putIfAbsent(skill.name(), new SkillReferenceDto(

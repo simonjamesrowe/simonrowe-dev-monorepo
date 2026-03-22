@@ -1,0 +1,191 @@
+# Chat API Contracts
+# Transport: WebSocket (STOMP over WebSocket)
+# MCP Server: SSE transport (Spring AI MCP Server WebMVC)
+
+---
+# WebSocket Endpoints
+websocket:
+  connect:
+    url: /ws/chat
+    protocol: STOMP
+    description: WebSocket handshake endpoint for chat connections
+
+  stomp_destinations:
+    send:
+      - destination: /app/chat.send
+        description: Send a chat message
+        payload:
+          type: ChatRequest
+          schema:
+            sessionId:
+              type: string
+              format: uuid
+              required: true
+              description: Unique chat session identifier
+            message:
+              type: string
+              required: true
+              minLength: 1
+              maxLength: 500
+              description: User's chat message
+
+    subscribe:
+      - destination: /topic/chat.{sessionId}
+        description: Subscribe to chat responses for a specific session
+        payload:
+          type: ChatResponse
+          schema:
+            sessionId:
+              type: string
+              format: uuid
+              description: Chat session identifier
+            content:
+              type: string
+              description: Response content (partial for STREAM_CHUNK, full for STREAM_END)
+            type:
+              type: string
+              enum: [STREAM_START, STREAM_CHUNK, STREAM_END, ERROR]
+              description: Message type indicating stream lifecycle
+            timestamp:
+              type: string
+              format: iso-8601
+              description: Server timestamp
+
+---
+# REST Endpoints (supporting)
+rest:
+  chat_session:
+    path: /api/chat/sessions
+    method: POST
+    description: Create a new chat session (returns session ID, optional — frontend can generate UUID)
+    request: {}
+    response:
+      schema:
+        sessionId:
+          type: string
+          format: uuid
+
+---
+# Rate Limit Headers (on all chat and MCP endpoints)
+rate_limiting:
+  headers:
+    X-RateLimit-Remaining:
+      type: integer
+      description: Number of requests remaining in current window
+    X-RateLimit-Reset:
+      type: integer
+      description: Seconds until rate limit window resets
+    Retry-After:
+      type: integer
+      description: Seconds to wait before retrying (only on 429 responses)
+
+  error_response:
+    status: 429
+    body:
+      schema:
+        error:
+          type: string
+          example: "Rate limit exceeded"
+        retryAfter:
+          type: integer
+          description: Seconds until rate limit resets
+
+---
+# MCP Server Endpoints (auto-configured by Spring AI MCP Server WebMVC)
+mcp:
+  transport: SSE
+  base_path: /mcp
+  description: MCP Server-Sent Events endpoint for tool discovery and invocation
+
+  tools:
+    - name: get_profile
+      description: Retrieve the site owner's profile information including name, title, headline, description, contact details, and social media links
+      parameters: {}
+      returns:
+        type: object
+        properties:
+          name: { type: string }
+          title: { type: string }
+          headline: { type: string }
+          description: { type: string }
+          location: { type: string }
+          primaryEmail: { type: string }
+          socialMediaLinks:
+            type: array
+            items:
+              type: object
+              properties:
+                name: { type: string }
+                url: { type: string }
+                icon: { type: string }
+
+    - name: search_blogs
+      description: Search published blog posts by keyword query
+      parameters:
+        query:
+          type: string
+          required: true
+          description: Search query (2-200 characters)
+      returns:
+        type: array
+        items:
+          type: object
+          properties:
+            id: { type: string }
+            title: { type: string }
+            summary: { type: string }
+            tags: { type: array, items: { type: string } }
+            publishedDate: { type: string, format: date }
+
+    - name: get_jobs
+      description: Retrieve the complete employment/job history
+      parameters: {}
+      returns:
+        type: array
+        items:
+          type: object
+          properties:
+            id: { type: string }
+            company: { type: string }
+            title: { type: string }
+            startDate: { type: string, format: date }
+            endDate: { type: string, format: date, nullable: true }
+            summary: { type: string }
+
+    - name: get_skills
+      description: Retrieve all skill groups with their individual skills
+      parameters: {}
+      returns:
+        type: array
+        items:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            skills:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: { type: string }
+                  rating: { type: integer }
+
+    - name: search_site
+      description: Search across all site content (blogs, jobs, skills)
+      parameters:
+        query:
+          type: string
+          required: true
+          description: Search query (2-200 characters)
+      returns:
+        type: object
+        properties:
+          blogs:
+            type: array
+            items: { $ref: "#/mcp/tools/search_blogs/returns/items" }
+          jobs:
+            type: array
+            items: { $ref: "#/mcp/tools/get_jobs/returns/items" }
+          skills:
+            type: array
+            items: { $ref: "#/mcp/tools/get_skills/returns/items" }

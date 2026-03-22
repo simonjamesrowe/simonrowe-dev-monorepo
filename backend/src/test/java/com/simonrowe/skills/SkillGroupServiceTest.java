@@ -2,9 +2,9 @@ package com.simonrowe.skills;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
-import com.simonrowe.common.Image;
 import com.simonrowe.common.ResourceNotFoundException;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
@@ -23,6 +23,9 @@ class SkillGroupServiceTest {
   private SkillGroupRepository skillGroupRepository;
 
   @Mock
+  private SkillRepository skillRepository;
+
+  @Mock
   private JobRepository jobRepository;
 
   @InjectMocks
@@ -34,6 +37,7 @@ class SkillGroupServiceTest {
     SkillGroup group2 = sampleSkillGroup("g-2", "JavaScript", 8.0, 2);
     given(skillGroupRepository.findAllByOrderByDisplayOrderAsc())
         .willReturn(List.of(group1, group2));
+    given(skillRepository.findAllByIdIn(any())).willReturn(List.of());
 
     List<SkillGroupSummaryDto> result = skillGroupService.getAllSkillGroups();
 
@@ -46,9 +50,10 @@ class SkillGroupServiceTest {
   @Test
   void getAllSkillGroupsIncludesNestedSkills() {
     Skill skill = new Skill("s-1", "Spring Boot", 10.0, 1, "Boot desc", null);
-    SkillGroup group = new SkillGroup("g-1", "Spring", null, 9.5, 1, null, List.of(skill));
+    SkillGroup group = new SkillGroup("g-1", "Spring", null, 9.5, 1, null, List.of("s-1"));
     given(skillGroupRepository.findAllByOrderByDisplayOrderAsc())
         .willReturn(List.of(group));
+    given(skillRepository.findAllByIdIn(List.of("s-1"))).willReturn(List.of(skill));
 
     List<SkillGroupSummaryDto> result = skillGroupService.getAllSkillGroups();
 
@@ -63,7 +68,7 @@ class SkillGroupServiceTest {
     Skill springMvc = new Skill("s-2", "Spring MVC", 9.0, 2, null, null);
     SkillGroup group = new SkillGroup(
         "g-1", "Spring", "Spring Framework", 9.5, 1, null,
-        List.of(springBoot, springMvc));
+        List.of("s-1", "s-2"));
 
     Job job1 = sampleJob("j-1", "Lead Engineer", "Upp", "2019-04-15",
         List.of("s-1", "s-2"));
@@ -71,6 +76,8 @@ class SkillGroupServiceTest {
         List.of("s-1"));
 
     given(skillGroupRepository.findById("g-1")).willReturn(Optional.of(group));
+    given(skillRepository.findAllByIdIn(List.of("s-1", "s-2")))
+        .willReturn(List.of(springBoot, springMvc));
     given(jobRepository.findBySkillsIn(
         List.of("s-1", "Spring Boot", "s-2", "Spring MVC")))
         .willReturn(List.of(job1, job2));
@@ -115,9 +122,7 @@ class SkillGroupServiceTest {
   private static SkillGroup sampleSkillGroup(
       String id, String name, Double rating, Integer displayOrder
   ) {
-    Skill skill = new Skill(
-        id + "-skill", name + " Skill", rating, 1, null, null);
-    return new SkillGroup(id, name, null, rating, displayOrder, null, List.of(skill));
+    return new SkillGroup(id, name, null, rating, displayOrder, null, List.of(id + "-skill"));
   }
 
   private static Job sampleJob(

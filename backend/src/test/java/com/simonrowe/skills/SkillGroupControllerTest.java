@@ -11,6 +11,7 @@ import com.simonrowe.common.ImageFormat;
 import com.simonrowe.common.ImageFormats;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
+import com.simonrowe.media.ImageVariantGenerator;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,19 +19,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = {
-    "management.health.kafka.enabled=false",
-    "management.health.elasticsearch.enabled=false",
-    "spring.kafka.bootstrap-servers=localhost:9092",
-    "spring.elasticsearch.uris=http://localhost:9200"
-})
+@SpringBootTest
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 class SkillGroupControllerTest {
+
+  @MockitoBean
+  private JwtDecoder jwtDecoder;
 
   @MockitoBean
   private ElasticsearchOperations elasticsearchOperations;
@@ -38,11 +40,17 @@ class SkillGroupControllerTest {
   @MockitoBean
   private BlogSearchRepository blogSearchRepository;
 
+  @MockitoBean
+  private ImageVariantGenerator imageVariantGenerator;
+
   @Autowired
   private MockMvc mockMvc;
 
   @Autowired
   private SkillGroupRepository skillGroupRepository;
+
+  @Autowired
+  private SkillRepository skillRepository;
 
   @Autowired
   private JobRepository jobRepository;
@@ -56,15 +64,17 @@ class SkillGroupControllerTest {
   void setup() {
     jobRepository.deleteAll();
     skillGroupRepository.deleteAll();
+    skillRepository.deleteAll();
   }
 
   @Test
   void getAllSkillGroupsReturnsGroupsWithSkills() throws Exception {
     Skill springBoot = new Skill("s-1", "Spring Boot", 10.0, 1, "Boot desc", null);
     Skill springMvc = new Skill("s-2", "Spring MVC", 9.0, 2, null, null);
+    skillRepository.saveAll(List.of(springBoot, springMvc));
     SkillGroup group = new SkillGroup(
         "g-1", "Spring", "Spring framework", 9.5, 1,
-        sampleImage(), List.of(springBoot, springMvc));
+        sampleImage(), List.of("s-1", "s-2"));
     skillGroupRepository.save(group);
 
     mockMvc.perform(get("/api/skills"))
@@ -88,8 +98,9 @@ class SkillGroupControllerTest {
   @Test
   void getSkillGroupByIdReturnsDetailWithJobCorrelations() throws Exception {
     Skill springBoot = new Skill("s-1", "Spring Boot", 10.0, 1, "Boot desc", null);
+    skillRepository.save(springBoot);
     SkillGroup group = new SkillGroup(
-        "g-1", "Spring", null, 9.5, 1, null, List.of(springBoot));
+        "g-1", "Spring", null, 9.5, 1, null, List.of("s-1"));
     skillGroupRepository.save(group);
 
     Job job = new Job(
@@ -123,16 +134,18 @@ class SkillGroupControllerTest {
     Skill aiDev = new Skill("s-ai-3", "AI-Assisted Development", 9.0, 3, "AI workflows", null);
     Skill prompts = new Skill("s-ai-4", "Prompt Engineering", 8.0, 4, "LLM prompts", null);
     Skill mcp = new Skill("s-ai-5", "MCP", 7.0, 5, "Model Context Protocol", null);
+    Skill springBoot = new Skill("s-1", "Spring Boot", 10.0, 1, "Boot desc", null);
+    skillRepository.saveAll(List.of(claudeCode, copilot, aiDev, prompts, mcp, springBoot));
 
     SkillGroup aiGroup = new SkillGroup(
         "g-ai", "Artificial Intelligence",
         "Artificial intelligence tools and practices for AI-assisted software development.",
         8.0, 1, null,
-        List.of(claudeCode, copilot, aiDev, prompts, mcp));
+        List.of("s-ai-1", "s-ai-2", "s-ai-3", "s-ai-4", "s-ai-5"));
 
     SkillGroup springGroup = new SkillGroup(
         "g-spring", "Spring", "Spring framework", 9.5, 3,
-        sampleImage(), List.of(new Skill("s-1", "Spring Boot", 10.0, 1, "Boot desc", null)));
+        sampleImage(), List.of("s-1"));
 
     skillGroupRepository.saveAll(List.of(aiGroup, springGroup));
 
@@ -150,8 +163,9 @@ class SkillGroupControllerTest {
   @Test
   void getAiSkillGroupByIdShowsGlobalJobCorrelation() throws Exception {
     Skill claudeCode = new Skill("s-ai-1", "Claude Code", 8.0, 1, "AI coding assistant", null);
+    skillRepository.save(claudeCode);
     SkillGroup aiGroup = new SkillGroup(
-        "g-ai", "Artificial Intelligence", "AI tools", 8.0, 1, null, List.of(claudeCode));
+        "g-ai", "Artificial Intelligence", "AI tools", 8.0, 1, null, List.of("s-ai-1"));
     skillGroupRepository.save(aiGroup);
 
     Job globalJob = new Job(

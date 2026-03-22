@@ -11,6 +11,12 @@ version = "0.0.1-SNAPSHOT"
 
 ext["opentelemetry.version"] = "1.59.0"
 
+dependencyManagement {
+    imports {
+        mavenBom(libs.spring.ai.bom.get().toString())
+    }
+}
+
 checkstyle {
     toolVersion = libs.versions.checkstyle.get()
     configFile = rootProject.file("config/checkstyle/google_checks.xml")
@@ -53,6 +59,8 @@ tasks.check {
 
 tasks.test {
     systemProperty("auth0.jwt.enabled", "false")
+    maxHeapSize = "1536m"
+    useJUnitPlatform()
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
@@ -71,6 +79,10 @@ dependencies {
     implementation(libs.openpdf)
     implementation(libs.commonmark)
     implementation(libs.spring.boot.starter.mail)
+    implementation(libs.spring.ai.starter.model.openai)
+    implementation(libs.spring.ai.starter.mcp.server.webmvc)
+    implementation(libs.spring.boot.starter.websocket)
+    implementation(libs.bucket4j.core)
     implementation(libs.spring.boot.starter.oauth2.resource.server)
     implementation(libs.thumbnailator)
 

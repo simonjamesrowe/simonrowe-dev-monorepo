@@ -53,6 +53,9 @@ cd frontend && npm run dev              # Start frontend dev server (port 5173)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 
 ## Recent Changes
+- 009-profile-chat: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, Spring AI 1.1.2 (Google Gemini starter, MCP Server WebMVC, Chat Memory), Spring WebSocket (STOMP), Bucket4j, React 19, @stomp/stompjs
+- 010-blog-posts: Added JavaScript (MongoDB migration script), Java 21 (existing backend, no changes) + MongoDB (data insertion), Elasticsearch (auto-indexed via IndexService)
+- 009-global-job: Added Java 21 (backend), TypeScript (frontend), JavaScript (migration script) + Spring Boot 3.5.x, Spring Data MongoDB, React (latest stable)
 - 007-content-management: Admin CMS with blog editor, media library drawer, icon-based list actions, @DBRef tag/skill resolution, simplified backup/restore scripts
 
 <!-- MANUAL ADDITIONS START -->

@@ -30,7 +30,7 @@ describe('SiteSearch', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByLabelText('Search across all content')).toBeInTheDocument()
+    expect(screen.getByLabelText('Search or ask a question')).toBeInTheDocument()
   })
 
   it('shows dropdown with results after typing', async () => {
@@ -42,7 +42,7 @@ describe('SiteSearch', () => {
       </MemoryRouter>,
     )
 
-    const input = screen.getByLabelText('Search across all content')
+    const input = screen.getByLabelText('Search or ask a question')
     await userEvent.type(input, 'spring')
 
     await waitFor(
@@ -61,7 +61,7 @@ describe('SiteSearch', () => {
       </MemoryRouter>,
     )
 
-    const input = screen.getByLabelText('Search across all content')
+    const input = screen.getByLabelText('Search or ask a question')
     await userEvent.type(input, 'x')
 
     await waitFor(
@@ -70,6 +70,52 @@ describe('SiteSearch', () => {
       },
       { timeout: 500 },
     )
+  })
+
+  it('calls onChatStart with query when Enter is pressed with non-empty query', async () => {
+    const onChatStart = vi.fn()
+
+    render(
+      <MemoryRouter>
+        <SiteSearch onChatStart={onChatStart} />
+      </MemoryRouter>,
+    )
+
+    const input = screen.getByLabelText('Search or ask a question')
+    await userEvent.type(input, 'spring')
+    await userEvent.keyboard('{Enter}')
+
+    expect(onChatStart).toHaveBeenCalledWith('spring')
+  })
+
+  it('does not call onChatStart when Enter is pressed with empty query', async () => {
+    const onChatStart = vi.fn()
+
+    render(
+      <MemoryRouter>
+        <SiteSearch onChatStart={onChatStart} />
+      </MemoryRouter>,
+    )
+
+    const input = screen.getByLabelText('Search or ask a question')
+    await userEvent.click(input)
+    await userEvent.keyboard('{Enter}')
+
+    expect(onChatStart).not.toHaveBeenCalled()
+  })
+
+  it('does not call onChatStart when no callback provided', async () => {
+    render(
+      <MemoryRouter>
+        <SiteSearch />
+      </MemoryRouter>,
+    )
+
+    const input = screen.getByLabelText('Search or ask a question')
+    await userEvent.type(input, 'spring')
+    await userEvent.keyboard('{Enter}')
+
+    // No error thrown when onChatStart is undefined
   })
 
   it('closes dropdown on Escape key', async () => {
@@ -81,7 +127,7 @@ describe('SiteSearch', () => {
       </MemoryRouter>,
     )
 
-    const input = screen.getByLabelText('Search across all content')
+    const input = screen.getByLabelText('Search or ask a question')
     await userEvent.type(input, 'spring')
 
     await waitFor(

@@ -15,6 +15,7 @@
     "@auth0/auth0-react": "^2.15.0",
     "@hookform/resolvers": "^5.2.2",
     "@mdxeditor/editor": "^3.52.4",
+    "@stomp/stompjs": "^7.3.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/react-google-recaptcha": "^2.1.9",
     "@types/react-syntax-highlighter": "^15.5.13",
