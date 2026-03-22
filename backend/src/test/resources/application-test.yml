@@ -1,8 +1,27 @@
 spring:
   kafka:
+    bootstrap-servers: localhost:9092
     consumer:
       auto-offset-reset: earliest
+    listener:
+      auto-startup: false
+  elasticsearch:
+    uris: http://localhost:9200
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://test.auth0.com/
+          audiences: https://test-api
   ai:
     google:
       genai:
         api-key: test-dummy-key
+management:
+  health:
+    kafka:
+      enabled: false
+    elasticsearch:
+      enabled: false
+uploads:
+  path: target/test-uploads

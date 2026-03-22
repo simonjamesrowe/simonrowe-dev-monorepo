@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.simonrowe.SharedMongoContainer;
 import com.simonrowe.blog.BlogSearchRepository;
 import com.simonrowe.common.Image;
+import com.simonrowe.media.ImageVariantGenerator;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,19 +19,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = {
-    "management.health.kafka.enabled=false",
-    "management.health.elasticsearch.enabled=false",
-    "spring.kafka.bootstrap-servers=localhost:9092",
-    "spring.elasticsearch.uris=http://localhost:9200",
-    "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://test.auth0.com/",
-    "spring.security.oauth2.resourceserver.jwt.audiences=https://test-api"
-})
+@SpringBootTest
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 class AdminProfileControllerTest {
 
@@ -42,6 +38,9 @@ class AdminProfileControllerTest {
 
   @MockitoBean
   private com.simonrowe.blog.BlogSearchRepository blogSearchRepository;
+
+  @MockitoBean
+  private ImageVariantGenerator imageVariantGenerator;
 
   @Autowired
   private MockMvc mockMvc;

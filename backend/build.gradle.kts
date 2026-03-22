@@ -59,6 +59,8 @@ tasks.check {
 
 tasks.test {
     systemProperty("auth0.jwt.enabled", "false")
+    maxHeapSize = "1536m"
+    useJUnitPlatform()
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {

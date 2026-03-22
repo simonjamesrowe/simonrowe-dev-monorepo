@@ -21,20 +21,14 @@ import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = {
-    "management.health.kafka.enabled=false",
-    "management.health.elasticsearch.enabled=false",
-    "spring.kafka.bootstrap-servers=localhost:9092",
-    "spring.elasticsearch.uris=http://localhost:9200",
-    "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://test.auth0.com/",
-    "spring.security.oauth2.resourceserver.jwt.audiences=https://test-api",
-    "uploads.path=target/test-uploads"
-})
+@SpringBootTest
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 class MediaControllerTest {
 
