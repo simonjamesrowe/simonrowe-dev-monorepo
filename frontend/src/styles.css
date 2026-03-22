@@ -1944,13 +1944,15 @@ a:hover {
 
 .site-search__input-wrapper {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .site-search__input {
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 0.75rem;
-  padding: 0.7rem 1rem;
+  padding: 0.7rem 2.75rem 0.7rem 1rem;
   font: inherit;
   font-size: 0.88rem;
   color: var(--color-text);
@@ -1959,6 +1961,54 @@ a:hover {
   box-shadow: var(--shadow-sm);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast),
               background var(--transition-fast);
+}
+
+.site-search__chat-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.site-search__chat-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.site-search__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  justify-content: center;
+}
+
+.site-search__suggestion {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.75rem;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--transition-fast), color var(--transition-fast),
+              border-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.site-search__suggestion:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .site-search__input::placeholder {
@@ -2330,28 +2380,45 @@ a:hover {
 
 /* ==================== Chat Panel ==================== */
 
+.chat-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 999;
+}
+
 .chat-panel {
   position: fixed;
+  top: 0;
+  right: 0;
   bottom: 0;
-  right: 1rem;
-  width: 400px;
-  max-height: 600px;
+  width: 420px;
   background: var(--color-panel, #fff);
-  border-radius: 12px 12px 0 0;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
   z-index: 1000;
   overflow: hidden;
+  animation: chat-drawer-slide-in 0.25s ease-out;
+}
+
+@keyframes chat-drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 .chat-panel__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
-  background: var(--color-accent, #0891b2);
-  color: #fff;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  color: #f8fafc;
 }
 
 .chat-panel__header h3 {
@@ -2377,7 +2444,6 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  max-height: 400px;
 }
 
 .chat-panel__input {
@@ -2409,8 +2475,16 @@ a:hover {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: var(--color-accent, #0891b2);
-  color: #fff;
+  background: #1e293b;
+  color: #f8fafc;
+  overflow: hidden;
+}
+
+.chat-message__avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .chat-message--user .chat-message__avatar {
@@ -2425,8 +2499,8 @@ a:hover {
 }
 
 .chat-message--user .chat-message__bubble {
-  background: var(--color-accent, #0891b2);
-  color: #fff;
+  background: #1e293b;
+  color: #f8fafc;
 }
 
 .chat-message--assistant .chat-message__bubble {
@@ -2461,12 +2535,12 @@ a:hover {
 }
 
 .chat-input__field:focus {
-  border-color: var(--color-accent, #0891b2);
+  border-color: #1e293b;
 }
 
 .chat-input__send {
-  background: var(--color-accent, #0891b2);
-  color: #fff;
+  background: #1e293b;
+  color: #f8fafc;
   border: none;
   border-radius: 8px;
   padding: 0.5rem;
@@ -2855,9 +2929,7 @@ a:hover {
 
 @media (max-width: 768px) {
   .chat-panel {
-    width: calc(100% - 2rem);
-    right: 1rem;
-    left: 1rem;
+    width: 100%;
   }
 }
 

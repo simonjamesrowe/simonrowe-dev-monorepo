@@ -50,6 +50,7 @@ export function ProfileBanner({ profile, onDownloadCv }: ProfileBannerProps) {
         <ChatPanel
           initialQuery={chatQuery}
           onClose={() => setChatOpen(false)}
+          profileImageUrl={profile.sidebarImage.url}
         />
       )}
     </section>

@@ -30,7 +30,7 @@ describe('SiteSearch', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByLabelText('Search across all content')).toBeInTheDocument()
+    expect(screen.getByLabelText('Search or ask a question')).toBeInTheDocument()
   })
 
   it('shows dropdown with results after typing', async () => {
@@ -42,7 +42,7 @@ describe('SiteSearch', () => {
       </MemoryRouter>,
     )
 
-    const input = screen.getByLabelText('Search across all content')
+    const input = screen.getByLabelText('Search or ask a question')
     await userEvent.type(input, 'spring')
 
     await waitFor(
@@ -61,7 +61,7 @@ describe('SiteSearch', () => {
       </MemoryRouter>,
     )
 
-    const input = screen.getByLabelText('Search across all content')
+    const input = screen.getByLabelText('Search or ask a question')
     await userEvent.type(input, 'x')
 
     await waitFor(
@@ -81,7 +81,7 @@ describe('SiteSearch', () => {
       </MemoryRouter>,
     )
 
-    const input = screen.getByLabelText('Search across all content')
+    const input = screen.getByLabelText('Search or ask a question')
     await userEvent.type(input, 'spring')
     await userEvent.keyboard('{Enter}')
 
@@ -97,7 +97,7 @@ describe('SiteSearch', () => {
       </MemoryRouter>,
     )
 
-    const input = screen.getByLabelText('Search across all content')
+    const input = screen.getByLabelText('Search or ask a question')
     await userEvent.click(input)
     await userEvent.keyboard('{Enter}')
 
@@ -111,7 +111,7 @@ describe('SiteSearch', () => {
       </MemoryRouter>,
     )
 
-    const input = screen.getByLabelText('Search across all content')
+    const input = screen.getByLabelText('Search or ask a question')
     await userEvent.type(input, 'spring')
     await userEvent.keyboard('{Enter}')
 
@@ -127,7 +127,7 @@ describe('SiteSearch', () => {
       </MemoryRouter>,
     )
 
-    const input = screen.getByLabelText('Search across all content')
+    const input = screen.getByLabelText('Search or ask a question')
     await userEvent.type(input, 'spring')
 
     await waitFor(

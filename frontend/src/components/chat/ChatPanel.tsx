@@ -9,6 +9,7 @@ import { ChatTypingIndicator } from './ChatTypingIndicator'
 interface ChatPanelProps {
   initialQuery: string
   onClose: () => void
+  profileImageUrl?: string
 }
 
 interface Message {
@@ -21,7 +22,7 @@ function formatTimestamp(): string {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function ChatPanel({ initialQuery, onClose }: ChatPanelProps) {
+export function ChatPanel({ initialQuery, onClose, profileImageUrl }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [connected, setConnected] = useState(false)
   const [streamingContent, setStreamingContent] = useState<string | null>(null)
@@ -95,6 +96,16 @@ export function ChatPanel({ initialQuery, onClose }: ChatPanelProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
   const handleSend = (text: string) => {
     const userMessage: Message = {
       role: 'user',
@@ -108,42 +119,46 @@ export function ChatPanel({ initialQuery, onClose }: ChatPanelProps) {
   const isStreaming = streamingContent !== null
 
   return (
-    <div className="chat-panel">
-      <div className="chat-panel__header">
-        <h3>Ask me anything</h3>
-        <button className="chat-panel__close" onClick={onClose} aria-label="Close chat">
-          <X size={18} />
-        </button>
-      </div>
+    <div className="chat-drawer-backdrop" onClick={onClose}>
+      <div className="chat-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="chat-panel__header">
+          <h3>Ask me anything</h3>
+          <button className="chat-panel__close" onClick={onClose} aria-label="Close chat">
+            <X size={18} />
+          </button>
+        </div>
 
-      <div className="chat-panel__messages">
-        {messages.map((msg, idx) => (
-          <ChatMessage
-            key={idx}
-            role={msg.role}
-            content={msg.content}
-            timestamp={msg.timestamp}
-          />
-        ))}
-        {isStreaming && streamingContent === '' && (
-          <div className="chat-message chat-message--assistant">
-            <ChatTypingIndicator />
-          </div>
-        )}
-        {isStreaming && streamingContent !== '' && (
-          <ChatMessage
-            role="assistant"
-            content={streamingContent ?? ''}
-          />
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+        <div className="chat-panel__messages">
+          {messages.map((msg, idx) => (
+            <ChatMessage
+              key={idx}
+              role={msg.role}
+              content={msg.content}
+              timestamp={msg.timestamp}
+              profileImageUrl={profileImageUrl}
+            />
+          ))}
+          {isStreaming && streamingContent === '' && (
+            <div className="chat-message chat-message--assistant">
+              <ChatTypingIndicator />
+            </div>
+          )}
+          {isStreaming && streamingContent !== '' && (
+            <ChatMessage
+              role="assistant"
+              content={streamingContent ?? ''}
+              profileImageUrl={profileImageUrl}
+            />
+          )}
+          <div ref={messagesEndRef} />
+        </div>
 
-      <div className="chat-panel__input">
-        <ChatInput
-          onSend={handleSend}
-          disabled={!connected || isStreaming}
-        />
+        <div className="chat-panel__input">
+          <ChatInput
+            onSend={handleSend}
+            disabled={!connected || isStreaming}
+          />
+        </div>
       </div>
     </div>
   )
