@@ -28,10 +28,14 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl }: ChatPanelP
   const [streamingContent, setStreamingContent] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const sessionIdRef = useRef<string>(crypto.randomUUID())
-  const initialSentRef = useRef(false)
+  const streamFinalized = useRef(false)
 
   useEffect(() => {
-    const sessionId = sessionIdRef.current
+    const sessionId = crypto.randomUUID()
+    sessionIdRef.current = sessionId
+    streamFinalized.current = false
+    let cancelled = false
+    let streamContent = ''
 
     setMessages([
       {
@@ -40,26 +44,33 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl }: ChatPanelP
         timestamp: formatTimestamp(),
       },
     ])
+    setStreamingContent(null)
 
     const onMessage = (response: ChatResponse) => {
+      if (cancelled) return
       if (response.type === 'STREAM_START') {
+        streamContent = ''
+        streamFinalized.current = false
         setStreamingContent('')
       } else if (response.type === 'STREAM_CHUNK') {
-        setStreamingContent((prev) => (prev ?? '') + response.content)
+        streamContent += response.content
+        setStreamingContent(streamContent)
       } else if (response.type === 'STREAM_END') {
-        setStreamingContent((prev) => {
-          const finalContent = prev ?? ''
-          setMessages((msgs) => [
-            ...msgs,
-            {
-              role: 'assistant',
-              content: finalContent,
-              timestamp: formatTimestamp(),
-            },
-          ])
-          return null
-        })
+        if (streamFinalized.current) return
+        streamFinalized.current = true
+        const finalContent = streamContent || response.content || ''
+        setStreamingContent(null)
+        setMessages((msgs) => [
+          ...msgs,
+          {
+            role: 'assistant',
+            content: finalContent,
+            timestamp: formatTimestamp(),
+          },
+        ])
       } else if (response.type === 'ERROR') {
+        if (streamFinalized.current) return
+        streamFinalized.current = true
         setStreamingContent(null)
         setMessages((msgs) => [
           ...msgs,
@@ -72,22 +83,29 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl }: ChatPanelP
       }
     }
 
+    let sendTimeout: ReturnType<typeof setTimeout>
+
     chatService.connect(
       sessionId,
       onMessage,
       () => {
+        if (cancelled) return
         setConnected(true)
-        if (!initialSentRef.current) {
-          initialSentRef.current = true
-          chatService.sendMessage({ sessionId, message: initialQuery })
-        }
+        sendTimeout = setTimeout(() => {
+          if (!cancelled) {
+            chatService.sendMessage({ sessionId, message: initialQuery })
+          }
+        }, 50)
       },
       () => {
+        if (cancelled) return
         setConnected(false)
       }
     )
 
     return () => {
+      cancelled = true
+      clearTimeout(sendTimeout)
       chatService.disconnect()
     }
   }, [initialQuery])

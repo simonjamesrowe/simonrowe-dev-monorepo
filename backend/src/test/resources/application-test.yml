@@ -14,9 +14,9 @@ spring:
           issuer-uri: https://test.auth0.com/
           audiences: https://test-api
   ai:
-    google:
-      genai:
-        api-key: test-dummy-key
+    openai:
+      api-key: test-dummy-key
+      base-url: https://api.groq.com/openai
 management:
   health:
     kafka:

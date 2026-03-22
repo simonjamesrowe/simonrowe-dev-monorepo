@@ -17,9 +17,10 @@ public class ChatConfig {
 
   @Bean
   public ChatMemory chatMemory() {
-    return MessageWindowChatMemory.builder()
-        .maxMessages(20)
-        .build();
+    return new ToolFilteringChatMemory(
+        MessageWindowChatMemory.builder()
+            .maxMessages(20)
+            .build());
   }
 
   @Bean

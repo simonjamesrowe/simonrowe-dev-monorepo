@@ -72,7 +72,8 @@ describe('ChatPanel', () => {
     expect(chatService.disconnect).toHaveBeenCalled()
   })
 
-  it('sends initial message when connected', () => {
+  it('sends initial message when connected', async () => {
+    vi.useFakeTimers()
     vi.mocked(chatService.connect).mockImplementation(
       (_sessionId, _onMessage, onConnect) => {
         onConnect?.()
@@ -80,11 +81,13 @@ describe('ChatPanel', () => {
     )
 
     render(<ChatPanel {...defaultProps} />)
+    await vi.advanceTimersByTimeAsync(100)
 
     expect(chatService.sendMessage).toHaveBeenCalledWith({
       sessionId: 'test-session-uuid',
       message: 'Tell me about Simon',
     })
+    vi.useRealTimers()
   })
 
   it('renders chat input area', () => {

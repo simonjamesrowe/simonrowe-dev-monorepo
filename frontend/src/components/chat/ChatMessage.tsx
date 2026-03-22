@@ -1,3 +1,5 @@
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { User } from 'lucide-react'
 
 interface ChatMessageProps {
@@ -22,7 +24,24 @@ export function ChatMessage({ role, content, timestamp, profileImageUrl }: ChatM
         )}
       </div>
       <div>
-        <div className="chat-message__bubble">{content}</div>
+        <div className="chat-message__bubble">
+          {isUser ? (
+            content
+          ) : (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                a: ({ href, children }) => (
+                  <a href={href} target="_blank" rel="noopener noreferrer">
+                    {children}
+                  </a>
+                ),
+              }}
+            >
+              {content}
+            </ReactMarkdown>
+          )}
+        </div>
         {timestamp && <div className="chat-message__time">{timestamp}</div>}
       </div>
     </div>

@@ -2508,6 +2508,37 @@ a:hover {
   color: var(--color-text, #1a1d26);
 }
 
+.chat-message--assistant .chat-message__bubble p {
+  margin: 0 0 0.5rem;
+}
+
+.chat-message--assistant .chat-message__bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-message--assistant .chat-message__bubble ul,
+.chat-message--assistant .chat-message__bubble ol {
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.chat-message--assistant .chat-message__bubble li {
+  margin-bottom: 0.2rem;
+}
+
+.chat-message--assistant .chat-message__bubble strong {
+  font-weight: 600;
+}
+
+.chat-message--assistant .chat-message__bubble a {
+  color: var(--color-primary, #3b82f6);
+  text-decoration: underline;
+}
+
+.chat-message--assistant .chat-message__bubble a:hover {
+  opacity: 0.8;
+}
+
 .chat-message__time {
   font-size: 0.7rem;
   color: var(--color-muted, #6b7280);

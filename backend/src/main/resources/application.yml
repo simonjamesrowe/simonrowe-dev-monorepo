@@ -15,6 +15,10 @@ management:
       exposure:
         include: health,prometheus,info,env,configprops
   endpoint:
+    env:
+      show-values: ALWAYS
+    configprops:
+      show-values: ALWAYS
     health:
       show-details: always
       show-components: always
@@ -63,12 +67,12 @@ spring:
           starttls:
             enable: true
   ai:
-    google:
-      genai:
-        api-key: ${GOOGLE_GENAI_API_KEY:not-set}
-        chat:
-          options:
-            model: gemini-2.5-pro
+    openai:
+      api-key: ${GROQ_API_KEY:not-set}
+      base-url: https://api.groq.com/openai
+      chat:
+        options:
+          model: llama-3.3-70b-versatile
     mcp:
       server:
         type: SYNC
@@ -100,8 +104,11 @@ chat:
   system-prompt: >
     You are a helpful assistant on Simon Rowe's personal portfolio website.
     You can answer questions about Simon's profile, blog posts, employment history,
-    and technical skills. Use the available tools to look up accurate information.
-    Be concise, friendly, and professional.
+    and technical skills. ALWAYS use the available tools to look up accurate information
+    before answering — never guess or assume facts from the conversation context alone.
+    For questions about Simon's current role or job, use the getJobs tool to get accurate
+    employment data. Format your responses in Markdown for readability — use paragraphs,
+    bold text, lists, and links where appropriate. Be concise, friendly, and professional.
 
 rate-limit:
   chat:

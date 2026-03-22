@@ -27,6 +27,7 @@ function buildWsUrl(): string {
 const WS_URL = buildWsUrl()
 
 let stompClient: Client | null = null
+let activeSessionId: string | null = null
 
 export function connect(
   sessionId: string,
@@ -34,24 +35,27 @@ export function connect(
   onConnect?: () => void,
   onError?: (error: string) => void
 ): void {
-  if (stompClient?.connected) {
-    disconnect()
-  }
+  disconnect()
+  activeSessionId = sessionId
 
   stompClient = new Client({
     brokerURL: WS_URL,
     reconnectDelay: 5000,
     onConnect: () => {
+      if (activeSessionId !== sessionId) return
       stompClient?.subscribe(`/topic/chat.${sessionId}`, (message: IMessage) => {
+        if (activeSessionId !== sessionId) return
         const response: ChatResponse = JSON.parse(message.body) as ChatResponse
         onMessage(response)
       })
       onConnect?.()
     },
     onStompError: (frame) => {
+      if (activeSessionId !== sessionId) return
       onError?.(frame.headers['message'] || 'WebSocket connection error')
     },
     onWebSocketError: () => {
+      if (activeSessionId !== sessionId) return
       onError?.('Unable to connect to chat service')
     },
   })
@@ -69,7 +73,9 @@ export function sendMessage(request: ChatRequest): void {
 }
 
 export function disconnect(): void {
+  activeSessionId = null
   if (stompClient) {
+    stompClient.forceDisconnect()
     stompClient.deactivate()
     stompClient = null
   }
