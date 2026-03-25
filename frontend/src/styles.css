@@ -1638,7 +1638,7 @@ a:hover {
   overflow: hidden;
   margin-bottom: 1.5rem;
   box-shadow: var(--shadow-md);
-  max-height: 400px;
+  height: 400px;
 }
 
 .blog-detail__featured-image {
