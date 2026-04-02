@@ -5,9 +5,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.simonrowe.SharedMongoContainer;
+import com.simonrowe.media.MediaAsset;
+import com.simonrowe.media.MediaAssetRepository;
 import com.simonrowe.media.ImageVariantGenerator;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +47,9 @@ class BlogControllerTest {
   @Autowired
   private BlogRepository blogRepository;
 
+  @Autowired
+  private MediaAssetRepository mediaAssetRepository;
+
   @DynamicPropertySource
   static void configureProperties(final DynamicPropertyRegistry registry) {
     SharedMongoContainer.configureProperties(registry);
@@ -52,6 +58,7 @@ class BlogControllerTest {
   @BeforeEach
   void setup() {
     blogRepository.deleteAll();
+    mediaAssetRepository.deleteAll();
   }
 
   @Test
@@ -86,6 +93,34 @@ class BlogControllerTest {
         .andExpect(jsonPath("$.id").value("b-1"))
         .andExpect(jsonPath("$.title").value("My Blog Post"))
         .andExpect(jsonPath("$.content").value("Full content here."));
+  }
+
+  @Test
+  void listPublishedBlogsUsesSmallVariantWhenAvailable() throws Exception {
+    blogRepository.save(sampleBlog("b-1", "Published Post", true));
+    mediaAssetRepository.save(sampleMediaAsset(
+        "/images/blogs/sample.jpg",
+        "/uploads/asset-1/asset-1_small.jpg",
+        "/uploads/asset-1/asset-1_large.jpg"));
+
+    mockMvc.perform(get("/api/blogs"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].featuredImageUrl")
+            .value("/uploads/asset-1/asset-1_small.jpg"));
+  }
+
+  @Test
+  void getBlogByIdUsesLargeVariantWhenAvailable() throws Exception {
+    blogRepository.save(sampleBlog("b-1", "Published Post", true));
+    mediaAssetRepository.save(sampleMediaAsset(
+        "/images/blogs/sample.jpg",
+        "/uploads/asset-1/asset-1_small.jpg",
+        "/uploads/asset-1/asset-1_large.jpg"));
+
+    mockMvc.perform(get("/api/blogs/b-1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.featuredImageUrl")
+            .value("/uploads/asset-1/asset-1_large.jpg"));
   }
 
   @Test
@@ -135,6 +170,27 @@ class BlogControllerTest {
         Instant.parse("2024-06-01T10:00:00Z"),
         Instant.parse("2024-06-01T10:00:00Z"),
         null,
+        null
+    );
+  }
+
+  private static MediaAsset sampleMediaAsset(
+      final String originalPath,
+      final String smallPath,
+      final String largePath
+  ) {
+    return new MediaAsset(
+        "asset-1",
+        "sample.jpg",
+        "image/jpeg",
+        1024L,
+        originalPath,
+        Map.of(
+            "small", new MediaAsset.VariantInfo(smallPath, 300, 200, 512L),
+            "large", new MediaAsset.VariantInfo(largePath, 1200, 800, 2048L)
+        ),
+        Instant.parse("2024-06-01T10:00:00Z"),
+        Instant.parse("2024-06-01T10:00:00Z"),
         null
     );
   }

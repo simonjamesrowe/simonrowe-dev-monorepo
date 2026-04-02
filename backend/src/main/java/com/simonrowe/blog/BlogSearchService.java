@@ -2,6 +2,7 @@ package com.simonrowe.blog;
 
 import java.util.List;
 import java.util.regex.Pattern;
+import com.simonrowe.media.MediaVariantResolver;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.query.Query;
@@ -17,13 +18,16 @@ public class BlogSearchService {
 
   private final BlogSearchRepository blogSearchRepository;
   private final ElasticsearchOperations elasticsearchOperations;
+  private final MediaVariantResolver mediaVariantResolver;
 
   public BlogSearchService(
       final BlogSearchRepository blogSearchRepository,
-      final ElasticsearchOperations elasticsearchOperations
+      final ElasticsearchOperations elasticsearchOperations,
+      final MediaVariantResolver mediaVariantResolver
   ) {
     this.blogSearchRepository = blogSearchRepository;
     this.elasticsearchOperations = elasticsearchOperations;
+    this.mediaVariantResolver = mediaVariantResolver;
   }
 
   public List<BlogSearchResult> search(final String queryString) {
@@ -62,7 +66,8 @@ public class BlogSearchService {
         strippedContent,
         tagNames,
         skillNames,
-        blog.featuredImageUrl(),
+        mediaVariantResolver.resolvePath(
+            blog.featuredImageUrl(), "thumbnail", "small", "medium"),
         blog.createdDate()
     );
 

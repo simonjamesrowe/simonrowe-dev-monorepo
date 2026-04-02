@@ -20,12 +20,20 @@ public record JobDetailDto(
 ) {
 
   public static JobDetailDto fromEntity(Job job, List<SkillReferenceDto> resolvedSkills) {
+    return fromEntity(job, job.companyImage(), resolvedSkills);
+  }
+
+  public static JobDetailDto fromEntity(
+      final Job job,
+      final Image companyImage,
+      final List<SkillReferenceDto> resolvedSkills
+  ) {
     return new JobDetailDto(
         job.id(),
         job.title(),
         job.company(),
         job.companyUrl(),
-        job.companyImage(),
+        companyImage,
         job.startDate(),
         job.endDate(),
         job.location(),

@@ -2,12 +2,16 @@ package com.simonrowe.profile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 
 import com.simonrowe.common.Image;
+import com.simonrowe.media.MediaImageHydrator;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,8 +29,17 @@ class ProfileServiceTest {
   @Mock
   private SocialMediaLinkRepository socialMediaLinkRepository;
 
+  @Mock
+  private MediaImageHydrator mediaImageHydrator;
+
   @InjectMocks
   private ProfileService profileService;
+
+  @BeforeEach
+  void setUp() {
+    lenient().when(mediaImageHydrator.hydrate(any(), any(String[].class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+  }
 
   @Test
   void getProfileReturnsAssembledResponse() {

@@ -3,6 +3,7 @@ package com.simonrowe.skills;
 import com.simonrowe.common.ResourceNotFoundException;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
+import com.simonrowe.media.MediaImageHydrator;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -15,15 +16,18 @@ public class SkillGroupService {
   private final SkillGroupRepository skillGroupRepository;
   private final SkillRepository skillRepository;
   private final JobRepository jobRepository;
+  private final MediaImageHydrator mediaImageHydrator;
 
   public SkillGroupService(
-      SkillGroupRepository skillGroupRepository,
-      SkillRepository skillRepository,
-      JobRepository jobRepository
+      final SkillGroupRepository skillGroupRepository,
+      final SkillRepository skillRepository,
+      final JobRepository jobRepository,
+      final MediaImageHydrator mediaImageHydrator
   ) {
     this.skillGroupRepository = skillGroupRepository;
     this.skillRepository = skillRepository;
     this.jobRepository = jobRepository;
+    this.mediaImageHydrator = mediaImageHydrator;
   }
 
   public List<SkillGroupSummaryDto> getAllSkillGroups() {
@@ -43,7 +47,13 @@ public class SkillGroupService {
                   .filter(skillMap::containsKey)
                   .map(skillMap::get)
                   .toList();
-          return SkillGroupSummaryDto.fromEntity(group, resolvedSkills);
+          List<Skill> hydratedSkills = resolvedSkills.stream()
+              .map(this::hydrateSkillImage)
+              .toList();
+          return SkillGroupSummaryDto.fromEntity(
+              group,
+              mediaImageHydrator.hydrate(group.image(), "medium", "small", "thumbnail"),
+              hydratedSkills);
         })
         .toList();
   }
@@ -85,12 +95,32 @@ public class SkillGroupService {
               .sorted(Comparator.comparing(
                   Job::startDate,
                   Comparator.nullsLast(Comparator.reverseOrder())))
-              .map(JobReferenceDto::fromEntity)
+              .map(job -> JobReferenceDto.fromEntity(
+                  job,
+                  mediaImageHydrator.hydrate(
+                      job.companyImage(), "small", "thumbnail", "medium")))
               .toList();
-          return SkillDetailDto.fromEntity(skill, jobRefs);
+          return SkillDetailDto.fromEntity(
+              hydrateSkillImage(skill),
+              mediaImageHydrator.hydrate(skill.image(), "medium", "small", "thumbnail"),
+              jobRefs);
         })
         .toList();
 
-    return SkillGroupDetailDto.fromEntity(group, skillDetails);
+    return SkillGroupDetailDto.fromEntity(
+        group,
+        mediaImageHydrator.hydrate(group.image(), "medium", "small", "thumbnail"),
+        skillDetails);
+  }
+
+  private Skill hydrateSkillImage(final Skill skill) {
+    return new Skill(
+        skill.id(),
+        skill.name(),
+        skill.rating(),
+        skill.displayOrder(),
+        skill.description(),
+        mediaImageHydrator.hydrate(skill.image(), "medium", "small", "thumbnail")
+    );
   }
 }

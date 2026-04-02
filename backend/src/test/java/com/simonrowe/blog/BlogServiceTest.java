@@ -2,8 +2,10 @@ package com.simonrowe.blog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
+import com.simonrowe.media.MediaVariantResolver;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -21,11 +23,15 @@ class BlogServiceTest {
   @Mock
   private BlogRepository blogRepository;
 
+  @Mock
+  private MediaVariantResolver mediaVariantResolver;
+
   @InjectMocks
   private BlogService blogService;
 
   @Test
   void listPublishedReturnsMappedSummaries() {
+    stubResolverFallback();
     Blog blog = sampleBlog("b-1", "Spring Boot Tips", true);
     given(blogRepository.findByPublishedTrueOrderByCreatedDateDesc()).willReturn(List.of(blog));
 
@@ -40,6 +46,7 @@ class BlogServiceTest {
 
   @Test
   void getPublishedByIdReturnsDetailWhenFound() {
+    stubResolverFallback();
     Blog blog = sampleBlog("b-2", "Kubernetes Deep Dive", true);
     given(blogRepository.findByIdAndPublishedTrue("b-2")).willReturn(Optional.of(blog));
 
@@ -65,6 +72,7 @@ class BlogServiceTest {
 
   @Test
   void getLatestReturnsLimitedPublishedBlogs() {
+    stubResolverFallback();
     List<Blog> blogs = List.of(
         sampleBlog("b-1", "Post 1", true),
         sampleBlog("b-2", "Post 2", true),
@@ -82,6 +90,7 @@ class BlogServiceTest {
 
   @Test
   void listPublishedWithTagsMapsTagNames() {
+    stubResolverFallback();
     Tag tag = new Tag("t-1", "Kubernetes");
     Blog blog = new Blog("b-1", "Post", "Short", "Content", true, null,
         Instant.parse("2024-01-01T00:00:00Z"), Instant.parse("2024-01-01T00:00:00Z"),
@@ -107,5 +116,10 @@ class BlogServiceTest {
         List.of(),
         List.of()
     );
+  }
+
+  private void stubResolverFallback() {
+    given(mediaVariantResolver.resolvePath(any(), any(String[].class)))
+        .willAnswer(invocation -> invocation.getArgument(0));
   }
 }

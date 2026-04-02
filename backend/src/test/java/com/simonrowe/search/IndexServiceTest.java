@@ -19,6 +19,7 @@ import com.simonrowe.blog.Tag;
 import com.simonrowe.common.Image;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
+import com.simonrowe.media.MediaVariantResolver;
 import com.simonrowe.search.elasticsearch.BlogSearchDocument;
 import com.simonrowe.search.elasticsearch.SiteSearchDocument;
 import com.simonrowe.skills.Skill;
@@ -34,6 +35,7 @@ class IndexServiceTest {
 
   private ElasticsearchClient esClient;
   private IndexService indexService;
+  private MediaVariantResolver mediaVariantResolver;
 
   @BeforeEach
   void setUp() {
@@ -42,8 +44,12 @@ class IndexServiceTest {
     JobRepository jobRepository = mock(JobRepository.class);
     SkillGroupRepository skillGroupRepository = mock(SkillGroupRepository.class);
     SkillRepository skillRepository = mock(SkillRepository.class);
+    mediaVariantResolver = mock(MediaVariantResolver.class);
+    when(mediaVariantResolver.resolvePath(any(), any(String[].class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
     indexService = new IndexService(
-        esClient, blogRepository, jobRepository, skillGroupRepository, skillRepository);
+        esClient, blogRepository, jobRepository, skillGroupRepository, skillRepository,
+        mediaVariantResolver);
   }
 
   @Test

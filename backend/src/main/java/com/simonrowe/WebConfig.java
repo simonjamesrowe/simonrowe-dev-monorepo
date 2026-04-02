@@ -3,11 +3,13 @@ package com.simonrowe;
 import com.simonrowe.ratelimit.RateLimitConfig;
 import com.simonrowe.ratelimit.RateLimitInterceptor;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.CacheControl;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -49,7 +51,10 @@ public class WebConfig implements WebMvcConfigurer {
   public void addResourceHandlers(final ResourceHandlerRegistry registry) {
     String location = Path.of(uploadsPath).toAbsolutePath().toUri().toString();
     registry.addResourceHandler("/uploads/**")
-        .addResourceLocations(location);
+        .addResourceLocations(location)
+        .setCacheControl(CacheControl.maxAge(Duration.ofDays(365))
+            .cachePublic()
+            .immutable());
   }
 
   @Override

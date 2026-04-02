@@ -58,13 +58,13 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 
 ## Recent Changes
+- 012-docker-compose-deploy: Added Nginx config (reverse proxy), Docker Compose YAML, Bash (scripts), Dockerfile modifications + Docker, Docker Compose, nginx:alpine, pinggy/pinggy, GHCR images
 - 011-admin-data-ops: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, Spring Data MongoDB, Spring Data Elasticsearch, Google Drive API v3 (`google-api-services-drive`), Google Auth Library, React (latest stable), Lucide Reac
 - 009-profile-chat: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, Spring AI 1.1.2 (Google Gemini starter, MCP Server WebMVC, Chat Memory), Spring WebSocket (STOMP), Bucket4j, React 19, @stomp/stompjs
-- 010-blog-posts: Added JavaScript (MongoDB migration script), Java 21 (existing backend, no changes) + MongoDB (data insertion), Elasticsearch (auto-indexed via IndexService)
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
-- Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, Spring Data MongoDB, Spring Data Elasticsearch, Google Drive API v3 (`google-api-services-drive`), Google Auth Library, React (latest stable), Lucide Reac (011-admin-data-ops)
-- MongoDB (primary, database: `simonrowe`), Elasticsearch (search indices: `site_search`, `blog_search`), Google Drive (backup archives) (011-admin-data-ops)
+- Nginx config (reverse proxy), Docker Compose YAML, Bash (scripts), Dockerfile modifications + Docker, Docker Compose, nginx:alpine, pinggy/pinggy, GHCR images (012-docker-compose-deploy)
+- MongoDB 8, Kafka 7.8.0, Elasticsearch 8.17.0 (all via named Docker volumes) (012-docker-compose-deploy)

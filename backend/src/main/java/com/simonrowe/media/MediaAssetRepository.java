@@ -7,6 +7,8 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface MediaAssetRepository extends MongoRepository<MediaAsset, String> {
 
+  Optional<MediaAsset> findByOriginalPath(String originalPath);
+
   Page<MediaAsset> findByFileNameContainingIgnoreCase(
       String fileName, Pageable pageable);
 

@@ -9,6 +9,7 @@ import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.blog.Tag;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
+import com.simonrowe.media.MediaVariantResolver;
 import com.simonrowe.search.elasticsearch.BlogSearchDocument;
 import com.simonrowe.search.elasticsearch.ElasticsearchConfig;
 import com.simonrowe.search.elasticsearch.SiteSearchDocument;
@@ -36,19 +37,22 @@ public class IndexService {
   private final JobRepository jobRepository;
   private final SkillGroupRepository skillGroupRepository;
   private final SkillRepository skillRepository;
+  private final MediaVariantResolver mediaVariantResolver;
 
   public IndexService(
       final ElasticsearchClient client,
       final BlogRepository blogRepository,
       final JobRepository jobRepository,
       final SkillGroupRepository skillGroupRepository,
-      final SkillRepository skillRepository
+      final SkillRepository skillRepository,
+      final MediaVariantResolver mediaVariantResolver
   ) {
     this.client = client;
     this.blogRepository = blogRepository;
     this.jobRepository = jobRepository;
     this.skillGroupRepository = skillGroupRepository;
     this.skillRepository = skillRepository;
+    this.mediaVariantResolver = mediaVariantResolver;
   }
 
   public void indexSiteDocument(final SiteSearchDocument document) throws IOException {
@@ -114,7 +118,8 @@ public class IndexService {
   }
 
   public SiteSearchDocument blogToSiteDocument(final Blog blog) {
-    String imageUrl = blog.featuredImageUrl();
+    String imageUrl = mediaVariantResolver.resolvePath(
+        blog.featuredImageUrl(), "thumbnail", "small", "medium");
     return new SiteSearchDocument(
         blog.id(),
         blog.title(),
@@ -127,7 +132,10 @@ public class IndexService {
   }
 
   public SiteSearchDocument jobToSiteDocument(final Job job) {
-    String imageUrl = job.companyImage() != null ? job.companyImage().url() : null;
+    String imageUrl = job.companyImage() != null
+        ? mediaVariantResolver.resolvePath(
+            job.companyImage().url(), "thumbnail", "small", "medium")
+        : null;
     return new SiteSearchDocument(
         job.id(),
         job.title(),
@@ -140,7 +148,10 @@ public class IndexService {
   }
 
   public SiteSearchDocument skillToSiteDocument(final Skill skill, final String skillGroupId) {
-    String imageUrl = skill.image() != null ? skill.image().url() : null;
+    String imageUrl = skill.image() != null
+        ? mediaVariantResolver.resolvePath(
+            skill.image().url(), "thumbnail", "small", "medium")
+        : null;
     return new SiteSearchDocument(
         skillGroupId + "_" + skill.id(),
         skill.name(),
@@ -169,7 +180,8 @@ public class IndexService {
         blog.content(),
         tagNames,
         skillNames,
-        blog.featuredImageUrl(),
+        mediaVariantResolver.resolvePath(
+            blog.featuredImageUrl(), "thumbnail", "small", "medium"),
         blog.createdDate(),
         "/blogs/" + blog.id()
     );
