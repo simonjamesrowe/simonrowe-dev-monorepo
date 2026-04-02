@@ -15,6 +15,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import reactor.core.publisher.Flux;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,28 +38,41 @@ class ChatServiceTest {
   @InjectMocks
   private ChatService chatService;
 
+  private static ChatResponse chatResponseWithText(final String text) {
+    return ChatResponse.builder()
+        .generations(List.of(new Generation(new AssistantMessage(text))))
+        .build();
+  }
+
   @Test
   void processMessageCallsChatClientWithCorrectSessionIdAndReturnsFlux() {
     final String sessionId = "session-abc";
     final String message = "Hello, who are you?";
-    final Flux<String> expectedFlux = Flux.just("I", " am", " an", " AI", ".");
+    final Flux<ChatResponse> expectedFlux = Flux.just(
+        chatResponseWithText("I"),
+        chatResponseWithText(" am"),
+        chatResponseWithText(" an"),
+        chatResponseWithText(" AI"),
+        chatResponseWithText("."));
 
     given(chatClient.prompt()).willReturn(requestSpec);
     given(requestSpec.user(message)).willReturn(requestSpec);
     given(requestSpec.advisors(any(Consumer.class))).willReturn(requestSpec);
     given(requestSpec.stream()).willReturn(streamResponseSpec);
-    given(streamResponseSpec.content()).willReturn(expectedFlux);
+    given(streamResponseSpec.chatResponse()).willReturn(expectedFlux);
 
-    final Flux<String> result = chatService.processMessage(sessionId, message);
+    final Flux<ChatResponse> result = chatService.processMessage(sessionId, message);
 
-    final List<String> tokens = result.collectList().block();
-    assertThat(tokens).containsExactly("I", " am", " an", " AI", ".");
+    final List<ChatResponse> responses = result.collectList().block();
+    assertThat(responses).hasSize(5);
+    assertThat(responses.get(0).getResult().getOutput().getText()).isEqualTo("I");
+    assertThat(responses.get(4).getResult().getOutput().getText()).isEqualTo(".");
 
     verify(chatClient).prompt();
     verify(requestSpec).user(message);
     verify(requestSpec).advisors(any(Consumer.class));
     verify(requestSpec).stream();
-    verify(streamResponseSpec).content();
+    verify(streamResponseSpec).chatResponse();
   }
 
   @Test
@@ -68,7 +84,7 @@ class ChatServiceTest {
     given(requestSpec.user(message)).willReturn(requestSpec);
     given(requestSpec.advisors(any(Consumer.class))).willReturn(requestSpec);
     given(requestSpec.stream()).willReturn(streamResponseSpec);
-    given(streamResponseSpec.content()).willReturn(Flux.empty());
+    given(streamResponseSpec.chatResponse()).willReturn(Flux.empty());
 
     final Instant before = Instant.now();
     chatService.processMessage(sessionId, message);
@@ -89,7 +105,7 @@ class ChatServiceTest {
     given(requestSpec.user(message)).willReturn(requestSpec);
     given(requestSpec.advisors(any(Consumer.class))).willReturn(requestSpec);
     given(requestSpec.stream()).willReturn(streamResponseSpec);
-    given(streamResponseSpec.content()).willReturn(Flux.empty());
+    given(streamResponseSpec.chatResponse()).willReturn(Flux.empty());
 
     chatService.processMessage(sessionId, message);
     assertThat(chatService.getSessionActivity()).containsKey(sessionId);
