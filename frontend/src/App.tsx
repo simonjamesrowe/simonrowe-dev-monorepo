@@ -7,6 +7,7 @@ import { BlogEditor } from './pages/admin/BlogEditor'
 import { BlogsAdmin } from './pages/admin/BlogsAdmin'
 import { JobEditor } from './pages/admin/JobEditor'
 import { JobsAdmin } from './pages/admin/JobsAdmin'
+import { DataOperationsAdmin } from './pages/admin/DataOperationsAdmin'
 import { MediaAdmin } from './pages/admin/MediaAdmin'
 import { ProfileAdmin } from './pages/admin/ProfileAdmin'
 import { SkillGroupEditor } from './pages/admin/SkillGroupEditor'
@@ -48,6 +49,7 @@ function App() {
             <Route path="tour-steps" element={<TourStepsAdmin />} />
             <Route path="tour-steps/:id" element={<TourStepEditor />} />
             <Route path="media" element={<MediaAdmin />} />
+            <Route path="data-operations" element={<DataOperationsAdmin />} />
           </Route>
         </Routes>
       </TourProvider>

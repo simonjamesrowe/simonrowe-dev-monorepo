@@ -26,17 +26,22 @@ scripts/           # Bash scripts for backup, restore, migration
 ## Commands
 
 ```bash
-# Backend
-cd backend && ../gradlew test           # Run backend tests
-cd backend && ../gradlew bootRun        # Start backend (port 8080)
+# Start/stop applications (sources env vars from .env files)
+./scripts/start.sh                      # Start both backend and frontend together
+./scripts/stop.sh                       # Stop both backend and frontend
+./scripts/start-backend.sh              # Start backend only (port 8080)
+./scripts/start-frontend.sh             # Start frontend only (port 5173)
 
-# Frontend
+# Tests
+cd backend && ../gradlew test           # Run backend tests
 cd frontend && npm test                 # Run frontend tests (vitest)
-cd frontend && npm run dev              # Start frontend dev server (port 5173)
 
 # Backup & Restore
 ./scripts/backup.sh                     # Create backup to /Users/simonrowe/backups/
 ./scripts/restore.sh                    # Restore latest backup
+
+# Environment setup (run automatically by Conductor on workspace creation)
+# Copies ~/workspace/simonjamesrowe/env to backend/.env and frontend/.env
 ```
 
 ## Code Style
@@ -53,10 +58,13 @@ cd frontend && npm run dev              # Start frontend dev server (port 5173)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 
 ## Recent Changes
+- 011-admin-data-ops: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, Spring Data MongoDB, Spring Data Elasticsearch, Google Drive API v3 (`google-api-services-drive`), Google Auth Library, React (latest stable), Lucide Reac
 - 009-profile-chat: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, Spring AI 1.1.2 (Google Gemini starter, MCP Server WebMVC, Chat Memory), Spring WebSocket (STOMP), Bucket4j, React 19, @stomp/stompjs
 - 010-blog-posts: Added JavaScript (MongoDB migration script), Java 21 (existing backend, no changes) + MongoDB (data insertion), Elasticsearch (auto-indexed via IndexService)
-- 009-global-job: Added Java 21 (backend), TypeScript (frontend), JavaScript (migration script) + Spring Boot 3.5.x, Spring Data MongoDB, React (latest stable)
-- 007-content-management: Admin CMS with blog editor, media library drawer, icon-based list actions, @DBRef tag/skill resolution, simplified backup/restore scripts
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
+
+## Active Technologies
+- Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, Spring Data MongoDB, Spring Data Elasticsearch, Google Drive API v3 (`google-api-services-drive`), Google Auth Library, React (latest stable), Lucide Reac (011-admin-data-ops)
+- MongoDB (primary, database: `simonrowe`), Elasticsearch (search indices: `site_search`, `blog_search`), Google Drive (backup archives) (011-admin-data-ops)

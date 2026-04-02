@@ -6,6 +6,7 @@ import { API_BASE_URL } from '../../config/api'
 import type { Profile } from '../../types/Profile'
 import { SiteSearch } from '../search/SiteSearch'
 import { ChatPanel } from '../chat/ChatPanel'
+import { RecaptchaGate } from '../chat/RecaptchaGate'
 
 interface ProfileBannerProps {
   profile: Profile
@@ -15,6 +16,9 @@ interface ProfileBannerProps {
 export function ProfileBanner({ profile, onDownloadCv }: ProfileBannerProps) {
   const [chatOpen, setChatOpen] = useState(false)
   const [chatQuery, setChatQuery] = useState('')
+  const [recaptchaVerified, setRecaptchaVerified] = useState(false)
+  const [showRecaptcha, setShowRecaptcha] = useState(false)
+  const [pendingQuery, setPendingQuery] = useState('')
 
   const style = {
     '--desktop-bg': `url(${profile.backgroundImage.url})`,
@@ -22,8 +26,21 @@ export function ProfileBanner({ profile, onDownloadCv }: ProfileBannerProps) {
   } as CSSProperties
 
   const handleChatStart = (query: string) => {
-    setChatQuery(query)
+    if (recaptchaVerified) {
+      setChatQuery(query)
+      setChatOpen(true)
+    } else {
+      setPendingQuery(query)
+      setShowRecaptcha(true)
+    }
+  }
+
+  const handleRecaptchaVerified = () => {
+    setRecaptchaVerified(true)
+    setShowRecaptcha(false)
+    setChatQuery(pendingQuery)
     setChatOpen(true)
+    setPendingQuery('')
   }
 
   return (
@@ -46,6 +63,12 @@ export function ProfileBanner({ profile, onDownloadCv }: ProfileBannerProps) {
           Download CV
         </a>
       </div>
+      {showRecaptcha && (
+        <RecaptchaGate
+          onVerified={handleRecaptchaVerified}
+          onCancel={() => { setShowRecaptcha(false); setPendingQuery('') }}
+        />
+      )}
       {chatOpen && (
         <ChatPanel
           initialQuery={chatQuery}

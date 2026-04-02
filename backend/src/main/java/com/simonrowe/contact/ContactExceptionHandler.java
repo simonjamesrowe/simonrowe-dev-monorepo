@@ -8,7 +8,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = ContactController.class)
+@RestControllerAdvice(assignableTypes = {ContactController.class, RecaptchaController.class})
 public class ContactExceptionHandler {
 
   @ExceptionHandler(MethodArgumentNotValidException.class)

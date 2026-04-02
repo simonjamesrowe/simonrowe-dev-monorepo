@@ -1,0 +1,304 @@
+openapi: 3.1.0
+info:
+  title: Admin Data Operations API
+  version: 1.0.0
+  description: API endpoints for admin data management operations (backup, restore, clear, rebuild search index)
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+paths:
+  /api/admin/data-operations/status:
+    get:
+      operationId: getOperationStatus
+      summary: Get current operation status and Google Drive connection status
+      description: Returns the status of any currently running operation and whether Google Drive is connected.
+      tags: [Data Operations]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataOperationsStatus'
+        '401':
+          description: Unauthorized
+
+  /api/admin/data-operations/backup:
+    post:
+      operationId: startBackup
+      summary: Start a full backup to Google Drive
+      description: Initiates a backup of all MongoDB collections and uploaded media files to the "simonrowe-backups" folder in Google Drive. Returns immediately with operation ID; use SSE endpoint for progress.
+      tags: [Data Operations]
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Backup started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataOperation'
+        '409':
+          description: Another operation is already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Google Drive not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/data-operations/backups:
+    get:
+      operationId: listBackups
+      summary: List available backups from Google Drive
+      description: Returns a list of all backup archives in the "simonrowe-backups" Google Drive folder, sorted by creation date (newest first).
+      tags: [Data Operations]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of available backups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BackupMetadata'
+        '503':
+          description: Google Drive not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/data-operations/restore:
+    post:
+      operationId: startRestore
+      summary: Restore from a Google Drive backup
+      description: Initiates a restore from the specified backup. Automatically creates a local pre-restore backup first. Returns immediately with operation ID; use SSE endpoint for progress.
+      tags: [Data Operations]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreRequest'
+      responses:
+        '202':
+          description: Restore started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataOperation'
+        '400':
+          description: Invalid backup file ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Another operation is already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Google Drive not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/data-operations/clear:
+    post:
+      operationId: startClear
+      summary: Clear all local application data
+      description: Clears all MongoDB collections, uploaded media files, and search indices. Requires typed confirmation. Google Drive backups are NOT affected.
+      tags: [Data Operations]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClearRequest'
+      responses:
+        '202':
+          description: Clear operation started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataOperation'
+        '400':
+          description: Confirmation phrase does not match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Another operation is already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/data-operations/rebuild-index:
+    post:
+      operationId: startRebuildIndex
+      summary: Rebuild the search index
+      description: Deletes and recreates all search indices, then re-indexes all content from MongoDB. Returns immediately with operation ID; use SSE endpoint for progress.
+      tags: [Data Operations]
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Index rebuild started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataOperation'
+        '409':
+          description: Another operation is already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/data-operations/progress:
+    get:
+      operationId: streamProgress
+      summary: Stream operation progress via SSE
+      description: Server-Sent Events endpoint for real-time progress updates of the currently running operation. Events contain DataOperation JSON payloads.
+      tags: [Data Operations]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/DataOperation'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Auth0 JWT token
+
+  schemas:
+    DataOperationsStatus:
+      type: object
+      required: [googleDriveConnected, operationInProgress]
+      properties:
+        googleDriveConnected:
+          type: boolean
+          description: Whether Google Drive credentials are configured and valid
+        googleDriveError:
+          type: string
+          nullable: true
+          description: Error message if Google Drive is not connected
+        operationInProgress:
+          type: boolean
+          description: Whether a data operation is currently running
+        currentOperation:
+          $ref: '#/components/schemas/DataOperation'
+          nullable: true
+          description: Details of the currently running operation, if any
+        lastOperation:
+          $ref: '#/components/schemas/DataOperation'
+          nullable: true
+          description: Details of the last completed/failed operation
+
+    DataOperation:
+      type: object
+      required: [id, type, status, startedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [BACKUP, RESTORE, CLEAR, REBUILD_INDEX]
+        status:
+          type: string
+          enum: [IN_PROGRESS, COMPLETED, FAILED]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        progressMessage:
+          type: string
+          description: Human-readable current step
+        progressPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        errorMessage:
+          type: string
+          nullable: true
+        resultSummary:
+          type: string
+          nullable: true
+
+    BackupMetadata:
+      type: object
+      required: [fileId, fileName, createdAt, fileSize]
+      properties:
+        fileId:
+          type: string
+          description: Google Drive file ID
+        fileName:
+          type: string
+          description: Archive filename
+        createdAt:
+          type: string
+          format: date-time
+        fileSize:
+          type: integer
+          format: int64
+          description: Size in bytes
+        fileSizeFormatted:
+          type: string
+          description: Human-readable file size (e.g., "45.2 MB")
+
+    RestoreRequest:
+      type: object
+      required: [backupFileId]
+      properties:
+        backupFileId:
+          type: string
+          description: Google Drive file ID of the backup to restore
+
+    ClearRequest:
+      type: object
+      required: [confirmationPhrase]
+      properties:
+        confirmationPhrase:
+          type: string
+          description: Must be exactly "DELETE ALL DATA" to confirm
+
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string

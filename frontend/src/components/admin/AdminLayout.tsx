@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
   Briefcase,
   Code,
+  Database,
   Home,
   Image,
   LogOut,
@@ -23,6 +24,7 @@ const navItems = [
   { path: '/admin/tags', label: 'Tags', icon: <Tag size={18} /> },
   { path: '/admin/tour-steps', label: 'Tour Steps', icon: <Route size={18} /> },
   { path: '/admin/media', label: 'Media', icon: <Image size={18} /> },
+  { path: '/admin/data-operations', label: 'Data Operations', icon: <Database size={18} /> },
 ]
 
 export function AdminLayout() {
