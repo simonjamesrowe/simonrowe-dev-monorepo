@@ -130,7 +130,9 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl }: ChatPanelP
       content: text,
       timestamp: formatTimestamp(),
     }
+    streamFinalized.current = false
     setMessages((msgs) => [...msgs, userMessage])
+    setStreamingContent('')
     chatService.sendMessage({ sessionId: sessionIdRef.current, message: text })
   }
 

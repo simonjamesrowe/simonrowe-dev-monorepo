@@ -72,7 +72,7 @@ spring:
       base-url: https://api.groq.com/openai
       chat:
         options:
-          model: llama-3.3-70b-versatile
+          model: moonshotai/kimi-k2-instruct
     mcp:
       server:
         type: SYNC
