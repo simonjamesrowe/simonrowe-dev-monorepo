@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -172,5 +174,29 @@ class ChatControllerTest {
     assertThat(sent.get(4).type()).isEqualTo(ChatResponse.MessageType.STREAM_END);
     // Only post-tool content in the final response
     assertThat(sent.get(4).content()).isEqualTo("Here are the results");
+  }
+
+  @Test
+  void handleChatMessageRejectsWhenSessionExceedsMessageLimit() {
+    final String sessionId = "session-limited";
+    // Pre-fill counter to the limit
+    chatController.getSessionMessageCounts()
+        .put(sessionId, new AtomicInteger(10));
+
+    chatController.handleChatMessage(
+        new ChatRequest(sessionId, "One more message"));
+
+    // Should only send an error, not call the chat service
+    verify(chatService, never()).processMessage(any(), any());
+
+    final ArgumentCaptor<ChatResponse> captor =
+        ArgumentCaptor.forClass(ChatResponse.class);
+    verify(messagingTemplate).convertAndSend(
+        eq("/topic/chat." + sessionId), captor.capture());
+
+    assertThat(captor.getValue().type())
+        .isEqualTo(ChatResponse.MessageType.ERROR);
+    assertThat(captor.getValue().content())
+        .contains("Message limit reached");
   }
 }

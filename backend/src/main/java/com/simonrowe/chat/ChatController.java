@@ -1,5 +1,7 @@
 package com.simonrowe.chat;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -10,9 +12,12 @@ import org.springframework.stereotype.Controller;
 public class ChatController {
 
   private static final Logger LOG = LoggerFactory.getLogger(ChatController.class);
+  private static final int MAX_MESSAGES_PER_SESSION = 10;
 
   private final ChatService chatService;
   private final SimpMessagingTemplate messagingTemplate;
+  private final ConcurrentHashMap<String, AtomicInteger> sessionMessageCounts =
+      new ConcurrentHashMap<>();
 
   public ChatController(final ChatService chatService,
       final SimpMessagingTemplate messagingTemplate) {
@@ -25,21 +30,32 @@ public class ChatController {
     String sessionId = request.sessionId();
     String destination = "/topic/chat." + sessionId;
 
-    LOG.info("Received chat message for session: {}", sessionId);
+    int count = sessionMessageCounts
+        .computeIfAbsent(sessionId, key -> new AtomicInteger(0))
+        .incrementAndGet();
+
+    if (count > MAX_MESSAGES_PER_SESSION) {
+      LOG.warn("Session {} exceeded message limit ({}/{})",
+          sessionId, count, MAX_MESSAGES_PER_SESSION);
+      messagingTemplate.convertAndSend(destination,
+          ChatResponse.error(sessionId,
+              "Message limit reached for this session. Please start a new chat."));
+      return;
+    }
+
+    LOG.info("Received chat message for session: {} ({}/{})",
+        sessionId, count, MAX_MESSAGES_PER_SESSION);
     messagingTemplate.convertAndSend(destination,
         ChatResponse.streamStart(sessionId));
 
     StringBuilder fullResponse = new StringBuilder();
-    // Track whether a tool call has been detected so we can discard pre-tool content
     boolean[] toolCallSeen = {false};
 
     chatService.processMessage(sessionId, request.message())
         .doOnNext(aiResponse -> {
-          // Check if this chunk signals a tool call
           if (aiResponse.hasToolCalls()) {
             if (!toolCallSeen[0]) {
               toolCallSeen[0] = true;
-              // Discard any pre-tool "thinking" text and reset the frontend
               fullResponse.setLength(0);
               messagingTemplate.convertAndSend(destination,
                   ChatResponse.streamReset(sessionId));
@@ -48,7 +64,6 @@ public class ChatController {
             return;
           }
 
-          // Extract text content from the response
           var result = aiResponse.getResult();
           if (result == null || result.getOutput() == null) {
             return;
@@ -74,5 +89,9 @@ public class ChatController {
                   "Sorry, I'm having trouble responding right now. Please try again."));
         })
         .subscribe();
+  }
+
+  ConcurrentHashMap<String, AtomicInteger> getSessionMessageCounts() {
+    return sessionMessageCounts;
   }
 }

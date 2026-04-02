@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { useState } from 'react'
-import { Download } from 'lucide-react'
+import { Download, MessageCircle } from 'lucide-react'
 
 import { API_BASE_URL } from '../../config/api'
 import type { Profile } from '../../types/Profile'
@@ -19,6 +19,7 @@ export function ProfileBanner({ profile, onDownloadCv }: ProfileBannerProps) {
   const [recaptchaVerified, setRecaptchaVerified] = useState(false)
   const [showRecaptcha, setShowRecaptcha] = useState(false)
   const [pendingQuery, setPendingQuery] = useState('')
+  const [hasUsedChat, setHasUsedChat] = useState(false)
 
   const style = {
     '--desktop-bg': `url(${profile.backgroundImage.url})`,
@@ -29,6 +30,7 @@ export function ProfileBanner({ profile, onDownloadCv }: ProfileBannerProps) {
     if (recaptchaVerified) {
       setChatQuery(query)
       setChatOpen(true)
+      setHasUsedChat(true)
     } else {
       setPendingQuery(query)
       setShowRecaptcha(true)
@@ -40,7 +42,17 @@ export function ProfileBanner({ profile, onDownloadCv }: ProfileBannerProps) {
     setShowRecaptcha(false)
     setChatQuery(pendingQuery)
     setChatOpen(true)
+    setHasUsedChat(true)
     setPendingQuery('')
+  }
+
+  const handleFabClick = () => {
+    if (recaptchaVerified) {
+      setChatOpen(true)
+    } else {
+      setPendingQuery(`Tell me about ${profile.name}`)
+      setShowRecaptcha(true)
+    }
   }
 
   return (
@@ -75,6 +87,16 @@ export function ProfileBanner({ profile, onDownloadCv }: ProfileBannerProps) {
           onClose={() => setChatOpen(false)}
           profileImageUrl={profile.sidebarImage.url}
         />
+      )}
+      {!chatOpen && hasUsedChat && (
+        <button
+          className="chat-fab"
+          onClick={handleFabClick}
+          aria-label="Open chat"
+          title="Open chat"
+        >
+          <MessageCircle size={24} />
+        </button>
       )}
     </section>
   )
