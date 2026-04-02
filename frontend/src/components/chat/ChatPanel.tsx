@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { RotateCcw, X } from 'lucide-react'
 import * as chatService from '../../services/chatService'
 import type { ChatResponse } from '../../services/chatService'
@@ -12,6 +12,7 @@ interface ChatPanelProps {
   initialQuery: string
   onClose: () => void
   profileImageUrl?: string
+  visible?: boolean
 }
 
 interface Message {
@@ -24,92 +25,64 @@ function formatTimestamp(): string {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function ChatPanel({ initialQuery, onClose, profileImageUrl }: ChatPanelProps) {
+export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = true }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [connected, setConnected] = useState(false)
   const [streamingContent, setStreamingContent] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const sessionIdRef = useRef<string>(crypto.randomUUID())
   const streamFinalized = useRef(false)
+  const streamContentRef = useRef('')
+  const cancelledRef = useRef(false)
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length
   const limitReached = userMessageCount >= MAX_USER_MESSAGES
 
-  const connectAndSend = (sessionId: string, query: string) => {
-    let cancelled = false
-    let streamContent = ''
-
-    const onMessage = (response: ChatResponse) => {
-      if (cancelled) return
-      if (response.type === 'STREAM_START') {
-        streamContent = ''
-        streamFinalized.current = false
-        setStreamingContent('')
-      } else if (response.type === 'STREAM_CHUNK') {
-        streamContent += response.content
-        setStreamingContent(streamContent)
-      } else if (response.type === 'STREAM_RESET') {
-        streamContent = ''
-        setStreamingContent('')
-      } else if (response.type === 'STREAM_END') {
-        if (streamFinalized.current) return
-        streamFinalized.current = true
-        const finalContent = streamContent || response.content || ''
-        setStreamingContent(null)
-        setMessages((msgs) => [
-          ...msgs,
-          {
-            role: 'assistant',
-            content: finalContent,
-            timestamp: formatTimestamp(),
-          },
-        ])
-      } else if (response.type === 'ERROR') {
-        if (streamFinalized.current) return
-        streamFinalized.current = true
-        setStreamingContent(null)
-        setMessages((msgs) => [
-          ...msgs,
-          {
-            role: 'assistant',
-            content: response.content || 'An error occurred. Please try again.',
-            timestamp: formatTimestamp(),
-          },
-        ])
-      }
+  const onMessage = useCallback((response: ChatResponse) => {
+    if (cancelledRef.current) return
+    if (response.type === 'STREAM_START') {
+      streamContentRef.current = ''
+      streamFinalized.current = false
+      setStreamingContent('')
+    } else if (response.type === 'STREAM_CHUNK') {
+      streamContentRef.current += response.content
+      setStreamingContent(streamContentRef.current)
+    } else if (response.type === 'STREAM_RESET') {
+      streamContentRef.current = ''
+      setStreamingContent('')
+    } else if (response.type === 'STREAM_END') {
+      if (streamFinalized.current) return
+      streamFinalized.current = true
+      const finalContent = streamContentRef.current || response.content || ''
+      setStreamingContent(null)
+      setMessages((msgs) => [
+        ...msgs,
+        {
+          role: 'assistant',
+          content: finalContent,
+          timestamp: formatTimestamp(),
+        },
+      ])
+    } else if (response.type === 'ERROR') {
+      if (streamFinalized.current) return
+      streamFinalized.current = true
+      setStreamingContent(null)
+      setMessages((msgs) => [
+        ...msgs,
+        {
+          role: 'assistant',
+          content: response.content || 'An error occurred. Please try again.',
+          timestamp: formatTimestamp(),
+        },
+      ])
     }
-
-    let sendTimeout: ReturnType<typeof setTimeout>
-
-    chatService.connect(
-      sessionId,
-      onMessage,
-      () => {
-        if (cancelled) return
-        setConnected(true)
-        sendTimeout = setTimeout(() => {
-          if (!cancelled) {
-            chatService.sendMessage({ sessionId, message: query })
-          }
-        }, 50)
-      },
-      () => {
-        if (cancelled) return
-        setConnected(false)
-      }
-    )
-
-    return () => {
-      cancelled = true
-      clearTimeout(sendTimeout)
-      chatService.disconnect()
-    }
-  }
+  }, [])
 
   useEffect(() => {
     const sessionId = crypto.randomUUID()
     sessionIdRef.current = sessionId
     streamFinalized.current = false
+    cancelledRef.current = false
 
     setMessages([
       {
@@ -120,22 +93,48 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl }: ChatPanelP
     ])
     setStreamingContent(null)
 
-    return connectAndSend(sessionId, initialQuery)
-  }, [initialQuery])
+    let sendTimeout: ReturnType<typeof setTimeout>
+
+    chatService.connect(
+      sessionId,
+      onMessage,
+      () => {
+        if (cancelledRef.current) return
+        setConnected(true)
+        sendTimeout = setTimeout(() => {
+          if (!cancelledRef.current) {
+            chatService.sendMessage({ sessionId, message: initialQuery })
+          }
+        }, 50)
+      },
+      () => {
+        if (cancelledRef.current) return
+        setConnected(false)
+      }
+    )
+
+    return () => {
+      cancelledRef.current = true
+      clearTimeout(sendTimeout)
+      chatService.disconnect()
+    }
+  }, [initialQuery, onMessage])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamingContent])
+    if (visible) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, streamingContent, visible])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && visible) {
         onClose()
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [onClose, visible])
 
   const handleSend = (text: string) => {
     if (limitReached) return
@@ -156,19 +155,22 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl }: ChatPanelP
     setStreamingContent(null)
     setConnected(false)
     streamFinalized.current = false
+    cancelledRef.current = false
 
     const newSessionId = crypto.randomUUID()
     sessionIdRef.current = newSessionId
 
     chatService.connect(
       newSessionId,
-      () => {},
+      onMessage,
       () => setConnected(true),
       () => setConnected(false)
     )
   }
 
   const isStreaming = streamingContent !== null
+
+  if (!visible) return null
 
   return (
     <div className="chat-drawer-backdrop" onClick={onClose}>

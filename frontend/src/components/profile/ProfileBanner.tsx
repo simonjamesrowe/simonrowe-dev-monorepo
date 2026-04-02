@@ -81,11 +81,12 @@ export function ProfileBanner({ profile, onDownloadCv }: ProfileBannerProps) {
           onCancel={() => { setShowRecaptcha(false); setPendingQuery('') }}
         />
       )}
-      {chatOpen && (
+      {hasUsedChat && (
         <ChatPanel
           initialQuery={chatQuery}
           onClose={() => setChatOpen(false)}
           profileImageUrl={profile.sidebarImage.url}
+          visible={chatOpen}
         />
       )}
       {!chatOpen && hasUsedChat && (
