@@ -85,6 +85,9 @@ dependencies {
     implementation(libs.bucket4j.core)
     implementation(libs.spring.boot.starter.oauth2.resource.server)
     implementation(libs.thumbnailator)
+    implementation(libs.google.api.client)
+    implementation(libs.google.api.services.drive)
+    implementation(libs.google.auth.library.oauth2.http)
 
     developmentOnly(libs.spring.boot.devtools)
 

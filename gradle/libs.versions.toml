@@ -13,6 +13,9 @@ commonmark = "0.24.0"
 springAi = "1.1.2"
 bucket4j = "8.16.1"
 thumbnailator = "0.4.20"
+googleApiClient = "2.8.0"
+googleApiServicesDrive = "v3-rev20250511-2.0.0"
+googleAuthLibrary = "1.35.0"
 
 [libraries]
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
@@ -42,6 +45,9 @@ bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bu
 spring-boot-starter-oauth2-resource-server = { module = "org.springframework.boot:spring-boot-starter-oauth2-resource-server" }
 spring-security-test = { module = "org.springframework.security:spring-security-test" }
 thumbnailator = { module = "net.coobird:thumbnailator", version.ref = "thumbnailator" }
+google-api-client = { module = "com.google.api-client:google-api-client", version.ref = "googleApiClient" }
+google-api-services-drive = { module = "com.google.apis:google-api-services-drive", version.ref = "googleApiServicesDrive" }
+google-auth-library-oauth2-http = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "googleAuthLibrary" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

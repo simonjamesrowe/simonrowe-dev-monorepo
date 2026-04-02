@@ -1,0 +1,5 @@
+{
+  "setup": "cp ~/workspace/simonjamesrowe/env backend/.env && cp ~/workspace/simonjamesrowe/env frontend/.env && echo 'Environment files copied to backend/ and frontend/'",
+  "run": "./scripts/start.sh",
+  "archive": "./scripts/stop.sh"
+}
