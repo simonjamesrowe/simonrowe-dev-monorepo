@@ -30,12 +30,37 @@ public class ChatController {
         ChatResponse.streamStart(sessionId));
 
     StringBuilder fullResponse = new StringBuilder();
+    // Track whether a tool call has been detected so we can discard pre-tool content
+    boolean[] toolCallSeen = {false};
 
     chatService.processMessage(sessionId, request.message())
-        .doOnNext(chunk -> {
-          fullResponse.append(chunk);
+        .doOnNext(aiResponse -> {
+          // Check if this chunk signals a tool call
+          if (aiResponse.hasToolCalls()) {
+            if (!toolCallSeen[0]) {
+              toolCallSeen[0] = true;
+              // Discard any pre-tool "thinking" text and reset the frontend
+              fullResponse.setLength(0);
+              messagingTemplate.convertAndSend(destination,
+                  ChatResponse.streamReset(sessionId));
+              LOG.debug("Tool call detected for session: {}, resetting stream", sessionId);
+            }
+            return;
+          }
+
+          // Extract text content from the response
+          var result = aiResponse.getResult();
+          if (result == null || result.getOutput() == null) {
+            return;
+          }
+          String text = result.getOutput().getText();
+          if (text == null || text.isEmpty()) {
+            return;
+          }
+
+          fullResponse.append(text);
           messagingTemplate.convertAndSend(destination,
-              ChatResponse.streamChunk(sessionId, chunk));
+              ChatResponse.streamChunk(sessionId, text));
         })
         .doOnComplete(() -> {
           messagingTemplate.convertAndSend(destination,

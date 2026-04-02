@@ -10,7 +10,7 @@ export interface ChatRequest {
 export interface ChatResponse {
   sessionId: string
   content: string
-  type: 'STREAM_START' | 'STREAM_CHUNK' | 'STREAM_END' | 'ERROR'
+  type: 'STREAM_START' | 'STREAM_CHUNK' | 'STREAM_RESET' | 'STREAM_END' | 'ERROR'
   timestamp: string
 }
 

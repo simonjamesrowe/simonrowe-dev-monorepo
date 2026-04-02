@@ -26,7 +26,8 @@ public class ChatService {
   }
 
   @WithSpan
-  public Flux<String> processMessage(final String sessionId, final String message) {
+  public Flux<org.springframework.ai.chat.model.ChatResponse> processMessage(
+      final String sessionId, final String message) {
     sessionActivity.put(sessionId, Instant.now());
     LOG.info("Processing message for session: {}", sessionId);
 
@@ -34,7 +35,7 @@ public class ChatService {
         .user(message)
         .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
         .stream()
-        .content();
+        .chatResponse();
   }
 
   public ConcurrentHashMap<String, Instant> getSessionActivity() {

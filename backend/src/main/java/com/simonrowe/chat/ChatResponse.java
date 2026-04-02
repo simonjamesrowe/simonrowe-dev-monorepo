@@ -12,6 +12,7 @@ public record ChatResponse(
   public enum MessageType {
     STREAM_START,
     STREAM_CHUNK,
+    STREAM_RESET,
     STREAM_END,
     ERROR
   }
@@ -23,6 +24,11 @@ public record ChatResponse(
 
   public static ChatResponse streamChunk(String sessionId, String content) {
     return new ChatResponse(sessionId, content, MessageType.STREAM_CHUNK,
+        Instant.now().toString());
+  }
+
+  public static ChatResponse streamReset(String sessionId) {
+    return new ChatResponse(sessionId, "", MessageType.STREAM_RESET,
         Instant.now().toString());
   }
 

@@ -55,6 +55,9 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl }: ChatPanelP
       } else if (response.type === 'STREAM_CHUNK') {
         streamContent += response.content
         setStreamingContent(streamContent)
+      } else if (response.type === 'STREAM_RESET') {
+        streamContent = ''
+        setStreamingContent('')
       } else if (response.type === 'STREAM_END') {
         if (streamFinalized.current) return
         streamFinalized.current = true
