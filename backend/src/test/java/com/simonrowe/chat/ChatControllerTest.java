@@ -4,15 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import reactor.core.publisher.Flux;
 
@@ -28,11 +33,18 @@ class ChatControllerTest {
   @InjectMocks
   private ChatController chatController;
 
+  private static org.springframework.ai.chat.model.ChatResponse aiResponse(
+      final String text) {
+    return org.springframework.ai.chat.model.ChatResponse.builder()
+        .generations(List.of(new Generation(new AssistantMessage(text))))
+        .build();
+  }
+
   @Test
   void handleChatMessageSendsStreamStartBeforeContent() {
     final String sessionId = "session-1";
     given(chatService.processMessage(eq(sessionId), any()))
-        .willReturn(Flux.just("Hello"));
+        .willReturn(Flux.just(aiResponse("Hello")));
 
     chatController.handleChatMessage(
         new ChatRequest(sessionId, "Hi"));
@@ -50,7 +62,7 @@ class ChatControllerTest {
   void handleChatMessageSendsChunksAndStreamEnd() {
     final String sessionId = "session-2";
     given(chatService.processMessage(eq(sessionId), any()))
-        .willReturn(Flux.just("Hello", " World"));
+        .willReturn(Flux.just(aiResponse("Hello"), aiResponse(" World")));
 
     chatController.handleChatMessage(
         new ChatRequest(sessionId, "Greetings"));
@@ -116,11 +128,75 @@ class ChatControllerTest {
     final String sessionId = "session-5";
     final String message = "What skills does Simon have?";
     given(chatService.processMessage(sessionId, message))
-        .willReturn(Flux.just("Many skills"));
+        .willReturn(Flux.just(aiResponse("Many skills")));
 
     chatController.handleChatMessage(
         new ChatRequest(sessionId, message));
 
     verify(chatService).processMessage(sessionId, message);
+  }
+
+  @Test
+  void handleChatMessageDiscardsPreToolContentAndSendsReset() {
+    final String sessionId = "session-tool";
+    final AssistantMessage toolCallMessage = AssistantMessage.builder()
+        .content("Let me search for that")
+        .toolCalls(List.of(new AssistantMessage.ToolCall(
+            "call-1", "function", "searchBlogs", "{\"query\":\"website\"}")))
+        .build();
+    final org.springframework.ai.chat.model.ChatResponse toolCallResponse =
+        org.springframework.ai.chat.model.ChatResponse.builder()
+            .generations(List.of(new Generation(toolCallMessage)))
+            .build();
+
+    given(chatService.processMessage(eq(sessionId), any()))
+        .willReturn(Flux.just(
+            aiResponse("Let me search"),
+            toolCallResponse,
+            aiResponse("Here are the results")));
+
+    chatController.handleChatMessage(
+        new ChatRequest(sessionId, "Tell me about the blog"));
+
+    final ArgumentCaptor<ChatResponse> captor =
+        ArgumentCaptor.forClass(ChatResponse.class);
+    // 1 START + 1 CHUNK("Let me search") + 1 RESET + 1 CHUNK("Here are...") + 1 END
+    verify(messagingTemplate, times(5)).convertAndSend(
+        eq("/topic/chat." + sessionId), captor.capture());
+
+    final List<ChatResponse> sent = captor.getAllValues();
+    assertThat(sent.get(0).type()).isEqualTo(ChatResponse.MessageType.STREAM_START);
+    assertThat(sent.get(1).type()).isEqualTo(ChatResponse.MessageType.STREAM_CHUNK);
+    assertThat(sent.get(1).content()).isEqualTo("Let me search");
+    assertThat(sent.get(2).type()).isEqualTo(ChatResponse.MessageType.STREAM_RESET);
+    assertThat(sent.get(3).type()).isEqualTo(ChatResponse.MessageType.STREAM_CHUNK);
+    assertThat(sent.get(3).content()).isEqualTo("Here are the results");
+    assertThat(sent.get(4).type()).isEqualTo(ChatResponse.MessageType.STREAM_END);
+    // Only post-tool content in the final response
+    assertThat(sent.get(4).content()).isEqualTo("Here are the results");
+  }
+
+  @Test
+  void handleChatMessageRejectsWhenSessionExceedsMessageLimit() {
+    final String sessionId = "session-limited";
+    // Pre-fill counter to the limit
+    chatController.getSessionMessageCounts()
+        .put(sessionId, new AtomicInteger(10));
+
+    chatController.handleChatMessage(
+        new ChatRequest(sessionId, "One more message"));
+
+    // Should only send an error, not call the chat service
+    verify(chatService, never()).processMessage(any(), any());
+
+    final ArgumentCaptor<ChatResponse> captor =
+        ArgumentCaptor.forClass(ChatResponse.class);
+    verify(messagingTemplate).convertAndSend(
+        eq("/topic/chat." + sessionId), captor.capture());
+
+    assertThat(captor.getValue().type())
+        .isEqualTo(ChatResponse.MessageType.ERROR);
+    assertThat(captor.getValue().content())
+        .contains("Message limit reached");
   }
 }

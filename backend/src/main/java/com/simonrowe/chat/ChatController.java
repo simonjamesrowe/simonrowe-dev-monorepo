@@ -1,5 +1,7 @@
 package com.simonrowe.chat;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -10,9 +12,12 @@ import org.springframework.stereotype.Controller;
 public class ChatController {
 
   private static final Logger LOG = LoggerFactory.getLogger(ChatController.class);
+  private static final int MAX_MESSAGES_PER_SESSION = 10;
 
   private final ChatService chatService;
   private final SimpMessagingTemplate messagingTemplate;
+  private final ConcurrentHashMap<String, AtomicInteger> sessionMessageCounts =
+      new ConcurrentHashMap<>();
 
   public ChatController(final ChatService chatService,
       final SimpMessagingTemplate messagingTemplate) {
@@ -25,17 +30,52 @@ public class ChatController {
     String sessionId = request.sessionId();
     String destination = "/topic/chat." + sessionId;
 
-    LOG.info("Received chat message for session: {}", sessionId);
+    int count = sessionMessageCounts
+        .computeIfAbsent(sessionId, key -> new AtomicInteger(0))
+        .incrementAndGet();
+
+    if (count > MAX_MESSAGES_PER_SESSION) {
+      LOG.warn("Session {} exceeded message limit ({}/{})",
+          sessionId, count, MAX_MESSAGES_PER_SESSION);
+      messagingTemplate.convertAndSend(destination,
+          ChatResponse.error(sessionId,
+              "Message limit reached for this session. Please start a new chat."));
+      return;
+    }
+
+    LOG.info("Received chat message for session: {} ({}/{})",
+        sessionId, count, MAX_MESSAGES_PER_SESSION);
     messagingTemplate.convertAndSend(destination,
         ChatResponse.streamStart(sessionId));
 
     StringBuilder fullResponse = new StringBuilder();
+    boolean[] toolCallSeen = {false};
 
     chatService.processMessage(sessionId, request.message())
-        .doOnNext(chunk -> {
-          fullResponse.append(chunk);
+        .doOnNext(aiResponse -> {
+          if (aiResponse.hasToolCalls()) {
+            if (!toolCallSeen[0]) {
+              toolCallSeen[0] = true;
+              fullResponse.setLength(0);
+              messagingTemplate.convertAndSend(destination,
+                  ChatResponse.streamReset(sessionId));
+              LOG.debug("Tool call detected for session: {}, resetting stream", sessionId);
+            }
+            return;
+          }
+
+          var result = aiResponse.getResult();
+          if (result == null || result.getOutput() == null) {
+            return;
+          }
+          String text = result.getOutput().getText();
+          if (text == null || text.isEmpty()) {
+            return;
+          }
+
+          fullResponse.append(text);
           messagingTemplate.convertAndSend(destination,
-              ChatResponse.streamChunk(sessionId, chunk));
+              ChatResponse.streamChunk(sessionId, text));
         })
         .doOnComplete(() -> {
           messagingTemplate.convertAndSend(destination,
@@ -49,5 +89,9 @@ public class ChatController {
                   "Sorry, I'm having trouble responding right now. Please try again."));
         })
         .subscribe();
+  }
+
+  ConcurrentHashMap<String, AtomicInteger> getSessionMessageCounts() {
+    return sessionMessageCounts;
   }
 }

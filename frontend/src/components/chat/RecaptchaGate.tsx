@@ -1,5 +1,5 @@
 import ReCAPTCHA from 'react-google-recaptcha'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ShieldCheck, X } from 'lucide-react'
 import { API_BASE_URL } from '../../config/api'
 
@@ -17,6 +17,12 @@ export function RecaptchaGate({ onVerified, onCancel }: RecaptchaGateProps) {
   const [error, setError] = useState<string | null>(null)
   const [verifying, setVerifying] = useState(false)
   const siteKey = getRecaptchaSiteKey()
+
+  useEffect(() => {
+    if (!siteKey) {
+      onVerified()
+    }
+  }, [siteKey, onVerified])
 
   const handleRecaptchaChange = async (token: string | null) => {
     if (!token) return
@@ -46,7 +52,6 @@ export function RecaptchaGate({ onVerified, onCancel }: RecaptchaGateProps) {
   }
 
   if (!siteKey) {
-    onVerified()
     return null
   }
 
