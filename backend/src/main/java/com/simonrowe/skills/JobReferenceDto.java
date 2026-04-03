@@ -13,13 +13,17 @@ public record JobReferenceDto(
 ) {
 
   public static JobReferenceDto fromEntity(Job job) {
+    return fromEntity(job, job.companyImage());
+  }
+
+  public static JobReferenceDto fromEntity(final Job job, final Image companyImage) {
     return new JobReferenceDto(
         job.id(),
         job.title(),
         job.company(),
         job.startDate(),
         job.endDate(),
-        job.companyImage()
+        companyImage
     );
   }
 }

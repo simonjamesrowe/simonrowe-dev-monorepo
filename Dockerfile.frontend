@@ -11,6 +11,15 @@ COPY frontend/ .
 ARG VITE_RECAPTCHA_SITE_KEY
 ENV VITE_RECAPTCHA_SITE_KEY=${VITE_RECAPTCHA_SITE_KEY}
 
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+
+ARG VITE_GA_MEASUREMENT_ID
+ENV VITE_GA_MEASUREMENT_ID=${VITE_GA_MEASUREMENT_ID}
+
+# Remove .env so build args take precedence over local dev defaults
+RUN rm -f .env .env.local .env.development
+
 RUN npm run build
 
 FROM nginx:alpine

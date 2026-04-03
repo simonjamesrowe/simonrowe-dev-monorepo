@@ -1,6 +1,7 @@
 package com.simonrowe.employment;
 
 import com.simonrowe.common.ResourceNotFoundException;
+import com.simonrowe.media.MediaImageHydrator;
 import com.simonrowe.skills.Skill;
 import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
@@ -18,20 +19,25 @@ public class JobService {
   private final JobRepository jobRepository;
   private final SkillGroupRepository skillGroupRepository;
   private final SkillRepository skillRepository;
+  private final MediaImageHydrator mediaImageHydrator;
 
   public JobService(
-      JobRepository jobRepository,
-      SkillGroupRepository skillGroupRepository,
-      SkillRepository skillRepository
+      final JobRepository jobRepository,
+      final SkillGroupRepository skillGroupRepository,
+      final SkillRepository skillRepository,
+      final MediaImageHydrator mediaImageHydrator
   ) {
     this.jobRepository = jobRepository;
     this.skillGroupRepository = skillGroupRepository;
     this.skillRepository = skillRepository;
+    this.mediaImageHydrator = mediaImageHydrator;
   }
 
   public List<JobSummaryDto> getAllJobs() {
     return jobRepository.findAllByOrderByStartDateDesc().stream()
-        .map(JobSummaryDto::fromEntity)
+        .map(job -> JobSummaryDto.fromEntity(
+            job,
+            mediaImageHydrator.hydrate(job.companyImage(), "medium", "small", "thumbnail")))
         .toList();
   }
 
@@ -41,7 +47,10 @@ public class JobService {
             "Job not found with id: " + id));
 
     List<SkillReferenceDto> resolvedSkills = resolveSkills(job.skills());
-    return JobDetailDto.fromEntity(job, resolvedSkills);
+    return JobDetailDto.fromEntity(
+        job,
+        mediaImageHydrator.hydrate(job.companyImage(), "medium", "small", "thumbnail"),
+        resolvedSkills);
   }
 
   private List<SkillReferenceDto> resolveSkills(List<String> skillIdentifiers) {
@@ -64,7 +73,7 @@ public class JobService {
               skill.id(),
               skill.name(),
               skill.rating(),
-              skill.image(),
+              mediaImageHydrator.hydrate(skill.image(), "medium", "small", "thumbnail"),
               group.id()
           ));
         }

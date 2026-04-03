@@ -1,0 +1,91 @@
+// =============================================================================
+// Grafana Alloy Configuration
+// Receives OTLP traces from the backend and sends to Grafana Cloud Tempo.
+// Collects Docker container logs and sends to Grafana Cloud Loki.
+// =============================================================================
+
+// ---------------------
+// OTLP Trace Receiver
+// ---------------------
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+// ---------------------
+// Batch Processor
+// ---------------------
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlphttp.tempo.input]
+  }
+}
+
+// ---------------------
+// Grafana Cloud Auth
+// ---------------------
+otelcol.auth.basic "grafana_cloud" {
+  username = sys.env("GRAFANA_CLOUD_TEMPO_USER")
+  password = sys.env("GRAFANA_CLOUD_API_KEY")
+}
+
+// ---------------------
+// Tempo Trace Exporter
+// ---------------------
+otelcol.exporter.otlphttp "tempo" {
+  client {
+    endpoint = sys.env("GRAFANA_CLOUD_TEMPO_ENDPOINT")
+    auth     = otelcol.auth.basic.grafana_cloud.handler
+  }
+}
+
+// ---------------------
+// Docker Log Discovery
+// ---------------------
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "docker_logs" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_image"]
+    target_label  = "image"
+  }
+}
+
+// ---------------------
+// Docker Log Collection
+// ---------------------
+loki.source.docker "default" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  relabel_rules = discovery.relabel.docker_logs.rules
+  forward_to    = [loki.write.grafana_cloud.receiver]
+}
+
+// ---------------------
+// Loki Log Exporter
+// ---------------------
+loki.write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_LOKI_ENDPOINT")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_LOKI_USER")
+      password = sys.env("GRAFANA_CLOUD_API_KEY")
+    }
+  }
+}

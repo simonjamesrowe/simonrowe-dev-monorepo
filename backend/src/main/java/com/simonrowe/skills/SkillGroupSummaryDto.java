@@ -15,6 +15,14 @@ public record SkillGroupSummaryDto(
 ) {
 
   public static SkillGroupSummaryDto fromEntity(SkillGroup group, List<Skill> skills) {
+    return fromEntity(group, group.image(), skills);
+  }
+
+  public static SkillGroupSummaryDto fromEntity(
+      final SkillGroup group,
+      final Image image,
+      final List<Skill> skills
+  ) {
     List<SkillSummaryDto> mappedSkills = skills == null
         ? List.of()
         : skills.stream()
@@ -29,7 +37,7 @@ public record SkillGroupSummaryDto(
         group.rating(),
         group.displayOrder(),
         group.description(),
-        group.image(),
+        image,
         mappedSkills
     );
   }

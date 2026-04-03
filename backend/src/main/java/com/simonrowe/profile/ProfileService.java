@@ -2,6 +2,7 @@ package com.simonrowe.profile;
 
 import java.util.Comparator;
 import java.util.List;
+import com.simonrowe.media.MediaImageHydrator;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -11,13 +12,16 @@ public class ProfileService {
 
   private final ProfileRepository profileRepository;
   private final SocialMediaLinkRepository socialMediaLinkRepository;
+  private final MediaImageHydrator mediaImageHydrator;
 
   public ProfileService(
-      ProfileRepository profileRepository,
-      SocialMediaLinkRepository socialMediaLinkRepository
+      final ProfileRepository profileRepository,
+      final SocialMediaLinkRepository socialMediaLinkRepository,
+      final MediaImageHydrator mediaImageHydrator
   ) {
     this.profileRepository = profileRepository;
     this.socialMediaLinkRepository = socialMediaLinkRepository;
+    this.mediaImageHydrator = mediaImageHydrator;
   }
 
   public ProfileResponse getProfile() {
@@ -30,6 +34,13 @@ public class ProfileService {
             Comparator.nullsLast(String::compareToIgnoreCase)))
         .toList();
 
-    return ProfileResponse.fromEntities(profile, socialMediaLinks);
+    return ProfileResponse.fromEntities(
+        profile,
+        socialMediaLinks,
+        mediaImageHydrator.hydrate(profile.profileImage(), "medium", "large", "small"),
+        mediaImageHydrator.hydrate(profile.sidebarImage(), "small", "thumbnail", "medium"),
+        mediaImageHydrator.hydrate(profile.backgroundImage(), "large", "medium", "small"),
+        mediaImageHydrator.hydrate(profile.mobileBackgroundImage(), "large", "medium", "small")
+    );
   }
 }

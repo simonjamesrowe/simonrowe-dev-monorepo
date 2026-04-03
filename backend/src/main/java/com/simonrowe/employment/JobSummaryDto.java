@@ -17,12 +17,16 @@ public record JobSummaryDto(
 ) {
 
   public static JobSummaryDto fromEntity(Job job) {
+    return fromEntity(job, job.companyImage());
+  }
+
+  public static JobSummaryDto fromEntity(final Job job, final Image companyImage) {
     return new JobSummaryDto(
         job.id(),
         job.title(),
         job.company(),
         job.companyUrl(),
-        job.companyImage(),
+        companyImage,
         job.startDate(),
         job.endDate(),
         job.location(),

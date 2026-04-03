@@ -4,12 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 
 import com.simonrowe.common.ResourceNotFoundException;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
+import com.simonrowe.media.MediaImageHydrator;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -28,8 +31,17 @@ class SkillGroupServiceTest {
   @Mock
   private JobRepository jobRepository;
 
+  @Mock
+  private MediaImageHydrator mediaImageHydrator;
+
   @InjectMocks
   private SkillGroupService skillGroupService;
+
+  @BeforeEach
+  void setUp() {
+    lenient().when(mediaImageHydrator.hydrate(any(), any(String[].class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+  }
 
   @Test
   void getAllSkillGroupsReturnsSortedSummaries() {

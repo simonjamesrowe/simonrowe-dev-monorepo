@@ -14,6 +14,13 @@ public record BlogSummaryResponse(
 ) {
 
   public static BlogSummaryResponse fromEntity(final Blog blog) {
+    return fromEntity(blog, blog.featuredImageUrl());
+  }
+
+  public static BlogSummaryResponse fromEntity(
+      final Blog blog,
+      final String featuredImageUrl
+  ) {
     List<TagRef> tagRefs = blog.tags() == null
         ? List.of()
         : blog.tags().stream().map(TagRef::fromEntity).toList();
@@ -26,7 +33,7 @@ public record BlogSummaryResponse(
         blog.id(),
         blog.title(),
         blog.shortDescription(),
-        blog.featuredImageUrl(),
+        featuredImageUrl,
         blog.createdDate(),
         tagRefs,
         skillRefs

@@ -26,6 +26,24 @@ public record ProfileResponse(
       Profile profile,
       List<SocialMediaLink> socialMediaLinks
   ) {
+    return fromEntities(
+        profile,
+        socialMediaLinks,
+        profile.profileImage(),
+        profile.sidebarImage(),
+        profile.backgroundImage(),
+        profile.mobileBackgroundImage()
+    );
+  }
+
+  public static ProfileResponse fromEntities(
+      Profile profile,
+      List<SocialMediaLink> socialMediaLinks,
+      Image profileImage,
+      Image sidebarImage,
+      Image backgroundImage,
+      Image mobileBackgroundImage
+  ) {
     List<SocialMediaLinkResponse> mappedLinks =
         socialMediaLinks == null
             ? List.of()
@@ -40,10 +58,10 @@ public record ProfileResponse(
         profile.title(),
         profile.headline(),
         profile.description(),
-        profile.profileImage(),
-        profile.sidebarImage(),
-        profile.backgroundImage(),
-        profile.mobileBackgroundImage(),
+        profileImage,
+        sidebarImage,
+        backgroundImage,
+        mobileBackgroundImage,
         profile.location(),
         profile.phoneNumber(),
         profile.primaryEmail(),

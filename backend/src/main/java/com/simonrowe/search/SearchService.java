@@ -3,6 +3,7 @@ package com.simonrowe.search;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import com.simonrowe.media.MediaVariantResolver;
 import com.simonrowe.search.elasticsearch.BlogSearchDocument;
 import com.simonrowe.search.elasticsearch.ElasticsearchConfig;
 import com.simonrowe.search.elasticsearch.SiteSearchDocument;
@@ -26,17 +27,20 @@ public class SearchService {
   private final int maxResultsPerGroup;
   private final int maxBlogResults;
   private final int maxQueryLength;
+  private final MediaVariantResolver mediaVariantResolver;
 
   public SearchService(
       final ElasticsearchClient client,
       @Value("${search.site.max-results-per-group:5}") final int maxResultsPerGroup,
       @Value("${search.blog.max-results:20}") final int maxBlogResults,
-      @Value("${search.query.max-length:200}") final int maxQueryLength
+      @Value("${search.query.max-length:200}") final int maxQueryLength,
+      final MediaVariantResolver mediaVariantResolver
   ) {
     this.client = client;
     this.maxResultsPerGroup = maxResultsPerGroup;
     this.maxBlogResults = maxBlogResults;
     this.maxQueryLength = maxQueryLength;
+    this.mediaVariantResolver = mediaVariantResolver;
   }
 
   public GroupedSearchResponse siteSearch(final String query) {
@@ -98,7 +102,7 @@ public class SearchService {
           .map(doc -> new BlogSearchResult(
               doc.title(),
               doc.shortDescription(),
-              doc.image(),
+              mediaVariantResolver.resolvePath(doc.image(), "thumbnail", "small", "medium"),
               doc.publishedDate(),
               doc.url()))
           .toList();
@@ -111,7 +115,10 @@ public class SearchService {
   private List<SearchResult> toSearchResults(final List<SiteSearchDocument> documents) {
     return documents.stream()
         .limit(maxResultsPerGroup)
-        .map(doc -> new SearchResult(doc.name(), doc.image(), doc.url()))
+        .map(doc -> new SearchResult(
+            doc.name(),
+            mediaVariantResolver.resolvePath(doc.image(), "thumbnail", "small", "medium"),
+            doc.url()))
         .toList();
   }
 

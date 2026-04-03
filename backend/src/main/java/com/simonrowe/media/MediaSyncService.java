@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,13 +34,16 @@ public class MediaSyncService {
       EXTENSION_MIME_TYPES.keySet();
 
   private final MediaAssetRepository repository;
+  private final ImageVariantGenerator imageVariantGenerator;
   private final String uploadsPath;
 
   public MediaSyncService(
       final MediaAssetRepository repository,
+      final ImageVariantGenerator imageVariantGenerator,
       @Value("${uploads.path:backend/uploads/}") final String uploadsPath
   ) {
     this.repository = repository;
+    this.imageVariantGenerator = imageVariantGenerator;
     this.uploadsPath = uploadsPath;
   }
 
@@ -56,6 +60,7 @@ public class MediaSyncService {
         uploadsDir);
 
     int created = 0;
+    int updated = 0;
     int skipped = 0;
 
     try (Stream<Path> files = Files.list(uploadsDir)) {
@@ -72,29 +77,45 @@ public class MediaSyncService {
           continue;
         }
 
-        if (repository.findByLegacyId(fileName).isPresent()) {
-          continue;
-        }
-
         try {
           long fileSize = Files.size(file);
           String mimeType = EXTENSION_MIME_TYPES.get(extension);
           Instant fileTime = Files.getLastModifiedTime(file).toInstant();
+          MediaAsset existing = repository.findByLegacyId(fileName).orElse(null);
+          String assetId = existing != null && existing.id() != null
+              ? existing.id()
+              : UUID.randomUUID().toString();
+          Map<String, MediaAsset.VariantInfo> variants = existing != null
+              ? existing.variants()
+              : Map.of();
+
+          if (variants == null || variants.isEmpty()) {
+            Path variantDir = uploadsDir.resolve(assetId);
+            Files.createDirectories(variantDir);
+            Map<String, MediaAsset.VariantInfo> generated =
+                imageVariantGenerator.generateVariants(
+                file, assetId, variantDir.toString());
+            variants = generated != null ? generated : Map.of();
+          }
 
           MediaAsset asset = new MediaAsset(
-              null,
+              assetId,
               fileName,
               mimeType,
               fileSize,
               "/uploads/" + fileName,
-              Map.of(),
-              fileTime,
-              fileTime,
+              variants,
+              existing != null ? existing.createdAt() : fileTime,
+              existing != null ? Instant.now() : fileTime,
               fileName
           );
 
           repository.save(asset);
-          created++;
+          if (existing == null) {
+            created++;
+          } else {
+            updated++;
+          }
         } catch (IOException e) {
           LOG.warn("Failed to read file metadata for {}: {}",
               fileName, e.getMessage());
@@ -104,8 +125,8 @@ public class MediaSyncService {
       LOG.error("Failed to scan uploads directory: {}", e.getMessage());
     }
 
-    LOG.info("Media sync complete: {} assets created, {} non-image files skipped.",
-        created, skipped);
+    LOG.info("Media sync complete: {} assets created, {} updated, {} non-image files skipped.",
+        created, updated, skipped);
   }
 
   private String getExtension(final String fileName) {

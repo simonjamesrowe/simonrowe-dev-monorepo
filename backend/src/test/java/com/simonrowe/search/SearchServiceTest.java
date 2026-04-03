@@ -9,6 +9,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.elasticsearch.core.search.HitsMetadata;
+import com.simonrowe.media.MediaVariantResolver;
 import com.simonrowe.search.elasticsearch.BlogSearchDocument;
 import com.simonrowe.search.elasticsearch.SiteSearchDocument;
 import java.io.IOException;
@@ -22,11 +23,15 @@ class SearchServiceTest {
 
   private ElasticsearchClient esClient;
   private SearchService searchService;
+  private MediaVariantResolver mediaVariantResolver;
 
   @BeforeEach
   void setUp() {
     esClient = mock(ElasticsearchClient.class);
-    searchService = new SearchService(esClient, 5, 20, 200);
+    mediaVariantResolver = mock(MediaVariantResolver.class);
+    when(mediaVariantResolver.resolvePath(any(), any(String[].class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+    searchService = new SearchService(esClient, 5, 20, 200, mediaVariantResolver);
   }
 
   @Test
@@ -219,7 +224,8 @@ class SearchServiceTest {
   @SuppressWarnings("unchecked")
   @Test
   void siteSearchTruncatesLongQuery() throws Exception {
-    SearchService shortMaxService = new SearchService(esClient, 5, 20, 10);
+    SearchService shortMaxService = new SearchService(
+        esClient, 5, 20, 10, mediaVariantResolver);
 
     HitsMetadata<SiteSearchDocument> hits = mock(HitsMetadata.class);
     when(hits.hits()).thenReturn(List.of());
