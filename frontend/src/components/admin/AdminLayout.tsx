@@ -1,22 +1,17 @@
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
-  BarChart3,
   Bell,
   Briefcase,
   Code,
   Database,
   FileText,
-  Home,
   Image,
   LayoutDashboard,
   LogOut,
   Menu,
-  MessageSquare,
-  PenLine,
   Plus,
   Route,
-  Settings,
   Tag,
   User,
   X,
@@ -36,7 +31,7 @@ const navItems = [
 ]
 
 export function AdminLayout() {
-  const { isAuthenticated, isLoading, login, logout, user } = useAuth()
+  const { isAuthenticated, isLoading, login, logout } = useAuth()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
