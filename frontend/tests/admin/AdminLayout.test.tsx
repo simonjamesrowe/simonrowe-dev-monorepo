@@ -76,7 +76,7 @@ describe('AdminLayout', () => {
     expect(screen.getByRole('navigation')).toBeInTheDocument()
   })
 
-  it('shows user email when authenticated', () => {
+  it('shows System Admin header when authenticated', () => {
     mockUseAuth.mockReturnValue({
       isAuthenticated: true,
       isLoading: false,
@@ -92,7 +92,7 @@ describe('AdminLayout', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('admin@example.com')).toBeInTheDocument()
+    expect(screen.getByText('System Admin')).toBeInTheDocument()
   })
 
   it('renders all nav links when authenticated', () => {
@@ -112,12 +112,12 @@ describe('AdminLayout', () => {
     )
 
     const expectedLabels = [
-      'Blogs',
-      'Jobs',
-      'Skills',
+      'Dashboard',
+      'Content',
       'Profile',
+      'Skills',
+      'Jobs',
       'Tags',
-      'Tour Steps',
       'Media',
     ]
 

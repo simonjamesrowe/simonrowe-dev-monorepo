@@ -18,8 +18,8 @@ describe('SocialLinks', () => {
     expect(githubLink).toHaveAttribute('href', 'https://github.com/simonrowe')
     expect(githubLink).toHaveAttribute('target', '_blank')
 
-    expect(screen.getByTestId('github-icon')).toBeInTheDocument()
-    expect(screen.getByTestId('linkedin-icon')).toBeInTheDocument()
+    const linkedinLink = screen.getByRole('link', { name: /LinkedIn/i })
+    expect(linkedinLink).toHaveAttribute('href', 'https://linkedin.com/in/simon')
   })
 
   it('returns null for an empty list', () => {

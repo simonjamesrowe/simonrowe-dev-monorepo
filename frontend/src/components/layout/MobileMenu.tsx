@@ -1,51 +1,45 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
+import { Menu, X } from 'lucide-react'
 
-import type { NavigationItem } from './Sidebar'
+const navItems = [
+  { label: 'Home', to: '/' },
+  { label: 'Experience', to: '/experience' },
+  { label: 'Blog', to: '/blogs' },
+  { label: 'Admin', to: '/admin' },
+]
 
-interface MobileMenuProps {
-  aboutImageUrl: string
-  items: NavigationItem[]
-  onNavigate?: (section: string) => void
-}
-
-export function MobileMenu({ aboutImageUrl, items, onNavigate }: MobileMenuProps) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const navigate = useNavigate()
-
-  const toggleMenu = () => {
-    setIsMenuOpen((value) => !value)
-  }
-
-  const navigateTo = (item: NavigationItem) => {
-    if (item.route) {
-      void navigate(item.route)
-    } else {
-      document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth' })
-    }
-    onNavigate?.(item.id)
-    setIsMenuOpen(false)
-  }
+export function MobileMenu() {
+  const [isOpen, setIsOpen] = useState(false)
 
   return (
     <div className="mobile-menu">
-      <button aria-expanded={isMenuOpen} className="mobile-menu__trigger" onClick={toggleMenu} type="button">
-        Menu
+      <button
+        aria-expanded={isOpen}
+        aria-label={isOpen ? 'Close menu' : 'Open menu'}
+        className="mobile-menu__trigger"
+        onClick={() => setIsOpen(v => !v)}
+        type="button"
+      >
+        {isOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
-      <div className={`mobile-menu__panel ${isMenuOpen ? 'is-open' : ''}`}>
-        <nav aria-label="Mobile navigation">
-          <ul>
-            {items.map((item) => (
-              <li key={item.id}>
-                <button onClick={() => navigateTo(item)} type="button">
-                  {item.id === 'about' ? <img alt="About" src={aboutImageUrl} /> : null}
-                  <span>{item.label}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </div>
+      {isOpen && <div className="mobile-menu__backdrop" onClick={() => setIsOpen(false)} />}
+      <nav className={`mobile-menu__panel${isOpen ? ' is-open' : ''}`} aria-label="Mobile navigation">
+        <ul className="mobile-menu__list">
+          {navItems.map(item => (
+            <li key={item.to}>
+              <NavLink
+                to={item.to}
+                className={({ isActive }) => `mobile-menu__link${isActive ? ' mobile-menu__link--active' : ''}`}
+                onClick={() => setIsOpen(false)}
+                end={item.to === '/'}
+              >
+                {item.label}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      </nav>
     </div>
   )
 }

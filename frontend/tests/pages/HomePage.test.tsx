@@ -12,36 +12,28 @@ vi.mock('../../src/hooks/useProfile', () => ({
 }))
 
 vi.mock('../../src/services/analytics', () => ({
-  trackHomepageEvent: vi.fn(),
   trackPageView: vi.fn(),
 }))
 
-vi.mock('../../src/components/employment/ExperienceSection', () => ({
-  ExperienceSection: () => <div data-testid="experience-section">Experience</div>,
+vi.mock('../../src/components/home/AIChatModule', () => ({
+  AIChatModule: () => <div data-testid="ai-chat-module">Chat</div>,
 }))
 
-vi.mock('../../src/components/skills/SkillsSection', () => ({
-  SkillsSection: () => <div data-testid="skills-section">Skills</div>,
+vi.mock('../../src/components/home/StatsGrid', () => ({
+  StatsGrid: () => <div data-testid="stats-grid">Stats</div>,
 }))
 
-vi.mock('../../src/components/skills/SkillGroupDetail', () => ({
-  SkillGroupDetail: () => <div data-testid="skill-group-detail">Skill Group Detail</div>,
+vi.mock('../../src/components/home/CTASection', () => ({
+  CTASection: () => <div data-testid="cta-section">CTA</div>,
 }))
 
-vi.mock('../../src/components/employment/JobDetail', () => ({
-  JobDetail: () => <div data-testid="job-detail">Job Detail</div>,
-}))
-
-vi.mock('../../src/components/common/ResumeDownloadButton', () => ({
-  ResumeDownloadButton: () => <div data-testid="resume-download">Resume</div>,
-}))
-
-vi.mock('../../src/components/tour/TourButton', () => ({
-  TourButton: () => <div data-testid="tour-button">Tour</div>,
-}))
-
-vi.mock('../../src/components/tour/TourOverlay', () => ({
-  TourOverlay: () => null,
+vi.mock('../../src/components/home/HeroSection', () => ({
+  HeroSection: ({ name, children }: { name: string; children: React.ReactNode }) => (
+    <div data-testid="hero-section">
+      <h1>{name}</h1>
+      {children}
+    </div>
+  ),
 }))
 
 const profile: Profile = {
@@ -103,7 +95,7 @@ describe('HomePage', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('boom')
   })
 
-  it('renders profile sections when data is available', () => {
+  it('renders hero, stats, and CTA when profile loads', () => {
     mockUseProfile.mockReturnValue({
       profile,
       loading: false,
@@ -117,10 +109,10 @@ describe('HomePage', () => {
       </MemoryRouter>,
     )
 
+    expect(screen.getByTestId('hero-section')).toBeInTheDocument()
+    expect(screen.getByTestId('ai-chat-module')).toBeInTheDocument()
+    expect(screen.getByTestId('stats-grid')).toBeInTheDocument()
+    expect(screen.getByTestId('cta-section')).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Simon Rowe')
-    expect(screen.getByRole('heading', { level: 3, name: 'About' })).toBeInTheDocument()
-    expect(screen.getByTestId('experience-section')).toBeInTheDocument()
-    expect(screen.getByTestId('skills-section')).toBeInTheDocument()
-    expect(screen.getByTestId('resume-download')).toBeInTheDocument()
   })
 })

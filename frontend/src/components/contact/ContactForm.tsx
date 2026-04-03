@@ -129,7 +129,7 @@ export function ContactForm() {
         className="button button--primary"
         disabled={isSubmitting}
       >
-        {isSubmitting ? 'Sending...' : 'Send message'}
+        {isSubmitting ? 'Sending...' : 'Initiate Connection \u2192'}
       </button>
     </form>
   )

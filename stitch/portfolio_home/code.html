@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Simon Rowe | The Digital Architect</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;family=Space+Grotesk:wght@300;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "tertiary-fixed": "#dbe2f6",
+                        "background": "#0f131c",
+                        "on-primary-fixed": "#001e2c",
+                        "secondary-fixed": "#ffdbca",
+                        "secondary": "#ffb690",
+                        "on-surface-variant": "#bec8cf",
+                        "tertiary-container": "#8991a3",
+                        "surface-tint": "#77d1ff",
+                        "inverse-primary": "#006688",
+                        "surface-container-highest": "#31353f",
+                        "on-secondary-container": "#4a1c00",
+                        "surface-container-low": "#181c25",
+                        "on-primary-fixed-variant": "#004d68",
+                        "outline": "#889299",
+                        "on-error": "#690005",
+                        "error-container": "#93000a",
+                        "tertiary": "#bfc6da",
+                        "surface-container-lowest": "#0a0e17",
+                        "on-tertiary": "#293140",
+                        "on-tertiary-container": "#222a39",
+                        "tertiary-fixed-dim": "#bfc6da",
+                        "on-primary": "#003548",
+                        "surface": "#0f131c",
+                        "surface-bright": "#353943",
+                        "on-secondary": "#552100",
+                        "primary-fixed": "#c2e8ff",
+                        "secondary-fixed-dim": "#ffb690",
+                        "outline-variant": "#3e484e",
+                        "surface-variant": "#31353f",
+                        "error": "#ffb4ab",
+                        "surface-container": "#1c2029",
+                        "primary-container": "#299bca",
+                        "on-tertiary-fixed-variant": "#3f4757",
+                        "surface-dim": "#0f131c",
+                        "primary-fixed-dim": "#77d1ff",
+                        "on-background": "#dfe2ef",
+                        "inverse-on-surface": "#2c303a",
+                        "on-surface": "#dfe2ef",
+                        "on-secondary-fixed": "#341100",
+                        "on-error-container": "#ffdad6",
+                        "inverse-surface": "#dfe2ef",
+                        "surface-container-high": "#262a33",
+                        "secondary-container": "#ec6a06",
+                        "primary": "#77d1ff",
+                        "on-secondary-fixed-variant": "#783200",
+                        "on-primary-container": "#002e3f",
+                        "on-tertiary-fixed": "#141c2a"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #0f131c;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(15, 19, 28, 0.6);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 bg-[#0f131c]/60 backdrop-blur-xl flex justify-between items-center px-8 h-20 w-full max-w-none shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
+<div class="flex items-center gap-2">
+<span class="text-2xl font-bold tracking-tighter text-white font-headline">The Digital Architect</span>
+</div>
+<div class="hidden md:flex items-center gap-8 font-headline tracking-tight">
+<a class="text-[#bec8cf] hover:text-white transition-colors" href="#">Experience</a>
+<a class="text-[#bec8cf] hover:text-white transition-colors" href="#">Skills</a>
+<a class="text-[#bec8cf] hover:text-white transition-colors" href="#">Blog</a>
+<a class="text-[#bec8cf] hover:text-white transition-colors" href="#">Admin</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-[#77d1ff] hover:bg-[#353943]/50 transition-all duration-300 rounded-full scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</nav>
+<main class="relative pt-20">
+<!-- Hero Section -->
+<section class="relative min-h-[921px] flex flex-col items-center justify-center px-6 overflow-hidden">
+<!-- Background Decorative Elements -->
+<div class="absolute top-1/4 -left-24 w-96 h-96 bg-primary/10 rounded-full blur-[120px]"></div>
+<div class="absolute bottom-1/4 -right-24 w-96 h-96 bg-secondary/5 rounded-full blur-[120px]"></div>
+<div class="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+<!-- Hero Content -->
+<div class="lg:col-span-7 space-y-8">
+<div class="space-y-4">
+<span class="inline-block py-1 px-3 rounded-full bg-surface-container-high border border-outline-variant/15 text-primary text-sm font-medium tracking-wide">
+                            Engineering Leadership // AI-Native Systems
+                        </span>
+<h1 class="text-6xl md:text-8xl font-headline font-bold text-white tracking-tighter leading-tight">
+                            Simon <span class="text-primary">Rowe</span>
+</h1>
+<p class="text-xl md:text-2xl text-on-surface-variant font-light max-w-2xl leading-relaxed">
+                            Architecting high-performance engineering cultures and intelligence-first digital infrastructures for the next frontier.
+                        </p>
+</div>
+<div class="flex flex-wrap gap-4 pt-4">
+<button class="bg-gradient-to-br from-primary to-primary-container text-on-primary-container px-8 py-4 rounded-xl font-semibold flex items-center gap-2 hover:brightness-110 transition-all shadow-lg shadow-primary/10">
+                            Download CV
+                            <span class="material-symbols-outlined" data-icon="download">download</span>
+</button>
+<button class="border border-outline-variant/20 hover:bg-surface-container-high text-on-surface px-8 py-4 rounded-xl font-semibold transition-all">
+                            View Github
+                        </button>
+<div class="flex items-center gap-2 ml-2">
+<a class="p-3 rounded-full hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="link">link</span>
+</a>
+<a class="p-3 rounded-full hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+</a>
+</div>
+</div>
+</div>
+<!-- AI-Integrated Search/Chat Module -->
+<div class="lg:col-span-5">
+<div class="bg-surface-container-low rounded-3xl p-1 border border-outline-variant/10 shadow-2xl">
+<div class="bg-surface-container-lowest rounded-[1.4rem] overflow-hidden border border-outline-variant/5">
+<div class="p-6 border-b border-outline-variant/10 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+<span class="font-headline text-sm font-medium tracking-widest uppercase text-on-surface-variant">SimonAI Interface</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="bolt">bolt</span>
+</div>
+<div class="p-8 space-y-6">
+<div class="space-y-4">
+<div class="bg-surface-container-high p-4 rounded-2xl rounded-tl-none max-w-[85%]">
+<p class="text-sm text-on-surface leading-relaxed">Hello. I am Simon's digital architect assistant. How can I help you navigate his experience?</p>
+</div>
+<div class="flex flex-wrap gap-2">
+<button class="text-xs py-2 px-4 rounded-full bg-surface-container-high border border-outline-variant/10 hover:border-primary/40 text-on-surface-variant transition-all">"Tell me about his AI stack"</button>
+<button class="text-xs py-2 px-4 rounded-full bg-surface-container-high border border-outline-variant/10 hover:border-primary/40 text-on-surface-variant transition-all">"Leadership philosophy?"</button>
+</div>
+</div>
+<div class="relative pt-4">
+<input class="w-full bg-surface-container rounded-xl border-none py-4 pl-4 pr-12 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Ask about expertise, projects, or hire..." type="text"/>
+<button class="absolute right-2 top-[calc(1rem+4px)] p-2 bg-primary rounded-lg text-on-primary-container">
+<span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Stats Bento Grid Section -->
+<section class="py-24 px-6 max-w-7xl mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+<!-- Professional Summary Card -->
+<div class="md:col-span-2 bg-surface-container border border-outline-variant/10 rounded-3xl p-10 flex flex-col justify-between">
+<div class="space-y-6">
+<h3 class="text-3xl font-headline font-bold text-white">The Vision</h3>
+<p class="text-on-surface-variant leading-relaxed text-lg">
+                            Over 12 years of leading engineering teams across fintech, healthtech, and silicon-valley scale-ups. Specialized in transforming legacy monoliths into elastic, AI-driven micro-architectures while mentoring the next generation of staff engineers.
+                        </p>
+</div>
+<div class="pt-8 flex items-center gap-4">
+<img alt="Simon Rowe" class="w-16 h-16 rounded-full object-cover grayscale hover:grayscale-0 transition-all duration-500 border-2 border-primary/20" data-alt="Close-up professional portrait of a tech leader with glasses and a slight smile, studio lighting with dark atmospheric background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAO5Tz5PqWFPLq2HQbN-3nLCKVaja_Z0I49iKL5It4HOh1yZAu76_VlMtZsq3lysqOncdlLCLF3eZJeT3uA-hDv4nllmVMP3YyzQLgeYKpN-rfF-so9AXk-Eg9innUkFe4qp3dvTf60J-AECsvZgXO1DLcJemHMDe9IN6jszkx7uS40kLIwNj7A9HMagwHZ90wk27GUlc9fnvlFoRIz--PRy3WBvSYdgZK9OvquoEttNSNcq23SbzKqdcl03Z3Fs1YIbmagU4NisW-u"/>
+<div>
+<p class="text-white font-bold">Simon Rowe</p>
+<p class="text-on-surface-variant text-sm">VP of Engineering</p>
+</div>
+</div>
+</div>
+<!-- Stats Cards -->
+<div class="bg-surface-container-high border border-outline-variant/10 rounded-3xl p-8 flex flex-col items-center justify-center text-center group transition-all hover:bg-surface-bright">
+<span class="text-5xl font-headline font-bold text-primary mb-2">12+</span>
+<p class="text-on-surface-variant uppercase tracking-widest text-xs font-medium">Years Experience</p>
+</div>
+<div class="bg-surface-container-high border border-outline-variant/10 rounded-3xl p-8 flex flex-col items-center justify-center text-center group transition-all hover:bg-surface-bright">
+<span class="text-5xl font-headline font-bold text-secondary mb-2">45</span>
+<p class="text-on-surface-variant uppercase tracking-widest text-xs font-medium">Engineers Led</p>
+</div>
+<div class="md:col-span-2 grid grid-cols-2 gap-6">
+<div class="bg-surface-container border border-outline-variant/10 rounded-3xl p-6 flex flex-col justify-between aspect-square">
+<span class="material-symbols-outlined text-primary text-4xl" data-icon="terminal">terminal</span>
+<div>
+<p class="text-white font-bold text-xl">Core Stack</p>
+<p class="text-on-surface-variant text-sm">Go, Rust, Node, Python</p>
+</div>
+</div>
+<div class="bg-surface-container border border-outline-variant/10 rounded-3xl p-6 flex flex-col justify-between aspect-square">
+<span class="material-symbols-outlined text-secondary text-4xl" data-icon="cloud">cloud</span>
+<div>
+<p class="text-white font-bold text-xl">Cloud Native</p>
+<p class="text-on-surface-variant text-sm">AWS, K8s, Terraform</p>
+</div>
+</div>
+</div>
+<div class="md:col-span-2 bg-[#1c2029] border border-outline-variant/10 rounded-3xl overflow-hidden relative min-h-[300px]">
+<img alt="Tech environment" class="absolute inset-0 w-full h-full object-cover opacity-30 mix-blend-overlay" data-alt="Sleek modern server room with teal and blue neon light accents on hardware cabinets, futuristic technical aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAiWAaOeneajLy3z7Aw89nR-yTzlhrmbnI6z_t9fVRhREU2NJNG_Wve0MYKr7iTZAZXEvPOH4KBSLEUKYz7OS8ZHSGOBH8dwCjwZuBNwpxgJCAFcFFAdkjE9Hf6MIQyRjwA-4pwvJFIO3szOplnOLPK3KB73xHsJAKBuM_N5dJ9b5ghz8w7FiQIQYs6ywpO7fGCLP3i5L3_ezNBeYxw2QHF1BYJHbN4UpVj9STj5OOzX-6Ks_aJxIW0lz9aFzVGUbXGJpb76_Ot7mfy"/>
+<div class="relative h-full p-10 flex flex-col justify-end">
+<h4 class="text-2xl font-headline font-bold text-white mb-2">Architecting Scale</h4>
+<p class="text-on-surface-variant">Implementing zero-trust security and sub-second latency global delivery systems.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Newsletter / Contact Teaser -->
+<section class="py-24 px-6">
+<div class="max-w-4xl mx-auto text-center space-y-10">
+<h2 class="text-4xl md:text-5xl font-headline font-bold text-white">Let's build the <span class="text-primary italic">impossible</span> together.</h2>
+<div class="flex flex-col md:flex-row gap-4 justify-center items-center">
+<a class="w-full md:w-auto bg-white text-surface px-10 py-5 rounded-2xl font-bold text-lg hover:bg-primary transition-all" href="mailto:contact@simonrowe.dev">
+                        Schedule a Strategy Call
+                    </a>
+<a class="w-full md:w-auto border border-outline-variant/30 text-on-surface-variant px-10 py-5 rounded-2xl font-bold text-lg hover:text-white hover:border-white transition-all" href="#">
+                        Explore Work
+                    </a>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full py-12 mt-auto bg-[#0f131c] flex flex-col md:flex-row justify-between items-center px-12 border-t border-[#3e484e]/15">
+<div class="mb-6 md:mb-0">
+<span class="text-white font-space-grotesk font-bold">The Digital Architect</span>
+<p class="font-inter text-sm text-[#bec8cf] mt-2 opacity-80">© 2024 The Digital Architect. Precision Luminescence.</p>
+</div>
+<div class="flex gap-8">
+<a class="font-inter text-sm text-[#bec8cf] hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">GitHub</a>
+<a class="font-inter text-sm text-[#bec8cf] hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">LinkedIn</a>
+<a class="font-inter text-sm text-[#bec8cf] hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">Documentation</a>
+</div>
+</footer>
+</body></html>

@@ -1,29 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { BlogDetail } from '../components/blog/BlogDetail'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
-import { Sidebar, type NavigationItem } from '../components/layout/Sidebar'
-import { BlogDetail } from '../components/blog/BlogDetail'
-import { useProfile } from '../hooks/useProfile'
 import { fetchBlogById } from '../services/blogApi'
+import { trackPageView } from '../services/analytics'
 import type { BlogDetail as BlogDetailType } from '../types/blog'
-
-const navigationItems: NavigationItem[] = [
-  { id: 'profile', label: 'Profile', route: '/' },
-  { id: 'about', label: 'About' },
-  { id: 'experience', label: 'Experience' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'blog', label: 'Blog', route: '/blogs' },
-  { id: 'contact', label: 'Contact' },
-]
 
 export function BlogDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [blog, setBlog] = useState<BlogDetailType | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { profile } = useProfile()
 
   useEffect(() => {
     if (!id) {
@@ -34,10 +23,13 @@ export function BlogDetailPage() {
 
     let cancelled = false
 
+    trackPageView(`/blogs/${id}`)
+
     fetchBlogById(id)
       .then((data) => {
         if (!cancelled) {
           setBlog(data)
+          document.title = `${data.title} | The Digital Architect`
         }
       })
       .catch((err: Error) => {
@@ -65,18 +57,11 @@ export function BlogDetailPage() {
   }
 
   return (
-    <div className="blog-page-layout">
-      {profile && (
-        <Sidebar
-          aboutImageUrl={profile.sidebarImage.url}
-          items={navigationItems}
-          socialLinks={profile.socialMediaLinks}
-        />
-      )}
-      <main className="blog-page-layout__content">
-        <Link className="page__back-link" to="/blogs">&larr; Back to Blog</Link>
+    <div className="blog-detail-page">
+      <Link className="blog-detail-page__back-link" to="/blogs">&larr; Back to Blog</Link>
+      <div className="blog-detail__reading-rail">
         <BlogDetail blog={blog} />
-      </main>
+      </div>
     </div>
   )
 }

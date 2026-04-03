@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-fixed": "#dbe2f6",
+              "background": "#0f131c",
+              "on-primary-fixed": "#001e2c",
+              "secondary-fixed": "#ffdbca",
+              "secondary": "#ffb690",
+              "on-surface-variant": "#bec8cf",
+              "tertiary-container": "#8991a3",
+              "surface-tint": "#77d1ff",
+              "inverse-primary": "#006688",
+              "surface-container-highest": "#31353f",
+              "on-secondary-container": "#4a1c00",
+              "surface-container-low": "#181c25",
+              "on-primary-fixed-variant": "#004d68",
+              "outline": "#889299",
+              "on-error": "#690005",
+              "error-container": "#93000a",
+              "tertiary": "#bfc6da",
+              "surface-container-lowest": "#0a0e17",
+              "on-tertiary": "#293140",
+              "on-tertiary-container": "#222a39",
+              "tertiary-fixed-dim": "#bfc6da",
+              "on-primary": "#003548",
+              "surface": "#0f131c",
+              "surface-bright": "#353943",
+              "on-secondary": "#552100",
+              "primary-fixed": "#c2e8ff",
+              "secondary-fixed-dim": "#ffb690",
+              "outline-variant": "#3e484e",
+              "surface-variant": "#31353f",
+              "error": "#ffb4ab",
+              "surface-container": "#1c2029",
+              "primary-container": "#299bca",
+              "on-tertiary-fixed-variant": "#3f4757",
+              "surface-dim": "#0f131c",
+              "primary-fixed-dim": "#77d1ff",
+              "on-background": "#dfe2ef",
+              "inverse-on-surface": "#2c303a",
+              "on-surface": "#dfe2ef",
+              "on-secondary-fixed": "#341100",
+              "on-error-container": "#ffdad6",
+              "inverse-surface": "#dfe2ef",
+              "surface-container-high": "#262a33",
+              "secondary-container": "#ec6a06",
+              "primary": "#77d1ff",
+              "on-secondary-fixed-variant": "#783200",
+              "on-primary-container": "#002e3f",
+              "on-tertiary-fixed": "#141c2a"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-header {
+            background: rgba(15, 19, 28, 0.6);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface selection:bg-primary/30">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 glass-header flex justify-between items-center px-8 h-20 w-full max-w-none shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
+<div class="text-2xl font-bold tracking-tighter text-white font-headline">
+            The Digital Architect
+        </div>
+<div class="hidden md:flex items-center space-x-8">
+<a class="text-[#bec8cf] hover:text-white transition-colors font-headline tracking-tight" href="#">Experience</a>
+<a class="text-[#bec8cf] hover:text-white transition-colors font-headline tracking-tight" href="#">Skills</a>
+<a class="text-[#77d1ff] border-b-2 border-[#77d1ff] pb-1 font-headline tracking-tight" href="#">Blog</a>
+<a class="text-[#bec8cf] hover:text-white transition-colors font-headline tracking-tight" href="#">Admin</a>
+</div>
+<div class="flex items-center space-x-4">
+<span class="material-symbols-outlined text-[#77d1ff] cursor-pointer hover:bg-[#353943]/50 transition-all duration-300 p-2 rounded-full" data-icon="account_circle">account_circle</span>
+</div>
+</nav>
+<main class="pt-32 pb-24 px-6 md:px-12 lg:px-24 max-w-7xl mx-auto">
+<!-- Hero / Featured Section -->
+<header class="mb-20">
+<h1 class="text-6xl md:text-8xl font-headline font-bold text-white tracking-tighter mb-6 leading-none">
+                Technical <br/><span class="text-primary">Luminescence.</span>
+</h1>
+<p class="text-xl text-on-surface-variant max-w-2xl leading-relaxed">
+                Insights from the intersection of high-level engineering leadership and the frontier of AI-native development.
+            </p>
+</header>
+<!-- Search and Filter Bar -->
+<section class="mb-16 flex flex-col md:flex-row md:items-center justify-between gap-6">
+<div class="flex flex-wrap gap-3">
+<span class="px-4 py-2 rounded-full bg-primary-container text-on-primary-container text-sm font-medium">All Posts</span>
+<span class="px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/15 text-on-surface-variant text-sm font-medium hover:text-primary transition-colors cursor-pointer">Architecture</span>
+<span class="px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/15 text-on-surface-variant text-sm font-medium hover:text-primary transition-colors cursor-pointer">AI Native</span>
+<span class="px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/15 text-on-surface-variant text-sm font-medium hover:text-primary transition-colors cursor-pointer">Engineering Management</span>
+</div>
+<div class="relative w-full md:w-80 group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors" data-icon="search">search</span>
+<input class="w-full bg-surface-container-lowest border-none rounded-xl py-4 pl-12 pr-4 text-on-surface focus:ring-2 focus:ring-primary/40 placeholder:text-on-surface-variant/50 transition-all" placeholder="Search insights..." type="text"/>
+</div>
+</section>
+<!-- Featured Post Bento Card -->
+<article class="relative group mb-24 overflow-hidden rounded-xl bg-surface-container-low">
+<div class="grid grid-cols-1 lg:grid-cols-12 items-stretch">
+<div class="lg:col-span-7 h-80 lg:h-auto relative overflow-hidden">
+<img alt="Featured post visual" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="abstract digital connection network with luminous blue lines and nodes on a dark technical background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBm4FLEddb2fwJBmpCfHmfFLWA5NWyxi1Hk-xUePLln9ZF0o0FNFtXzHCoMkekvXPKrYcTdVppGPfUU05OtQdxobid2C_tP_rS3Zr3x3oXpXc6kpILpJlWkgs7MFM77-jrFWrvph3qtNaVun5_lJVXFZ655km50HVK2sIHRHH7UnnDg64ymXA0ScX0mC5_vPKKIszdDNPIChhx_gJHWceupl8b21A0e2Gyj5Y0pLFFNriTxr8Wd54ErTvf4Iao_Bus_0xevLWfKTG4D"/>
+<div class="absolute inset-0 bg-gradient-to-r from-surface-container-low via-transparent to-transparent hidden lg:block"></div>
+</div>
+<div class="lg:col-span-5 p-8 lg:p-12 flex flex-col justify-center">
+<div class="flex items-center gap-4 mb-6">
+<span class="text-secondary font-headline text-xs tracking-widest uppercase">Featured Article</span>
+<span class="w-12 h-px bg-outline-variant/30"></span>
+<span class="text-on-surface-variant text-xs">12 Min Read</span>
+</div>
+<h2 class="text-4xl font-headline font-bold text-white mb-6 leading-tight group-hover:text-primary transition-colors">
+                        Scaling AI Infrastructure for Multi-Tenant Architectures
+                    </h2>
+<p class="text-on-surface-variant mb-8 leading-relaxed">
+                        Deep dive into the complexities of isolation, performance optimization, and cost-efficient scaling strategies for production-grade AI systems.
+                    </p>
+<a class="flex items-center gap-2 text-primary font-medium group/link" href="#">
+                        Read Detailed Analysis
+                        <span class="material-symbols-outlined text-sm transition-transform group-hover/link:translate-x-1" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+</div>
+</article>
+<!-- Content Grid (Editorial Layout) -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+<!-- Post 1 -->
+<article class="flex flex-col group">
+<div class="aspect-video mb-8 overflow-hidden rounded-xl bg-surface-container-high relative">
+<img alt="The future of LLMs" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="close up of sophisticated computer circuit board with glowing blue light paths and high precision components" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLq2D2YQH4EKfTcp1ThzJX0eOBAJFpWcQZWa2otwe17zeA1SvWDpTrNS87SPxhhR7jYfZrwSh_TxyxyvDzbxQNkejBm9yCnxUJyYpVPb2IFsg5QrouZGeLOXIftNZrOUUfPvDaKbTKkWA_3lmLRwCIDYA3QJeNR8PnEFGFErCsLlkKmetnfHC23QjTtThjEgnUHzp19q9vF86qSe3SkHasxwQNIvy1nHFwzVREOkJ2Yn5iJHIMFcq7dL4MSrfyHZTs_JMpsoL5M0_r"/>
+</div>
+<div class="flex items-center gap-3 mb-4">
+<span class="text-xs font-medium text-primary">AI Native</span>
+<span class="text-xs text-on-surface-variant/40">•</span>
+<span class="text-xs text-on-surface-variant">Oct 24, 2024</span>
+</div>
+<h3 class="text-2xl font-headline font-semibold text-white mb-4 leading-snug group-hover:text-primary transition-colors">
+                    Beyond Prompt Engineering: The Rise of Agentic Frameworks
+                </h3>
+<p class="text-on-surface-variant line-clamp-3 mb-6 leading-relaxed">
+                    Exploring how the shift from sequential prompting to autonomous agent loops is redefining software development cycles.
+                </p>
+<div class="mt-auto">
+<a class="text-sm font-bold text-on-surface group-hover:text-primary transition-colors underline underline-offset-8 decoration-primary/20 group-hover:decoration-primary" href="#">View Post</a>
+</div>
+</article>
+<!-- Post 2 -->
+<article class="flex flex-col group">
+<div class="aspect-video mb-8 overflow-hidden rounded-xl bg-surface-container-high relative">
+<img alt="Distributed Systems" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="planet earth from space with glowing data connections and digital overlays in deep blue and turquoise" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7SwRu1t70XtzUCmnu1ARH854iWYIY6qFX22GfQbwN49hU-XbpR3doCu54Iibi9yjKwhFHkvDWpswW8daEI8NhtdL3BGE1eI6ofw7C-0WdKubbTyHit1VKrPbaFTPDtaEeUVpot1_BYE6yIiw4kFWP_5ukCZOb6rUD_7VgfGOM0wW6ObqHTcca1K3zBYjw5ANKoaB6E6iMoNn4iT6ke5uBPPlUyb-i3oHxIpTYoO_sY5p-aZXhp_eCNralrzS1CyAqwO8M_fGC9Ckm"/>
+</div>
+<div class="flex items-center gap-3 mb-4">
+<span class="text-xs font-medium text-primary">Architecture</span>
+<span class="text-xs text-on-surface-variant/40">•</span>
+<span class="text-xs text-on-surface-variant">Oct 18, 2024</span>
+</div>
+<h3 class="text-2xl font-headline font-semibold text-white mb-4 leading-snug group-hover:text-primary transition-colors">
+                    The Cost of Complexity in Event-Driven Systems
+                </h3>
+<p class="text-on-surface-variant line-clamp-3 mb-6 leading-relaxed">
+                    A pragmatic look at when to embrace microservices and when to maintain a refined modular monolith.
+                </p>
+<div class="mt-auto">
+<a class="text-sm font-bold text-on-surface group-hover:text-primary transition-colors underline underline-offset-8 decoration-primary/20 group-hover:decoration-primary" href="#">View Post</a>
+</div>
+</article>
+<!-- Post 3 -->
+<article class="flex flex-col group">
+<div class="aspect-video mb-8 overflow-hidden rounded-xl bg-surface-container-high relative">
+<img alt="Leadership in Tech" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="minimalist server room aisle with soft blue light and metallic surfaces reflecting high tech infrastructure" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCZNP6nd7XwYxD9yOdq-3WAHU_i3cQN9nI2-33Vj5I9ET_d5YePF9yM5MuEu6Yc_MfEKokTfmGweGDluTUlzZqa8OXMXVO6rFU085yw93KLB8eyW-iXv_D7kQkk8FFMXSeYqxid2113hmvqm9lNe5fz8HB2QuCdQB4EpPajy2fbBR69JTlejvm6qBaSdXvc67ldMGI0GstM8-Q1uhX0Z_EYpk8d34_KDQoCV6UDsEi-aQykD_HG_CN60dk6GX1faV6nyIP-rh5fA-pe"/>
+</div>
+<div class="flex items-center gap-3 mb-4">
+<span class="text-xs font-medium text-primary">Management</span>
+<span class="text-xs text-on-surface-variant/40">•</span>
+<span class="text-xs text-on-surface-variant">Oct 12, 2024</span>
+</div>
+<h3 class="text-2xl font-headline font-semibold text-white mb-4 leading-snug group-hover:text-primary transition-colors">
+                    Managing Engineers in the Age of Co-Pilots
+                </h3>
+<p class="text-on-surface-variant line-clamp-3 mb-6 leading-relaxed">
+                    How team metrics and performance reviews must evolve when individual velocity is amplified by AI assistance.
+                </p>
+<div class="mt-auto">
+<a class="text-sm font-bold text-on-surface group-hover:text-primary transition-colors underline underline-offset-8 decoration-primary/20 group-hover:decoration-primary" href="#">View Post</a>
+</div>
+</article>
+</div>
+<!-- Pagination / Load More -->
+<div class="mt-24 flex justify-center">
+<button class="px-10 py-4 rounded-xl border border-outline-variant/30 text-on-surface font-headline font-medium hover:bg-surface-container-high hover:border-primary/50 transition-all active:scale-95">
+                Load Archive
+            </button>
+</div>
+</main>
+<!-- Footer -->
+<footer class="w-full py-12 mt-auto bg-[#0f131c] flex flex-col md:flex-row justify-between items-center px-12 border-t border-[#3e484e]/15">
+<div class="mb-6 md:mb-0">
+<div class="text-white font-space-grotesk font-bold text-lg">The Digital Architect</div>
+<p class="font-inter text-sm text-[#bec8cf] mt-1">© 2024 The Digital Architect. Precision Luminescence.</p>
+</div>
+<div class="flex space-x-8">
+<a class="font-inter text-sm text-[#bec8cf] hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">GitHub</a>
+<a class="font-inter text-sm text-[#bec8cf] hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">LinkedIn</a>
+<a class="font-inter text-sm text-[#bec8cf] hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">Documentation</a>
+</div>
+</footer>
+</body></html>

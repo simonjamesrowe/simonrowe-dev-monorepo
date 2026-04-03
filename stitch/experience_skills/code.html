@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Simon Rowe | The Digital Architect</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-fixed": "#dbe2f6",
+              "background": "#0f131c",
+              "on-primary-fixed": "#001e2c",
+              "secondary-fixed": "#ffdbca",
+              "secondary": "#ffb690",
+              "on-surface-variant": "#bec8cf",
+              "tertiary-container": "#8991a3",
+              "surface-tint": "#77d1ff",
+              "inverse-primary": "#006688",
+              "surface-container-highest": "#31353f",
+              "on-secondary-container": "#4a1c00",
+              "surface-container-low": "#181c25",
+              "on-primary-fixed-variant": "#004d68",
+              "outline": "#889299",
+              "on-error": "#690005",
+              "error-container": "#93000a",
+              "tertiary": "#bfc6da",
+              "surface-container-lowest": "#0a0e17",
+              "on-tertiary": "#293140",
+              "on-tertiary-container": "#222a39",
+              "tertiary-fixed-dim": "#bfc6da",
+              "on-primary": "#003548",
+              "surface": "#0f131c",
+              "surface-bright": "#353943",
+              "on-secondary": "#552100",
+              "primary-fixed": "#c2e8ff",
+              "secondary-fixed-dim": "#ffb690",
+              "outline-variant": "#3e484e",
+              "surface-variant": "#31353f",
+              "error": "#ffb4ab",
+              "surface-container": "#1c2029",
+              "primary-container": "#299bca",
+              "on-tertiary-fixed-variant": "#3f4757",
+              "surface-dim": "#0f131c",
+              "primary-fixed-dim": "#77d1ff",
+              "on-background": "#dfe2ef",
+              "inverse-on-surface": "#2c303a",
+              "on-surface": "#dfe2ef",
+              "on-secondary-fixed": "#341100",
+              "on-error-container": "#ffdad6",
+              "inverse-surface": "#dfe2ef",
+              "surface-container-high": "#262a33",
+              "secondary-container": "#ec6a06",
+              "primary": "#77d1ff",
+              "on-secondary-fixed-variant": "#783200",
+              "on-primary-container": "#002e3f",
+              "on-tertiary-fixed": "#141c2a"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      body {
+        background-color: #0f131c;
+        color: #dfe2ef;
+      }
+      .glass-card {
+        background: rgba(28, 32, 41, 0.6);
+        backdrop-filter: blur(20px);
+      }
+      .glow-accent {
+        box-shadow: 0 0 20px rgba(119, 209, 255, 0.15);
+      }
+    </style>
+</head>
+<body class="font-body selection:bg-primary-container/30">
+<!-- TopAppBar -->
+<nav class="fixed top-0 w-full z-50 bg-[#0f131c]/60 backdrop-blur-xl flex justify-between items-center px-8 h-20 w-full max-w-none">
+<div class="flex items-center gap-2">
+<span class="text-2xl font-bold tracking-tighter text-white font-headline">The Digital Architect</span>
+</div>
+<div class="hidden md:flex items-center gap-8 font-headline tracking-tight">
+<a class="text-[#77d1ff] border-b-2 border-[#77d1ff] pb-1" href="#">Experience</a>
+<a class="text-[#bec8cf] hover:text-white transition-colors" href="#">Skills</a>
+<a class="text-[#bec8cf] hover:text-white transition-colors" href="#">Blog</a>
+<a class="text-[#bec8cf] hover:text-white transition-colors" href="#">Admin</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-[#bec8cf] p-2 hover:bg-[#353943]/50 transition-all duration-300 rounded-full scale-95 active:scale-90" data-icon="search">search</button>
+<button class="material-symbols-outlined text-[#bec8cf] p-2 hover:bg-[#353943]/50 transition-all duration-300 rounded-full scale-95 active:scale-90" data-icon="account_circle">account_circle</button>
+</div>
+</nav>
+<main class="pt-32 pb-24 px-6 md:px-12 lg:px-24 max-w-7xl mx-auto">
+<!-- Hero Header -->
+<header class="mb-24">
+<h1 class="font-headline text-5xl md:text-7xl font-bold text-white tracking-tighter mb-6 leading-tight">
+                Architecting <br/>
+<span class="bg-gradient-to-r from-primary to-primary-container bg-clip-text text-transparent">Digital Fortresses.</span>
+</h1>
+<p class="text-on-surface-variant text-xl max-w-2xl leading-relaxed">
+                Simon Rowe. Senior Cloud Architect &amp; Cyber Sentinel. Precision-driven engineering for the AI-native frontier.
+            </p>
+</header>
+<!-- Experience Section: Editorial Bento Grid -->
+<section class="mb-32">
+<div class="flex items-center gap-4 mb-12">
+<span class="h-px w-12 bg-primary/40"></span>
+<h2 class="font-headline text-2xl uppercase tracking-widest text-primary font-bold">Experience</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Current Role -->
+<div class="md:col-span-8 group relative overflow-hidden rounded-xl bg-surface-container-low p-8 border border-outline-variant/15 transition-all duration-500 hover:border-primary/30 glow-accent">
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-8">
+<div>
+<span class="text-secondary font-headline text-sm tracking-widest uppercase mb-2 block">2021 — Present</span>
+<h3 class="text-3xl font-headline font-bold text-white mb-1">Principal Systems Architect</h3>
+<p class="text-primary-fixed-dim text-lg">CyberDyne Quantum Systems</p>
+</div>
+<div class="mt-4 md:mt-0">
+<img alt="Logo" class="rounded-lg opacity-80" data-alt="minimalist tech company logo with geometric shapes in neon blue and dark grey" src="https://lh3.googleusercontent.com/aida-public/AB6AXuALb-W-GDnzg31mpjqq1xMEHjcTOqPhuRhe2ww8iyWgEEro9XQGvCJD1FCA8-XfTeF8_-gNXGw1YyDC8aSH__7RX2g2IWadmo8fsxnIE9HL7ye1SoAYVIuxq_G2oqnNuYs-kIBkqY3pAOejA_2Y0DqaUbL2B-KYU23VrBGlU26h0BTnmx8YWdZiAXDP_NwlKiZq5G7kF7uqlbuNYNRHKTpQd1OIp87nO9MI3H63HbVv94uzRHI57hQC2q_M88L8H1WECS8lLWN9LFTX"/>
+</div>
+</div>
+<ul class="space-y-4 text-on-surface-variant text-lg max-w-2xl mb-8">
+<li class="flex gap-4">
+<span class="material-symbols-outlined text-primary text-sm mt-1" data-icon="bolt">bolt</span>
+                            Architected a serverless microservices ecosystem handling 40M+ daily events using Go and AWS Lambda.
+                        </li>
+<li class="flex gap-4">
+<span class="material-symbols-outlined text-primary text-sm mt-1" data-icon="shield">shield</span>
+                            Implemented zero-trust security protocols across multi-region cloud infrastructures.
+                        </li>
+</ul>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/15 text-xs text-on-surface-variant">Go</span>
+<span class="px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/15 text-xs text-on-surface-variant">Kubernetes</span>
+<span class="px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/15 text-xs text-on-surface-variant">AWS</span>
+</div>
+</div>
+<!-- Secondary Role -->
+<div class="md:col-span-4 bg-surface-container-highest/40 p-8 rounded-xl border border-outline-variant/15 flex flex-col justify-between">
+<div>
+<span class="text-on-surface-variant font-headline text-xs tracking-widest uppercase mb-4 block">2018 — 2021</span>
+<h3 class="text-2xl font-headline font-bold text-white mb-1">Senior Cloud Engineer</h3>
+<p class="text-primary-fixed-dim mb-6">Nexus Flow Solutions</p>
+<p class="text-on-surface-variant text-sm leading-relaxed mb-6">
+                            Led the migration of legacy monolithic architectures to containerized environments, reducing operational overhead by 45%.
+                        </p>
+</div>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/15 text-xs text-on-surface-variant">Python</span>
+<span class="px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/15 text-xs text-on-surface-variant">Terraform</span>
+</div>
+</div>
+<!-- Image / Content Module -->
+<div class="md:col-span-4 h-80 rounded-xl relative overflow-hidden group">
+<img alt="Hardware" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="close-up of futuristic computer hardware with glowing blue circuit paths and metallic textures in a dark room" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6mlIpmyw1nvVTkWrumlp5fsa7w6_3GMP6tdpl2ML87uBTSfU4dUhjc2n2VgnEzRBkhnflCJ4wv70N68Nl0mdKvwfdDUym3cANxUdjTZ7B2TvyIyn_SFCn7o0NEeHR1qwPvippkkMIK3-K9BGYU_s1OMQcBzYYuEcdXHN9aRliYj5OU9unYuL2D5obdGT7UqoKiGAYpRl777d97iTpq1_YNDEOpcETZ3qodPyMlAd_oMbaPlpB1ZhWuDqYR6vY7s1mpx9slNXJLP7b"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background to-transparent opacity-60"></div>
+<div class="absolute bottom-6 left-6 right-6">
+<p class="font-headline font-bold text-white text-xl">Cloud Infrastructure Visualization</p>
+</div>
+</div>
+<!-- Third Role -->
+<div class="md:col-span-8 bg-surface-container-low p-8 rounded-xl border border-outline-variant/15">
+<div class="flex flex-col md:flex-row justify-between mb-6">
+<div>
+<span class="text-on-surface-variant font-headline text-xs tracking-widest uppercase mb-2 block">2015 — 2018</span>
+<h3 class="text-2xl font-headline font-bold text-white mb-1">Lead Developer</h3>
+<p class="text-primary-fixed-dim">Apex Logic Corp</p>
+</div>
+<div class="flex items-center gap-2 mt-4 md:mt-0">
+<span class="text-on-surface-variant text-xs">Legacy Node 04</span>
+<span class="w-2 h-2 rounded-full bg-error animate-pulse"></span>
+</div>
+</div>
+<p class="text-on-surface-variant text-lg mb-6 leading-relaxed">
+                        Pioneered automated CI/CD pipelines for high-traffic financial applications. Orchestrated full-stack development teams across 3 global timezones.
+                    </p>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/15 text-xs text-on-surface-variant">React</span>
+<span class="px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/15 text-xs text-on-surface-variant">Node.js</span>
+<span class="px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/15 text-xs text-on-surface-variant">PostgreSQL</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Technical Expertise Section -->
+<section class="mb-32">
+<div class="flex items-center gap-4 mb-12">
+<span class="h-px w-12 bg-primary/40"></span>
+<h2 class="font-headline text-2xl uppercase tracking-widest text-primary font-bold">Expertise</h2>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+<div>
+<h3 class="font-headline text-4xl font-bold text-white mb-8 leading-tight">The Arsenal of an Architect.</h3>
+<p class="text-on-surface-variant text-lg mb-12 leading-relaxed">
+                        A synthesis of backend engineering and infrastructure as code. Each tool is chosen for precision, scalability, and resilience.
+                    </p>
+<div class="space-y-12">
+<!-- Language Tier -->
+<div>
+<span class="text-xs uppercase tracking-tighter text-on-surface-variant font-bold mb-4 block">Core Languages</span>
+<div class="flex flex-wrap gap-4">
+<div class="flex items-center gap-3 bg-surface-container px-4 py-3 rounded-lg border border-outline-variant/10">
+<span class="material-symbols-outlined text-primary" data-icon="terminal">terminal</span>
+<span class="text-white font-medium">Go (Golang)</span>
+</div>
+<div class="flex items-center gap-3 bg-surface-container px-4 py-3 rounded-lg border border-outline-variant/10">
+<span class="material-symbols-outlined text-primary" data-icon="code">code</span>
+<span class="text-white font-medium">Python</span>
+</div>
+<div class="flex items-center gap-3 bg-surface-container px-4 py-3 rounded-lg border border-outline-variant/10">
+<span class="material-symbols-outlined text-primary" data-icon="data_object">data_object</span>
+<span class="text-white font-medium">TypeScript</span>
+</div>
+</div>
+</div>
+<!-- Infrastructure Tier -->
+<div>
+<span class="text-xs uppercase tracking-tighter text-on-surface-variant font-bold mb-4 block">Cloud &amp; Infrastructure</span>
+<div class="flex flex-wrap gap-4">
+<div class="flex items-center gap-3 bg-surface-container px-4 py-3 rounded-lg border border-outline-variant/10">
+<span class="material-symbols-outlined text-secondary" data-icon="cloud">cloud</span>
+<span class="text-white font-medium">AWS / GCP</span>
+</div>
+<div class="flex items-center gap-3 bg-surface-container px-4 py-3 rounded-lg border border-outline-variant/10">
+<span class="material-symbols-outlined text-secondary" data-icon="grid_view">grid_view</span>
+<span class="text-white font-medium">Kubernetes</span>
+</div>
+<div class="flex items-center gap-3 bg-surface-container px-4 py-3 rounded-lg border border-outline-variant/10">
+<span class="material-symbols-outlined text-secondary" data-icon="layers">layers</span>
+<span class="text-white font-medium">Terraform</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Visual Skill Cloud/Grid -->
+<div class="bg-surface-container-low rounded-2xl p-12 relative overflow-hidden border border-outline-variant/10">
+<div class="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 blur-[100px] rounded-full"></div>
+<div class="absolute -bottom-24 -left-24 w-64 h-64 bg-secondary/10 blur-[100px] rounded-full"></div>
+<div class="grid grid-cols-2 gap-4 relative z-10">
+<div class="p-6 bg-surface-container-high rounded-xl border border-outline-variant/15 flex flex-col gap-4">
+<span class="material-symbols-outlined text-3xl text-primary" data-icon="monitoring">monitoring</span>
+<h4 class="text-white font-bold font-headline">Observability</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">Prometheus, Grafana, ELK Stack for real-time telemetry.</p>
+</div>
+<div class="p-6 bg-surface-container-high rounded-xl border border-outline-variant/15 flex flex-col gap-4 translate-y-8">
+<span class="material-symbols-outlined text-3xl text-secondary" data-icon="security">security</span>
+<h4 class="text-white font-bold font-headline">DevSecOps</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">Automated vulnerability scanning and IAM hardening.</p>
+</div>
+<div class="p-6 bg-surface-container-high rounded-xl border border-outline-variant/15 flex flex-col gap-4">
+<span class="material-symbols-outlined text-3xl text-primary" data-icon="database">database</span>
+<h4 class="text-white font-bold font-headline">Persistence</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">PostgreSQL, Redis, DynamoDB optimized for scale.</p>
+</div>
+<div class="p-6 bg-surface-container-high rounded-xl border border-outline-variant/15 flex flex-col gap-4 translate-y-8">
+<span class="material-symbols-outlined text-3xl text-secondary" data-icon="hub">hub</span>
+<h4 class="text-white font-bold font-headline">Orchestration</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">Istio Service Mesh and gRPC communication.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full py-12 mt-auto bg-[#0f131c] flex flex-col md:flex-row justify-between items-center px-12 border-t border-[#3e484e]/15">
+<div class="flex flex-col mb-8 md:mb-0">
+<span class="text-white font-space-grotesk font-bold text-xl mb-2">The Digital Architect</span>
+<span class="font-inter text-sm text-[#bec8cf]">© 2024 The Digital Architect. Precision Luminescence.</span>
+</div>
+<div class="flex gap-8 items-center">
+<a class="font-inter text-sm text-[#bec8cf] hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">GitHub</a>
+<a class="font-inter text-sm text-[#bec8cf] hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">LinkedIn</a>
+<a class="font-inter text-sm text-[#bec8cf] hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">Documentation</a>
+</div>
+<div class="mt-8 md:mt-0 flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary shadow-[0_0_10px_#77d1ff]"></div>
+<span class="text-[#bec8cf] text-[10px] uppercase tracking-widest font-bold">System Status: Optimal</span>
+</div>
+</footer>
+</body></html>
