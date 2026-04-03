@@ -26,7 +26,7 @@ class MediaSyncServiceTest {
 
   @Test
   void syncUploadsDirectoryCreatesVariantsForLegacyRootImage() throws IOException {
-    Path legacyFile = createTestJpeg("legacy-image.jpg", 1600, 1200);
+    final Path legacyFile = createTestJpeg("legacy-image.jpg", 1600, 1200);
     MediaAssetRepository repository = mock(MediaAssetRepository.class);
     when(repository.findByLegacyId("legacy-image.jpg")).thenReturn(Optional.empty());
 
