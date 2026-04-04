@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -12,36 +12,42 @@ vi.mock('../../src/hooks/useProfile', () => ({
 }))
 
 vi.mock('../../src/services/analytics', () => ({
-  trackHomepageEvent: vi.fn(),
   trackPageView: vi.fn(),
 }))
 
-vi.mock('../../src/components/employment/ExperienceSection', () => ({
-  ExperienceSection: () => <div data-testid="experience-section">Experience</div>,
+vi.mock('../../src/components/home/AboutSection', () => ({
+  AboutSection: ({ onContact }: { onContact: () => void }) => (
+    <div data-testid="about-section"><button onClick={onContact}>Contact</button></div>
+  ),
 }))
 
-vi.mock('../../src/components/skills/SkillsSection', () => ({
-  SkillsSection: () => <div data-testid="skills-section">Skills</div>,
+vi.mock('../../src/components/home/CTASection', () => ({
+  CTASection: () => <div data-testid="cta-section">CTA</div>,
 }))
 
-vi.mock('../../src/components/skills/SkillGroupDetail', () => ({
-  SkillGroupDetail: () => <div data-testid="skill-group-detail">Skill Group Detail</div>,
+vi.mock('../../src/components/contact/ContactDrawer', () => ({
+  ContactDrawer: ({ open }: { open: boolean }) => (
+    open ? <div data-testid="contact-drawer">Drawer</div> : null
+  ),
 }))
 
-vi.mock('../../src/components/employment/JobDetail', () => ({
-  JobDetail: () => <div data-testid="job-detail">Job Detail</div>,
+vi.mock('../../src/components/chat/ChatPanel', () => ({
+  ChatPanel: () => <div data-testid="chat-panel">Chat</div>,
 }))
 
-vi.mock('../../src/components/common/ResumeDownloadButton', () => ({
-  ResumeDownloadButton: () => <div data-testid="resume-download">Resume</div>,
+vi.mock('../../src/components/chat/RecaptchaGate', () => ({
+  RecaptchaGate: ({ onVerified }: { onVerified: () => void }) => (
+    <div data-testid="recaptcha-gate"><button onClick={onVerified}>Verify</button></div>
+  ),
 }))
 
-vi.mock('../../src/components/tour/TourButton', () => ({
-  TourButton: () => <div data-testid="tour-button">Tour</div>,
-}))
-
-vi.mock('../../src/components/tour/TourOverlay', () => ({
-  TourOverlay: () => null,
+vi.mock('../../src/components/home/HeroSection', () => ({
+  HeroSection: ({ name, onChatOpen }: { name: string; onChatOpen: (q: string) => void }) => (
+    <div data-testid="hero-section">
+      <h1>{name}</h1>
+      <button onClick={() => onChatOpen('test query')}>Open Chat</button>
+    </div>
+  ),
 }))
 
 const profile: Profile = {
@@ -86,7 +92,7 @@ describe('HomePage', () => {
     expect(screen.getByText('Loading profile...')).toBeInTheDocument()
   })
 
-  it('renders error state', () => {
+  it('renders error state', async () => {
     mockUseProfile.mockReturnValue({
       profile: null,
       loading: false,
@@ -100,10 +106,12 @@ describe('HomePage', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole('alert')).toHaveTextContent('boom')
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('boom')
+    })
   })
 
-  it('renders profile sections when data is available', () => {
+  it('renders hero, about, and CTA when profile loads', async () => {
     mockUseProfile.mockReturnValue({
       profile,
       loading: false,
@@ -117,10 +125,11 @@ describe('HomePage', () => {
       </MemoryRouter>,
     )
 
+    await waitFor(() => {
+      expect(screen.getByTestId('hero-section')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('about-section')).toBeInTheDocument()
+    expect(screen.getByTestId('cta-section')).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Simon Rowe')
-    expect(screen.getByRole('heading', { level: 3, name: 'About' })).toBeInTheDocument()
-    expect(screen.getByTestId('experience-section')).toBeInTheDocument()
-    expect(screen.getByTestId('skills-section')).toBeInTheDocument()
-    expect(screen.getByTestId('resume-download')).toBeInTheDocument()
   })
 })

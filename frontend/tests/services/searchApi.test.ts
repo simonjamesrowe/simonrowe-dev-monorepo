@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { blogSearch, siteSearch } from '../../src/services/searchApi'
 
+vi.mock('../../src/config/api', () => ({
+  API_BASE_URL: '',
+}))
+
 describe('searchApi', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())

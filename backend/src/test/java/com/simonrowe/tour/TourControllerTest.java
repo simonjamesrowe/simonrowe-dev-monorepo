@@ -87,7 +87,7 @@ class TourControllerTest {
         "s-1", 1, ".homepage-banner", "Welcome",
         "/images/tour/welcome.png",
         "This is the **homepage banner**.",
-        "bottom"
+        "bottom", "/"
     ));
 
     mockMvc.perform(get("/api/tour/steps"))
@@ -113,6 +113,6 @@ class TourControllerTest {
   private static TourStep sampleStep(final String id, final int order,
       final String selector, final String title) {
     return new TourStep(id, order, selector, title, null,
-        "Description for " + title, "bottom");
+        "Description for " + title, "bottom", "/");
   }
 }

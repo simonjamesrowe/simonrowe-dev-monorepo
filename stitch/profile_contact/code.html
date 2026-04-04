@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "tertiary-fixed-dim": "#bfc6da",
+            "secondary-fixed-dim": "#ffb690",
+            "surface-container-low": "#181c25",
+            "on-surface": "#dfe2ef",
+            "on-tertiary": "#293140",
+            "surface-container": "#1c2029",
+            "surface-tint": "#77d1ff",
+            "on-background": "#dfe2ef",
+            "primary-fixed-dim": "#77d1ff",
+            "primary-fixed": "#c2e8ff",
+            "inverse-primary": "#006688",
+            "on-secondary-fixed": "#341100",
+            "background": "#0f131c",
+            "on-primary-fixed-variant": "#004d68",
+            "error-container": "#93000a",
+            "on-tertiary-fixed-variant": "#3f4757",
+            "on-tertiary-container": "#222a39",
+            "tertiary": "#bfc6da",
+            "outline": "#889299",
+            "on-secondary": "#552100",
+            "secondary": "#ffb690",
+            "on-secondary-container": "#4a1c00",
+            "primary-container": "#299bca",
+            "inverse-on-surface": "#2c303a",
+            "surface-dim": "#0f131c",
+            "surface-bright": "#353943",
+            "secondary-fixed": "#ffdbca",
+            "on-primary-fixed": "#001e2c",
+            "secondary-container": "#ec6a06",
+            "surface-container-highest": "#31353f",
+            "error": "#ffb4ab",
+            "primary": "#77d1ff",
+            "outline-variant": "#3e484e",
+            "on-secondary-fixed-variant": "#783200",
+            "on-error-container": "#ffdad6",
+            "surface-container-lowest": "#0a0e17",
+            "inverse-surface": "#dfe2ef",
+            "on-surface-variant": "#bec8cf",
+            "on-primary-container": "#002e3f",
+            "on-error": "#690005",
+            "surface-container-high": "#262a33",
+            "tertiary-fixed": "#dbe2f6",
+            "surface-variant": "#31353f",
+            "on-primary": "#003548",
+            "surface": "#0f131c",
+            "tertiary-container": "#8991a3",
+            "on-tertiary-fixed": "#141c2a"
+          },
+          fontFamily: {
+            "headline": ["Space Grotesk"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          },
+          borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .glass-nav {
+      background: rgba(15, 19, 28, 0.6);
+      backdrop-filter: blur(20px);
+    }
+    .glow-primary:hover {
+      box-shadow: 0 0 15px rgba(119, 209, 255, 0.2);
+    }
+    body {
+      background-color: #0f131c;
+      color: #dfe2ef;
+    }
+  </style>
+</head>
+<body class="font-body selection:bg-primary selection:text-on-primary">
+<!-- TopNavBar Navigation Shell -->
+<nav class="fixed top-0 w-full z-50 bg-[#0f131c]/60 backdrop-blur-xl flex justify-between items-center px-8 h-20 shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
+<div class="flex items-center gap-4">
+<span class="text-2xl font-bold tracking-tighter text-white font-headline">The Digital Architect</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-[#bec8cf] hover:text-white transition-colors font-headline tracking-tight" href="#">Experience</a>
+<a class="text-[#bec8cf] hover:text-white transition-colors font-headline tracking-tight" href="#">Skills</a>
+<a class="text-[#bec8cf] hover:text-white transition-colors font-headline tracking-tight" href="#">Blog</a>
+<a class="text-[#77d1ff] border-b-2 border-[#77d1ff] pb-1 font-headline tracking-tight" href="#">Admin</a>
+<div class="flex items-center gap-4 ml-4">
+<span class="material-symbols-outlined text-[#77d1ff] cursor-pointer" data-icon="account_circle">account_circle</span>
+</div>
+</div>
+<!-- Mobile Menu Toggle (Simplified) -->
+<div class="md:hidden">
+<span class="material-symbols-outlined text-on-surface" data-icon="menu">menu</span>
+</div>
+</nav>
+<main class="pt-32 pb-20 px-6 md:px-12 lg:px-24 max-w-7xl mx-auto">
+<!-- Profile Narrative Section -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start mb-32">
+<!-- Image Column -->
+<div class="lg:col-span-5 relative group">
+<div class="absolute -inset-4 bg-primary/10 rounded-xl blur-2xl group-hover:bg-primary/20 transition-all duration-700"></div>
+<div class="relative aspect-[4/5] overflow-hidden rounded-xl border border-outline-variant/15">
+<img alt="Lead Architect Profile" class="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700 ease-in-out" data-alt="Professional portrait of a middle-aged engineering leader with a sophisticated, confident expression against a dark, minimalist industrial background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNrXBfneXBCb8xJGGvgv6TiDdjbMqAGyfxaCOFNI2XCLnvIuP5MPnnQmY6NNodTLfrEOcYTgSPKmM3nuLh2cRH-Q6gm1ImGfTeXPW_qdKbBUR8LMLy0JmCww7dtwQgLwk00-H3eh8zJhkLdbGOc1EqbHb9vF1vTZhtlOL_FV-RGVGMzESMFuVqAADsM-SegVJmk8hnTWIL5T_CISPY4RiJel8fcHM_ZbB9w5HnlMvP4syU5NJT0iaDXGhkSrTaCfaqNOZbbr62ohJN"/>
+</div>
+<div class="mt-8 flex flex-wrap gap-3">
+<span class="px-4 py-1.5 rounded-full bg-surface-container-high border border-outline-variant/15 text-on-surface-variant text-sm font-medium tracking-wide">Principal Architect</span>
+<span class="px-4 py-1.5 rounded-full bg-surface-container-high border border-outline-variant/15 text-on-surface-variant text-sm font-medium tracking-wide">VPE</span>
+<span class="px-4 py-1.5 rounded-full bg-surface-container-high border border-outline-variant/15 text-secondary text-sm font-medium tracking-wide">AI Native Pioneer</span>
+</div>
+</div>
+<!-- Narrative Column -->
+<div class="lg:col-span-7 pt-4">
+<h1 class="font-headline text-5xl md:text-7xl font-bold tracking-tighter text-white mb-8 leading-[0.9]">
+          The Architect of <br/><span class="text-primary">Precision Systems</span>
+</h1>
+<div class="space-y-6 text-on-surface-variant leading-relaxed text-lg">
+<p>
+            With over 12 years at the helm of complex engineering organizations, I bridge the gap between abstract technical vision and hardened production reality. My journey began in the early days of distributed systems, evolving through the cloud-native revolution to today's frontier: AI-native infrastructure.
+          </p>
+<p>
+            As a leader, I believe in "Precision Luminescence"—the idea that high-performing systems and teams don't just work; they illuminate the path for others. I’ve led organizations from 10 to 150 engineers, focusing on the cultural and technical shifts required to scale without losing velocity.
+          </p>
+<div class="pt-8 grid grid-cols-2 gap-8 border-t border-outline-variant/15">
+<div>
+<p class="font-headline text-3xl font-bold text-white tracking-tighter">12+</p>
+<p class="text-sm uppercase tracking-widest text-primary/70 mt-1">Years Leadership</p>
+</div>
+<div>
+<p class="font-headline text-3xl font-bold text-white tracking-tighter">450M+</p>
+<p class="text-sm uppercase tracking-widest text-primary/70 mt-1">Scale Managed</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Connect & Contact Section -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-16 pt-20 border-t border-outline-variant/15">
+<!-- Contact Info & Socials -->
+<div class="lg:col-span-4">
+<h2 class="font-headline text-4xl font-bold text-white mb-6 tracking-tight">Connect</h2>
+<p class="text-on-surface-variant mb-12 max-w-sm">
+          Available for strategic advisory, keynote speaking, and selective technical leadership roles. 
+        </p>
+<div class="space-y-6">
+<a class="flex items-center gap-4 group p-4 rounded-xl hover:bg-surface-container-high transition-all duration-300" href="#">
+<div class="w-12 h-12 flex items-center justify-center rounded-lg bg-surface-container text-primary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+</div>
+<div>
+<p class="text-xs uppercase tracking-widest text-on-surface-variant/60 font-bold">LinkedIn</p>
+<p class="text-on-surface font-medium">linkedin.com/in/digitalarchitect</p>
+</div>
+</a>
+<a class="flex items-center gap-4 group p-4 rounded-xl hover:bg-surface-container-high transition-all duration-300" href="#">
+<div class="w-12 h-12 flex items-center justify-center rounded-lg bg-surface-container text-primary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</div>
+<div>
+<p class="text-xs uppercase tracking-widest text-on-surface-variant/60 font-bold">GitHub</p>
+<p class="text-on-surface font-medium">github.com/the-architect</p>
+</div>
+</a>
+<a class="flex items-center gap-4 group p-4 rounded-xl hover:bg-surface-container-high transition-all duration-300" href="#">
+<div class="w-12 h-12 flex items-center justify-center rounded-lg bg-surface-container text-primary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" data-icon="alternate_email">alternate_email</span>
+</div>
+<div>
+<p class="text-xs uppercase tracking-widest text-on-surface-variant/60 font-bold">X / Twitter</p>
+<p class="text-on-surface font-medium">@sentinel_architect</p>
+</div>
+</a>
+</div>
+</div>
+<!-- Contact Form -->
+<div class="lg:col-span-8">
+<div class="bg-surface-container rounded-2xl p-8 md:p-12 border border-outline-variant/10 shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
+<form class="space-y-8">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="space-y-2">
+<label class="block text-sm font-medium text-on-surface-variant/80 ml-1">Name</label>
+<input class="w-full bg-surface-container-lowest border-0 rounded-lg p-4 text-on-surface placeholder:text-on-surface-variant/30 focus:ring-2 focus:ring-primary/40 transition-all" placeholder="John Doe" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-medium text-on-surface-variant/80 ml-1">Email</label>
+<input class="w-full bg-surface-container-lowest border-0 rounded-lg p-4 text-on-surface placeholder:text-on-surface-variant/30 focus:ring-2 focus:ring-primary/40 transition-all" placeholder="john@architecture.io" type="email"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-medium text-on-surface-variant/80 ml-1">Subject</label>
+<input class="w-full bg-surface-container-lowest border-0 rounded-lg p-4 text-on-surface placeholder:text-on-surface-variant/30 focus:ring-2 focus:ring-primary/40 transition-all" placeholder="Strategic Partnership Inquiry" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-medium text-on-surface-variant/80 ml-1">Message</label>
+<textarea class="w-full bg-surface-container-lowest border-0 rounded-lg p-4 text-on-surface placeholder:text-on-surface-variant/30 focus:ring-2 focus:ring-primary/40 transition-all resize-none" placeholder="Describe your vision or project requirements..." rows="6"></textarea>
+</div>
+<div class="flex justify-end pt-4">
+<button class="group relative px-8 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary-container font-headline font-bold rounded-lg overflow-hidden transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] glow-primary" type="submit">
+<span class="relative z-10 flex items-center gap-2">
+                  Initiate Connection
+                  <span class="material-symbols-outlined text-lg" data-icon="send">send</span>
+</span>
+<div class="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</button>
+</div>
+</form>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer Shell -->
+<footer class="w-full py-12 mt-auto bg-[#0f131c] flex flex-col md:flex-row justify-between items-center px-12 border-t border-[#3e484e]/15">
+<div class="mb-6 md:mb-0">
+<span class="text-white font-space-grotesk tracking-tighter font-bold">The Digital Architect</span>
+<p class="text-xs text-[#bec8cf] mt-1 font-inter">© 2024 The Digital Architect. Precision Luminescence.</p>
+</div>
+<div class="flex gap-8">
+<a class="text-[#bec8cf] hover:text-[#77d1ff] transition-colors text-sm font-inter opacity-80 hover:opacity-100" href="#">GitHub</a>
+<a class="text-[#bec8cf] hover:text-[#77d1ff] transition-colors text-sm font-inter opacity-80 hover:opacity-100" href="#">LinkedIn</a>
+<a class="text-[#bec8cf] hover:text-[#77d1ff] transition-colors text-sm font-inter opacity-80 hover:opacity-100" href="#">Documentation</a>
+</div>
+</footer>
+</body></html>

@@ -11,6 +11,14 @@ vi.mock('../src/components/tour/TourProvider', () => ({
   TourProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
+vi.mock('../src/components/tour/TourButton', () => ({
+  TourButton: () => null,
+}))
+
+vi.mock('../src/components/tour/TourOverlay', () => ({
+  TourOverlay: () => null,
+}))
+
 describe('App', () => {
   it('routes / to HomePage', () => {
     window.history.pushState({}, '', '/')

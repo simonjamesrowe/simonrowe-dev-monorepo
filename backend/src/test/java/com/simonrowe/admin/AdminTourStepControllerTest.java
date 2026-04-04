@@ -95,7 +95,8 @@ class AdminTourStepControllerTest {
             "About",
             null,
             "About section",
-            "bottom"
+            "bottom",
+            "/"
         ),
         new com.simonrowe.tour.TourStep(
             null,
@@ -104,7 +105,8 @@ class AdminTourStepControllerTest {
             "Welcome",
             null,
             "Welcome banner",
-            "top"
+            "top",
+            "/"
         )
     ));
 
@@ -258,7 +260,8 @@ class AdminTourStepControllerTest {
         order,
         now,
         now,
-        null
+        null,
+        "/"
     );
   }
 }

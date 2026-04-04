@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Admin Dashboard | Simon Rowe</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-fixed": "#dbe2f6",
+              "background": "#0f131c",
+              "on-primary-fixed": "#001e2c",
+              "secondary-fixed": "#ffdbca",
+              "secondary": "#ffb690",
+              "on-surface-variant": "#bec8cf",
+              "tertiary-container": "#8991a3",
+              "surface-tint": "#77d1ff",
+              "inverse-primary": "#006688",
+              "surface-container-highest": "#31353f",
+              "on-secondary-container": "#4a1c00",
+              "surface-container-low": "#181c25",
+              "on-primary-fixed-variant": "#004d68",
+              "outline": "#889299",
+              "on-error": "#690005",
+              "error-container": "#93000a",
+              "tertiary": "#bfc6da",
+              "surface-container-lowest": "#0a0e17",
+              "on-tertiary": "#293140",
+              "on-tertiary-container": "#222a39",
+              "tertiary-fixed-dim": "#bfc6da",
+              "on-primary": "#003548",
+              "surface": "#0f131c",
+              "surface-bright": "#353943",
+              "on-secondary": "#552100",
+              "primary-fixed": "#c2e8ff",
+              "secondary-fixed-dim": "#ffb690",
+              "outline-variant": "#3e484e",
+              "surface-variant": "#31353f",
+              "error": "#ffb4ab",
+              "surface-container": "#1c2029",
+              "primary-container": "#299bca",
+              "on-tertiary-fixed-variant": "#3f4757",
+              "surface-dim": "#0f131c",
+              "primary-fixed-dim": "#77d1ff",
+              "on-background": "#dfe2ef",
+              "inverse-on-surface": "#2c303a",
+              "on-surface": "#dfe2ef",
+              "on-secondary-fixed": "#341100",
+              "on-error-container": "#ffdad6",
+              "inverse-surface": "#dfe2ef",
+              "surface-container-high": "#262a33",
+              "secondary-container": "#ec6a06",
+              "primary": "#77d1ff",
+              "on-secondary-fixed-variant": "#783200",
+              "on-primary-container": "#002e3f",
+              "on-tertiary-fixed": "#141c2a"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #0f131c;
+            color: #dfe2ef;
+        }
+        .glass-panel {
+            background: rgba(15, 19, 28, 0.6);
+            backdrop-filter: blur(20px);
+        }
+        input, textarea {
+            background: rgba(28, 32, 41, 0.5);
+            border: 1px solid rgba(136, 146, 153, 0.2);
+            color: #dfe2ef;
+        }
+        input:focus, textarea:focus {
+            border-color: #77d1ff;
+            outline: none;
+            box-shadow: 0 0 0 1px #77d1ff;
+        }
+    </style>
+</head>
+<body class="font-body selection:bg-primary/30">
+<!-- SideNavBar (Execution from JSON) -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-[#0f131c] flex flex-col h-full py-6 px-4 font-space-grotesk z-50 border-r border-outline-variant/15">
+<!-- Header Profile -->
+<div class="flex items-center gap-3 mb-10 px-2">
+<div class="w-10 h-10 rounded-full bg-surface-container-high overflow-hidden">
+<img alt="Admin Avatar" class="w-full h-full object-cover" data-alt="Close-up portrait of a professional male architect in a dark studio, minimalist lighting, high-end editorial style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBs_tt81Lo3odoVCRuJEpQz1jfgy0p3_8R3IkHUZPHZo0EFP3L2pLo2T0qXmgAK82fdOHFyv7r5a86uDUSCrgyurHe7Sk6itOWbwawueTO-nxiLEf-nce7xpx8yndtIDyDAuoZ6ynceXBxJg0NCJBTX9dju51j2ELL0N4ecJZ_KgzZOjx1kffxLYzzMVMqi6PgeKjvQoUpQKDQEpXLQmkf_XTftWWlP_ECsQFDEJBy_OquEpR-sIBjfzP-y0nr38664CULhy9HY9-73"/>
+</div>
+<div>
+<p class="text-sm font-bold text-[#77d1ff]">System Admin</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Sentinel Node 01</p>
+</div>
+</div>
+<!-- Navigation Tabs -->
+<nav class="flex-1 space-y-1">
+<!-- Active Tab: Dashboard -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-[#77d1ff] bg-[#1c2029] border-r-4 border-[#77d1ff] transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-[#bec8cf] hover:bg-[#262a33] hover:text-white transition-all duration-200 ease-in-out" href="#content">
+<span class="material-symbols-outlined">edit_note</span>
+<span>Content</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-[#bec8cf] hover:bg-[#262a33] hover:text-white transition-all duration-200 ease-in-out" href="#inquiries">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span>Inquiries</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-[#bec8cf] hover:bg-[#262a33] hover:text-white transition-all duration-200 ease-in-out" href="#profile">
+<span class="material-symbols-outlined">account_circle</span>
+<span>Profile</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-[#bec8cf] hover:bg-[#262a33] hover:text-white transition-all duration-200 ease-in-out" href="#settings">
+<span class="material-symbols-outlined">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<!-- CTA & Footer -->
+<div class="mt-auto pt-6 space-y-4">
+<button class="w-full py-3 px-4 rounded-xl bg-gradient-to-br from-primary to-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-sm">add</span>
+                New Entry
+            </button>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-[#bec8cf] hover:bg-[#262a33] hover:text-white transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 min-h-screen flex flex-col">
+<!-- Top Header (Contextual) -->
+<header class="h-20 glass-panel sticky top-0 z-40 flex items-center justify-between px-10 border-b border-outline-variant/10">
+<h1 class="font-headline text-2xl font-bold tracking-tight text-white">The Digital Architect <span class="text-primary-fixed-dim font-light ml-2">/ Dashboard</span></h1>
+<div class="flex items-center gap-6">
+<div class="relative group">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors">notifications</span>
+<span class="absolute -top-1 -right-1 w-2 h-2 bg-secondary rounded-full"></span>
+</div>
+<div class="flex items-center gap-3 bg-surface-container px-4 py-2 rounded-full border border-outline-variant/20">
+<span class="material-symbols-outlined text-primary text-sm">bolt</span>
+<span class="text-xs font-label font-medium uppercase tracking-wider">Live Node: 124ms</span>
+</div>
+</div>
+</header>
+<!-- Content Area -->
+<section class="p-10 space-y-10 max-w-7xl">
+<!-- Bento Grid Summary -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+<div class="col-span-1 md:col-span-2 bg-surface-container-low p-8 rounded-xl border border-outline-variant/5">
+<p class="text-on-surface-variant text-sm font-medium mb-1">Active Visitors</p>
+<div class="flex items-baseline gap-4">
+<h2 class="font-headline text-5xl font-bold text-white">1,284</h2>
+<span class="text-primary text-sm font-bold flex items-center">+12.4% <span class="material-symbols-outlined text-xs ml-1">trending_up</span></span>
+</div>
+<div class="mt-6 flex gap-1 h-8 items-end">
+<div class="w-full bg-primary/20 h-2 rounded-full"></div>
+<div class="w-full bg-primary/40 h-4 rounded-full"></div>
+<div class="w-full bg-primary/30 h-3 rounded-full"></div>
+<div class="w-full bg-primary/60 h-6 rounded-full"></div>
+<div class="w-full bg-primary/80 h-8 rounded-full"></div>
+<div class="w-full bg-primary/50 h-5 rounded-full"></div>
+<div class="w-full bg-primary h-7 rounded-full"></div>
+</div>
+</div>
+<div class="bg-surface-container-high p-8 rounded-xl border border-outline-variant/5">
+<p class="text-on-surface-variant text-sm font-medium mb-1">Blog Reads</p>
+<h2 class="font-headline text-3xl font-bold text-white">45.2k</h2>
+<p class="text-xs text-on-surface-variant mt-2">Avg. time: 4m 12s</p>
+</div>
+<div class="bg-surface-container-high p-8 rounded-xl border border-outline-variant/5">
+<p class="text-on-surface-variant text-sm font-medium mb-1">Conversion</p>
+<h2 class="font-headline text-3xl font-bold text-white">3.8%</h2>
+<p class="text-xs text-on-surface-variant mt-2">Contact form leads</p>
+</div>
+</div>
+<!-- Profile Management Section -->
+<div class="scroll-mt-24" id="profile">
+<div class="flex items-center gap-3 mb-6">
+<span class="material-symbols-outlined text-primary">account_circle</span>
+<h3 class="font-headline text-xl font-bold">Profile Management</h3>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<div class="lg:col-span-2 bg-surface-container-low p-8 rounded-xl border border-outline-variant/5 space-y-6">
+<div>
+<label class="block text-sm font-medium text-on-surface-variant mb-2">Short Biography</label>
+<textarea class="w-full rounded-lg p-4 text-sm h-32 resize-none" placeholder="Enter your professional bio here...">Senior Architect specializing in AI-driven design systems and cyber-physical infrastructure. Leading the digital transition at Sentinel Node 01.</textarea>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div>
+<label class="block text-sm font-medium text-on-surface-variant mb-2">Primary CV Link</label>
+<div class="flex gap-2">
+<input class="flex-1 rounded-lg px-4 py-2 text-sm" type="url" value="https://drive.google.com/cv-primary.pdf"/>
+<button class="bg-surface-container-highest px-3 rounded-lg hover:text-primary transition-colors"><span class="material-symbols-outlined text-sm">link</span></button>
+</div>
+</div>
+<div>
+<label class="block text-sm font-medium text-on-surface-variant mb-2">Technical Portfolio PDF</label>
+<div class="flex gap-2">
+<input class="flex-1 rounded-lg px-4 py-2 text-sm" type="url" value="https://drive.google.com/portfolio-2024.pdf"/>
+<button class="bg-surface-container-highest px-3 rounded-lg hover:text-primary transition-colors"><span class="material-symbols-outlined text-sm">link</span></button>
+</div>
+</div>
+</div>
+<div class="flex justify-end">
+<button class="bg-primary px-6 py-2 rounded-lg text-on-primary font-bold text-sm hover:opacity-90 transition-all">Save Profile Changes</button>
+</div>
+</div>
+<div class="bg-surface-container-high p-8 rounded-xl border border-outline-variant/5 flex flex-col items-center justify-center text-center">
+<div class="w-24 h-24 rounded-full bg-surface-container-low mb-4 overflow-hidden border-2 border-primary/20">
+<img alt="Avatar Preview" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBs_tt81Lo3odoVCRuJEpQz1jfgy0p3_8R3IkHUZPHZo0EFP3L2pLo2T0qXmgAK82fdOHFyv7r5a86uDUSCrgyurHe7Sk6itOWbwawueTO-nxiLEf-nce7xpx8yndtIDyDAuoZ6ynceXBxJg0NCJBTX9dju51j2ELL0N4ecJZ_KgzZOjx1kffxLYzzMVMqi6PgeKjvQoUpQKDQEpXLQmkf_XTftWWlP_ECsQFDEJBy_OquEpR-sIBjfzP-y0nr38664CULhy9HY9-73"/>
+</div>
+<button class="text-xs font-bold text-primary hover:underline uppercase tracking-widest mb-2">Change Image</button>
+<p class="text-xs text-on-surface-variant">Recommended size: 512x512px. PNG or JPG.</p>
+</div>
+</div>
+</div>
+<!-- Recent Inquiries Section -->
+<div class="scroll-mt-24" id="inquiries">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">mail</span>
+<h3 class="font-headline text-xl font-bold">Recent Inquiries</h3>
+</div>
+<button class="text-sm font-bold text-primary flex items-center hover:underline">View All <span class="material-symbols-outlined text-sm ml-1">open_in_new</span></button>
+</div>
+<div class="bg-surface-container-low rounded-xl overflow-hidden border border-outline-variant/5">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high text-xs uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+<th class="px-6 py-4 font-semibold">Sender</th>
+<th class="px-6 py-4 font-semibold">Subject</th>
+<th class="px-6 py-4 font-semibold">Status</th>
+<th class="px-6 py-4 font-semibold">Received</th>
+<th class="px-6 py-4 font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="text-sm">
+<tr class="border-b border-outline-variant/5 hover:bg-surface-container transition-colors">
+<td class="px-6 py-4">
+<p class="font-medium">Elena Vance</p>
+<p class="text-xs text-on-surface-variant">elena.v@neuro-labs.io</p>
+</td>
+<td class="px-6 py-4 max-w-[200px] truncate">Partnership Proposal: Neural Nodes</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase">New</span>
+</td>
+<td class="px-6 py-4 text-on-surface-variant">2h ago</td>
+<td class="px-6 py-4 text-right">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-white transition-colors">visibility</button>
+</td>
+</tr>
+<tr class="border-b border-outline-variant/5 hover:bg-surface-container transition-colors">
+<td class="px-6 py-4">
+<p class="font-medium">Marcus Chen</p>
+<p class="text-xs text-on-surface-variant">m.chen@tectonic.com</p>
+</td>
+<td class="px-6 py-4 max-w-[200px] truncate">Question about Digital Architect portfolio</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 rounded-full bg-secondary/10 text-secondary text-[10px] font-bold uppercase">Pending</span>
+</td>
+<td class="px-6 py-4 text-on-surface-variant">Yesterday</td>
+<td class="px-6 py-4 text-right">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-white transition-colors">visibility</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container transition-colors">
+<td class="px-6 py-4">
+<p class="font-medium">Sarah Jenkins</p>
+<p class="text-xs text-on-surface-variant">sarah@jenkins.net</p>
+</td>
+<td class="px-6 py-4 max-w-[200px] truncate">Freelance Inquiry - Frontend Overhaul</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 rounded-full bg-surface-container-highest text-on-surface-variant text-[10px] font-bold uppercase">Replied</span>
+</td>
+<td class="px-6 py-4 text-on-surface-variant">Jan 12</td>
+<td class="px-6 py-4 text-right">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-white transition-colors">visibility</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Top Performing Content (Existing) -->
+<div class="space-y-6 scroll-mt-24" id="content">
+<h3 class="font-headline text-xl font-bold">Top Performing Content</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Content Card 1 -->
+<div class="bg-surface-container-low rounded-xl overflow-hidden group border border-outline-variant/5">
+<div class="h-40 overflow-hidden relative">
+<img alt="Tech Blog Cover" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Abstract 3D visualization of neural networks with glowing blue data lines and deep shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0tRAG2v3phtyIGx4S925dDy7TpIw2-YBqrIRziLEGKWADQlXOsI2GFjQgdB-nn9jJLqzKbSAV6s4MbzAS1-sgwqTKQu3G577Rj83HXRaqhCWwXteNDr9XjIrqiv-1IGYJ2TuXPEzLCTnxxJXjSk4lzl_BFYgO12j5174MBwk9UoMQqnAIPTJzfiJ38aCrNZq2KctdwlTa2_JXkpMCrEjqb-lhf-AVeJM7zXbGKAiQxDb5uLCZ5JhK9k4ChplKo9QTw296PqgdpM_C"/>
+<div class="absolute top-4 left-4 bg-primary/20 backdrop-blur-md px-2 py-1 rounded text-[10px] font-bold text-primary-fixed uppercase tracking-widest">Engineering</div>
+</div>
+<div class="p-6">
+<h4 class="font-headline text-lg font-bold leading-tight mb-4">Architecting Scalable LLM Infrastructure</h4>
+<div class="flex justify-between items-center text-xs text-on-surface-variant border-t border-outline-variant/10 pt-4">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">visibility</span> 12.4k</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">thumb_up</span> 892</span>
+<span class="text-primary font-bold">Trending</span>
+</div>
+</div>
+</div>
+<!-- Content Card 2 -->
+<div class="bg-surface-container-low rounded-xl overflow-hidden group border border-outline-variant/5">
+<div class="h-40 overflow-hidden relative">
+<img alt="Security Post" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Close-up of a high-tech computer server rack with blinking green and blue LEDs in a dark data center" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD26NlJGoS4xwM6VhXklTt7bksjxzUeOi20ncohV76-miGvuH-Ox_e-dfmZVoQwN_ZFYDsTS8yqpGoJIwXxmhjm91wO_V7HIv_fypCdoiDTxcrKbckASUxCHOHys9cTdSXFr_2xoobeglQ4Zl1MFwjkeGD5tuDuc1IUDkG0SY3o7eN0Pik62lT57C8zKD7fXeOHr-6PBqJfgq_fhlUkR3PbF7TjuFlYlfz4eMmAMYcFjPOU6rL2pqGl75TlC1B7KSeKKP6tGGnHGGxC"/>
+<div class="absolute top-4 left-4 bg-secondary/20 backdrop-blur-md px-2 py-1 rounded text-[10px] font-bold text-secondary-fixed uppercase tracking-widest">Security</div>
+</div>
+<div class="p-6">
+<h4 class="font-headline text-lg font-bold leading-tight mb-4">Zero-Trust Models in Modern Portfolios</h4>
+<div class="flex justify-between items-center text-xs text-on-surface-variant border-t border-outline-variant/10 pt-4">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">visibility</span> 8.1k</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">thumb_up</span> 415</span>
+<span class="text-on-surface-variant">Stable</span>
+</div>
+</div>
+</div>
+<!-- Content Card 3 (Action Placeholder) -->
+<div class="bg-surface-container-lowest border-2 border-dashed border-outline-variant/30 rounded-xl flex flex-col items-center justify-center p-6 text-center group cursor-pointer hover:border-primary/50 transition-colors">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">add</span>
+</div>
+<p class="font-headline font-bold text-on-surface-variant group-hover:text-white">Draft New Post</p>
+<p class="text-xs text-on-surface-variant/60 mt-1">Start writing with AI-assist</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Footer (Execution from JSON) -->
+<footer class="w-full py-12 mt-auto bg-[#0f131c] flex flex-col md:flex-row justify-between items-center px-12 border-t border-[#3e484e]/15 font-inter text-sm text-[#bec8cf]">
+<div class="mb-4 md:mb-0">
+<p class="text-white font-space-grotesk font-bold">© 2024 The Digital Architect. <span class="text-[#77d1ff] font-normal">Precision Luminescence.</span></p>
+</div>
+<div class="flex gap-8">
+<a class="hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">GitHub</a>
+<a class="hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">LinkedIn</a>
+<a class="hover:text-[#77d1ff] transition-colors opacity-80 hover:opacity-100" href="#">Documentation</a>
+</div>
+</footer>
+</main>
+</body></html>

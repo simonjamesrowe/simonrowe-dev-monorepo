@@ -3,16 +3,9 @@ interface SkillRatingBarProps {
   skillName?: string
 }
 
-function getRatingColor(rating: number): string {
-  if (rating >= 9) return 'var(--rating-green, #28a745)'
-  if (rating >= 8.5) return 'var(--rating-blue, #17a2b8)'
-  return 'var(--rating-orange, #ffc107)'
-}
-
 export function SkillRatingBar({ rating, skillName }: SkillRatingBarProps) {
   const safeRating = typeof rating === 'number' && rating >= 0 && rating <= 10 ? rating : 0
   const widthPercent = safeRating * 10
-  const color = getRatingColor(safeRating)
 
   return (
     <div
@@ -25,7 +18,7 @@ export function SkillRatingBar({ rating, skillName }: SkillRatingBarProps) {
     >
       <div
         className="skill-rating-bar__fill"
-        style={{ width: `${widthPercent}%`, backgroundColor: color }}
+        style={{ width: `${widthPercent}%`, backgroundColor: 'var(--primary)' }}
       />
     </div>
   )

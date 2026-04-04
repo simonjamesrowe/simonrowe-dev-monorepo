@@ -1,41 +1,24 @@
-import { useCallback, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
 
+import { AboutSection } from '../components/home/AboutSection'
+import { CTASection } from '../components/home/CTASection'
+import { HeroSection } from '../components/home/HeroSection'
+import { ChatPanel } from '../components/chat/ChatPanel'
+import { RecaptchaGate } from '../components/chat/RecaptchaGate'
+import { ContactDrawer } from '../components/contact/ContactDrawer'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
-import { ResumeDownloadButton } from '../components/common/ResumeDownloadButton'
-import { ExperienceSection } from '../components/employment/ExperienceSection'
-import { JobDetail } from '../components/employment/JobDetail'
-import { MobileMenu } from '../components/layout/MobileMenu'
-import { ScrollToTop } from '../components/layout/ScrollToTop'
-import { Sidebar, type NavigationItem } from '../components/layout/Sidebar'
-import { HomepageBlogPreview } from '../components/blog/HomepageBlogPreview'
-import { ContactSection } from '../components/contact/ContactSection'
-import { AboutSection } from '../components/profile/AboutSection'
-import { ProfileBanner } from '../components/profile/ProfileBanner'
-import { SkillGroupDetail } from '../components/skills/SkillGroupDetail'
-import { SkillsSection } from '../components/skills/SkillsSection'
-import { TourButton } from '../components/tour/TourButton'
-import { TourOverlay } from '../components/tour/TourOverlay'
 import { useProfile } from '../hooks/useProfile'
-import { trackHomepageEvent, trackPageView } from '../services/analytics'
-
-const navigationItems: NavigationItem[] = [
-  { id: 'profile', label: 'Profile', route: '/' },
-  { id: 'about', label: 'About' },
-  { id: 'experience', label: 'Experience' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'blog', label: 'Blog', route: '/blogs' },
-  { id: 'contact', label: 'Contact' },
-]
+import { trackPageView } from '../services/analytics'
+import { API_BASE_URL } from '../config/api'
 
 export function HomePage() {
-  const { profile, loading, error, retry } = useProfile()
-  const navigate = useNavigate()
-  const params = useParams<{ groupId?: string; jobId?: string }>()
-
-  const groupId = params.groupId
-  const jobId = params.jobId
+  const { profile, loading: profileLoading, error: profileError, retry } = useProfile()
+  const [contactOpen, setContactOpen] = useState(false)
+  const [chatQuery, setChatQuery] = useState<string | null>(null)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [recaptchaVerified, setRecaptchaVerified] = useState(false)
+  const [showRecaptcha, setShowRecaptcha] = useState(false)
 
   useEffect(() => {
     trackPageView(window.location.pathname)
@@ -43,96 +26,75 @@ export function HomePage() {
 
   useEffect(() => {
     if (profile) {
-      document.title = `${profile.name} | ${profile.title}`
+      document.title = `${profile.name} | Software Engineering Leader`
     }
   }, [profile])
 
-  const handleGroupClick = useCallback((id: string) => {
-    trackHomepageEvent('skill_group_click', id)
-    void navigate(`/skills-groups/${id}`)
-  }, [navigate])
+  const openContact = useCallback(() => setContactOpen(true), [])
+  const closeContact = useCallback(() => setContactOpen(false), [])
 
-  const handleJobClick = useCallback((id: string) => {
-    trackHomepageEvent('job_click', id)
-    void navigate(`/jobs/${id}`)
-  }, [navigate])
+  const handleChatOpen = useCallback((query: string) => {
+    setChatQuery(query)
+    if (recaptchaVerified) {
+      setChatOpen(true)
+    } else {
+      setShowRecaptcha(true)
+    }
+  }, [recaptchaVerified])
 
-  const handleSkillClick = useCallback((skillGroupId: string, skillId: string) => {
-    trackHomepageEvent('skill_click', `${skillGroupId}#${skillId}`)
-    void navigate(`/skills-groups/${skillGroupId}#${skillId}`)
-  }, [navigate])
+  const handleRecaptchaVerified = useCallback(() => {
+    setRecaptchaVerified(true)
+    setShowRecaptcha(false)
+    setChatOpen(true)
+  }, [])
 
-  const handleDrawerClose = useCallback(() => {
-    void navigate('/')
-  }, [navigate])
+  const handleRecaptchaCancel = useCallback(() => {
+    setShowRecaptcha(false)
+    setChatQuery(null)
+  }, [])
 
-  if (loading) {
+  const handleChatClose = useCallback(() => {
+    setChatOpen(false)
+    setChatQuery(null)
+  }, [])
+
+  const profileImageUrl = profile?.profileImage?.url
+    ? `${API_BASE_URL}${profile.profileImage.url}`
+    : undefined
+
+  if (profileLoading) {
     return <LoadingIndicator />
   }
 
-  if (error || !profile) {
-    return <ErrorMessage message={error ?? 'Unable to load profile data.'} onRetry={retry} />
+  if (profileError || !profile) {
+    return <ErrorMessage message={profileError ?? 'Unable to load profile data.'} onRetry={retry} />
   }
 
   return (
-    <div className="homepage">
-      <Sidebar
-        aboutImageUrl={profile.sidebarImage.url}
-        items={navigationItems}
-        onNavigate={(section) => trackHomepageEvent('navigate_section', section)}
-        socialLinks={profile.socialMediaLinks}
-        onSocialClick={(type) => trackHomepageEvent('social_media_click', type)}
+    <>
+      <HeroSection
+        name={profile.name}
+        title={profile.title}
+        tagline={profile.headline}
+        cvUrl={profile.cvUrl}
+        backgroundImageUrl={profile.backgroundImage?.url}
+        socialMediaLinks={profile.socialMediaLinks}
+        onChatOpen={handleChatOpen}
       />
-      <MobileMenu
-        aboutImageUrl={profile.sidebarImage.url}
-        items={navigationItems}
-        onNavigate={(section) => trackHomepageEvent('navigate_section', section)}
-      />
-      <TourButton />
-      <main className="homepage__content">
-        <ProfileBanner
-          onDownloadCv={() => trackHomepageEvent('download_cv', profile.cvUrl ?? 'missing')}
-          profile={profile}
-        />
-        <AboutSection
-          description={profile.description}
-          profileImageUrl={profile.profileImage.url}
-          profileName={profile.name}
-          location={profile.location}
-          primaryEmail={profile.primaryEmail}
-          secondaryEmail={profile.secondaryEmail}
-          phoneNumber={profile.phoneNumber}
-          socialLinks={profile.socialMediaLinks}
-          onSocialClick={(type) => trackHomepageEvent('social_media_click', type)}
-        />
-        <ExperienceSection onJobClick={handleJobClick} />
-        <SkillsSection onGroupClick={handleGroupClick} />
-        <div className="resume-section">
-          <ResumeDownloadButton
-            onDownload={() => trackHomepageEvent('download_cv', 'homepage')}
-          />
-        </div>
-        <HomepageBlogPreview />
-        <ContactSection />
-      </main>
-      <ScrollToTop onScrollToTop={() => trackHomepageEvent('scroll_to_top', 'homepage')} />
-      <TourOverlay />
-
-      {groupId && (
-        <SkillGroupDetail
-          groupId={groupId}
-          onClose={handleDrawerClose}
-          onJobClick={handleJobClick}
+      <AboutSection profile={profile} onContact={openContact} />
+      <CTASection onContact={openContact} />
+      <ContactDrawer open={contactOpen} onClose={closeContact} />
+      {showRecaptcha && (
+        <RecaptchaGate onVerified={handleRecaptchaVerified} onCancel={handleRecaptchaCancel} />
+      )}
+      {chatOpen && chatQuery && (
+        <ChatPanel
+          initialQuery={chatQuery}
+          onClose={handleChatClose}
+          profileImageUrl={profileImageUrl}
+          visible={chatOpen}
         />
       )}
-
-      {jobId && (
-        <JobDetail
-          jobId={jobId}
-          onClose={handleDrawerClose}
-          onSkillClick={handleSkillClick}
-        />
-      )}
-    </div>
+    </>
   )
 }

@@ -44,6 +44,7 @@ interface TourStepFormState {
   titleImage: string
   position: Position | ''
   order: number
+  route: string
 }
 
 const emptyForm = (): TourStepFormState => ({
@@ -53,6 +54,7 @@ const emptyForm = (): TourStepFormState => ({
   titleImage: '',
   position: '',
   order: 0,
+  route: '/',
 })
 
 const POSITIONS: Position[] = ['top', 'bottom', 'left', 'right', 'center']
@@ -88,6 +90,7 @@ export function TourStepEditor() {
         titleImage: data.titleImage ?? '',
         position: (data.position as Position) ?? '',
         order: data.order,
+        route: data.route ?? '/',
       })
       setEditorKey((k) => k + 1)
     } catch (err) {
@@ -117,6 +120,7 @@ export function TourStepEditor() {
         description: description || null,
         position: form.position || null,
         titleImage: form.titleImage || null,
+        route: form.route || null,
       }
       if (isNew) {
         await createAdminTourStep(getAccessToken, payload)
@@ -197,7 +201,7 @@ export function TourStepEditor() {
           </div>
         </div>
 
-        <div className="blog-editor__section blog-editor__two-col">
+        <div className="blog-editor__section blog-editor__three-col">
           <div>
             <label className="blog-editor__section-label" htmlFor="position">Position</label>
             <select
@@ -213,6 +217,20 @@ export function TourStepEditor() {
                   {pos.charAt(0).toUpperCase() + pos.slice(1)}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="blog-editor__section-label" htmlFor="route">Route</label>
+            <select
+              className="admin-form__select"
+              id="route"
+              name="route"
+              onChange={(e) => { setForm((f) => ({ ...f, route: e.target.value })); setDirty(true) }}
+              value={form.route}
+            >
+              <option value="/">/</option>
+              <option value="/experience">/experience</option>
+              <option value="/blogs">/blogs</option>
             </select>
           </div>
           <div>

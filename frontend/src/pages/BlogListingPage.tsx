@@ -1,28 +1,23 @@
 import { useEffect, useState } from 'react'
 
+import { ArticleCard } from '../components/blog/ArticleCard'
+import { BlogSearch } from '../components/blog/BlogSearch'
+import { FeaturedArticle } from '../components/blog/FeaturedArticle'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
-import { Sidebar, type NavigationItem } from '../components/layout/Sidebar'
-import { BlogGrid } from '../components/blog/BlogGrid'
-import { BlogSearch } from '../components/search/BlogSearch'
-import { useProfile } from '../hooks/useProfile'
 import { fetchBlogs } from '../services/blogApi'
+import { trackPageView } from '../services/analytics'
 import type { BlogSummary } from '../types/blog'
-
-const navigationItems: NavigationItem[] = [
-  { id: 'profile', label: 'Profile', route: '/' },
-  { id: 'about', label: 'About' },
-  { id: 'experience', label: 'Experience' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'blog', label: 'Blog', route: '/blogs' },
-  { id: 'contact', label: 'Contact' },
-]
 
 export function BlogListingPage() {
   const [blogs, setBlogs] = useState<BlogSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { profile } = useProfile()
+
+  useEffect(() => {
+    trackPageView('/blogs')
+    document.title = 'Blog'
+  }, [])
 
   useEffect(() => {
     fetchBlogs()
@@ -30,6 +25,9 @@ export function BlogListingPage() {
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
+
+  const featuredBlog = blogs[0] ?? null
+  const gridBlogs = blogs.slice(1)
 
   if (loading) {
     return <LoadingIndicator />
@@ -40,19 +38,26 @@ export function BlogListingPage() {
   }
 
   return (
-    <div className="blog-page-layout">
-      {profile && (
-        <Sidebar
-          aboutImageUrl={profile.sidebarImage.url}
-          items={navigationItems}
-          socialLinks={profile.socialMediaLinks}
-        />
-      )}
-      <main className="blog-page-layout__content">
-        <h1 className="blog-listing-page__title">Blog</h1>
+    <div className="blog-listing-page">
+      <section className="blog-listing-page__hero">
+        <h1 className="display-lg blog-listing-page__headline">Blog</h1>
+        <p className="blog-listing-page__subtitle body-lg">
+          Thoughts on engineering leadership, cloud-native architecture, and building with AI.
+        </p>
+      </section>
+
+      <div className="blog-listing-page__search">
         <BlogSearch />
-        <BlogGrid blogs={blogs} />
-      </main>
+      </div>
+
+      {featuredBlog && <FeaturedArticle blog={featuredBlog} />}
+      {gridBlogs.length > 0 && (
+        <div className="blog-listing-page__grid">
+          {gridBlogs.map((blog) => (
+            <ArticleCard key={blog.id} blog={blog} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

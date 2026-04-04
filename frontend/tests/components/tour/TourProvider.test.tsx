@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TourProvider } from '../../../src/components/tour/TourProvider'
@@ -32,6 +33,7 @@ const stepOne: TourStep = {
   titleImage: null,
   description: 'About section description.',
   position: 'bottom',
+  route: '/',
 }
 
 const stepTwo: TourStep = {
@@ -42,6 +44,7 @@ const stepTwo: TourStep = {
   titleImage: null,
   description: 'Skills section description.',
   position: 'right',
+  route: '/experience',
 }
 
 function TourStateDisplay() {
@@ -76,17 +79,23 @@ function TourStateDisplay() {
   )
 }
 
+function renderWithRouter() {
+  return render(
+    <MemoryRouter>
+      <TourProvider>
+        <TourStateDisplay />
+      </TourProvider>
+    </MemoryRouter>,
+  )
+}
+
 describe('TourProvider', () => {
   beforeEach(() => {
     vi.mocked(fetchTourSteps).mockReset()
   })
 
   it('starts in an inactive state with no steps', () => {
-    render(
-      <TourProvider>
-        <TourStateDisplay />
-      </TourProvider>,
-    )
+    renderWithRouter()
 
     expect(screen.getByTestId('is-active')).toHaveTextContent('false')
     expect(screen.getByTestId('step-count')).toHaveTextContent('0')
@@ -97,11 +106,7 @@ describe('TourProvider', () => {
   it('start() fetches steps and activates the tour', async () => {
     vi.mocked(fetchTourSteps).mockResolvedValue([stepOne, stepTwo])
 
-    render(
-      <TourProvider>
-        <TourStateDisplay />
-      </TourProvider>,
-    )
+    renderWithRouter()
 
     act(() => {
       screen.getByTestId('btn-start').click()
@@ -118,11 +123,7 @@ describe('TourProvider', () => {
   it('next() advances to the next step', async () => {
     vi.mocked(fetchTourSteps).mockResolvedValue([stepOne, stepTwo])
 
-    render(
-      <TourProvider>
-        <TourStateDisplay />
-      </TourProvider>,
-    )
+    renderWithRouter()
 
     act(() => {
       screen.getByTestId('btn-start').click()
@@ -142,11 +143,7 @@ describe('TourProvider', () => {
   it('next() on the last step resets the tour', async () => {
     vi.mocked(fetchTourSteps).mockResolvedValue([stepOne, stepTwo])
 
-    render(
-      <TourProvider>
-        <TourStateDisplay />
-      </TourProvider>,
-    )
+    renderWithRouter()
 
     act(() => {
       screen.getByTestId('btn-start').click()
@@ -171,11 +168,7 @@ describe('TourProvider', () => {
   it('prev() moves to the previous step', async () => {
     vi.mocked(fetchTourSteps).mockResolvedValue([stepOne, stepTwo])
 
-    render(
-      <TourProvider>
-        <TourStateDisplay />
-      </TourProvider>,
-    )
+    renderWithRouter()
 
     act(() => {
       screen.getByTestId('btn-start').click()
@@ -201,11 +194,7 @@ describe('TourProvider', () => {
   it('prev() on the first step does not change step index', async () => {
     vi.mocked(fetchTourSteps).mockResolvedValue([stepOne, stepTwo])
 
-    render(
-      <TourProvider>
-        <TourStateDisplay />
-      </TourProvider>,
-    )
+    renderWithRouter()
 
     act(() => {
       screen.getByTestId('btn-start').click()
@@ -225,11 +214,7 @@ describe('TourProvider', () => {
   it('exit() resets the tour to initial state', async () => {
     vi.mocked(fetchTourSteps).mockResolvedValue([stepOne, stepTwo])
 
-    render(
-      <TourProvider>
-        <TourStateDisplay />
-      </TourProvider>,
-    )
+    renderWithRouter()
 
     act(() => {
       screen.getByTestId('btn-start').click()
@@ -251,11 +236,7 @@ describe('TourProvider', () => {
   it('setSearchValue() updates the search value in context', async () => {
     vi.mocked(fetchTourSteps).mockResolvedValue([stepOne])
 
-    render(
-      <TourProvider>
-        <TourStateDisplay />
-      </TourProvider>,
-    )
+    renderWithRouter()
 
     act(() => {
       screen.getByTestId('btn-start').click()
@@ -275,11 +256,7 @@ describe('TourProvider', () => {
   it('start() silently handles API errors and leaves tour inactive', async () => {
     vi.mocked(fetchTourSteps).mockRejectedValue(new Error('Network error'))
 
-    render(
-      <TourProvider>
-        <TourStateDisplay />
-      </TourProvider>,
-    )
+    renderWithRouter()
 
     await act(async () => {
       screen.getByTestId('btn-start').click()
@@ -292,11 +269,7 @@ describe('TourProvider', () => {
   it('start() does not activate when API returns empty steps', async () => {
     vi.mocked(fetchTourSteps).mockResolvedValue([])
 
-    render(
-      <TourProvider>
-        <TourStateDisplay />
-      </TourProvider>,
-    )
+    renderWithRouter()
 
     await act(async () => {
       screen.getByTestId('btn-start').click()

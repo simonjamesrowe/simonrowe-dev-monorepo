@@ -1,41 +1,50 @@
-import type { SocialMediaLink } from '../../types/SocialMediaLink'
+import { Github, Linkedin, Twitter } from 'lucide-react'
+
+import type { SocialMediaLink, SocialMediaPlatform } from '../../types/SocialMediaLink'
 
 interface SocialLinksProps {
   links: SocialMediaLink[]
-  onSocialClick?: (type: string) => void
 }
 
-const iconByType: Record<string, string> = {
-  github: 'GH',
-  linkedin: 'IN',
-  twitter: 'TW',
+const platformIcons: Record<SocialMediaPlatform, React.ReactNode> = {
+  github: <Github size={20} />,
+  linkedin: <Linkedin size={20} />,
+  twitter: <Twitter size={20} />,
 }
 
-export function SocialLinks({ links, onSocialClick }: SocialLinksProps) {
+const platformLabels: Record<SocialMediaPlatform, string> = {
+  github: 'GitHub',
+  linkedin: 'LinkedIn',
+  twitter: 'Twitter',
+}
+
+export function SocialLinks({ links }: SocialLinksProps) {
   if (links.length === 0) {
     return null
   }
 
   return (
-    <section className="panel" aria-label="Social media links">
-      <h3>Social</h3>
-      <ul className="social-links">
-        {links.map((link) => (
-          <li key={`${link.type}-${link.url}`}>
-            <a
-              href={link.url}
-              onClick={() => onSocialClick?.(link.type)}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              <span aria-hidden="true" className="social-links__icon" data-testid={`${link.type}-icon`}>
-                {iconByType[link.type] ?? '::'}
+    <ul className="social-links">
+      {links.map((link) => (
+        <li key={`${link.type}-${link.url}`} className="social-links__item">
+          <a
+            href={link.url}
+            rel="noopener noreferrer"
+            target="_blank"
+            aria-label={`${platformLabels[link.type] ?? link.name} profile`}
+          >
+            <span className="social-links__icon" aria-hidden="true">
+              {platformIcons[link.type] ?? null}
+            </span>
+            <span className="social-links__details">
+              <span className="social-links__platform">
+                {platformLabels[link.type] ?? link.name}
               </span>
-              <span>{link.name}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </section>
+              <span className="social-links__url">{link.url}</span>
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
   )
 }

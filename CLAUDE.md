@@ -58,6 +58,7 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 
 ## Recent Changes
+- 001-website-redesign: Added TypeScript (frontend), Java 21 (backend — no changes) + React (latest stable), React Router, Lucide React, React Hook Form, Zod, @stomp/stompjs, React Markdown
 - 013-blog-posts-phase-2: Added Java 21 (backend), TypeScript (frontend) — no code changes needed; content-only feature + MongoDB 8 (mongosh for migration), Docker (container exec for script runner)
 - 012-docker-compose-deploy: Added Nginx config (reverse proxy), Docker Compose YAML, Bash (scripts), Dockerfile modifications + Docker, Docker Compose, nginx:alpine, pinggy/pinggy, GHCR images
 - 011-admin-data-ops: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, Spring Data MongoDB, Spring Data Elasticsearch, Google Drive API v3 (`google-api-services-drive`), Google Auth Library, React (latest stable), Lucide Reac
@@ -66,5 +67,9 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
+- TypeScript (frontend), Java 21 (backend — no changes) + React (latest stable), React Router, Lucide React, React Hook Form, Zod, @stomp/stompjs, React Markdown (001-website-redesign)
+- MongoDB (unchanged), Elasticsearch (unchanged) (001-website-redesign)
+- Nginx config (reverse proxy), Docker Compose YAML, Bash (scripts), Dockerfile modifications + Docker, Docker Compose, nginx:alpine, pinggy/pinggy, GHCR images (012-docker-compose-deploy)
+- MongoDB 8, Kafka 7.8.0, Elasticsearch 8.17.0 (all via named Docker volumes) (012-docker-compose-deploy)
 - Java 21 (backend), TypeScript (frontend) — no code changes needed; content-only feature + MongoDB 8 (mongosh for migration), Docker (container exec for script runner) (013-blog-posts-phase-2)
 - MongoDB `blogs` and `tags` collections (013-blog-posts-phase-2)

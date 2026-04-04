@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Search } from 'lucide-react'
 
-import { searchBlogs } from '../../services/blogApi'
-import type { BlogSearchResult } from '../../types/blog'
+import { blogSearch, type BlogSearchResult } from '../../services/searchApi'
 import { formatDate } from '../../utils/dateFormat'
+import { API_BASE_URL } from '../../config/api'
 
 const DEBOUNCE_MS = 300
 const MIN_QUERY_LENGTH = 2
-const PLACEHOLDER_IMAGE = '/images/blogs/placeholder.svg'
 
 export function BlogSearch() {
   const [query, setQuery] = useState('')
@@ -29,9 +29,10 @@ export function BlogSearch() {
 
     const timer = setTimeout(() => {
       abortRef.current?.abort()
-      abortRef.current = new AbortController()
+      const controller = new AbortController()
+      abortRef.current = controller
 
-      searchBlogs(query)
+      blogSearch(query, controller.signal)
         .then((data) => {
           setResults(data)
           setNoResults(data.length === 0)
@@ -57,7 +58,7 @@ export function BlogSearch() {
   }, [])
 
   function handleSelect(result: BlogSearchResult) {
-    navigate(`/blogs/${result.id}`)
+    navigate(result.url)
     setOpen(false)
     setQuery('')
   }
@@ -81,20 +82,23 @@ export function BlogSearch() {
 
   return (
     <div className="blog-search" ref={containerRef}>
-      <input
-        aria-autocomplete="list"
-        aria-controls="blog-search-results"
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        aria-label="Search blog posts"
-        className="blog-search__input"
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Search blog posts..."
-        role="combobox"
-        type="search"
-        value={query}
-      />
+      <div className="blog-search__input-wrap">
+        <Search size={16} className="blog-search__icon" />
+        <input
+          aria-autocomplete="list"
+          aria-controls="blog-search-results"
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          aria-label="Search blog posts"
+          className="blog-search__input"
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Search blog posts..."
+          role="combobox"
+          type="search"
+          value={query}
+        />
+      </div>
       {open && (
         <ul
           className="blog-search__results"
@@ -106,30 +110,33 @@ export function BlogSearch() {
               No results found
             </li>
           ) : (
-            results.map((result, index) => (
-              <li
-                aria-selected={index === activeIndex}
-                className={`blog-search__result${index === activeIndex ? ' blog-search__result--active' : ''}`}
-                key={result.id}
-                onMouseDown={() => handleSelect(result)}
-                role="option"
-              >
-                <img
-                  alt=""
-                  className="blog-search__thumbnail"
-                  onError={(e) => {
-                    ;(e.currentTarget as HTMLImageElement).src = PLACEHOLDER_IMAGE
-                  }}
-                  src={result.thumbnailImage ?? PLACEHOLDER_IMAGE}
-                />
-                <div className="blog-search__result-info">
-                  <span className="blog-search__result-title">{result.title}</span>
-                  <time className="blog-search__result-date" dateTime={result.createdDate}>
-                    {formatDate(result.createdDate)}
-                  </time>
-                </div>
-              </li>
-            ))
+            results.map((result, index) => {
+              const imgSrc = result.image ? `${API_BASE_URL}${result.image}` : null
+
+              return (
+                <li
+                  aria-selected={index === activeIndex}
+                  className={`blog-search__result${index === activeIndex ? ' blog-search__result--active' : ''}`}
+                  key={result.url}
+                  onMouseDown={() => handleSelect(result)}
+                  role="option"
+                >
+                  {imgSrc && (
+                    <img
+                      alt=""
+                      className="blog-search__thumbnail"
+                      src={imgSrc}
+                    />
+                  )}
+                  <div className="blog-search__result-info">
+                    <span className="blog-search__result-title">{result.title}</span>
+                    <time className="blog-search__result-date" dateTime={result.publishedDate}>
+                      {formatDate(result.publishedDate)}
+                    </time>
+                  </div>
+                </li>
+              )
+            })
           )}
         </ul>
       )}

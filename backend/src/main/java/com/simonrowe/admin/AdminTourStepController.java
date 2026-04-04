@@ -62,7 +62,8 @@ public class AdminTourStepController {
         (String) body.get("titleImage"),
         (String) body.get("position"),
         toInt(body.get("order"), 0),
-        now, now, null
+        now, now, null,
+        (String) body.get("route")
     );
 
     TourStep saved = tourStepRepository.save(step);
@@ -102,7 +103,8 @@ public class AdminTourStepController {
         toInt(body.get("order"), existing.order()),
         existing.createdAt(),
         Instant.now(),
-        existing.legacyId()
+        existing.legacyId(),
+        (String) body.get("route")
     );
 
     TourStep saved = tourStepRepository.save(updated);
@@ -134,7 +136,8 @@ public class AdminTourStepController {
           existing.id(), existing.title(), existing.selector(),
           existing.description(), existing.titleImage(),
           existing.position(), i + 1,
-          existing.createdAt(), Instant.now(), existing.legacyId()
+          existing.createdAt(), Instant.now(), existing.legacyId(),
+          existing.route()
       );
       tourStepRepository.save(reordered);
     }

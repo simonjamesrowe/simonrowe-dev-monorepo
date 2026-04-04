@@ -121,8 +121,11 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
   }, [initialQuery, onMessage])
 
   useEffect(() => {
-    if (visible) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (visible && messagesEndRef.current) {
+      const container = messagesEndRef.current.parentElement
+      if (container) {
+        container.scrollTop = container.scrollHeight
+      }
     }
   }, [messages, streamingContent, visible])
 
