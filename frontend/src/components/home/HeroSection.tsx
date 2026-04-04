@@ -25,7 +25,7 @@ const SUGGESTED_PROMPTS = [
   'Cloud-native experience?',
 ]
 
-export function HeroSection({ name, title, tagline, cvUrl, backgroundImageUrl, socialMediaLinks, onChatOpen }: HeroSectionProps) {
+export function HeroSection({ name, tagline, cvUrl, backgroundImageUrl, socialMediaLinks, onChatOpen }: HeroSectionProps) {
   const bgUrl = backgroundImageUrl ? `${API_BASE_URL}${backgroundImageUrl}` : undefined
   const [chatInput, setChatInput] = useState('')
   const nameParts = name.split(' ')

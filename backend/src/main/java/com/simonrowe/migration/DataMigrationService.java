@@ -486,7 +486,9 @@ public class DataMigrationService implements ApplicationRunner {
 
   private void migrateTourSteps() {
     LOG.info("Tour steps migration skipped — managed via admin UI.");
-    if (true) return;
+    if (true) {
+      return;
+    }
     LOG.info("Migrating tour steps...");
     List<Document> docs = readBsonFile("tour_steps.bson");
     int saved = 0;
