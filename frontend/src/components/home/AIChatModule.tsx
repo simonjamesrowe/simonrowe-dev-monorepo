@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { ArrowRight, Zap } from 'lucide-react'
 import * as chatService from '../../services/chatService'
 
@@ -22,6 +22,7 @@ export function AIChatModule() {
   const sessionId = useRef(crypto.randomUUID())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const connected = useRef(false)
+  const pendingMessage = useRef<string | null>(null)
 
   useEffect(() => {
     return () => {
@@ -32,45 +33,68 @@ export function AIChatModule() {
   }, [])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = messagesEndRef.current
+    if (el) {
+      const container = el.parentElement
+      if (container) {
+        container.scrollTop = container.scrollHeight
+      }
+    }
   }, [messages])
 
-  const ensureConnected = () => {
+  const handleMessage = useCallback((response: chatService.ChatResponse) => {
+    if (response.type === 'STREAM_START') {
+      setIsStreaming(true)
+      setMessages(prev => [...prev, { role: 'assistant', content: '' }])
+    } else if (response.type === 'STREAM_CHUNK') {
+      setMessages(prev => {
+        const updated = [...prev]
+        const last = updated[updated.length - 1]
+        if (last && last.role === 'assistant') {
+          updated[updated.length - 1] = { ...last, content: last.content + (response.content ?? '') }
+        }
+        return updated
+      })
+    } else if (response.type === 'STREAM_END') {
+      setIsStreaming(false)
+    } else if (response.type === 'ERROR') {
+      setIsStreaming(false)
+    }
+  }, [])
+
+  const ensureConnected = useCallback(() => {
     if (!connected.current) {
       chatService.connect(
         sessionId.current,
-        (response) => {
-          if (response.type === 'STREAM_START') {
-            setIsStreaming(true)
-            setMessages(prev => [...prev, { role: 'assistant', content: '' }])
-          } else if (response.type === 'STREAM_CHUNK') {
-            setMessages(prev => {
-              const updated = [...prev]
-              const last = updated[updated.length - 1]
-              if (last && last.role === 'assistant') {
-                updated[updated.length - 1] = { ...last, content: last.content + (response.content ?? '') }
-              }
-              return updated
-            })
-          } else if (response.type === 'STREAM_END') {
-            setIsStreaming(false)
-          } else if (response.type === 'ERROR') {
-            setIsStreaming(false)
+        handleMessage,
+        () => {
+          connected.current = true
+          setConnectionFailed(false)
+          // Send any pending message once connected
+          if (pendingMessage.current) {
+            chatService.sendMessage({ sessionId: sessionId.current, message: pendingMessage.current })
+            pendingMessage.current = null
           }
         },
-        () => { connected.current = true; setConnectionFailed(false) },
         () => { connected.current = false; setConnectionFailed(true) }
       )
     }
-  }
+  }, [handleMessage])
 
-  const sendMessage = (text: string) => {
+  const sendMessage = useCallback((text: string) => {
     if (!text.trim() || isStreaming) return
-    ensureConnected()
-    setMessages(prev => [...prev, { role: 'user', content: text.trim() }])
+    const trimmed = text.trim()
+    setMessages(prev => [...prev, { role: 'user', content: trimmed }])
     setInput('')
-    chatService.sendMessage({ sessionId: sessionId.current, message: text.trim() })
-  }
+
+    if (connected.current && chatService.isConnected()) {
+      chatService.sendMessage({ sessionId: sessionId.current, message: trimmed })
+    } else {
+      // Queue message to send once connected
+      pendingMessage.current = trimmed
+      ensureConnected()
+    }
+  }, [isStreaming, ensureConnected])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

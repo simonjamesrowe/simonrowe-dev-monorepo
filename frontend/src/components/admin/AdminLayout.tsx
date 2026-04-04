@@ -45,6 +45,7 @@ export function AdminLayout() {
   }
 
   const isActive = (path: string) => location.pathname.startsWith(path)
+  const currentPage = navItems.find(item => isActive(item.path))?.label ?? 'Dashboard'
 
   return (
     <div className="admin-layout">
@@ -102,9 +103,9 @@ export function AdminLayout() {
       <div className="admin-content">
         <header className="admin-header">
           <div className="admin-header__title">
-            <span className="admin-header__brand">The Digital Architect</span>
+            <span className="admin-header__brand">Admin</span>
             <span className="admin-header__separator">/</span>
-            <span className="admin-header__page">Dashboard</span>
+            <span className="admin-header__page">{currentPage}</span>
           </div>
           <div className="admin-header__actions">
             <button type="button" className="admin-header__bell" aria-label="Notifications">

@@ -90,7 +90,8 @@ public class DataMigrationService implements ApplicationRunner {
     migrateSocialMediaLinks();
     migrateJobs(skillIdMap);
     migrateBlogs(tagIdMap, skillIdMap);
-    migrateTourSteps();
+    // Tour steps are managed via admin UI — skip migration
+    // migrateTourSteps();
 
     LOG.info("Data migration complete.");
   }
@@ -484,6 +485,8 @@ public class DataMigrationService implements ApplicationRunner {
   }
 
   private void migrateTourSteps() {
+    LOG.info("Tour steps migration skipped — managed via admin UI.");
+    if (true) return;
     LOG.info("Migrating tour steps...");
     List<Document> docs = readBsonFile("tour_steps.bson");
     int saved = 0;
@@ -509,7 +512,8 @@ public class DataMigrationService implements ApplicationRunner {
             getInt(doc, "order"),
             toInstant(doc.get("createdAt")),
             toInstant(doc.get("updatedAt")),
-            legacyId
+            legacyId,
+            getString(doc, "route")
         );
         tourStepRepository.save(updated);
       } else {
@@ -523,7 +527,8 @@ public class DataMigrationService implements ApplicationRunner {
             getInt(doc, "order"),
             toInstant(doc.get("createdAt")),
             toInstant(doc.get("updatedAt")),
-            legacyId
+            legacyId,
+            getString(doc, "route")
         );
         tourStepRepository.save(step);
       }

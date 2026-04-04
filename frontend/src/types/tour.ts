@@ -6,4 +6,5 @@ export interface TourStep {
   titleImage: string | null
   description: string
   position: 'top' | 'bottom' | 'left' | 'right' | 'center'
+  route: string | null
 }

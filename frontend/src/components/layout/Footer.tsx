@@ -1,14 +1,23 @@
+import { useProfile } from '../../hooks/useProfile'
+
 export function Footer() {
+  const { profile } = useProfile()
+
+  const githubLink = profile?.socialMediaLinks?.find(l => l.type === 'github')
+  const linkedinLink = profile?.socialMediaLinks?.find(l => l.type === 'linkedin')
+
   return (
     <footer className="footer">
       <div className="footer__brand">
-        <span className="footer__title">The Digital Architect</span>
-        <p className="footer__copyright">© 2024 The Digital Architect. Precision Luminescence.</p>
+        <p className="footer__copyright">© {new Date().getFullYear()} {profile?.name ?? 'Simon Rowe'}. All rights reserved.</p>
       </div>
       <div className="footer__links">
-        <a href="#" target="_blank" rel="noopener noreferrer" className="footer__link">GitHub</a>
-        <a href="#" target="_blank" rel="noopener noreferrer" className="footer__link">LinkedIn</a>
-        <a href="#" target="_blank" rel="noopener noreferrer" className="footer__link">Documentation</a>
+        {githubLink && (
+          <a href={githubLink.url} target="_blank" rel="noopener noreferrer" className="footer__link">GitHub</a>
+        )}
+        {linkedinLink && (
+          <a href={linkedinLink.url} target="_blank" rel="noopener noreferrer" className="footer__link">LinkedIn</a>
+        )}
       </div>
     </footer>
   )

@@ -30,9 +30,9 @@ class TourStepRepositoryTest {
   @Test
   void findAllByOrderByOrderAscReturnsSortedSteps() {
     tourStepRepository.saveAll(List.of(
-        new TourStep("s-3", 3, ".contact", "Contact", null, "Contact desc", "top"),
-        new TourStep("s-1", 1, ".banner", "Welcome", null, "Welcome desc", "bottom"),
-        new TourStep("s-2", 2, ".about", "About", null, "About desc", "top")
+        new TourStep("s-3", 3, ".contact", "Contact", null, "Contact desc", "top", "/"),
+        new TourStep("s-1", 1, ".banner", "Welcome", null, "Welcome desc", "bottom", "/"),
+        new TourStep("s-2", 2, ".about", "About", null, "About desc", "top", "/")
     ));
 
     final List<TourStep> steps = tourStepRepository.findAllByOrderByOrderAsc();
@@ -59,7 +59,8 @@ class TourStepRepositoryTest {
         "s-1", 1, ".homepage-banner", "Welcome",
         "/images/tour/welcome.png",
         "This is the **homepage banner**.",
-        "bottom"
+        "bottom",
+        "/"
     );
     tourStepRepository.save(step);
 
@@ -76,7 +77,7 @@ class TourStepRepositoryTest {
   @Test
   void saveHandlesNullTitleImage() {
     final TourStep step = new TourStep(
-        "s-1", 1, ".banner", "Welcome", null, "Description", "bottom"
+        "s-1", 1, ".banner", "Welcome", null, "Description", "bottom", "/"
     );
     tourStepRepository.save(step);
 

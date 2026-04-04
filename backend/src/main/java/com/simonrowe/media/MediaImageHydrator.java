@@ -28,8 +28,8 @@ public class MediaImageHydrator {
     MediaAsset.VariantInfo preferred = selectVariant(asset, preferredVariants);
 
     String resolvedUrl = preferred != null ? preferred.path() : image.url();
-    Integer width = preferred != null ? preferred.width() : image.width();
-    Integer height = preferred != null ? preferred.height() : image.height();
+    Integer width = preferred != null ? Integer.valueOf(preferred.width()) : image.width();
+    Integer height = preferred != null ? Integer.valueOf(preferred.height()) : image.height();
     String name = image.name() != null ? image.name() : asset.fileName();
     String mime = image.mime() != null ? image.mime() : asset.mimeType();
 

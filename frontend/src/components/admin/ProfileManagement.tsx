@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { API_BASE_URL } from '../../config/api'
 import { useProfile } from '../../hooks/useProfile'
 
 export function ProfileManagement() {
@@ -47,7 +48,7 @@ export function ProfileManagement() {
           {profile?.profileImage?.url && (
             <div className="profile-mgmt__image-wrapper">
               <img
-                src={profile.profileImage.url}
+                src={`${API_BASE_URL}${profile.profileImage.url}`}
                 alt="Profile"
                 className="profile-mgmt__image"
               />

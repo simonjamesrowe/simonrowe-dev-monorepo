@@ -1,10 +1,14 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import { AuthProvider } from './auth/AuthProvider'
 import { AdminLayout } from './components/admin/AdminLayout'
 import { Footer } from './components/layout/Footer'
 import { MobileMenu } from './components/layout/MobileMenu'
 import { TopNav } from './components/layout/TopNav'
+import { TourProvider } from './components/tour/TourProvider'
+import { TourButton } from './components/tour/TourButton'
+import { TourOverlay } from './components/tour/TourOverlay'
 import { BlogEditor } from './pages/admin/BlogEditor'
 import { BlogsAdmin } from './pages/admin/BlogsAdmin'
 import { JobEditor } from './pages/admin/JobEditor'
@@ -22,18 +26,30 @@ import { BlogDetailPage } from './pages/BlogDetailPage'
 import { BlogListingPage } from './pages/BlogListingPage'
 import { ExperiencePage } from './pages/ExperiencePage'
 import { HomePage } from './pages/HomePage'
-import { ProfilePage } from './pages/ProfilePage'
+
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+  return null
+}
 
 function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="app-layout">
-      <TopNav />
-      <MobileMenu />
-      <main className="app-layout__main">
-        {children}
-      </main>
-      <Footer />
-    </div>
+    <TourProvider>
+      <div className="app-layout">
+        <ScrollToTop />
+        <TopNav />
+        <MobileMenu />
+        <main className="app-layout__main">
+          {children}
+        </main>
+        <Footer />
+        <TourButton />
+        <TourOverlay />
+      </div>
+    </TourProvider>
   )
 }
 
@@ -45,7 +61,6 @@ function App() {
         <Route element={<PublicLayout><ExperiencePage /></PublicLayout>} path="/experience" />
         <Route element={<PublicLayout><BlogListingPage /></PublicLayout>} path="/blogs" />
         <Route element={<PublicLayout><BlogDetailPage /></PublicLayout>} path="/blogs/:id" />
-        <Route element={<PublicLayout><ProfilePage /></PublicLayout>} path="/profile" />
         <Route
           path="/admin"
           element={

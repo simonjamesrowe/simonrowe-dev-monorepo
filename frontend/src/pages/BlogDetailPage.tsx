@@ -29,7 +29,7 @@ export function BlogDetailPage() {
       .then((data) => {
         if (!cancelled) {
           setBlog(data)
-          document.title = `${data.title} | The Digital Architect`
+          document.title = `${data.title} | Blog`
         }
       })
       .catch((err: Error) => {

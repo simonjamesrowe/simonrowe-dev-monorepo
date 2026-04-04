@@ -103,6 +103,7 @@ export interface AdminTourStep {
   titleImage: string | null
   position: string | null
   order: number
+  route: string | null
   createdAt: string
   updatedAt: string
 }

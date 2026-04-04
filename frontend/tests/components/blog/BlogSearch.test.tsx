@@ -4,22 +4,22 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { BlogSearch } from '../../../src/components/blog/BlogSearch'
-import type { BlogSearchResult } from '../../../src/types/blog'
+import type { BlogSearchResult } from '../../../src/services/searchApi'
 
-vi.mock('../../../src/services/blogApi', () => ({
-  searchBlogs: vi.fn(),
+vi.mock('../../../src/services/searchApi', () => ({
+  blogSearch: vi.fn(),
 }))
 
-import { searchBlogs } from '../../../src/services/blogApi'
+import { blogSearch } from '../../../src/services/searchApi'
 
 const searchResults: BlogSearchResult[] = [
-  { id: 'b-1', title: 'Spring Boot Tips', createdDate: '2024-01-01T00:00:00Z' },
-  { id: 'b-2', title: 'Kubernetes Deep Dive', createdDate: '2024-02-01T00:00:00Z' },
+  { title: 'Spring Boot Tips', shortDescription: null, image: null, publishedDate: '2024-01-01T00:00:00Z', url: '/blogs/b-1' },
+  { title: 'Kubernetes Deep Dive', shortDescription: null, image: null, publishedDate: '2024-02-01T00:00:00Z', url: '/blogs/b-2' },
 ]
 
 describe('BlogSearch', () => {
   beforeEach(() => {
-    vi.mocked(searchBlogs).mockReset()
+    vi.mocked(blogSearch).mockReset()
   })
 
   it('renders search input', () => {
@@ -33,7 +33,7 @@ describe('BlogSearch', () => {
   })
 
   it('shows no results message when search returns empty', async () => {
-    vi.mocked(searchBlogs).mockResolvedValue([])
+    vi.mocked(blogSearch).mockResolvedValue([])
 
     render(
       <MemoryRouter>
@@ -53,7 +53,7 @@ describe('BlogSearch', () => {
   })
 
   it('shows search results when query matches', async () => {
-    vi.mocked(searchBlogs).mockResolvedValue(searchResults)
+    vi.mocked(blogSearch).mockResolvedValue(searchResults)
 
     render(
       <MemoryRouter>
@@ -85,7 +85,7 @@ describe('BlogSearch', () => {
 
     await waitFor(
       () => {
-        expect(searchBlogs).not.toHaveBeenCalled()
+        expect(blogSearch).not.toHaveBeenCalled()
       },
       { timeout: 500 },
     )

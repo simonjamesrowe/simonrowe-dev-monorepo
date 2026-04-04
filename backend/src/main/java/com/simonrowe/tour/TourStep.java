@@ -12,6 +12,7 @@ public record TourStep(
     String title,
     String titleImage,
     String description,
-    String position
+    String position,
+    String route
 ) {
 }

@@ -1,33 +1,76 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
-import { ExpertiseGrid } from '../components/experience/ExpertiseGrid'
 import { RoleTimeline } from '../components/experience/RoleTimeline'
+import { JobDetailDrawer } from '../components/experience/JobDetailDrawer'
+import { SkillGroupGrid } from '../components/skills/SkillGroupGrid'
+import { SkillGroupDetail } from '../components/skills/SkillGroupDetail'
 import { trackPageView } from '../services/analytics'
 
 export function ExperiencePage() {
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+
   useEffect(() => {
     trackPageView('/experience')
-    document.title = 'Experience & Skills | The Digital Architect'
+    document.title = 'Experience & Skills'
+  }, [])
+
+  const handleGroupClick = useCallback((groupId: string) => {
+    setSelectedGroupId(groupId)
+  }, [])
+
+  const handleCloseSkillDrawer = useCallback(() => {
+    setSelectedGroupId(null)
+  }, [])
+
+  const handleJobClick = useCallback((jobId: string) => {
+    setSelectedJobId(jobId)
+  }, [])
+
+  const handleCloseJobDrawer = useCallback(() => {
+    setSelectedJobId(null)
+  }, [])
+
+  const handleSkillGroupFromJob = useCallback((groupId: string) => {
+    setSelectedJobId(null)
+    setSelectedGroupId(groupId)
+  }, [])
+
+  const handleJobFromSkill = useCallback((jobId: string) => {
+    setSelectedGroupId(null)
+    setSelectedJobId(jobId)
   }, [])
 
   return (
     <div className="experience-page">
-      <section className="experience-page__hero">
-        <h1 className="display-lg experience-page__title">
-          Architecting{' '}
-          <span className="experience-page__title-accent">Digital Fortresses.</span>
-        </h1>
-        <p className="experience-page__subtitle body-lg">
-          Simon Rowe, Senior Cloud Architect &amp; Cyber Sentinel. Precision-driven engineering for the AI-native frontier.
-        </p>
-      </section>
-
-      <section className="experience-page__section">
+      <section className="experience-page__section tour-experience">
         <h2 className="headline-lg" style={{ color: 'white', marginBottom: '2rem' }}>Experience</h2>
-        <RoleTimeline />
+        <RoleTimeline onJobClick={handleJobClick} />
       </section>
 
-      <ExpertiseGrid />
+      <section className="experience-page__section tour-skills">
+        <h2 className="headline-lg" style={{ color: 'white', marginBottom: '0.5rem' }}>Skills</h2>
+        <p className="body-lg" style={{ color: 'var(--on-surface-variant)', marginBottom: '2rem' }}>
+          Click a skill group to explore individual skills and see where they&apos;ve been used.
+        </p>
+        <SkillGroupGrid onGroupClick={handleGroupClick} />
+      </section>
+
+      {selectedGroupId && (
+        <SkillGroupDetail
+          groupId={selectedGroupId}
+          onClose={handleCloseSkillDrawer}
+          onJobClick={handleJobFromSkill}
+        />
+      )}
+
+      {selectedJobId && (
+        <JobDetailDrawer
+          jobId={selectedJobId}
+          onClose={handleCloseJobDrawer}
+          onSkillGroupClick={handleSkillGroupFromJob}
+        />
+      )}
     </div>
   )
 }

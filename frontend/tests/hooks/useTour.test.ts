@@ -1,4 +1,6 @@
 import { renderHook } from '@testing-library/react'
+import { createElement, type ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { TourProvider } from '../../src/components/tour/TourProvider'
@@ -19,10 +21,14 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 })
 
+function Wrapper({ children }: { children: ReactNode }) {
+  return createElement(MemoryRouter, null, createElement(TourProvider, null, children))
+}
+
 describe('useTour', () => {
   it('returns context values when used inside TourProvider', () => {
     const { result } = renderHook(() => useTour(), {
-      wrapper: TourProvider,
+      wrapper: Wrapper,
     })
 
     expect(result.current.isActive).toBe(false)
