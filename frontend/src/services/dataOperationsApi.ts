@@ -8,7 +8,7 @@ const DATA_OPS_URL = `${API_BASE_URL}/api/admin/data-operations`
 
 export interface DataOperation {
   id: string
-  type: 'BACKUP' | 'RESTORE' | 'CLEAR' | 'REBUILD_INDEX'
+  type: 'BACKUP' | 'RESTORE' | 'CLEAR' | 'REBUILD_INDEX' | 'REDEPLOY'
   status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
   startedAt: string
   completedAt: string | null
@@ -145,6 +145,18 @@ export async function startRebuildIndex(
 ): Promise<DataOperation> {
   const token = await getAccessToken()
   const response = await authFetch(`${DATA_OPS_URL}/rebuild-index`, token, { method: 'POST' })
+  return handleResponse<DataOperation>(response)
+}
+
+// ---------------------------------------------------------------------------
+// Redeploy
+// ---------------------------------------------------------------------------
+
+export async function startRedeploy(
+  getAccessToken: GetAccessToken,
+): Promise<DataOperation> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${DATA_OPS_URL}/redeploy`, token, { method: 'POST' })
   return handleResponse<DataOperation>(response)
 }
 

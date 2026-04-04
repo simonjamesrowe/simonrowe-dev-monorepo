@@ -48,6 +48,13 @@ services:
       timeout: 5s
       retries: 5
 
+  uploads-init:
+    image: busybox
+    volumes:
+      - backend-uploads:/workspace/uploads
+    command: ["sh", "-c", "chown -R 1002:1000 /workspace/uploads"]
+    restart: "no"
+
   backend:
     image: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:latest
     pull_policy: always
@@ -69,7 +76,14 @@ services:
       UPLOADS_PATH: uploads/
     volumes:
       - backend-uploads:/workspace/uploads
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/local/bin/docker:/usr/local/bin/docker:ro
+      - /usr/local/lib/docker/cli-plugins:/usr/local/lib/docker/cli-plugins:ro
+      - ./docker-compose.prod.yml:/workspace/docker-compose.prod.yml:ro
+      - ./.env:/workspace/.env:ro
     depends_on:
+      uploads-init:
+        condition: service_completed_successfully
       mongodb:
         condition: service_healthy
       kafka:

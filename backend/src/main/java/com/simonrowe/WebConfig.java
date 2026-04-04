@@ -1,5 +1,6 @@
 package com.simonrowe;
 
+import com.simonrowe.dataops.RedeployProperties;
 import com.simonrowe.ratelimit.RateLimitConfig;
 import com.simonrowe.ratelimit.RateLimitInterceptor;
 import java.nio.file.Path;
@@ -19,7 +20,7 @@ import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
-@EnableConfigurationProperties(RateLimitConfig.class)
+@EnableConfigurationProperties({RateLimitConfig.class, RedeployProperties.class})
 public class WebConfig implements WebMvcConfigurer {
 
   @Value("${cors.allowed-origins:}")

@@ -132,6 +132,15 @@ chat:
     and headings where appropriate. Keep your tone conversational and approachable, not robotic
     or corporate. You're a real person sharing your story.
 
+redeploy:
+  compose-file: ${REDEPLOY_COMPOSE_FILE:/workspace/docker-compose.prod.yml}
+  services:
+    - backend
+    - frontend
+    - nginx
+  docker-binary: ${REDEPLOY_DOCKER_BINARY:docker}
+  self-restart-delay-seconds: 5
+
 rate-limit:
   chat:
     requests-per-minute: 20
