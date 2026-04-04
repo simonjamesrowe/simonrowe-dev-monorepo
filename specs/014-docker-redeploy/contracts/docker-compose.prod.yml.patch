@@ -1,0 +1,15 @@
+# Docker Compose Production Changes
+# These volume mounts must be added to the backend service
+# to enable Docker control from within the container.
+
+# Add to backend.volumes:
+#   - /var/run/docker.sock:/var/run/docker.sock:ro
+#   - /usr/local/bin/docker:/usr/local/bin/docker:ro
+#   - /usr/local/lib/docker/cli-plugins:/usr/local/lib/docker/cli-plugins:ro
+#   - ./docker-compose.prod.yml:/workspace/docker-compose.prod.yml:ro
+#   - ./.env:/workspace/.env:ro
+
+# The Docker socket gives the backend the ability to manage sibling containers.
+# The Docker CLI binary and compose plugin are mounted from the host since
+# the Cloud Native Buildpack image does not include them.
+# The compose file and .env are needed for `docker compose -f` commands.

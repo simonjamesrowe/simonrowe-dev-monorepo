@@ -82,7 +82,7 @@ print('');
 print('--- Looking up skills ---');
 
 const skillIds = {};
-const skillNames = ['Java', 'Spring Boot', 'React', 'TypeScript', 'MongoDB', 'Docker', 'Nginx', 'Grafana', 'Kafka', 'Elasticsearch'];
+const skillNames = ['Java 21', 'Spring Boot', 'React', 'Typescript', 'MongoDB', 'Docker', 'Kafka', 'Elastic Search'];
 
 skillNames.forEach(name => {
   skillIds[name] = findSkillId(name);
@@ -692,8 +692,8 @@ const post6Tags = buildDbRefArray('tags', [
   tagIds['Spring Boot'], tagIds['AI']
 ]);
 const post6Skills = buildDbRefArray('skills', [
-  skillIds['Java'], skillIds['Spring Boot'], skillIds['React'],
-  skillIds['TypeScript'], skillIds['MongoDB']
+  skillIds['Java 21'], skillIds['Spring Boot'], skillIds['React'],
+  skillIds['Typescript'], skillIds['MongoDB']
 ]);
 
 const post6Result = db.blogs.insertOne({
@@ -716,8 +716,8 @@ const post7Tags = buildDbRefArray('tags', [
   tagIds['AI'], tagIds['Chatbot']
 ]);
 const post7Skills = buildDbRefArray('skills', [
-  skillIds['Java'], skillIds['Spring Boot'],
-  skillIds['React'], skillIds['TypeScript']
+  skillIds['Java 21'], skillIds['Spring Boot'],
+  skillIds['React'], skillIds['Typescript']
 ]);
 
 const post7Result = db.blogs.insertOne({
@@ -741,7 +741,7 @@ const post8Tags = buildDbRefArray('tags', [
 ]);
 const post8Skills = buildDbRefArray('skills', [
   skillIds['Docker'], skillIds['MongoDB'],
-  skillIds['Kafka'], skillIds['Elasticsearch']
+  skillIds['Kafka'], skillIds['Elastic Search']
 ]);
 
 const post8Result = db.blogs.insertOne({

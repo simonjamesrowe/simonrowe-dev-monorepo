@@ -1,0 +1,108 @@
+openapi: 3.0.3
+info:
+  title: Data Operations - Redeploy Extension
+  description: New endpoint added to the existing Data Operations API
+  version: 1.0.0
+
+paths:
+  /api/admin/data-operations/redeploy:
+    post:
+      summary: Trigger site redeployment
+      description: |
+        Pulls latest container images from GHCR and restarts application
+        containers (backend, frontend, nginx). Returns 202 Accepted immediately
+        and runs the operation asynchronously. Progress is streamed via the
+        existing SSE endpoint at /api/admin/data-operations/progress.
+
+        The backend restarts itself last. The SSE connection will drop when
+        the backend container restarts. The frontend should reconnect and
+        check the final status via GET /api/admin/data-operations/status.
+      operationId: startRedeploy
+      tags:
+        - Data Operations
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Redeploy operation accepted and started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataOperation'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                type: "REDEPLOY"
+                status: "IN_PROGRESS"
+                startedAt: "2026-04-04T12:00:00Z"
+                completedAt: null
+                progressMessage: "Starting redeploy..."
+                progressPercent: 0
+                errorMessage: null
+                resultSummary: null
+        '409':
+          description: Another operation is already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Operation already in progress"
+                currentOperation: "BACKUP"
+        '503':
+          description: Docker environment not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Docker is not accessible. Ensure the Docker socket is mounted."
+
+components:
+  schemas:
+    DataOperation:
+      type: object
+      description: Existing model — no changes required
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [BACKUP, RESTORE, CLEAR, REBUILD_INDEX, REDEPLOY]
+        status:
+          type: string
+          enum: [IN_PROGRESS, COMPLETED, FAILED]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        progressMessage:
+          type: string
+        progressPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        errorMessage:
+          type: string
+          nullable: true
+        resultSummary:
+          type: string
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        currentOperation:
+          type: string
+          nullable: true
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
