@@ -371,6 +371,25 @@ a:hover {
     flex: 1;
     margin-right: 3rem;
   }
+
+  .site-search__input {
+    font-size: 16px;
+    padding: 0.6rem 2.75rem 0.6rem 0.75rem;
+  }
+
+  .site-search__suggestions {
+    display: none;
+  }
+
+  .search-dropdown {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
+    margin-top: 0;
+    border-radius: 0;
+    max-height: calc(100vh - 56px);
+  }
 }
 
 /* ==================== Footer ==================== */
@@ -515,6 +534,12 @@ a:hover {
 .app-layout__main {
   flex: 1;
   padding-top: 80px;
+}
+
+@media (max-width: 768px) {
+  .app-layout__main {
+    padding-top: 56px;
+  }
 }
 
 /* ==================== Hero Section ==================== */
@@ -747,9 +772,15 @@ a:hover {
 
 /* Hero responsive */
 @media (max-width: 768px) {
+  .hero {
+    min-height: auto;
+    align-items: flex-start;
+    padding-top: 1rem;
+  }
+
   .hero__grid {
     grid-template-columns: 1fr;
-    padding: 3.5rem 1.25rem 2rem;
+    padding: 1.5rem 1.25rem 2rem;
     gap: 2rem;
   }
 
@@ -759,6 +790,14 @@ a:hover {
 
   .hero__chat-teaser {
     max-width: 100%;
+  }
+
+  .hero__badge {
+    margin-bottom: 1rem;
+  }
+
+  .hero__tagline {
+    margin-bottom: 1.25rem;
   }
 }
 
