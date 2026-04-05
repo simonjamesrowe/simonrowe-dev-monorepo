@@ -132,7 +132,7 @@ public class DataOperationsController {
   public ResponseEntity<?> startRedeploy() {
     if (!redeployService.isDockerAvailable()) {
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-          .body(java.util.Map.of("error",
+          .body(java.util.Map.of("message",
               "Docker is not accessible. Ensure the Docker socket is mounted."));
     }
     DataOperation operation =
