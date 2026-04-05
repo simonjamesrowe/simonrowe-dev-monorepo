@@ -77,8 +77,8 @@ services:
     volumes:
       - backend-uploads:/workspace/uploads
       - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/local/bin/docker:/usr/local/bin/docker:ro
-      - /usr/local/lib/docker/cli-plugins:/usr/local/lib/docker/cli-plugins:ro
+      - ${DOCKER_BINARY_PATH:-/usr/bin/docker}:/usr/local/bin/docker:ro
+      - ${DOCKER_PLUGINS_PATH:-/usr/libexec/docker/cli-plugins}:/usr/local/lib/docker/cli-plugins:ro
       - ./docker-compose.prod.yml:/workspace/docker-compose.prod.yml:ro
       - ./.env:/workspace/.env:ro
     depends_on:
