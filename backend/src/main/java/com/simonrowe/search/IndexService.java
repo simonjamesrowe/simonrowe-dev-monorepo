@@ -324,6 +324,11 @@ public class IndexService {
     if (dateStr == null || dateStr.isBlank()) {
       return null;
     }
-    return LocalDate.parse(dateStr).atStartOfDay(ZoneOffset.UTC).toInstant();
+    try {
+      return LocalDate.parse(dateStr).atStartOfDay(ZoneOffset.UTC).toInstant();
+    } catch (java.time.format.DateTimeParseException e) {
+      return java.time.YearMonth.parse(dateStr)
+          .atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
   }
 }
