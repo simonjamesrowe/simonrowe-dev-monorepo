@@ -138,6 +138,11 @@ services:
     depends_on:
       nginx:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   alloy:
     image: grafana/alloy:latest

@@ -58,6 +58,7 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 
 ## Recent Changes
+- 016-prod-health-scripts: Added Bash (strict mode: `set -euo pipefail`) + Docker Compose, curl, systemd (optional, for persistent monitoring)
 - 015-landing-ai-redesign: Added TypeScript (frontend), React (latest stable) + React, React Router, Lucide React, @stomp/stompjs, react-markdown
 - 014-docker-redeploy: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, React, ProcessBuilder (java.lang), Docker Compose CLI (mounted from host)
 - 001-website-redesign: Added TypeScript (frontend), Java 21 (backend — no changes) + React (latest stable), React Router, Lucide React, React Hook Form, Zod, @stomp/stompjs, React Markdown
@@ -66,5 +67,7 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
+- Bash (strict mode: `set -euo pipefail`) + Docker Compose, curl, systemd (optional, for persistent monitoring) (016-prod-health-scripts)
+- N/A (log files only) (016-prod-health-scripts)
 - TypeScript (frontend), React (latest stable) + React, React Router, Lucide React, @stomp/stompjs, react-markdown (015-landing-ai-redesign)
 - N/A (frontend-only changes; chat uses existing WebSocket service) (015-landing-ai-redesign)
