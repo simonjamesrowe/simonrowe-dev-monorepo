@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -231,12 +232,14 @@ public class IndexService {
       if (group.skills() == null) {
         continue;
       }
-      int index = 0;
-      for (String skillId : group.skills()) {
-        if (skillMap.containsKey(skillId)) {
-          skillDocs.add(skillToSiteDocument(skillMap.get(skillId), group.id(), index));
-          index++;
-        }
+      List<Skill> sortedSkills = group.skills().stream()
+          .filter(skillMap::containsKey)
+          .map(skillMap::get)
+          .sorted(Comparator.comparingInt(
+              s -> s.displayOrder() != null ? s.displayOrder() : Integer.MAX_VALUE))
+          .toList();
+      for (int i = 0; i < sortedSkills.size(); i++) {
+        skillDocs.add(skillToSiteDocument(sortedSkills.get(i), group.id(), i));
       }
     }
     bulkIndexSiteDocuments(skillDocs);
