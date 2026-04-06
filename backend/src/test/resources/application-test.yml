@@ -16,7 +16,10 @@ spring:
   ai:
     openai:
       api-key: test-dummy-key
-      base-url: https://api.groq.com/openai
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.vectorstore.elasticsearch.autoconfigure.ElasticsearchVectorStoreAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
 management:
   health:
     kafka:

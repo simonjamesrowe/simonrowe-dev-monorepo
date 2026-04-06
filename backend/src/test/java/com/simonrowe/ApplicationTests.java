@@ -3,12 +3,15 @@ package com.simonrowe;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.Status;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -17,6 +20,12 @@ import org.testcontainers.kafka.ConfluentKafkaContainer;
 @SpringBootTest
 @Testcontainers
 class ApplicationTests {
+
+  @MockitoBean
+  private VectorStore vectorStore;
+
+  @MockitoBean
+  private EmbeddingModel embeddingModel;
 
   @Container
   static ConfluentKafkaContainer kafka =
