@@ -9,6 +9,7 @@ public record RedeployProperties(
     String projectName,
     List<String> services,
     String dockerBinary,
-    int selfRestartDelaySeconds
+    int selfRestartDelaySeconds,
+    String helperImage
 ) {
 }

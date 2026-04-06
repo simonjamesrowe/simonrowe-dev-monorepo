@@ -141,6 +141,7 @@ redeploy:
     - nginx
   docker-binary: ${REDEPLOY_DOCKER_BINARY:docker}
   self-restart-delay-seconds: 5
+  helper-image: ${REDEPLOY_HELPER_IMAGE:docker:cli}
 
 rate-limit:
   chat:
