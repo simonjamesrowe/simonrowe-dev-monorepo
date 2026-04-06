@@ -49,6 +49,9 @@ class AdminSkillControllerTest {
   @MockitoBean
   private ImageVariantGenerator imageVariantGenerator;
 
+  @MockitoBean
+  private com.simonrowe.events.ContentChangePublisher contentChangePublisher;
+
   @Autowired
   private MockMvc mockMvc;
 
