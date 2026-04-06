@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { SearchResultGroup } from '../../../src/components/search/SearchResultGroup'
+import { DrawerProvider } from '../../../src/hooks/useDrawer'
 import type { SearchResult } from '../../../src/services/searchApi'
 
 const results: SearchResult[] = [
@@ -15,8 +16,8 @@ describe('SearchResultGroup', () => {
   it('renders title and results', () => {
     render(
       <MemoryRouter>
-        <SearchResultGroup onResultClick={vi.fn()} results={results} title="Blogs" />
-      </MemoryRouter>,
+        <DrawerProvider><SearchResultGroup onResultClick={vi.fn()} results={results} title="Blogs" />
+      </DrawerProvider></MemoryRouter>,
     )
 
     expect(screen.getByText('Blogs')).toBeInTheDocument()
@@ -29,8 +30,8 @@ describe('SearchResultGroup', () => {
 
     render(
       <MemoryRouter>
-        <SearchResultGroup onResultClick={onResultClick} results={results} title="Blogs" />
-      </MemoryRouter>,
+        <DrawerProvider><SearchResultGroup onResultClick={onResultClick} results={results} title="Blogs" />
+      </DrawerProvider></MemoryRouter>,
     )
 
     await userEvent.click(screen.getByText('Spring Boot'))
@@ -41,8 +42,8 @@ describe('SearchResultGroup', () => {
   it('uses placeholder image when image is null', () => {
     render(
       <MemoryRouter>
-        <SearchResultGroup onResultClick={vi.fn()} results={results} title="Skills" />
-      </MemoryRouter>,
+        <DrawerProvider><SearchResultGroup onResultClick={vi.fn()} results={results} title="Skills" />
+      </DrawerProvider></MemoryRouter>,
     )
 
     const images = document.querySelectorAll<HTMLImageElement>('.search-result-group__thumbnail')

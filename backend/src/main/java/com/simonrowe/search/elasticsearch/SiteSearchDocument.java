@@ -6,6 +6,7 @@ public record SiteSearchDocument(
     String type,
     String shortDescription,
     String longDescription,
+    String company,
     String image,
     String url
 ) {

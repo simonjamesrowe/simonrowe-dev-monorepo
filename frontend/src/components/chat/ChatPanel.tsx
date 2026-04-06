@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RotateCcw, X } from 'lucide-react'
+import { MessageCircle, RotateCcw, X } from 'lucide-react'
 import * as chatService from '../../services/chatService'
 import type { ChatResponse } from '../../services/chatService'
 import { ChatMessage } from './ChatMessage'
@@ -7,9 +7,16 @@ import { ChatInput } from './ChatInput'
 import { ChatTypingIndicator } from './ChatTypingIndicator'
 
 const MAX_USER_MESSAGES = 10
+const STREAM_TIMEOUT_MS = 30000
+
+const SUGGESTED_PROMPTS = [
+  'Tell me about his AI stack',
+  'Leadership philosophy?',
+  'Cloud-native experience?',
+]
 
 interface ChatPanelProps {
-  initialQuery: string
+  initialQuery?: string
   onClose: () => void
   profileImageUrl?: string
   visible?: boolean
@@ -34,9 +41,33 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
   const streamFinalized = useRef(false)
   const streamContentRef = useRef('')
   const cancelledRef = useRef(false)
+  const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length
   const limitReached = userMessageCount >= MAX_USER_MESSAGES
+
+  const finalizeStream = useCallback(() => {
+    if (streamFinalized.current) return
+    streamFinalized.current = true
+    clearTimeout(streamTimeoutRef.current)
+    const finalContent = streamContentRef.current
+    setStreamingContent(null)
+    if (finalContent) {
+      setMessages((msgs) => [
+        ...msgs,
+        { role: 'assistant', content: finalContent, timestamp: formatTimestamp() },
+      ])
+    }
+  }, [])
+
+  const resetStreamTimeout = useCallback(() => {
+    clearTimeout(streamTimeoutRef.current)
+    streamTimeoutRef.current = setTimeout(() => {
+      if (!streamFinalized.current && !cancelledRef.current) {
+        finalizeStream()
+      }
+    }, STREAM_TIMEOUT_MS)
+  }, [finalizeStream])
 
   const onMessage = useCallback((response: ChatResponse) => {
     if (cancelledRef.current) return
@@ -44,26 +75,29 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
       streamContentRef.current = ''
       streamFinalized.current = false
       setStreamingContent('')
+      resetStreamTimeout()
     } else if (response.type === 'STREAM_CHUNK') {
       streamContentRef.current += response.content
       setStreamingContent(streamContentRef.current)
+      resetStreamTimeout()
     } else if (response.type === 'STREAM_RESET') {
       streamContentRef.current = ''
       setStreamingContent('')
+      resetStreamTimeout()
     } else if (response.type === 'STREAM_END') {
+      clearTimeout(streamTimeoutRef.current)
       if (streamFinalized.current) return
       streamFinalized.current = true
       const finalContent = streamContentRef.current || response.content || ''
       setStreamingContent(null)
-      setMessages((msgs) => [
-        ...msgs,
-        {
-          role: 'assistant',
-          content: finalContent,
-          timestamp: formatTimestamp(),
-        },
-      ])
+      if (finalContent) {
+        setMessages((msgs) => [
+          ...msgs,
+          { role: 'assistant', content: finalContent, timestamp: formatTimestamp() },
+        ])
+      }
     } else if (response.type === 'ERROR') {
+      clearTimeout(streamTimeoutRef.current)
       if (streamFinalized.current) return
       streamFinalized.current = true
       setStreamingContent(null)
@@ -76,7 +110,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
         },
       ])
     }
-  }, [])
+  }, [resetStreamTimeout])
 
   useEffect(() => {
     const sessionId = crypto.randomUUID()
@@ -84,13 +118,17 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
     streamFinalized.current = false
     cancelledRef.current = false
 
-    setMessages([
-      {
-        role: 'user',
-        content: initialQuery,
-        timestamp: formatTimestamp(),
-      },
-    ])
+    if (initialQuery) {
+      setMessages([
+        {
+          role: 'user',
+          content: initialQuery,
+          timestamp: formatTimestamp(),
+        },
+      ])
+    } else {
+      setMessages([])
+    }
     setStreamingContent(null)
 
     let sendTimeout: ReturnType<typeof setTimeout>
@@ -101,11 +139,13 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
       () => {
         if (cancelledRef.current) return
         setConnected(true)
-        sendTimeout = setTimeout(() => {
-          if (!cancelledRef.current) {
-            chatService.sendMessage({ sessionId, message: initialQuery })
-          }
-        }, 50)
+        if (initialQuery) {
+          sendTimeout = setTimeout(() => {
+            if (!cancelledRef.current) {
+              chatService.sendMessage({ sessionId, message: initialQuery })
+            }
+          }, 50)
+        }
       },
       () => {
         if (cancelledRef.current) return
@@ -116,6 +156,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
     return () => {
       cancelledRef.current = true
       clearTimeout(sendTimeout)
+      clearTimeout(streamTimeoutRef.current)
       chatService.disconnect()
     }
   }, [initialQuery, onMessage])
@@ -196,6 +237,28 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
         </div>
 
         <div className="chat-panel__messages">
+          {messages.length === 0 && !isStreaming && (
+            <div className="chat-panel__welcome">
+              <MessageCircle size={32} className="chat-panel__welcome-icon" />
+              <p className="chat-panel__welcome-title">Hi, I'm Simon's AI assistant</p>
+              <p className="chat-panel__welcome-text">
+                Ask me anything about Simon's experience, skills, and career history.
+              </p>
+              <div className="chat-panel__welcome-prompts">
+                {SUGGESTED_PROMPTS.map(prompt => (
+                  <button
+                    key={prompt}
+                    className="chat-panel__welcome-chip"
+                    onClick={() => handleSend(prompt)}
+                    type="button"
+                    disabled={!connected}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {messages.map((msg, idx) => (
             <ChatMessage
               key={idx}

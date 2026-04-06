@@ -59,6 +59,8 @@ public class ElasticsearchConfig {
                   .text(TextProperty.of(t -> t.analyzer("standard")))))
               .properties("longDescription", Property.of(p -> p
                   .text(TextProperty.of(t -> t.analyzer("standard")))))
+              .properties("company", Property.of(p -> p
+                  .text(TextProperty.of(t -> t.analyzer("standard")))))
               .properties("image", Property.of(p -> p
                   .keyword(KeywordProperty.of(k -> k.index(false)))))
               .properties("url", Property.of(p -> p

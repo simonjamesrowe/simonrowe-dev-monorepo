@@ -81,13 +81,13 @@ class SearchServiceTest {
   void siteSearchReturnsGroupedResults() throws Exception {
     SiteSearchDocument blogDoc = new SiteSearchDocument(
         "b1", "Java Blog", "blog", "A Java blog",
-        null, "/img.jpg", "/blogs/java");
+        null, null, "/img.jpg", "/blogs/java");
     SiteSearchDocument jobDoc = new SiteSearchDocument(
         "j1", "Java Dev", "job", "Java developer",
-        "Long desc", null, "/employment");
+        "Long desc", "Acme Corp", null, "/employment");
     SiteSearchDocument skillDoc = new SiteSearchDocument(
         "s1", "Java", "skill", "Java language",
-        null, "/img/java.png", "/skills");
+        null, null, "/img/java.png", "/skills");
 
     Hit<SiteSearchDocument> blogHit = mock(Hit.class);
     when(blogHit.source()).thenReturn(blogDoc);

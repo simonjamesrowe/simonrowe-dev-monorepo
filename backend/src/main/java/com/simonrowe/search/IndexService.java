@@ -126,6 +126,7 @@ public class IndexService {
         "blog",
         blog.shortDescription(),
         null,
+        null,
         imageUrl,
         "/blogs/" + blog.id()
     );
@@ -142,6 +143,7 @@ public class IndexService {
         "job",
         job.shortDescription(),
         job.longDescription(),
+        job.company(),
         imageUrl,
         "/jobs/" + job.id()
     );
@@ -157,6 +159,7 @@ public class IndexService {
         skill.name(),
         "skill",
         skill.description(),
+        null,
         null,
         imageUrl,
         "/skills-groups/" + skillGroupId

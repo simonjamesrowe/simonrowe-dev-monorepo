@@ -57,7 +57,7 @@ public class SearchService {
               .query(q -> q
                   .multiMatch(mm -> mm
                       .query(sanitized)
-                      .fields("name", "shortDescription", "longDescription")
+                      .fields("name", "shortDescription", "longDescription", "company")
                       .type(co.elastic.clients.elasticsearch._types.query_dsl
                           .TextQueryType.BestFields))),
           SiteSearchDocument.class);

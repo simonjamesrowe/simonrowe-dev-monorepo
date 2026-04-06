@@ -1,7 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import type { SearchResult } from '../../services/searchApi'
+import { useDrawer } from '../../hooks/useDrawer'
 
 const PLACEHOLDER_IMAGE = '/images/placeholder.png'
+
+const JOB_URL_RE = /^\/jobs\/(.+)$/
+const SKILL_GROUP_URL_RE = /^\/skills-groups\/(.+)$/
 
 interface SearchResultGroupProps {
   title: string
@@ -11,9 +15,23 @@ interface SearchResultGroupProps {
 
 export function SearchResultGroup({ title, results, onResultClick }: SearchResultGroupProps) {
   const navigate = useNavigate()
+  const { openJob, openSkillGroup } = useDrawer()
 
   function handleClick(url: string) {
     onResultClick()
+
+    const jobMatch = JOB_URL_RE.exec(url)
+    if (jobMatch) {
+      openJob(jobMatch[1])
+      return
+    }
+
+    const skillMatch = SKILL_GROUP_URL_RE.exec(url)
+    if (skillMatch) {
+      openSkillGroup(skillMatch[1])
+      return
+    }
+
     void navigate(url)
   }
 

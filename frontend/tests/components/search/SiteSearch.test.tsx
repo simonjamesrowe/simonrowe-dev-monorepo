@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SiteSearch } from '../../../src/components/search/SiteSearch'
+import { DrawerProvider } from '../../../src/hooks/useDrawer'
 import type { GroupedSearchResponse } from '../../../src/services/searchApi'
 
 vi.mock('../../../src/services/searchApi', () => ({
@@ -26,8 +27,8 @@ describe('SiteSearch', () => {
   it('renders search input', () => {
     render(
       <MemoryRouter>
-        <SiteSearch />
-      </MemoryRouter>,
+        <DrawerProvider><SiteSearch />
+      </DrawerProvider></MemoryRouter>,
     )
 
     expect(screen.getByLabelText('Search or ask a question')).toBeInTheDocument()
@@ -38,8 +39,8 @@ describe('SiteSearch', () => {
 
     render(
       <MemoryRouter>
-        <SiteSearch />
-      </MemoryRouter>,
+        <DrawerProvider><SiteSearch />
+      </DrawerProvider></MemoryRouter>,
     )
 
     const input = screen.getByLabelText('Search or ask a question')
@@ -57,8 +58,8 @@ describe('SiteSearch', () => {
   it('does not search when query is shorter than 2 characters', async () => {
     render(
       <MemoryRouter>
-        <SiteSearch />
-      </MemoryRouter>,
+        <DrawerProvider><SiteSearch />
+      </DrawerProvider></MemoryRouter>,
     )
 
     const input = screen.getByLabelText('Search or ask a question')
@@ -77,8 +78,8 @@ describe('SiteSearch', () => {
 
     render(
       <MemoryRouter>
-        <SiteSearch onChatStart={onChatStart} />
-      </MemoryRouter>,
+        <DrawerProvider><SiteSearch onChatStart={onChatStart} />
+      </DrawerProvider></MemoryRouter>,
     )
 
     const input = screen.getByLabelText('Search or ask a question')
@@ -93,8 +94,8 @@ describe('SiteSearch', () => {
 
     render(
       <MemoryRouter>
-        <SiteSearch onChatStart={onChatStart} />
-      </MemoryRouter>,
+        <DrawerProvider><SiteSearch onChatStart={onChatStart} />
+      </DrawerProvider></MemoryRouter>,
     )
 
     const input = screen.getByLabelText('Search or ask a question')
@@ -107,8 +108,8 @@ describe('SiteSearch', () => {
   it('does not call onChatStart when no callback provided', async () => {
     render(
       <MemoryRouter>
-        <SiteSearch />
-      </MemoryRouter>,
+        <DrawerProvider><SiteSearch />
+      </DrawerProvider></MemoryRouter>,
     )
 
     const input = screen.getByLabelText('Search or ask a question')
@@ -123,8 +124,8 @@ describe('SiteSearch', () => {
 
     render(
       <MemoryRouter>
-        <SiteSearch />
-      </MemoryRouter>,
+        <DrawerProvider><SiteSearch />
+      </DrawerProvider></MemoryRouter>,
     )
 
     const input = screen.getByLabelText('Search or ask a question')

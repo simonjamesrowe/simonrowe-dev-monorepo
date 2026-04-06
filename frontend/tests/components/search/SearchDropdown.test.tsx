@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { SearchDropdown } from '../../../src/components/search/SearchDropdown'
+import { DrawerProvider } from '../../../src/hooks/useDrawer'
 import type { GroupedSearchResponse } from '../../../src/services/searchApi'
 
 const onResultClick = vi.fn()
@@ -17,8 +18,8 @@ describe('SearchDropdown', () => {
   it('shows loading state', () => {
     render(
       <MemoryRouter>
-        <SearchDropdown hasResults={false} loading={true} onResultClick={onResultClick} results={null} />
-      </MemoryRouter>,
+        <DrawerProvider><SearchDropdown hasResults={false} loading={true} onResultClick={onResultClick} results={null} />
+      </DrawerProvider></MemoryRouter>,
     )
 
     expect(screen.getByText('Searching...')).toBeInTheDocument()
@@ -27,8 +28,8 @@ describe('SearchDropdown', () => {
   it('shows no results message', () => {
     render(
       <MemoryRouter>
-        <SearchDropdown hasResults={false} loading={false} onResultClick={onResultClick} results={null} />
-      </MemoryRouter>,
+        <DrawerProvider><SearchDropdown hasResults={false} loading={false} onResultClick={onResultClick} results={null} />
+      </DrawerProvider></MemoryRouter>,
     )
 
     expect(screen.getByText('No results found')).toBeInTheDocument()
@@ -37,8 +38,8 @@ describe('SearchDropdown', () => {
   it('renders grouped results', () => {
     render(
       <MemoryRouter>
-        <SearchDropdown hasResults={true} loading={false} onResultClick={onResultClick} results={results} />
-      </MemoryRouter>,
+        <DrawerProvider><SearchDropdown hasResults={true} loading={false} onResultClick={onResultClick} results={results} />
+      </DrawerProvider></MemoryRouter>,
     )
 
     expect(screen.getByText('Blogs')).toBeInTheDocument()
@@ -58,8 +59,8 @@ describe('SearchDropdown', () => {
 
     render(
       <MemoryRouter>
-        <SearchDropdown hasResults={true} loading={false} onResultClick={onResultClick} results={partialResults} />
-      </MemoryRouter>,
+        <DrawerProvider><SearchDropdown hasResults={true} loading={false} onResultClick={onResultClick} results={partialResults} />
+      </DrawerProvider></MemoryRouter>,
     )
 
     expect(screen.getByText('Blogs')).toBeInTheDocument()
