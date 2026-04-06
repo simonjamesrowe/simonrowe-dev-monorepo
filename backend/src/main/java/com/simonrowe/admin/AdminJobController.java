@@ -1,6 +1,8 @@
 package com.simonrowe.admin;
 
 import com.simonrowe.common.Image;
+import com.simonrowe.events.ContentChangeEvent.ContentType;
+import com.simonrowe.events.ContentChangePublisher;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -35,9 +37,12 @@ public class AdminJobController {
       LoggerFactory.getLogger(AdminJobController.class);
 
   private final AdminJobRepository jobRepository;
-  private final com.simonrowe.events.ContentChangePublisher contentChangePublisher;
+  private final ContentChangePublisher contentChangePublisher;
 
-  public AdminJobController(final AdminJobRepository jobRepository, final com.simonrowe.events.ContentChangePublisher contentChangePublisher) {
+  public AdminJobController(
+      final AdminJobRepository jobRepository,
+      final ContentChangePublisher contentChangePublisher
+  ) {
     this.jobRepository = jobRepository;
     this.contentChangePublisher = contentChangePublisher;
   }
@@ -70,7 +75,7 @@ public class AdminJobController {
     Instant now = Instant.now();
     Job job = buildJob(null, body, now, now, null);
     Job saved = jobRepository.save(job);
-    contentChangePublisher.publishCreated(com.simonrowe.events.ContentChangeEvent.ContentType.JOB, saved.id());
+    contentChangePublisher.publishCreated(ContentType.JOB, saved.id());
     LOG.info("Created job: id={}, title={}, user={}",
         saved.id(), saved.title(), jwt.getSubject());
     return saved;
@@ -99,7 +104,7 @@ public class AdminJobController {
     Job updated = buildJob(existing.id(), body,
         existing.createdAt(), Instant.now(), existing.legacyId());
     Job saved = jobRepository.save(updated);
-    contentChangePublisher.publishUpdated(com.simonrowe.events.ContentChangeEvent.ContentType.JOB, saved.id());
+    contentChangePublisher.publishUpdated(ContentType.JOB, saved.id());
     LOG.info("Updated job: id={}, user={}", id, jwt.getSubject());
     return saved;
   }
@@ -112,7 +117,7 @@ public class AdminJobController {
   ) {
     Job job = getById(id);
     jobRepository.delete(job);
-    contentChangePublisher.publishDeleted(com.simonrowe.events.ContentChangeEvent.ContentType.JOB, id);
+    contentChangePublisher.publishDeleted(ContentType.JOB, id);
     LOG.info("Deleted job: id={}, user={}", id, jwt.getSubject());
   }
 

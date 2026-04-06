@@ -63,8 +63,6 @@ public class EmbeddingService {
       LOG.info("Blog {} is not published, skipping embedding", blog.id());
       return;
     }
-    String content = blog.title() + "\n\n" + blog.shortDescription()
-        + "\n\n" + blog.content();
     Map<String, Object> metadata = new HashMap<>();
     metadata.put("sourceId", blog.id());
     metadata.put("sourceType", "blog");
@@ -80,6 +78,8 @@ public class EmbeddingService {
           .collect(Collectors.joining(",")));
     }
     metadata.put("url", "/blogs/" + blog.id());
+    String content = blog.title() + "\n\n" + blog.shortDescription()
+        + "\n\n" + blog.content();
     embedContent(content, metadata);
     LOG.info("Embedded blog: {} ({} chars)", blog.title(), content.length());
   }

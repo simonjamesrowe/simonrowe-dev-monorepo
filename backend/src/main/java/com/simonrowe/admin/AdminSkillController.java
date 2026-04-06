@@ -1,6 +1,8 @@
 package com.simonrowe.admin;
 
 import com.simonrowe.common.Image;
+import com.simonrowe.events.ContentChangeEvent.ContentType;
+import com.simonrowe.events.ContentChangePublisher;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,10 +35,12 @@ public class AdminSkillController {
       LoggerFactory.getLogger(AdminSkillController.class);
 
   private final AdminSkillRepository skillRepository;
-  private final com.simonrowe.events.ContentChangePublisher contentChangePublisher;
+  private final ContentChangePublisher contentChangePublisher;
 
-  public AdminSkillController(final AdminSkillRepository skillRepository,
-      final com.simonrowe.events.ContentChangePublisher contentChangePublisher) {
+  public AdminSkillController(
+      final AdminSkillRepository skillRepository,
+      final ContentChangePublisher contentChangePublisher
+  ) {
     this.skillRepository = skillRepository;
     this.contentChangePublisher = contentChangePublisher;
   }
@@ -74,7 +78,7 @@ public class AdminSkillController {
     );
 
     Skill saved = skillRepository.save(skill);
-    contentChangePublisher.publishCreated(com.simonrowe.events.ContentChangeEvent.ContentType.SKILL, saved.id());
+    contentChangePublisher.publishCreated(ContentType.SKILL, saved.id());
     LOG.info("Created skill: id={}, name={}, user={}",
         saved.id(), saved.name(), jwt.getSubject());
     return saved;
@@ -114,7 +118,7 @@ public class AdminSkillController {
     );
 
     Skill saved = skillRepository.save(updated);
-    contentChangePublisher.publishUpdated(com.simonrowe.events.ContentChangeEvent.ContentType.SKILL, saved.id());
+    contentChangePublisher.publishUpdated(ContentType.SKILL, saved.id());
     LOG.info("Updated skill: id={}, user={}", id, jwt.getSubject());
     return saved;
   }
@@ -127,7 +131,7 @@ public class AdminSkillController {
   ) {
     Skill skill = getById(id);
     skillRepository.delete(skill);
-    contentChangePublisher.publishDeleted(com.simonrowe.events.ContentChangeEvent.ContentType.SKILL, id);
+    contentChangePublisher.publishDeleted(ContentType.SKILL, id);
     LOG.info("Deleted skill: id={}, user={}", id, jwt.getSubject());
   }
 

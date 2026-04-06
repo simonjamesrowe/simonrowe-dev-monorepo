@@ -202,7 +202,6 @@ public class AdminCodeExampleController {
     String title = (String) body.get("title");
     String description = (String) body.get("description");
     String language = (String) body.get("language");
-    String code = (String) body.get("code");
 
     if (title == null || title.isBlank()) {
       errors.add(new ValidationErrorResponse.FieldError(
@@ -230,6 +229,7 @@ public class AdminCodeExampleController {
           "Language must not exceed " + MAX_LANGUAGE_LENGTH + " characters"));
     }
 
+    String code = (String) body.get("code");
     if (code == null || code.isBlank()) {
       errors.add(new ValidationErrorResponse.FieldError(
           "code", "Code is required"));
