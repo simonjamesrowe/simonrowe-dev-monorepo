@@ -187,7 +187,7 @@ class IndexServiceTest {
     when(esClient.index(any(Function.class))).thenReturn(mockResponse);
 
     SiteSearchDocument doc = new SiteSearchDocument(
-        "id1", "Name", "blog", "Desc", null, null, null, "/url");
+        "id1", "Name", "blog", "Desc", null, null, null, "/url", null);
     indexService.indexSiteDocument(doc);
 
     verify(esClient).index(any(Function.class));
@@ -313,7 +313,7 @@ class IndexServiceTest {
     when(esClient.bulk(any(BulkRequest.class))).thenReturn(mockResponse);
 
     SiteSearchDocument doc = new SiteSearchDocument(
-        "id1", "Name", "blog", "Desc", null, null, null, "/url");
+        "id1", "Name", "blog", "Desc", null, null, null, "/url", null);
     indexService.bulkIndexSiteDocuments(List.of(doc));
 
     verify(esClient).bulk(any(BulkRequest.class));
