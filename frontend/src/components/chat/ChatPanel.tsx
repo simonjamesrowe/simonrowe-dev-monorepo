@@ -41,7 +41,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
   const streamFinalized = useRef(false)
   const streamContentRef = useRef('')
   const cancelledRef = useRef(false)
-  const streamTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
+  const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length
   const limitReached = userMessageCount >= MAX_USER_MESSAGES
