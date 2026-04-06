@@ -99,6 +99,7 @@ services:
 
   frontend:
     image: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-frontend:latest
+    pull_policy: always
     restart: unless-stopped
     volumes:
       - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
@@ -160,7 +161,7 @@ services:
       - --storage.path=/var/lib/alloy/data
       - /etc/alloy/config.alloy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:12345/-/healthy"]
+      test: ["CMD", "/bin/alloy", "--version"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -168,11 +169,14 @@ services:
   portainer:
     image: portainer/portainer-ce:latest
     restart: unless-stopped
+    command:
+      - --host
+      - unix:///var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer-data:/data
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000"]
+      test: ["CMD", "/portainer", "--version"]
       interval: 10s
       timeout: 5s
       retries: 3
