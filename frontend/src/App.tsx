@@ -3,12 +3,20 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 
 import { AuthProvider } from './auth/AuthProvider'
 import { AdminLayout } from './components/admin/AdminLayout'
+import { ChatPanel } from './components/chat/ChatPanel'
+import { RecaptchaGate } from './components/chat/RecaptchaGate'
+import { JobDetailDrawer } from './components/experience/JobDetailDrawer'
 import { Footer } from './components/layout/Footer'
 import { MobileMenu } from './components/layout/MobileMenu'
 import { TopNav } from './components/layout/TopNav'
+import { SkillGroupDetail } from './components/skills/SkillGroupDetail'
 import { TourProvider } from './components/tour/TourProvider'
 import { TourButton } from './components/tour/TourButton'
 import { TourOverlay } from './components/tour/TourOverlay'
+import { API_BASE_URL } from './config/api'
+import { ChatProvider, useChat } from './contexts/ChatContext'
+import { DrawerProvider, useDrawer } from './hooks/useDrawer'
+import { useProfile } from './hooks/useProfile'
 import { BlogEditor } from './pages/admin/BlogEditor'
 import { BlogsAdmin } from './pages/admin/BlogsAdmin'
 import { JobEditor } from './pages/admin/JobEditor'
@@ -35,21 +43,75 @@ function ScrollToTop() {
   return null
 }
 
+function GlobalDrawers() {
+  const { selectedJobId, selectedGroupId, openJob, openSkillGroup, closeJob, closeSkillGroup } = useDrawer()
+
+  return (
+    <>
+      {selectedJobId && (
+        <JobDetailDrawer
+          jobId={selectedJobId}
+          onClose={closeJob}
+          onSkillGroupClick={openSkillGroup}
+        />
+      )}
+      {selectedGroupId && (
+        <SkillGroupDetail
+          groupId={selectedGroupId}
+          onClose={closeSkillGroup}
+          onJobClick={openJob}
+        />
+      )}
+    </>
+  )
+}
+
+function ChatOverlay() {
+  const { chatOpen, chatQuery, showRecaptcha, closeChat, handleRecaptchaVerified, cancelRecaptcha } = useChat()
+  const { profile } = useProfile()
+
+  const profileImageUrl = profile?.profileImage?.url
+    ? `${API_BASE_URL}${profile.profileImage.url}`
+    : undefined
+
+  return (
+    <>
+      {showRecaptcha && (
+        <RecaptchaGate onVerified={handleRecaptchaVerified} onCancel={cancelRecaptcha} />
+      )}
+      {chatOpen && (
+        <ChatPanel
+          initialQuery={chatQuery ?? undefined}
+          onClose={closeChat}
+          profileImageUrl={profileImageUrl}
+          visible={chatOpen}
+        />
+      )}
+    </>
+  )
+}
+
 function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
-    <TourProvider>
-      <div className="app-layout">
-        <ScrollToTop />
-        <TopNav />
-        <MobileMenu />
-        <main className="app-layout__main">
-          {children}
-        </main>
-        <Footer />
-        <TourButton />
-        <TourOverlay />
-      </div>
-    </TourProvider>
+    <ChatProvider>
+      <DrawerProvider>
+        <TourProvider>
+          <div className="app-layout">
+            <ScrollToTop />
+            <TopNav />
+            <MobileMenu />
+            <main className="app-layout__main">
+              {children}
+            </main>
+            <Footer />
+            <TourButton />
+            <TourOverlay />
+            <GlobalDrawers />
+            <ChatOverlay />
+          </div>
+        </TourProvider>
+      </DrawerProvider>
+    </ChatProvider>
   )
 }
 

@@ -15,6 +15,20 @@ vi.mock('../../src/services/analytics', () => ({
   trackPageView: vi.fn(),
 }))
 
+vi.mock('../../src/contexts/ChatContext', () => ({
+  ChatProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useChat: () => ({
+    openChat: vi.fn(),
+    closeChat: vi.fn(),
+    chatOpen: false,
+    chatQuery: null,
+    recaptchaVerified: false,
+    showRecaptcha: false,
+    handleRecaptchaVerified: vi.fn(),
+    cancelRecaptcha: vi.fn(),
+  }),
+}))
+
 vi.mock('../../src/components/home/AboutSection', () => ({
   AboutSection: ({ onContact }: { onContact: () => void }) => (
     <div data-testid="about-section"><button onClick={onContact}>Contact</button></div>
@@ -31,21 +45,10 @@ vi.mock('../../src/components/contact/ContactDrawer', () => ({
   ),
 }))
 
-vi.mock('../../src/components/chat/ChatPanel', () => ({
-  ChatPanel: () => <div data-testid="chat-panel">Chat</div>,
-}))
-
-vi.mock('../../src/components/chat/RecaptchaGate', () => ({
-  RecaptchaGate: ({ onVerified }: { onVerified: () => void }) => (
-    <div data-testid="recaptcha-gate"><button onClick={onVerified}>Verify</button></div>
-  ),
-}))
-
 vi.mock('../../src/components/home/HeroSection', () => ({
-  HeroSection: ({ name, onChatOpen }: { name: string; onChatOpen: (q: string) => void }) => (
+  HeroSection: ({ name }: { name: string }) => (
     <div data-testid="hero-section">
       <h1>{name}</h1>
-      <button onClick={() => onChatOpen('test query')}>Open Chat</button>
     </div>
   ),
 }))

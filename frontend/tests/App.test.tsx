@@ -7,6 +7,15 @@ vi.mock('../src/pages/HomePage', () => ({
   HomePage: () => <h1>Homepage</h1>,
 }))
 
+vi.mock('../src/hooks/useProfile', () => ({
+  useProfile: () => ({
+    profile: null,
+    loading: true,
+    error: null,
+    retry: vi.fn(),
+  }),
+}))
+
 vi.mock('../src/components/tour/TourProvider', () => ({
   TourProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))

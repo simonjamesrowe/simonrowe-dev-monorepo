@@ -73,13 +73,24 @@ public class ChatController {
             return;
           }
 
+          toolCallSeen[0] = false;
           fullResponse.append(text);
           messagingTemplate.convertAndSend(destination,
               ChatResponse.streamChunk(sessionId, text));
         })
         .doOnComplete(() -> {
-          messagingTemplate.convertAndSend(destination,
-              ChatResponse.streamEnd(sessionId, fullResponse.toString()));
+          String content = fullResponse.toString();
+          if (content.isEmpty() && toolCallSeen[0]) {
+            LOG.warn("Stream completed after tool call with no continuation for session: {}",
+                sessionId);
+            messagingTemplate.convertAndSend(destination,
+                ChatResponse.streamEnd(sessionId,
+                    "I tried to look that up but couldn't retrieve the information. "
+                        + "Could you try rephrasing your question?"));
+          } else {
+            messagingTemplate.convertAndSend(destination,
+                ChatResponse.streamEnd(sessionId, content));
+          }
           LOG.info("Completed response for session: {}", sessionId);
         })
         .doOnError(error -> {

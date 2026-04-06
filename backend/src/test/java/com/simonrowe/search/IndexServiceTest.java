@@ -77,6 +77,7 @@ class IndexServiceTest {
     assertThat(doc.type()).isEqualTo("blog");
     assertThat(doc.shortDescription()).isEqualTo("Short desc");
     assertThat(doc.longDescription()).isNull();
+    assertThat(doc.company()).isNull();
     assertThat(doc.image()).isEqualTo("/images/blog.jpg");
     assertThat(doc.url()).isEqualTo("/blogs/blog1");
   }
@@ -97,6 +98,7 @@ class IndexServiceTest {
     assertThat(doc.type()).isEqualTo("job");
     assertThat(doc.shortDescription()).isEqualTo("Short desc");
     assertThat(doc.longDescription()).isEqualTo("Long desc");
+    assertThat(doc.company()).isEqualTo("Acme Corp");
     assertThat(doc.image()).isEqualTo("/images/acme.png");
     assertThat(doc.url()).isEqualTo("/jobs/job1");
   }
@@ -125,6 +127,7 @@ class IndexServiceTest {
     assertThat(doc.type()).isEqualTo("skill");
     assertThat(doc.shortDescription()).isEqualTo("Java language");
     assertThat(doc.longDescription()).isNull();
+    assertThat(doc.company()).isNull();
     assertThat(doc.image()).isEqualTo("/images/java.png");
     assertThat(doc.url()).isEqualTo("/skills-groups/g1");
   }
@@ -184,7 +187,7 @@ class IndexServiceTest {
     when(esClient.index(any(Function.class))).thenReturn(mockResponse);
 
     SiteSearchDocument doc = new SiteSearchDocument(
-        "id1", "Name", "blog", "Desc", null, null, "/url");
+        "id1", "Name", "blog", "Desc", null, null, null, "/url");
     indexService.indexSiteDocument(doc);
 
     verify(esClient).index(any(Function.class));
@@ -310,7 +313,7 @@ class IndexServiceTest {
     when(esClient.bulk(any(BulkRequest.class))).thenReturn(mockResponse);
 
     SiteSearchDocument doc = new SiteSearchDocument(
-        "id1", "Name", "blog", "Desc", null, null, "/url");
+        "id1", "Name", "blog", "Desc", null, null, null, "/url");
     indexService.bulkIndexSiteDocuments(List.of(doc));
 
     verify(esClient).bulk(any(BulkRequest.class));

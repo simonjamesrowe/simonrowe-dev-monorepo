@@ -58,13 +58,13 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 
 ## Recent Changes
+- 015-landing-ai-redesign: Added TypeScript (frontend), React (latest stable) + React, React Router, Lucide React, @stomp/stompjs, react-markdown
 - 014-docker-redeploy: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, React, ProcessBuilder (java.lang), Docker Compose CLI (mounted from host)
 - 001-website-redesign: Added TypeScript (frontend), Java 21 (backend — no changes) + React (latest stable), React Router, Lucide React, React Hook Form, Zod, @stomp/stompjs, React Markdown
-- 013-blog-posts-phase-2: Added Java 21 (backend), TypeScript (frontend) — no code changes needed; content-only feature + MongoDB 8 (mongosh for migration), Docker (container exec for script runner)
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
-- Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, React, ProcessBuilder (java.lang), Docker Compose CLI (mounted from host) (014-docker-redeploy)
-- MongoDB (operation status persistence via existing DataOperation record) (014-docker-redeploy)
+- TypeScript (frontend), React (latest stable) + React, React Router, Lucide React, @stomp/stompjs, react-markdown (015-landing-ai-redesign)
+- N/A (frontend-only changes; chat uses existing WebSocket service) (015-landing-ai-redesign)
