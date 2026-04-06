@@ -58,13 +58,13 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 
 ## Recent Changes
+- 016-prod-health-scripts: Added Bash (strict mode: `set -euo pipefail`) + Docker Compose, curl, systemd (optional, for persistent monitoring)
 - 014-docker-redeploy: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, React, ProcessBuilder (java.lang), Docker Compose CLI (mounted from host)
 - 001-website-redesign: Added TypeScript (frontend), Java 21 (backend — no changes) + React (latest stable), React Router, Lucide React, React Hook Form, Zod, @stomp/stompjs, React Markdown
-- 013-blog-posts-phase-2: Added Java 21 (backend), TypeScript (frontend) — no code changes needed; content-only feature + MongoDB 8 (mongosh for migration), Docker (container exec for script runner)
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
-- Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, React, ProcessBuilder (java.lang), Docker Compose CLI (mounted from host) (014-docker-redeploy)
-- MongoDB (operation status persistence via existing DataOperation record) (014-docker-redeploy)
+- Bash (strict mode: `set -euo pipefail`) + Docker Compose, curl, systemd (optional, for persistent monitoring) (016-prod-health-scripts)
+- N/A (log files only) (016-prod-health-scripts)
