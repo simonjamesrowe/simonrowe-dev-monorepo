@@ -138,6 +138,10 @@ public class RedeployService {
     List<String> command = new ArrayList<>();
     command.add(properties.dockerBinary());
     command.add("compose");
+    if (properties.projectName() != null && !properties.projectName().isBlank()) {
+      command.add("-p");
+      command.add(properties.projectName());
+    }
     command.add("-f");
     command.add(properties.composeFile());
     command.addAll(args);

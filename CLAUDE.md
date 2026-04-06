@@ -58,11 +58,10 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 
 ## Recent Changes
+- 001-add-portainer: Added N/A (infrastructure-only change — Docker Compose YAML + Nginx config) + Portainer CE Docker image (`portainer/portainer-ce:latest`), existing nginx reverse proxy
 - 016-prod-health-scripts: Added Bash (strict mode: `set -euo pipefail`) + Docker Compose, curl, systemd (optional, for persistent monitoring)
 - 015-rag-vector-chat: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.9, Spring AI 1.1.4 (`spring-ai-starter-model-openai`, `spring-ai-starter-vector-store-elasticsearch`, `spring-ai-advisors-vector-store`), React (latest stable)
 - 015-landing-ai-redesign: Added TypeScript (frontend), React (latest stable) + React, React Router, Lucide React, @stomp/stompjs, react-markdown
-- 014-docker-redeploy: Added Java 21 (backend), TypeScript (frontend) + Spring Boot 3.5.x, React, ProcessBuilder (java.lang), Docker Compose CLI (mounted from host)
-- 001-website-redesign: Added TypeScript (frontend), Java 21 (backend — no changes) + React (latest stable), React Router, Lucide React, React Hook Form, Zod, @stomp/stompjs, React Markdown
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
@@ -74,3 +73,5 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - MongoDB 8 (primary), Elasticsearch 8.17.0 (search + vector store), Kafka (async messaging) (015-rag-vector-chat)
 - TypeScript (frontend), React (latest stable) + React, React Router, Lucide React, @stomp/stompjs, react-markdown (015-landing-ai-redesign)
 - N/A (frontend-only changes; chat uses existing WebSocket service) (015-landing-ai-redesign)
+- N/A (infrastructure-only change — Docker Compose YAML + Nginx config) + Portainer CE Docker image (`portainer/portainer-ce:latest`), existing nginx reverse proxy (001-add-portainer)
+- Named Docker volume for Portainer data (user accounts, settings, environment config) (001-add-portainer)

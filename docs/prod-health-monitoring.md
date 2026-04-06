@@ -20,6 +20,21 @@ its status.
 
 ## Setting up the cron job on Raspberry Pi
 
+The quickest path is to run the installer script from the repo root:
+
+```bash
+./scripts/install-prod-monitoring.sh
+```
+
+This will:
+
+- enable and start `cron`
+- create `/var/log/prod-health/monitor.log`
+- install `/etc/logrotate.d/prod-health`
+- register the cron job with the correct absolute repo path for the current machine
+
+The remaining steps below describe the manual setup.
+
 ### 1. Verify the scripts work
 
 ```bash
@@ -51,10 +66,8 @@ crontab -e
 Add the following line to run the health check every minute:
 
 ```cron
-* * * * * /home/simonrowe/simonrowe-dev-monorepo/scripts/monitor-prod.sh >> /var/log/prod-health/monitor.log 2>&1
+* * * * * /absolute/path/to/repo/scripts/monitor-prod.sh >> /var/log/prod-health/monitor.log 2>&1
 ```
-
-Adjust the path to match where the repository is cloned on your Raspberry Pi.
 
 Save and exit. Verify the cron job is registered:
 
@@ -103,7 +116,7 @@ set them inline in the crontab entry:
 Example cron entry with custom settings:
 
 ```cron
-* * * * * FAILURE_THRESHOLD=2 MAX_RESTARTS=5 /home/simonrowe/simonrowe-dev-monorepo/scripts/monitor-prod.sh >> /var/log/prod-health/monitor.log 2>&1
+* * * * * FAILURE_THRESHOLD=2 MAX_RESTARTS=5 /absolute/path/to/repo/scripts/monitor-prod.sh >> /var/log/prod-health/monitor.log 2>&1
 ```
 
 ## State files
@@ -160,3 +173,4 @@ rm -rf /tmp/prod-health
 | `scripts/stop-prod.sh` | Stop all production services (preserves data volumes) |
 | `scripts/status-prod.sh` | Show health of all services + external reachability |
 | `scripts/monitor-prod.sh` | Single-run health check (designed for cron) |
+| `scripts/install-prod-monitoring.sh` | Install cron, log file, and logrotate config for the monitor |
