@@ -33,9 +33,12 @@ public class AdminSkillController {
       LoggerFactory.getLogger(AdminSkillController.class);
 
   private final AdminSkillRepository skillRepository;
+  private final com.simonrowe.events.ContentChangePublisher contentChangePublisher;
 
-  public AdminSkillController(final AdminSkillRepository skillRepository) {
+  public AdminSkillController(final AdminSkillRepository skillRepository,
+      final com.simonrowe.events.ContentChangePublisher contentChangePublisher) {
     this.skillRepository = skillRepository;
+    this.contentChangePublisher = contentChangePublisher;
   }
 
   @GetMapping
@@ -71,6 +74,7 @@ public class AdminSkillController {
     );
 
     Skill saved = skillRepository.save(skill);
+    contentChangePublisher.publishCreated(com.simonrowe.events.ContentChangeEvent.ContentType.SKILL, saved.id());
     LOG.info("Created skill: id={}, name={}, user={}",
         saved.id(), saved.name(), jwt.getSubject());
     return saved;
@@ -110,6 +114,7 @@ public class AdminSkillController {
     );
 
     Skill saved = skillRepository.save(updated);
+    contentChangePublisher.publishUpdated(com.simonrowe.events.ContentChangeEvent.ContentType.SKILL, saved.id());
     LOG.info("Updated skill: id={}, user={}", id, jwt.getSubject());
     return saved;
   }
@@ -122,6 +127,7 @@ public class AdminSkillController {
   ) {
     Skill skill = getById(id);
     skillRepository.delete(skill);
+    contentChangePublisher.publishDeleted(com.simonrowe.events.ContentChangeEvent.ContentType.SKILL, id);
     LOG.info("Deleted skill: id={}, user={}", id, jwt.getSubject());
   }
 

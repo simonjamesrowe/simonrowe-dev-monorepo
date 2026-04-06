@@ -35,15 +35,18 @@ public class AdminBlogController {
   private final AdminBlogRepository blogRepository;
   private final AdminTagRepository tagRepository;
   private final AdminSkillRepository skillRepository;
+  private final com.simonrowe.events.ContentChangePublisher contentChangePublisher;
 
   public AdminBlogController(
       final AdminBlogRepository blogRepository,
       final AdminTagRepository tagRepository,
-      final AdminSkillRepository skillRepository
+      final AdminSkillRepository skillRepository,
+      final com.simonrowe.events.ContentChangePublisher contentChangePublisher
   ) {
     this.blogRepository = blogRepository;
     this.tagRepository = tagRepository;
     this.skillRepository = skillRepository;
+    this.contentChangePublisher = contentChangePublisher;
   }
 
   @GetMapping
@@ -90,6 +93,8 @@ public class AdminBlogController {
     Blog saved = blogRepository.save(blog);
     LOG.info("Created blog: id={}, title={}, user={}",
         saved.id(), saved.title(), jwt.getSubject());
+    contentChangePublisher.publishCreated(
+        com.simonrowe.events.ContentChangeEvent.ContentType.BLOG, saved.id());
     return toDto(saved);
   }
 
@@ -128,6 +133,8 @@ public class AdminBlogController {
 
     Blog saved = blogRepository.save(updated);
     LOG.info("Updated blog: id={}, user={}", id, jwt.getSubject());
+    contentChangePublisher.publishUpdated(
+        com.simonrowe.events.ContentChangeEvent.ContentType.BLOG, saved.id());
     return toDto(saved);
   }
 
@@ -139,6 +146,8 @@ public class AdminBlogController {
   ) {
     Blog blog = findById(id);
     blogRepository.delete(blog);
+    contentChangePublisher.publishDeleted(
+        com.simonrowe.events.ContentChangeEvent.ContentType.BLOG, id);
     LOG.info("Deleted blog: id={}, user={}", id, jwt.getSubject());
   }
 

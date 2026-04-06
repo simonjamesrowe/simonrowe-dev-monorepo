@@ -61,6 +61,51 @@ else
   echo "WARNING: No uploads found in backup"
 fi
 
+# Restore Elasticsearch
+echo ""
+echo "=== Restoring Elasticsearch ==="
+ES_URL="http://localhost:9200"
+ES_REPO="simonrowe_backup"
+
+if curl -sf "${ES_URL}/_cluster/health" > /dev/null 2>&1; then
+  if [ -d "$BACKUP_FOLDER/elasticsearch" ] && [ "$(ls -A "$BACKUP_FOLDER/elasticsearch" 2>/dev/null)" ]; then
+    # Copy snapshot data into Docker volume
+    ES_CONTAINER=$(docker ps -q --filter "ancestor=elasticsearch:8.17.0" | head -1)
+    if [ -n "$ES_CONTAINER" ]; then
+      docker exec "$ES_CONTAINER" rm -rf /usr/share/elasticsearch/backups/*
+      docker cp "$BACKUP_FOLDER/elasticsearch/." "$ES_CONTAINER:/usr/share/elasticsearch/backups/"
+
+      # Register filesystem repository
+      curl -sf -X PUT "${ES_URL}/_snapshot/${ES_REPO}" \
+        -H 'Content-Type: application/json' \
+        -d '{"type":"fs","settings":{"location":"/usr/share/elasticsearch/backups","compress":true}}' > /dev/null
+
+      # Find the latest snapshot in the repository
+      SNAP_NAME=$(curl -sf "${ES_URL}/_snapshot/${ES_REPO}/_all" \
+        | grep -o '"snapshot":"[^"]*"' | tail -1 | sed 's/"snapshot":"//;s/"//')
+
+      if [ -n "$SNAP_NAME" ]; then
+        echo "Restoring snapshot: ${SNAP_NAME}"
+        # Close indices that exist before restore
+        curl -sf -X POST "${ES_URL}/_all/_close?ignore_unavailable=true" > /dev/null 2>&1 || true
+        # Restore
+        curl -sf -X POST "${ES_URL}/_snapshot/${ES_REPO}/${SNAP_NAME}/_restore?wait_for_completion=true" \
+          -H 'Content-Type: application/json' \
+          -d '{"ignore_unavailable":true,"include_global_state":false}' > /dev/null
+        # Reopen indices
+        curl -sf -X POST "${ES_URL}/_all/_open" > /dev/null 2>&1 || true
+        echo "Elasticsearch snapshot restored"
+      else
+        echo "WARNING: No snapshots found in repository"
+      fi
+    fi
+  else
+    echo "WARNING: No Elasticsearch data found in backup"
+  fi
+else
+  echo "WARNING: Elasticsearch not available — skipping ES restore"
+fi
+
 echo ""
 echo "=== Restore complete ==="
 echo "Restart the backend to pick up the new data."

@@ -95,6 +95,17 @@ export interface AdminTag {
   updatedAt: string
 }
 
+export interface AdminCodeExample {
+  id: string
+  title: string
+  description: string
+  language: string
+  code: string
+  skills: string[]
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AdminTourStep {
   id: string
   title: string
@@ -647,5 +658,62 @@ export async function deleteAdminMedia(
 ): Promise<void> {
   const token = await getAccessToken()
   const response = await authFetch(`${ADMIN_URL}/media/${id}`, token, { method: 'DELETE' })
+  return handleResponse<void>(response)
+}
+
+
+// ---------------------------------------------------------------------------
+// Code Examples
+// ---------------------------------------------------------------------------
+
+export async function fetchAdminCodeExamples(
+  getAccessToken: GetAccessToken,
+  page = 0,
+  size = 20,
+  params?: { skill?: string; language?: string; search?: string },
+): Promise<PageResponse<AdminCodeExample>> {
+  const token = await getAccessToken()
+  const searchParams = new URLSearchParams({ page: String(page), size: String(size) })
+  if (params?.skill) searchParams.set('skill', params.skill)
+  if (params?.language) searchParams.set('language', params.language)
+  if (params?.search) searchParams.set('search', params.search)
+  const response = await authFetch(`${ADMIN_URL}/code-examples?${searchParams}`, token)
+  return handleResponse<PageResponse<AdminCodeExample>>(response)
+}
+
+export async function fetchAdminCodeExampleById(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<AdminCodeExample> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/code-examples/${id}`, token)
+  return handleResponse<AdminCodeExample>(response)
+}
+
+export async function createAdminCodeExample(
+  getAccessToken: GetAccessToken,
+  data: Record<string, unknown>,
+): Promise<AdminCodeExample> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/code-examples`, token, jsonOptions(data, 'POST'))
+  return handleResponse<AdminCodeExample>(response)
+}
+
+export async function updateAdminCodeExample(
+  getAccessToken: GetAccessToken,
+  id: string,
+  data: Record<string, unknown>,
+): Promise<AdminCodeExample> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/code-examples/${id}`, token, jsonOptions(data, 'PUT'))
+  return handleResponse<AdminCodeExample>(response)
+}
+
+export async function deleteAdminCodeExample(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<void> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/code-examples/${id}`, token, { method: 'DELETE' })
   return handleResponse<void>(response)
 }

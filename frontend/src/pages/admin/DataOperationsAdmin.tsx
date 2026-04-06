@@ -19,6 +19,7 @@ import {
   startRestore,
   startClear,
   startRebuildIndex,
+  startReembed,
   startRedeploy,
   connectProgress,
   type DataOperation,
@@ -48,6 +49,9 @@ export function DataOperationsAdmin() {
 
   // Rebuild confirm state
   const [showRebuildConfirm, setShowRebuildConfirm] = useState(false)
+
+  // Reembed state
+  const [showReembedConfirm, setShowReembedConfirm] = useState(false)
 
   // Redeploy state
   const [showRedeployConfirm, setShowRedeployConfirm] = useState(false)
@@ -208,6 +212,19 @@ export function DataOperationsAdmin() {
     }
   }
 
+  // --- Reembed ---
+  const handleReembedConfirm = async () => {
+    try {
+      setShowReembedConfirm(false)
+      setError(null)
+      setSuccess(null)
+      await connectSse()
+      await startReembed(getAccessToken)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start re-embedding')
+    }
+  }
+
   // --- Redeploy ---
   const handleRedeployConfirm = async () => {
     try {
@@ -336,6 +353,22 @@ export function DataOperationsAdmin() {
             type="button"
           >
             Rebuild Index
+          </button>
+        </div>
+
+        <div className="data-ops__card">
+          <div className="data-ops__card-icon"><RefreshCw size={24} /></div>
+          <h3 className="data-ops__card-title">Re-embed Content</h3>
+          <p className="data-ops__card-desc">
+            Re-generate all vector embeddings for blogs, jobs, skills, and code examples.
+          </p>
+          <button
+            className="admin-btn admin-btn--primary"
+            disabled={operationInProgress}
+            onClick={() => setShowReembedConfirm(true)}
+            type="button"
+          >
+            Re-embed All
           </button>
         </div>
 
@@ -502,6 +535,35 @@ export function DataOperationsAdmin() {
                 onClick={handleRebuildConfirm}
               >
                 Rebuild
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reembed Confirm Dialog */}
+      {showReembedConfirm && (
+        <div className="confirm-dialog-backdrop" onClick={() => setShowReembedConfirm(false)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <h2 className="confirm-dialog__title">Re-embed All Content</h2>
+            <p className="confirm-dialog__message">
+              This will regenerate vector embeddings for all blog posts, jobs, skills, and code examples.
+              Chat will continue to work during re-embedding using existing embeddings.
+            </p>
+            <div className="confirm-dialog__actions">
+              <button
+                type="button"
+                className="confirm-dialog__btn confirm-dialog__btn--cancel"
+                onClick={() => setShowReembedConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="confirm-dialog__btn confirm-dialog__btn--confirm"
+                onClick={handleReembedConfirm}
+              >
+                Re-embed
               </button>
             </div>
           </div>

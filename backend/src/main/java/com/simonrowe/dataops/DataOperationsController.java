@@ -30,6 +30,7 @@ public class DataOperationsController {
   private final ClearService clearService;
   private final RedeployService redeployService;
   private final com.simonrowe.search.IndexService indexService;
+  private final com.simonrowe.embedding.EmbeddingService embeddingService;
 
   public DataOperationsController(
       final DataOperationsService operationsService,
@@ -38,7 +39,8 @@ public class DataOperationsController {
       final RestoreService restoreService,
       final ClearService clearService,
       final RedeployService redeployService,
-      final com.simonrowe.search.IndexService indexService
+      final com.simonrowe.search.IndexService indexService,
+      final com.simonrowe.embedding.EmbeddingService embeddingService
   ) {
     this.operationsService = operationsService;
     this.googleDriveService = googleDriveService;
@@ -47,6 +49,7 @@ public class DataOperationsController {
     this.clearService = clearService;
     this.redeployService = redeployService;
     this.indexService = indexService;
+    this.embeddingService = embeddingService;
   }
 
   @GetMapping("/status")
@@ -123,6 +126,32 @@ public class DataOperationsController {
         LOG.error("Index rebuild failed", ex);
         operationsService.failOperation(
             "Index rebuild failed: " + ex.getMessage());
+      }
+    });
+    return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
+  }
+
+  @PostMapping("/reembed")
+  public ResponseEntity<DataOperation> startReembed() {
+    DataOperation operation =
+        requireNoOperationInProgress(OperationType.REEMBED_CONTENT);
+    CompletableFuture.runAsync(() -> {
+      try {
+        int total = 0;
+        operationsService.updateProgress("Embedding blog posts...", 5);
+        total += embeddingService.embedAllBlogs();
+        operationsService.updateProgress("Embedding jobs...", 30);
+        total += embeddingService.embedAllJobs();
+        operationsService.updateProgress("Embedding skills...", 55);
+        total += embeddingService.embedAllSkills();
+        operationsService.updateProgress("Embedding code examples...", 80);
+        total += embeddingService.embedAllCodeExamples();
+        operationsService.completeOperation(
+            "Re-embedded " + total + " items successfully");
+      } catch (Exception ex) {
+        LOG.error("Re-embedding failed", ex);
+        operationsService.failOperation(
+            "Re-embedding failed: " + ex.getMessage());
       }
     });
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);

@@ -149,6 +149,18 @@ export async function startRebuildIndex(
 }
 
 // ---------------------------------------------------------------------------
+// Re-embed content
+// ---------------------------------------------------------------------------
+
+export async function startReembed(
+  getAccessToken: GetAccessToken,
+): Promise<DataOperation> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${DATA_OPS_URL}/reembed`, token, { method: 'POST' })
+  return handleResponse<DataOperation>(response)
+}
+
+// ---------------------------------------------------------------------------
 // Redeploy
 // ---------------------------------------------------------------------------
 

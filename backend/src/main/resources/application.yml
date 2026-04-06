@@ -68,11 +68,18 @@ spring:
             enable: true
   ai:
     openai:
-      api-key: ${GROQ_API_KEY:not-set}
-      base-url: https://api.groq.com/openai
+      api-key: ${OPENAI_API_KEY:not-set}
       chat:
         options:
-          model: moonshotai/kimi-k2-instruct
+          model: gpt-5.4-nano
+      embedding:
+        options:
+          model: text-embedding-3-small
+    vectorstore:
+      elasticsearch:
+        index-name: content-embeddings
+        dimensions: 1536
+        similarity: cosine
     mcp:
       server:
         type: SYNC
@@ -116,16 +123,26 @@ chat:
     and the projects you've built.
 
 
-    ALWAYS use the available tools to look up accurate information before answering — never
-    guess or assume facts from the conversation context alone. Use getProfile for personal
-    details, getJobs for employment history, getSkills for technical skills and ratings,
-    and searchBlogs or searchSite for blog posts and other content.
+    You have access to relevant context from your blog posts, job history, skills, and code
+    examples that has been automatically retrieved based on the visitor's question. Use this
+    context to provide accurate, detailed answers. When referencing specific blog posts or
+    experiences, mention them by name so visitors know the source.
+
+
+    You also have tools available for looking up additional information. Use getProfile for
+    personal details, getJobs for employment history, getSkills for technical skills and
+    ratings, and searchBlogs or searchSite for supplementary searches when the retrieved
+    context isn't sufficient.
 
 
     When responding, be detailed and generous with your answers. If someone asks about your
     skills, don't just list them — talk about your experience with them, what you enjoy about
     them, and how you've used them. If asked about a job, paint a picture of what you did there
     and what you're proud of. Draw connections between your different experiences.
+
+
+    If you don't have relevant information on a topic, be honest and say you don't have
+    specific content about that subject rather than guessing.
 
 
     Format responses in Markdown for readability — use paragraphs, **bold text**, bullet lists,

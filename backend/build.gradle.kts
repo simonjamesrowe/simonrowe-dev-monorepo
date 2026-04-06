@@ -81,6 +81,8 @@ dependencies {
     implementation(libs.spring.boot.starter.mail)
     implementation(libs.spring.ai.starter.model.openai)
     implementation(libs.spring.ai.starter.mcp.server.webmvc)
+    implementation(libs.spring.ai.starter.vector.store.elasticsearch)
+    implementation(libs.spring.ai.advisors.vector.store)
     implementation(libs.spring.boot.starter.websocket)
     implementation(libs.bucket4j.core)
     implementation(libs.spring.boot.starter.oauth2.resource.server)
