@@ -112,7 +112,8 @@ public class ContentChangeConsumer {
       }
       Optional<Skill> skillOpt = skillRepository.findById(contentId);
       if (skillOpt.isPresent()) {
-        indexService.indexSkillContent(skillOpt.get(), group.id());
+        int skillIndex = group.skills().indexOf(contentId);
+        indexService.indexSkillContent(skillOpt.get(), group.id(), skillIndex);
         LOG.info("Indexed skill {} from group {} in search index", contentId, group.id());
       } else {
         indexService.deleteSkillContent(contentId);

@@ -120,7 +120,7 @@ class IndexServiceTest {
         "/images/java.png", "java", 50, 50, "image/png", null);
     Skill skill = new Skill("s1", "Java", 4.5, 1, "Java language", skillImage);
 
-    SiteSearchDocument doc = indexService.skillToSiteDocument(skill, "g1");
+    SiteSearchDocument doc = indexService.skillToSiteDocument(skill, "g1", 0);
 
     assertThat(doc.id()).isEqualTo("g1_s1");
     assertThat(doc.name()).isEqualTo("Java");
@@ -136,7 +136,7 @@ class IndexServiceTest {
   void skillToSiteDocumentNullImageReturnsNullImage() {
     Skill skill = new Skill("s1", "Java", 4.5, 1, "Java language", null);
 
-    SiteSearchDocument doc = indexService.skillToSiteDocument(skill, "g1");
+    SiteSearchDocument doc = indexService.skillToSiteDocument(skill, "g1", 0);
 
     assertThat(doc.image()).isNull();
   }
@@ -290,7 +290,7 @@ class IndexServiceTest {
 
     Skill skill = new Skill("s1", "Java", 4.0, 1, "Java", null);
 
-    indexService.indexSkillContent(skill, "g1");
+    indexService.indexSkillContent(skill, "g1", 0);
 
     verify(esClient).index(any(Function.class));
   }

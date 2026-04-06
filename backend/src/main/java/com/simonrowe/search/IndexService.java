@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -154,11 +155,14 @@ public class IndexService {
     );
   }
 
-  public SiteSearchDocument skillToSiteDocument(final Skill skill, final String skillGroupId) {
+  public SiteSearchDocument skillToSiteDocument(
+      final Skill skill, final String skillGroupId, final int skillIndex) {
     String imageUrl = skill.image() != null
         ? mediaVariantResolver.resolvePath(
             skill.image().url(), "thumbnail", "small", "medium")
         : null;
+    Instant syntheticDate = Instant.parse("2026-01-01T00:00:00Z")
+        .minusSeconds((long) skillIndex * 86400);
     return new SiteSearchDocument(
         skillGroupId + "_" + skill.id(),
         skill.name(),
@@ -168,7 +172,7 @@ public class IndexService {
         null,
         imageUrl,
         "/skills-groups/" + skillGroupId,
-        null
+        syntheticDate
     );
   }
 
@@ -222,12 +226,19 @@ public class IndexService {
         .toList();
     Map<String, Skill> skillMap = skillRepository.findAllByIdIn(allSkillIds).stream()
         .collect(Collectors.toMap(Skill::id, s -> s));
-    List<SiteSearchDocument> skillDocs = skillGroups.stream()
-        .filter(g -> g.skills() != null)
-        .flatMap(group -> group.skills().stream()
-            .filter(skillMap::containsKey)
-            .map(skillId -> skillToSiteDocument(skillMap.get(skillId), group.id())))
-        .toList();
+    List<SiteSearchDocument> skillDocs = new ArrayList<>();
+    for (SkillGroup group : skillGroups) {
+      if (group.skills() == null) {
+        continue;
+      }
+      int index = 0;
+      for (String skillId : group.skills()) {
+        if (skillMap.containsKey(skillId)) {
+          skillDocs.add(skillToSiteDocument(skillMap.get(skillId), group.id(), index));
+          index++;
+        }
+      }
+    }
     bulkIndexSiteDocuments(skillDocs);
     skillDocs.forEach(doc -> indexedIds.add(doc.id()));
 
@@ -297,8 +308,9 @@ public class IndexService {
     deleteSiteDocument(jobId);
   }
 
-  public void indexSkillContent(final Skill skill, final String skillGroupId) throws IOException {
-    indexSiteDocument(skillToSiteDocument(skill, skillGroupId));
+  public void indexSkillContent(
+      final Skill skill, final String skillGroupId, final int skillIndex) throws IOException {
+    indexSiteDocument(skillToSiteDocument(skill, skillGroupId, skillIndex));
   }
 
   public void deleteSkillContent(final String skillId) throws IOException {
