@@ -134,6 +134,7 @@ chat:
 
 redeploy:
   compose-file: ${REDEPLOY_COMPOSE_FILE:/workspace/docker-compose.prod.yml}
+  project-name: ${REDEPLOY_PROJECT_NAME:${COMPOSE_PROJECT_NAME:simonrowe-dev-monorepo}}
   services:
     - backend
     - frontend
