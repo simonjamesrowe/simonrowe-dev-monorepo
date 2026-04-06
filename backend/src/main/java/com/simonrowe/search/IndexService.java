@@ -18,6 +18,9 @@ import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
 import com.simonrowe.skills.SkillRepository;
 import java.io.IOException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -128,7 +131,8 @@ public class IndexService {
         null,
         null,
         imageUrl,
-        "/blogs/" + blog.id()
+        "/blogs/" + blog.id(),
+        blog.createdDate()
     );
   }
 
@@ -145,7 +149,8 @@ public class IndexService {
         job.longDescription(),
         job.company(),
         imageUrl,
-        "/jobs/" + job.id()
+        "/jobs/" + job.id(),
+        parseDate(job.startDate())
     );
   }
 
@@ -162,7 +167,8 @@ public class IndexService {
         null,
         null,
         imageUrl,
-        "/skills-groups/" + skillGroupId
+        "/skills-groups/" + skillGroupId,
+        null
     );
   }
 
@@ -297,5 +303,12 @@ public class IndexService {
 
   public void deleteSkillContent(final String skillId) throws IOException {
     deleteSiteDocument(skillId);
+  }
+
+  private Instant parseDate(final String dateStr) {
+    if (dateStr == null || dateStr.isBlank()) {
+      return null;
+    }
+    return LocalDate.parse(dateStr).atStartOfDay(ZoneOffset.UTC).toInstant();
   }
 }

@@ -9,6 +9,7 @@ import com.simonrowe.search.elasticsearch.ElasticsearchConfig;
 import com.simonrowe.search.elasticsearch.SiteSearchDocument;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -59,13 +60,20 @@ public class SearchService {
                       .query(sanitized)
                       .fields("name", "shortDescription", "longDescription", "company")
                       .type(co.elastic.clients.elasticsearch._types.query_dsl
-                          .TextQueryType.BestFields))),
+                          .TextQueryType.BestFields)))
+              .sort(sort -> sort.score(sc -> sc
+                  .order(co.elastic.clients.elasticsearch._types.SortOrder.Desc)))
+              .sort(sort -> sort.field(f -> f
+                  .field("sortDate")
+                  .order(co.elastic.clients.elasticsearch._types.SortOrder.Desc)
+                  .missing("_last"))),
           SiteSearchDocument.class);
 
       Map<String, List<SiteSearchDocument>> grouped = response.hits().hits().stream()
           .map(Hit::source)
           .filter(doc -> doc != null)
-          .collect(Collectors.groupingBy(SiteSearchDocument::type));
+          .collect(Collectors.groupingBy(
+              SiteSearchDocument::type, LinkedHashMap::new, Collectors.toList()));
 
       List<SearchResult> blogs = toSearchResults(grouped.getOrDefault("blog", List.of()));
       List<SearchResult> jobs = toSearchResults(grouped.getOrDefault("job", List.of()));

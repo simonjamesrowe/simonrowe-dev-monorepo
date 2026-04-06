@@ -8,8 +8,8 @@ interface Message {
 }
 
 const SUGGESTED_PROMPTS = [
-  '"Tell me about his AI stack"',
-  '"Leadership philosophy?"',
+  '"What Spring Boot and Kafka patterns does he use?"',
+  '"What is he blogging about recently?"',
 ]
 
 export function AIChatModule() {

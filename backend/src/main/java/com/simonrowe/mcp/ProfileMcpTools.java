@@ -1,5 +1,7 @@
 package com.simonrowe.mcp;
 
+import com.simonrowe.blog.BlogService;
+import com.simonrowe.blog.BlogSummaryResponse;
 import com.simonrowe.employment.JobService;
 import com.simonrowe.employment.JobSummaryDto;
 import com.simonrowe.profile.ProfileResponse;
@@ -21,16 +23,19 @@ public class ProfileMcpTools {
   private final SearchService searchService;
   private final JobService jobService;
   private final SkillGroupService skillGroupService;
+  private final BlogService blogService;
 
   public ProfileMcpTools(
       final ProfileService profileService,
       final SearchService searchService,
       final JobService jobService,
-      final SkillGroupService skillGroupService) {
+      final SkillGroupService skillGroupService,
+      final BlogService blogService) {
     this.profileService = profileService;
     this.searchService = searchService;
     this.jobService = jobService;
     this.skillGroupService = skillGroupService;
+    this.blogService = blogService;
   }
 
   @WithSpan
@@ -68,6 +73,14 @@ public class ProfileMcpTools {
       + "questions about what technologies Simon knows and how experienced he is with them.")
   public List<SkillGroupSummaryDto> getSkills() {
     return skillGroupService.getAllSkillGroups();
+  }
+
+  @WithSpan
+  @Tool(description = "Get Simon's most recent blog posts, ordered by date (newest first). "
+      + "Returns titles, summaries, tags, skills, and publication dates. Use this when asked "
+      + "what Simon has been writing about, his latest posts, or recent blogging activity.")
+  public List<BlogSummaryResponse> getRecentBlogs() {
+    return blogService.getLatest(10);
   }
 
   @WithSpan

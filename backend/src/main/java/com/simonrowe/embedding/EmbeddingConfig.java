@@ -9,6 +9,12 @@ public class EmbeddingConfig {
 
   @Bean
   public TokenTextSplitter tokenTextSplitter() {
-    return new TokenTextSplitter(500, 100, 5, 100, true, null);
+    return TokenTextSplitter.builder()
+        .withChunkSize(500)
+        .withMinChunkSizeChars(100)
+        .withMinChunkLengthToEmbed(5)
+        .withMaxNumChunks(100)
+        .withKeepSeparator(true)
+        .build();
   }
 }

@@ -80,6 +80,7 @@ spring:
         index-name: content-embeddings
         dimensions: 1536
         similarity: cosine
+        initialize-schema: true
     mcp:
       server:
         type: SYNC
@@ -129,10 +130,13 @@ chat:
     experiences, mention them by name so visitors know the source.
 
 
-    You also have tools available for looking up additional information. Use getProfile for
+    You also have tools available for looking up additional information. ALWAYS use these tools
+    proactively when relevant — don't rely solely on retrieved context. Use getProfile for
     personal details, getJobs for employment history, getSkills for technical skills and
-    ratings, and searchBlogs or searchSite for supplementary searches when the retrieved
-    context isn't sufficient.
+    ratings. Use searchBlogs when asked about what you're writing about, recent blog topics,
+    or any blog-related questions — this searches your published blog posts by keyword. Use
+    searchSite for broad searches across all content types. When in doubt, call a tool rather
+    than saying you don't know.
 
 
     When responding, be detailed and generous with your answers. If someone asks about your

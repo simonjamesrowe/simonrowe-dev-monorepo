@@ -64,7 +64,9 @@ public class ElasticsearchConfig {
               .properties("image", Property.of(p -> p
                   .keyword(KeywordProperty.of(k -> k.index(false)))))
               .properties("url", Property.of(p -> p
-                  .keyword(KeywordProperty.of(k -> k.index(false)))))));
+                  .keyword(KeywordProperty.of(k -> k.index(false)))))
+              .properties("sortDate", Property.of(p -> p
+                  .date(d -> d.format("strict_date_optional_time"))))));
       LOG.info("Created index {}", SITE_SEARCH_INDEX);
     } catch (IOException e) {
       LOG.error("Failed to create index {}", SITE_SEARCH_INDEX, e);

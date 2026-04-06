@@ -10,9 +10,9 @@ const MAX_USER_MESSAGES = 10
 const STREAM_TIMEOUT_MS = 30000
 
 const SUGGESTED_PROMPTS = [
-  'Tell me about his AI stack',
-  'Leadership philosophy?',
-  'Cloud-native experience?',
+  'What Spring Boot and Kafka patterns does he use?',
+  'What is he blogging about recently?',
+  'How does he handle event sourcing and CQRS?',
 ]
 
 interface ChatPanelProps {

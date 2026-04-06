@@ -1,5 +1,7 @@
 package com.simonrowe.search.elasticsearch;
 
+import java.time.Instant;
+
 public record SiteSearchDocument(
     String id,
     String name,
@@ -8,6 +10,7 @@ public record SiteSearchDocument(
     String longDescription,
     String company,
     String image,
-    String url
+    String url,
+    Instant sortDate
 ) {
 }
