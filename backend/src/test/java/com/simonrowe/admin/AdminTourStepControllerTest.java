@@ -9,59 +9,21 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.simonrowe.SharedMongoContainer;
-import com.simonrowe.blog.BlogSearchRepository;
-import com.simonrowe.media.ImageVariantGenerator;
+import com.simonrowe.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.http.MediaType;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest
-@ActiveProfiles("test")
-@AutoConfigureMockMvc
-class AdminTourStepControllerTest {
-
-  @MockitoBean
-  private JwtDecoder jwtDecoder;
-
-  @MockitoBean
-  private ElasticsearchOperations elasticsearchOperations;
-
-  @MockitoBean
-  private VectorStore vectorStore;
-
-  @MockitoBean
-  private com.simonrowe.blog.BlogSearchRepository blogSearchRepository;
-
-  @MockitoBean
-  private ImageVariantGenerator imageVariantGenerator;
-
-  @Autowired
-  private MockMvc mockMvc;
+class AdminTourStepControllerTest extends AbstractIntegrationTest {
 
   @Autowired
   private AdminTourStepRepository adminTourStepRepository;
 
   @Autowired
   private com.simonrowe.tour.TourStepRepository tourStepRepository;
-
-  @DynamicPropertySource
-  static void configureProperties(final DynamicPropertyRegistry registry) {
-    SharedMongoContainer.configureProperties(registry);
-  }
 
   @BeforeEach
   void setup() {
