@@ -40,8 +40,10 @@ services:
       discovery.type: single-node
       xpack.security.enabled: "false"
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      path.repo: /usr/share/elasticsearch/backups
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
+      - elasticsearch-backups:/usr/share/elasticsearch/backups
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
       interval: 10s
@@ -187,5 +189,6 @@ volumes:
   mongodb-data:
   kafka-data:
   elasticsearch-data:
+  elasticsearch-backups:
   backend-uploads:
   portainer-data:

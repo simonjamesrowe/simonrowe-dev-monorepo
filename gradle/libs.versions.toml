@@ -10,7 +10,7 @@ cyclonedx = "2.1.0"
 sonarqube = "6.0.1.5171"
 openpdf = "2.0.3"
 commonmark = "0.24.0"
-springAi = "1.1.2"
+springAi = "1.1.4"
 bucket4j = "8.16.1"
 thumbnailator = "0.4.20"
 googleApiClient = "2.8.0"
@@ -40,6 +40,8 @@ commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" 
 spring-ai-bom = { module = "org.springframework.ai:spring-ai-bom", version.ref = "springAi" }
 spring-ai-starter-model-openai = { module = "org.springframework.ai:spring-ai-starter-model-openai" }
 spring-ai-starter-mcp-server-webmvc = { module = "org.springframework.ai:spring-ai-starter-mcp-server-webmvc" }
+spring-ai-starter-vector-store-elasticsearch = { module = "org.springframework.ai:spring-ai-starter-vector-store-elasticsearch" }
+spring-ai-advisors-vector-store = { module = "org.springframework.ai:spring-ai-advisors-vector-store" }
 spring-boot-starter-websocket = { module = "org.springframework.boot:spring-boot-starter-websocket" }
 bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }
 spring-boot-starter-oauth2-resource-server = { module = "org.springframework.boot:spring-boot-starter-oauth2-resource-server" }

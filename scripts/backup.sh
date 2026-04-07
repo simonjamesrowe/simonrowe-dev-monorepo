@@ -41,6 +41,37 @@ else
   echo "WARNING: No uploads found at $UPLOADS_DIR (empty backup)"
 fi
 
+# Snapshot Elasticsearch
+echo ""
+echo "=== Snapshotting Elasticsearch ==="
+ES_URL="http://localhost:9200"
+ES_REPO="simonrowe_backup"
+ES_SNAPSHOT="snapshot_${TIMESTAMP}"
+
+if curl -sf "${ES_URL}/_cluster/health" > /dev/null 2>&1; then
+  # Register filesystem repository (idempotent)
+  curl -sf -X PUT "${ES_URL}/_snapshot/${ES_REPO}" \
+    -H 'Content-Type: application/json' \
+    -d '{"type":"fs","settings":{"location":"/usr/share/elasticsearch/backups","compress":true}}' > /dev/null
+
+  # Create snapshot
+  echo "Creating snapshot: ${ES_SNAPSHOT}"
+  SNAP_RESULT=$(curl -sf -X PUT "${ES_URL}/_snapshot/${ES_REPO}/${ES_SNAPSHOT}?wait_for_completion=true" \
+    -H 'Content-Type: application/json' \
+    -d '{"ignore_unavailable":true,"include_global_state":false}')
+  echo "Snapshot result: $(echo "$SNAP_RESULT" | grep -o '"state":"[^"]*"' || echo 'completed')"
+
+  # Copy snapshot data from Docker volume
+  ES_CONTAINER=$(docker ps -q --filter "ancestor=elasticsearch:8.17.0" | head -1)
+  if [ -n "$ES_CONTAINER" ]; then
+    mkdir -p "$BACKUP_FOLDER/elasticsearch"
+    docker cp "$ES_CONTAINER:/usr/share/elasticsearch/backups/." "$BACKUP_FOLDER/elasticsearch/"
+    echo "Elasticsearch snapshot copied to backup"
+  fi
+else
+  echo "WARNING: Elasticsearch not available at ${ES_URL} — skipping ES backup"
+fi
+
 # Create tarball
 echo ""
 echo "=== Creating backup archive ==="

@@ -142,7 +142,7 @@ class ContentChangeConsumerTest {
         EventType.CREATED, ContentType.SKILL, "s1", Instant.now());
     consumer.handleContentChange(event);
 
-    verify(indexService).indexSkillContent(skill, "g1");
+    verify(indexService).indexSkillContent(skill, "g1", 0);
   }
 
   @Test
@@ -184,7 +184,7 @@ class ContentChangeConsumerTest {
         EventType.CREATED, ContentType.SKILL, "s1", Instant.now());
     consumer.handleContentChange(event);
 
-    verify(indexService).indexSkillContent(skill, "g2");
+    verify(indexService).indexSkillContent(skill, "g2", 0);
   }
 
   @Test

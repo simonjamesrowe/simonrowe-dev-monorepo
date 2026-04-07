@@ -18,6 +18,11 @@ import com.simonrowe.skills.SkillGroup;
 import com.simonrowe.skills.SkillGroupRepository;
 import com.simonrowe.skills.SkillRepository;
 import java.io.IOException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -128,7 +133,8 @@ public class IndexService {
         null,
         null,
         imageUrl,
-        "/blogs/" + blog.id()
+        "/blogs/" + blog.id(),
+        blog.createdDate()
     );
   }
 
@@ -145,15 +151,19 @@ public class IndexService {
         job.longDescription(),
         job.company(),
         imageUrl,
-        "/jobs/" + job.id()
+        "/jobs/" + job.id(),
+        parseDate(job.startDate())
     );
   }
 
-  public SiteSearchDocument skillToSiteDocument(final Skill skill, final String skillGroupId) {
+  public SiteSearchDocument skillToSiteDocument(
+      final Skill skill, final String skillGroupId, final int skillIndex) {
     String imageUrl = skill.image() != null
         ? mediaVariantResolver.resolvePath(
             skill.image().url(), "thumbnail", "small", "medium")
         : null;
+    Instant syntheticDate = Instant.parse("2026-01-01T00:00:00Z")
+        .minusSeconds((long) skillIndex * 86400);
     return new SiteSearchDocument(
         skillGroupId + "_" + skill.id(),
         skill.name(),
@@ -162,7 +172,8 @@ public class IndexService {
         null,
         null,
         imageUrl,
-        "/skills-groups/" + skillGroupId
+        "/skills-groups/" + skillGroupId,
+        syntheticDate
     );
   }
 
@@ -216,12 +227,21 @@ public class IndexService {
         .toList();
     Map<String, Skill> skillMap = skillRepository.findAllByIdIn(allSkillIds).stream()
         .collect(Collectors.toMap(Skill::id, s -> s));
-    List<SiteSearchDocument> skillDocs = skillGroups.stream()
-        .filter(g -> g.skills() != null)
-        .flatMap(group -> group.skills().stream()
-            .filter(skillMap::containsKey)
-            .map(skillId -> skillToSiteDocument(skillMap.get(skillId), group.id())))
-        .toList();
+    List<SiteSearchDocument> skillDocs = new ArrayList<>();
+    for (SkillGroup group : skillGroups) {
+      if (group.skills() == null) {
+        continue;
+      }
+      List<Skill> sortedSkills = group.skills().stream()
+          .filter(skillMap::containsKey)
+          .map(skillMap::get)
+          .sorted(Comparator.comparingInt(
+              s -> s.displayOrder() != null ? s.displayOrder() : Integer.MAX_VALUE))
+          .toList();
+      for (int i = 0; i < sortedSkills.size(); i++) {
+        skillDocs.add(skillToSiteDocument(sortedSkills.get(i), group.id(), i));
+      }
+    }
     bulkIndexSiteDocuments(skillDocs);
     skillDocs.forEach(doc -> indexedIds.add(doc.id()));
 
@@ -291,11 +311,24 @@ public class IndexService {
     deleteSiteDocument(jobId);
   }
 
-  public void indexSkillContent(final Skill skill, final String skillGroupId) throws IOException {
-    indexSiteDocument(skillToSiteDocument(skill, skillGroupId));
+  public void indexSkillContent(
+      final Skill skill, final String skillGroupId, final int skillIndex) throws IOException {
+    indexSiteDocument(skillToSiteDocument(skill, skillGroupId, skillIndex));
   }
 
   public void deleteSkillContent(final String skillId) throws IOException {
     deleteSiteDocument(skillId);
+  }
+
+  private Instant parseDate(final String dateStr) {
+    if (dateStr == null || dateStr.isBlank()) {
+      return null;
+    }
+    try {
+      return LocalDate.parse(dateStr).atStartOfDay(ZoneOffset.UTC).toInstant();
+    } catch (java.time.format.DateTimeParseException e) {
+      return java.time.YearMonth.parse(dateStr)
+          .atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
   }
 }

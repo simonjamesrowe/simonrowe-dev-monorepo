@@ -30,6 +30,8 @@ import { SkillsAdmin } from './pages/admin/SkillsAdmin'
 import { TagsAdmin } from './pages/admin/TagsAdmin'
 import { TourStepEditor } from './pages/admin/TourStepEditor'
 import { TourStepsAdmin } from './pages/admin/TourStepsAdmin'
+import { CodeExamplesAdmin } from './pages/admin/CodeExamplesAdmin'
+import { CodeExampleEditor } from './pages/admin/CodeExampleEditor'
 import { BlogDetailPage } from './pages/BlogDetailPage'
 import { BlogListingPage } from './pages/BlogListingPage'
 import { ExperiencePage } from './pages/ExperiencePage'
@@ -144,6 +146,8 @@ function App() {
           <Route path="tour-steps" element={<TourStepsAdmin />} />
           <Route path="tour-steps/:id" element={<TourStepEditor />} />
           <Route path="media" element={<MediaAdmin />} />
+          <Route path="code-examples" element={<CodeExamplesAdmin />} />
+          <Route path="code-examples/:id" element={<CodeExampleEditor />} />
           <Route path="data-operations" element={<DataOperationsAdmin />} />
         </Route>
       </Routes>

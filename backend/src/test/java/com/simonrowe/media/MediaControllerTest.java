@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -37,6 +38,9 @@ class MediaControllerTest {
 
   @MockitoBean
   private ElasticsearchOperations elasticsearchOperations;
+
+  @MockitoBean
+  private VectorStore vectorStore;
 
   @MockitoBean
   private BlogSearchRepository blogSearchRepository;

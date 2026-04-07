@@ -39,13 +39,15 @@ public class BackupService {
       JsonWriterSettings.builder().outputMode(JsonMode.EXTENDED).indent(true).build();
   private static final Set<String> BACKUP_COLLECTIONS = Set.of(
       "blogs", "tags", "skills", "skill_groups", "jobs",
-      "profiles", "social_medias", "tourSteps", "media_assets"
+      "profiles", "social_medias", "tourSteps", "media_assets",
+      "code_examples"
   );
 
   private final MongoClient mongoClient;
   private final String databaseName;
   private final GoogleDriveService googleDriveService;
   private final DataOperationsService operationsService;
+  private final com.simonrowe.embedding.ElasticsearchBackupService esBackupService;
   private final String uploadsPath;
 
   public BackupService(
@@ -53,12 +55,14 @@ public class BackupService {
       final MongoTemplate mongoTemplate,
       final GoogleDriveService googleDriveService,
       final DataOperationsService operationsService,
+      final com.simonrowe.embedding.ElasticsearchBackupService esBackupService,
       @Value("${uploads.path:backend/uploads/}") final String uploadsPath
   ) {
     this.mongoClient = mongoClient;
     this.databaseName = mongoTemplate.getDb().getName();
     this.googleDriveService = googleDriveService;
     this.operationsService = operationsService;
+    this.esBackupService = esBackupService;
     this.uploadsPath = uploadsPath;
   }
 
@@ -118,6 +122,16 @@ public class BackupService {
             Files.copy(mediaFile, zos);
             zos.closeEntry();
           }
+        }
+
+        operationsService.updateProgress("Exporting vector embeddings...", 70);
+        try {
+          String embeddingsJson = esBackupService.exportEmbeddings();
+          zos.putNextEntry(new ZipEntry("embeddings/content-embeddings.json"));
+          zos.write(embeddingsJson.getBytes(StandardCharsets.UTF_8));
+          zos.closeEntry();
+        } catch (Exception ex) {
+          LOG.warn("Failed to export embeddings, skipping: {}", ex.getMessage());
         }
 
         operationsService.updateProgress("Writing manifest...", 75);

@@ -20,9 +20,9 @@ const socialIcons: Record<string, React.ReactNode> = {
 }
 
 const SUGGESTED_PROMPTS = [
-  'Tell me about his AI stack',
-  'Leadership philosophy?',
-  'Cloud-native experience?',
+  'What Spring Boot and Kafka patterns does he use?',
+  'What is he blogging about recently?',
+  'How does he handle event sourcing and CQRS?',
 ]
 
 export function HeroSection({ name, tagline, cvUrl, backgroundImageUrl, socialMediaLinks }: HeroSectionProps) {

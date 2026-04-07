@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.simonrowe.blog.BlogService;
+import com.simonrowe.blog.BlogSummaryResponse;
 import com.simonrowe.employment.JobService;
 import com.simonrowe.employment.JobSummaryDto;
 import com.simonrowe.profile.ProfileResponse;
@@ -33,6 +35,9 @@ class ProfileMcpToolsTest {
 
   @Mock
   private SkillGroupService skillGroupService;
+
+  @Mock
+  private BlogService blogService;
 
   @InjectMocks
   private ProfileMcpTools profileMcpTools;
@@ -103,6 +108,17 @@ class ProfileMcpToolsTest {
     profileMcpTools.searchBlogs(query);
 
     verify(searchService).siteSearch(query);
+  }
+
+  @Test
+  void getRecentBlogsDelegatesToBlogService() {
+    final List<BlogSummaryResponse> expectedBlogs = List.of();
+    given(blogService.getLatest(10)).willReturn(expectedBlogs);
+
+    final List<BlogSummaryResponse> result = profileMcpTools.getRecentBlogs();
+
+    assertThat(result).isSameAs(expectedBlogs);
+    verify(blogService).getLatest(10);
   }
 
   @Test

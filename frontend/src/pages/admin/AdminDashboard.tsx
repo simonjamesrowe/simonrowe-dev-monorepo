@@ -7,6 +7,7 @@ const sections = [
   { path: '/admin/profile', label: 'Profile', description: 'Edit profile information' },
   { path: '/admin/tags', label: 'Tags', description: 'Manage content tags' },
   { path: '/admin/tour-steps', label: 'Tour Steps', description: 'Manage interactive tour' },
+  { path: '/admin/code-examples', label: 'Code Examples', description: 'Manage code snippets and examples' },
   { path: '/admin/media', label: 'Media', description: 'Upload and manage media' },
 ]
 

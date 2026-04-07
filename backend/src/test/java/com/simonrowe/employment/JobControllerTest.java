@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -36,6 +37,9 @@ class JobControllerTest {
 
   @MockitoBean
   private ElasticsearchOperations elasticsearchOperations;
+
+  @MockitoBean
+  private VectorStore vectorStore;
 
   @MockitoBean
   private BlogSearchRepository blogSearchRepository;

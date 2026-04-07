@@ -18,6 +18,7 @@ public record ContentChangeEvent(
   public enum ContentType {
     BLOG,
     JOB,
-    SKILL
+    SKILL,
+    CODE_EXAMPLE
   }
 }

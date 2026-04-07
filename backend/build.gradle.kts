@@ -27,7 +27,7 @@ jacoco {
     toolVersion = libs.versions.jacoco.get()
 }
 
-val jacocoExcludes = listOf("com/simonrowe/migration/**", "com/simonrowe/dataops/**")
+val jacocoExcludes = listOf("com/simonrowe/migration/**", "com/simonrowe/dataops/**", "com/simonrowe/embedding/**")
 
 val jacocoClassDirectories = sourceSets.main.get().output.asFileTree.matching {
     exclude(jacocoExcludes)
@@ -81,6 +81,8 @@ dependencies {
     implementation(libs.spring.boot.starter.mail)
     implementation(libs.spring.ai.starter.model.openai)
     implementation(libs.spring.ai.starter.mcp.server.webmvc)
+    implementation(libs.spring.ai.starter.vector.store.elasticsearch)
+    implementation(libs.spring.ai.advisors.vector.store)
     implementation(libs.spring.boot.starter.websocket)
     implementation(libs.bucket4j.core)
     implementation(libs.spring.boot.starter.oauth2.resource.server)

@@ -27,7 +27,7 @@ public class RestoreService {
       "tags", "skills", "profiles", "social_medias", "tourSteps", "media_assets"
   );
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
-      "skill_groups", "jobs", "blogs"
+      "skill_groups", "jobs", "blogs", "code_examples"
   );
 
   private final MongoTemplate mongoTemplate;
@@ -35,6 +35,7 @@ public class RestoreService {
   private final DataOperationsService operationsService;
   private final BackupService backupService;
   private final com.simonrowe.search.IndexService indexService;
+  private final com.simonrowe.embedding.ElasticsearchBackupService esBackupService;
   private final String uploadsPath;
 
   public RestoreService(
@@ -43,6 +44,7 @@ public class RestoreService {
       final DataOperationsService operationsService,
       final BackupService backupService,
       final com.simonrowe.search.IndexService indexService,
+      final com.simonrowe.embedding.ElasticsearchBackupService esBackupService,
       @Value("${uploads.path:backend/uploads/}") final String uploadsPath
   ) {
     this.mongoTemplate = mongoTemplate;
@@ -50,6 +52,7 @@ public class RestoreService {
     this.operationsService = operationsService;
     this.backupService = backupService;
     this.indexService = indexService;
+    this.esBackupService = esBackupService;
     this.uploadsPath = uploadsPath;
   }
 
@@ -75,12 +78,23 @@ public class RestoreService {
       operationsService.updateProgress("Restoring media files...", 70);
       restoreMediaFiles(tempZip);
 
-      operationsService.updateProgress("Rebuilding search index...", 85);
+      operationsService.updateProgress("Rebuilding search index...", 80);
       indexService.fullSyncSiteIndex();
       indexService.fullSyncBlogIndex();
 
+      operationsService.updateProgress("Restoring vector embeddings...", 90);
+      String embeddingsJson = readEntryFromZip(
+          tempZip, "embeddings/content-embeddings.json");
+      if (embeddingsJson != null) {
+        int count = esBackupService.importEmbeddings(embeddingsJson);
+        LOG.info("Restored {} vector embeddings from backup", count);
+      } else {
+        LOG.warn("No vector embeddings found in backup — "
+            + "use 'Re-embed Content' from Data Operations to regenerate");
+      }
+
       operationsService.completeOperation(
-          "Data restored successfully from backup. Search index rebuilt.");
+          "Data restored successfully. Search index and vector embeddings restored.");
 
     } catch (Exception ex) {
       LOG.error("Restore failed", ex);

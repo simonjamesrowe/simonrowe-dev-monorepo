@@ -1,0 +1,223 @@
+openapi: 3.1.0
+info:
+  title: Admin Code Examples API
+  version: 1.0.0
+  description: CRUD API for managing code examples in the admin CMS
+
+paths:
+  /api/admin/code-examples:
+    get:
+      summary: List all code examples
+      operationId: listCodeExamples
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: skill
+          in: query
+          description: Filter by skill ID
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Search by title or description
+          schema:
+            type: string
+        - name: language
+          in: query
+          description: Filter by programming language
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of code examples
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageCodeExample'
+      security:
+        - bearerAuth: []
+    post:
+      summary: Create a new code example
+      operationId: createCodeExample
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CodeExampleRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeExampleResponse'
+        '400':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+      security:
+        - bearerAuth: []
+
+  /api/admin/code-examples/{id}:
+    get:
+      summary: Get a code example by ID
+      operationId: getCodeExample
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Code example found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeExampleResponse'
+        '404':
+          description: Not found
+      security:
+        - bearerAuth: []
+    put:
+      summary: Update a code example
+      operationId: updateCodeExample
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CodeExampleRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeExampleResponse'
+        '400':
+          description: Validation errors
+        '404':
+          description: Not found
+      security:
+        - bearerAuth: []
+    delete:
+      summary: Delete a code example
+      operationId: deleteCodeExample
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: Not found
+      security:
+        - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CodeExampleRequest:
+      type: object
+      required:
+        - title
+        - description
+        - language
+        - code
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        language:
+          type: string
+          maxLength: 50
+        code:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+          description: Array of skill IDs
+
+    CodeExampleResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        language:
+          type: string
+        code:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+          description: Array of skill IDs
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PageCodeExample:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CodeExampleResponse'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
+
+    ValidationErrors:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string

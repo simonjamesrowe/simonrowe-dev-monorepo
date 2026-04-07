@@ -1,0 +1,66 @@
+openapi: 3.1.0
+info:
+  title: Admin Embedding Operations API
+  version: 1.0.0
+  description: Endpoint for triggering full re-embedding of all content
+
+paths:
+  /api/admin/data-operations/reembed:
+    post:
+      summary: Trigger full re-embedding of all content
+      operationId: startReembedding
+      description: |
+        Processes all blog posts, jobs, skills, and code examples through
+        the embedding pipeline. Uses the existing DataOperations SSE progress
+        stream at /api/admin/data-operations/progress for real-time updates.
+      responses:
+        '202':
+          description: Re-embedding started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataOperation'
+        '409':
+          description: Another operation is already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataOperation'
+      security:
+        - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    DataOperation:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [BACKUP, RESTORE, CLEAR, REBUILD_INDEX, REDEPLOY, REEMBED_CONTENT]
+        status:
+          type: string
+          enum: [IN_PROGRESS, COMPLETED, FAILED]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        progressMessage:
+          type: string
+        progressPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        errorMessage:
+          type: string
+        resultSummary:
+          type: string
