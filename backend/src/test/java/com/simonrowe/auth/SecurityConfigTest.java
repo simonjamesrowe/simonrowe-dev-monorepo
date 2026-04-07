@@ -4,49 +4,10 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.simonrowe.SharedMongoContainer;
-import com.simonrowe.blog.BlogSearchRepository;
-import com.simonrowe.media.ImageVariantGenerator;
+import com.simonrowe.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest
-@ActiveProfiles("test")
-@AutoConfigureMockMvc
-class SecurityConfigTest {
-
-  @MockitoBean
-  private JwtDecoder jwtDecoder;
-
-  @MockitoBean
-  private ElasticsearchOperations elasticsearchOperations;
-
-  @MockitoBean
-  private VectorStore vectorStore;
-
-  @MockitoBean
-  private BlogSearchRepository blogSearchRepository;
-
-  @MockitoBean
-  private ImageVariantGenerator imageVariantGenerator;
-
-  @Autowired
-  private MockMvc mockMvc;
-
-  @DynamicPropertySource
-  static void configureProperties(final DynamicPropertyRegistry registry) {
-    SharedMongoContainer.configureProperties(registry);
-  }
+class SecurityConfigTest extends AbstractIntegrationTest {
 
   @Test
   void publicEndpointIsAccessibleWithoutAuth() throws Exception {
