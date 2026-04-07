@@ -27,7 +27,7 @@ jacoco {
     toolVersion = libs.versions.jacoco.get()
 }
 
-val jacocoExcludes = listOf("com/simonrowe/migration/**", "com/simonrowe/dataops/**")
+val jacocoExcludes = listOf("com/simonrowe/migration/**", "com/simonrowe/dataops/**", "com/simonrowe/embedding/**")
 
 val jacocoClassDirectories = sourceSets.main.get().output.asFileTree.matching {
     exclude(jacocoExcludes)
