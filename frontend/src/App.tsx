@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import { AuthProvider } from './auth/AuthProvider'
+import { ThemeProvider } from './contexts/ThemeContext'
 import { AdminLayout } from './components/admin/AdminLayout'
 import { ChatPanel } from './components/chat/ChatPanel'
 import { RecaptchaGate } from './components/chat/RecaptchaGate'
@@ -119,6 +120,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <Routes>
         <Route element={<PublicLayout><HomePage /></PublicLayout>} path="/" />
@@ -152,6 +154,7 @@ function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </ThemeProvider>
   )
 }
 

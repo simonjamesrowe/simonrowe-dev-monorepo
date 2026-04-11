@@ -1,10 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { MessageSquare, UserCircle } from 'lucide-react'
+import { MessageSquare, Moon, Sun, UserCircle } from 'lucide-react'
 import { SiteSearch } from '../search/SiteSearch'
 import { useChat } from '../../contexts/ChatContext'
+import { useTheme } from '../../contexts/ThemeContext'
 
 export function TopNav() {
   const { openChat } = useChat()
+  const { theme, toggleTheme } = useTheme()
 
   return (
     <nav className="top-nav glass-panel elevation-ambient">
@@ -19,6 +21,14 @@ export function TopNav() {
           <span className="top-nav__ask-ai-label">ASK AI</span>
         </button>
         <SiteSearch />
+        <button
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          className="nav__theme-toggle"
+          onClick={toggleTheme}
+          type="button"
+        >
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
         <NavLink to="/admin" className="top-nav__user-btn">
           <UserCircle size={24} />
         </NavLink>

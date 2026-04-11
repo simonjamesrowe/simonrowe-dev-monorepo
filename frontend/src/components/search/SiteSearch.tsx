@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { MessageCircle } from 'lucide-react'
-import { siteSearch, type GroupedSearchResponse } from '../../services/searchApi'
+import { blogSearch, siteSearch, type GroupedSearchResponse } from '../../services/searchApi'
 import { SearchDropdown } from './SearchDropdown'
 
 const DEBOUNCE_MS = 300
@@ -26,6 +27,8 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { pathname } = useLocation()
+  const isBlogPage = pathname.startsWith('/blogs')
 
   useEffect(() => {
     if (query.length < MIN_QUERY_LENGTH) {
@@ -41,7 +44,13 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
       const controller = new AbortController()
       abortRef.current = controller
 
-      siteSearch(query, controller.signal)
+      const searchPromise = isBlogPage
+        ? blogSearch(query, controller.signal).then((blogs) => ({
+            blogs: blogs.map((b) => ({ name: b.title, image: b.image, url: b.url })),
+          }))
+        : siteSearch(query, controller.signal)
+
+      searchPromise
         .then((data) => {
           if (!controller.signal.aborted) {
             setResults(data)
@@ -61,7 +70,7 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
         clearTimeout(timerRef.current)
       }
     }
-  }, [query])
+  }, [query, isBlogPage])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -112,7 +121,7 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
           className="site-search__input"
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Search or ask me anything..."
+          placeholder={isBlogPage ? "Search blog posts..." : "Search or ask me anything..."}
           type="search"
           value={query}
         />

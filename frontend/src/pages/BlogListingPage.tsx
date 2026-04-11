@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 
 import { ArticleCard } from '../components/blog/ArticleCard'
-import { BlogSearch } from '../components/blog/BlogSearch'
 import { FeaturedArticle } from '../components/blog/FeaturedArticle'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
@@ -39,17 +38,6 @@ export function BlogListingPage() {
 
   return (
     <div className="blog-listing-page">
-      <section className="blog-listing-page__hero">
-        <h1 className="display-lg blog-listing-page__headline">Blog</h1>
-        <p className="blog-listing-page__subtitle body-lg">
-          Thoughts on engineering leadership, cloud-native architecture, and building with AI.
-        </p>
-      </section>
-
-      <div className="blog-listing-page__search">
-        <BlogSearch />
-      </div>
-
       {featuredBlog && <FeaturedArticle blog={featuredBlog} />}
       {gridBlogs.length > 0 && (
         <div className="blog-listing-page__grid">

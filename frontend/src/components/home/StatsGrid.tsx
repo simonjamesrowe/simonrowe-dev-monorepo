@@ -25,7 +25,7 @@ export function StatsGrid({ profile, skillGroups, yearsExperience, jobCount }: S
       <div className="stats-grid__grid">
         {/* Summary card — spans 2 cols */}
         <div className="card stats-grid__summary">
-          <h3 className="headline-md" style={{ color: 'white' }}>The Vision</h3>
+          <h3 className="headline-md" style={{ color: 'var(--on-surface)' }}>The Vision</h3>
           <p className="body-lg" style={{ color: 'var(--on-surface-variant)', marginTop: '1.5rem' }}>
             {profile.description}
           </p>
@@ -83,7 +83,7 @@ export function StatsGrid({ profile, skillGroups, yearsExperience, jobCount }: S
         {/* Skill groups count card — spans 2 cols */}
         <div className="card stats-grid__showcase">
           <div className="stats-grid__showcase-content">
-            <h4 className="headline-md" style={{ color: 'white' }}>{skillGroups.length} Skill Domains</h4>
+            <h4 className="headline-md" style={{ color: 'var(--on-surface)' }}>{skillGroups.length} Skill Domains</h4>
             <p style={{ color: 'var(--on-surface-variant)' }}>
               Spanning {skillGroups.reduce((acc, g) => acc + g.skills.length, 0)} individual technologies and practices.
             </p>
