@@ -5,14 +5,15 @@ import type { ChatResponse } from '../../services/chatService'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { ChatTypingIndicator } from './ChatTypingIndicator'
+import { CodeExampleDrawer } from '../code/CodeExampleDrawer'
 
 const MAX_USER_MESSAGES = 10
 const STREAM_TIMEOUT_MS = 30000
 
 const SUGGESTED_PROMPTS = [
-  'What Spring Boot and Kafka patterns does he use?',
-  'What is he blogging about recently?',
-  'How does he handle event sourcing and CQRS?',
+  'What is your experience with Kafka?',
+  'What have you been blogging about recently?',
+  'Show me some code examples',
 ]
 
 interface ChatPanelProps {
@@ -43,6 +44,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
   const cancelledRef = useRef(false)
   const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
+  const [codeExampleId, setCodeExampleId] = useState<string | null>(null)
   const userMessageCount = messages.filter((m) => m.role === 'user').length
   const limitReached = userMessageCount >= MAX_USER_MESSAGES
 
@@ -266,6 +268,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
               content={msg.content}
               timestamp={msg.timestamp}
               profileImageUrl={profileImageUrl}
+              onCodeExampleClick={setCodeExampleId}
             />
           ))}
           {isStreaming && streamingContent === '' && (
@@ -278,6 +281,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
               role="assistant"
               content={streamingContent ?? ''}
               profileImageUrl={profileImageUrl}
+              onCodeExampleClick={setCodeExampleId}
             />
           )}
           {limitReached && !isStreaming && (
@@ -295,6 +299,12 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
           />
         </div>
       </div>
+      {codeExampleId && (
+        <CodeExampleDrawer
+          codeExampleId={codeExampleId}
+          onClose={() => setCodeExampleId(null)}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,7 @@
 package com.simonrowe.mcp;
 
+import com.simonrowe.admin.AdminCodeExampleRepository;
+import com.simonrowe.admin.CodeExample;
 import com.simonrowe.blog.BlogService;
 import com.simonrowe.blog.BlogSummaryResponse;
 import com.simonrowe.employment.JobService;
@@ -11,7 +13,9 @@ import com.simonrowe.search.SearchService;
 import com.simonrowe.skills.SkillGroupService;
 import com.simonrowe.skills.SkillGroupSummaryDto;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -24,18 +28,21 @@ public class ProfileMcpTools {
   private final JobService jobService;
   private final SkillGroupService skillGroupService;
   private final BlogService blogService;
+  private final AdminCodeExampleRepository codeExampleRepository;
 
   public ProfileMcpTools(
       final ProfileService profileService,
       final SearchService searchService,
       final JobService jobService,
       final SkillGroupService skillGroupService,
-      final BlogService blogService) {
+      final BlogService blogService,
+      final AdminCodeExampleRepository codeExampleRepository) {
     this.profileService = profileService;
     this.searchService = searchService;
     this.jobService = jobService;
     this.skillGroupService = skillGroupService;
     this.blogService = blogService;
+    this.codeExampleRepository = codeExampleRepository;
   }
 
   @WithSpan
@@ -91,5 +98,42 @@ public class ProfileMcpTools {
       @ToolParam(description = "Search keywords to match across all site content")
       final String query) {
     return searchService.siteSearch(query);
+  }
+
+  @WithSpan
+  @Tool(description = "Get code examples from Simon's portfolio. Returns real code "
+      + "snippets with titles, descriptions, language, and associated skills. Optionally "
+      + "filter by language (java, typescript, yaml, etc.). Use this when asked to show "
+      + "code, demonstrate implementation patterns, or provide technical examples.")
+  public List<Map<String, Object>> getCodeExamples(
+      @ToolParam(description = "Optional language filter: java, typescript, yaml, python, "
+          + "kotlin, go, bash. Pass null or empty to return all.")
+      final String language) {
+    List<CodeExample> examples;
+    if (language != null && !language.isBlank()) {
+      examples = codeExampleRepository.findByLanguage(
+          language.toLowerCase().trim(),
+          org.springframework.data.domain.PageRequest.of(0, 20)).getContent();
+    } else {
+      examples = codeExampleRepository.findAll();
+    }
+    return examples.stream()
+        .map(this::toCodeExampleSummary)
+        .toList();
+  }
+
+  private Map<String, Object> toCodeExampleSummary(final CodeExample example) {
+    Map<String, Object> summary = new LinkedHashMap<>();
+    summary.put("id", example.id());
+    summary.put("title", example.title());
+    summary.put("description", example.description());
+    summary.put("language", example.language());
+    summary.put("code", example.code());
+    if (example.skills() != null) {
+      summary.put("skills", example.skills().stream()
+          .map(s -> s.name())
+          .toList());
+    }
+    return summary;
   }
 }

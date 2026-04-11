@@ -87,37 +87,46 @@ export function CodeExamplesAdmin() {
       </div>
 
       <div className="code-examples-filters">
-        <input
-          type="text"
-          className="code-examples-filters__search"
-          placeholder="Search..."
-          value={searchQuery}
-          onChange={handleFilterChange(setSearchQuery)}
-        />
-        <select
-          className="code-examples-filters__select"
-          value={skillFilter}
-          onChange={handleFilterChange(setSkillFilter)}
-        >
-          <option value="">All skills</option>
-          {skills.map((skill) => (
-            <option key={skill.id} value={skill.id}>
-              {skill.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="code-examples-filters__select"
-          value={languageFilter}
-          onChange={handleFilterChange(setLanguageFilter)}
-        >
-          <option value="">All languages</option>
-          {LANGUAGES.map((lang) => (
-            <option key={lang} value={lang}>
-              {lang}
-            </option>
-          ))}
-        </select>
+        <div className="code-examples-filters__group">
+          <label>Search</label>
+          <input
+            type="text"
+            className="admin-form__input"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={handleFilterChange(setSearchQuery)}
+          />
+        </div>
+        <div className="code-examples-filters__group">
+          <label>Skill</label>
+          <select
+            className="admin-form__input"
+            value={skillFilter}
+            onChange={handleFilterChange(setSkillFilter)}
+          >
+            <option value="">All skills</option>
+            {skills.map((skill) => (
+              <option key={skill.id} value={skill.id}>
+                {skill.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="code-examples-filters__group">
+          <label>Language</label>
+          <select
+            className="admin-form__input"
+            value={languageFilter}
+            onChange={handleFilterChange(setLanguageFilter)}
+          >
+            <option value="">All languages</option>
+            {LANGUAGES.map((lang) => (
+              <option key={lang} value={lang}>
+                {lang}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loading ? (

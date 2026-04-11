@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
-  Bell,
   Briefcase,
   Code,
   Database,
+  FileCode,
   FileText,
   Image,
   LayoutDashboard,
@@ -25,6 +25,7 @@ const navItems = [
   { path: '/admin/skills', label: 'Skills', icon: <Code size={18} /> },
   { path: '/admin/jobs', label: 'Jobs', icon: <Briefcase size={18} /> },
   { path: '/admin/tags', label: 'Tags', icon: <Tag size={18} /> },
+  { path: '/admin/code-examples', label: 'Code Examples', icon: <FileCode size={18} /> },
   { path: '/admin/tour-steps', label: 'Tour Steps', icon: <Route size={18} /> },
   { path: '/admin/media', label: 'Media', icon: <Image size={18} /> },
   { path: '/admin/data-operations', label: 'Data Ops', icon: <Database size={18} /> },
@@ -45,7 +46,6 @@ export function AdminLayout() {
   }
 
   const isActive = (path: string) => location.pathname.startsWith(path)
-  const currentPage = navItems.find(item => isActive(item.path))?.label ?? 'Dashboard'
 
   return (
     <div className="admin-layout">
@@ -101,22 +101,6 @@ export function AdminLayout() {
         </div>
       </aside>
       <div className="admin-content">
-        <header className="admin-header">
-          <div className="admin-header__title">
-            <span className="admin-header__brand">Admin</span>
-            <span className="admin-header__separator">/</span>
-            <span className="admin-header__page">{currentPage}</span>
-          </div>
-          <div className="admin-header__actions">
-            <button type="button" className="admin-header__bell" aria-label="Notifications">
-              <Bell size={18} />
-            </button>
-            <span className="admin-header__live-badge">
-              <span className="admin-header__live-dot" />
-              LIVE NODE
-            </span>
-          </div>
-        </header>
         <main className="admin-main">
           <Outlet />
         </main>

@@ -8,7 +8,6 @@ interface HeroSectionProps {
   name: string
   title: string
   tagline: string
-  cvUrl?: string | null
   backgroundImageUrl?: string | null
   socialMediaLinks?: SocialMediaLink[]
 }
@@ -20,12 +19,14 @@ const socialIcons: Record<string, React.ReactNode> = {
 }
 
 const SUGGESTED_PROMPTS = [
-  'What Spring Boot and Kafka patterns does he use?',
-  'What is he blogging about recently?',
-  'How does he handle event sourcing and CQRS?',
+  'What is your experience with Kafka?',
+  'What have you been blogging about recently?',
+  'Show me some code examples',
+  'What was your role at Global?',
+  'What testing strategies do you use?',
 ]
 
-export function HeroSection({ name, tagline, cvUrl, backgroundImageUrl, socialMediaLinks }: HeroSectionProps) {
+export function HeroSection({ name, tagline, backgroundImageUrl, socialMediaLinks }: HeroSectionProps) {
   const bgUrl = backgroundImageUrl ? `${API_BASE_URL}${backgroundImageUrl}` : undefined
   const [chatInput, setChatInput] = useState('')
   const { openChat } = useChat()
@@ -89,11 +90,9 @@ export function HeroSection({ name, tagline, cvUrl, backgroundImageUrl, socialMe
         </div>
 
         <div className="hero__actions">
-          {cvUrl && (
-            <a href={`${API_BASE_URL}${cvUrl}`} target="_blank" rel="noopener noreferrer" className="button button--primary tour-download-cv">
-              <Download size={16} /> Download CV
-            </a>
-          )}
+          <a href={`${API_BASE_URL}/api/resume`} target="_blank" rel="noopener noreferrer" className="button button--primary tour-download-cv">
+            <Download size={16} /> Download CV
+          </a>
           {displayLinks.length > 0 && (
             <div className="hero__social">
               {displayLinks.map(link => (
