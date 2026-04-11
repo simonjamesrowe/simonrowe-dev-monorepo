@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Experience Page — Alternating Timeline Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --surface: #0b0f18;
+    --surface-raised: #131825;
+    --surface-overlay: #1a2030;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --border-accent: rgba(119,209,255,0.3);
+    --text-primary: #e8ebf5;
+    --text-secondary: #9ba3b8;
+    --text-muted: #6b7280;
+    --accent: #77d1ff;
+    --accent-glow: rgba(119,209,255,0.12);
+    --accent-warm: #ffb690;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-heading: 'Space Grotesk', system-ui, sans-serif;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--surface);
+    color: var(--text-primary);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ─── NAV ─── */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 2rem;
+    background: rgba(11,15,24,0.7);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav__links { display: flex; gap: 1.75rem; }
+  .nav__links a {
+    color: var(--text-secondary); text-decoration: none;
+    font-size: 0.875rem; font-weight: 500; transition: color 0.2s;
+  }
+  .nav__links a:hover { color: var(--text-primary); }
+  .nav__links a.active { color: var(--text-primary); }
+  .nav__right { display: flex; align-items: center; gap: 1rem; }
+  .nav__ask-ai {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.4rem 1rem; border-radius: 999px;
+    border: 1px solid var(--accent); color: var(--accent);
+    font-size: 0.8rem; font-weight: 600;
+    background: transparent; cursor: pointer;
+  }
+  .nav__search {
+    padding: 0.5rem 1rem; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface-raised);
+    color: var(--text-muted); font-size: 0.85rem; width: 280px; outline: none;
+  }
+
+  /* ─── PAGE HEADER ─── */
+  .page-header {
+    padding: 6rem 2rem 2rem;
+    max-width: 900px; margin: 0 auto; text-align: center;
+  }
+  .page-header h1 {
+    font-family: var(--font-heading); font-size: 2.8rem; font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .page-header h1 span { color: var(--accent); }
+  .page-header p {
+    color: var(--text-muted); font-size: 0.95rem; max-width: 500px; margin: 0 auto;
+  }
+
+  /* ─── ALTERNATING TIMELINE ─── */
+  .timeline {
+    position: relative;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 3rem 2rem 4rem;
+  }
+
+  /* Central vertical line */
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    transform: translateX(-50%);
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      var(--accent) 3%,
+      var(--border-accent) 40%,
+      var(--border) 90%,
+      transparent 100%
+    );
+  }
+
+  .timeline__item {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+  }
+  .timeline__item:last-child { margin-bottom: 0; }
+
+  /* Left card items (odd) */
+  .timeline__item--left .timeline__card-wrap {
+    width: calc(50% - 36px);
+    margin-right: auto;
+    padding-right: 0;
+  }
+  .timeline__item--left .timeline__card {
+    text-align: left;
+  }
+
+  /* Right card items (even) */
+  .timeline__item--right .timeline__card-wrap {
+    width: calc(50% - 36px);
+    margin-left: auto;
+    padding-left: 0;
+  }
+  .timeline__item--right .timeline__card {
+    text-align: left;
+  }
+
+  /* Center dot */
+  .timeline__dot {
+    position: absolute;
+    left: 50%;
+    top: 20px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    background: var(--surface-overlay);
+    border: 2px solid var(--text-muted);
+  }
+  .timeline__item--current .timeline__dot {
+    background: var(--accent);
+    border-color: var(--surface);
+    box-shadow: 0 0 0 4px var(--accent-glow), 0 0 16px rgba(119,209,255,0.3);
+    width: 18px; height: 18px;
+  }
+  .timeline__item--education .timeline__dot {
+    background: var(--accent-warm);
+    border-color: var(--surface);
+    box-shadow: 0 0 0 4px rgba(255,182,144,0.15);
+  }
+
+  /* Connector arm from dot to card */
+  .timeline__connector {
+    position: absolute;
+    top: 27px;
+    height: 2px;
+    background: var(--border);
+    z-index: 1;
+  }
+  .timeline__item--left .timeline__connector {
+    left: calc(50% + 8px);
+    right: calc(50% - 36px + 1px);
+    width: 28px;
+  }
+  .timeline__item--right .timeline__connector {
+    right: calc(50% + 8px);
+    left: calc(50% - 36px + 1px);
+    width: 28px;
+  }
+  .timeline__item--current .timeline__connector {
+    background: var(--border-accent);
+  }
+
+  /* Year label */
+  .timeline__year {
+    position: absolute;
+    top: 18px;
+    font-family: var(--font-heading);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+  .timeline__item--left .timeline__year {
+    left: calc(50% + 44px);
+  }
+  .timeline__item--right .timeline__year {
+    right: calc(50% + 44px);
+    text-align: right;
+  }
+
+  /* Card */
+  .timeline__card {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    cursor: pointer;
+    transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+  }
+  .timeline__card:hover {
+    border-color: var(--border-hover);
+    box-shadow: 0 4px 24px rgba(119,209,255,0.06);
+    transform: translateY(-2px);
+  }
+  .timeline__item--current .timeline__card {
+    border-color: var(--border-accent);
+    box-shadow: 0 0 24px rgba(119,209,255,0.06);
+  }
+  .timeline__item--current .timeline__card:hover {
+    box-shadow: 0 4px 32px rgba(119,209,255,0.12);
+  }
+
+  .timeline__card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin-bottom: 0.5rem;
+  }
+  .timeline__logo {
+    width: 48px; height: 48px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-overlay);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; flex-shrink: 0;
+  }
+  .timeline__logo img {
+    width: 100%; height: 100%; object-fit: cover;
+  }
+  .timeline__logo-placeholder {
+    font-family: var(--font-heading);
+    font-size: 1.3rem; font-weight: 700;
+    color: var(--accent);
+  }
+
+  .timeline__role-info {
+    flex: 1; min-width: 0;
+  }
+  .timeline__title {
+    font-family: var(--font-heading);
+    font-size: 1rem; font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 0.1rem;
+  }
+  .timeline__company {
+    font-size: 0.85rem; color: var(--text-primary); font-weight: 500;
+  }
+
+  .timeline__meta {
+    display: flex; align-items: center; gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .timeline__dates-badge {
+    display: inline-flex; align-items: center;
+    font-size: 0.75rem; color: var(--text-muted);
+    background: var(--surface-overlay);
+    padding: 0.2rem 0.6rem; border-radius: 999px;
+  }
+  .timeline__dates-badge--current {
+    color: var(--accent);
+    border: 1px solid var(--border-accent);
+    background: var(--accent-glow);
+    font-weight: 600;
+  }
+  .timeline__location {
+    font-size: 0.75rem; color: var(--text-muted);
+  }
+
+  .timeline__description {
+    font-size: 0.85rem; color: var(--text-secondary);
+    line-height: 1.55;
+  }
+
+  /* ─── SKILLS SECTION (unchanged from current) ─── */
+  .skills-section {
+    padding: 2rem 2rem 4rem;
+    max-width: 1100px; margin: 0 auto;
+  }
+  .skills-section h2 {
+    font-family: var(--font-heading); font-size: 2.2rem; font-weight: 700;
+    margin-bottom: 0.5rem; color: var(--text-primary);
+  }
+  .skills-section h2 span { color: var(--accent); }
+  .skills-section > p {
+    color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem;
+  }
+  .skills-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;
+  }
+  .skill-card {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .skill-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-1px);
+  }
+  .skill-card__icon {
+    width: 36px; height: 36px; border-radius: var(--radius-sm);
+    background: var(--surface-overlay);
+    display: grid; place-items: center;
+    font-size: 0.9rem; font-weight: 700; color: var(--accent);
+  }
+  .skill-card__info { flex: 1; }
+  .skill-card__name { font-size: 0.9rem; font-weight: 600; }
+  .skill-card__bar {
+    height: 4px; border-radius: 2px;
+    background: var(--surface-overlay);
+    margin-top: 0.35rem;
+  }
+  .skill-card__bar-fill {
+    height: 100%; border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent) 0%, rgba(119,209,255,0.4) 100%);
+  }
+
+  /* ─── FOOTER ─── */
+  .footer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 1.5rem 2rem; border-top: 1px solid var(--border);
+    color: var(--text-muted); font-size: 0.8rem;
+  }
+  .footer a { color: var(--text-secondary); text-decoration: none; margin-left: 1.5rem; }
+  .footer a:hover { color: var(--accent); }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 768px) {
+    .timeline::before { left: 20px; }
+    .timeline__dot { left: 20px; }
+    .timeline__connector { display: none; }
+    .timeline__year { display: none; }
+    .timeline__item--left .timeline__card-wrap,
+    .timeline__item--right .timeline__card-wrap {
+      width: calc(100% - 48px);
+      margin-left: auto;
+      margin-right: 0;
+    }
+    .skills-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__links">
+    <a href="#">Home</a>
+    <a href="#" class="active">Experience</a>
+    <a href="#">Blog</a>
+  </div>
+  <div class="nav__right">
+    <button class="nav__ask-ai">&#x1F4AC; ASK AI</button>
+    <input class="nav__search" type="text" placeholder="Search or ask me anything...">
+  </div>
+</nav>
+
+<header class="page-header">
+  <h1>Experience &amp; <span>Career</span></h1>
+  <p>20+ years building software, leading teams, and shipping products across industries.</p>
+</header>
+
+<section class="timeline">
+
+  <!-- 1: LEFT — Current role -->
+  <div class="timeline__item timeline__item--left timeline__item--current">
+    <div class="timeline__card-wrap">
+      <div class="timeline__card">
+        <div class="timeline__card-header">
+          <div class="timeline__logo"><img src="http://localhost:8080/uploads/global-logo.jpg" alt="Global"></div>
+          <div class="timeline__role-info">
+            <div class="timeline__title">Head of Engineering</div>
+            <div class="timeline__company">Global</div>
+          </div>
+        </div>
+        <div class="timeline__meta">
+          <span class="timeline__dates-badge timeline__dates-badge--current">Aug 2021 &mdash; Present</span>
+          <span class="timeline__location">Holborn, London</span>
+        </div>
+        <p class="timeline__description">Head of Engineering for Commercial Trading at Global, leading AI-native transformation, platform modernization, and delivery across 30+ engineers and three product pillars.</p>
+      </div>
+    </div>
+    <div class="timeline__dot"></div>
+    <span class="timeline__year">2021</span>
+  </div>
+
+  <!-- 2: RIGHT -->
+  <div class="timeline__item timeline__item--right">
+    <span class="timeline__year">2020</span>
+    <div class="timeline__dot"></div>
+    <div class="timeline__card-wrap">
+      <div class="timeline__card">
+        <div class="timeline__card-header">
+          <div class="timeline__logo"><img src="http://localhost:8080/uploads/YT_ree_50b80993fc.png" alt="Y-Tree"></div>
+          <div class="timeline__role-info">
+            <div class="timeline__title">Senior Developer</div>
+            <div class="timeline__company">Y-Tree</div>
+          </div>
+        </div>
+        <div class="timeline__meta">
+          <span class="timeline__dates-badge">May 2020 &mdash; Jul 2021</span>
+          <span class="timeline__location">London</span>
+        </div>
+        <p class="timeline__description">Lead Developer of exciting fin-tech platform composed of event-driven and restful microservices.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3: LEFT -->
+  <div class="timeline__item timeline__item--left">
+    <div class="timeline__card-wrap">
+      <div class="timeline__card">
+        <div class="timeline__card-header">
+          <div class="timeline__logo"><img src="http://localhost:8080/uploads/upp_4780c5270b.png" alt="Upp"></div>
+          <div class="timeline__role-info">
+            <div class="timeline__title">Software Engineering Lead</div>
+            <div class="timeline__company">Upp Technologies</div>
+          </div>
+        </div>
+        <div class="timeline__meta">
+          <span class="timeline__dates-badge">Apr 2019 &mdash; May 2020</span>
+          <span class="timeline__location">London</span>
+        </div>
+        <p class="timeline__description">Hands-on lead engineer in a small cross-functional team.</p>
+      </div>
+    </div>
+    <div class="timeline__dot"></div>
+    <span class="timeline__year">2019</span>
+  </div>
+
+  <!-- 4: RIGHT -->
+  <div class="timeline__item timeline__item--right">
+    <span class="timeline__year">2018</span>
+    <div class="timeline__dot"></div>
+    <div class="timeline__card-wrap">
+      <div class="timeline__card">
+        <div class="timeline__card-header">
+          <div class="timeline__logo"><img src="http://localhost:8080/uploads/pivotal_1_06ffe33158.png" alt="Pivotal"></div>
+          <div class="timeline__role-info">
+            <div class="timeline__title">Senior Platform Architect</div>
+            <div class="timeline__company">Pivotal</div>
+          </div>
+        </div>
+        <div class="timeline__meta">
+          <span class="timeline__dates-badge">Aug 2018 &mdash; Apr 2019</span>
+          <span class="timeline__location">London</span>
+        </div>
+        <p class="timeline__description">Applications Focused Platform Architect specialising in cloud native development.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5: LEFT -->
+  <div class="timeline__item timeline__item--left">
+    <div class="timeline__card-wrap">
+      <div class="timeline__card">
+        <div class="timeline__card-header">
+          <div class="timeline__logo"><div class="timeline__logo-placeholder">U</div></div>
+          <div class="timeline__role-info">
+            <div class="timeline__title">Senior Director, Java Development</div>
+            <div class="timeline__company">Universal Music Publishing</div>
+          </div>
+        </div>
+        <div class="timeline__meta">
+          <span class="timeline__dates-badge">Jul 2011 &mdash; Aug 2018</span>
+        </div>
+        <p class="timeline__description">Technology leader in cloud native development for business critical applications.</p>
+      </div>
+    </div>
+    <div class="timeline__dot"></div>
+    <span class="timeline__year">2011</span>
+  </div>
+
+  <!-- 6: RIGHT -->
+  <div class="timeline__item timeline__item--right">
+    <span class="timeline__year">2009</span>
+    <div class="timeline__dot"></div>
+    <div class="timeline__card-wrap">
+      <div class="timeline__card">
+        <div class="timeline__card-header">
+          <div class="timeline__logo"><div class="timeline__logo-placeholder">W</div></div>
+          <div class="timeline__role-info">
+            <div class="timeline__title">Senior Applications Developer</div>
+            <div class="timeline__company">Workcover Queensland</div>
+          </div>
+        </div>
+        <div class="timeline__meta">
+          <span class="timeline__dates-badge">Nov 2009 &mdash; May 2011</span>
+        </div>
+        <p class="timeline__description">Team Leader working on an external-facing self-service portal in addition to migration of internal business-critical Oracle Forms applications to Spring MVC.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7: LEFT -->
+  <div class="timeline__item timeline__item--left">
+    <div class="timeline__card-wrap">
+      <div class="timeline__card">
+        <div class="timeline__card-header">
+          <div class="timeline__logo"><div class="timeline__logo-placeholder">M</div></div>
+          <div class="timeline__role-info">
+            <div class="timeline__title">Analyst / Programmer</div>
+            <div class="timeline__company">Macquarie Group</div>
+          </div>
+        </div>
+        <div class="timeline__meta">
+          <span class="timeline__dates-badge">Feb 2008 &mdash; Nov 2009</span>
+        </div>
+        <p class="timeline__description">Built real-time, batch and web applications using Struts and Spring framework for the Risk Management Group.</p>
+      </div>
+    </div>
+    <div class="timeline__dot"></div>
+    <span class="timeline__year">2008</span>
+  </div>
+
+  <!-- 8: RIGHT -->
+  <div class="timeline__item timeline__item--right">
+    <span class="timeline__year">2006</span>
+    <div class="timeline__dot"></div>
+    <div class="timeline__card-wrap">
+      <div class="timeline__card">
+        <div class="timeline__card-header">
+          <div class="timeline__logo"><div class="timeline__logo-placeholder">S</div></div>
+          <div class="timeline__role-info">
+            <div class="timeline__title">Junior Applications Developer</div>
+            <div class="timeline__company">SAS</div>
+          </div>
+        </div>
+        <div class="timeline__meta">
+          <span class="timeline__dates-badge">Sep 2006 &mdash; Feb 2008</span>
+        </div>
+        <p class="timeline__description">Design, Development, Testing and Documentation of the Synapse internal business systems.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9: LEFT -->
+  <div class="timeline__item timeline__item--left">
+    <div class="timeline__card-wrap">
+      <div class="timeline__card">
+        <div class="timeline__card-header">
+          <div class="timeline__logo"><div class="timeline__logo-placeholder">C</div></div>
+          <div class="timeline__role-info">
+            <div class="timeline__title">Graduate Developer</div>
+            <div class="timeline__company">Civica</div>
+          </div>
+        </div>
+        <div class="timeline__meta">
+          <span class="timeline__dates-badge">Jan 2005 &mdash; Aug 2006</span>
+        </div>
+        <p class="timeline__description">Design, Development, Testing and Documentation of the Authority application.</p>
+      </div>
+    </div>
+    <div class="timeline__dot"></div>
+    <span class="timeline__year">2005</span>
+  </div>
+
+  <!-- 10: RIGHT — Education -->
+  <div class="timeline__item timeline__item--right timeline__item--education">
+    <span class="timeline__year">2002</span>
+    <div class="timeline__dot"></div>
+    <div class="timeline__card-wrap">
+      <div class="timeline__card">
+        <div class="timeline__card-header">
+          <div class="timeline__logo"><div class="timeline__logo-placeholder">&#x1F393;</div></div>
+          <div class="timeline__role-info">
+            <div class="timeline__title">Computer Science</div>
+            <div class="timeline__company">University of Newcastle</div>
+          </div>
+        </div>
+        <div class="timeline__meta">
+          <span class="timeline__dates-badge">Jan 2002 &mdash; Dec 2004</span>
+        </div>
+        <p class="timeline__description">Bachelor of Computer Science &mdash; WAM (Weighted Average Mark): 81.24</p>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- SKILLS (placeholder to show full page context) -->
+<section class="skills-section">
+  <h2><span>Skills</span></h2>
+  <p>Click a skill group to explore individual skills and see where they've been used.</p>
+  <div class="skills-grid">
+    <div class="skill-card">
+      <div class="skill-card__icon">AI</div>
+      <div class="skill-card__info">
+        <div class="skill-card__name">Artificial Intelligence</div>
+        <div class="skill-card__bar"><div class="skill-card__bar-fill" style="width:85%"></div></div>
+      </div>
+    </div>
+    <div class="skill-card">
+      <div class="skill-card__icon">J</div>
+      <div class="skill-card__info">
+        <div class="skill-card__name">Java / Kotlin</div>
+        <div class="skill-card__bar"><div class="skill-card__bar-fill" style="width:95%"></div></div>
+      </div>
+    </div>
+    <div class="skill-card">
+      <div class="skill-card__icon">S</div>
+      <div class="skill-card__info">
+        <div class="skill-card__name">Spring</div>
+        <div class="skill-card__bar"><div class="skill-card__bar-fill" style="width:92%"></div></div>
+      </div>
+    </div>
+    <div class="skill-card">
+      <div class="skill-card__icon">C</div>
+      <div class="skill-card__info">
+        <div class="skill-card__name">Cloud</div>
+        <div class="skill-card__bar"><div class="skill-card__bar-fill" style="width:80%"></div></div>
+      </div>
+    </div>
+    <div class="skill-card">
+      <div class="skill-card__icon">CI</div>
+      <div class="skill-card__info">
+        <div class="skill-card__name">CI/CD</div>
+        <div class="skill-card__bar"><div class="skill-card__bar-fill" style="width:88%"></div></div>
+      </div>
+    </div>
+    <div class="skill-card">
+      <div class="skill-card__icon">D</div>
+      <div class="skill-card__info">
+        <div class="skill-card__name">Data Persistence / Search</div>
+        <div class="skill-card__bar"><div class="skill-card__bar-fill" style="width:90%"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <span>&copy; 2026 Simon Rowe. All rights reserved.</span>
+  <div>
+    <a href="#">GitHub</a>
+    <a href="#">LinkedIn</a>
+  </div>
+</footer>
+
+</body>
+</html>

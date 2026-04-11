@@ -13,6 +13,10 @@ function formatDateRange(startDate: string, endDate?: string | null): string {
   return `${formatDate(startDate)} — ${endDate ? formatDate(endDate) : 'Present'}`
 }
 
+function getYear(dateStr: string): string {
+  return new Date(dateStr).getFullYear().toString()
+}
+
 interface RoleTimelineProps {
   onJobClick?: (jobId: string) => void
 }
@@ -53,13 +57,16 @@ export function RoleTimeline({ onJobClick }: RoleTimelineProps) {
   if (loading) {
     return (
       <div className="role-timeline" aria-label="Loading experience" role="status">
-        <div className="role-timeline__grid">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div className="role-timeline__card role-timeline__card--skeleton" key={i}>
-              <div className="skeleton-card skeleton-pulse" style={{ height: '10rem' }} />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div className={`role-timeline__item role-timeline__item--${i % 2 === 0 ? 'left' : 'right'}`} key={i}>
+            <div className="role-timeline__card-wrap">
+              <div className="role-timeline__card role-timeline__card--skeleton">
+                <div className="skeleton-card skeleton-pulse" style={{ height: '10rem' }} />
+              </div>
             </div>
-          ))}
-        </div>
+            <div className="role-timeline__dot" />
+          </div>
+        ))}
       </div>
     )
   }
@@ -74,66 +81,86 @@ export function RoleTimeline({ onJobClick }: RoleTimelineProps) {
 
   return (
     <div className="role-timeline" aria-label="Employment timeline">
-      <div className="role-timeline__grid">
-        {jobs.map((job, index) => {
-          const thumbnailUrl = job.companyImage?.formats?.thumbnail?.url ?? job.companyImage?.url
-          const logoSrc = thumbnailUrl ? `${API_BASE_URL}${thumbnailUrl}` : null
-          const row = Math.floor(index / 2)
-          const isEven = row % 2 === 1
+      {jobs.map((job, index) => {
+        const thumbnailUrl = job.companyImage?.formats?.thumbnail?.url ?? job.companyImage?.url
+        const logoSrc = thumbnailUrl ? `${API_BASE_URL}${thumbnailUrl}` : null
+        const isCurrent = !job.endDate
+        const isLeft = index % 2 === 0
 
-          const logoEl = (
-            <div className="role-timeline__logo">
-              {logoSrc ? (
-                <img alt={job.company} className="role-timeline__logo-image" src={logoSrc} />
-              ) : (
-                <div className="role-timeline__logo-placeholder" aria-label={job.company}>
-                  {job.company.charAt(0)}
-                </div>
-              )}
-            </div>
-          )
+        const sideClass = isLeft ? 'role-timeline__item--left' : 'role-timeline__item--right'
+        const stateClass = isCurrent
+          ? 'role-timeline__item--current'
+          : job.isEducation
+            ? 'role-timeline__item--education'
+            : ''
 
-          const infoEl = (
-            <div className="role-timeline__card-info">
-              <h3 className="role-timeline__title">{job.title}</h3>
-              <p className="role-timeline__company">
-                {job.companyUrl ? (
-                  <a
-                    href={job.companyUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={e => e.stopPropagation()}
-                    className="role-timeline__company-link"
-                  >
-                    {job.company}
-                  </a>
-                ) : job.company}
-              </p>
-              <p className="role-timeline__dates">{formatDateRange(job.startDate, job.endDate)}</p>
-            </div>
-          )
-
-          return (
+        const cardContent = (
+          <div className="role-timeline__card-wrap">
             <div
-              key={job.id}
-              className={`role-timeline__card${isEven ? ' role-timeline__card--reversed' : ''}`}
+              className="role-timeline__card"
               role="button"
               tabIndex={0}
               onClick={() => onJobClick?.(job.id)}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onJobClick?.(job.id) }}
             >
               <div className="role-timeline__card-header">
-                {isEven ? (
-                  <>{logoEl}{infoEl}</>
-                ) : (
-                  <>{infoEl}{logoEl}</>
-                )}
+                <div className="role-timeline__logo">
+                  {logoSrc ? (
+                    <img alt={job.company} className="role-timeline__logo-image" src={logoSrc} />
+                  ) : (
+                    <div className="role-timeline__logo-placeholder" aria-label={job.company}>
+                      {job.company.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <div className="role-timeline__card-info">
+                  <h3 className="role-timeline__title">{job.title}</h3>
+                  <p className="role-timeline__company">
+                    {job.companyUrl ? (
+                      <a
+                        href={job.companyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="role-timeline__company-link"
+                      >
+                        {job.company}
+                      </a>
+                    ) : job.company}
+                  </p>
+                </div>
+              </div>
+              <div className="role-timeline__meta">
+                <span className={`role-timeline__dates-badge${isCurrent ? ' role-timeline__dates-badge--current' : ''}`}>
+                  {formatDateRange(job.startDate, job.endDate)}
+                </span>
+                {job.location && <span className="role-timeline__location">{job.location}</span>}
               </div>
               <p className="role-timeline__description">{job.shortDescription}</p>
             </div>
-          )
-        })}
-      </div>
+          </div>
+        )
+
+        const yearLabel = <span className="role-timeline__year">{getYear(job.startDate)}</span>
+
+        return (
+          <div key={job.id} className={`role-timeline__item ${sideClass} ${stateClass}`}>
+            {isLeft ? (
+              <>
+                {cardContent}
+                <div className="role-timeline__dot" />
+                {yearLabel}
+              </>
+            ) : (
+              <>
+                {yearLabel}
+                <div className="role-timeline__dot" />
+                {cardContent}
+              </>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
