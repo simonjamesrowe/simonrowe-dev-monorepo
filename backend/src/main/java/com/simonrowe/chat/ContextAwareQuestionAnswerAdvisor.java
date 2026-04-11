@@ -98,10 +98,13 @@ public class ContextAwareQuestionAnswerAdvisor implements BaseAdvisor {
             .topK(searchRequest.getTopK())
             .build();
 
-    List<Document> documents = vectorStore.similaritySearch(enrichedSearchRequest);
+    List<Document> documents = vectorStore.similaritySearch(enrichedSearchRequest).stream()
+        .filter(doc -> !"code_example".equals(doc.getMetadata().get("sourceType")))
+        .toList();
     String contextText = documents.stream()
-        .map(Document::getText)
-        .collect(Collectors.joining(System.lineSeparator()));
+        .map(this::formatDocumentWithMetadata)
+        .collect(Collectors.joining(
+            System.lineSeparator() + System.lineSeparator()));
 
     String renderedPrompt = PROMPT_TEMPLATE
         .replace("{query}", currentMessage)
@@ -129,6 +132,25 @@ public class ContextAwareQuestionAnswerAdvisor implements BaseAdvisor {
   @Override
   public String getName() {
     return ContextAwareQuestionAnswerAdvisor.class.getSimpleName();
+  }
+
+  private String formatDocumentWithMetadata(final Document doc) {
+    Map<String, Object> metadata = doc.getMetadata();
+    StringBuilder header = new StringBuilder("[Source:");
+    Object title = metadata.get("title");
+    if (title != null) {
+      header.append(" ").append(title);
+    }
+    Object url = metadata.get("url");
+    if (url != null) {
+      header.append(" | URL: ").append(url);
+    }
+    Object sourceType = metadata.get("sourceType");
+    if (sourceType != null) {
+      header.append(" | Type: ").append(sourceType);
+    }
+    header.append("]");
+    return header + System.lineSeparator() + doc.getText();
   }
 
   private String buildEnrichedQuery(

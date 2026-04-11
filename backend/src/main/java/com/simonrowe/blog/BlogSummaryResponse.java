@@ -10,7 +10,8 @@ public record BlogSummaryResponse(
     String featuredImageUrl,
     Instant createdDate,
     List<TagRef> tags,
-    List<SkillRef> skills
+    List<SkillRef> skills,
+    String url
 ) {
 
   public static BlogSummaryResponse fromEntity(final Blog blog) {
@@ -36,7 +37,8 @@ public record BlogSummaryResponse(
         featuredImageUrl,
         blog.createdDate(),
         tagRefs,
-        skillRefs
+        skillRefs,
+        "/blogs/" + blog.id()
     );
   }
 }
