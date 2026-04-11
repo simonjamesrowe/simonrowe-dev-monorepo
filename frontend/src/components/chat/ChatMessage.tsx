@@ -7,10 +7,20 @@ interface ChatMessageProps {
   content: string
   timestamp?: string
   profileImageUrl?: string
+  onCodeExampleClick?: (id: string) => void
 }
 
-export function ChatMessage({ role, content, timestamp, profileImageUrl }: ChatMessageProps) {
+export function ChatMessage({ role, content, timestamp, profileImageUrl, onCodeExampleClick }: ChatMessageProps) {
   const isUser = role === 'user'
+
+  const handleLinkClick = (href: string | undefined, e: React.MouseEvent) => {
+    if (!href) return
+    const codeExampleMatch = href.match(/\/code-examples\/([a-f0-9]+)/)
+    if (codeExampleMatch && onCodeExampleClick) {
+      e.preventDefault()
+      onCodeExampleClick(codeExampleMatch[1])
+    }
+  }
 
   return (
     <div className={`chat-message ${isUser ? 'chat-message--user' : 'chat-message--assistant'}`}>
@@ -32,7 +42,12 @@ export function ChatMessage({ role, content, timestamp, profileImageUrl }: ChatM
               remarkPlugins={[remarkGfm]}
               components={{
                 a: ({ href, children }) => (
-                  <a href={href} target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => handleLinkClick(href, e)}
+                  >
                     {children}
                   </a>
                 ),

@@ -161,7 +161,7 @@ public class EmbeddingService {
           .map(s -> s.name())
           .collect(Collectors.joining(",")));
     }
-    metadata.put("url", "/admin/code-examples/" + example.id());
+    metadata.put("url", "/code-examples/" + example.id());
     embedContent(content.toString(), metadata);
     LOG.info("Embedded code example: {} ({})", example.title(), example.language());
   }

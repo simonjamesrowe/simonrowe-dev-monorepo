@@ -97,11 +97,21 @@ export function JobEditor() {
     loadSkills()
   }, [getAccessToken])
 
+  const resolveSkillNamesToIds = (skillValues: string[], availableSkills: AdminSkill[]): string[] => {
+    return skillValues.map(value => {
+      const byId = availableSkills.find(s => s.id === value)
+      if (byId) return byId.id
+      const byName = availableSkills.find(s => s.name === value)
+      return byName ? byName.id : value
+    })
+  }
+
   const loadJob = useCallback(async () => {
     if (isNew || !id) return
     try {
       setLoading(true)
       const job = await fetchAdminJobById(getAccessToken, id)
+      const resolvedSkills = resolveSkillNamesToIds(job.skills ?? [], skills)
       setForm({
         title: job.title,
         company: job.company,
@@ -114,7 +124,7 @@ export function JobEditor() {
         longDescription: job.longDescription ?? '',
         education: job.education,
         includeOnResume: job.includeOnResume,
-        skills: job.skills ?? [],
+        skills: resolvedSkills,
       })
       setEditorKey((k) => k + 1)
     } catch (err) {
@@ -122,7 +132,7 @@ export function JobEditor() {
     } finally {
       setLoading(false)
     }
-  }, [getAccessToken, id, isNew])
+  }, [getAccessToken, id, isNew, skills])
 
   useEffect(() => {
     loadJob()
@@ -139,6 +149,10 @@ export function JobEditor() {
       setSaving(true)
       setError(null)
       const longDescription = editorRef.current?.getMarkdown() ?? form.longDescription
+      const skillNames = form.skills.map(id => {
+        const skill = skills.find(s => s.id === id)
+        return skill ? skill.name : id
+      })
       const payload = {
         title: form.title,
         company: form.company,
@@ -151,7 +165,7 @@ export function JobEditor() {
         longDescription,
         education: form.education,
         includeOnResume: form.includeOnResume,
-        skills: form.skills,
+        skills: skillNames,
       }
       if (isNew) {
         await createAdminJob(getAccessToken, payload)

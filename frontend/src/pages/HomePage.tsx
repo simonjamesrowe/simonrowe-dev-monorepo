@@ -40,7 +40,6 @@ export function HomePage() {
         name={profile.name}
         title={profile.title}
         tagline={profile.headline}
-        cvUrl={profile.cvUrl}
         backgroundImageUrl={profile.backgroundImage?.url}
         socialMediaLinks={profile.socialMediaLinks}
       />

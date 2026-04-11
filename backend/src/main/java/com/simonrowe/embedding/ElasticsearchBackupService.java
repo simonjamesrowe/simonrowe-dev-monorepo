@@ -114,7 +114,7 @@ public class ElasticsearchBackupService {
           .index(idx -> idx
               .index(indexName)
               .id(id)
-              .document(new StringReader(source.toString()))
+              .document(source)
           )
       );
       batchCount++;
