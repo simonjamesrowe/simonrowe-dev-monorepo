@@ -62,7 +62,8 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
             null,
             "About section",
             "bottom",
-            "/"
+            "/",
+            null
         ),
         new com.simonrowe.tour.TourStep(
             null,
@@ -72,7 +73,8 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
             null,
             "Welcome banner",
             "top",
-            "/"
+            "/",
+            null
         )
     ));
 

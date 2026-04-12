@@ -18,6 +18,24 @@ vi.mock('../src/hooks/useProfile', () => ({
 
 vi.mock('../src/components/tour/TourProvider', () => ({
   TourProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TourContext: { Provider: ({ children }: { children: React.ReactNode }) => children },
+}))
+
+vi.mock('../src/hooks/useTour', () => ({
+  useTour: () => ({
+    isActive: false,
+    currentStepIndex: 0,
+    steps: [],
+    searchValue: '',
+    autoAdvancePaused: false,
+    start: vi.fn(),
+    next: vi.fn(),
+    prev: vi.fn(),
+    exit: vi.fn(),
+    setSearchValue: vi.fn(),
+    pauseAutoAdvance: vi.fn(),
+    resumeAutoAdvance: vi.fn(),
+  }),
 }))
 
 vi.mock('../src/components/tour/TourButton', () => ({

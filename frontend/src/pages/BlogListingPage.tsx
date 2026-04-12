@@ -37,7 +37,7 @@ export function BlogListingPage() {
   }
 
   return (
-    <div className="blog-listing-page">
+    <div className="blog-listing-page tour-blogs">
       {featuredBlog && <FeaturedArticle blog={featuredBlog} />}
       {gridBlogs.length > 0 && (
         <div className="blog-listing-page__grid">

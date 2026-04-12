@@ -14,12 +14,23 @@ const defaultStep: TourStep = {
   titleImage: null,
   description: 'This is the about section.',
   position: 'bottom',
+  route: '/',
+  autoAdvanceMs: null,
 }
 
 const mockUseTour = vi.fn()
 
 vi.mock('../../../src/hooks/useTour', () => ({
   useTour: () => mockUseTour(),
+}))
+
+vi.mock('../../../src/contexts/ChatContext', () => ({
+  useChat: () => ({
+    openChat: vi.fn(),
+    closeChat: vi.fn(),
+    handleRecaptchaVerified: vi.fn(),
+    recaptchaVerified: false,
+  }),
 }))
 
 vi.mock('../../../src/components/tour/TourTooltip', () => ({
