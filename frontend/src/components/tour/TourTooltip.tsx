@@ -10,6 +10,7 @@ interface Position {
 
 const GAP = 12
 const EDGE_PADDING = 16
+const DEFAULT_AUTO_ADVANCE_MS = 7000
 
 function calculatePosition(
   element: Element,
@@ -58,13 +59,14 @@ function calculatePosition(
 }
 
 export function TourTooltip() {
-  const { steps, currentStepIndex, next, prev, exit } = useTour()
+  const { steps, currentStepIndex, next, prev, exit, autoAdvancePaused, pauseAutoAdvance, resumeAutoAdvance } = useTour()
   const tooltipRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState<Position>({ top: 0, left: 0 })
 
   const currentStep = steps[currentStepIndex]
   const isFirstStep = currentStepIndex === 0
   const isLastStep = currentStepIndex === steps.length - 1
+  const autoAdvanceMs = currentStep?.autoAdvanceMs ?? DEFAULT_AUTO_ADVANCE_MS
 
   const updatePosition = useCallback(() => {
     if (!currentStep || !tooltipRef.current) {
@@ -103,6 +105,8 @@ export function TourTooltip() {
     <div
       className="tour-tooltip"
       data-testid="tour-tooltip"
+      onMouseEnter={pauseAutoAdvance}
+      onMouseLeave={resumeAutoAdvance}
       ref={tooltipRef}
       style={{ top: position.top, left: position.left }}
     >
@@ -149,6 +153,11 @@ export function TourTooltip() {
           </button>
         </div>
       </div>
+      <div
+        className={`tour-tooltip__progress-bar${autoAdvancePaused ? ' tour-tooltip__progress-bar--paused' : ''}`}
+        key={currentStepIndex}
+        style={{ '--auto-advance-duration': `${autoAdvanceMs}ms` } as React.CSSProperties}
+      />
     </div>
   )
 }

@@ -7,4 +7,5 @@ export interface TourStep {
   description: string
   position: 'top' | 'bottom' | 'left' | 'right' | 'center'
   route: string | null
+  autoAdvanceMs: number | null
 }

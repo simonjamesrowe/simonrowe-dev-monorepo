@@ -34,6 +34,7 @@ const stepOne: TourStep = {
   description: 'About section description.',
   position: 'bottom',
   route: '/',
+  autoAdvanceMs: null,
 }
 
 const stepTwo: TourStep = {
@@ -45,6 +46,7 @@ const stepTwo: TourStep = {
   description: 'Skills section description.',
   position: 'right',
   route: '/experience',
+  autoAdvanceMs: null,
 }
 
 function TourStateDisplay() {
@@ -143,6 +145,10 @@ describe('TourProvider', () => {
   it('next() on the last step resets the tour', async () => {
     vi.mocked(fetchTourSteps).mockResolvedValue([stepOne, stepTwo])
 
+    let now = 1000
+    const origDateNow = Date.now
+    Date.now = () => now
+
     renderWithRouter()
 
     act(() => {
@@ -157,12 +163,17 @@ describe('TourProvider', () => {
       screen.getByTestId('btn-next').click()
     })
 
+    // Advance past the debounce guard (300ms)
+    now += 400
+
     act(() => {
       screen.getByTestId('btn-next').click()
     })
 
     expect(screen.getByTestId('is-active')).toHaveTextContent('false')
     expect(screen.getByTestId('step-count')).toHaveTextContent('0')
+
+    Date.now = origDateNow
   })
 
   it('prev() moves to the previous step', async () => {

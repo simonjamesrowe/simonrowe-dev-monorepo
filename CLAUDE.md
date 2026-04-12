@@ -1,6 +1,6 @@
 # simonrowe-dev-monorepo Development Guidelines
 
-Last updated: 2026-03-15
+Last updated: 2026-04-12
 
 ## Technology Stack
 
@@ -58,13 +58,19 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 
 ## Recent Changes
-- 017-light-dark-mode: Added TypeScript (latest), CSS3 custom properties + React (latest stable), Lucide React (icons), Vite (build)
-- 001-add-portainer: Added N/A (infrastructure-only change — Docker Compose YAML + Nginx config) + Portainer CE Docker image (`portainer/portainer-ce:latest`), existing nginx reverse proxy
-- 016-prod-health-scripts: Added Bash (strict mode: `set -euo pipefail`) + Docker Compose, curl, systemd (optional, for persistent monitoring)
+- 020-tour-blog-content: Fixed site tour with cross-page navigation, auto-advance timer with CSS progress bar, interactive demos (chat, drawers, search simulation), 10-step tour flow. Added blog post on RAG quality.
+- 019-fix-chat-hallucination: Custom `ContextAwareQuestionAnswerAdvisor` for conversation-aware vector search, structured document metadata, code example filtering from general RAG context.
+- 018-code-examples-admin-ux: Code example CRUD in admin, improved AI chat quality, admin UX refinements.
+- 017-light-dark-mode: Light/dark theme via CSS custom properties, `ThemeContext` with localStorage persistence, `prefers-color-scheme` fallback, image compression script.
+- 001-add-portainer: Portainer CE container management at console.simonrowe.dev behind nginx reverse proxy.
+- 016-prod-health-scripts: Production health monitoring scripts with Pinggy health check.
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
-- TypeScript (latest), CSS3 custom properties + React (latest stable), Lucide React (icons), Vite (build) (017-light-dark-mode)
-- Browser localStorage (theme preference only) (017-light-dark-mode)
+- TypeScript (latest), CSS3 custom properties + React (latest stable), Lucide React (icons), Vite (build)
+- Browser localStorage (theme preference only)
+- Spring AI 1.1.4 with OpenAI (GPT 5.4 Nano for chat, text-embedding-3-small for RAG)
+- MCP (Model Context Protocol) server for tool-augmented chat
+- Interactive site tour with auto-advance, cross-page navigation, and step actions

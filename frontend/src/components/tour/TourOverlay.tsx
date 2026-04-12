@@ -1,12 +1,16 @@
 import { useEffect, useRef } from 'react'
 
 import { useTour } from '../../hooks/useTour'
+import { useChat } from '../../contexts/ChatContext'
 import { TourTooltip } from './TourTooltip'
 import { SearchSimulation } from './SearchSimulation'
+import { STEP_ACTIONS, STEP_CLEANUP } from './tourActions'
 
 export function TourOverlay() {
   const { isActive, steps, currentStepIndex, exit } = useTour()
+  const { openChat, closeChat, handleRecaptchaVerified, recaptchaVerified } = useChat()
   const spotlightRef = useRef<Element | null>(null)
+  const prevStepRef = useRef<number>(-1)
 
   useEffect(() => {
     if (!isActive || steps.length === 0) {
@@ -43,6 +47,51 @@ export function TourOverlay() {
       }
     }
   }, [isActive, steps, currentStepIndex])
+
+  // Execute step actions on enter & cleanup on leave
+  useEffect(() => {
+    if (!isActive || steps.length === 0) {
+      prevStepRef.current = -1
+      return
+    }
+
+    const prevIndex = prevStepRef.current
+    prevStepRef.current = currentStepIndex
+
+    // Cleanup previous step
+    if (prevIndex >= 0 && prevIndex < steps.length) {
+      const prevStep = steps[prevIndex]
+      const cleanup = STEP_CLEANUP[prevStep.targetSelector]
+      if (cleanup) {
+        if (cleanup.type === 'openChat') {
+          closeChat()
+        } else if (cleanup.type === 'clickElement' && cleanup.clickTarget) {
+          const el = document.querySelector<HTMLElement>(cleanup.clickTarget)
+          if (el) el.click()
+        }
+      }
+    }
+
+    // Execute action for current step
+    const currentStep = steps[currentStepIndex]
+    const action = STEP_ACTIONS[currentStep.targetSelector]
+    if (!action) return
+
+    const timer = setTimeout(() => {
+      if (action.type === 'openChat') {
+        // Bypass reCAPTCHA for tour demo
+        if (!recaptchaVerified) {
+          handleRecaptchaVerified()
+        }
+        setTimeout(() => openChat(action.chatQuery), 200)
+      } else if (action.type === 'clickElement' && action.clickTarget) {
+        const el = document.querySelector<HTMLElement>(action.clickTarget)
+        if (el) el.click()
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [isActive, currentStepIndex, steps, openChat, closeChat, recaptchaVerified, handleRecaptchaVerified])
 
   if (!isActive || steps.length === 0) {
     return null

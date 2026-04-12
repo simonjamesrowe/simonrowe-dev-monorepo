@@ -1,31 +1,20 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.9.0 → 1.10.0 (MINOR)
+  Version change: 1.10.0 → 1.11.0 (MINOR)
 
   Modified principles:
     - Principle II: Modern Java & React Stack
-      Changed: Spring AI version from 1.1.2 to 1.1.4.
-      Changed: RAG advisor from RetrievalAugmentationAdvisor to
-      QuestionAnswerAdvisor (correct Spring AI 1.1.4 class name).
-      Added: MCP (Model Context Protocol) server integration via
-      spring-ai-starter-mcp-server-webmvc for tool-augmented chat.
-      Added: Kafka-driven embedding pipeline (EmbeddingService,
-      EmbeddingChangeConsumer) for automatic content vectorisation.
-      Added: CodeExample entity with admin CRUD for code snippets
-      associated with skills.
-    - Principle III: Quality Gates
-      Added: AbstractIntegrationTest base class requirement for
-      shared Spring test context and singleton Testcontainers.
-    - Principle IV: Observability & Operability
-      Added: Grafana Alloy as telemetry collector (OTLP traces to
-      Tempo, Docker logs to Loki). Replaces direct OTel collector.
-      Added: Portainer CE for container management UI.
-      Added: Nginx reverse proxy for production hostname routing.
+      Changed: RAG advisor from QuestionAnswerAdvisor to custom
+      ContextAwareQuestionAnswerAdvisor with conversation-aware
+      vector search, structured document metadata, and code
+      example filtering from general RAG context.
 
   Added sections:
-    - Technology Stack Constraints: new rows for Grafana Alloy,
-      Portainer, Nginx, MCP Server, Embedding Pipeline.
+    - Principle VII: Interactive Site Tour — new section covering
+      tour step data model, cross-page navigation, auto-advance
+      timer, interactive step actions, and search simulation.
+    - Renumbered Backup & Restore to VIII, Shell Scripting to IX.
 
   Removed sections: None
 
@@ -142,8 +131,15 @@ code and MongoDB persistence.
 - Semantic search for chat MUST use Spring AI's Elasticsearch vector
   store (`spring-ai-starter-vector-store-elasticsearch`) with the
   existing Elasticsearch instance. Vector embeddings MUST be stored
-  alongside keyword search indices. The `QuestionAnswerAdvisor`
-  MUST be used to inject retrieved context into chat prompts.
+  alongside keyword search indices. A custom
+  `ContextAwareQuestionAnswerAdvisor` MUST be used to inject
+  retrieved context into chat prompts. This advisor enriches vector
+  search queries with recent conversation history (last N user
+  messages) so follow-up questions retrieve relevant documents.
+  Retrieved documents MUST include structured metadata (title, URL,
+  sourceType) to prevent hallucinated links. Code examples MUST be
+  filtered from general RAG context (by `sourceType`) to avoid
+  mixing code snippets into conversational responses.
 - Content embedding MUST be driven by Kafka events. The
   `EmbeddingService` and `EmbeddingChangeConsumer` MUST
   automatically vectorise content (blogs, jobs, skills, code
@@ -265,7 +261,35 @@ editing experience.
   between `@DBRef` entity references (backend) and plain string
   IDs (frontend API).
 
-### VII. Backup & Restore
+### VII. Interactive Site Tour
+
+The site MUST include an interactive guided tour accessible via a
+"Take a Tour" button. The tour MUST showcase key site features
+across multiple pages.
+
+- Tour steps MUST be stored in MongoDB (`tourSteps` collection)
+  and managed via the admin UI with drag-and-drop reordering.
+- Each tour step MUST have: `targetSelector` (CSS selector),
+  `title`, `description` (Markdown), `position`, `route`
+  (target page path), and optional `autoAdvanceMs` (milliseconds
+  before auto-advancing, default 7000ms).
+- The tour MUST support cross-page navigation: when a step
+  targets an element on a different page, `TourProvider` MUST
+  navigate via React Router and poll for the target element
+  (up to 2 seconds) before spotlighting it.
+- Auto-advance MUST be implemented with a CSS-animated progress
+  bar. Hovering the tooltip MUST pause auto-advance. Manual
+  Next/Previous clicks MUST reset the timer.
+- Interactive step actions MUST be defined in `tourActions.ts`
+  mapping selectors to actions (e.g. `openChat`, `clickElement`).
+  Steps MAY open drawers, the chat panel, or trigger search
+  simulation. Cleanup actions MUST close drawers/panels when
+  leaving a step.
+- The `SearchSimulation` component MUST drive the actual search
+  input by syncing `searchValue` from the tour context into the
+  `SiteSearch` component's local state.
+
+### VIII. Backup & Restore
 
 Data backup and restore MUST use simple shell scripts that capture
 the current MongoDB state, uploaded media assets, and Elasticsearch
@@ -297,7 +321,7 @@ provides off-site disaster recovery.
 - Backup archives MUST be stored in `/Users/simonrowe/backups/`
   by default (configurable via first argument).
 
-### VIII. Shell Scripting Standards
+### IX. Shell Scripting Standards
 
 All shell scripts MUST use bash with `#!/usr/bin/env bash` shebang
 and `set -euo pipefail` for strict error handling. No PowerShell,
@@ -410,4 +434,4 @@ defined above.
   principles. Violations MUST be resolved before merge unless
   explicitly justified in a Complexity Tracking table.
 
-**Version**: 1.10.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-04-07
+**Version**: 1.11.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-04-12

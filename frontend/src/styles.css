@@ -3911,6 +3911,25 @@ a:hover {
   background: rgba(8, 145, 178, 0.06);
 }
 
+.tour-tooltip__progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--color-accent);
+  border-radius: 0 0 0.75rem 0.75rem;
+  animation: tour-progress var(--auto-advance-duration, 7000ms) linear forwards;
+}
+
+.tour-tooltip__progress-bar--paused {
+  animation-play-state: paused;
+}
+
+@keyframes tour-progress {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
 /* ==================== Chat Panel ==================== */
 
 /* reCAPTCHA gate overlay */

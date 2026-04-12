@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { MessageCircle } from 'lucide-react'
 import { blogSearch, siteSearch, type GroupedSearchResponse } from '../../services/searchApi'
 import { SearchDropdown } from './SearchDropdown'
+import { useTour } from '../../hooks/useTour'
 
 const DEBOUNCE_MS = 300
 const MIN_QUERY_LENGTH = 2
@@ -29,6 +30,18 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { pathname } = useLocation()
   const isBlogPage = pathname.startsWith('/blogs')
+
+  const { isActive: tourActive, searchValue: tourSearchValue, currentStepIndex, steps } = useTour()
+  const isSearchTourStep = tourActive && steps[currentStepIndex]?.targetSelector === '.tour-search'
+
+  // Sync tour search simulation into local query state
+  useEffect(() => {
+    if (isSearchTourStep) {
+      setQuery(tourSearchValue)
+    } else if (tourActive) {
+      setQuery('')
+    }
+  }, [isSearchTourStep, tourSearchValue, tourActive])
 
   useEffect(() => {
     if (query.length < MIN_QUERY_LENGTH) {
