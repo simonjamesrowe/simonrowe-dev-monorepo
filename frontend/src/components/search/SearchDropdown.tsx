@@ -48,6 +48,20 @@ export function SearchDropdown({ results, loading, hasResults, onResultClick }: 
           title="Skills"
         />
       )}
+      {results?.news && results.news.length > 0 && (
+        <SearchResultGroup
+          onResultClick={onResultClick}
+          results={results.news}
+          title="News"
+        />
+      )}
+      {results?.events && results.events.length > 0 && (
+        <SearchResultGroup
+          onResultClick={onResultClick}
+          results={results.events}
+          title="Events"
+        />
+      )}
     </div>
   )
 }

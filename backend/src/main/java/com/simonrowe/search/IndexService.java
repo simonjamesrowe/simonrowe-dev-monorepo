@@ -4,6 +4,10 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
+import com.simonrowe.aggregation.AggregatedArticle;
+import com.simonrowe.aggregation.AggregatedArticleRepository;
+import com.simonrowe.aggregation.AggregatedEvent;
+import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.blog.Tag;
@@ -43,6 +47,8 @@ public class IndexService {
   private final SkillGroupRepository skillGroupRepository;
   private final SkillRepository skillRepository;
   private final MediaVariantResolver mediaVariantResolver;
+  private final AggregatedArticleRepository articleRepository;
+  private final AggregatedEventRepository eventRepository;
 
   public IndexService(
       final ElasticsearchClient client,
@@ -50,7 +56,9 @@ public class IndexService {
       final JobRepository jobRepository,
       final SkillGroupRepository skillGroupRepository,
       final SkillRepository skillRepository,
-      final MediaVariantResolver mediaVariantResolver
+      final MediaVariantResolver mediaVariantResolver,
+      final AggregatedArticleRepository articleRepository,
+      final AggregatedEventRepository eventRepository
   ) {
     this.client = client;
     this.blogRepository = blogRepository;
@@ -58,6 +66,8 @@ public class IndexService {
     this.skillGroupRepository = skillGroupRepository;
     this.skillRepository = skillRepository;
     this.mediaVariantResolver = mediaVariantResolver;
+    this.articleRepository = articleRepository;
+    this.eventRepository = eventRepository;
   }
 
   public void indexSiteDocument(final SiteSearchDocument document) throws IOException {
@@ -177,6 +187,34 @@ public class IndexService {
     );
   }
 
+  public SiteSearchDocument articleToSiteDocument(final AggregatedArticle article) {
+    return new SiteSearchDocument(
+        "news_" + article.id(),
+        article.title(),
+        "news",
+        article.summary(),
+        null,
+        article.sourceName(),
+        article.imageUrl(),
+        article.originalUrl(),
+        article.publishedDate()
+    );
+  }
+
+  public SiteSearchDocument eventToSiteDocument(final AggregatedEvent event) {
+    return new SiteSearchDocument(
+        "event_" + event.id(),
+        event.title(),
+        "event",
+        event.summary() != null ? event.summary() : event.description(),
+        null,
+        event.sourceName(),
+        null,
+        event.originalUrl(),
+        event.eventDate()
+    );
+  }
+
   public BlogSearchDocument blogToBlogDocument(final Blog blog) {
     List<String> tagNames = blog.tags() == null
         ? List.of()
@@ -244,6 +282,21 @@ public class IndexService {
     }
     bulkIndexSiteDocuments(skillDocs);
     skillDocs.forEach(doc -> indexedIds.add(doc.id()));
+
+    List<AggregatedArticle> articles = articleRepository
+        .findByVisibleTrueOrderByPublishedDateDesc();
+    List<SiteSearchDocument> articleDocs = articles.stream()
+        .map(this::articleToSiteDocument)
+        .toList();
+    bulkIndexSiteDocuments(articleDocs);
+    articleDocs.forEach(doc -> indexedIds.add(doc.id()));
+
+    List<AggregatedEvent> events = eventRepository.findByVisibleTrueOrderByEventDateDesc();
+    List<SiteSearchDocument> eventDocs = events.stream()
+        .map(this::eventToSiteDocument)
+        .toList();
+    bulkIndexSiteDocuments(eventDocs);
+    eventDocs.forEach(doc -> indexedIds.add(doc.id()));
 
     cleanupOrphans(ElasticsearchConfig.SITE_SEARCH_INDEX, indexedIds);
     LOG.info("Full sync of site_search completed: {} documents indexed",
@@ -318,6 +371,22 @@ public class IndexService {
 
   public void deleteSkillContent(final String skillId) throws IOException {
     deleteSiteDocument(skillId);
+  }
+
+  public void indexArticleContent(final AggregatedArticle article) throws IOException {
+    indexSiteDocument(articleToSiteDocument(article));
+  }
+
+  public void deleteArticleContent(final String articleId) throws IOException {
+    deleteSiteDocument("news_" + articleId);
+  }
+
+  public void indexEventContent(final AggregatedEvent event) throws IOException {
+    indexSiteDocument(eventToSiteDocument(event));
+  }
+
+  public void deleteEventContent(final String eventId) throws IOException {
+    deleteSiteDocument("event_" + eventId);
   }
 
   private Instant parseDate(final String dateStr) {

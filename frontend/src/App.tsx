@@ -18,8 +18,10 @@ import { API_BASE_URL } from './config/api'
 import { ChatProvider, useChat } from './contexts/ChatContext'
 import { DrawerProvider, useDrawer } from './hooks/useDrawer'
 import { useProfile } from './hooks/useProfile'
+import { AggregatedContentAdmin } from './pages/admin/AggregatedContentAdmin'
 import { BlogEditor } from './pages/admin/BlogEditor'
 import { BlogsAdmin } from './pages/admin/BlogsAdmin'
+import { ContentSourcesAdmin } from './pages/admin/ContentSourcesAdmin'
 import { JobEditor } from './pages/admin/JobEditor'
 import { JobsAdmin } from './pages/admin/JobsAdmin'
 import { DashboardAdmin } from './pages/admin/DashboardAdmin'
@@ -34,6 +36,7 @@ import { TourStepsAdmin } from './pages/admin/TourStepsAdmin'
 import { CodeExamplesAdmin } from './pages/admin/CodeExamplesAdmin'
 import { CodeExampleEditor } from './pages/admin/CodeExampleEditor'
 import { BlogDetailPage } from './pages/BlogDetailPage'
+import { NewsEventsPage } from './pages/NewsEventsPage'
 import { BlogListingPage } from './pages/BlogListingPage'
 import { ExperiencePage } from './pages/ExperiencePage'
 import { HomePage } from './pages/HomePage'
@@ -127,6 +130,7 @@ function App() {
         <Route element={<PublicLayout><ExperiencePage /></PublicLayout>} path="/experience" />
         <Route element={<PublicLayout><BlogListingPage /></PublicLayout>} path="/blogs" />
         <Route element={<PublicLayout><BlogDetailPage /></PublicLayout>} path="/blogs/:id" />
+        <Route element={<PublicLayout><NewsEventsPage /></PublicLayout>} path="/news-events" />
         <Route
           path="/admin"
           element={
@@ -151,6 +155,8 @@ function App() {
           <Route path="code-examples" element={<CodeExamplesAdmin />} />
           <Route path="code-examples/:id" element={<CodeExampleEditor />} />
           <Route path="data-operations" element={<DataOperationsAdmin />} />
+          <Route path="aggregated-content" element={<AggregatedContentAdmin />} />
+          <Route path="content-sources" element={<ContentSourcesAdmin />} />
         </Route>
       </Routes>
     </BrowserRouter>

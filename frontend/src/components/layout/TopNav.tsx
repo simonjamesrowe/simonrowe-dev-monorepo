@@ -14,6 +14,7 @@ export function TopNav() {
         <NavLink to="/" className={({ isActive }) => `top-nav__link${isActive ? ' top-nav__link--active' : ''}`} end>Home</NavLink>
         <NavLink to="/experience" className={({ isActive }) => `top-nav__link${isActive ? ' top-nav__link--active' : ''}`}>Experience</NavLink>
         <NavLink to="/blogs" className={({ isActive }) => `top-nav__link${isActive ? ' top-nav__link--active' : ''}`}>Blog</NavLink>
+        <NavLink to="/news-events" className={({ isActive }) => `top-nav__link${isActive ? ' top-nav__link--active' : ''}`}>News & Events</NavLink>
       </div>
       <div className="top-nav__actions">
         <button className="top-nav__ask-ai" onClick={() => openChat()} type="button">

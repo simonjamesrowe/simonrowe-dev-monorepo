@@ -20,6 +20,11 @@ export function SearchResultGroup({ title, results, onResultClick }: SearchResul
   function handleClick(url: string) {
     onResultClick()
 
+    if (url.startsWith('http')) {
+      window.open(url, '_blank', 'noopener,noreferrer')
+      return
+    }
+
     const jobMatch = JOB_URL_RE.exec(url)
     if (jobMatch) {
       openJob(jobMatch[1])

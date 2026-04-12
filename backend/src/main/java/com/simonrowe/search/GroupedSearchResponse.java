@@ -7,6 +7,8 @@ import java.util.List;
 public record GroupedSearchResponse(
     List<SearchResult> blogs,
     List<SearchResult> jobs,
-    List<SearchResult> skills
+    List<SearchResult> skills,
+    List<SearchResult> news,
+    List<SearchResult> events
 ) {
 }

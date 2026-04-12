@@ -138,6 +138,37 @@ export interface PageResponse<T> {
   number: number
 }
 
+export interface AdminNewsArticle {
+  id: string
+  title: string
+  sourceName: string
+  publishedDate: string | null
+  visible: boolean
+  url: string | null
+}
+
+export interface AdminEvent {
+  id: string
+  title: string
+  sourceName: string
+  eventDate: string | null
+  visible: boolean
+  url: string | null
+}
+
+export interface AdminContentSource {
+  id: string
+  name: string
+  baseUrl: string
+  feedUrl: string | null
+  sitemapUrl: string | null
+  sourceType: string
+  scrapeStrategy: string
+  active: boolean
+  lastFetchedAt: string | null
+  lastError: string | null
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -716,4 +747,128 @@ export async function deleteAdminCodeExample(
   const token = await getAccessToken()
   const response = await authFetch(`${ADMIN_URL}/code-examples/${id}`, token, { method: 'DELETE' })
   return handleResponse<void>(response)
+}
+
+// ---------------------------------------------------------------------------
+// Aggregated Content (News & Events)
+// ---------------------------------------------------------------------------
+
+export async function fetchAdminNews(
+  getAccessToken: GetAccessToken,
+): Promise<AdminNewsArticle[]> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/news`, token)
+  return handleResponse<AdminNewsArticle[]>(response)
+}
+
+export async function toggleArticleVisibility(
+  getAccessToken: GetAccessToken,
+  id: string,
+  visible: boolean,
+): Promise<AdminNewsArticle> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/news/${id}/visibility`,
+    token,
+    jsonOptions({ visible } as Record<string, unknown>, 'PUT'),
+  )
+  return handleResponse<AdminNewsArticle>(response)
+}
+
+export async function deleteArticle(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<void> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/news/${id}`, token, { method: 'DELETE' })
+  return handleResponse<void>(response)
+}
+
+export async function fetchAdminEvents(
+  getAccessToken: GetAccessToken,
+): Promise<AdminEvent[]> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/events`, token)
+  return handleResponse<AdminEvent[]>(response)
+}
+
+export async function toggleEventVisibility(
+  getAccessToken: GetAccessToken,
+  id: string,
+  visible: boolean,
+): Promise<AdminEvent> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/events/${id}/visibility`,
+    token,
+    jsonOptions({ visible } as Record<string, unknown>, 'PUT'),
+  )
+  return handleResponse<AdminEvent>(response)
+}
+
+export async function deleteEvent(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<void> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/events/${id}`, token, { method: 'DELETE' })
+  return handleResponse<void>(response)
+}
+
+export async function triggerAggregation(
+  getAccessToken: GetAccessToken,
+): Promise<unknown> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/aggregation/trigger`, token, { method: 'POST' })
+  return handleResponse<unknown>(response)
+}
+
+export async function triggerDigest(
+  getAccessToken: GetAccessToken,
+): Promise<unknown> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/digest/trigger`, token, { method: 'POST' })
+  return handleResponse<unknown>(response)
+}
+
+export async function triggerSearchSync(
+  getAccessToken: GetAccessToken,
+): Promise<unknown> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/search/full-sync`, token, { method: 'POST' })
+  return handleResponse<unknown>(response)
+}
+
+export async function triggerEmbeddingSync(
+  getAccessToken: GetAccessToken,
+): Promise<unknown> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/embedding/full-sync`, token, { method: 'POST' })
+  return handleResponse<unknown>(response)
+}
+
+// ---------------------------------------------------------------------------
+// Content Sources
+// ---------------------------------------------------------------------------
+
+export async function fetchContentSources(
+  getAccessToken: GetAccessToken,
+): Promise<AdminContentSource[]> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/content-sources`, token)
+  return handleResponse<AdminContentSource[]>(response)
+}
+
+export async function updateContentSource(
+  getAccessToken: GetAccessToken,
+  id: string,
+  data: Record<string, unknown>,
+): Promise<AdminContentSource> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/content-sources/${id}`,
+    token,
+    jsonOptions(data, 'PUT'),
+  )
+  return handleResponse<AdminContentSource>(response)
 }
