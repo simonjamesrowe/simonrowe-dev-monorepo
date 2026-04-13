@@ -2,6 +2,7 @@ package com.simonrowe;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.embabel.agent.api.common.Ai;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -28,6 +29,9 @@ class ApplicationTests {
 
   @MockitoBean
   private EmbeddingModel embeddingModel;
+
+  @MockitoBean
+  private Ai ai;
 
   @Container
   static ConfluentKafkaContainer kafka =
