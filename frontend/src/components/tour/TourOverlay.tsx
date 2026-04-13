@@ -51,7 +51,22 @@ export function TourOverlay() {
   // Execute step actions on enter & cleanup on leave
   useEffect(() => {
     if (!isActive || steps.length === 0) {
+      // Tour exited — cleanup the step that was active
+      const exitIndex = prevStepRef.current
       prevStepRef.current = -1
+      if (exitIndex >= 0 && exitIndex < steps.length) {
+        const exitStep = steps[exitIndex]
+        const cleanup = STEP_CLEANUP[exitStep.targetSelector]
+        if (cleanup) {
+          if (cleanup.type === 'openChat') {
+            closeChat()
+            cancelRecaptcha()
+          } else if (cleanup.type === 'clickElement' && cleanup.clickTarget) {
+            const el = document.querySelector<HTMLElement>(cleanup.clickTarget)
+            if (el) el.click()
+          }
+        }
+      }
       return
     }
 
