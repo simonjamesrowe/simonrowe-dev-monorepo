@@ -40,7 +40,8 @@ public class BackupService {
   private static final Set<String> BACKUP_COLLECTIONS = Set.of(
       "blogs", "tags", "skills", "skill_groups", "jobs",
       "profiles", "social_medias", "tourSteps", "media_assets",
-      "code_examples"
+      "code_examples", "aggregated_articles", "aggregated_events",
+      "content_sources"
   );
 
   private final MongoClient mongoClient;

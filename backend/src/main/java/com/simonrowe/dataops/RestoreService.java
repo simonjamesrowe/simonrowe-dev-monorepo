@@ -24,7 +24,8 @@ public class RestoreService {
   private static final Logger LOG = LoggerFactory.getLogger(RestoreService.class);
 
   private static final List<String> IMPORT_ORDER_INDEPENDENT = List.of(
-      "tags", "skills", "profiles", "social_medias", "tourSteps", "media_assets"
+      "tags", "skills", "profiles", "social_medias", "tourSteps", "media_assets",
+      "content_sources", "aggregated_articles", "aggregated_events"
   );
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
       "skill_groups", "jobs", "blogs", "code_examples"
