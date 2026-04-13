@@ -10,6 +10,7 @@ interface ChatContextValue {
   closeChat: () => void
   handleRecaptchaVerified: () => void
   cancelRecaptcha: () => void
+  openChatBypassRecaptcha: (query?: string) => void
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -45,6 +46,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setChatQuery(null)
   }, [])
 
+  /** Opens chat bypassing reCAPTCHA — for use by the site tour only */
+  const openChatBypassRecaptcha = useCallback((query?: string) => {
+    setRecaptchaVerified(true)
+    setShowRecaptcha(false)
+    setChatQuery(query ?? null)
+    setChatOpen(true)
+  }, [])
+
   return (
     <ChatContext.Provider value={{
       chatOpen,
@@ -55,6 +64,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       closeChat,
       handleRecaptchaVerified,
       cancelRecaptcha,
+      openChatBypassRecaptcha,
     }}>
       {children}
     </ChatContext.Provider>

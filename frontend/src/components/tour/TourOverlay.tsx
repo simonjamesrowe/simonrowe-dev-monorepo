@@ -8,7 +8,7 @@ import { STEP_ACTIONS, STEP_CLEANUP } from './tourActions'
 
 export function TourOverlay() {
   const { isActive, steps, currentStepIndex, exit } = useTour()
-  const { openChat, closeChat, handleRecaptchaVerified, recaptchaVerified } = useChat()
+  const { closeChat, cancelRecaptcha, openChatBypassRecaptcha } = useChat()
   const spotlightRef = useRef<Element | null>(null)
   const prevStepRef = useRef<number>(-1)
 
@@ -65,6 +65,7 @@ export function TourOverlay() {
       if (cleanup) {
         if (cleanup.type === 'openChat') {
           closeChat()
+          cancelRecaptcha()
         } else if (cleanup.type === 'clickElement' && cleanup.clickTarget) {
           const el = document.querySelector<HTMLElement>(cleanup.clickTarget)
           if (el) el.click()
@@ -79,11 +80,7 @@ export function TourOverlay() {
 
     const timer = setTimeout(() => {
       if (action.type === 'openChat') {
-        // Bypass reCAPTCHA for tour demo
-        if (!recaptchaVerified) {
-          handleRecaptchaVerified()
-        }
-        setTimeout(() => openChat(action.chatQuery), 200)
+        openChatBypassRecaptcha(action.chatQuery)
       } else if (action.type === 'clickElement' && action.clickTarget) {
         const el = document.querySelector<HTMLElement>(action.clickTarget)
         if (el) el.click()
@@ -91,7 +88,7 @@ export function TourOverlay() {
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [isActive, currentStepIndex, steps, openChat, closeChat, recaptchaVerified, handleRecaptchaVerified])
+  }, [isActive, currentStepIndex, steps, openChatBypassRecaptcha, closeChat, cancelRecaptcha])
 
   if (!isActive || steps.length === 0) {
     return null
