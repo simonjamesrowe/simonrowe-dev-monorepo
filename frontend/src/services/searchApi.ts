@@ -16,6 +16,8 @@ export interface GroupedSearchResponse {
   blogs?: SearchResult[]
   jobs?: SearchResult[]
   skills?: SearchResult[]
+  news?: SearchResult[]
+  events?: SearchResult[]
 }
 
 import { API_BASE_URL } from '../config/api'

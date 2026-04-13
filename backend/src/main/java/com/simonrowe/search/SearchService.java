@@ -47,11 +47,11 @@ public class SearchService {
   public GroupedSearchResponse siteSearch(final String query) {
     String sanitized = sanitizeQuery(query);
     if (sanitized.length() < MIN_QUERY_LENGTH) {
-      return new GroupedSearchResponse(List.of(), List.of(), List.of());
+      return new GroupedSearchResponse(List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     try {
-      int totalSize = maxResultsPerGroup * 3;
+      int totalSize = maxResultsPerGroup * 5;
       SearchResponse<SiteSearchDocument> response = client.search(s -> s
               .index(ElasticsearchConfig.SITE_SEARCH_INDEX)
               .size(totalSize)
@@ -78,11 +78,13 @@ public class SearchService {
       List<SearchResult> blogs = toSearchResults(grouped.getOrDefault("blog", List.of()));
       List<SearchResult> jobs = toSearchResults(grouped.getOrDefault("job", List.of()));
       List<SearchResult> skills = toSearchResults(grouped.getOrDefault("skill", List.of()));
+      List<SearchResult> news = toSearchResults(grouped.getOrDefault("news", List.of()));
+      List<SearchResult> events = toSearchResults(grouped.getOrDefault("event", List.of()));
 
-      return new GroupedSearchResponse(blogs, jobs, skills);
+      return new GroupedSearchResponse(blogs, jobs, skills, news, events);
     } catch (IOException e) {
       LOG.error("Site search failed for query: {}", sanitized, e);
-      return new GroupedSearchResponse(List.of(), List.of(), List.of());
+      return new GroupedSearchResponse(List.of(), List.of(), List.of(), List.of(), List.of());
     }
   }
 

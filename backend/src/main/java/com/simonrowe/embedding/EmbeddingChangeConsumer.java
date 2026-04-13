@@ -1,5 +1,9 @@
 package com.simonrowe.embedding;
 
+import com.simonrowe.aggregation.AggregatedArticle;
+import com.simonrowe.aggregation.AggregatedArticleRepository;
+import com.simonrowe.aggregation.AggregatedEvent;
+import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.employment.Job;
@@ -31,19 +35,25 @@ public class EmbeddingChangeConsumer {
   private final JobRepository jobRepository;
   private final SkillRepository skillRepository;
   private final SkillGroupRepository skillGroupRepository;
+  private final AggregatedArticleRepository articleRepository;
+  private final AggregatedEventRepository eventRepository;
 
   public EmbeddingChangeConsumer(
       final EmbeddingService embeddingService,
       final BlogRepository blogRepository,
       final JobRepository jobRepository,
       final SkillRepository skillRepository,
-      final SkillGroupRepository skillGroupRepository
+      final SkillGroupRepository skillGroupRepository,
+      final AggregatedArticleRepository articleRepository,
+      final AggregatedEventRepository eventRepository
   ) {
     this.embeddingService = embeddingService;
     this.blogRepository = blogRepository;
     this.jobRepository = jobRepository;
     this.skillRepository = skillRepository;
     this.skillGroupRepository = skillGroupRepository;
+    this.articleRepository = articleRepository;
+    this.eventRepository = eventRepository;
   }
 
   @RetryableTopic(
@@ -71,6 +81,8 @@ public class EmbeddingChangeConsumer {
       case SKILL -> handleSkill(event.contentId());
       case CODE_EXAMPLE -> LOG.debug("Code example embedding handled by "
           + "AdminCodeExampleController directly");
+      case AGGREGATED_ARTICLE -> handleArticle(event.contentId());
+      case AGGREGATED_EVENT -> handleEvent(event.contentId());
       default -> LOG.warn("Unknown content type: {}", event.contentType());
     }
   }
@@ -107,5 +119,25 @@ public class EmbeddingChangeConsumer {
       }
     }
     embeddingService.removeContent(contentId);
+  }
+
+  private void handleArticle(final String contentId) {
+    Optional<AggregatedArticle> article = articleRepository.findById(contentId);
+    if (article.isPresent() && article.get().visible()) {
+      embeddingService.embedArticle(article.get());
+    } else {
+      embeddingService.removeContent("news_" + contentId);
+      LOG.info("Article {} not found or hidden, removed embeddings", contentId);
+    }
+  }
+
+  private void handleEvent(final String contentId) {
+    Optional<AggregatedEvent> event = eventRepository.findById(contentId);
+    if (event.isPresent() && event.get().visible()) {
+      embeddingService.embedEvent(event.get());
+    } else {
+      embeddingService.removeContent("event_" + contentId);
+      LOG.info("Event {} not found or hidden, removed embeddings", contentId);
+    }
   }
 }

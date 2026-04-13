@@ -10,8 +10,10 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Newspaper,
   Plus,
   Route,
+  Rss,
   Tag,
   User,
   X,
@@ -28,6 +30,8 @@ const navItems = [
   { path: '/admin/code-examples', label: 'Code Examples', icon: <FileCode size={18} /> },
   { path: '/admin/tour-steps', label: 'Tour Steps', icon: <Route size={18} /> },
   { path: '/admin/media', label: 'Media', icon: <Image size={18} /> },
+  { path: '/admin/aggregated-content', label: 'News & Events', icon: <Newspaper size={18} /> },
+  { path: '/admin/content-sources', label: 'Content Sources', icon: <Rss size={18} /> },
   { path: '/admin/data-operations', label: 'Data Ops', icon: <Database size={18} /> },
 ]
 

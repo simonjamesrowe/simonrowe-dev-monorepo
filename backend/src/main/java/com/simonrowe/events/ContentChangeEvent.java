@@ -19,6 +19,8 @@ public record ContentChangeEvent(
     BLOG,
     JOB,
     SKILL,
-    CODE_EXAMPLE
+    CODE_EXAMPLE,
+    AGGREGATED_ARTICLE,
+    AGGREGATED_EVENT
   }
 }

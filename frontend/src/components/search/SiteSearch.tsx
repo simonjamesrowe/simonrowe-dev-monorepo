@@ -115,7 +115,9 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
   const hasResults = results && (
     (results.blogs && results.blogs.length > 0) ||
     (results.jobs && results.jobs.length > 0) ||
-    (results.skills && results.skills.length > 0)
+    (results.skills && results.skills.length > 0) ||
+    (results.news && results.news.length > 0) ||
+    (results.events && results.events.length > 0)
   )
 
   const handleChatClick = useCallback(() => {

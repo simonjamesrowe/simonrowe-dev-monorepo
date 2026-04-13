@@ -4,6 +4,7 @@ build/
 target/
 
 # Java
+META-INF/
 bin/
 *.class
 *.jar

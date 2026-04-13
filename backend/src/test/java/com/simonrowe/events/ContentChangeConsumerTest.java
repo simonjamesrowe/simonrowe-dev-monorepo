@@ -8,6 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.simonrowe.aggregation.AggregatedArticleRepository;
+import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.employment.Job;
@@ -32,6 +34,8 @@ class ContentChangeConsumerTest {
   private JobRepository jobRepository;
   private SkillGroupRepository skillGroupRepository;
   private SkillRepository skillRepository;
+  private AggregatedArticleRepository articleRepository;
+  private AggregatedEventRepository eventRepository;
   private ContentChangeConsumer consumer;
 
   @BeforeEach
@@ -41,8 +45,11 @@ class ContentChangeConsumerTest {
     jobRepository = mock(JobRepository.class);
     skillGroupRepository = mock(SkillGroupRepository.class);
     skillRepository = mock(SkillRepository.class);
+    articleRepository = mock(AggregatedArticleRepository.class);
+    eventRepository = mock(AggregatedEventRepository.class);
     consumer = new ContentChangeConsumer(
-        indexService, blogRepository, jobRepository, skillGroupRepository, skillRepository);
+        indexService, blogRepository, jobRepository, skillGroupRepository, skillRepository,
+        articleRepository, eventRepository);
   }
 
   @Test

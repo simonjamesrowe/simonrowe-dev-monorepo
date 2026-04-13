@@ -20,6 +20,8 @@ spring:
     exclude:
       - org.springframework.ai.vectorstore.elasticsearch.autoconfigure.ElasticsearchVectorStoreAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
+      - com.embabel.agent.autoconfigure.models.openai.AgentOpenAiAutoConfiguration
+      - com.embabel.agent.autoconfigure.platform.AgentPlatformAutoConfiguration
 management:
   health:
     kafka:

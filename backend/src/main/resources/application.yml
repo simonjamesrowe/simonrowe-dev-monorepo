@@ -214,3 +214,9 @@ rate-limit:
     requests-per-minute: 20
   mcp:
     requests-per-minute: 60
+
+aggregation:
+  schedule:
+    cron: "0 0 */6 * * *"
+  digest:
+    cron: "0 0 8 * * MON"

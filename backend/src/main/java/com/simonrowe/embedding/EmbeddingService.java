@@ -2,6 +2,10 @@ package com.simonrowe.embedding;
 
 import com.simonrowe.admin.AdminCodeExampleRepository;
 import com.simonrowe.admin.CodeExample;
+import com.simonrowe.aggregation.AggregatedArticle;
+import com.simonrowe.aggregation.AggregatedArticleRepository;
+import com.simonrowe.aggregation.AggregatedEvent;
+import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.employment.Job;
@@ -37,6 +41,8 @@ public class EmbeddingService {
   private final SkillRepository skillRepository;
   private final SkillGroupRepository skillGroupRepository;
   private final AdminCodeExampleRepository codeExampleRepository;
+  private final AggregatedArticleRepository articleRepository;
+  private final AggregatedEventRepository eventRepository;
 
   public EmbeddingService(
       final VectorStore vectorStore,
@@ -45,7 +51,9 @@ public class EmbeddingService {
       final JobRepository jobRepository,
       final SkillRepository skillRepository,
       final SkillGroupRepository skillGroupRepository,
-      final AdminCodeExampleRepository codeExampleRepository
+      final AdminCodeExampleRepository codeExampleRepository,
+      final AggregatedArticleRepository articleRepository,
+      final AggregatedEventRepository eventRepository
   ) {
     this.vectorStore = vectorStore;
     this.splitter = splitter;
@@ -54,6 +62,8 @@ public class EmbeddingService {
     this.skillRepository = skillRepository;
     this.skillGroupRepository = skillGroupRepository;
     this.codeExampleRepository = codeExampleRepository;
+    this.articleRepository = articleRepository;
+    this.eventRepository = eventRepository;
   }
 
   @WithSpan
@@ -166,6 +176,71 @@ public class EmbeddingService {
     LOG.info("Embedded code example: {} ({})", example.title(), example.language());
   }
 
+  @WithSpan
+  public void embedArticle(final AggregatedArticle article) {
+    removeContent("news_" + article.id());
+    if (!article.visible()) {
+      LOG.info("Article {} is not visible, skipping embedding", article.id());
+      return;
+    }
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("sourceId", "news_" + article.id());
+    metadata.put("sourceType", "aggregated_article");
+    metadata.put("title", article.title());
+    metadata.put("url", article.originalUrl());
+    metadata.put("sourceName", article.sourceName());
+    StringBuilder content = new StringBuilder();
+    content.append(article.title()).append("\n\n");
+    if (article.summary() != null) {
+      content.append(article.summary()).append("\n\n");
+    }
+    if (article.fullContent() != null) {
+      content.append(article.fullContent());
+    }
+    embedContent(content.toString(), metadata);
+    LOG.info("Embedded article: {}", article.title());
+  }
+
+  @WithSpan
+  public void embedEvent(final AggregatedEvent event) {
+    removeContent("event_" + event.id());
+    if (!event.visible()) {
+      LOG.info("Event {} is not visible, skipping embedding", event.id());
+      return;
+    }
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("sourceId", "event_" + event.id());
+    metadata.put("sourceType", "aggregated_event");
+    metadata.put("title", event.title());
+    metadata.put("url", event.originalUrl());
+    metadata.put("sourceName", event.sourceName());
+    StringBuilder content = new StringBuilder();
+    content.append(event.title()).append("\n\n");
+    if (event.summary() != null) {
+      content.append(event.summary()).append("\n\n");
+    }
+    if (event.description() != null) {
+      content.append(event.description());
+    }
+    embedContent(content.toString(), metadata);
+    LOG.info("Embedded event: {}", event.title());
+  }
+
+  public int embedAllArticles() {
+    List<AggregatedArticle> articles = articleRepository
+        .findByVisibleTrueOrderByPublishedDateDesc();
+    articles.forEach(this::embedArticle);
+    LOG.info("Embedded {} articles", articles.size());
+    return articles.size();
+  }
+
+  public int embedAllEvents() {
+    List<AggregatedEvent> events = eventRepository.findByVisibleTrueOrderByEventDateDesc();
+    events.forEach(this::embedEvent);
+    LOG.info("Embedded {} events", events.size());
+    return events.size();
+  }
+
   @Scheduled(cron = "${search.sync.cron:0 0 */4 * * *}")
   public void fullVectorSync() {
     LOG.info("Starting full vector sync");
@@ -174,6 +249,8 @@ public class EmbeddingService {
       embedAllJobs();
       embedAllSkills();
       embedAllCodeExamples();
+      embedAllArticles();
+      embedAllEvents();
       LOG.info("Full vector sync completed");
     } catch (Exception ex) {
       LOG.error("Full vector sync failed", ex);

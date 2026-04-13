@@ -1,5 +1,6 @@
 package com.simonrowe;
 
+import com.embabel.agent.api.common.Ai;
 import com.simonrowe.blog.BlogSearchRepository;
 import com.simonrowe.events.ContentChangePublisher;
 import com.simonrowe.media.ImageVariantGenerator;
@@ -37,6 +38,9 @@ public abstract class AbstractIntegrationTest {
 
   @MockitoBean
   protected ContentChangePublisher contentChangePublisher;
+
+  @MockitoBean
+  protected Ai ai;
 
   @Autowired
   protected MockMvc mockMvc;

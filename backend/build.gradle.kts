@@ -1,7 +1,8 @@
 plugins {
     id("org.springframework.boot")
     id("io.spring.dependency-management")
-    alias(libs.plugins.graalvm.native)
+    // Disabled: Embabel requires JVM mode (kotlin-reflect incompatible with native image)
+    // alias(libs.plugins.graalvm.native)
     checkstyle
     jacoco
 }
@@ -10,6 +11,11 @@ group = "com.simonrowe"
 version = "0.0.1-SNAPSHOT"
 
 ext["opentelemetry.version"] = "1.59.0"
+
+repositories {
+    mavenCentral()
+    maven { url = uri("https://repo.embabel.com/artifactory/embabel-releases") }
+}
 
 dependencyManagement {
     imports {
@@ -27,7 +33,14 @@ jacoco {
     toolVersion = libs.versions.jacoco.get()
 }
 
-val jacocoExcludes = listOf("com/simonrowe/migration/**", "com/simonrowe/dataops/**", "com/simonrowe/embedding/**")
+val jacocoExcludes = listOf(
+    "com/simonrowe/migration/**",
+    "com/simonrowe/dataops/**",
+    "com/simonrowe/embedding/**",
+    "com/simonrowe/agents/scrapers/SitemapHtmlScraper*",
+    "com/simonrowe/agents/scrapers/LumaApiScraper*",
+    "com/simonrowe/media/ExternalImageDownloader*"
+)
 
 val jacocoClassDirectories = sourceSets.main.get().output.asFileTree.matching {
     exclude(jacocoExcludes)
@@ -91,6 +104,10 @@ dependencies {
     implementation(libs.google.api.client)
     implementation(libs.google.api.services.drive)
     implementation(libs.google.auth.library.oauth2.http)
+    implementation("com.embabel.agent:embabel-agent-starter:0.3.5")
+    implementation("com.embabel.agent:embabel-agent-starter-openai:0.3.5")
+    implementation("org.jsoup:jsoup:1.18.3")
+    implementation("com.rometools:rome:2.1.0")
 
     developmentOnly(libs.spring.boot.devtools)
 
@@ -102,4 +119,5 @@ dependencies {
     testImplementation(libs.testcontainers.mongodb)
     testImplementation(libs.testcontainers.kafka)
     testImplementation(libs.testcontainers.elasticsearch)
+    testImplementation("com.embabel.agent:embabel-agent-test:0.3.5")
 }

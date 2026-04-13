@@ -37,7 +37,9 @@ class SearchControllerTest {
             "Java Blog", "/images/java.jpg", "/blogs/java")),
         List.of(),
         List.of(new SearchResult(
-            "Java", "/images/skills/java.png", "/skills")));
+            "Java", "/images/skills/java.png", "/skills")),
+        List.of(),
+        List.of());
     when(searchService.siteSearch(anyString())).thenReturn(response);
 
     mockMvc.perform(get("/api/search").param("q", "java"))

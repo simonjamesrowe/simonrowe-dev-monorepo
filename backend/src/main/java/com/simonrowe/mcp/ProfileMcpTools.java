@@ -2,6 +2,10 @@ package com.simonrowe.mcp;
 
 import com.simonrowe.admin.AdminCodeExampleRepository;
 import com.simonrowe.admin.CodeExample;
+import com.simonrowe.aggregation.AggregatedArticle;
+import com.simonrowe.aggregation.AggregatedArticleRepository;
+import com.simonrowe.aggregation.AggregatedEvent;
+import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.BlogService;
 import com.simonrowe.blog.BlogSummaryResponse;
 import com.simonrowe.employment.JobService;
@@ -29,6 +33,8 @@ public class ProfileMcpTools {
   private final SkillGroupService skillGroupService;
   private final BlogService blogService;
   private final AdminCodeExampleRepository codeExampleRepository;
+  private final AggregatedArticleRepository articleRepository;
+  private final AggregatedEventRepository eventRepository;
 
   public ProfileMcpTools(
       final ProfileService profileService,
@@ -36,13 +42,17 @@ public class ProfileMcpTools {
       final JobService jobService,
       final SkillGroupService skillGroupService,
       final BlogService blogService,
-      final AdminCodeExampleRepository codeExampleRepository) {
+      final AdminCodeExampleRepository codeExampleRepository,
+      final AggregatedArticleRepository articleRepository,
+      final AggregatedEventRepository eventRepository) {
     this.profileService = profileService;
     this.searchService = searchService;
     this.jobService = jobService;
     this.skillGroupService = skillGroupService;
     this.blogService = blogService;
     this.codeExampleRepository = codeExampleRepository;
+    this.articleRepository = articleRepository;
+    this.eventRepository = eventRepository;
   }
 
   @WithSpan
@@ -119,6 +129,67 @@ public class ProfileMcpTools {
     }
     return examples.stream()
         .map(this::toCodeExampleSummary)
+        .toList();
+  }
+
+  @WithSpan
+  @Tool(description = "Search aggregated tech news articles from external sources like "
+      + "AI Native Dev, Rundown AI, and Spring Blog. Returns recent articles with "
+      + "AI-generated summaries and source attribution. Use this when asked about "
+      + "recent tech news, industry trends, or what's happening in the tech world.")
+  public List<Map<String, Object>> searchNews(
+      @ToolParam(description = "Search keywords to match against news article titles "
+          + "and summaries. Pass null or empty for latest articles.")
+      final String query) {
+    List<AggregatedArticle> articles;
+    if (query != null && !query.isBlank()) {
+      articles = articleRepository
+          .findByVisibleTrueOrderByPublishedDateDesc().stream()
+          .filter(a -> a.title().toLowerCase().contains(query.toLowerCase())
+              || (a.summary() != null
+                  && a.summary().toLowerCase().contains(query.toLowerCase())))
+          .limit(10)
+          .toList();
+    } else {
+      articles = articleRepository
+          .findByVisibleTrueOrderByPublishedDateDesc(
+              org.springframework.data.domain.PageRequest.of(0, 10))
+          .getContent();
+    }
+    return articles.stream()
+        .map(a -> {
+          Map<String, Object> map = new LinkedHashMap<>();
+          map.put("title", a.title());
+          map.put("summary", a.summary());
+          map.put("sourceName", a.sourceName());
+          map.put("originalUrl", a.originalUrl());
+          map.put("publishedDate", a.publishedDate());
+          return map;
+        })
+        .toList();
+  }
+
+  @WithSpan
+  @Tool(description = "Get upcoming tech community events like meetups and conferences. "
+      + "Returns events with dates, venues, and descriptions. Use this when asked "
+      + "about upcoming events, meetups, or tech gatherings.")
+  public List<Map<String, Object>> getUpcomingEvents() {
+    List<AggregatedEvent> events = eventRepository
+        .findByVisibleTrueAndEventDateAfterOrderByEventDateAsc(
+            java.time.Instant.now());
+    return events.stream()
+        .limit(10)
+        .map(e -> {
+          Map<String, Object> map = new LinkedHashMap<>();
+          map.put("title", e.title());
+          map.put("summary", e.summary());
+          map.put("sourceName", e.sourceName());
+          map.put("originalUrl", e.originalUrl());
+          map.put("eventDate", e.eventDate());
+          map.put("venue", e.venue());
+          map.put("location", e.location());
+          return map;
+        })
         .toList();
   }
 
