@@ -67,11 +67,6 @@ export function NewsEventsPage() {
 
   return (
     <div className="feed">
-      <div className="feed__header">
-        <h1 className="feed__title">The Feed</h1>
-        <p className="feed__subtitle">AI-curated tech news, articles, and community events</p>
-      </div>
-
       {/* Source filter pills */}
       <div className="feed__filters">
         <button
@@ -123,9 +118,6 @@ export function NewsEventsPage() {
               <div className="feed__hero-overlay">
                 <span className="feed__source-badge">{article.sourceName}</span>
                 <h2 className="feed__hero-title">{article.title}</h2>
-                {i === 0 && article.summary && (
-                  <p className="feed__hero-summary">{article.summary}</p>
-                )}
                 <div className="feed__hero-meta">
                   {article.author && <span>{article.author}</span>}
                   {article.publishedDate && (

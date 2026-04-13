@@ -13,6 +13,8 @@ import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.DeleteResponse;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
+import com.simonrowe.aggregation.AggregatedArticleRepository;
+import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.blog.Tag;
@@ -45,11 +47,13 @@ class IndexServiceTest {
     SkillGroupRepository skillGroupRepository = mock(SkillGroupRepository.class);
     SkillRepository skillRepository = mock(SkillRepository.class);
     mediaVariantResolver = mock(MediaVariantResolver.class);
+    AggregatedArticleRepository articleRepository = mock(AggregatedArticleRepository.class);
+    AggregatedEventRepository eventRepository = mock(AggregatedEventRepository.class);
     when(mediaVariantResolver.resolvePath(any(), any(String[].class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
     indexService = new IndexService(
         esClient, blogRepository, jobRepository, skillGroupRepository, skillRepository,
-        mediaVariantResolver);
+        mediaVariantResolver, articleRepository, eventRepository);
   }
 
   @Test

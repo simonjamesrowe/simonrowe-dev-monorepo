@@ -87,11 +87,15 @@
   --color-bg: var(--surface);
   --color-panel: var(--surface-container);
   --color-text: var(--on-surface);
+  --color-text-muted: var(--on-surface-variant);
   --color-muted: var(--on-surface-variant);
   --color-border: var(--outline-variant);
   --color-accent: var(--primary);
   --color-accent-hover: var(--primary-container);
   --color-surface-subtle: var(--surface-container-low);
+  --color-primary: var(--primary);
+  --color-primary-subtle: var(--primary-container);
+  --color-surface: var(--surface-container);
 }
 
 [data-theme="light"] {
@@ -171,11 +175,15 @@
   --color-bg: var(--surface);
   --color-panel: var(--surface-container);
   --color-text: var(--on-surface);
+  --color-text-muted: var(--on-surface-variant);
   --color-muted: var(--on-surface-variant);
   --color-border: var(--outline-variant);
   --color-accent: var(--primary);
   --color-accent-hover: var(--primary-container);
   --color-surface-subtle: var(--surface-container-low);
+  --color-primary: var(--primary);
+  --color-primary-subtle: var(--primary-container);
+  --color-surface: var(--surface-container);
 }
 
 * {
@@ -7883,24 +7891,6 @@ a:hover {
   padding: 2rem 1.5rem 4rem;
 }
 
-.feed__header {
-  margin-bottom: 2rem;
-}
-
-.feed__title {
-  font-family: var(--font-heading);
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: var(--color-text);
-  letter-spacing: -0.02em;
-}
-
-.feed__subtitle {
-  color: var(--color-text-muted);
-  font-size: 1.05rem;
-  margin-top: 0.25rem;
-}
-
 /* Filter pills */
 .feed__filters {
   display: flex;
@@ -7930,10 +7920,12 @@ a:hover {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb, 99, 102, 241), 0.35);
 }
 
 .feed__pill--events {
-  border-style: dashed;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 /* Source badge */
@@ -7996,13 +7988,12 @@ a:hover {
 .feed__hero-overlay {
   position: relative;
   z-index: 1;
-  padding: 1.5rem;
-  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.5) 50%, transparent 100%);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  min-height: 50%;
-  justify-content: flex-end;
+  gap: 0.35rem;
+  margin-top: auto;
 }
 
 .feed__hero-title {
@@ -8017,14 +8008,10 @@ a:hover {
   font-size: 1.75rem;
 }
 
-.feed__hero-summary {
-  font-size: 0.9rem;
-  color: rgba(255,255,255,0.8);
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.feed__hero-overlay .feed__source-badge {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(4px);
 }
 
 .feed__hero-meta {
@@ -8222,21 +8209,6 @@ a:hover {
   padding: 4rem 1rem;
   color: var(--color-text-muted);
   font-size: 1.1rem;
-}
-
-/* News card image - retained for backward compatibility */
-.news-card__image {
-  margin: -1.5rem -1.5rem 1rem -1.5rem;
-  border-radius: 12px 12px 0 0;
-  overflow: hidden;
-  aspect-ratio: 16 / 9;
-}
-
-.news-card__image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
 }
 
 /* Feed responsive */

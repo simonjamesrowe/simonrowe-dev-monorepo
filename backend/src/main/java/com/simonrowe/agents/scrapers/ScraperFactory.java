@@ -9,11 +9,14 @@ public class ScraperFactory {
 
   private final RssScraper rssScraper;
   private final SitemapHtmlScraper sitemapHtmlScraper;
+  private final LumaApiScraper lumaApiScraper;
 
   public ScraperFactory(RssScraper rssScraper,
-      SitemapHtmlScraper sitemapHtmlScraper) {
+      SitemapHtmlScraper sitemapHtmlScraper,
+      LumaApiScraper lumaApiScraper) {
     this.rssScraper = rssScraper;
     this.sitemapHtmlScraper = sitemapHtmlScraper;
+    this.lumaApiScraper = lumaApiScraper;
   }
 
   public List<ScrapedContent> scrape(ContentSource source) {
@@ -22,6 +25,7 @@ public class ScraperFactory {
       case RSS -> rssScraper.scrape(source.feedUrl(), isEvent);
       case SITEMAP_HTML -> sitemapHtmlScraper.scrape(source.sitemapUrl());
       case HTML -> sitemapHtmlScraper.scrapeEventsPage(source.baseUrl());
+      case LUMA -> lumaApiScraper.scrape(source.feedUrl());
     };
   }
 }

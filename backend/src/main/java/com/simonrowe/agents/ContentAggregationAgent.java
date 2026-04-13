@@ -16,6 +16,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -23,6 +24,24 @@ public class ContentAggregationAgent {
 
   private static final Logger log =
       LoggerFactory.getLogger(ContentAggregationAgent.class);
+
+  private static final String CLASSIFY_PROMPT = """
+      Analyze the following content and respond with JSON matching the schema below.
+
+      1. Classify whether this is a news/blog "article" or an "event" \
+      (conference, meetup, workshop, webinar, talk).
+      2. Write a concise 2-3 sentence summary.
+      3. If it is an event, extract the event date (ISO-8601), venue name, and location/city.
+      4. Extract the published date (ISO-8601 format, e.g. "2025-07-23") from the content \
+      if mentioned (look for dates near the author name or article header).
+
+      Title: %s
+
+      Content:
+      %s
+
+      %s
+      """;
 
   private final ContentSourceRepository sourceRepository;
   private final AggregatedArticleRepository articleRepository;
@@ -78,26 +97,35 @@ public class ContentAggregationAgent {
     log.info("Fetched {} items from {}", scraped.size(), source.name());
 
     for (ScrapedContent content : scraped) {
-      if (source.sourceType() == ContentSource.SourceType.EVENTS
+      boolean alreadyExists = articleRepository.existsByOriginalUrl(content.url())
+          || eventRepository.existsByOriginalUrl(content.url());
+      if (alreadyExists) {
+        continue;
+      }
+
+      ContentClassification classification = classifyAndSummarize(content);
+
+      if (classification.isEvent()
+          || source.sourceType() == ContentSource.SourceType.EVENTS
           || content.isEvent()) {
-        processEvent(source, content);
+        processEvent(source, content, classification);
       } else {
-        processArticle(source, content);
+        processArticle(source, content, classification);
       }
     }
   }
 
-  private void processArticle(final ContentSource source, final ScrapedContent content) {
-    if (articleRepository.existsByOriginalUrl(content.url())) {
-      return;
-    }
-
-    String summary = summarize(content.title(), content.content());
+  private void processArticle(final ContentSource source,
+      final ScrapedContent content, final ContentClassification classification) {
     String localImageUrl = imageDownloader.downloadAndStore(content.imageUrl());
+    Instant publishedDate = content.publishedDate();
+    if (publishedDate == null) {
+      publishedDate = parseEventDate(classification.publishedDate());
+    }
     AggregatedArticle article = new AggregatedArticle(
         null, content.title(), source.name(), source.baseUrl(),
-        content.url(), summary, content.content(), content.author(),
-        content.publishedDate(), Instant.now(), true,
+        content.url(), classification.summary(), content.content(), content.author(),
+        publishedDate, Instant.now(), true,
         localImageUrl != null ? localImageUrl : content.imageUrl());
 
     AggregatedArticle saved = articleRepository.save(article);
@@ -105,39 +133,66 @@ public class ContentAggregationAgent {
     log.info("Saved article: {}", saved.title());
   }
 
-  private void processEvent(final ContentSource source, final ScrapedContent content) {
-    if (eventRepository.existsByOriginalUrl(content.url())) {
-      return;
+  private void processEvent(final ContentSource source,
+      final ScrapedContent content, final ContentClassification classification) {
+    Instant eventDate = parseEventDate(classification.eventDate());
+    if (eventDate == null) {
+      eventDate = content.publishedDate() != null ? content.publishedDate() : Instant.now();
     }
 
-    String summary = summarize(content.title(), content.content());
+    String venue = content.venue() != null ? content.venue() : classification.venue();
+    String location = content.location() != null ? content.location() : classification.location();
+
     AggregatedEvent event = new AggregatedEvent(
         null, content.title(), source.name(), content.url(),
-        summary, content.content(),
-        content.publishedDate() != null ? content.publishedDate() : Instant.now(),
-        null, null, null, Instant.now(), true);
+        classification.summary(), content.content(),
+        eventDate, null, venue, location, Instant.now(), true);
 
     AggregatedEvent saved = eventRepository.save(event);
     changePublisher.publishCreated(ContentType.AGGREGATED_EVENT, saved.id());
     log.info("Saved event: {}", saved.title());
   }
 
-  private String summarize(final String title, final String content) {
-    if (content == null || content.length() < 50) {
-      return title;
+  ContentClassification classifyAndSummarize(final ScrapedContent content) {
+    if (content.content() == null || content.content().length() < 50) {
+      return new ContentClassification(
+          content.isEvent() ? "event" : "article", content.title(), null, null, null, null);
     }
     try {
-      String truncated = content.length() > 3000
-          ? content.substring(0, 3000) : content;
+      String truncated = content.content().length() > 3000
+          ? content.content().substring(0, 3000) : content.content();
+      BeanOutputConverter<ContentClassification> converter =
+          new BeanOutputConverter<>(ContentClassification.class);
       ChatClient client = chatClientBuilder.build();
-      return client.prompt()
-          .user("Summarize this article in 2-3 sentences. Be concise and factual. "
-              + "Article title: " + title + "\n\nArticle content: " + truncated)
+      String response = client.prompt()
+          .user(String.format(CLASSIFY_PROMPT,
+              content.title(), truncated, converter.getFormat()))
           .call()
           .content();
+      ContentClassification result = converter.convert(response);
+      if (result != null) {
+        return result;
+      }
     } catch (Exception e) {
-      log.warn("Summarization failed for: {}. Using title as summary.", title, e);
-      return title;
+      log.warn("Classification failed for: {}. Using defaults.", content.title(), e);
+    }
+    return new ContentClassification(
+        content.isEvent() ? "event" : "article", content.title(), null, null, null, null);
+  }
+
+  private Instant parseEventDate(final String dateStr) {
+    if (dateStr == null || dateStr.isBlank()) {
+      return null;
+    }
+    try {
+      return Instant.parse(dateStr);
+    } catch (Exception e) {
+      try {
+        return java.time.LocalDate.parse(dateStr.substring(0, 10))
+            .atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
+      } catch (Exception ignored) {
+        return null;
+      }
     }
   }
 }

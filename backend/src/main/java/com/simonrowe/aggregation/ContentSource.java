@@ -28,6 +28,7 @@ public record ContentSource(
   public enum ScrapeStrategy {
     RSS,
     SITEMAP_HTML,
-    HTML
+    HTML,
+    LUMA
   }
 }
