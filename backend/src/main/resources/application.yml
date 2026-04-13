@@ -75,6 +75,9 @@ spring:
       embedding:
         options:
           model: text-embedding-3-small
+      image:
+        options:
+          model: dall-e-3
     vectorstore:
       elasticsearch:
         index-name: content-embeddings
