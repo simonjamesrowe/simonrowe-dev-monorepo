@@ -25,15 +25,10 @@ public class AggregationScheduler {
     this.digestAgent = digestAgent;
   }
 
-  @Scheduled(cron = "${aggregation.schedule.cron:0 0 */6 * * *}")
-  public void runScheduledAggregation() {
-    log.info("Scheduled content aggregation starting");
+  @Scheduled(cron = "${aggregation.schedule.cron:0 0 0 * * *}")
+  public void runNightlyAggregation() {
+    log.info("Nightly aggregation starting");
     aggregationAgent.runAggregation();
-  }
-
-  @Scheduled(cron = "${aggregation.digest.cron:0 0 8 * * MON}")
-  public void runScheduledDigest() {
-    log.info("Scheduled weekly digest generation starting");
     digestAgent.generateDigest();
   }
 }
