@@ -27,8 +27,13 @@ public class AggregationScheduler {
 
   @Scheduled(cron = "${aggregation.schedule.cron:0 0 0 * * *}")
   public void runNightlyAggregation() {
-    log.info("Nightly aggregation starting");
+    log.info("Nightly content aggregation starting");
     aggregationAgent.runAggregation();
+  }
+
+  @Scheduled(cron = "${aggregation.digest.cron:0 0 0 */3 * *}")
+  public void runDigestGeneration() {
+    log.info("Digest blog post generation starting");
     digestAgent.generateDigest();
   }
 }
