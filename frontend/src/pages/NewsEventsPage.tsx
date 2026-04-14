@@ -66,7 +66,7 @@ export function NewsEventsPage() {
   const allEvents = [...upcomingEvents, ...pastEvents]
 
   return (
-    <div className="feed">
+    <div className="feed tour-news-events">
       {/* Source filter pills */}
       <div className="feed__filters">
         <button

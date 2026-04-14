@@ -13,6 +13,7 @@ import com.simonrowe.blog.Tag;
 import com.simonrowe.blog.TagRepository;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
+import com.simonrowe.media.BlogImageGenerationService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -41,23 +42,29 @@ public class WeeklyDigestAgent {
           + "(300-500 words). Do not include a title heading "
           + "(it will be added separately).\n\n";
 
+  private static final String DIGEST_SHORT_DESCRIPTION =
+      "Weekly summary of site activity and tech news";
+
   private final BlogRepository blogRepository;
   private final TagRepository tagRepository;
   private final AggregatedArticleRepository articleRepository;
   private final Ai ai;
   private final ContentChangePublisher changePublisher;
+  private final BlogImageGenerationService blogImageGenerationService;
 
   public WeeklyDigestAgent(
-      BlogRepository blogRepository,
-      TagRepository tagRepository,
-      AggregatedArticleRepository articleRepository,
-      Ai ai,
-      ContentChangePublisher changePublisher) {
+      final BlogRepository blogRepository,
+      final TagRepository tagRepository,
+      final AggregatedArticleRepository articleRepository,
+      final Ai ai,
+      final ContentChangePublisher changePublisher,
+      final BlogImageGenerationService blogImageGenerationService) {
     this.blogRepository = blogRepository;
     this.tagRepository = tagRepository;
     this.articleRepository = articleRepository;
     this.ai = ai;
     this.changePublisher = changePublisher;
+    this.blogImageGenerationService = blogImageGenerationService;
   }
 
   @Action(description = "Generate a weekly digest blog post")
@@ -100,12 +107,16 @@ public class WeeklyDigestAgent {
         + weekStart.format(fmt) + " - " + now.format(fmt)
         + ", " + now.getYear();
 
+    String featuredImageUrl =
+        blogImageGenerationService.generateAndStore(
+            title, DIGEST_SHORT_DESCRIPTION);
+
     Tag digestTag = getOrCreateDigestTag();
     Instant createdAt = Instant.now();
     Blog digest = new Blog(
         null, title,
-        "Weekly summary of site activity and tech news",
-        digestContent, true, null,
+        DIGEST_SHORT_DESCRIPTION,
+        digestContent, true, featuredImageUrl,
         createdAt, createdAt,
         List.of(digestTag), List.<Skill>of());
 

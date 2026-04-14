@@ -231,6 +231,7 @@ export function TourStepEditor() {
               <option value="/">/</option>
               <option value="/experience">/experience</option>
               <option value="/blogs">/blogs</option>
+              <option value="/news-events">/news-events</option>
             </select>
           </div>
           <div>

@@ -20,6 +20,7 @@ import com.simonrowe.blog.Tag;
 import com.simonrowe.blog.TagRepository;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
+import com.simonrowe.media.BlogImageGenerationService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -39,6 +40,7 @@ class WeeklyDigestAgentTest {
   @Mock private AggregatedArticleRepository articleRepository;
   @Mock private Ai ai;
   @Mock private ContentChangePublisher changePublisher;
+  @Mock private BlogImageGenerationService blogImageGenerationService;
 
   private PromptRunner promptRunner;
   private AssistantMessage assistantMessage;
@@ -61,7 +63,8 @@ class WeeklyDigestAgentTest {
 
     agent = new WeeklyDigestAgent(
         blogRepository, tagRepository,
-        articleRepository, ai, changePublisher);
+        articleRepository, ai, changePublisher,
+        blogImageGenerationService);
   }
 
   @Test
