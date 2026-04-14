@@ -14,6 +14,8 @@ const SUGGESTED_PROMPTS = [
   'What is your experience with Kafka?',
   'What have you been blogging about recently?',
   'Show me some code examples',
+  'What was your role at Global?',
+  'What testing strategies do you use?',
 ]
 
 interface ChatPanelProps {

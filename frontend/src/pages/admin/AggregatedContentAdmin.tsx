@@ -11,8 +11,10 @@ import {
   toggleEventVisibility,
   deleteEvent,
   triggerAggregation,
+  triggerDigest,
   triggerSearchSync,
   triggerEmbeddingSync,
+  importArticleUrl,
   type AdminNewsArticle,
   type AdminEvent,
 } from '../../services/adminApi'
@@ -36,6 +38,9 @@ export function AggregatedContentAdmin() {
   const [aggregationTriggering, setAggregationTriggering] = useState(false)
   const [aggregationSuccess, setAggregationSuccess] = useState<string | null>(null)
   const [aggregationError, setAggregationError] = useState<string | null>(null)
+  const [digestTriggering, setDigestTriggering] = useState(false)
+  const [importUrl, setImportUrl] = useState('')
+  const [importLoading, setImportLoading] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string; type: 'news' | 'event' } | null>(null)
 
@@ -187,7 +192,65 @@ export function AggregatedContentAdmin() {
           >
             {aggregationTriggering ? 'Triggering...' : 'Trigger Aggregation'}
           </button>
+          <button
+            className="admin-btn admin-btn--primary"
+            disabled={digestTriggering}
+            onClick={async () => {
+              try {
+                setDigestTriggering(true)
+                setAggregationSuccess(null)
+                setAggregationError(null)
+                await triggerDigest(getAccessToken)
+                setAggregationSuccess('Weekly digest generation triggered.')
+              } catch (err) {
+                setAggregationError(err instanceof Error ? err.message : 'Failed to trigger digest')
+              } finally {
+                setDigestTriggering(false)
+              }
+            }}
+            type="button"
+          >
+            {digestTriggering ? 'Generating...' : 'Trigger Digest'}
+          </button>
         </div>
+      </div>
+
+      <div className="admin-page__import" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', margin: '1rem 0' }}>
+        <input
+          type="url"
+          placeholder="Paste article or event URL to import..."
+          value={importUrl}
+          onChange={(e) => setImportUrl(e.target.value)}
+          style={{ flex: 1, padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid var(--border-color, #ddd)', fontSize: '0.875rem' }}
+        />
+        <button
+          className="admin-btn admin-btn--secondary"
+          disabled={importLoading || !importUrl.trim()}
+          onClick={async () => {
+            try {
+              setImportLoading(true)
+              setAggregationSuccess(null)
+              setAggregationError(null)
+              const result = await importArticleUrl(getAccessToken, importUrl.trim()) as { message?: string }
+              const message = result?.message || 'Import complete'
+              if (message.startsWith('Failed') || message.startsWith('Already')) {
+                setAggregationError(message)
+              } else {
+                setAggregationSuccess(message)
+                setImportUrl('')
+                await loadNews()
+                await loadEvents()
+              }
+            } catch (err) {
+              setAggregationError(err instanceof Error ? err.message : 'Failed to import URL')
+            } finally {
+              setImportLoading(false)
+            }
+          }}
+          type="button"
+        >
+          {importLoading ? 'Importing...' : 'Import URL'}
+        </button>
       </div>
 
       <div className="admin-tabs">

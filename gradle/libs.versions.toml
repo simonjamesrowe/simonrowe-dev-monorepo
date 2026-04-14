@@ -39,6 +39,7 @@ openpdf = { module = "com.github.librepdf:openpdf", version.ref = "openpdf" }
 commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
 spring-ai-bom = { module = "org.springframework.ai:spring-ai-bom", version.ref = "springAi" }
 spring-ai-starter-model-openai = { module = "org.springframework.ai:spring-ai-starter-model-openai" }
+spring-ai-starter-model-openai-sdk = { module = "org.springframework.ai:spring-ai-starter-model-openai-sdk" }
 spring-ai-starter-mcp-server-webmvc = { module = "org.springframework.ai:spring-ai-starter-mcp-server-webmvc" }
 spring-ai-starter-vector-store-elasticsearch = { module = "org.springframework.ai:spring-ai-starter-vector-store-elasticsearch" }
 spring-ai-advisors-vector-store = { module = "org.springframework.ai:spring-ai-advisors-vector-store" }

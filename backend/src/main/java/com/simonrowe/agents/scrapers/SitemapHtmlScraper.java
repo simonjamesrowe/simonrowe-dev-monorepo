@@ -2,6 +2,7 @@ package com.simonrowe.agents.scrapers;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Year;
@@ -9,8 +10,10 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jsoup.Jsoup;
@@ -29,6 +32,10 @@ public class SitemapHtmlScraper {
   private static final int MAX_ARTICLES = 20;
   private static final long DELAY_BETWEEN_REQUESTS_MS = 1000;
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final String USER_AGENT =
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+          + "AppleWebKit/537.36 (KHTML, like Gecko) "
+          + "Chrome/131.0.0.0 Safari/537.36";
 
   private static final Pattern DATE_HEADER_PATTERN = Pattern.compile(
       "(\\d{1,2})\\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*",
@@ -37,12 +44,22 @@ public class SitemapHtmlScraper {
   private static final DateTimeFormatter DAY_MONTH_FORMATTER =
       DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
 
+  // Fix 5: regex for visible-text date extraction
+  private static final Pattern TEXT_DATE_PATTERN = Pattern.compile(
+      "(?:(\\d{1,2})\\s+(January|February|March|April|May|June|July|August|September"
+          + "|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+          + "\\s+(\\d{4}))"
+          + "|(?:(January|February|March|April|May|June|July|August|September"
+          + "|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+          + "\\s+(\\d{1,2}),?\\s+(\\d{4}))",
+      Pattern.CASE_INSENSITIVE);
+
   public List<ScrapedContent> scrape(String sitemapUrl) {
     List<ScrapedContent> results = new ArrayList<>();
     try {
       Document sitemap = Jsoup.connect(sitemapUrl)
           .timeout(TIMEOUT_MS)
-          .userAgent("SimonRoweBot/1.0")
+          .userAgent(USER_AGENT)
           .get();
       Elements urls = sitemap.select("url > loc");
 
@@ -78,12 +95,152 @@ public class SitemapHtmlScraper {
     return results;
   }
 
+  public List<ScrapedContent> scrapeListingPage(String listingUrl) {
+    List<ScrapedContent> results = new ArrayList<>();
+    try {
+      Document doc = Jsoup.connect(listingUrl)
+          .timeout(TIMEOUT_MS)
+          .userAgent(USER_AGENT)
+          .get();
+
+      Set<String> articleUrls = new LinkedHashSet<>();
+      for (Element anchor : doc.select("a[href]")) {
+        String href = anchor.absUrl("href");
+        if (isArticleLink(href, listingUrl)) {
+          // Fix 2: normalize before adding to de-duplicate
+          articleUrls.add(normalizeUrl(href));
+        }
+      }
+
+      log.info("Found {} candidate article links on listing page: {}",
+          articleUrls.size(), listingUrl);
+
+      int count = 0;
+      for (String articleUrl : articleUrls) {
+        if (count >= MAX_ARTICLES) {
+          break;
+        }
+        try {
+          ScrapedContent content = scrapeArticlePage(articleUrl);
+          if (content != null) {
+            results.add(content);
+            count++;
+          }
+        } catch (Exception e) {
+          log.warn("Failed to scrape article: {}", articleUrl, e);
+        }
+        try {
+          Thread.sleep(DELAY_BETWEEN_REQUESTS_MS);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          break;
+        }
+      }
+      log.info("Scraped {} articles from listing page: {}", results.size(), listingUrl);
+    } catch (Exception e) {
+      log.error("Failed to scrape listing page: {}", listingUrl, e);
+    }
+    return results;
+  }
+
+  private boolean isArticleLink(String href, String listingUrl) {
+    if (href == null || href.isEmpty()) {
+      return false;
+    }
+    try {
+      URI hrefUri = new URI(href);
+      URI listingUri = new URI(listingUrl);
+
+      if (!hrefUri.getHost().equals(listingUri.getHost())) {
+        return false;
+      }
+
+      String path = hrefUri.getPath();
+      if (path == null || path.isEmpty()) {
+        return false;
+      }
+
+      String[] segments = path.split("/");
+      long nonEmptySegments = java.util.Arrays.stream(segments)
+          .filter(s -> !s.isEmpty())
+          .count();
+      if (nonEmptySegments < 2) {
+        return false;
+      }
+
+      if (href.contains("#")) {
+        return false;
+      }
+      if (href.contains("?page=")) {
+        return false;
+      }
+
+      String listingPath = listingUri.getPath();
+      if (path.equals(listingPath) || path.equals(listingPath + "/")) {
+        return false;
+      }
+
+      String lastSegment = segments[segments.length - 1];
+      if (lastSegment.isEmpty() && segments.length > 1) {
+        lastSegment = segments[segments.length - 2];
+      }
+      if (lastSegment.equals("category") || lastSegment.equals("tag")
+          || lastSegment.equals("author") || lastSegment.equals("page")) {
+        return false;
+      }
+
+      String secondSegment = "";
+      for (String s : segments) {
+        if (!s.isEmpty()) {
+          secondSegment = s;
+          break;
+        }
+      }
+      if (secondSegment.equals("category") || secondSegment.equals("tag")
+          || secondSegment.equals("author") || secondSegment.equals("page")) {
+        return false;
+      }
+
+      // Fix 3: filter junk/utility pages
+      String lowerPath = path.toLowerCase();
+      if (lowerPath.contains("/privacy") || lowerPath.contains("/terms")
+          || lowerPath.contains("/legal") || lowerPath.contains("/cookie")
+          || lowerPath.contains("/contact") || lowerPath.contains("/about")
+          || lowerPath.contains("/careers") || lowerPath.contains("/login")
+          || lowerPath.contains("/signup") || lowerPath.contains("/pricing")) {
+        return false;
+      }
+
+      return true;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  // Fix 2: URL normalization helper
+  private static String normalizeUrl(String url) {
+    if (url == null) {
+      return null;
+    }
+    try {
+      URI uri = new URI(url);
+      String normalized = new URI(
+          uri.getScheme(),
+          uri.getHost().toLowerCase(),
+          uri.getPath().replaceAll("/+$", ""),
+          null, null).toString();
+      return normalized;
+    } catch (Exception e) {
+      return url.replaceAll("[?#].*$", "").replaceAll("/+$", "");
+    }
+  }
+
   public List<ScrapedContent> scrapeEventsPage(String pageUrl) {
     List<ScrapedContent> results = new ArrayList<>();
     try {
       Document doc = Jsoup.connect(pageUrl)
           .timeout(TIMEOUT_MS)
-          .userAgent("SimonRoweBot/1.0")
+          .userAgent(USER_AGENT)
           .get();
 
       if (pageUrl.contains("tessl.io")) {
@@ -247,10 +404,19 @@ public class SitemapHtmlScraper {
     return results;
   }
 
+  public ScrapedContent scrapeArticlePagePublic(String url) {
+    try {
+      return scrapeArticlePage(url);
+    } catch (Exception e) {
+      log.warn("Failed to scrape article page: {}", url, e);
+      return null;
+    }
+  }
+
   private ScrapedContent scrapeArticlePage(String url) throws Exception {
     Document doc = Jsoup.connect(url)
         .timeout(TIMEOUT_MS)
-        .userAgent("SimonRoweBot/1.0")
+        .userAgent(USER_AGENT)
         .get();
 
     String title = doc.title();
@@ -276,11 +442,25 @@ public class SitemapHtmlScraper {
       imageUrl = ogImage.attr("content");
     }
 
-    return new ScrapedContent(title, url, content, extractPublishedDate(doc), author, imageUrl,
-        false);
+    // Fix 2: normalize the URL stored in ScrapedContent
+    return new ScrapedContent(title, normalizeUrl(url), content,
+        extractPublishedDate(doc), author, imageUrl, false);
   }
 
-  Instant extractPublishedDate(Document doc) {
+  public Instant extractPublishedDateFromUrl(String url) {
+    try {
+      Document doc = Jsoup.connect(url)
+          .timeout(TIMEOUT_MS)
+          .userAgent(USER_AGENT)
+          .get();
+      return extractPublishedDate(doc);
+    } catch (Exception e) {
+      log.warn("Failed to fetch page for date extraction: {}", url, e);
+      return null;
+    }
+  }
+
+  public Instant extractPublishedDate(Document doc) {
     Element pubTimeMeta = doc.selectFirst("meta[property=article:published_time]");
     if (pubTimeMeta != null && !pubTimeMeta.attr("content").isEmpty()) {
       Instant parsed = parseInstantOrDate(pubTimeMeta.attr("content"));
@@ -330,6 +510,15 @@ public class SitemapHtmlScraper {
       }
     }
 
+    // Fix 5: visible-text regex fallback in header area
+    String headerText = extractHeaderText(doc);
+    if (headerText != null) {
+      Instant textDate = extractDateFromText(headerText);
+      if (textDate != null) {
+        return textDate;
+      }
+    }
+
     return null;
   }
 
@@ -352,8 +541,68 @@ public class SitemapHtmlScraper {
             return parsed;
           }
         }
+        // Fix 1: check @graph arrays (Sanity, WordPress, etc.)
+        JsonNode graphNode = node.path("@graph");
+        if (graphNode.isArray()) {
+          for (JsonNode item : graphNode) {
+            JsonNode graphDateNode = item.path("datePublished");
+            if (!graphDateNode.isMissingNode() && !graphDateNode.asText().isEmpty()) {
+              Instant parsed = parseInstantOrDate(graphDateNode.asText());
+              if (parsed != null) {
+                return parsed;
+              }
+            }
+            graphDateNode = item.path("dateCreated");
+            if (!graphDateNode.isMissingNode() && !graphDateNode.asText().isEmpty()) {
+              Instant parsed = parseInstantOrDate(graphDateNode.asText());
+              if (parsed != null) {
+                return parsed;
+              }
+            }
+          }
+        }
       } catch (Exception ignored) {
         // JSON-LD parsing can fail for malformed data
+      }
+    }
+    return null;
+  }
+
+  // Fix 5: extract text from article header area for date regex fallback
+  private String extractHeaderText(Document doc) {
+    Element header = doc.selectFirst(
+        "article header, [class*=article-header], [class*=post-header], [class*=entry-header]");
+    if (header != null) {
+      return header.text();
+    }
+    Element article = doc.selectFirst("article, main, [class*=content], [class*=article]");
+    if (article != null) {
+      String text = article.text();
+      return text.length() > 500 ? text.substring(0, 500) : text;
+    }
+    return null;
+  }
+
+  // Fix 5: extract a date Instant from free text using TEXT_DATE_PATTERN
+  private Instant extractDateFromText(String text) {
+    Matcher matcher = TEXT_DATE_PATTERN.matcher(text);
+    if (matcher.find()) {
+      try {
+        String matched = matcher.group();
+        for (String pattern : List.of(
+            "d MMMM yyyy", "d MMM yyyy",
+            "MMMM d, yyyy", "MMMM d yyyy",
+            "MMM d, yyyy", "MMM d yyyy")) {
+          try {
+            return LocalDate.parse(matched.replaceAll(",", "").trim(),
+                DateTimeFormatter.ofPattern(pattern, Locale.ENGLISH))
+                .atStartOfDay(ZoneOffset.UTC).toInstant();
+          } catch (DateTimeParseException ignored) {
+            // try next pattern
+          }
+        }
+      } catch (Exception ignored) {
+        // no parseable date found
       }
     }
     return null;

@@ -66,18 +66,25 @@ spring:
           auth: true
           starttls:
             enable: true
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
+      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkEmbeddingAutoConfiguration
+      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkImageAutoConfiguration
   ai:
     openai:
       api-key: ${OPENAI_API_KEY:not-set}
-      chat:
-        options:
-          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
       embedding:
         options:
           model: text-embedding-3-small
       image:
         options:
           model: dall-e-3
+    openai-sdk:
+      api-key: ${OPENAI_API_KEY:not-set}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-5-mini}
     vectorstore:
       elasticsearch:
         index-name: content-embeddings

@@ -35,15 +35,17 @@ public class WeeklyDigestAgent {
       LoggerFactory.getLogger(WeeklyDigestAgent.class);
 
   private static final String DIGEST_PROMPT =
-      "Write a weekly digest blog post in Markdown format "
-          + "summarizing the following activity. Write in a "
-          + "friendly, professional tone. Include sections for "
-          + "blog posts and tech news. Keep it concise "
-          + "(300-500 words). Do not include a title heading "
-          + "(it will be added separately).\n\n";
+      "Write a digest blog post in Markdown format summarizing "
+          + "the following activity. Write in a friendly, "
+          + "professional tone as Simon Rowe (first person). "
+          + "For each item, include a Markdown link using the "
+          + "URL provided. Keep it concise (300-500 words). "
+          + "Do not include a title heading (it will be added "
+          + "separately). Group by sections (blog posts, tech "
+          + "news) if both are present.\n\n";
 
   private static final String DIGEST_SHORT_DESCRIPTION =
-      "Weekly summary of site activity and tech news";
+      "Latest roundup of site activity and tech news";
 
   private final BlogRepository blogRepository;
   private final TagRepository tagRepository;
@@ -67,30 +69,29 @@ public class WeeklyDigestAgent {
     this.blogImageGenerationService = blogImageGenerationService;
   }
 
-  @Action(description = "Generate a weekly digest blog post")
+  @Action(description = "Generate a digest blog post")
   public void generateDigest() {
-    Instant oneWeekAgo =
-        Instant.now().minus(7, ChronoUnit.DAYS);
-    log.info(
-        "Generating weekly digest for period since {}",
-        oneWeekAgo);
+    Tag digestTag = getOrCreateDigestTag();
+    Instant sinceDate = findLastDigestDate(digestTag);
+    log.info("Generating digest for period since {}", sinceDate);
 
     List<Blog> recentBlogs = blogRepository
         .findByPublishedTrueOrderByCreatedDateDesc().stream()
         .filter(b -> b.createdDate() != null
-            && b.createdDate().isAfter(oneWeekAgo))
+            && b.createdDate().isAfter(sinceDate))
+        .filter(b -> !isDigestBlog(b, digestTag))
         .toList();
 
     List<AggregatedArticle> recentArticles = articleRepository
         .findByVisibleTrueOrderByPublishedDateDesc().stream()
         .filter(a -> a.fetchedAt() != null
-            && a.fetchedAt().isAfter(oneWeekAgo))
+            && a.fetchedAt().isAfter(sinceDate))
         .toList();
 
     if (recentBlogs.isEmpty() && recentArticles.isEmpty()) {
       log.info(
-          "Quiet week - no activity to summarize, "
-              + "skipping digest generation");
+          "Nothing new since last digest, "
+              + "skipping generation");
       return;
     }
 
@@ -100,18 +101,18 @@ public class WeeklyDigestAgent {
         generateDigestContent(activitySummary);
 
     LocalDate now = LocalDate.now(ZoneOffset.UTC);
-    LocalDate weekStart = now.minusDays(7);
+    LocalDate periodStart = sinceDate.atZone(ZoneOffset.UTC)
+        .toLocalDate();
     DateTimeFormatter fmt =
         DateTimeFormatter.ofPattern("MMM d");
-    String title = "Week in Review: "
-        + weekStart.format(fmt) + " - " + now.format(fmt)
+    String title = "AI & Tech Roundup: "
+        + periodStart.format(fmt) + " - " + now.format(fmt)
         + ", " + now.getYear();
 
     String featuredImageUrl =
         blogImageGenerationService.generateAndStore(
             title, DIGEST_SHORT_DESCRIPTION);
 
-    Tag digestTag = getOrCreateDigestTag();
     Instant createdAt = Instant.now();
     Blog digest = new Blog(
         null, title,
@@ -122,7 +123,21 @@ public class WeeklyDigestAgent {
 
     Blog saved = blogRepository.save(digest);
     changePublisher.publishCreated(ContentType.BLOG, saved.id());
-    log.info("Published weekly digest: {}", title);
+    log.info("Published digest: {}", title);
+  }
+
+  private Instant findLastDigestDate(final Tag digestTag) {
+    return blogRepository
+        .findByPublishedTrueOrderByCreatedDateDesc().stream()
+        .filter(b -> isDigestBlog(b, digestTag))
+        .map(Blog::createdDate)
+        .findFirst()
+        .orElse(Instant.now().minus(7, ChronoUnit.DAYS));
+  }
+
+  private boolean isDigestBlog(final Blog blog, final Tag digestTag) {
+    return blog.tags() != null && blog.tags().stream()
+        .anyMatch(t -> t.id().equals(digestTag.id()));
   }
 
   private String buildActivitySummary(
@@ -130,19 +145,21 @@ public class WeeklyDigestAgent {
       final List<AggregatedArticle> recentArticles) {
     StringBuilder sb = new StringBuilder();
     if (!recentBlogs.isEmpty()) {
-      sb.append("## New Blog Posts This Week\n");
+      sb.append("## New Blog Posts\n");
       for (Blog blog : recentBlogs) {
-        sb.append("- ").append(blog.title())
+        sb.append("- [").append(blog.title())
+            .append("](/blogs/").append(blog.id()).append(")")
             .append(": ").append(blog.shortDescription())
             .append("\n");
       }
       sb.append("\n");
     }
     if (!recentArticles.isEmpty()) {
-      sb.append("## Notable Tech News This Week\n");
+      sb.append("## Notable Tech News\n");
       for (AggregatedArticle a : recentArticles.stream()
-          .limit(10).collect(Collectors.toList())) {
-        sb.append("- ").append(a.title())
+          .limit(15).collect(Collectors.toList())) {
+        sb.append("- [").append(a.title())
+            .append("](").append(a.originalUrl()).append(")")
             .append(" (").append(a.sourceName()).append(")")
             .append(": ").append(a.summary()).append("\n");
       }
@@ -153,7 +170,7 @@ public class WeeklyDigestAgent {
   private String generateDigestContent(
       final String activitySummary) {
     try {
-      return ai.withDefaultLlm()
+      return ai.withLlm("gpt-4o-mini")
           .respond(List.of(
               new UserMessage(DIGEST_PROMPT + activitySummary)))
           .getContent();

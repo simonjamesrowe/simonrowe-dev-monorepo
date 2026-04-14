@@ -29,6 +29,7 @@ public record ContentSource(
     RSS,
     SITEMAP_HTML,
     HTML,
+    HTML_LISTING,
     LUMA
   }
 }

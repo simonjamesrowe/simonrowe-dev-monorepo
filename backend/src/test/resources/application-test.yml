@@ -16,10 +16,15 @@ spring:
   ai:
     openai:
       api-key: test-dummy-key
+    openai-sdk:
+      api-key: test-dummy-key
   autoconfigure:
     exclude:
       - org.springframework.ai.vectorstore.elasticsearch.autoconfigure.ElasticsearchVectorStoreAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
+      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkEmbeddingAutoConfiguration
+      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkImageAutoConfiguration
       - com.embabel.agent.autoconfigure.models.openai.AgentOpenAiAutoConfiguration
       - com.embabel.agent.autoconfigure.platform.AgentPlatformAutoConfiguration
 management:

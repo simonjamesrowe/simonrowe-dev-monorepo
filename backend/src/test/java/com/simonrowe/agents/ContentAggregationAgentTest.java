@@ -14,6 +14,7 @@ import com.embabel.agent.api.common.PromptRunner;
 import com.embabel.agent.api.common.PromptRunner.Creating;
 import com.simonrowe.agents.scrapers.ScrapedContent;
 import com.simonrowe.agents.scrapers.ScraperFactory;
+import com.simonrowe.agents.scrapers.SitemapHtmlScraper;
 import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.AggregatedEvent;
@@ -24,6 +25,7 @@ import com.simonrowe.aggregation.ContentSource.SourceType;
 import com.simonrowe.aggregation.ContentSourceRepository;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
+import com.simonrowe.media.BlogImageGenerationService;
 import com.simonrowe.media.ExternalImageDownloader;
 import java.time.Instant;
 import java.util.List;
@@ -41,9 +43,11 @@ class ContentAggregationAgentTest {
   @Mock private AggregatedArticleRepository articleRepository;
   @Mock private AggregatedEventRepository eventRepository;
   @Mock private ScraperFactory scraperFactory;
+  @Mock private SitemapHtmlScraper htmlScraper;
   @Mock private Ai ai;
   @Mock private ContentChangePublisher changePublisher;
   @Mock private ExternalImageDownloader imageDownloader;
+  @Mock private BlogImageGenerationService blogImageGenerationService;
 
   private PromptRunner promptRunner;
   @SuppressWarnings("rawtypes")
@@ -64,15 +68,15 @@ class ContentAggregationAgentTest {
     promptRunner = mock(PromptRunner.class);
     creating = mock(Creating.class);
 
-    lenient().when(ai.withDefaultLlm())
+    lenient().when(ai.withLlm("gpt-4o-mini"))
         .thenReturn(promptRunner);
     lenient().when(promptRunner.creating(
         ContentClassification.class)).thenReturn(creating);
 
     agent = new ContentAggregationAgent(
         sourceRepository, articleRepository,
-        eventRepository, scraperFactory, ai,
-        changePublisher, imageDownloader);
+        eventRepository, scraperFactory, htmlScraper, ai,
+        changePublisher, imageDownloader, blogImageGenerationService);
   }
 
   @Test

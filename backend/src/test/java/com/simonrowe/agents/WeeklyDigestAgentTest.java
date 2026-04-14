@@ -56,7 +56,7 @@ class WeeklyDigestAgentTest {
     promptRunner = mock(PromptRunner.class);
     assistantMessage = mock(AssistantMessage.class);
 
-    lenient().when(ai.withDefaultLlm())
+    lenient().when(ai.withLlm("gpt-4o-mini"))
         .thenReturn(promptRunner);
     lenient().when(promptRunner.respond(anyList()))
         .thenReturn(assistantMessage);
@@ -69,6 +69,8 @@ class WeeklyDigestAgentTest {
 
   @Test
   void generateDigest_skipsWhenNoRecentContent() {
+    when(tagRepository.findByName("Weekly Digest"))
+        .thenReturn(Optional.of(DIGEST_TAG));
     when(blogRepository
         .findByPublishedTrueOrderByCreatedDateDesc())
         .thenReturn(List.of());
@@ -85,6 +87,8 @@ class WeeklyDigestAgentTest {
 
   @Test
   void generateDigest_skipsWhenOnlyOldContent() {
+    when(tagRepository.findByName("Weekly Digest"))
+        .thenReturn(Optional.of(DIGEST_TAG));
     Instant twoWeeksAgo =
         Instant.now().minus(14, ChronoUnit.DAYS);
 
@@ -126,7 +130,7 @@ class WeeklyDigestAgentTest {
     Blog savedDigest = new Blog(
         "blog-digest-1",
         "Week in Review: Apr 6 - Apr 13, 2026",
-        "Weekly summary of site activity and tech news",
+        "Latest roundup of site activity and tech news",
         "Generated content.", true, null,
         Instant.now(), Instant.now(),
         List.of(DIGEST_TAG), List.of());
@@ -153,10 +157,10 @@ class WeeklyDigestAgentTest {
 
     assertThat(created.id()).isNull();
     assertThat(created.title())
-        .startsWith("Week in Review:");
+        .startsWith("AI & Tech Roundup:");
     assertThat(created.shortDescription())
         .isEqualTo(
-            "Weekly summary of site activity and tech news");
+            "Latest roundup of site activity and tech news");
     assertThat(created.published()).isTrue();
     assertThat(created.content())
         .isEqualTo("# Week in Review\n\nGenerated.");
@@ -176,7 +180,7 @@ class WeeklyDigestAgentTest {
     Blog savedDigest = new Blog(
         "blog-digest-2",
         "Week in Review: Apr 6 - Apr 13, 2026",
-        "Weekly summary of site activity and tech news",
+        "Latest roundup of site activity and tech news",
         "Generated content.", true, null,
         Instant.now(), Instant.now(),
         List.of(DIGEST_TAG), List.of());
@@ -215,7 +219,7 @@ class WeeklyDigestAgentTest {
 
     Blog savedDigest = new Blog(
         "blog-digest-3", "Week in Review",
-        "Weekly summary of site activity and tech news",
+        "Latest roundup of site activity and tech news",
         "LLM generated content.", true, null,
         Instant.now(), Instant.now(),
         List.of(DIGEST_TAG), List.of());
@@ -235,7 +239,7 @@ class WeeklyDigestAgentTest {
 
     agent.generateDigest();
 
-    verify(ai).withDefaultLlm();
+    verify(ai).withLlm("gpt-4o-mini");
     verify(promptRunner).respond(anyList());
 
     ArgumentCaptor<Blog> captor =
@@ -260,7 +264,7 @@ class WeeklyDigestAgentTest {
     Tag newTag = new Tag("tag-new", "Weekly Digest");
     Blog savedDigest = new Blog(
         "blog-digest-5", "Week in Review",
-        "Weekly summary of site activity and tech news",
+        "Latest roundup of site activity and tech news",
         "Content.", true, null,
         Instant.now(), Instant.now(),
         List.of(newTag), List.of());
@@ -303,7 +307,7 @@ class WeeklyDigestAgentTest {
 
     Blog savedDigest = new Blog(
         "saved-blog-id", "Week in Review",
-        "Weekly summary of site activity and tech news",
+        "Latest roundup of site activity and tech news",
         "Content.", true, null,
         Instant.now(), Instant.now(),
         List.of(DIGEST_TAG), List.of());
@@ -341,7 +345,7 @@ class WeeklyDigestAgentTest {
 
     Blog savedDigest = new Blog(
         "blog-digest-6", "Week in Review",
-        "Weekly summary of site activity and tech news",
+        "Latest roundup of site activity and tech news",
         "Fallback content.", true, null,
         Instant.now(), Instant.now(),
         List.of(DIGEST_TAG), List.of());

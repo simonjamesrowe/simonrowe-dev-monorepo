@@ -5,6 +5,7 @@ import com.embabel.agent.api.annotation.Agent;
 import com.embabel.agent.api.common.Ai;
 import com.simonrowe.agents.scrapers.ScrapedContent;
 import com.simonrowe.agents.scrapers.ScraperFactory;
+import com.simonrowe.agents.scrapers.SitemapHtmlScraper;
 import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.AggregatedEvent;
@@ -13,7 +14,9 @@ import com.simonrowe.aggregation.ContentSource;
 import com.simonrowe.aggregation.ContentSourceRepository;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
+import com.simonrowe.media.BlogImageGenerationService;
 import com.simonrowe.media.ExternalImageDownloader;
+import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
@@ -29,6 +32,7 @@ public class ContentAggregationAgent {
   private static final Logger log =
       LoggerFactory.getLogger(ContentAggregationAgent.class);
 
+  // Fix 4: include URL in prompt; truncation limit raised to 5000
   private static final String CLASSIFY_PROMPT = """
       Analyze the following content and respond with JSON matching \
       the schema below.
@@ -42,6 +46,7 @@ public class ContentAggregationAgent {
       "2025-07-23") from the content if mentioned (look for dates \
       near the author name or article header).
 
+      URL: %s
       Title: %s
 
       Content:
@@ -52,25 +57,95 @@ public class ContentAggregationAgent {
   private final AggregatedArticleRepository articleRepository;
   private final AggregatedEventRepository eventRepository;
   private final ScraperFactory scraperFactory;
+  private final SitemapHtmlScraper htmlScraper;
   private final Ai ai;
   private final ContentChangePublisher changePublisher;
   private final ExternalImageDownloader imageDownloader;
+  private final BlogImageGenerationService blogImageGenerationService;
 
   public ContentAggregationAgent(
       final ContentSourceRepository sourceRepository,
       final AggregatedArticleRepository articleRepository,
       final AggregatedEventRepository eventRepository,
       final ScraperFactory scraperFactory,
+      final SitemapHtmlScraper htmlScraper,
       final Ai ai,
       final ContentChangePublisher changePublisher,
-      final ExternalImageDownloader imageDownloader) {
+      final ExternalImageDownloader imageDownloader,
+      final BlogImageGenerationService blogImageGenerationService) {
     this.sourceRepository = sourceRepository;
     this.articleRepository = articleRepository;
     this.eventRepository = eventRepository;
     this.scraperFactory = scraperFactory;
+    this.htmlScraper = htmlScraper;
     this.ai = ai;
     this.changePublisher = changePublisher;
     this.imageDownloader = imageDownloader;
+    this.blogImageGenerationService = blogImageGenerationService;
+  }
+
+  @Action(description = "Import a single article or event from a URL")
+  public String importFromUrl(final String url) {
+    String normalizedUrl = normalizeUrl(url);
+    boolean alreadyExists =
+        articleRepository.existsByOriginalUrl(normalizedUrl)
+            || eventRepository.existsByOriginalUrl(normalizedUrl);
+    if (alreadyExists) {
+      log.info("URL already imported: {}", normalizedUrl);
+      return "Already imported: " + normalizedUrl;
+    }
+
+    ScrapedContent content =
+        htmlScraper.scrapeArticlePagePublic(normalizedUrl);
+    if (content == null) {
+      log.warn("Failed to scrape URL: {}", normalizedUrl);
+      return "Failed to scrape URL (site may block automated access): "
+          + normalizedUrl;
+    }
+
+    ContentClassification classification =
+        classifyAndSummarize(content);
+
+    String sourceName = extractHostName(normalizedUrl);
+    ContentSource manualSource = new ContentSource(
+        null, sourceName, normalizedUrl, null, null,
+        ContentSource.SourceType.NEWS,
+        ContentSource.ScrapeStrategy.HTML_LISTING,
+        false, null, null);
+
+    if (classification.isEvent() || content.isEvent()) {
+      processEvent(manualSource, content, classification);
+    } else {
+      processArticle(manualSource, content, classification);
+    }
+    log.info("Imported from URL: {}", normalizedUrl);
+    return "Imported: " + content.title();
+  }
+
+  // Fix 6: URL normalization matching the scraper's normalizeUrl logic
+  private String normalizeUrl(String url) {
+    if (url == null) {
+      return null;
+    }
+    try {
+      URI uri = URI.create(url);
+      return new URI(
+          uri.getScheme(),
+          uri.getHost().toLowerCase(),
+          uri.getPath().replaceAll("/+$", ""),
+          null, null).toString();
+    } catch (Exception e) {
+      return url.replaceAll("[?#].*$", "").replaceAll("/+$", "");
+    }
+  }
+
+  private String extractHostName(final String url) {
+    try {
+      return java.net.URI.create(url).getHost()
+          .replaceFirst("^www\\.", "");
+    } catch (Exception e) {
+      return "Manual Import";
+    }
   }
 
   @Action(description = "Aggregate content from all active sources")
@@ -132,10 +207,20 @@ public class ContentAggregationAgent {
       final ContentClassification classification) {
     String localImageUrl =
         imageDownloader.downloadAndStore(content.imageUrl());
+    if (localImageUrl == null && content.imageUrl() == null) {
+      localImageUrl = blogImageGenerationService.generateAndStore(
+          content.title(), classification.summary());
+    }
     Instant publishedDate = content.publishedDate();
     if (publishedDate == null) {
       publishedDate =
           parseEventDate(classification.publishedDate());
+    }
+    if (publishedDate == null) {
+      log.info("No date from scraper or LLM for '{}', "
+          + "fetching detail page", content.title());
+      publishedDate =
+          htmlScraper.extractPublishedDateFromUrl(content.url());
     }
     AggregatedArticle article = new AggregatedArticle(
         null, content.title(), source.name(), source.baseUrl(),
@@ -157,8 +242,16 @@ public class ContentAggregationAgent {
     Instant eventDate =
         parseEventDate(classification.eventDate());
     if (eventDate == null) {
-      eventDate = content.publishedDate() != null
-          ? content.publishedDate() : Instant.now();
+      eventDate = content.publishedDate();
+    }
+    if (eventDate == null) {
+      log.info("No date from scraper or LLM for event '{}', "
+          + "fetching detail page", content.title());
+      eventDate =
+          htmlScraper.extractPublishedDateFromUrl(content.url());
+    }
+    if (eventDate == null) {
+      eventDate = Instant.now();
     }
 
     String venue = content.venue() != null
@@ -186,12 +279,14 @@ public class ContentAggregationAgent {
           content.title(), null, null, null, null);
     }
     try {
-      String truncated = content.content().length() > 3000
-          ? content.content().substring(0, 3000)
+      // Fix 4: raise truncation limit from 3000 to 5000
+      String truncated = content.content().length() > 5000
+          ? content.content().substring(0, 5000)
           : content.content();
+      // Fix 4: include URL as first format argument
       String prompt = String.format(
-          CLASSIFY_PROMPT, content.title(), truncated);
-      return ai.withDefaultLlm()
+          CLASSIFY_PROMPT, content.url(), content.title(), truncated);
+      return ai.withLlm("gpt-4o-mini")
           .creating(ContentClassification.class)
           .fromPrompt(prompt);
     } catch (Exception e) {

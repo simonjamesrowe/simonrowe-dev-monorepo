@@ -25,6 +25,7 @@ public class ScraperFactory {
       case RSS -> rssScraper.scrape(source.feedUrl(), isEvent);
       case SITEMAP_HTML -> sitemapHtmlScraper.scrape(source.sitemapUrl());
       case HTML -> sitemapHtmlScraper.scrapeEventsPage(source.baseUrl());
+      case HTML_LISTING -> sitemapHtmlScraper.scrapeListingPage(source.baseUrl());
       case LUMA -> lumaApiScraper.scrape(source.feedUrl());
     };
   }
