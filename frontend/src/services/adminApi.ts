@@ -823,6 +823,19 @@ export async function triggerAggregation(
   return handleResponse<unknown>(response)
 }
 
+export async function importArticleUrl(
+  getAccessToken: GetAccessToken,
+  url: string,
+): Promise<unknown> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/aggregation/import`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  })
+  return handleResponse<unknown>(response)
+}
+
 export async function triggerDigest(
   getAccessToken: GetAccessToken,
 ): Promise<unknown> {

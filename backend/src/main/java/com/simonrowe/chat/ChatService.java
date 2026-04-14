@@ -7,8 +7,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 @Service
 public class ChatService {
@@ -26,16 +28,19 @@ public class ChatService {
   }
 
   @WithSpan
-  public Flux<org.springframework.ai.chat.model.ChatResponse> processMessage(
+  public Flux<ChatResponse> processMessage(
       final String sessionId, final String message) {
     sessionActivity.put(sessionId, Instant.now());
     LOG.info("Processing message for session: {}", sessionId);
 
-    return chatClient.prompt()
-        .user(message)
-        .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
-        .stream()
-        .chatResponse();
+    return Flux.defer(() -> {
+      ChatResponse response = chatClient.prompt()
+          .user(message)
+          .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
+          .call()
+          .chatResponse();
+      return Flux.just(response);
+    }).subscribeOn(Schedulers.boundedElastic());
   }
 
   public ConcurrentHashMap<String, Instant> getSessionActivity() {

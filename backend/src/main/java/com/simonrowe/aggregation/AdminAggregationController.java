@@ -128,6 +128,25 @@ public class AdminAggregationController {
     return sourceRepository.save(updated);
   }
 
+  @PostMapping("/aggregation/import")
+  public ResponseEntity<Map<String, String>> importUrl(
+      @RequestBody Map<String, String> body) {
+    String url = body.get("url");
+    if (url == null || url.isBlank()) {
+      return ResponseEntity.badRequest()
+          .body(Map.of("message", "URL is required"));
+    }
+    try {
+      String result = aggregationAgent.importFromUrl(url);
+      return ResponseEntity.ok()
+          .body(Map.of("message", result));
+    } catch (Exception e) {
+      LOG.error("Import failed for URL: {}", url, e);
+      return ResponseEntity.internalServerError()
+          .body(Map.of("message", "Import failed: " + e.getMessage()));
+    }
+  }
+
   @PostMapping("/aggregation/trigger")
   public ResponseEntity<Map<String, String>> triggerAggregation() {
     Thread.ofVirtual().start(aggregationAgent::runAggregation);
