@@ -22,11 +22,15 @@ class ChatSessionCleanupServiceTest {
   @Mock
   private ChatService chatService;
 
+  @Mock
+  private ChatContactTracker contactTracker;
+
   private ChatSessionCleanupService cleanupService;
 
   @BeforeEach
   void setUp() {
-    cleanupService = new ChatSessionCleanupService(chatService, DEFAULT_MAX_INACTIVE_MINUTES);
+    cleanupService = new ChatSessionCleanupService(
+        chatService, contactTracker, DEFAULT_MAX_INACTIVE_MINUTES);
   }
 
   @Test
@@ -42,6 +46,8 @@ class ChatSessionCleanupServiceTest {
 
     verify(chatService).evictSession("stale-session-1");
     verify(chatService).evictSession("stale-session-2");
+    verify(contactTracker).clearSession("stale-session-1");
+    verify(contactTracker).clearSession("stale-session-2");
   }
 
   @Test
@@ -94,8 +100,9 @@ class ChatSessionCleanupServiceTest {
   void cleanupStaleSessionsRespectsCustomMaxInactiveMinutes() {
     final long maxInactiveMinutes = 5;
     final ChatService localChatService = mock(ChatService.class);
+    final ChatContactTracker localTracker = mock(ChatContactTracker.class);
     final ChatSessionCleanupService shortTimeoutService =
-        new ChatSessionCleanupService(localChatService, maxInactiveMinutes);
+        new ChatSessionCleanupService(localChatService, localTracker, maxInactiveMinutes);
 
     final ConcurrentHashMap<String, Instant> sessionActivity = new ConcurrentHashMap<>();
     sessionActivity.put("stale-under-5min",

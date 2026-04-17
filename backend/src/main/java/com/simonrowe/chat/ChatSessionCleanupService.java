@@ -20,12 +20,15 @@ public class ChatSessionCleanupService {
       LoggerFactory.getLogger(ChatSessionCleanupService.class);
 
   private final ChatService chatService;
+  private final ChatContactTracker contactTracker;
   private final long maxInactiveMinutes;
 
   public ChatSessionCleanupService(
       final ChatService chatService,
+      final ChatContactTracker contactTracker,
       @Value("${chat.session.max-inactive-minutes:30}") final long maxInactiveMinutes) {
     this.chatService = chatService;
+    this.contactTracker = contactTracker;
     this.maxInactiveMinutes = maxInactiveMinutes;
   }
 
@@ -42,7 +45,10 @@ public class ChatSessionCleanupService {
 
     if (!staleIds.isEmpty()) {
       LOG.info("Evicting {} stale chat sessions", staleIds.size());
-      staleIds.forEach(chatService::evictSession);
+      staleIds.forEach(id -> {
+        chatService.evictSession(id);
+        contactTracker.clearSession(id);
+      });
     }
   }
 }

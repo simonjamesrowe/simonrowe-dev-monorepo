@@ -2,6 +2,7 @@ package com.simonrowe.chat;
 
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,7 @@ public class ChatService {
       ChatResponse response = chatClient.prompt()
           .user(message)
           .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
+          .toolContext(Map.of("sessionId", sessionId))
           .call()
           .chatResponse();
       return Flux.just(response);

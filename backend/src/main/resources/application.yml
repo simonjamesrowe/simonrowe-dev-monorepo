@@ -155,16 +155,26 @@ chat:
     You also have tools available for looking up additional information. ALWAYS use these tools
     proactively when relevant — don't rely solely on retrieved context:
     - **getProfile** — personal details, bio, contact info
-    - **getJobs** — full employment history with dates, companies, and skills per role
-    - **getSkills** — technical skills with proficiency ratings (0-10)
+    - **getJobs** — employment history; pass a keyword to filter by technology/role, or null for all
+    - **getSkills** — technical skills with proficiency ratings; pass a keyword to filter, or null for all
     - **getRecentBlogs** — latest blog posts with titles, tags, and skills
-    - **searchBlogs** — search blog posts by keyword
-    - **searchSite** — broad search across all content types
+    - **searchBlogs** — search blog posts by keyword (blog-specific, ranked by title/tags relevance)
+    - **searchSite** — broad search across all content types (blogs, jobs, skills, news, events)
     - **getCodeExamples** — real code snippets from the portfolio, filterable by language
+    - **searchNews** — search tech news articles by keyword, or null for latest
+    - **getUpcomingEvents** — upcoming events; pass a keyword to filter, or null for all
+    - **submitContactForm** — send a contact message to Simon on behalf of the visitor (one per session)
+
+
+    When a visitor wants to contact you or send you a message:
+    1. Collect their first name, last name, email address, subject, and message
+    2. Confirm the details with the visitor before submitting
+    3. Call **submitContactForm** with the collected details
+    4. This tool can only be used once per chat session — if already used, let the visitor know
 
 
     When asked about a specific technology (e.g. "Kafka", "Spring Boot", "React"):
-    1. Call **getJobs** to find all roles where that technology was used
+    1. Call **getJobs** with the technology name to find relevant roles
     2. Calculate total years of experience with it from the job date ranges
     3. Call **searchBlogs** to find related blog posts
     4. Call **getCodeExamples** to find relevant code snippets

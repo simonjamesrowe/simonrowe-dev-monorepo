@@ -58,13 +58,13 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 
 ## Recent Changes
+- 022-improve-mcp-tools: Added Java 21 (LTS) + Spring Boot 3.5.x, Spring AI 1.1.4, Spring Data MongoDB, Spring Data Elasticsearch
 - 021-embabel-news-events: Added Java 21 (LTS) + Spring Boot 3.5.x, Embabel Agent 0.3.5, Spring AI 1.1.4, JSoup 1.18.x, Rome 2.1.x
 - 020-tour-blog-content: Fixed site tour with cross-page navigation, auto-advance timer with CSS progress bar, interactive demos (chat, drawers, search simulation), 10-step tour flow. Added blog post on RAG quality.
-- 019-fix-chat-hallucination: Custom `ContextAwareQuestionAnswerAdvisor` for conversation-aware vector search, structured document metadata, code example filtering from general RAG context.
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
-- Java 21 (LTS) + Spring Boot 3.5.x, Embabel Agent 0.3.5, Spring AI 1.1.4, JSoup 1.18.x, Rome 2.1.x (021-embabel-news-events)
-- MongoDB (primary), Elasticsearch (search + vectors), Kafka (async events) (021-embabel-news-events)
+- Java 21 (LTS) + Spring Boot 3.5.x, Spring AI 1.1.4, Spring Data MongoDB, Spring Data Elasticsearch (022-improve-mcp-tools)
+- MongoDB (primary), Elasticsearch (search indices: `site_search`, `blog_search`) (022-improve-mcp-tools)

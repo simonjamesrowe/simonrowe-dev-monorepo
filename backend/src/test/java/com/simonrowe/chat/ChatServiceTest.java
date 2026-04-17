@@ -2,11 +2,13 @@ package com.simonrowe.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,6 +49,7 @@ class ChatServiceTest {
     given(chatClient.prompt()).willReturn(requestSpec);
     given(requestSpec.user(message)).willReturn(requestSpec);
     given(requestSpec.advisors(any(Consumer.class))).willReturn(requestSpec);
+    given(requestSpec.toolContext(anyMap())).willReturn(requestSpec);
     given(requestSpec.call()).willReturn(callResponseSpec);
     given(callResponseSpec.chatResponse()).willReturn(response);
   }

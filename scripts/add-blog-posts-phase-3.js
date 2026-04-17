@@ -61,7 +61,7 @@ print('');
 print('--- Creating new tags ---');
 
 const tagIds = {};
-const newTags = ['RAG (Retrieval-Augmented Generation)', 'Web Scraping', 'Content Aggregation', 'Agents'];
+const newTags = ['RAG (Retrieval-Augmented Generation)', 'Web Scraping', 'Content Aggregation', 'Agents', 'Embabel', 'Kafka'];
 
 newTags.forEach(name => {
   tagIds[name] = findOrCreateTag(name);
@@ -266,107 +266,148 @@ None of these required changing the LLM model or the system prompt. The chatbot'
 // Post 10: Automated News Aggregation
 // ---------------------------------------------------------------------------
 
-const BLOG_10_CONTENT = `A portfolio site that only shows your own content feels static. What if it also curated relevant tech news and upcoming events? That's the idea behind the content aggregation pipeline I built — a system that scrapes external sources, uses an LLM to classify and summarise each piece, and stores everything locally.
+const BLOG_10_CONTENT = `A portfolio site that only shows your own content feels static. What if it also curated relevant tech news and upcoming events — automatically? That's the idea behind the content aggregation system I built. It uses [Embabel](https://embabel.com) agents to orchestrate a pipeline that scrapes external sources, classifies each piece with an LLM, stores everything locally, and publishes events that trigger downstream search indexing and vector embedding for the site's AI chatbot.
 
-## The Data Model
+## Why Embabel
 
-Everything starts with a \`ContentSource\` — a record that defines where to scrape and how:
+The first version of this pipeline used Spring AI's \`ChatClient\` directly — building prompts, calling the model, parsing the response. It worked, but the code was a tangle of scraping logic, LLM calls, and storage operations with no clear boundaries.
+
+[Embabel](https://embabel.com) is an agentic framework for Spring that brings structure to AI-powered workflows. It provides:
+
+- **\`@Agent\`** — declares a class as an autonomous agent with a name and description
+- **\`@Action\`** — marks methods as discrete, describable operations the agent can perform
+- **\`Ai\`** — a clean abstraction over LLM calls that handles structured output natively
+
+Switching to Embabel meant the pipeline became two well-defined agents with clear responsibilities, rather than a monolithic service with scattered AI calls.
+
+![Embabel Agent Architecture](/uploads/17b473e4-e028-4262-8fb9-0965b0a1b879/original.jpg)
+
+## The Two Agents
+
+### ContentAggregationAgent
+
+This agent handles the full scrape-classify-store pipeline:
 
 \`\`\`java
-@Document(collection = "content_sources")
-public record ContentSource(
-    @Id String id,
-    @Indexed(unique = true) String name,
-    String baseUrl,
-    String feedUrl,
-    String sitemapUrl,
-    SourceType sourceType,
-    ScrapeStrategy scrapeStrategy,
-    @Indexed boolean active,
-    Instant lastFetchedAt,
-    String lastError
-) {
+@Agent(
+    name = "ContentAggregation",
+    description = "Scrapes external content sources, classifies items "
+        + "using an LLM, and stores articles and events locally"
+)
+public class ContentAggregationAgent {
 
-  public enum SourceType {
-    BLOG, NEWS, EVENTS
+  private final Ai ai;
+  // ... repositories, scrapers, publishers
+
+  @Action(description = "Aggregate content from all active sources")
+  public void runAggregation() {
+    List<ContentSource> sources = sourceRepository.findByActiveTrue();
+    for (ContentSource source : sources) {
+      try {
+        processSource(source);
+        sourceRepository.save(source.withLastFetchedAt(Instant.now()));
+      } catch (Exception e) {
+        log.error("Failed to process source: {}", source.name(), e);
+        sourceRepository.save(source.withLastError(e.getMessage()));
+      }
+    }
   }
 
-  public enum ScrapeStrategy {
-    RSS, SITEMAP_HTML, HTML, LUMA
+  @Action(description = "Import a single article or event from a URL")
+  public String importFromUrl(final String url) {
+    // Scrape, classify, and store a single URL on demand
   }
 }
 \`\`\`
 
-The \`SourceType\` tells us what kind of content to expect. The \`ScrapeStrategy\` tells us how to fetch it. These are managed through an admin UI, so adding a new source is just filling in a form — no code changes needed.
+The \`@Agent\` annotation declares metadata that Embabel uses for orchestration and observability. Each \`@Action\` is a self-contained operation — \`runAggregation()\` processes all active sources on a schedule, while \`importFromUrl()\` handles ad-hoc imports triggered from the admin UI or via an MCP tool.
+
+### WeeklyDigestAgent
+
+A second agent generates a weekly summary blog post from recent content:
+
+\`\`\`java
+@Agent(
+    name = "WeeklyDigest",
+    description = "Generates a weekly digest blog post summarising "
+        + "recent site activity and aggregated tech news"
+)
+public class WeeklyDigestAgent {
+
+  private final Ai ai;
+
+  @Action(description = "Generate a digest blog post")
+  public void generateDigest() {
+    // Gather recent blogs + aggregated articles
+    // Generate markdown via LLM
+    // Create and publish blog post
+  }
+}
+\`\`\`
+
+The digest agent reads from the same \`AggregatedArticle\` collection that the aggregation agent writes to, creating a natural producer-consumer relationship between the two agents.
 
 ## The Scraper Architecture
 
-A \`ScraperFactory\` routes each source to the right scraper implementation using a Java 21 switch expression:
+Content sources are configured in MongoDB — each \`ContentSource\` record defines a name, URL, and scraping strategy. A \`ScraperFactory\` routes each source to the right implementation using a Java 21 switch expression:
 
 \`\`\`java
-@Component
-public class ScraperFactory {
-
-  private final RssScraper rssScraper;
-  private final SitemapHtmlScraper sitemapHtmlScraper;
-  private final LumaApiScraper lumaApiScraper;
-
-  public List<ScrapedContent> scrape(ContentSource source) {
-    boolean isEvent = source.sourceType() == ContentSource.SourceType.EVENTS;
-    return switch (source.scrapeStrategy()) {
-      case RSS -> rssScraper.scrape(source.feedUrl(), isEvent);
-      case SITEMAP_HTML -> sitemapHtmlScraper.scrape(source.sitemapUrl());
-      case HTML -> sitemapHtmlScraper.scrapeEventsPage(source.baseUrl());
-      case LUMA -> lumaApiScraper.scrape(source.feedUrl());
-    };
-  }
+public List<ScrapedContent> scrape(ContentSource source) {
+  boolean isEvent = source.sourceType() == ContentSource.SourceType.EVENTS;
+  return switch (source.scrapeStrategy()) {
+    case RSS -> rssScraper.scrape(source.feedUrl(), isEvent);
+    case SITEMAP_HTML -> sitemapHtmlScraper.scrape(source.sitemapUrl());
+    case HTML -> sitemapHtmlScraper.scrapeEventsPage(source.baseUrl());
+    case HTML_LISTING -> sitemapHtmlScraper.scrapeListingPage(source.baseUrl());
+    case LUMA -> lumaApiScraper.scrape(source.feedUrl());
+  };
 }
 \`\`\`
 
-Each scraper returns a list of \`ScrapedContent\` records — a uniform representation regardless of the source format:
+Five strategies cover most tech content sources:
 
-- **RssScraper**: Parses RSS/Atom feeds using the Rome library, extracting titles, descriptions, authors, and publication dates
-- **SitemapHtmlScraper**: Fetches a sitemap XML, then scrapes each page with JSoup, pulling content from article tags and Open Graph metadata
-- **LumaApiScraper**: Hits the [Luma](https://lu.ma) API for event listings, extracting event dates, venues, and locations
+- **RSS** — Rome library parses RSS/Atom feeds (Spring Blog, London Java Community)
+- **SITEMAP_HTML** — fetches a sitemap XML, then scrapes each page with JSoup
+- **HTML** — scrapes event listing pages directly
+- **HTML_LISTING** — scrapes article listing pages, following links to detail pages
+- **LUMA** — hits the lu.ma calendar API for event listings with dates, venues, and locations
 
-## LLM-Powered Classification
+Each scraper returns a uniform \`ScrapedContent\` record regardless of the source format. Adding a new source is a data change in the admin UI, not a code change.
 
-Here's where it gets interesting. Scraped content arrives as raw text — but is it a news article or an event? What's a good summary? If it's an event, when and where is it?
+![Content Aggregation Pipeline](/uploads/62598943-002c-49fb-b9ba-811556e0db61/original.png)
 
-Rather than writing brittle parsing rules, I ask an LLM:
+## LLM Classification with Embabel's Ai Interface
+
+Scraped content arrives as raw text — but is it a news article or an event? What's a good summary? Rather than writing brittle parsing rules, I ask an LLM. This is where Embabel's \`Ai\` abstraction shines:
 
 \`\`\`java
 ContentClassification classifyAndSummarize(final ScrapedContent content) {
   if (content.content() == null || content.content().length() < 50) {
     return new ContentClassification(
-        content.isEvent() ? "event" : "article", content.title(),
-        null, null, null, null);
+        content.isEvent() ? "event" : "article",
+        content.title(), null, null, null, null);
   }
   try {
-    String truncated = content.content().length() > 3000
-        ? content.content().substring(0, 3000) : content.content();
-    BeanOutputConverter<ContentClassification> converter =
-        new BeanOutputConverter<>(ContentClassification.class);
-    ChatClient client = chatClientBuilder.build();
-    String response = client.prompt()
-        .user(String.format(CLASSIFY_PROMPT,
-            content.title(), truncated, converter.getFormat()))
-        .call()
-        .content();
-    ContentClassification result = converter.convert(response);
-    if (result != null) {
-      return result;
-    }
+    String truncated = content.content().length() > 5000
+        ? content.content().substring(0, 5000) : content.content();
+    String prompt = String.format(
+        CLASSIFY_PROMPT, content.url(), content.title(), truncated);
+    return ai.withLlm("gpt-4o-mini")
+        .creating(ContentClassification.class)
+        .fromPrompt(prompt);
   } catch (Exception e) {
-    log.warn("Classification failed for: {}. Using defaults.", content.title(), e);
+    log.warn("Classification failed for: {}. Using defaults.",
+        content.title(), e);
   }
   return new ContentClassification(
-      content.isEvent() ? "event" : "article", content.title(),
-      null, null, null, null);
+      content.isEvent() ? "event" : "article",
+      content.title(), null, null, null, null);
 }
 \`\`\`
 
-Spring AI's \`BeanOutputConverter\` is the key here. It generates a JSON schema from the \`ContentClassification\` record and appends it to the prompt, telling the LLM exactly what structure to return:
+Compare this to the old Spring AI approach — no \`ChatClient\` builder, no \`BeanOutputConverter\`, no manual JSON parsing. The Embabel \`Ai\` interface handles structured output natively: \`ai.withLlm("gpt-4o-mini").creating(ContentClassification.class).fromPrompt(prompt)\` tells the framework which model to use, what Java type to return, and what prompt to send. Embabel handles the schema generation and response parsing.
+
+The \`ContentClassification\` record defines the structure the LLM returns:
 
 \`\`\`java
 public record ContentClassification(
@@ -376,97 +417,80 @@ public record ContentClassification(
     @JsonProperty("venue") String venue,
     @JsonProperty("location") String location,
     @JsonProperty("publishedDate") String publishedDate
-) {
-  public boolean isEvent() {
-    return "event".equalsIgnoreCase(type);
-  }
-}
+) {}
 \`\`\`
 
-The prompt itself asks the LLM to classify the content type, write a 2-3 sentence summary, extract event details if applicable, and find the published date. If classification fails (network error, malformed response), we fall back to sensible defaults rather than crashing.
+The prompt asks the LLM to classify the content type, write a 2-3 sentence summary, extract event details if applicable, and find the published date. If classification fails, we fall back to sensible defaults rather than crashing.
 
-## The Aggregation Loop
+## Event-Driven Downstream Processing
 
-The \`ContentAggregationAgent\` orchestrates the full pipeline:
+When an article or event is saved, a Kafka event is published to the \`content-changes\` topic. Two independent consumers react:
+
+**Search Indexing** — \`ContentChangeConsumer\` listens for \`AGGREGATED_ARTICLE\` and \`AGGREGATED_EVENT\` events and indexes them into Elasticsearch. This means aggregated content appears in the site's unified search alongside blogs, jobs, and skills — with retry logic (4 attempts, exponential backoff) and a dead-letter topic for failures.
+
+**Vector Embedding** — \`EmbeddingChangeConsumer\` embeds the content into the vector store for the AI chatbot. Article titles, summaries, and full content are chunked and embedded, so visitors can ask the chatbot about recent tech news and get answers grounded in real aggregated content.
+
+This event-driven design means the aggregation agent doesn't need to know about search indexing or vector embedding. It just publishes an event and moves on. Adding a new consumer (e.g., sending a Slack notification for new events) is a new listener, not a change to the agent.
+
+## The Weekly Digest
+
+The \`WeeklyDigestAgent\` runs every Monday morning and generates a blog post summarising recent activity. It gathers new blog posts and aggregated articles since the last digest, builds a structured summary, and asks the LLM to write a friendly roundup:
 
 \`\`\`java
-public void runAggregation() {
-  List<ContentSource> sources = sourceRepository.findByActiveTrue();
-  log.info("Starting content aggregation for {} active sources", sources.size());
-
-  for (ContentSource source : sources) {
-    try {
-      processSource(source);
-      sourceRepository.save(new ContentSource(
-          source.id(), source.name(), source.baseUrl(),
-          source.feedUrl(), source.sitemapUrl(), source.sourceType(),
-          source.scrapeStrategy(), source.active(),
-          Instant.now(), null));
-    } catch (Exception e) {
-      log.error("Failed to process source: {}", source.name(), e);
-      sourceRepository.save(new ContentSource(
-          source.id(), source.name(), source.baseUrl(),
-          source.feedUrl(), source.sitemapUrl(), source.sourceType(),
-          source.scrapeStrategy(), source.active(),
-          source.lastFetchedAt(), e.getMessage()));
-    }
+private String generateDigestContent(final String activitySummary) {
+  try {
+    return ai.withLlm("gpt-4o-mini")
+        .respond(List.of(
+            new UserMessage(DIGEST_PROMPT + activitySummary)))
+        .getContent();
+  } catch (Exception e) {
+    log.error("Failed to generate digest via LLM, using raw summary", e);
+    return activitySummary;
   }
 }
 \`\`\`
 
-For each source, it scrapes content, skips anything already stored (deduplication by URL), classifies new items via the LLM, downloads external images locally, and saves the result. The source record is updated with the fetch timestamp on success or the error message on failure — giving the admin UI visibility into what's working and what's broken.
+The digest gets an AI-generated featured image, a "Weekly Digest" tag, and is auto-published — no manual approval needed. It also publishes a Kafka event, so it gets indexed for search and embedded in the vector store like any other content.
 
-The deduplication check is simple but essential:
+![Weekly Digest blog post](/uploads/0cb48869-88c7-4c6e-aa3a-34b6d2f9c3a4/original.png)
 
-\`\`\`java
-boolean alreadyExists = articleRepository.existsByOriginalUrl(content.url())
-    || eventRepository.existsByOriginalUrl(content.url());
-if (alreadyExists) {
-  continue;
-}
-\`\`\`
+## The Frontend
 
-Without it, every scheduled run would create duplicates of everything it had seen before.
+The News & Events page shows aggregated content with source-based filtering, a hero layout for the latest items, and a card grid below:
 
-## Scheduled Execution
+![News & Events page](/uploads/7273bfae-bf07-4c39-816e-c3789d812404/original.png)
 
-The aggregation runs on a cron schedule via Spring's \`@Scheduled\`:
-
-\`\`\`java
-@Component
-@EnableScheduling
-public class AggregationScheduler {
-
-  private final ContentAggregationAgent aggregationAgent;
-  private final WeeklyDigestAgent digestAgent;
-
-  @Scheduled(cron = "\${aggregation.schedule.cron:0 0 */6 * * *}")
-  public void runScheduledAggregation() {
-    log.info("Scheduled content aggregation starting");
-    aggregationAgent.runAggregation();
-  }
-
-  @Scheduled(cron = "\${aggregation.digest.cron:0 0 8 * * MON}")
-  public void runScheduledDigest() {
-    log.info("Scheduled weekly digest generation starting");
-    digestAgent.generateDigest();
-  }
-}
-\`\`\`
-
-Content aggregation runs every 6 hours. A separate \`WeeklyDigestAgent\` runs every Monday at 8am, using the LLM to generate a summary blog post of the week's aggregated content. Both cron expressions are configurable via application properties, so adjusting the schedule doesn't require a code change.
+Filter buttons across the top let visitors focus on specific sources — Tessl Blog, Spring Blog, Rundown AI, or Events. Each card shows the title, source, AI-generated summary, publication date, and links to the original article. The page pulls from the same MongoDB collections that the aggregation agent writes to.
 
 ## Image Handling
 
-External images are a liability — they can disappear, change, or slow down page loads. The \`ExternalImageDownloader\` fetches images from source URLs and stores them locally using the same upload infrastructure as the media library:
+External images are a liability — they can disappear, change, or slow down page loads. The \`ExternalImageDownloader\` fetches images from source URLs and stores them locally. If the source has no image, the \`BlogImageGenerationService\` generates one using AI. Either way, aggregated content gets the same treatment as uploaded media — the site never hot-links external resources.
 
-This means aggregated content gets the same image variant treatment as uploaded media — thumbnails for list views, large variants for detail pages — and the site never hot-links external resources.
+## Scheduling
+
+An \`AggregationScheduler\` triggers both agents on configurable cron schedules:
+
+\`\`\`java
+@Scheduled(cron = "\${aggregation.schedule.cron:0 0 */6 * * *}")
+public void runScheduledAggregation() {
+  aggregationAgent.runAggregation();
+}
+
+@Scheduled(cron = "\${aggregation.digest.cron:0 0 8 * * MON}")
+public void runScheduledDigest() {
+  digestAgent.generateDigest();
+}
+\`\`\`
+
+Content aggregation runs every 6 hours. The digest runs Monday mornings. Both schedules are configurable via application properties.
 
 ## What I Learned
 
-The pattern of **scrape → classify → store** is surprisingly reusable. The scrapers handle the messy reality of different content formats. The LLM handles the classification and summarisation that would be fragile to do with rules. And the storage layer (MongoDB + local images) means the site owns its data rather than depending on external availability.
+**Embabel simplifies AI orchestration.** The \`@Agent\` / \`@Action\` / \`Ai\` abstractions eliminated boilerplate around prompt building and response parsing. The structured output support (\`ai.creating(SomeRecord.class).fromPrompt(...)\`) is particularly clean — it replaces the manual \`BeanOutputConverter\` + \`ChatClient\` dance.
 
-The key design decision was making content sources configurable through the admin UI rather than hardcoded. Adding a new RSS feed or event calendar is a data change, not a code change. The scraper architecture just needs to support the strategy — and with four strategies (RSS, Sitemap/HTML, HTML, Luma), most tech content sources are covered.`;
+**Event-driven architecture pays off for side-effects.** Decoupling the aggregation pipeline from search indexing and vector embedding via Kafka means each concern evolves independently. The aggregation agent has no idea that a chatbot exists — it just publishes content change events.
+
+**The scrape-classify-store pattern is reusable.** Five scraping strategies cover RSS feeds, sitemaps, HTML pages, listing pages, and API endpoints. The LLM handles classification and summarisation that would be fragile with rules. And MongoDB + local images means the site owns its data.`;
 
 // ============================================================================
 // Phase 4: Insert blog posts
@@ -503,7 +527,7 @@ print('Inserted Post 9: RAG Advisor (' + post9Result.insertedId + ')');
 const post10Tags = buildDbRefArray('tags', [
   tagIds['Web Scraping'], tagIds['Content Aggregation'],
   tagIds['Agents'], tagIds['Spring AI'], tagIds['AI'],
-  tagIds['Spring Boot']
+  tagIds['Spring Boot'], tagIds['Embabel'], tagIds['Kafka']
 ]);
 const post10Skills = buildDbRefArray('skills', [
   skillIds['Java 21'], skillIds['Spring Boot'],
@@ -512,7 +536,7 @@ const post10Skills = buildDbRefArray('skills', [
 
 const post10Result = db.blogs.insertOne({
   title: 'Automated News Aggregation with AI-Powered Classification',
-  shortDescription: 'Building a content aggregation pipeline that scrapes RSS feeds, sitemaps, and event APIs, then uses an LLM to classify and summarise each piece of content before storing it locally with downloaded images.',
+  shortDescription: 'How I used Embabel agents to build an automated content aggregation pipeline — scraping RSS feeds, sitemaps, and event APIs, classifying content with an LLM, and publishing Kafka events for search indexing and vector embedding.',
   content: BLOG_10_CONTENT,
   published: true,
   featuredImageUrl: '/uploads/blog-phase3-10-aggregation.jpg',
