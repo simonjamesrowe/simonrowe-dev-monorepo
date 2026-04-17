@@ -122,6 +122,46 @@ public class SearchService {
     }
   }
 
+  public List<SearchResult> searchByType(final String query, final String type) {
+    String sanitized = sanitizeQuery(query);
+    if (sanitized.length() < MIN_QUERY_LENGTH) {
+      return List.of();
+    }
+
+    try {
+      SearchResponse<SiteSearchDocument> response = client.search(s -> s
+              .index(ElasticsearchConfig.SITE_SEARCH_INDEX)
+              .size(maxResultsPerGroup)
+              .query(q -> q
+                  .bool(b -> b
+                      .must(m -> m
+                          .multiMatch(mm -> mm
+                              .query(sanitized)
+                              .fields("name", "shortDescription", "longDescription", "company")
+                              .type(co.elastic.clients.elasticsearch._types.query_dsl
+                                  .TextQueryType.BestFields)))
+                      .filter(f -> f
+                          .term(t -> t
+                              .field("type")
+                              .value(type)))))
+              .sort(sort -> sort.score(sc -> sc
+                  .order(co.elastic.clients.elasticsearch._types.SortOrder.Desc))),
+          SiteSearchDocument.class);
+
+      return response.hits().hits().stream()
+          .map(Hit::source)
+          .filter(doc -> doc != null)
+          .map(doc -> new SearchResult(doc.name(),
+              mediaVariantResolver.resolvePath(doc.image(), "thumbnail", "small", "medium"),
+              doc.url()))
+          .toList();
+    } catch (IOException e) {
+      LOG.error("Search by type '{}' failed for query: {}", type, sanitized, e);
+      throw new SearchUnavailableException(
+          "Search is temporarily unavailable. Please try again later.");
+    }
+  }
+
   private List<SearchResult> toSearchResults(final List<SiteSearchDocument> documents) {
     return documents.stream()
         .limit(maxResultsPerGroup)

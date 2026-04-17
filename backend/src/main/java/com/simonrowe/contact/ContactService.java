@@ -22,6 +22,13 @@ public class ContactService {
   }
 
   @WithSpan
+  public void submitFromChat(final ContactSubmission submission) {
+    log.info("Contact submission received from AI Chat for {}", submission.email());
+    emailService.send(submission);
+    log.info("Email dispatched successfully for chat contact from {}", submission.email());
+  }
+
+  @WithSpan
   public void submit(final ContactRequest request, final String referrer) {
     log.info("Contact submission received from {}", request.email());
 
