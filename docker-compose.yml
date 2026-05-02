@@ -37,6 +37,7 @@ services:
 
   elasticsearch:
     image: elasticsearch:8.17.0
+    stop_grace_period: 90s
     ports:
       - "9200:9200"
     environment:
