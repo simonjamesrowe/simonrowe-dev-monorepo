@@ -1006,6 +1006,20 @@ a:hover {
   .hero__chat-input {
     max-width: 100%;
   }
+
+  .hero__chat-intro,
+  .hero__prompts,
+  .hero__actions {
+    display: none;
+  }
+
+  .hero__tagline {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 /* ==================== AI Chat Module ==================== */
