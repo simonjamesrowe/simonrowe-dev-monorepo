@@ -653,6 +653,8 @@ a:hover {
   background: transparent;
   color: var(--on-surface);
   cursor: pointer;
+  border-radius: 0.5rem;
+  transition: background var(--transition-fast);
 }
 
 .mobile-menu__trigger:hover {
