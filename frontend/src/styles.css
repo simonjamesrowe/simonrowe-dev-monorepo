@@ -8331,3 +8331,27 @@ a:hover {
     color: var(--on-surface);
   }
 }
+
+.about-section__read-more {
+  align-self: flex-start;
+  margin: 0 0 1rem;
+  padding: 0.4rem 0;
+  background: transparent;
+  border: none;
+  color: var(--primary);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.about-section__read-more:hover {
+  text-decoration: none;
+}
+
+@media (min-width: 769px) {
+  .about-section__read-more {
+    display: none;
+  }
+}
