@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { AboutSection } from '../components/home/AboutSection'
+import { ConnectStrip } from '../components/home/ConnectStrip'
 import { CTASection } from '../components/home/CTASection'
 import { HeroSection } from '../components/home/HeroSection'
 import { ContactDrawer } from '../components/contact/ContactDrawer'
@@ -44,6 +45,7 @@ export function HomePage() {
         socialMediaLinks={profile.socialMediaLinks}
       />
       <AboutSection profile={profile} onContact={openContact} />
+      <ConnectStrip socialMediaLinks={profile.socialMediaLinks} />
       <CTASection onContact={openContact} />
       <ContactDrawer open={contactOpen} onClose={closeContact} />
     </>
