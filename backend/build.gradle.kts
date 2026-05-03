@@ -108,6 +108,7 @@ dependencies {
     implementation(libs.google.api.client)
     implementation(libs.google.api.services.drive)
     implementation(libs.google.auth.library.oauth2.http)
+    implementation(libs.google.http.client.apache.v5)
     implementation("com.embabel.agent:embabel-agent-starter:0.3.5")
     implementation("com.embabel.agent:embabel-agent-starter-openai:0.3.5")
     implementation("org.jsoup:jsoup:1.18.3")

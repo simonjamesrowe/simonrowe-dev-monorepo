@@ -3,9 +3,9 @@ package com.simonrowe.dataops;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.auth.oauth2.TokenResponse;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
+import com.google.api.client.http.apache.v5.Apache5HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.drive.Drive;
@@ -46,7 +46,10 @@ public class GoogleDriveConfig {
     }
 
     try {
-      HttpTransport transport = GoogleNetHttpTransport.newTrustedTransport();
+      // Apache HttpClient transport: avoids HttpURLConnection's poor write
+      // throughput under GraalVM native image (saw ~5 KB/s sustained on 10 MB
+      // chunked uploads, vs ~1.9 MB/s from a vanilla curl on the same host).
+      HttpTransport transport = new Apache5HttpTransport();
       JsonFactory jsonFactory = GsonFactory.getDefaultInstance();
 
       GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(

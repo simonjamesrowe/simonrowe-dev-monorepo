@@ -16,6 +16,7 @@ thumbnailator = "0.4.20"
 googleApiClient = "2.8.0"
 googleApiServicesDrive = "v3-rev20250511-2.0.0"
 googleAuthLibrary = "1.35.0"
+googleHttpClient = "1.45.0"
 
 [libraries]
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
@@ -51,6 +52,7 @@ thumbnailator = { module = "net.coobird:thumbnailator", version.ref = "thumbnail
 google-api-client = { module = "com.google.api-client:google-api-client", version.ref = "googleApiClient" }
 google-api-services-drive = { module = "com.google.apis:google-api-services-drive", version.ref = "googleApiServicesDrive" }
 google-auth-library-oauth2-http = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "googleAuthLibrary" }
+google-http-client-apache-v5 = { module = "com.google.http-client:google-http-client-apache-v5", version.ref = "googleHttpClient" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
