@@ -68,11 +68,15 @@ public class BackupService {
   }
 
   public void performBackup() {
+    performBackup(true);
+  }
+
+  public void performBackup(final boolean includeMedia) {
     Path tempFile = null;
     try {
       operationsService.updateProgress("Exporting database collections...", 10);
       String timestamp = TIMESTAMP_FORMAT.format(Instant.now());
-      String fileName = "backup-" + timestamp + ".zip";
+      String fileName = "backup-" + timestamp + (includeMedia ? "" : "-data") + ".zip";
       tempFile = Files.createTempFile("backup-", ".zip");
 
       Map<String, Integer> collectionCounts = new LinkedHashMap<>();
@@ -110,19 +114,23 @@ public class BackupService {
           progress += progressPerCollection;
         }
 
-        operationsService.updateProgress("Adding media files...", 60);
-        Path uploadsDir = Path.of(uploadsPath);
-        if (Files.exists(uploadsDir) && Files.isDirectory(uploadsDir)) {
-          List<Path> mediaFiles = Files.walk(uploadsDir)
-              .filter(Files::isRegularFile)
-              .toList();
-          mediaFileCount = mediaFiles.size();
-          for (Path mediaFile : mediaFiles) {
-            String entryPath = "uploads/" + uploadsDir.relativize(mediaFile);
-            zos.putNextEntry(new ZipEntry(entryPath));
-            Files.copy(mediaFile, zos);
-            zos.closeEntry();
+        if (includeMedia) {
+          operationsService.updateProgress("Adding media files...", 60);
+          Path uploadsDir = Path.of(uploadsPath);
+          if (Files.exists(uploadsDir) && Files.isDirectory(uploadsDir)) {
+            List<Path> mediaFiles = Files.walk(uploadsDir)
+                .filter(Files::isRegularFile)
+                .toList();
+            mediaFileCount = mediaFiles.size();
+            for (Path mediaFile : mediaFiles) {
+              String entryPath = "uploads/" + uploadsDir.relativize(mediaFile);
+              zos.putNextEntry(new ZipEntry(entryPath));
+              Files.copy(mediaFile, zos);
+              zos.closeEntry();
+            }
           }
+        } else {
+          operationsService.updateProgress("Skipping media files (data-only backup)", 60);
         }
 
         operationsService.updateProgress("Exporting vector embeddings...", 70);
