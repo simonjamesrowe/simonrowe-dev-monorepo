@@ -25,7 +25,7 @@ export function ConnectStrip({ socialMediaLinks = [] }: ConnectStripProps) {
   )
 
   return (
-    <section className="connect-strip" aria-label="Connect">
+    <section className="connect-strip">
       <p className="connect-strip__eyebrow">Connect</p>
       <a
         className="button button--primary connect-strip__cv"
