@@ -147,7 +147,19 @@ public class BackupService {
       String folderId = googleDriveService.findOrCreateFolder();
       long fileSize = Files.size(tempFile);
       try (var is = Files.newInputStream(tempFile)) {
-        googleDriveService.uploadFile(folderId, fileName, is, fileSize);
+        googleDriveService.uploadFile(folderId, fileName, is, fileSize,
+            (sent, total) -> {
+              int percent = total > 0 ? 80 + (int) ((sent * 15L) / total) : 80;
+              if (percent > 95) {
+                percent = 95;
+              }
+              operationsService.updateProgress(
+                  String.format("Uploading to Google Drive... %d%% (%s / %s)",
+                      total > 0 ? (int) ((sent * 100L) / total) : 0,
+                      BackupMetadata.formatFileSize(sent),
+                      BackupMetadata.formatFileSize(total)),
+                  percent);
+            });
       }
 
       int totalDocs = collectionCounts.values().stream()
