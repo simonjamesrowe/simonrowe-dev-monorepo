@@ -61,3 +61,4 @@ coverage/
 *.tmp
 *.bak
 .superpowers/
+.claude/scheduled_tasks*
