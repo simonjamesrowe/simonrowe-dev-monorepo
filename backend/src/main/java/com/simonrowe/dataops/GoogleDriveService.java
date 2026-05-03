@@ -1,5 +1,6 @@
 package com.simonrowe.dataops;
 
+import com.google.api.client.googleapis.media.MediaHttpUploader;
 import com.google.api.client.http.InputStreamContent;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.model.File;
@@ -11,6 +12,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +25,7 @@ public class GoogleDriveService {
   private static final Logger LOG = LoggerFactory.getLogger(GoogleDriveService.class);
   static final String FOLDER_NAME = "simonrowe-backups";
   private static final String FOLDER_MIME = "application/vnd.google-apps.folder";
+  private static final int UPLOAD_CHUNK_SIZE_BYTES = 10 * 1024 * 1024;
 
   @Nullable
   private final Drive drive;
@@ -95,6 +98,12 @@ public class GoogleDriveService {
 
   public String uploadFile(final String folderId, final String fileName,
       final InputStream inputStream, final long size) throws IOException {
+    return uploadFile(folderId, fileName, inputStream, size, null);
+  }
+
+  public String uploadFile(final String folderId, final String fileName,
+      final InputStream inputStream, final long size,
+      @Nullable final BiConsumer<Long, Long> progressListener) throws IOException {
     checkDrive();
     File fileMetadata = new File();
     fileMetadata.setName(fileName);
@@ -103,11 +112,28 @@ public class GoogleDriveService {
     InputStreamContent content = new InputStreamContent("application/zip", inputStream);
     content.setLength(size);
 
-    File uploaded = drive.files().create(fileMetadata, content)
+    Drive.Files.Create request = drive.files().create(fileMetadata, content)
         .setFields("id, name, size, createdTime")
-        .setSupportsAllDrives(true)
-        .execute();
-    LOG.info("Uploaded backup '{}' to Google Drive (id={})", fileName, uploaded.getId());
+        .setSupportsAllDrives(true);
+
+    MediaHttpUploader uploader = request.getMediaHttpUploader();
+    if (uploader != null) {
+      uploader.setDirectUploadEnabled(false);
+      uploader.setChunkSize(UPLOAD_CHUNK_SIZE_BYTES);
+      uploader.setProgressListener(u -> {
+        long sent = u.getNumBytesUploaded();
+        int percent = size > 0 ? (int) ((sent * 100L) / size) : 0;
+        LOG.info("Drive upload '{}' progress: {}/{} bytes ({}%) state={}",
+            fileName, sent, size, percent, u.getUploadState());
+        if (progressListener != null) {
+          progressListener.accept(sent, size);
+        }
+      });
+    }
+
+    File uploaded = request.execute();
+    LOG.info("Uploaded backup '{}' to Google Drive (id={}, size={})",
+        fileName, uploaded.getId(), size);
     return uploaded.getId();
   }
 

@@ -140,12 +140,16 @@ public class DataOperationsController {
         int total = 0;
         operationsService.updateProgress("Embedding blog posts...", 5);
         total += embeddingService.embedAllBlogs();
-        operationsService.updateProgress("Embedding jobs...", 30);
+        operationsService.updateProgress("Embedding jobs...", 25);
         total += embeddingService.embedAllJobs();
-        operationsService.updateProgress("Embedding skills...", 55);
+        operationsService.updateProgress("Embedding skills...", 45);
         total += embeddingService.embedAllSkills();
-        operationsService.updateProgress("Embedding code examples...", 80);
+        operationsService.updateProgress("Embedding code examples...", 65);
         total += embeddingService.embedAllCodeExamples();
+        operationsService.updateProgress("Embedding articles...", 80);
+        total += embeddingService.embedAllArticles();
+        operationsService.updateProgress("Embedding events...", 92);
+        total += embeddingService.embedAllEvents();
         operationsService.completeOperation(
             "Re-embedded " + total + " items successfully");
       } catch (Exception ex) {
