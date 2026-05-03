@@ -60,3 +60,5 @@ coverage/
 # Misc
 *.tmp
 *.bak
+.superpowers/
+.claude/scheduled_tasks*

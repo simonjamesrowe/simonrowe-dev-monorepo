@@ -562,8 +562,11 @@ a:hover {
   }
 
   .site-search__input {
+    box-sizing: border-box;
+    height: 44px;
+    padding: 0 2.75rem 0 0.75rem;
     font-size: 16px;
-    padding: 0.6rem 2.75rem 0.6rem 0.75rem;
+    line-height: 44px;
   }
 
   .site-search__suggestions {
@@ -637,13 +640,15 @@ a:hover {
 
 .mobile-menu__trigger {
   position: fixed;
-  top: 0.85rem;
+  top: 6px;            /* (56 - 44) / 2 */
   right: 1rem;
   z-index: 60;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   border: none;
   background: transparent;
   color: var(--on-surface);
@@ -1000,6 +1005,20 @@ a:hover {
 
   .hero__chat-input {
     max-width: 100%;
+  }
+
+  .hero__chat-intro,
+  .hero__prompts,
+  .hero__actions {
+    display: none;
+  }
+
+  .hero__tagline {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
@@ -8253,5 +8272,86 @@ a:hover {
 
   .feed__pill {
     white-space: nowrap;
+  }
+}
+
+/* ==================== Connect Strip (mobile only) ==================== */
+
+.connect-strip {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .connect-strip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem 1.25rem;
+    margin: 0 1rem 1.5rem;
+    background: var(--surface-container-low);
+    border: 1px solid var(--border-faint);
+    border-radius: 1rem;
+  }
+
+  .connect-strip__eyebrow {
+    margin: 0;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--on-surface-variant);
+  }
+
+  .connect-strip__cv {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .connect-strip__socials {
+    display: flex;
+    gap: 1.25rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .connect-strip__social-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    color: var(--on-surface-variant);
+    transition: background var(--transition-fast), color var(--transition-fast);
+  }
+
+  .connect-strip__social-link:hover {
+    background: var(--surface-container-high);
+    color: var(--on-surface);
+  }
+}
+
+.about-section__read-more {
+  align-self: flex-start;
+  margin: 0 0 1rem;
+  padding: 0.4rem 0;
+  background: transparent;
+  border: none;
+  color: var(--primary);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.about-section__read-more:hover {
+  text-decoration: none;
+}
+
+@media (min-width: 769px) {
+  .about-section__read-more {
+    display: none;
   }
 }
