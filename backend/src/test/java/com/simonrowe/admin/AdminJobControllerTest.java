@@ -1,6 +1,6 @@
 package com.simonrowe.admin;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static com.simonrowe.AdminTestAuth.adminJwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,7 +34,7 @@ class AdminJobControllerTest extends AbstractIntegrationTest {
     ));
 
     mockMvc.perform(get("/api/admin/jobs")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(2))
         .andExpect(jsonPath("$.totalElements").value(2));
@@ -57,7 +57,7 @@ class AdminJobControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(post("/api/admin/jobs")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isCreated())
@@ -77,7 +77,7 @@ class AdminJobControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(post("/api/admin/jobs")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isBadRequest());
@@ -88,7 +88,7 @@ class AdminJobControllerTest extends AbstractIntegrationTest {
     adminJobRepository.save(sampleJob("j-1", "Lead Engineer", "Acme Corp", false));
 
     mockMvc.perform(get("/api/admin/jobs/j-1")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value("j-1"))
         .andExpect(jsonPath("$.title").value("Lead Engineer"))
@@ -98,7 +98,7 @@ class AdminJobControllerTest extends AbstractIntegrationTest {
   @Test
   void getJobByIdReturnsNotFound() throws Exception {
     mockMvc.perform(get("/api/admin/jobs/nonexistent")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNotFound());
   }
 
@@ -120,7 +120,7 @@ class AdminJobControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(put("/api/admin/jobs/j-1")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isOk())
@@ -134,7 +134,7 @@ class AdminJobControllerTest extends AbstractIntegrationTest {
     adminJobRepository.save(sampleJob("j-1", "Job To Delete", "Acme Corp", false));
 
     mockMvc.perform(delete("/api/admin/jobs/j-1")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNoContent());
   }
 
@@ -147,7 +147,7 @@ class AdminJobControllerTest extends AbstractIntegrationTest {
     ));
 
     mockMvc.perform(get("/api/admin/jobs?education=true")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(2))
         .andExpect(jsonPath("$.totalElements").value(2));

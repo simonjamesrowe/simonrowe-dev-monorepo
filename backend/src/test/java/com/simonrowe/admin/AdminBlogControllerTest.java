@@ -1,6 +1,6 @@
 package com.simonrowe.admin;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static com.simonrowe.AdminTestAuth.adminJwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -38,7 +38,7 @@ class AdminBlogControllerTest extends AbstractIntegrationTest {
     ));
 
     mockMvc.perform(get("/api/admin/blogs")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(2))
         .andExpect(jsonPath("$.totalElements").value(2));
@@ -58,7 +58,7 @@ class AdminBlogControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(post("/api/admin/blogs")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isCreated())
@@ -78,7 +78,7 @@ class AdminBlogControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(post("/api/admin/blogs")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isBadRequest());
@@ -89,7 +89,7 @@ class AdminBlogControllerTest extends AbstractIntegrationTest {
     adminBlogRepository.save(sampleBlog("b-1", "My Blog Post", true));
 
     mockMvc.perform(get("/api/admin/blogs/b-1")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value("b-1"))
         .andExpect(jsonPath("$.title").value("My Blog Post"))
@@ -100,7 +100,7 @@ class AdminBlogControllerTest extends AbstractIntegrationTest {
   @Test
   void getBlogByIdReturnsNotFound() throws Exception {
     mockMvc.perform(get("/api/admin/blogs/nonexistent")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNotFound());
   }
 
@@ -120,7 +120,7 @@ class AdminBlogControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(put("/api/admin/blogs/b-1")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isOk())
@@ -134,7 +134,7 @@ class AdminBlogControllerTest extends AbstractIntegrationTest {
     adminBlogRepository.save(sampleBlog("b-1", "Post To Delete", false));
 
     mockMvc.perform(delete("/api/admin/blogs/b-1")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNoContent());
   }
 

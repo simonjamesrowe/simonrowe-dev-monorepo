@@ -1,6 +1,6 @@
 package com.simonrowe.admin;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static com.simonrowe.AdminTestAuth.adminJwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -40,7 +40,7 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
     ));
 
     mockMvc.perform(get("/api/admin/tour-steps")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(3))
         .andExpect(jsonPath("$[0].order").value(1))
@@ -79,7 +79,7 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
     ));
 
     mockMvc.perform(get("/api/admin/tour-steps")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(2))
         .andExpect(jsonPath("$[0].title").value("Welcome"))
@@ -91,7 +91,7 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
   @Test
   void createTourStepReturnsCreated() throws Exception {
     mockMvc.perform(post("/api/admin/tour-steps")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -115,7 +115,7 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
   @Test
   void createTourStepValidatesRequiredFields() throws Exception {
     mockMvc.perform(post("/api/admin/tour-steps")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -133,7 +133,7 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
     );
 
     mockMvc.perform(get("/api/admin/tour-steps/" + saved.id())
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(saved.id()))
         .andExpect(jsonPath("$.title").value("Welcome"))
@@ -147,7 +147,7 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
     );
 
     mockMvc.perform(put("/api/admin/tour-steps/" + saved.id())
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -174,7 +174,7 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
     );
 
     mockMvc.perform(delete("/api/admin/tour-steps/" + saved.id())
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNoContent());
   }
 
@@ -191,7 +191,7 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
     final String thirdId = saved.get(2).id();
 
     mockMvc.perform(patch("/api/admin/tour-steps/reorder")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -201,7 +201,7 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
         .andExpect(status().isOk());
 
     mockMvc.perform(get("/api/admin/tour-steps")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(3))
         .andExpect(jsonPath("$[0].id").value(thirdId))

@@ -1,6 +1,6 @@
 package com.simonrowe.aggregation;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static com.simonrowe.AdminTestAuth.adminJwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -61,7 +61,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     ));
 
     mockMvc.perform(get("/api/admin/content-sources")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(2));
   }
@@ -75,7 +75,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
   @Test
   void listSourcesReturnsEmptyListWhenNoneExist() throws Exception {
     mockMvc.perform(get("/api/admin/content-sources")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(0));
   }
@@ -89,7 +89,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(put("/api/admin/content-sources/s-1")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isOk())
@@ -107,7 +107,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(put("/api/admin/content-sources/s-1")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isOk())
@@ -121,7 +121,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(put("/api/admin/content-sources/nonexistent")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isNotFound());
@@ -144,7 +144,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
   @Test
   void triggerAggregationReturnsAccepted() throws Exception {
     mockMvc.perform(post("/api/admin/aggregation/trigger")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.message").value("Content aggregation triggered"));
   }
@@ -160,7 +160,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
   @Test
   void triggerDigestReturnsAccepted() throws Exception {
     mockMvc.perform(post("/api/admin/digest/trigger")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.message").value("Weekly digest generation triggered"));
   }
@@ -181,7 +181,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     ));
 
     mockMvc.perform(get("/api/admin/news")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(2));
   }
@@ -195,7 +195,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
   @Test
   void listNewsReturnsEmptyListWhenNoneExist() throws Exception {
     mockMvc.perform(get("/api/admin/news")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(0));
   }
@@ -206,7 +206,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     articleRepository.save(sampleArticle("a-2", "Hidden Article", false));
 
     mockMvc.perform(get("/api/admin/news")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(2));
   }
@@ -216,7 +216,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     articleRepository.save(sampleArticle("a-1", "Article To Delete", true));
 
     mockMvc.perform(delete("/api/admin/news/a-1")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNoContent());
   }
 
@@ -229,7 +229,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
   @Test
   void deleteNonexistentArticleReturnsNoContent() throws Exception {
     mockMvc.perform(delete("/api/admin/news/nonexistent")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNoContent());
   }
 
@@ -242,7 +242,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(put("/api/admin/news/a-1/visibility")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isOk())
@@ -257,7 +257,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(put("/api/admin/news/nonexistent/visibility")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isNotFound());
@@ -273,7 +273,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     ));
 
     mockMvc.perform(get("/api/admin/events")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(2));
   }
@@ -287,7 +287,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
   @Test
   void listEventsReturnsEmptyListWhenNoneExist() throws Exception {
     mockMvc.perform(get("/api/admin/events")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(0));
   }
@@ -298,7 +298,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     eventRepository.save(sampleEvent("e-2", "Hidden Event", false));
 
     mockMvc.perform(get("/api/admin/events")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(2));
   }
@@ -308,7 +308,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     eventRepository.save(sampleEvent("e-1", "Event To Delete", true));
 
     mockMvc.perform(delete("/api/admin/events/e-1")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNoContent());
   }
 
@@ -321,7 +321,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
   @Test
   void deleteNonexistentEventReturnsNoContent() throws Exception {
     mockMvc.perform(delete("/api/admin/events/nonexistent")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNoContent());
   }
 
@@ -334,7 +334,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(put("/api/admin/events/e-1/visibility")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isOk())
@@ -349,7 +349,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(put("/api/admin/events/nonexistent/visibility")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isNotFound());
@@ -360,7 +360,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
   @Test
   void triggerFullSearchSyncReturnsAccepted() throws Exception {
     mockMvc.perform(post("/api/admin/search/full-sync")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.message").value("Full search index sync triggered"));
   }
@@ -374,7 +374,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
   @Test
   void triggerFullEmbeddingSyncReturnsAccepted() throws Exception {
     mockMvc.perform(post("/api/admin/embedding/full-sync")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.message").value("Full embedding sync triggered"));
   }

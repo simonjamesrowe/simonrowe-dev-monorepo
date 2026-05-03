@@ -2,7 +2,7 @@ package com.simonrowe.media;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static com.simonrowe.AdminTestAuth.adminJwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -40,7 +40,7 @@ class MediaControllerTest extends AbstractIntegrationTest {
 
     mockMvc.perform(multipart("/api/admin/media")
             .file(file)
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.fileName").value("test-image.jpg"))
         .andExpect(jsonPath("$.mimeType").value(MediaType.IMAGE_JPEG_VALUE));
@@ -57,14 +57,14 @@ class MediaControllerTest extends AbstractIntegrationTest {
 
     mockMvc.perform(multipart("/api/admin/media")
             .file(file)
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   void listMediaReturnsPage() throws Exception {
     mockMvc.perform(get("/api/admin/media")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content").isArray())
         .andExpect(jsonPath("$.totalElements").value(0));
@@ -77,7 +77,7 @@ class MediaControllerTest extends AbstractIntegrationTest {
     mediaAssetRepository.save(asset);
 
     mockMvc.perform(get("/api/admin/media/asset-1")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value("asset-1"))
         .andExpect(jsonPath("$.fileName").value("photo.jpg"))
@@ -87,7 +87,7 @@ class MediaControllerTest extends AbstractIntegrationTest {
   @Test
   void getByIdReturnsNotFound() throws Exception {
     mockMvc.perform(get("/api/admin/media/nonexistent")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNotFound());
   }
 
@@ -98,7 +98,7 @@ class MediaControllerTest extends AbstractIntegrationTest {
     mediaAssetRepository.save(asset);
 
     mockMvc.perform(delete("/api/admin/media/asset-1")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNoContent());
   }
 

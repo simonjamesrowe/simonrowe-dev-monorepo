@@ -6,8 +6,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.simonrowe.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 class SecurityConfigTest extends AbstractIntegrationTest {
+
+  private static final SimpleGrantedAuthority ADMIN_AUTHORITY =
+      new SimpleGrantedAuthority("ROLE_DEV_PORTAL_ADMIN");
+  private static final SimpleGrantedAuthority OTHER_AUTHORITY =
+      new SimpleGrantedAuthority("ROLE_VIEWER");
 
   @Test
   void publicEndpointIsAccessibleWithoutAuth() throws Exception {
@@ -16,15 +22,33 @@ class SecurityConfigTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void adminEndpointRequiresAuthentication() throws Exception {
+  void adminEndpointRejectsAnonymous() throws Exception {
     mockMvc.perform(get("/api/admin/blogs"))
         .andExpect(status().isUnauthorized());
   }
 
   @Test
-  void adminEndpointIsAccessibleWithJwt() throws Exception {
+  void adminEndpointRejectsAuthenticatedWithoutAnyRole() throws Exception {
     mockMvc.perform(get("/api/admin/blogs")
             .with(jwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void adminEndpointRejectsAuthenticatedWithDifferentRole() throws Exception {
+    mockMvc.perform(get("/api/admin/blogs")
+            .with(jwt()
+                .jwt(j -> j.subject("test-user"))
+                .authorities(OTHER_AUTHORITY)))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void adminEndpointAllowsAuthenticatedWithAdminRole() throws Exception {
+    mockMvc.perform(get("/api/admin/blogs")
+            .with(jwt()
+                .jwt(j -> j.subject("test-user"))
+                .authorities(ADMIN_AUTHORITY)))
         .andExpect(status().isOk());
   }
 }
