@@ -4,6 +4,7 @@ import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.auth.oauth2.TokenResponse;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
@@ -20,6 +21,10 @@ import org.springframework.context.annotation.Configuration;
 public class GoogleDriveConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(GoogleDriveConfig.class);
+  private static final int CONNECT_TIMEOUT_MS = 30_000;
+  // Per-request read timeout. Must accommodate a single 10 MB chunk PUT on a slow
+  // residential uplink without being so long that real hangs go undetected.
+  private static final int READ_TIMEOUT_MS = 5 * 60_000;
 
   @Value("${google.drive.client-id:}")
   private String clientId;
@@ -53,7 +58,13 @@ public class GoogleDriveConfig {
       tokenResponse.setRefreshToken(refreshToken);
       Credential credential = flow.createAndStoreCredential(tokenResponse, "user");
 
-      return new Drive.Builder(transport, jsonFactory, credential)
+      HttpRequestInitializer initializer = request -> {
+        credential.initialize(request);
+        request.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        request.setReadTimeout(READ_TIMEOUT_MS);
+      };
+
+      return new Drive.Builder(transport, jsonFactory, initializer)
           .setApplicationName("simonrowe-backup")
           .build();
     } catch (Exception ex) {
