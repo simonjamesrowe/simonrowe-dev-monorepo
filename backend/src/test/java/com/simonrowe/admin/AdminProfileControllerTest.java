@@ -1,6 +1,6 @@
 package com.simonrowe.admin;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static com.simonrowe.AdminTestAuth.adminJwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -29,7 +29,7 @@ class AdminProfileControllerTest extends AbstractIntegrationTest {
     adminProfileRepository.save(sampleProfile());
 
     mockMvc.perform(get("/api/admin/profile")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.name").value("Simon Rowe"))
         .andExpect(jsonPath("$.title").value("Engineering Leader"))
@@ -39,14 +39,14 @@ class AdminProfileControllerTest extends AbstractIntegrationTest {
   @Test
   void getProfileReturnsNotFoundWhenEmpty() throws Exception {
     mockMvc.perform(get("/api/admin/profile")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNotFound());
   }
 
   @Test
   void updateProfileCreatesWhenNoneExists() throws Exception {
     mockMvc.perform(put("/api/admin/profile")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -75,7 +75,7 @@ class AdminProfileControllerTest extends AbstractIntegrationTest {
     adminProfileRepository.save(sampleProfile());
 
     mockMvc.perform(put("/api/admin/profile")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -102,7 +102,7 @@ class AdminProfileControllerTest extends AbstractIntegrationTest {
   @Test
   void updateProfileValidatesRequiredFields() throws Exception {
     mockMvc.perform(put("/api/admin/profile")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {

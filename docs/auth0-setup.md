@@ -41,13 +41,70 @@ For production, add your production domain alongside the localhost entries (comm
    - **Identifier**: `https://api.simonrowe.dev` (this is the audience URI — it does not need to be a real URL)
 3. Note the **Identifier** — this is your `AUTH0_AUDIENCE`
 
-## 5. Disable Self-Registration
+## 5. Restrict access with the DEV_PORTAL_ADMIN role
 
-Since this is an admin panel, only specific users should have access:
+The admin panel is gated by a `DEV_PORTAL_ADMIN` role. Both the backend
+(`/api/admin/**`) and the frontend (`/admin` route) require an authenticated
+user whose access token / ID token contains that role under the namespaced
+claim `https://simonrowe.dev/roles`.
 
-1. Navigate to **Authentication** > **Database** > your connection (usually `Username-Password-Authentication`)
-2. Toggle **Disable Sign Ups** to on
-3. Create admin users manually via **User Management** > **Users** > **Create User**
+> **Why this is required:** The Google social connection (and any database
+> sign-ups) can mint valid JWTs for the API audience. Without RBAC, *any*
+> Google user who completes the Auth0 login flow has admin access. Disabling
+> database sign-ups alone is not enough.
+
+### 5a. Create the role
+
+1. Navigate to **User Management** → **Roles** → **Create Role**
+2. Name: `DEV_PORTAL_ADMIN`
+3. Description: `Full access to the simonrowe.dev admin panel`
+
+### 5b. Assign the role to your admin user
+
+1. **User Management** → **Users** → select your admin user
+2. **Roles** tab → **Assign Roles** → pick `DEV_PORTAL_ADMIN`
+
+> **Lockout warning:** assign the role to your own user **before** deploying
+> the backend role check, otherwise you will lose access to the admin panel.
+
+### 5c. Add a Post-Login Action that injects roles into the tokens
+
+Auth0 does not include role names in tokens by default. Add an Action:
+
+1. **Actions** → **Library** → **Build Custom**
+2. Name: `Add roles to tokens`. Trigger: `Login / Post Login`. Runtime: latest Node.
+3. Paste:
+
+   ```js
+   exports.onExecutePostLogin = async (event, api) => {
+     const roles = event.authorization?.roles ?? [];
+     api.accessToken.setCustomClaim('https://simonrowe.dev/roles', roles);
+     api.idToken.setCustomClaim('https://simonrowe.dev/roles', roles);
+   };
+   ```
+
+4. Click **Deploy**.
+5. **Actions** → **Flows** → **Login** → drag the new Action into the flow → **Apply**.
+
+### 5d. Verify
+
+1. Log out of the admin panel and log in again.
+2. Decode the access token at [jwt.io](https://jwt.io) — the payload should contain:
+
+   ```json
+   "https://simonrowe.dev/roles": ["DEV_PORTAL_ADMIN"]
+   ```
+
+3. Confirm `/admin` loads the dashboard for your user, and that any user *without* the role sees the "Access denied" screen.
+
+### Optional: also disable database sign-ups
+
+If you also want to prevent self-service signup on the database connection
+(e.g. so the only admin path is Google + the role above), navigate to
+**Authentication** → **Database** → your connection (typically
+`Username-Password-Authentication`) and toggle **Disable Sign Ups**. Create
+any database admin users manually via **User Management** → **Users** →
+**Create User**, then assign them the `DEV_PORTAL_ADMIN` role per 5b.
 
 ## 6. Environment Variables
 
@@ -110,6 +167,24 @@ VITE_AUTH0_AUDIENCE=https://api.simonrowe.dev
 
 - Ensure the API was created in step 4 and its identifier matches `VITE_AUTH0_AUDIENCE`
 - The `audience` parameter must be passed in the Auth0Provider's `authorizationParams` — this is already configured in `frontend/src/auth/AuthProvider.tsx`
+
+### "Access denied" screen after a successful login
+
+The user authenticated but does not have the `DEV_PORTAL_ADMIN` role.
+
+- Check the user's **Roles** tab in the Auth0 dashboard and assign
+  `DEV_PORTAL_ADMIN` if missing.
+- Verify the **Add roles to tokens** Action is attached to the **Login** flow
+  (Actions → Flows → Login).
+- Ask the user to fully sign out (Auth0 logout, not just the local app) and
+  sign back in so a fresh token is issued.
+- Decode the access token at [jwt.io](https://jwt.io) and confirm the claim
+  `https://simonrowe.dev/roles` is present and contains `DEV_PORTAL_ADMIN`.
+
+### 403 Forbidden from `/api/admin/**` despite being signed in
+
+Same root cause as above — the JWT lacks the role claim. See the previous
+section.
 
 ### CORS errors on API calls
 

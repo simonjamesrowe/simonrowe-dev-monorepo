@@ -18,7 +18,9 @@ import {
   User,
   X,
 } from 'lucide-react'
+import { useAdminRole } from '../../auth/useAdminRole'
 import { useAuth } from '../../auth/useAuth'
+import { ForbiddenScreen } from './ForbiddenScreen'
 
 const navItems = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
@@ -37,6 +39,7 @@ const navItems = [
 
 export function AdminLayout() {
   const { isAuthenticated, isLoading, login, logout } = useAuth()
+  const isAdminRole = useAdminRole()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -47,6 +50,10 @@ export function AdminLayout() {
   if (!isAuthenticated) {
     login()
     return <div className="admin-loading">Redirecting to login...</div>
+  }
+
+  if (!isAdminRole) {
+    return <ForbiddenScreen />
   }
 
   const isActive = (path: string) => location.pathname.startsWith(path)

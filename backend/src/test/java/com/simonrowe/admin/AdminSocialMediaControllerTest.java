@@ -1,6 +1,6 @@
 package com.simonrowe.admin;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static com.simonrowe.AdminTestAuth.adminJwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,7 +34,7 @@ class AdminSocialMediaControllerTest extends AbstractIntegrationTest {
     ));
 
     mockMvc.perform(get("/api/admin/social-media")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(2));
   }
@@ -42,7 +42,7 @@ class AdminSocialMediaControllerTest extends AbstractIntegrationTest {
   @Test
   void createSocialMediaReturnsCreated() throws Exception {
     mockMvc.perform(post("/api/admin/social-media")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -63,7 +63,7 @@ class AdminSocialMediaControllerTest extends AbstractIntegrationTest {
   @Test
   void createSocialMediaValidatesRequiredFields() throws Exception {
     mockMvc.perform(post("/api/admin/social-media")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -81,7 +81,7 @@ class AdminSocialMediaControllerTest extends AbstractIntegrationTest {
     );
 
     mockMvc.perform(get("/api/admin/social-media/" + saved.id())
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(saved.id()))
         .andExpect(jsonPath("$.type").value("github"))
@@ -95,7 +95,7 @@ class AdminSocialMediaControllerTest extends AbstractIntegrationTest {
     );
 
     mockMvc.perform(put("/api/admin/social-media/" + saved.id())
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -119,7 +119,7 @@ class AdminSocialMediaControllerTest extends AbstractIntegrationTest {
     );
 
     mockMvc.perform(delete("/api/admin/social-media/" + saved.id())
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNoContent());
   }
 

@@ -1,6 +1,6 @@
 package com.simonrowe.admin;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static com.simonrowe.AdminTestAuth.adminJwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -35,7 +35,7 @@ class AdminSkillGroupControllerTest extends AbstractIntegrationTest {
     ));
 
     mockMvc.perform(get("/api/admin/skill-groups")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(2))
         .andExpect(jsonPath("$.totalElements").value(2));
@@ -54,7 +54,7 @@ class AdminSkillGroupControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(post("/api/admin/skill-groups")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isCreated())
@@ -73,7 +73,7 @@ class AdminSkillGroupControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(post("/api/admin/skill-groups")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isBadRequest());
@@ -84,7 +84,7 @@ class AdminSkillGroupControllerTest extends AbstractIntegrationTest {
     adminSkillGroupRepository.save(sampleSkillGroup("g-1", "JVM Languages", 0));
 
     mockMvc.perform(get("/api/admin/skill-groups/g-1")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value("g-1"))
         .andExpect(jsonPath("$.name").value("JVM Languages"));
@@ -105,7 +105,7 @@ class AdminSkillGroupControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(put("/api/admin/skill-groups/g-1")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isOk())
@@ -119,7 +119,7 @@ class AdminSkillGroupControllerTest extends AbstractIntegrationTest {
     adminSkillGroupRepository.save(sampleSkillGroup("g-1", "JVM Languages", 0));
 
     mockMvc.perform(delete("/api/admin/skill-groups/g-1")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isNoContent());
   }
 
@@ -138,13 +138,13 @@ class AdminSkillGroupControllerTest extends AbstractIntegrationTest {
         """;
 
     mockMvc.perform(patch("/api/admin/skill-groups/reorder")
-            .with(jwt().jwt(j -> j.subject("test-user")))
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
         .andExpect(status().isOk());
 
     mockMvc.perform(get("/api/admin/skill-groups")
-            .with(jwt().jwt(j -> j.subject("test-user"))))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].name").value("Cloud Platforms"))
         .andExpect(jsonPath("$.content[0].order").value(0))
