@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -63,10 +64,12 @@ public class DataOperationsController {
   }
 
   @PostMapping("/backup")
-  public ResponseEntity<DataOperation> startBackup() {
+  public ResponseEntity<DataOperation> startBackup(
+      @RequestParam(name = "includeMedia", defaultValue = "true") final boolean includeMedia
+  ) {
     requireDriveConnected();
     DataOperation operation = requireNoOperationInProgress(OperationType.BACKUP);
-    CompletableFuture.runAsync(backupService::performBackup);
+    CompletableFuture.runAsync(() -> backupService.performBackup(includeMedia));
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
   }
 
