@@ -77,7 +77,14 @@ public class RestoreService {
       restoreCollections(tempZip);
 
       operationsService.updateProgress("Restoring media files...", 70);
-      restoreMediaFiles(tempZip);
+      Path mediaZip = resolveMediaSource(tempZip);
+      try {
+        restoreMediaFiles(mediaZip);
+      } finally {
+        if (mediaZip != null && !mediaZip.equals(tempZip)) {
+          deleteTempFile(mediaZip);
+        }
+      }
 
       operationsService.updateProgress("Rebuilding search index...", 80);
       indexService.fullSyncSiteIndex();
@@ -161,6 +168,68 @@ public class RestoreService {
 
       progress += progressPerCollection;
     }
+  }
+
+  /**
+   * If {@code zipFile} contains uploads/ entries it is returned as-is. Otherwise
+   * we read the manifest's {@code mediaSource} field, fetch that backup from
+   * Drive, and return a temp file pointing at it. Returns the original file if
+   * no upgrade is needed; null if no media is available at all.
+   */
+  private Path resolveMediaSource(final Path zipFile) throws IOException {
+    if (zipHasUploads(zipFile)) {
+      return zipFile;
+    }
+    String manifestJson = readEntryFromZip(zipFile, "manifest.json");
+    if (manifestJson == null) {
+      return zipFile;
+    }
+    String mediaSource = extractJsonString(manifestJson, "mediaSource");
+    if (mediaSource == null || mediaSource.isBlank()) {
+      LOG.info("Backup contains no uploads/ and no mediaSource — "
+          + "uploads dir will be cleared but no media restored");
+      return zipFile;
+    }
+    LOG.info("Backup references media from prior backup '{}', fetching from Drive",
+        mediaSource);
+    String folderId = googleDriveService.findOrCreateFolder();
+    String sourceFileId = googleDriveService.findFileIdByName(folderId, mediaSource);
+    if (sourceFileId == null) {
+      throw new IOException("Backup manifest references media source '"
+          + mediaSource + "' but that file is not present in Drive backups folder");
+    }
+    Path sourceZip = Files.createTempFile("restore-media-", ".zip");
+    try (var os = new BufferedOutputStream(Files.newOutputStream(sourceZip))) {
+      googleDriveService.downloadFile(sourceFileId, os);
+    }
+    return sourceZip;
+  }
+
+  private boolean zipHasUploads(final Path zipFile) throws IOException {
+    try (var zis = new ZipInputStream(Files.newInputStream(zipFile))) {
+      ZipEntry entry;
+      while ((entry = zis.getNextEntry()) != null) {
+        if (entry.getName().startsWith("uploads/") && !entry.isDirectory()) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private static String extractJsonString(final String json, final String key) {
+    String marker = "\"" + key + "\"";
+    int k = json.indexOf(marker);
+    if (k < 0) {
+      return null;
+    }
+    int colon = json.indexOf(':', k);
+    int q1 = json.indexOf('"', colon + 1);
+    int q2 = json.indexOf('"', q1 + 1);
+    if (q1 < 0 || q2 < 0) {
+      return null;
+    }
+    return json.substring(q1 + 1, q2);
   }
 
   private void restoreMediaFiles(final Path zipFile) throws IOException {

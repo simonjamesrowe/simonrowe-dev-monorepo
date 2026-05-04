@@ -104,6 +104,19 @@ public class RedeployService {
               .start()
               .waitFor(5, TimeUnit.SECONDS);
 
+          // Run compose in a helper container, then explicitly `docker start`
+          // the canonical backend container as a safety net. We've seen the
+          // compose recreate flow leave the new container in `created` state
+          // (canonical name held by the now-stopped old container, so the new
+          // one was auto-renamed and never started). --force-recreate +
+          // explicit start removes ambiguity.
+          String canonicalContainer = properties.projectName() + "-backend-1";
+          String shellCmd = String.format(
+              "docker compose -f %s -p %s up -d --force-recreate --no-deps backend; "
+                  + "sleep 2; "
+                  + "docker start %s 2>/dev/null || true",
+              hostComposeFile, properties.projectName(), canonicalContainer);
+
           List<String> command = new ArrayList<>();
           command.add(properties.dockerBinary());
           command.addAll(List.of(
@@ -112,11 +125,9 @@ public class RedeployService {
               "-v", "/var/run/docker.sock:/var/run/docker.sock",
               "-v", hostComposeDir + ":" + hostComposeDir,
               "-w", hostComposeDir,
+              "--entrypoint", "sh",
               properties.helperImage(),
-              "docker", "compose",
-              "-f", hostComposeFile,
-              "-p", properties.projectName(),
-              "up", "-d", "backend"));
+              "-c", shellCmd));
 
           LOG.info("Starting helper container: {}", String.join(" ", command));
           new ProcessBuilder(command)
