@@ -189,6 +189,69 @@ public class GoogleDriveService {
     drive.files().delete(fileId).setSupportsAllDrives(true).execute();
   }
 
+  /** Returns the file id of the named file in the folder, or null if missing. */
+  @Nullable
+  public String findFileIdByName(final String folderId, final String fileName)
+      throws IOException {
+    checkDrive();
+    String escaped = fileName.replace("\\", "\\\\").replace("'", "\\'");
+    FileList result = drive.files().list()
+        .setQ("'" + folderId + "' in parents and trashed = false and name = '"
+            + escaped + "'")
+        .setFields("files(id)")
+        .setPageSize(1)
+        .setSupportsAllDrives(true)
+        .setIncludeItemsFromAllDrives(true)
+        .execute();
+    if (result.getFiles() == null || result.getFiles().isEmpty()) {
+      return null;
+    }
+    return result.getFiles().get(0).getId();
+  }
+
+  /**
+   * Uploads {@code content} to {@code folderId/fileName}, replacing any existing
+   * file with that name. Suitable for small JSON sidecar files; uses direct
+   * upload (not the resumable chunked path used for backups).
+   */
+  public void upsertSmallFile(final String folderId, final String fileName,
+      final byte[] content, final String mimeType) throws IOException {
+    checkDrive();
+    com.google.api.client.http.ByteArrayContent body =
+        new com.google.api.client.http.ByteArrayContent(mimeType, content);
+    String existingId = findFileIdByName(folderId, fileName);
+    if (existingId != null) {
+      File metadata = new File();
+      metadata.setName(fileName);
+      drive.files().update(existingId, metadata, body)
+          .setFields("id")
+          .setSupportsAllDrives(true)
+          .execute();
+    } else {
+      File metadata = new File();
+      metadata.setName(fileName);
+      metadata.setParents(Collections.singletonList(folderId));
+      metadata.setMimeType(mimeType);
+      drive.files().create(metadata, body)
+          .setFields("id")
+          .setSupportsAllDrives(true)
+          .execute();
+    }
+  }
+
+  /** Reads a small Drive file fully into memory. Returns null if the file is missing. */
+  @Nullable
+  public byte[] readSmallFile(final String folderId, final String fileName)
+      throws IOException {
+    String fileId = findFileIdByName(folderId, fileName);
+    if (fileId == null) {
+      return null;
+    }
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    drive.files().get(fileId).executeMediaAndDownloadTo(out);
+    return out.toByteArray();
+  }
+
   private void checkDrive() {
     if (drive == null) {
       throw new IllegalStateException(
