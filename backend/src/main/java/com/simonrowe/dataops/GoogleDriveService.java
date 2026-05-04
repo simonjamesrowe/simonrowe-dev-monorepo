@@ -25,7 +25,10 @@ public class GoogleDriveService {
   private static final Logger LOG = LoggerFactory.getLogger(GoogleDriveService.class);
   static final String FOLDER_NAME = "simonrowe-backups";
   private static final String FOLDER_MIME = "application/vnd.google-apps.folder";
-  private static final int UPLOAD_CHUNK_SIZE_BYTES = 10 * 1024 * 1024;
+  // 1 MB chunks — small enough that the per-chunk PUT/308 round-trip is
+  // dominated by data transfer rather than acks, and progress logs land
+  // every chunk so a stalled upload is visible quickly.
+  private static final int UPLOAD_CHUNK_SIZE_BYTES = 1024 * 1024;
 
   @Nullable
   private final Drive drive;
