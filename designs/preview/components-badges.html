@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; padding: 24px; }
+  .badge { font-family: var(--font-main); font-size: 0.7rem; font-weight: 500; padding: 5px 12px; border-radius: 999px; border: 1px solid; display: inline-flex; align-items: center; gap: 6px; }
+  .current { background: rgba(119,209,255,0.10); color: #77d1ff; border-color: rgba(119,209,255,0.30); }
+  .current::before { content:''; width: 6px; height: 6px; border-radius: 999px; background: #77d1ff; box-shadow: 0 0 8px #77d1ff; }
+  .neutral { background: var(--surface-container); color: var(--on-surface-variant); border-color: var(--border-subtle); }
+  .tag { background: rgba(167,139,250,0.10); color: #c4b5fd; border-color: rgba(167,139,250,0.25); }
+  .warm { background: rgba(255,182,144,0.10); color: #ffb690; border-color: rgba(255,182,144,0.30); }
+  .eyebrow { font-family: var(--font-main); font-weight: 500; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--on-surface-variant); padding: 6px 14px; background: var(--surface-container-low); border: 1px solid var(--border-subtle); border-radius: 999px; }
+</style>
+</head>
+<body>
+  <span class="badge current">Current Role</span>
+  <span class="badge neutral">5+ years</span>
+  <span class="badge tag">Spring Boot</span>
+  <span class="badge tag">Kafka</span>
+  <span class="badge warm">🎓 Education</span>
+  <span class="eyebrow">Engineering Leadership</span>
+</body>
+</html>

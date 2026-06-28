@@ -20,6 +20,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import reactor.core.publisher.Flux;
 
 @ExtendWith(MockitoExtension.class)
 class ChatServiceTest {
@@ -34,7 +35,7 @@ class ChatServiceTest {
   private ChatClient.ChatClientRequestSpec requestSpec;
 
   @Mock
-  private ChatClient.CallResponseSpec callResponseSpec;
+  private ChatClient.StreamResponseSpec streamResponseSpec;
 
   @InjectMocks
   private ChatService chatService;
@@ -45,13 +46,13 @@ class ChatServiceTest {
         .build();
   }
 
-  private void stubCallChain(final String message, final ChatResponse response) {
+  private void stubStreamChain(final String message, final ChatResponse... responses) {
     given(chatClient.prompt()).willReturn(requestSpec);
     given(requestSpec.user(message)).willReturn(requestSpec);
     given(requestSpec.advisors(any(Consumer.class))).willReturn(requestSpec);
     given(requestSpec.toolContext(anyMap())).willReturn(requestSpec);
-    given(requestSpec.call()).willReturn(callResponseSpec);
-    given(callResponseSpec.chatResponse()).willReturn(response);
+    given(requestSpec.stream()).willReturn(streamResponseSpec);
+    given(streamResponseSpec.chatResponse()).willReturn(Flux.just(responses));
   }
 
   @Test
@@ -60,7 +61,7 @@ class ChatServiceTest {
     final String message = "Hello, who are you?";
     final ChatResponse expected = chatResponseWithText("I am an AI.");
 
-    stubCallChain(message, expected);
+    stubStreamChain(message, expected);
 
     final List<ChatResponse> responses =
         chatService.processMessage(sessionId, message).collectList().block();
@@ -71,8 +72,8 @@ class ChatServiceTest {
     verify(chatClient).prompt();
     verify(requestSpec).user(message);
     verify(requestSpec).advisors(any(Consumer.class));
-    verify(requestSpec).call();
-    verify(callResponseSpec).chatResponse();
+    verify(requestSpec).stream();
+    verify(streamResponseSpec).chatResponse();
   }
 
   @Test
@@ -80,7 +81,7 @@ class ChatServiceTest {
     final String sessionId = "session-xyz";
     final String message = "Tell me about yourself.";
 
-    stubCallChain(message, chatResponseWithText("response"));
+    stubStreamChain(message, chatResponseWithText("response"));
 
     final Instant before = Instant.now();
     chatService.processMessage(sessionId, message).blockLast();
@@ -97,7 +98,7 @@ class ChatServiceTest {
     final String sessionId = "session-to-evict";
     final String message = "A message.";
 
-    stubCallChain(message, chatResponseWithText("response"));
+    stubStreamChain(message, chatResponseWithText("response"));
 
     chatService.processMessage(sessionId, message).blockLast();
     assertThat(chatService.getSessionActivity()).containsKey(sessionId);

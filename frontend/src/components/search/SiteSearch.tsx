@@ -25,6 +25,7 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
   const [results, setResults] = useState<GroupedSearchResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -89,6 +90,7 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setOpen(false)
+        setSuggestionsOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -98,10 +100,12 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       setOpen(false)
+      setSuggestionsOpen(false)
     } else if (e.key === 'Enter' && query.length >= 1) {
       if (onChatStart) {
         onChatStart(query)
         setOpen(false)
+        setSuggestionsOpen(false)
         setQuery('')
       }
     }
@@ -124,6 +128,7 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
     if (query.length >= 1 && onChatStart) {
       onChatStart(query)
       setOpen(false)
+      setSuggestionsOpen(false)
       setQuery('')
     }
   }, [query, onChatStart])
@@ -134,6 +139,7 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
         <input
           aria-label="Search or ask a question"
           className="site-search__input"
+          onFocus={() => setSuggestionsOpen(true)}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={isBlogPage ? "Search blog posts..." : "Search or ask me anything..."}
@@ -159,13 +165,17 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
           results={results}
         />
       )}
-      {onChatStart && query.length === 0 && (
+      {onChatStart && suggestionsOpen && query.length === 0 && (
         <div className="site-search__suggestions">
           {CHAT_SUGGESTIONS.map((suggestion) => (
             <button
               key={suggestion}
               className="site-search__suggestion"
-              onClick={() => onChatStart(suggestion)}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChatStart(suggestion)
+                setSuggestionsOpen(false)
+              }}
               type="button"
             >
               {suggestion}

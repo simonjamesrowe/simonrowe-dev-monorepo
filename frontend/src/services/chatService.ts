@@ -10,8 +10,11 @@ export interface ChatRequest {
 export interface ChatResponse {
   sessionId: string
   content: string
-  type: 'STREAM_START' | 'STREAM_CHUNK' | 'STREAM_RESET' | 'STREAM_END' | 'ERROR'
+  type: 'STREAM_START' | 'STREAM_CHUNK' | 'STREAM_END' | 'TOOL_START' | 'TOOL_END' | 'WIDGET' | 'ERROR'
   timestamp: string
+  toolLabel?: string | null
+  widgetKind?: string | null
+  payload?: unknown
 }
 
 function buildWsUrl(): string {
@@ -75,9 +78,9 @@ export function sendMessage(request: ChatRequest): void {
 export function disconnect(): void {
   activeSessionId = null
   if (stompClient) {
-    stompClient.forceDisconnect()
-    stompClient.deactivate()
+    const client = stompClient
     stompClient = null
+    void client.deactivate()
   }
 }
 

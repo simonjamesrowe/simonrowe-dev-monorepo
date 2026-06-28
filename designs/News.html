@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>News &amp; Events — Simon Rowe</title>
+<link rel="icon" href="assets/favicon.ico">
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="pages.css">
+</head>
+<body data-screen-label="News">
+
+<nav class="nav">
+  <a href="Landing%20Page.html" class="nav__brand"><span class="nav__mono">SR</span> Simon Rowe</a>
+  <div class="nav__center">
+    <div class="nav__links">
+      <a href="Landing%20Page.html">Home</a>
+      <a href="Landing%20Page.html#about">About</a>
+      <a href="Experience.html">Experience</a>
+      <a href="Blog.html">Blog</a>
+      <a href="News.html" class="is-active">News</a>
+    </div>
+    <label class="nav__search">
+      <i data-lucide="search"></i>
+      <input type="text" placeholder="Search or ask anything…">
+    </label>
+  </div>
+  <div class="nav__right">
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme">
+      <i data-lucide="moon" class="icon-moon"></i><i data-lucide="sun" class="icon-sun"></i>
+    </button>
+    <button class="icon-btn nav__menu-btn" id="menu-toggle" aria-label="Open menu"><i data-lucide="menu"></i></button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobile-menu">
+  <a href="Landing%20Page.html">Home</a>
+  <a href="Landing%20Page.html#about">About</a>
+  <a href="Experience.html">Experience</a>
+  <a href="Blog.html">Blog</a>
+  <a href="News.html" class="is-active">News</a>
+  <a href="Contact.html">Contact</a>
+</div>
+
+<main>
+  <header class="page-head">
+    <div class="page-head__ambient"></div>
+    <div class="container">
+      <p class="eyebrow">News <span class="sr-slash">//</span> Events</p>
+      <h1 class="page-head__title">News &amp; <span class="sr-accent">Events</span></h1>
+      <p class="page-head__sub">Talks, conferences, podcasts and the occasional open-source release. Where I'll be — and where I've been.</p>
+    </div>
+  </header>
+
+  <section class="section">
+    <div class="container">
+      <div class="events">
+
+        <article class="event event--upcoming">
+          <div class="event__date"><div class="event__day">12</div><div class="event__mon">Jun</div><div class="event__yr">2026</div></div>
+          <div class="event__body">
+            <div class="event__top"><span class="tag tag--primary">Talk</span><span class="tag">Upcoming</span></div>
+            <h2 class="event__title">AI-Native Engineering at Scale</h2>
+            <div class="event__venue"><i data-lucide="map-pin"></i> QCon London 2026</div>
+            <p class="event__desc">A keynote on running an AI-native transformation across 30+ engineers without losing the engineering — what amplified, what didn't, and the guardrails that kept quality high.</p>
+            <a href="#" class="event__link">Event details <i data-lucide="arrow-up-right"></i></a>
+          </div>
+        </article>
+
+        <article class="event event--upcoming">
+          <div class="event__date"><div class="event__day">03</div><div class="event__mon">Jun</div><div class="event__yr">2026</div></div>
+          <div class="event__body">
+            <div class="event__top"><span class="tag tag--warm">Podcast</span><span class="tag">Upcoming</span></div>
+            <h2 class="event__title">Guest: The Pragmatic Engineer Podcast</h2>
+            <div class="event__venue"><i data-lucide="mic"></i> Remote</div>
+            <p class="event__desc">A long-form conversation on event sourcing, the outbox pattern, and why most services should start CRUD.</p>
+            <a href="#" class="event__link">Listen when live <i data-lucide="arrow-up-right"></i></a>
+          </div>
+        </article>
+
+        <article class="event">
+          <div class="event__date"><div class="event__day">18</div><div class="event__mon">Apr</div><div class="event__yr">2026</div></div>
+          <div class="event__body">
+            <div class="event__top"><span class="tag tag--primary">Release</span></div>
+            <h2 class="event__title">Open-sourced <code>outbox-relay</code></h2>
+            <div class="event__venue"><i data-lucide="git-branch"></i> github.com/simonjamesrowe</div>
+            <p class="event__desc">A small, dependency-light polling relay that ships transactional-outbox rows to Kafka with batching, backoff and poison-message handling.</p>
+            <a href="#" class="event__link">View on GitHub <i data-lucide="arrow-up-right"></i></a>
+          </div>
+        </article>
+
+        <article class="event">
+          <div class="event__date"><div class="event__day">22</div><div class="event__mon">Mar</div><div class="event__yr">2026</div></div>
+          <div class="event__body">
+            <div class="event__top"><span class="tag tag--primary">Talk</span></div>
+            <h2 class="event__title">Event Sourcing You Won't Regret</h2>
+            <div class="event__venue"><i data-lucide="map-pin"></i> Devoxx UK, London</div>
+            <p class="event__desc">A practitioner's guide to picking your battles with event sourcing and CQRS — and the read-model rebuild strategy that makes it safe.</p>
+            <a href="#" class="event__link">Watch the recording <i data-lucide="arrow-up-right"></i></a>
+          </div>
+        </article>
+
+        <article class="event">
+          <div class="event__date"><div class="event__day">14</div><div class="event__mon">Feb</div><div class="event__yr">2026</div></div>
+          <div class="event__body">
+            <div class="event__top"><span class="tag tag--warm">Recognition</span></div>
+            <h2 class="event__title">Finalist — Engineering Leader of the Year</h2>
+            <div class="event__venue"><i data-lucide="award"></i> UK Tech Awards 2026</div>
+            <p class="event__desc">Recognised for leading Commercial Trading's platform modernisation and AI-native delivery programme at Global.</p>
+          </div>
+        </article>
+
+        <article class="event">
+          <div class="event__date"><div class="event__day">09</div><div class="event__mon">Jan</div><div class="event__yr">2026</div></div>
+          <div class="event__body">
+            <div class="event__top"><span class="tag tag--warm">Panel</span></div>
+            <h2 class="event__title">Will AI replace engineers?</h2>
+            <div class="event__venue"><i data-lucide="users"></i> London Java Community</div>
+            <p class="event__desc">A panel discussion on AI-native workflows. My line, as ever: AI amplifies good engineering — it doesn't replace it.</p>
+            <a href="#" class="event__link">Read the write-up <i data-lucide="arrow-up-right"></i></a>
+          </div>
+        </article>
+
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <div class="site-footer__brand">
+      <a href="Landing%20Page.html" class="nav__brand"><span class="nav__mono">SR</span> Simon Rowe</a>
+      <p>Head of Engineering, Commercial Trading at Global. Building AI-native, cloud-native, event-driven systems.</p>
+    </div>
+    <div class="site-footer__col">
+      <h4>Explore</h4>
+      <a href="Experience.html">Experience</a>
+      <a href="Blog.html">Blog</a>
+      <a href="News.html">News &amp; Events</a>
+      <a href="Contact.html">Contact</a>
+    </div>
+    <div class="site-footer__col">
+      <h4>Connect</h4>
+      <a href="#">GitHub</a>
+      <a href="#">LinkedIn</a>
+      <a href="#">Download CV</a>
+    </div>
+  </div>
+  <div class="site-footer__bar">
+    <span>© 2026 Simon Rowe</span>
+    <span>Built with AI-native engineering</span>
+  </div>
+</footer>
+
+<div id="chat-dock"></div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="site.js"></script>
+<script type="text/babel" src="chat.jsx"></script>
+
+</body>
+</html>

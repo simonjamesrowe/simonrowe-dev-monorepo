@@ -17,6 +17,7 @@ import com.simonrowe.admin.SkillGroup;
 import com.simonrowe.admin.SocialMediaLink;
 import com.simonrowe.admin.Tag;
 import com.simonrowe.admin.TourStep;
+import com.simonrowe.tour.TourStepSeeder;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -90,8 +91,7 @@ public class DataMigrationService implements ApplicationRunner {
     migrateSocialMediaLinks();
     migrateJobs(skillIdMap);
     migrateBlogs(tagIdMap, skillIdMap);
-    // Tour steps are managed via admin UI — skip migration
-    // migrateTourSteps();
+    TourStepSeeder.seedDefaultTourSteps(tourStepRepository, Instant.now());
 
     LOG.info("Data migration complete.");
   }

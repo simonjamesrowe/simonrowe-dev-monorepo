@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { padding: 18px 22px; }
+  .row { display: flex; align-items: baseline; gap: 18px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
+  .row:last-child { border-bottom: 0; }
+  .label { font-family: var(--font-mono); font-size: 0.65rem; color: var(--on-surface-variant); width: 110px; flex: none; }
+  .h1 { font-family: var(--font-heading); font-weight: 700; font-size: 2.5rem; letter-spacing: -0.02em; line-height: 1.15; }
+  .h2 { font-family: var(--font-heading); font-weight: 700; font-size: 2rem; letter-spacing: -0.02em; line-height: 1.2; }
+  .h3 { font-family: var(--font-heading); font-weight: 600; font-size: 1.5rem; letter-spacing: -0.015em; line-height: 1.25; }
+  .h4 { font-family: var(--font-main); font-weight: 600; font-size: 1.25rem; line-height: 1.3; }
+  span.acc { color: var(--primary); }
+</style>
+</head>
+<body>
+  <div class="row"><div class="label">headline-lg / h1</div><div class="h1">Career <span class="acc">Timeline</span></div></div>
+  <div class="row"><div class="label">headline-md / h2</div><div class="h2">About <span class="acc">Simon</span></div></div>
+  <div class="row"><div class="label">headline-sm / h3</div><div class="h3">Latest from the <span class="acc">blog</span></div></div>
+  <div class="row"><div class="label">title-lg / h4</div><div class="h4">Head of Engineering</div></div>
+</body>
+</html>

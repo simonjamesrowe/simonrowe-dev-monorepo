@@ -137,7 +137,7 @@ class ChatControllerTest {
   }
 
   @Test
-  void handleChatMessageDiscardsPreToolContentAndSendsReset() {
+  void handleChatMessageDoesNotEmitStreamResetForToolCalls() {
     final String sessionId = "session-tool";
     final AssistantMessage toolCallMessage = AssistantMessage.builder()
         .content("Let me search for that")
@@ -160,20 +160,18 @@ class ChatControllerTest {
 
     final ArgumentCaptor<ChatResponse> captor =
         ArgumentCaptor.forClass(ChatResponse.class);
-    // 1 START + 1 CHUNK("Let me search") + 1 RESET + 1 CHUNK("Here are...") + 1 END
-    verify(messagingTemplate, times(5)).convertAndSend(
+    // 1 START + 1 CHUNK("Let me search") + 1 CHUNK("Here are...") + 1 END
+    verify(messagingTemplate, times(4)).convertAndSend(
         eq("/topic/chat." + sessionId), captor.capture());
 
     final List<ChatResponse> sent = captor.getAllValues();
     assertThat(sent.get(0).type()).isEqualTo(ChatResponse.MessageType.STREAM_START);
     assertThat(sent.get(1).type()).isEqualTo(ChatResponse.MessageType.STREAM_CHUNK);
     assertThat(sent.get(1).content()).isEqualTo("Let me search");
-    assertThat(sent.get(2).type()).isEqualTo(ChatResponse.MessageType.STREAM_RESET);
-    assertThat(sent.get(3).type()).isEqualTo(ChatResponse.MessageType.STREAM_CHUNK);
-    assertThat(sent.get(3).content()).isEqualTo("Here are the results");
-    assertThat(sent.get(4).type()).isEqualTo(ChatResponse.MessageType.STREAM_END);
-    // Only post-tool content in the final response
-    assertThat(sent.get(4).content()).isEqualTo("Here are the results");
+    assertThat(sent.get(2).type()).isEqualTo(ChatResponse.MessageType.STREAM_CHUNK);
+    assertThat(sent.get(2).content()).isEqualTo("Here are the results");
+    assertThat(sent.get(3).type()).isEqualTo(ChatResponse.MessageType.STREAM_END);
+    assertThat(sent.get(3).content()).isEqualTo("Let me searchHere are the results");
   }
 
   @Test

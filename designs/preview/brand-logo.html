@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { padding: 24px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; align-items: center; }
+  .lockup { display: flex; align-items: center; justify-content: center; padding: 18px; background: var(--surface-container-low); border: 1px solid var(--border-subtle); border-radius: 16px; min-height: 100px; }
+  .lockup.light { background: #f8f9fc; border-color: rgba(0,0,0,0.06); }
+  .wm { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.6rem; letter-spacing: -0.025em; color: var(--on-surface); }
+  .wm .accent { color: var(--primary); }
+  .wm.light { color: #1a1d2b; }
+  .wm.light .accent { color: #2563eb; }
+  .mark { width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, #77d1ff, #a78bfa); display: grid; place-items: center; color: #001b2e; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.6rem; letter-spacing: -0.04em; }
+</style>
+</head>
+<body>
+  <div class="lockup"><div class="wm">simon<span class="accent">.</span>rowe</div></div>
+  <div class="lockup light"><div class="wm light">simon<span class="accent">.</span>rowe</div></div>
+  <div class="lockup"><div class="mark">SR</div></div>
+</body>
+</html>

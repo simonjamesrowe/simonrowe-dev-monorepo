@@ -8,7 +8,12 @@ import com.simonrowe.aggregation.AggregatedEvent;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.BlogService;
 import com.simonrowe.blog.BlogSummaryResponse;
+import com.simonrowe.chat.BlogWidgetPayload;
+import com.simonrowe.chat.ChatStreamPublisher;
 import com.simonrowe.chat.ChatContactTracker;
+import com.simonrowe.chat.CodeWidgetPayload;
+import com.simonrowe.chat.EmploymentWidgetPayload;
+import com.simonrowe.chat.SkillsWidgetPayload;
 import com.simonrowe.contact.ContactService;
 import com.simonrowe.contact.ContactSubmission;
 import com.simonrowe.contact.EmailDeliveryException;
@@ -43,6 +48,10 @@ public class ProfileMcpTools {
       Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
   private static final String SEARCH_UNAVAILABLE =
       "Search is temporarily unavailable. Please try again later.";
+  private static final String SKILLS_LABEL = "Looking up Simon's skills";
+  private static final String JOBS_LABEL = "Pulling up employment history";
+  private static final String CODE_LABEL = "Fetching code examples";
+  private static final String BLOGS_LABEL = "Searching blog posts";
 
   private final ProfileService profileService;
   private final SearchService searchService;
@@ -54,6 +63,7 @@ public class ProfileMcpTools {
   private final AggregatedEventRepository eventRepository;
   private final ContactService contactService;
   private final ChatContactTracker contactTracker;
+  private final ChatStreamPublisher streamPublisher;
 
   public ProfileMcpTools(
       final ProfileService profileService,
@@ -65,7 +75,8 @@ public class ProfileMcpTools {
       final AggregatedArticleRepository articleRepository,
       final AggregatedEventRepository eventRepository,
       final ContactService contactService,
-      final ChatContactTracker contactTracker) {
+      final ChatContactTracker contactTracker,
+      final ChatStreamPublisher streamPublisher) {
     this.profileService = profileService;
     this.searchService = searchService;
     this.jobService = jobService;
@@ -76,6 +87,7 @@ public class ProfileMcpTools {
     this.eventRepository = eventRepository;
     this.contactService = contactService;
     this.contactTracker = contactTracker;
+    this.streamPublisher = streamPublisher;
   }
 
   @WithSpan
@@ -87,6 +99,10 @@ public class ProfileMcpTools {
     return profileService.getProfile();
   }
 
+  public List<BlogSearchResult> searchBlogs(final String query) {
+    return searchBlogs(query, null);
+  }
+
   @WithSpan
   @Tool(description = "Search Simon's published blog posts by keyword. Returns matching "
       + "blog entries with titles, summaries, tags, and publication dates, ranked by relevance "
@@ -94,13 +110,24 @@ public class ProfileMcpTools {
       + "written about, his blog content, or technical articles. Returns blog posts only.")
   public List<BlogSearchResult> searchBlogs(
       @ToolParam(description = "Search keywords to match against blog titles and content")
-      final String query) {
+      final String query,
+      final ToolContext toolContext) {
+    String sessionId = sessionId(toolContext);
+    publishToolStart(sessionId, BLOGS_LABEL);
     try {
-      return searchService.blogSearch(query);
+      List<BlogSearchResult> results = searchService.blogSearch(query);
+      publishWidgetIfNotEmpty(sessionId, "blogs", toBlogPayload(results));
+      return results;
     } catch (Exception e) {
       LOG.error("Blog search failed for query: {}", query, e);
       return List.of();
+    } finally {
+      publishToolEnd(sessionId, BLOGS_LABEL);
     }
+  }
+
+  public Object getJobs(final String query) {
+    return getJobs(query, null);
   }
 
   @WithSpan
@@ -111,15 +138,28 @@ public class ProfileMcpTools {
   public Object getJobs(
       @ToolParam(description = "Optional search keywords to filter jobs by technology, "
           + "role, or company. Pass null or empty for all jobs.")
-      final String query) {
-    if (query != null && !query.isBlank()) {
-      try {
-        return searchService.searchByType(query, "job");
-      } catch (SearchUnavailableException e) {
-        return SEARCH_UNAVAILABLE;
+      final String query,
+      final ToolContext toolContext) {
+    String sessionId = sessionId(toolContext);
+    publishToolStart(sessionId, JOBS_LABEL);
+    try {
+      if (query != null && !query.isBlank()) {
+        try {
+          return searchService.searchByType(query, "job");
+        } catch (SearchUnavailableException e) {
+          return SEARCH_UNAVAILABLE;
+        }
       }
+      List<JobSummaryDto> jobs = jobService.getAllJobs();
+      publishWidgetIfNotEmpty(sessionId, "employment", toEmploymentPayload(jobs));
+      return jobs;
+    } finally {
+      publishToolEnd(sessionId, JOBS_LABEL);
     }
-    return jobService.getAllJobs();
+  }
+
+  public Object getSkills(final String query) {
+    return getSkills(query, null);
   }
 
   @WithSpan
@@ -130,23 +170,44 @@ public class ProfileMcpTools {
   public Object getSkills(
       @ToolParam(description = "Optional search keywords to filter skills by technology. "
           + "Pass null or empty for all skill groups.")
-      final String query) {
-    if (query != null && !query.isBlank()) {
-      try {
-        return searchService.searchByType(query, "skill");
-      } catch (SearchUnavailableException e) {
-        return SEARCH_UNAVAILABLE;
+      final String query,
+      final ToolContext toolContext) {
+    String sessionId = sessionId(toolContext);
+    publishToolStart(sessionId, SKILLS_LABEL);
+    try {
+      if (query != null && !query.isBlank()) {
+        try {
+          return searchService.searchByType(query, "skill");
+        } catch (SearchUnavailableException e) {
+          return SEARCH_UNAVAILABLE;
+        }
       }
+      List<SkillGroupSummaryDto> groups = skillGroupService.getAllSkillGroups();
+      publishWidgetIfNotEmpty(sessionId, "skills", toSkillsPayload(groups));
+      return groups;
+    } finally {
+      publishToolEnd(sessionId, SKILLS_LABEL);
     }
-    return skillGroupService.getAllSkillGroups();
+  }
+
+  public List<BlogSummaryResponse> getRecentBlogs() {
+    return getRecentBlogs(null);
   }
 
   @WithSpan
   @Tool(description = "Get Simon's most recent blog posts, ordered by date (newest first). "
       + "Returns titles, summaries, tags, skills, and publication dates. Use this when asked "
       + "what Simon has been writing about, his latest posts, or recent blogging activity.")
-  public List<BlogSummaryResponse> getRecentBlogs() {
-    return blogService.getLatest(10);
+  public List<BlogSummaryResponse> getRecentBlogs(final ToolContext toolContext) {
+    String sessionId = sessionId(toolContext);
+    publishToolStart(sessionId, BLOGS_LABEL);
+    try {
+      List<BlogSummaryResponse> blogs = blogService.getLatest(10);
+      publishWidgetIfNotEmpty(sessionId, "blogs", toBlogSummaryPayload(blogs));
+      return blogs;
+    } finally {
+      publishToolEnd(sessionId, BLOGS_LABEL);
+    }
   }
 
   @WithSpan
@@ -164,6 +225,10 @@ public class ProfileMcpTools {
     }
   }
 
+  public List<Map<String, Object>> getCodeExamples(final String language) {
+    return getCodeExamples(language, null);
+  }
+
   @WithSpan
   @Tool(description = "Get code examples from Simon's portfolio. Returns real code "
       + "snippets with titles, descriptions, language, and associated skills. Optionally "
@@ -172,18 +237,26 @@ public class ProfileMcpTools {
   public List<Map<String, Object>> getCodeExamples(
       @ToolParam(description = "Optional language filter: java, typescript, yaml, python, "
           + "kotlin, go, bash. Pass null or empty to return all.")
-      final String language) {
+      final String language,
+      final ToolContext toolContext) {
+    String sessionId = sessionId(toolContext);
+    publishToolStart(sessionId, CODE_LABEL);
     List<CodeExample> examples;
-    if (language != null && !language.isBlank()) {
-      examples = codeExampleRepository.findByLanguage(
-          language.toLowerCase().trim(),
-          org.springframework.data.domain.PageRequest.of(0, 20)).getContent();
-    } else {
-      examples = codeExampleRepository.findAll();
+    try {
+      if (language != null && !language.isBlank()) {
+        examples = codeExampleRepository.findByLanguage(
+            language.toLowerCase().trim(),
+            org.springframework.data.domain.PageRequest.of(0, 20)).getContent();
+      } else {
+        examples = codeExampleRepository.findAll();
+      }
+      publishWidgetIfNotEmpty(sessionId, "code", toCodePayload(examples));
+      return examples.stream()
+          .map(this::toCodeExampleSummary)
+          .toList();
+    } finally {
+      publishToolEnd(sessionId, CODE_LABEL);
     }
-    return examples.stream()
-        .map(this::toCodeExampleSummary)
-        .toList();
   }
 
   @WithSpan
@@ -307,6 +380,111 @@ public class ProfileMcpTools {
 
   private static boolean isBlank(final String value) {
     return value == null || value.isBlank();
+  }
+
+  private static String sessionId(final ToolContext toolContext) {
+    if (toolContext == null) {
+      return null;
+    }
+    Object value = toolContext.getContext().get("sessionId");
+    return value instanceof String id && !id.isBlank() ? id : null;
+  }
+
+  private void publishToolStart(final String sessionId, final String label) {
+    if (sessionId != null) {
+      streamPublisher.toolStart(sessionId, label);
+    }
+  }
+
+  private void publishToolEnd(final String sessionId, final String label) {
+    if (sessionId != null) {
+      streamPublisher.toolEnd(sessionId, label);
+    }
+  }
+
+  private void publishWidgetIfNotEmpty(
+      final String sessionId, final String kind, final Object payload) {
+    if (sessionId == null || isEmptyPayload(payload)) {
+      return;
+    }
+    streamPublisher.widget(sessionId, kind, payload);
+  }
+
+  private static boolean isEmptyPayload(final Object payload) {
+    return switch (payload) {
+      case SkillsWidgetPayload skills -> skills.groups().isEmpty();
+      case EmploymentWidgetPayload employment -> employment.jobs().isEmpty();
+      case CodeWidgetPayload code -> code.examples().isEmpty();
+      case BlogWidgetPayload blogs -> blogs.posts().isEmpty();
+      default -> payload == null;
+    };
+  }
+
+  private static SkillsWidgetPayload toSkillsPayload(
+      final List<SkillGroupSummaryDto> groups) {
+    return new SkillsWidgetPayload(groups.stream()
+        .map(group -> new SkillsWidgetPayload.Group(
+            group.name(),
+            group.skills() == null ? List.of() : group.skills().stream()
+                .map(skill -> new SkillsWidgetPayload.Skill(
+                    skill.name(),
+                    skill.rating() == null ? null : (int) Math.round(skill.rating())))
+                .toList()))
+        .toList());
+  }
+
+  private static EmploymentWidgetPayload toEmploymentPayload(
+      final List<JobSummaryDto> jobs) {
+    return new EmploymentWidgetPayload(jobs.stream()
+        .map(job -> new EmploymentWidgetPayload.Job(
+            job.company(),
+            job.title(),
+            job.startDate(),
+            job.endDate(),
+            job.shortDescription(),
+            List.of()))
+        .toList());
+  }
+
+  private static CodeWidgetPayload toCodePayload(final List<CodeExample> examples) {
+    return new CodeWidgetPayload(examples.stream()
+        .map(example -> new CodeWidgetPayload.Example(
+            example.id(),
+            example.title(),
+            example.description(),
+            example.language(),
+            example.code(),
+            example.skills() == null ? List.of() : example.skills().stream()
+                .map(skill -> skill.name())
+                .toList()))
+        .toList());
+  }
+
+  private static BlogWidgetPayload toBlogSummaryPayload(
+      final List<BlogSummaryResponse> blogs) {
+    return new BlogWidgetPayload(blogs.stream()
+        .map(blog -> new BlogWidgetPayload.Post(
+            blog.id(),
+            blog.title(),
+            blog.shortDescription(),
+            blog.tags() == null ? List.of() : blog.tags().stream()
+                .map(tag -> tag.name())
+                .toList(),
+            blog.createdDate() == null ? null : blog.createdDate().toString(),
+            blog.url()))
+        .toList());
+  }
+
+  private static BlogWidgetPayload toBlogPayload(final List<BlogSearchResult> blogs) {
+    return new BlogWidgetPayload(blogs.stream()
+        .map(blog -> new BlogWidgetPayload.Post(
+            null,
+            blog.title(),
+            blog.shortDescription(),
+            List.of(),
+            blog.publishedDate() == null ? null : blog.publishedDate().toString(),
+            blog.url()))
+        .toList());
   }
 
   private Map<String, Object> toCodeExampleSummary(final CodeExample example) {

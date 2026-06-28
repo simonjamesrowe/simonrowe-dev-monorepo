@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { padding: 22px; }
+  pre.code { font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.65; background: var(--surface-container); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 12px 14px; color: var(--on-surface); overflow: hidden; }
+  .key  { color: #c084fc; }
+  .str  { color: #86efac; }
+  .num  { color: #fde68a; }
+  .com  { color: var(--on-surface-variant); }
+  .meta { font-family: var(--font-mono); font-size: 0.66rem; color: var(--on-surface-variant); margin-bottom: 8px; }
+</style>
+</head>
+<body>
+  <div class="meta">Inter · 400/500/600 · monospace fallback for code</div>
+<pre class="code"><span class="com">// API call inside ChatPanel.tsx</span>
+<span class="key">const</span> response = <span class="key">await</span> fetch(<span class="str">`/api/chat/sessions`</span>, {
+  <span class="key">method</span>: <span class="str">'POST'</span>,
+  <span class="key">headers</span>: { <span class="str">'Content-Type'</span>: <span class="str">'application/json'</span> },
+  <span class="key">body</span>: JSON.stringify({ userId, messages: <span class="num">[]</span> })
+});</pre>
+</body>
+</html>

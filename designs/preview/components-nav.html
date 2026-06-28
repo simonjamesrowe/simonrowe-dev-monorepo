@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { padding: 18px 22px; }
+  .nav { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: rgba(15,19,28,0.7); backdrop-filter: blur(20px); border: 1px solid var(--border-subtle); border-radius: 999px; }
+  .brand { font-family: var(--font-heading); font-weight: 700; font-size: 1rem; }
+  .brand .dot { color: var(--primary); }
+  .links { display: flex; gap: 6px; }
+  .links a { font-family: var(--font-main); font-size: 0.8rem; color: var(--on-surface-variant); padding: 6px 12px; border-radius: 999px; text-decoration: none; }
+  .links a.active { background: rgba(119,209,255,0.10); color: var(--primary); }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .icon-btn { width: 32px; height: 32px; border-radius: 999px; background: var(--surface-container); border: 1px solid var(--border-subtle); display: grid; place-items: center; color: var(--on-surface-variant); }
+  .cta { font-family: var(--font-main); font-size: 0.8rem; font-weight: 600; padding: 8px 14px; border-radius: 999px; background: linear-gradient(135deg,#77d1ff,#a78bfa); color: #001b2e; border: 0; }
+  .icn { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <div class="brand">simon<span class="dot">.</span>rowe</div>
+    <div class="links">
+      <a class="active">Home</a>
+      <a>Experience</a>
+      <a>Blog</a>
+      <a>Events</a>
+      <a>Contact</a>
+    </div>
+    <div class="actions">
+      <div class="icon-btn"><svg class="icn" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></svg></div>
+      <button class="cta">Let's chat</button>
+    </div>
+  </div>
+</body>
+</html>

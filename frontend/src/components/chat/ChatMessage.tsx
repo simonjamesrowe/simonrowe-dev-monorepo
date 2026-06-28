@@ -1,26 +1,21 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { User } from 'lucide-react'
+import { ToolActivityBlock } from './ToolActivityBlock'
+import { ChatWidget } from './widgets/ChatWidgetRegistry'
+import type { ChatBlock } from './chatTypes'
 
 interface ChatMessageProps {
   role: 'user' | 'assistant'
-  content: string
+  content?: string
+  blocks?: ChatBlock[]
   timestamp?: string
   profileImageUrl?: string
-  onCodeExampleClick?: (id: string) => void
 }
 
-export function ChatMessage({ role, content, timestamp, profileImageUrl, onCodeExampleClick }: ChatMessageProps) {
+export function ChatMessage({ role, content = '', blocks, timestamp, profileImageUrl }: ChatMessageProps) {
   const isUser = role === 'user'
-
-  const handleLinkClick = (href: string | undefined, e: React.MouseEvent) => {
-    if (!href) return
-    const codeExampleMatch = href.match(/\/code-examples\/([a-f0-9]+)/)
-    if (codeExampleMatch && onCodeExampleClick) {
-      e.preventDefault()
-      onCodeExampleClick(codeExampleMatch[1])
-    }
-  }
+  const assistantBlocks = !isUser && blocks?.length ? blocks : undefined
 
   return (
     <div className={`chat-message ${isUser ? 'chat-message--user' : 'chat-message--assistant'}`}>
@@ -37,21 +32,31 @@ export function ChatMessage({ role, content, timestamp, profileImageUrl, onCodeE
         <div className="chat-message__bubble">
           {isUser ? (
             content
+          ) : assistantBlocks ? (
+            <div className="chat-message__blocks">
+              {assistantBlocks.map((block, index) => {
+                if (block.kind === 'text') {
+                  return (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} key={`text-${index}`}>
+                      {block.content}
+                    </ReactMarkdown>
+                  )
+                }
+                if (block.kind === 'tool') {
+                  return <ToolActivityBlock block={block} key={`tool-${index}-${block.label}`} />
+                }
+                return (
+                  <ChatWidget
+                    widgetKind={block.widgetKind}
+                    payload={block.payload}
+                    key={`widget-${index}-${block.widgetKind}`}
+                  />
+                )
+              })}
+            </div>
           ) : (
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
-              components={{
-                a: ({ href, children }) => (
-                  <a
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => handleLinkClick(href, e)}
-                  >
-                    {children}
-                  </a>
-                ),
-              }}
             >
               {content}
             </ReactMarkdown>

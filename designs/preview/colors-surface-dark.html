@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; align-content: center; }
+  .swatch { aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--border-subtle); position: relative; padding: 8px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .swatch .name { font-family: var(--font-heading); font-size: 0.65rem; font-weight: 600; color: var(--on-surface); }
+  .swatch .hex { font-family: var(--font-mono); font-size: 0.6rem; color: var(--on-surface-variant); }
+  .swatch.lowest { background: #0a0e17; } .swatch.surface { background: #0f131c; }
+  .swatch.low { background: #181c25; } .swatch.container { background: #1c2029; }
+  .swatch.high { background: #262a33; } .swatch.highest { background: #31353f; } .swatch.bright { background: #353943; }
+</style>
+</head>
+<body>
+  <div class="swatch lowest"><span class="name">lowest</span><span class="hex">#0a0e17</span></div>
+  <div class="swatch surface"><span class="name">surface</span><span class="hex">#0f131c</span></div>
+  <div class="swatch low"><span class="name">low</span><span class="hex">#181c25</span></div>
+  <div class="swatch container"><span class="name">container</span><span class="hex">#1c2029</span></div>
+  <div class="swatch high"><span class="name">high</span><span class="hex">#262a33</span></div>
+  <div class="swatch highest"><span class="name">highest</span><span class="hex">#31353f</span></div>
+  <div class="swatch bright"><span class="name">bright</span><span class="hex">#353943</span></div>
+</body>
+</html>

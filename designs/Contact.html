@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact — Simon Rowe</title>
+<link rel="icon" href="assets/favicon.ico">
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="pages.css">
+</head>
+<body data-screen-label="Contact">
+
+<nav class="nav">
+  <a href="Landing%20Page.html" class="nav__brand"><span class="nav__mono">SR</span> Simon Rowe</a>
+  <div class="nav__center">
+    <div class="nav__links">
+      <a href="Landing%20Page.html">Home</a>
+      <a href="Landing%20Page.html#about">About</a>
+      <a href="Experience.html">Experience</a>
+      <a href="Blog.html">Blog</a>
+      <a href="News.html">News</a>
+    </div>
+    <label class="nav__search">
+      <i data-lucide="search"></i>
+      <input type="text" placeholder="Search or ask anything…">
+    </label>
+  </div>
+  <div class="nav__right">
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme">
+      <i data-lucide="moon" class="icon-moon"></i><i data-lucide="sun" class="icon-sun"></i>
+    </button>
+    <button class="icon-btn nav__menu-btn" id="menu-toggle" aria-label="Open menu"><i data-lucide="menu"></i></button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobile-menu">
+  <a href="Landing%20Page.html">Home</a>
+  <a href="Landing%20Page.html#about">About</a>
+  <a href="Experience.html">Experience</a>
+  <a href="Blog.html">Blog</a>
+  <a href="News.html">News</a>
+  <a href="Contact.html" class="is-active">Contact</a>
+</div>
+
+<main>
+  <header class="page-head" style="padding-bottom: clamp(1.5rem, 4vw, 2.5rem);">
+    <div class="page-head__ambient"></div>
+    <div class="container container--wide">
+      <p class="eyebrow">Contact <span class="sr-slash">//</span> Get in touch</p>
+      <h1 class="page-head__title">Let's <span class="sr-accent">connect</span></h1>
+    </div>
+  </header>
+
+  <section class="section" style="padding-top: 0;">
+    <div class="container container--wide">
+      <div class="contact">
+        <div class="contact__lead">
+          <h2>Let's build the <em>impossible</em> together.</h2>
+          <p>Whether it's an engineering leadership role, a speaking invite, or a knotty architecture problem worth talking through — I'd love to hear from you. Drop a note and I'll get back to you.</p>
+          <div class="contact__direct">
+            <a href="mailto:hello@simonrowe.dev">
+              <span class="ic"><i data-lucide="mail"></i></span>
+              <span>Email<small>hello@simonrowe.dev</small></span>
+            </a>
+            <a href="#">
+              <span class="ic"><i data-lucide="git-branch"></i></span>
+              <span>GitHub<small>@simonjamesrowe</small></span>
+            </a>
+            <a href="#">
+              <span class="ic"><i data-lucide="briefcase"></i></span>
+              <span>LinkedIn<small>in/simonjamesrowe</small></span>
+            </a>
+            <a href="#">
+              <span class="ic"><i data-lucide="file-down"></i></span>
+              <span>Download CV<small>PDF — updated May 2026</small></span>
+            </a>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <form id="contact-form">
+            <div class="field">
+              <label for="cf-name">Name</label>
+              <input id="cf-name" type="text" placeholder="Your name" required>
+            </div>
+            <div class="field">
+              <label for="cf-email">Email</label>
+              <input id="cf-email" type="email" placeholder="you@company.com" required>
+            </div>
+            <div class="field">
+              <label for="cf-subject">Subject</label>
+              <input id="cf-subject" type="text" placeholder="What's this about?">
+            </div>
+            <div class="field">
+              <label for="cf-message">Message</label>
+              <textarea id="cf-message" placeholder="Tell me a little about it…" required></textarea>
+            </div>
+            <button type="submit" class="btn btn--primary"><i data-lucide="send"></i> Send message</button>
+          </form>
+          <div class="form-success" id="form-success">
+            <span class="ok"><i data-lucide="check"></i></span>
+            <h3>Message sent</h3>
+            <p>Thanks for reaching out — I'll be in touch soon.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <div class="site-footer__brand">
+      <a href="Landing%20Page.html" class="nav__brand"><span class="nav__mono">SR</span> Simon Rowe</a>
+      <p>Head of Engineering, Commercial Trading at Global. Building AI-native, cloud-native, event-driven systems.</p>
+    </div>
+    <div class="site-footer__col">
+      <h4>Explore</h4>
+      <a href="Experience.html">Experience</a>
+      <a href="Blog.html">Blog</a>
+      <a href="News.html">News &amp; Events</a>
+      <a href="Contact.html">Contact</a>
+    </div>
+    <div class="site-footer__col">
+      <h4>Connect</h4>
+      <a href="#">GitHub</a>
+      <a href="#">LinkedIn</a>
+      <a href="#">Download CV</a>
+    </div>
+  </div>
+  <div class="site-footer__bar">
+    <span>© 2026 Simon Rowe</span>
+    <span>Built with AI-native engineering</span>
+  </div>
+</footer>
+
+<div id="chat-dock"></div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="site.js"></script>
+<script type="text/babel" src="chat.jsx"></script>
+<script>
+  (function () {
+    var form = document.getElementById("contact-form");
+    var ok = document.getElementById("form-success");
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        form.style.display = "none";
+        ok.classList.add("is-shown");
+        if (window.lucide) window.lucide.createIcons();
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>

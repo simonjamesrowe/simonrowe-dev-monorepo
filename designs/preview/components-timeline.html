@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { padding: 18px 22px; }
+  .timeline { position: relative; padding-left: 36px; }
+  .spine { position: absolute; left: 16px; top: 6px; bottom: 6px; width: 2px; background: linear-gradient(to bottom, var(--primary), var(--border-subtle), transparent); }
+  .node { position: relative; padding-bottom: 14px; }
+  .node:last-child { padding-bottom: 0; }
+  .dot { position: absolute; left: -28px; top: 4px; width: 14px; height: 14px; border-radius: 999px; background: var(--surface); border: 2px solid var(--border-faint); }
+  .dot.current { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(119,209,255,0.15), 0 0 12px var(--primary); background: var(--primary); }
+  .dot.warm { border-color: #ffb690; }
+  .role { font-family: var(--font-heading); font-weight: 600; font-size: 0.88rem; }
+  .org { font-family: var(--font-main); font-size: 0.74rem; color: var(--on-surface-variant); }
+  .dates { font-family: var(--font-mono); font-size: 0.62rem; color: var(--on-surface-variant); margin-top: 2px; }
+</style>
+</head>
+<body>
+  <div class="timeline">
+    <div class="spine"></div>
+    <div class="node">
+      <div class="dot current"></div>
+      <div class="role">Head of Engineering · Global</div>
+      <div class="org">Commercial Trading platform — 30+ engineers</div>
+      <div class="dates">Aug 2021 — Present</div>
+    </div>
+    <div class="node">
+      <div class="dot"></div>
+      <div class="role">Lead Engineer · Y-Tree</div>
+      <div class="org">Wealthtech / event-driven microservices</div>
+      <div class="dates">Jan 2019 — Jul 2021</div>
+    </div>
+    <div class="node">
+      <div class="dot warm"></div>
+      <div class="role">🎓 BSc Computer Science</div>
+      <div class="org">University · WAM 81.24</div>
+      <div class="dates">2008 — 2011</div>
+    </div>
+  </div>
+</body>
+</html>

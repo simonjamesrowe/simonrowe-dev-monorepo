@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; align-content: center; padding: 22px; }
+  .step { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+  .box { background: var(--primary); border-radius: 4px; opacity: 0.85; }
+  .lbl { font-family: var(--font-mono); font-size: 0.62rem; color: var(--on-surface-variant); }
+  .nm { font-family: var(--font-heading); font-size: 0.7rem; font-weight: 600; color: var(--on-surface); }
+  .b1 { width: 4px; height: 4px; } .b2 { width: 8px; height: 8px; } .b3 { width: 12px; height: 12px; }
+  .b4 { width: 16px; height: 16px; } .b5 { width: 24px; height: 24px; } .b6 { width: 32px; height: 32px; }
+  .b7 { width: 48px; height: 48px; } .b8 { width: 64px; height: 64px; }
+</style>
+</head>
+<body>
+  <div class="step"><div class="box b1"></div><div class="nm">space-1</div><div class="lbl">4px</div></div>
+  <div class="step"><div class="box b2"></div><div class="nm">space-2</div><div class="lbl">8px</div></div>
+  <div class="step"><div class="box b3"></div><div class="nm">space-3</div><div class="lbl">12px</div></div>
+  <div class="step"><div class="box b4"></div><div class="nm">space-4</div><div class="lbl">16px</div></div>
+  <div class="step"><div class="box b5"></div><div class="nm">space-6</div><div class="lbl">24px</div></div>
+  <div class="step"><div class="box b6"></div><div class="nm">space-8</div><div class="lbl">32px</div></div>
+  <div class="step"><div class="box b7"></div><div class="nm">space-12</div><div class="lbl">48px</div></div>
+  <div class="step"><div class="box b8"></div><div class="nm">space-16</div><div class="lbl">64px</div></div>
+</body>
+</html>

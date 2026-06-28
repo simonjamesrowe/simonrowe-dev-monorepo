@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { padding: 18px 22px; }
+  .sidebar { width: 240px; background: var(--surface-container-low); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 14px 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 6px 10px 12px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 10px; }
+  .b-mark { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg,#77d1ff,#a78bfa); display: grid; place-items: center; color: #001b2e; font-family: var(--font-heading); font-weight: 700; font-size: 0.85rem; }
+  .b-title { font-family: var(--font-heading); font-weight: 700; font-size: 0.85rem; }
+  .b-sub { font-family: var(--font-mono); font-size: 0.6rem; color: var(--on-surface-variant); }
+  nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-family: var(--font-main); font-size: 0.78rem; color: var(--on-surface-variant); text-decoration: none; margin-bottom: 2px; }
+  nav a.active { background: rgba(119,209,255,0.10); color: var(--primary); }
+  .icn { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><div class="b-mark">S</div><div><div class="b-title">Admin</div><div class="b-sub">simonrowe.dev</div></div></div>
+    <nav>
+      <a class="active"><svg class="icn" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a><svg class="icn" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 9h16M9 4v16"/></svg>Blog</a>
+      <a><svg class="icn" viewBox="0 0 24 24"><path d="M3 7h18M3 12h18M3 17h18"/></svg>Events</a>
+      <a><svg class="icn" viewBox="0 0 24 24"><path d="M12 3l8 4-8 4-8-4 8-4zM4 11l8 4 8-4M4 15l8 4 8-4"/></svg>Experience</a>
+      <a><svg class="icn" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4 12H1M23 12h-3"/></svg>Settings</a>
+    </nav>
+  </div>
+</body>
+</html>

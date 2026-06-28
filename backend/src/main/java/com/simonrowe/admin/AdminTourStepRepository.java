@@ -10,4 +10,6 @@ public interface AdminTourStepRepository
   List<TourStep> findAllByOrderByOrderAsc();
 
   Optional<TourStep> findByLegacyId(String legacyId);
+
+  Optional<TourStep> findByOrder(int order);
 }

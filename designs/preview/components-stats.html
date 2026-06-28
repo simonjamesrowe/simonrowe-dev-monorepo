@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { padding: 18px 22px; display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; align-content: center; }
+  .stat { background: var(--surface-container-low); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 14px 16px; }
+  .label { font-family: var(--font-main); font-size: 0.7rem; color: var(--on-surface-variant); text-transform: uppercase; letter-spacing: 0.06em; }
+  .value { font-family: var(--font-heading); font-weight: 700; font-size: 1.7rem; line-height: 1.1; margin-top: 4px; }
+  .delta { font-family: var(--font-mono); font-size: 0.66rem; color: #86efac; margin-top: 4px; display: inline-flex; align-items: center; gap: 4px; }
+  .delta.warm { color: #ffb690; }
+  .accent { color: var(--primary); }
+</style>
+</head>
+<body>
+  <div class="stat"><div class="label">Posts published</div><div class="value">42</div><div class="delta">▲ 3 this month</div></div>
+  <div class="stat"><div class="label">Chat sessions</div><div class="value accent">1,284</div><div class="delta">▲ 12% w/w</div></div>
+  <div class="stat"><div class="label">Upcoming events</div><div class="value">5</div><div class="delta warm">2 next week</div></div>
+</body>
+</html>

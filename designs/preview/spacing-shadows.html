@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 22px; align-content: center; }
+  .card { background: var(--surface-container); border: 1px solid var(--border-subtle); border-radius: 12px; height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px; }
+  .card .nm { font-family: var(--font-heading); font-size: 0.72rem; font-weight: 600; color: var(--on-surface); }
+  .card .lbl { font-family: var(--font-mono); font-size: 0.6rem; color: var(--on-surface-variant); text-align: center; }
+  .e-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.18); }
+  .e-md { box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
+  .e-lg { box-shadow: 0 8px 24px rgba(0,0,0,0.22); }
+  .e-glow { box-shadow: 0 0 0 1px rgba(119,209,255,0.20), 0 0 20px rgba(119,209,255,0.20); border-color: rgba(119,209,255,0.30); }
+</style>
+</head>
+<body>
+  <div class="card e-sm"><div class="nm">shadow-sm</div><div class="lbl">0 1px 2px rgba(0,0,0,.18)</div></div>
+  <div class="card e-md"><div class="nm">shadow-md</div><div class="lbl">0 4px 12px rgba(0,0,0,.18)</div></div>
+  <div class="card e-lg"><div class="nm">shadow-lg</div><div class="lbl">0 8px 24px rgba(0,0,0,.22)</div></div>
+  <div class="card e-glow"><div class="nm">glow-primary</div><div class="lbl">cyan focus / current job</div></div>
+</body>
+</html>
