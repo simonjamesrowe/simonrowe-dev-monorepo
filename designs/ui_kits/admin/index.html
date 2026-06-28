@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>simon.rowe — admin console UI kit</title>
+<link rel="icon" href="../../assets/favicon.ico">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-screen-label="01 Admin Dashboard">
+<div id="app"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+<script type="text/babel" src="ui.jsx"></script>
+<script type="text/babel" src="AdminLayout.jsx"></script>
+<script type="text/babel" src="Dashboard.jsx"></script>
+<script type="text/babel" src="BlogList.jsx"></script>
+<script type="text/babel" src="BlogEditor.jsx"></script>
+<script type="text/babel" src="EventList.jsx"></script>
+<script type="text/babel" src="ExperienceEditor.jsx"></script>
+<script type="text/babel" src="MediaLibrary.jsx"></script>
+
+<script type="text/babel">
+const { useState } = React;
+
+const TITLES = {
+  dashboard:  { title: "Dashboard", subtitle: "Welcome back, Simon" },
+  blog:       { title: "Blog",       subtitle: "Manage posts, drafts, and scheduled publishes" },
+  events:     { title: "Events",     subtitle: "Talks, panels, meetups" },
+  experience: { title: "Experience", subtitle: "Roles shown on the public timeline" },
+  media:      { title: "Media",      subtitle: "Images and assets used across the site" },
+};
+
+function App() {
+  const [route, setRoute] = useState("dashboard");
+  const [editingPost, setEditingPost] = useState(null);
+
+  const meta = TITLES[route];
+
+  const actions = (() => {
+    if (editingPost) return null;
+    if (route === "blog") return (
+      <>
+        <AButton variant="ghost" icon="filter">Filter</AButton>
+        <AButton variant="primary" icon="plus" onClick={() => setEditingPost({ title: "" })}>New post</AButton>
+      </>
+    );
+    if (route === "events") return <AButton variant="primary" icon="plus">New event</AButton>;
+    if (route === "media") return <AButton variant="primary" icon="upload">Upload</AButton>;
+    return <AButton variant="ghost" icon="bell">Notifications</AButton>;
+  })();
+
+  let body;
+  if (route === "blog" && editingPost) {
+    body = <BlogEditor post={editingPost} onClose={() => setEditingPost(null)} />;
+  } else if (route === "dashboard")  body = <Dashboard />;
+  else if (route === "blog")         body = <BlogList onOpen={(p) => setEditingPost(p)} />;
+  else if (route === "events")       body = <EventList />;
+  else if (route === "experience")   body = <ExperienceEditor />;
+  else if (route === "media")        body = <MediaLibrary />;
+
+  const screenLabel = `${String(Object.keys(TITLES).indexOf(route) + 1).padStart(2, "0")} ${meta.title}${editingPost ? " — Editor" : ""}`;
+  React.useEffect(() => { document.body.setAttribute("data-screen-label", screenLabel); }, [screenLabel]);
+
+  return (
+    <AdminLayout
+      route={route}
+      setRoute={(r) => { setEditingPost(null); setRoute(r); }}
+      title={editingPost ? "Edit post" : meta.title}
+      subtitle={editingPost ? "Drafting in markdown" : meta.subtitle}
+      actions={actions}
+    >
+      {body}
+    </AdminLayout>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("app")).render(<App />);
+</script>
+</body>
+</html>

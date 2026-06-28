@@ -1,0 +1,266 @@
+/* ==========================================================================
+   simonrowe.dev — Colors & Type
+   Tokens lifted directly from frontend/src/styles.css :root + [data-theme="light"]
+   plus the design refs in /designs.
+
+   Default theme is DARK. Set <html data-theme="light"> for light mode.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+:root {
+  color-scheme: dark;
+
+  /* ---------- Type families ---------- */
+  --font-main:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Space Grotesk', system-ui, sans-serif;
+  --font-body:    var(--font-main);
+  --font-mono:    ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ---------- Surface palette (DARK) ---------- */
+  --surface:                    #0f131c;
+  --surface-container-lowest:   #0a0e17;
+  --surface-container-low:      #181c25;
+  --surface-container:          #1c2029;
+  --surface-container-high:     #262a33;
+  --surface-container-highest:  #31353f;
+  --surface-bright:             #353943;
+
+  /* ---------- Text ---------- */
+  --on-surface:          #dfe2ef;
+  --on-surface-variant:  #bec8cf;
+
+  /* ---------- Primary (cyan) ---------- */
+  --primary:              #77d1ff;
+  --primary-rgb:          119, 209, 255;
+  --primary-container:    #299bca;
+  --on-primary:           #003548;
+  --on-primary-container: #002e3f;
+
+  /* ---------- Secondary (warm peach) ---------- */
+  --secondary:            #ffb690;
+  --secondary-container:  #ec6a06;
+  --on-secondary:         #552100;
+
+  /* ---------- Outline / borders ---------- */
+  --outline:           #889299;
+  --outline-variant:   #3e484e;
+  --border-subtle:     rgba(255, 255, 255, 0.06);
+  --border-faint:      rgba(255, 255, 255, 0.10);
+  --border-medium:     rgba(255, 255, 255, 0.15);
+  --border-strong:     rgba(255, 255, 255, 0.25);
+
+  /* ---------- Status ---------- */
+  --error:           #ffb4ab;
+  --error-container: #93000a;
+  --on-error:        #690005;
+
+  /* ---------- Shadows / Elevation ---------- */
+  --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.10);
+  --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.20);
+  --shadow-ambient: 0 20px 50px rgba(0, 0, 0, 0.30);
+  --glow-primary:   0 0 15px rgba(119, 209, 255, 0.20);
+
+  /* ---------- Hero overlay tokens ---------- */
+  --hero-overlay-start: rgba(15, 19, 28, 0.50);
+  --hero-overlay-mid:   rgba(15, 19, 28, 0.35);
+  --hero-overlay-end:   rgba(15, 19, 28, 0.70);
+  --hero-radial-inner:  rgba(15, 19, 28, 0.20);
+  --hero-radial-outer:  rgba(15, 19, 28, 0.60);
+  --glass-bg:           rgba(15, 19, 28, 0.60);
+
+  /* ---------- Motion ---------- */
+  --transition-fast:   0.15s ease;
+  --transition-normal: 0.25s ease;
+  --transition-slow:   0.40s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---------- Layout ---------- */
+  --sidebar-width: 240px;
+
+  /* ---------- Radii ---------- */
+  --radius-xs:  4px;
+  --radius-sm:  8px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+  --radius-xl:  24px;
+  --radius-2xl: 28px;
+  --radius-pill: 999px;
+
+  /* ---------- Spacing scale (8pt grid) ---------- */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+}
+
+/* ============================================================
+   LIGHT THEME — same tokens, blue accent (#2563eb)
+   ============================================================ */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --surface:                    #f8f9fc;
+  --surface-container-lowest:   #f5f6fa;
+  --surface-container-low:      #f0f2f7;
+  --surface-container:          #ffffff;
+  --surface-container-high:     #e8eaf0;
+  --surface-container-highest:  #d8dbe3;
+  --surface-bright:             #dde0e7;
+
+  --on-surface:          #1a1d2b;
+  --on-surface-variant:  #4b5563;
+
+  --primary:              #2563eb;
+  --primary-rgb:          37, 99, 235;
+  --primary-container:    #dbeafe;
+  --on-primary:           #ffffff;
+  --on-primary-container: #1e40af;
+
+  --secondary:            #f97316;
+  --secondary-container:  #fed7aa;
+  --on-secondary:         #ffffff;
+
+  --outline:         #d1d5db;
+  --outline-variant: #e5e7eb;
+  --border-subtle:   rgba(0, 0, 0, 0.06);
+  --border-faint:    rgba(0, 0, 0, 0.08);
+  --border-medium:   rgba(0, 0, 0, 0.10);
+  --border-strong:   rgba(0, 0, 0, 0.15);
+
+  --error:           #dc2626;
+  --error-container: #fef2f2;
+  --on-error:        #ffffff;
+
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.10);
+  --shadow-ambient: 0 20px 50px rgba(0, 0, 0, 0.08);
+  --glow-primary:   0 0 15px rgba(37, 99, 235, 0.15);
+
+  --hero-overlay-start: rgba(248, 249, 252, 0.75);
+  --hero-overlay-mid:   rgba(248, 249, 252, 0.45);
+  --hero-overlay-end:   rgba(248, 249, 252, 0.82);
+  --hero-radial-inner:  rgba(248, 249, 252, 0.30);
+  --hero-radial-outer:  rgba(248, 249, 252, 0.70);
+  --glass-bg:           rgba(248, 249, 252, 0.85);
+}
+
+/* ============================================================
+   SEMANTIC TYPE — drop these classes onto elements
+   ============================================================ */
+
+/* Display (hero name, big landing headlines) */
+.display-lg,
+h1.display {
+  font-family: var(--font-heading);
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+/* Headline (section titles) */
+.headline-lg,
+h1 {
+  font-family: var(--font-heading);
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.headline-md,
+h2 {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.headline-sm,
+h3 {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+/* Title (card titles, role titles) */
+.title-lg,
+h4 {
+  font-family: var(--font-main);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.title-md {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Body */
+.body-lg,
+p {
+  font-family: var(--font-main);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.body-md {
+  font-family: var(--font-main);
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.body-sm {
+  font-family: var(--font-main);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+/* Labels & UI text */
+.label-md {
+  font-family: var(--font-main);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.label-sm {
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+/* Eyebrow / badge — uppercase tracked */
+.eyebrow {
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+/* Code */
+code, pre, .code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}

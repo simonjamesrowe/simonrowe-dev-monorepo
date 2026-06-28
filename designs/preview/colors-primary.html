@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; align-content: center; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .pair > div { padding: 12px; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px; }
+  .label { font-family: var(--font-heading); font-size: 0.7rem; font-weight: 600; opacity: 0.85; }
+  .hex { font-family: var(--font-mono); font-size: 0.7rem; }
+  .name { font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700; }
+  /* dark column */
+  .dark .primary       { background: #77d1ff; color: #003548; }
+  .dark .primary-cont  { background: #299bca; color: #002e3f; }
+  /* light column */
+  .light .primary      { background: #2563eb; color: #ffffff; }
+  .light .primary-cont { background: #dbeafe; color: #1e40af; }
+  .heading { font-family: var(--font-heading); font-size: 0.7rem; font-weight: 600; color: var(--on-surface-variant); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+  <div>
+    <div class="heading">Dark theme</div>
+    <div class="pair dark">
+      <div class="primary"><span class="label">primary</span><span><span class="name">#77d1ff</span><div class="hex">on: #003548</div></span></div>
+      <div class="primary-cont"><span class="label">primary-container</span><span><span class="name">#299bca</span><div class="hex">on: #002e3f</div></span></div>
+    </div>
+  </div>
+  <div>
+    <div class="heading">Light theme</div>
+    <div class="pair light">
+      <div class="primary"><span class="label">primary</span><span><span class="name">#2563eb</span><div class="hex">on: #ffffff</div></span></div>
+      <div class="primary-cont"><span class="label">primary-container</span><span><span class="name">#dbeafe</span><div class="hex">on: #1e40af</div></span></div>
+    </div>
+  </div>
+</body>
+</html>

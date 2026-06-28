@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simon Rowe — Engineering Leadership, AI-Native Systems</title>
+<link rel="icon" href="assets/favicon.ico">
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="landing.css">
+</head>
+<body data-screen-label="Home">
+
+<!-- ─────────────── NAV ─────────────── -->
+<nav class="nav">
+  <a href="Landing%20Page.html" class="nav__brand">
+    <span class="nav__mono">SR</span>
+    Simon Rowe
+  </a>
+  <div class="nav__center">
+    <div class="nav__links">
+      <a href="Landing%20Page.html" class="is-active">Home</a>
+      <a href="#about">About</a>
+      <a href="Experience.html">Experience</a>
+      <a href="Blog.html">Blog</a>
+      <a href="News.html">News</a>
+    </div>
+    <label class="nav__search">
+      <i data-lucide="search"></i>
+      <input type="text" placeholder="Search or ask anything…">
+    </label>
+  </div>
+  <div class="nav__right">
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme">
+      <i data-lucide="moon" class="icon-moon"></i>
+      <i data-lucide="sun" class="icon-sun"></i>
+    </button>
+    <button class="icon-btn nav__menu-btn" id="menu-toggle" aria-label="Open menu">
+      <i data-lucide="menu"></i>
+    </button>
+  </div>
+</nav>
+
+<div class="mobile-menu" id="mobile-menu">
+  <a href="Landing%20Page.html" class="is-active">Home</a>
+  <a href="#about">About</a>
+  <a href="Experience.html">Experience</a>
+  <a href="Blog.html">Blog</a>
+  <a href="News.html">News</a>
+  <a href="Contact.html">Contact</a>
+</div>
+
+<!-- ─────────────── HERO (chat-first) ─────────────── -->
+<header class="hero" id="top">
+  <div class="hero__ambient"></div>
+  <div class="hero__inner">
+    <p class="hero__eyebrow">
+      Engineering Leadership <span class="sr-slash">//</span> AI-Native Systems
+    </p>
+    <h1 class="hero__title">Simon <span class="sr-accent">Rowe</span></h1>
+    <p class="hero__role">Head of Engineering, Commercial Trading at Global</p>
+    <p class="hero__tag">
+      Passionate about AI-native development, cloud-native architecture, and
+      empowering engineering teams to ship real business value.
+    </p>
+    <div id="chat-root"></div>
+    <p class="hero__hint">
+      <i data-lucide="sparkles"></i>
+      Ask my AI anything — it knows my work, my stack and my career.
+    </p>
+  </div>
+</header>
+
+<!-- ─────────────── ABOUT (short blurb) ─────────────── -->
+<section class="about" id="about">
+  <div class="about__portrait">
+    <div class="ph"><span>portrait — 3:4</span></div>
+  </div>
+  <div class="about__body">
+    <h2>About <span class="sr-accent">Simon</span></h2>
+    <p>
+      I lead engineering for Commercial Trading at <strong>Global</strong>, where I'm
+      driving an AI-native transformation across 30+ engineers and three product
+      pillars — delivering real business value by shipping incrementally and
+      engaging feedback early.
+    </p>
+    <p>
+      I'm a strong advocate for <strong>AI-native engineering</strong> — from Claude
+      Code and MCP integration to structured evaluation frameworks — but I believe
+      AI amplifies good engineering, it doesn't replace it.
+    </p>
+    <div class="about__stack">
+      <span>Java</span><span>Kotlin</span><span>Spring Boot</span>
+      <span>Kafka</span><span>Kubernetes</span><span>TypeScript &amp; React</span>
+    </div>
+    <div class="about__actions">
+      <a href="#" class="btn btn--primary"><i data-lucide="download"></i> Download CV</a>
+      <a href="Experience.html" class="btn btn--ghost"><i data-lucide="route"></i> See my experience</a>
+      <div class="about__socials">
+        <a href="#" aria-label="GitHub">GitHub</a>
+        <a href="#" aria-label="LinkedIn">LinkedIn</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────── FOOTER ─────────────── -->
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <div class="site-footer__brand">
+      <a href="Landing%20Page.html" class="nav__brand"><span class="nav__mono">SR</span> Simon Rowe</a>
+      <p>Head of Engineering, Commercial Trading at Global. Building AI-native, cloud-native, event-driven systems.</p>
+    </div>
+    <div class="site-footer__col">
+      <h4>Explore</h4>
+      <a href="Experience.html">Experience</a>
+      <a href="Blog.html">Blog</a>
+      <a href="News.html">News &amp; Events</a>
+      <a href="Contact.html">Contact</a>
+    </div>
+    <div class="site-footer__col">
+      <h4>Connect</h4>
+      <a href="#">GitHub</a>
+      <a href="#">LinkedIn</a>
+      <a href="#">Download CV</a>
+    </div>
+  </div>
+  <div class="site-footer__bar">
+    <span>© 2026 Simon Rowe</span>
+    <span>Built with AI-native engineering</span>
+  </div>
+</footer>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="site.js"></script>
+<script type="text/babel" src="chat.jsx"></script>
+
+</body>
+</html>

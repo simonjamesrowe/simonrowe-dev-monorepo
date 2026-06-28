@@ -49,18 +49,11 @@ public class ChatController {
         ChatResponse.streamStart(sessionId));
 
     StringBuilder fullResponse = new StringBuilder();
-    boolean[] toolCallSeen = {false};
 
     chatService.processMessage(sessionId, request.message())
         .doOnNext(aiResponse -> {
           if (aiResponse.hasToolCalls()) {
-            if (!toolCallSeen[0]) {
-              toolCallSeen[0] = true;
-              fullResponse.setLength(0);
-              messagingTemplate.convertAndSend(destination,
-                  ChatResponse.streamReset(sessionId));
-              LOG.debug("Tool call detected for session: {}, resetting stream", sessionId);
-            }
+            LOG.debug("Tool call detected for session: {}", sessionId);
             return;
           }
 
@@ -73,24 +66,14 @@ public class ChatController {
             return;
           }
 
-          toolCallSeen[0] = false;
           fullResponse.append(text);
           messagingTemplate.convertAndSend(destination,
               ChatResponse.streamChunk(sessionId, text));
         })
         .doOnComplete(() -> {
           String content = fullResponse.toString();
-          if (content.isEmpty() && toolCallSeen[0]) {
-            LOG.warn("Stream completed after tool call with no continuation for session: {}",
-                sessionId);
-            messagingTemplate.convertAndSend(destination,
-                ChatResponse.streamEnd(sessionId,
-                    "I tried to look that up but couldn't retrieve the information. "
-                        + "Could you try rephrasing your question?"));
-          } else {
-            messagingTemplate.convertAndSend(destination,
-                ChatResponse.streamEnd(sessionId, content));
-          }
+          messagingTemplate.convertAndSend(destination,
+              ChatResponse.streamEnd(sessionId, content));
           LOG.info("Completed response for session: {}", sessionId);
         })
         .doOnError(error -> {

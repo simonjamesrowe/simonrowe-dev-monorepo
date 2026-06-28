@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; align-content: center; }
+  .swatch { padding: 14px; border-radius: 12px; min-height: 110px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid var(--border-subtle); }
+  .label { font-family: var(--font-heading); font-size: 0.7rem; font-weight: 600; opacity: 0.85; }
+  .name { font-family: var(--font-heading); font-size: 0.9rem; font-weight: 700; }
+  .hex { font-family: var(--font-mono); font-size: 0.65rem; opacity: 0.85; }
+  .secondary-d { background: #ffb690; color: #552100; }
+  .secondary-l { background: #f97316; color: #fff; }
+  .error-d     { background: #ffb4ab; color: #690005; }
+  .error-l     { background: #dc2626; color: #fff; }
+  .heading { grid-column: 1 / -1; font-family: var(--font-heading); font-size: 0.7rem; font-weight: 600; color: var(--on-surface-variant); text-transform: uppercase; letter-spacing: 0.08em; margin-top: -2px; }
+</style>
+</head>
+<body>
+  <div class="heading">Secondary (warm) — used ONLY for the education timeline node + occasional contrast stat</div>
+  <div class="swatch secondary-d"><span class="label">secondary · dark</span><div><div class="name">#ffb690</div><div class="hex">on: #552100</div></div></div>
+  <div class="swatch secondary-l"><span class="label">secondary · light</span><div><div class="name">#f97316</div><div class="hex">on: #ffffff</div></div></div>
+  <div class="swatch error-d"><span class="label">error · dark</span><div><div class="name">#ffb4ab</div><div class="hex">on: #690005</div></div></div>
+  <div class="swatch error-l"><span class="label">error · light</span><div><div class="name">#dc2626</div><div class="hex">on: #ffffff</div></div></div>
+</body>
+</html>

@@ -2,16 +2,21 @@ package com.simonrowe.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.simonrowe.admin.AdminCodeExampleRepository;
+import com.simonrowe.admin.CodeExample;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.BlogService;
 import com.simonrowe.blog.BlogSummaryResponse;
 import com.simonrowe.chat.ChatContactTracker;
+import com.simonrowe.chat.ChatStreamPublisher;
 import com.simonrowe.contact.ContactService;
 import com.simonrowe.contact.ContactSubmission;
 import com.simonrowe.contact.EmailDeliveryException;
@@ -30,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -68,6 +74,9 @@ class ProfileMcpToolsTest {
   @Mock
   private ChatContactTracker contactTracker;
 
+  @Mock
+  private ChatStreamPublisher streamPublisher;
+
   @InjectMocks
   private ProfileMcpTools profileMcpTools;
 
@@ -96,6 +105,22 @@ class ProfileMcpToolsTest {
   }
 
   @Test
+  void searchBlogsPublishesBlogsWidgetWhenResultsExist() {
+    final String query = "spring boot";
+    final ToolContext context = new ToolContext(Map.of("sessionId", "sess-widget"));
+    given(searchService.blogSearch(query)).willReturn(List.of(
+        new BlogSearchResult("Spring", "Boot patterns", null,
+            java.time.Instant.parse("2026-05-01T00:00:00Z"), "/blogs/spring")));
+
+    profileMcpTools.searchBlogs(query, context);
+
+    InOrder order = inOrder(streamPublisher);
+    order.verify(streamPublisher).toolStart("sess-widget", "Searching blog posts");
+    order.verify(streamPublisher).widget(eq("sess-widget"), eq("blogs"), any());
+    order.verify(streamPublisher).toolEnd("sess-widget", "Searching blog posts");
+  }
+
+  @Test
   void getJobsWithoutQueryDelegatesToJobService() {
     final List<JobSummaryDto> expectedJobs = List.of(sampleJobSummaryDto());
     given(jobService.getAllJobs()).willReturn(expectedJobs);
@@ -104,6 +129,19 @@ class ProfileMcpToolsTest {
 
     assertThat(result).isSameAs(expectedJobs);
     verify(jobService).getAllJobs();
+  }
+
+  @Test
+  void getJobsPublishesEmploymentWidgetWhenResultsExist() {
+    final ToolContext context = new ToolContext(Map.of("sessionId", "sess-jobs"));
+    given(jobService.getAllJobs()).willReturn(List.of(sampleJobSummaryDto()));
+
+    profileMcpTools.getJobs(null, context);
+
+    InOrder order = inOrder(streamPublisher);
+    order.verify(streamPublisher).toolStart("sess-jobs", "Pulling up employment history");
+    order.verify(streamPublisher).widget(eq("sess-jobs"), eq("employment"), any());
+    order.verify(streamPublisher).toolEnd("sess-jobs", "Pulling up employment history");
   }
 
   @Test
@@ -154,6 +192,31 @@ class ProfileMcpToolsTest {
   }
 
   @Test
+  void getSkillsPublishesSkillsWidgetWhenResultsExist() {
+    final ToolContext context = new ToolContext(Map.of("sessionId", "sess-skills"));
+    given(skillGroupService.getAllSkillGroups()).willReturn(List.of(sampleSkillGroupSummaryDto()));
+
+    profileMcpTools.getSkills(null, context);
+
+    InOrder order = inOrder(streamPublisher);
+    order.verify(streamPublisher).toolStart("sess-skills", "Looking up Simon's skills");
+    order.verify(streamPublisher).widget(eq("sess-skills"), eq("skills"), any());
+    order.verify(streamPublisher).toolEnd("sess-skills", "Looking up Simon's skills");
+  }
+
+  @Test
+  void getSkillsSkipsWidgetWhenResultsAreEmpty() {
+    final ToolContext context = new ToolContext(Map.of("sessionId", "sess-empty"));
+    given(skillGroupService.getAllSkillGroups()).willReturn(List.of());
+
+    profileMcpTools.getSkills(null, context);
+
+    verify(streamPublisher).toolStart("sess-empty", "Looking up Simon's skills");
+    verify(streamPublisher, never()).widget(eq("sess-empty"), eq("skills"), any());
+    verify(streamPublisher).toolEnd("sess-empty", "Looking up Simon's skills");
+  }
+
+  @Test
   void getSkillsWithQueryDelegatesToSearchByType() {
     final String query = "react";
     final List<SearchResult> expectedResults = List.of(
@@ -187,6 +250,34 @@ class ProfileMcpToolsTest {
 
     assertThat(result).isSameAs(expectedBlogs);
     verify(blogService).getLatest(10);
+  }
+
+  @Test
+  void getRecentBlogsPublishesBlogsWidgetWhenResultsExist() {
+    final ToolContext context = new ToolContext(Map.of("sessionId", "sess-blogs"));
+    given(blogService.getLatest(10)).willReturn(List.of(sampleBlogSummaryResponse()));
+
+    profileMcpTools.getRecentBlogs(context);
+
+    InOrder order = inOrder(streamPublisher);
+    order.verify(streamPublisher).toolStart("sess-blogs", "Searching blog posts");
+    order.verify(streamPublisher).widget(eq("sess-blogs"), eq("blogs"), any());
+    order.verify(streamPublisher).toolEnd("sess-blogs", "Searching blog posts");
+  }
+
+  @Test
+  void getCodeExamplesPublishesCodeWidgetWhenResultsExist() {
+    final ToolContext context = new ToolContext(Map.of("sessionId", "sess-code"));
+    given(codeExampleRepository.findAll()).willReturn(List.of(
+        new CodeExample("c-1", "Outbox", "Transactional events", "java",
+            "class Outbox {}", null, null, null)));
+
+    profileMcpTools.getCodeExamples(null, context);
+
+    InOrder order = inOrder(streamPublisher);
+    order.verify(streamPublisher).toolStart("sess-code", "Fetching code examples");
+    order.verify(streamPublisher).widget(eq("sess-code"), eq("code"), any());
+    order.verify(streamPublisher).toolEnd("sess-code", "Fetching code examples");
   }
 
   @Test
@@ -355,6 +446,19 @@ class ProfileMcpToolsTest {
         null,
         null,
         List.of()
+    );
+  }
+
+  private static BlogSummaryResponse sampleBlogSummaryResponse() {
+    return new BlogSummaryResponse(
+        "b-1",
+        "Streaming chat",
+        "How real streaming improves UX",
+        null,
+        java.time.Instant.parse("2026-05-01T00:00:00Z"),
+        List.of(),
+        List.of(),
+        "/blogs/b-1"
     );
   }
 }

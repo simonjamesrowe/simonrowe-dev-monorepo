@@ -1,10 +1,14 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from '../src/App'
 
 vi.mock('../src/pages/HomePage', () => ({
   HomePage: () => <h1>Homepage</h1>,
+}))
+
+vi.mock('../src/pages/ProfilePage', () => ({
+  ProfilePage: () => <h1>Profile</h1>,
 }))
 
 vi.mock('../src/hooks/useProfile', () => ({
@@ -47,10 +51,23 @@ vi.mock('../src/components/tour/TourOverlay', () => ({
 }))
 
 describe('App', () => {
+  beforeEach(() => {
+    vi.stubGlobal('scrollTo', vi.fn())
+  })
+
   it('routes / to HomePage', () => {
     window.history.pushState({}, '', '/')
     render(<App />)
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Homepage')
+    expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()
+  })
+
+  it('routes /profile to ProfilePage', () => {
+    window.history.pushState({}, '', '/profile')
+    render(<App />)
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Profile')
+    expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()
   })
 })

@@ -7,7 +7,6 @@ import { AdminLayout } from './components/admin/AdminLayout'
 import { ChatPanel } from './components/chat/ChatPanel'
 import { RecaptchaGate } from './components/chat/RecaptchaGate'
 import { JobDetailDrawer } from './components/experience/JobDetailDrawer'
-import { Footer } from './components/layout/Footer'
 import { MobileMenu } from './components/layout/MobileMenu'
 import { TopNav } from './components/layout/TopNav'
 import { SkillGroupDetail } from './components/skills/SkillGroupDetail'
@@ -40,6 +39,7 @@ import { NewsEventsPage } from './pages/NewsEventsPage'
 import { BlogListingPage } from './pages/BlogListingPage'
 import { ExperiencePage } from './pages/ExperiencePage'
 import { HomePage } from './pages/HomePage'
+import { ProfilePage } from './pages/ProfilePage'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -109,7 +109,6 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
             <main className="app-layout__main">
               {children}
             </main>
-            <Footer />
             <TourButton />
             <TourOverlay />
             <GlobalDrawers />
@@ -127,6 +126,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<PublicLayout><HomePage /></PublicLayout>} path="/" />
+        <Route element={<PublicLayout><ProfilePage /></PublicLayout>} path="/profile" />
         <Route element={<PublicLayout><ExperiencePage /></PublicLayout>} path="/experience" />
         <Route element={<PublicLayout><BlogListingPage /></PublicLayout>} path="/blogs" />
         <Route element={<PublicLayout><BlogDetailPage /></PublicLayout>} path="/blogs/:id" />

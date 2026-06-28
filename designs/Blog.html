@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blog — Simon Rowe</title>
+<link rel="icon" href="assets/favicon.ico">
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="pages.css">
+</head>
+<body data-screen-label="Blog">
+
+<nav class="nav">
+  <a href="Landing%20Page.html" class="nav__brand"><span class="nav__mono">SR</span> Simon Rowe</a>
+  <div class="nav__center">
+    <div class="nav__links">
+      <a href="Landing%20Page.html">Home</a>
+      <a href="Landing%20Page.html#about">About</a>
+      <a href="Experience.html">Experience</a>
+      <a href="Blog.html" class="is-active">Blog</a>
+      <a href="News.html">News</a>
+    </div>
+    <label class="nav__search">
+      <i data-lucide="search"></i>
+      <input type="text" placeholder="Search or ask anything…">
+    </label>
+  </div>
+  <div class="nav__right">
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme">
+      <i data-lucide="moon" class="icon-moon"></i><i data-lucide="sun" class="icon-sun"></i>
+    </button>
+    <button class="icon-btn nav__menu-btn" id="menu-toggle" aria-label="Open menu"><i data-lucide="menu"></i></button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobile-menu">
+  <a href="Landing%20Page.html">Home</a>
+  <a href="Landing%20Page.html#about">About</a>
+  <a href="Experience.html">Experience</a>
+  <a href="Blog.html" class="is-active">Blog</a>
+  <a href="News.html">News</a>
+  <a href="Contact.html">Contact</a>
+</div>
+
+<main>
+  <header class="page-head">
+    <div class="page-head__ambient"></div>
+    <div class="container container--wide">
+      <p class="eyebrow">Writing <span class="sr-slash">//</span> Engineering Notes</p>
+      <h1 class="page-head__title">The <span class="sr-accent">Blog</span></h1>
+      <p class="page-head__sub">Notes on architecture, AI-native engineering and the event-driven patterns I keep reaching for. Roughly twice a month.</p>
+    </div>
+  </header>
+
+  <section class="section">
+    <div class="container container--wide">
+
+      <!-- Featured -->
+      <article class="blog-featured">
+        <div class="blog-featured__media ph-img"><span>cover — 16:10</span></div>
+        <div class="blog-featured__body">
+          <div class="blog-featured__tags">
+            <span class="tag tag--primary">Architecture</span>
+            <span class="tag">Kafka</span>
+          </div>
+          <h2 class="blog-featured__title"><a href="Article.html">The outbox pattern: reliable events without distributed transactions</a></h2>
+          <p class="blog-featured__excerpt">Dual-writing to a database and a broker is the bug you ship without noticing. Here's how I use the transactional outbox — with schema-registry Avro and idempotent consumers — to publish events you can actually trust.</p>
+          <div class="blog-meta">
+            <span>24 Apr 2026</span><span class="dot"></span><span>9 min read</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Grid -->
+      <div class="blog-grid">
+
+        <article class="blog-card">
+          <div class="blog-card__media ph-img"><span>cover</span></div>
+          <div class="blog-card__body">
+            <div class="blog-card__tags"><span class="tag tag--primary">AI-Native</span><span class="tag">Evals</span></div>
+            <h3 class="blog-card__title"><a href="Article.html">Running weekly evals on every prompt</a></h3>
+            <p class="blog-card__excerpt">Prompts are code. If you wouldn't ship a service without tests, why ship a prompt without evals? How my team runs a structured eval suite every week.</p>
+            <div class="blog-meta"><span>11 Apr 2026</span><span class="dot"></span><span>6 min</span></div>
+          </div>
+        </article>
+
+        <article class="blog-card">
+          <div class="blog-card__media ph-img"><span>cover</span></div>
+          <div class="blog-card__body">
+            <div class="blog-card__tags"><span class="tag tag--primary">Architecture</span><span class="tag">Event Sourcing</span></div>
+            <h3 class="blog-card__title"><a href="Article.html">Event sourcing is not a default — start CRUD</a></h3>
+            <p class="blog-card__excerpt">Event sourcing is a sharp tool for audit and time-travel, and a foot-gun everywhere else. A pragmatic take on when to reach for it.</p>
+            <div class="blog-meta"><span>28 Mar 2026</span><span class="dot"></span><span>7 min</span></div>
+          </div>
+        </article>
+
+        <article class="blog-card">
+          <div class="blog-card__media ph-img"><span>cover</span></div>
+          <div class="blog-card__body">
+            <div class="blog-card__tags"><span class="tag tag--primary">AI-Native</span></div>
+            <h3 class="blog-card__title"><a href="Article.html">Claude Code in a Spring Boot team: what actually changed</a></h3>
+            <p class="blog-card__excerpt">Six months in. The honest wins, the things that didn't stick, and why AI amplifies good engineering rather than replacing it.</p>
+            <div class="blog-meta"><span>14 Mar 2026</span><span class="dot"></span><span>8 min</span></div>
+          </div>
+        </article>
+
+        <article class="blog-card">
+          <div class="blog-card__media ph-img"><span>cover</span></div>
+          <div class="blog-card__body">
+            <div class="blog-card__tags"><span class="tag">Kafka</span><span class="tag">Java</span></div>
+            <h3 class="blog-card__title"><a href="Article.html">Idempotent Kafka consumers with Kafka Streams</a></h3>
+            <p class="blog-card__excerpt">At-least-once delivery means you will process the same message twice. Designing consumers so that's a non-event.</p>
+            <div class="blog-meta"><span>27 Feb 2026</span><span class="dot"></span><span>10 min</span></div>
+          </div>
+        </article>
+
+        <article class="blog-card">
+          <div class="blog-card__media ph-img"><span>cover</span></div>
+          <div class="blog-card__body">
+            <div class="blog-card__tags"><span class="tag tag--warm">Leadership</span></div>
+            <h3 class="blog-card__title"><a href="Article.html">Sub-team autonomy with shared platform standards</a></h3>
+            <p class="blog-card__excerpt">How to scale to 30+ engineers without everything turning into a committee — autonomy at the edges, standards at the core.</p>
+            <div class="blog-meta"><span>13 Feb 2026</span><span class="dot"></span><span>5 min</span></div>
+          </div>
+        </article>
+
+        <article class="blog-card">
+          <div class="blog-card__media ph-img"><span>cover</span></div>
+          <div class="blog-card__body">
+            <div class="blog-card__tags"><span class="tag tag--primary">AI-Native</span><span class="tag">MCP</span></div>
+            <h3 class="blog-card__title"><a href="Article.html">MCP integration: giving the model the right tools</a></h3>
+            <p class="blog-card__excerpt">A model is only as good as the context and tools it can reach. Wiring up the Model Context Protocol against real internal systems.</p>
+            <div class="blog-meta"><span>30 Jan 2026</span><span class="dot"></span><span>7 min</span></div>
+          </div>
+        </article>
+
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <div class="site-footer__brand">
+      <a href="Landing%20Page.html" class="nav__brand"><span class="nav__mono">SR</span> Simon Rowe</a>
+      <p>Head of Engineering, Commercial Trading at Global. Building AI-native, cloud-native, event-driven systems.</p>
+    </div>
+    <div class="site-footer__col">
+      <h4>Explore</h4>
+      <a href="Experience.html">Experience</a>
+      <a href="Blog.html">Blog</a>
+      <a href="News.html">News &amp; Events</a>
+      <a href="Contact.html">Contact</a>
+    </div>
+    <div class="site-footer__col">
+      <h4>Connect</h4>
+      <a href="#">GitHub</a>
+      <a href="#">LinkedIn</a>
+      <a href="#">Download CV</a>
+    </div>
+  </div>
+  <div class="site-footer__bar">
+    <span>© 2026 Simon Rowe</span>
+    <span>Built with AI-native engineering</span>
+  </div>
+</footer>
+
+<div id="chat-dock"></div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="site.js"></script>
+<script type="text/babel" src="chat.jsx"></script>
+
+</body>
+</html>

@@ -5,7 +5,12 @@ import type { ChatResponse } from '../../services/chatService'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { ChatTypingIndicator } from './ChatTypingIndicator'
-import { CodeExampleDrawer } from '../code/CodeExampleDrawer'
+import {
+  applyChatStreamEvent,
+  createEmptyAssistantMessage,
+  finalizeAssistantMessage,
+} from './chatStreamReducer'
+import type { ChatMessageModel } from './chatTypes'
 
 const MAX_USER_MESSAGES = 10
 const STREAM_TIMEOUT_MS = 30000
@@ -25,44 +30,39 @@ interface ChatPanelProps {
   visible?: boolean
 }
 
-interface Message {
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: string
-}
-
 function formatTimestamp(): string {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = true }: ChatPanelProps) {
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<ChatMessageModel[]>([])
   const [connected, setConnected] = useState(false)
-  const [streamingContent, setStreamingContent] = useState<string | null>(null)
+  const [activeAssistant, setActiveAssistantState] = useState<ChatMessageModel | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const sessionIdRef = useRef<string>(crypto.randomUUID())
   const streamFinalized = useRef(false)
-  const streamContentRef = useRef('')
   const cancelledRef = useRef(false)
   const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const activeAssistantRef = useRef<ChatMessageModel | null>(null)
 
-  const [codeExampleId, setCodeExampleId] = useState<string | null>(null)
   const userMessageCount = messages.filter((m) => m.role === 'user').length
   const limitReached = userMessageCount >= MAX_USER_MESSAGES
+
+  const setActiveAssistant = useCallback((message: ChatMessageModel | null) => {
+    activeAssistantRef.current = message
+    setActiveAssistantState(message)
+  }, [])
 
   const finalizeStream = useCallback(() => {
     if (streamFinalized.current) return
     streamFinalized.current = true
     clearTimeout(streamTimeoutRef.current)
-    const finalContent = streamContentRef.current
-    setStreamingContent(null)
-    if (finalContent) {
-      setMessages((msgs) => [
-        ...msgs,
-        { role: 'assistant', content: finalContent, timestamp: formatTimestamp() },
-      ])
+    const finalMessage = activeAssistantRef.current
+    setActiveAssistant(null)
+    if (finalMessage && (finalMessage.blocks?.length ?? 0) > 0) {
+      setMessages((msgs) => [...msgs, finalizeAssistantMessage(finalMessage)])
     }
-  }, [])
+  }, [setActiveAssistant])
 
   const resetStreamTimeout = useCallback(() => {
     clearTimeout(streamTimeoutRef.current)
@@ -76,45 +76,34 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
   const onMessage = useCallback((response: ChatResponse) => {
     if (cancelledRef.current) return
     if (response.type === 'STREAM_START') {
-      streamContentRef.current = ''
       streamFinalized.current = false
-      setStreamingContent('')
-      resetStreamTimeout()
-    } else if (response.type === 'STREAM_CHUNK') {
-      streamContentRef.current += response.content
-      setStreamingContent(streamContentRef.current)
-      resetStreamTimeout()
-    } else if (response.type === 'STREAM_RESET') {
-      streamContentRef.current = ''
-      setStreamingContent('')
+      setActiveAssistant(createEmptyAssistantMessage(formatTimestamp()))
       resetStreamTimeout()
     } else if (response.type === 'STREAM_END') {
       clearTimeout(streamTimeoutRef.current)
       if (streamFinalized.current) return
       streamFinalized.current = true
-      const finalContent = streamContentRef.current || response.content || ''
-      setStreamingContent(null)
-      if (finalContent) {
-        setMessages((msgs) => [
-          ...msgs,
-          { role: 'assistant', content: finalContent, timestamp: formatTimestamp() },
-        ])
+      const current = activeAssistantRef.current ?? createEmptyAssistantMessage(formatTimestamp())
+      const finalMessage = applyChatStreamEvent(current, response)
+      setActiveAssistant(null)
+      if ((finalMessage.blocks?.length ?? 0) > 0) {
+        setMessages((msgs) => [...msgs, finalMessage])
       }
     } else if (response.type === 'ERROR') {
       clearTimeout(streamTimeoutRef.current)
       if (streamFinalized.current) return
       streamFinalized.current = true
-      setStreamingContent(null)
-      setMessages((msgs) => [
-        ...msgs,
-        {
-          role: 'assistant',
-          content: response.content || 'An error occurred. Please try again.',
-          timestamp: formatTimestamp(),
-        },
-      ])
+      const current = activeAssistantRef.current ?? createEmptyAssistantMessage(formatTimestamp())
+      const finalMessage = applyChatStreamEvent(current, response)
+      setActiveAssistant(null)
+      setMessages((msgs) => [...msgs, finalMessage])
+    } else {
+      const current = activeAssistantRef.current ?? createEmptyAssistantMessage(formatTimestamp())
+      const next = applyChatStreamEvent(current, response)
+      setActiveAssistant(next)
+      resetStreamTimeout()
     }
-  }, [resetStreamTimeout])
+  }, [resetStreamTimeout, setActiveAssistant])
 
   useEffect(() => {
     const sessionId = crypto.randomUUID()
@@ -133,7 +122,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
     } else {
       setMessages([])
     }
-    setStreamingContent(null)
+    setActiveAssistant(null)
 
     let sendTimeout: ReturnType<typeof setTimeout>
 
@@ -163,7 +152,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
       clearTimeout(streamTimeoutRef.current)
       chatService.disconnect()
     }
-  }, [initialQuery, onMessage])
+  }, [initialQuery, onMessage, setActiveAssistant])
 
   useEffect(() => {
     if (visible && messagesEndRef.current) {
@@ -172,7 +161,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
         container.scrollTop = container.scrollHeight
       }
     }
-  }, [messages, streamingContent, visible])
+  }, [messages, activeAssistant, visible])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -186,21 +175,21 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
 
   const handleSend = (text: string) => {
     if (limitReached) return
-    const userMessage: Message = {
+    const userMessage: ChatMessageModel = {
       role: 'user',
       content: text,
       timestamp: formatTimestamp(),
     }
     streamFinalized.current = false
     setMessages((msgs) => [...msgs, userMessage])
-    setStreamingContent('')
+    setActiveAssistant(createEmptyAssistantMessage(formatTimestamp()))
     chatService.sendMessage({ sessionId: sessionIdRef.current, message: text })
   }
 
   const handleClearChat = () => {
     chatService.disconnect()
     setMessages([])
-    setStreamingContent(null)
+    setActiveAssistant(null)
     setConnected(false)
     streamFinalized.current = false
     cancelledRef.current = false
@@ -216,7 +205,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
     )
   }
 
-  const isStreaming = streamingContent !== null
+  const isStreaming = activeAssistant !== null
 
   if (!visible) return null
 
@@ -268,22 +257,22 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
               key={idx}
               role={msg.role}
               content={msg.content}
+              blocks={msg.blocks}
               timestamp={msg.timestamp}
               profileImageUrl={profileImageUrl}
-              onCodeExampleClick={setCodeExampleId}
             />
           ))}
-          {isStreaming && streamingContent === '' && (
+          {isStreaming && (activeAssistant.blocks?.length ?? 0) === 0 && (
             <div className="chat-message chat-message--assistant">
               <ChatTypingIndicator />
             </div>
           )}
-          {isStreaming && streamingContent !== '' && (
+          {isStreaming && (activeAssistant.blocks?.length ?? 0) > 0 && (
             <ChatMessage
               role="assistant"
-              content={streamingContent ?? ''}
+              blocks={activeAssistant.blocks}
+              timestamp={activeAssistant.timestamp}
               profileImageUrl={profileImageUrl}
-              onCodeExampleClick={setCodeExampleId}
             />
           )}
           {limitReached && !isStreaming && (
@@ -301,12 +290,6 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
           />
         </div>
       </div>
-      {codeExampleId && (
-        <CodeExampleDrawer
-          codeExampleId={codeExampleId}
-          onClose={() => setCodeExampleId(null)}
-        />
-      )}
     </div>
   )
 }

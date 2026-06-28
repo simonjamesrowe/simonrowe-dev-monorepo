@@ -58,13 +58,18 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 
 ## Recent Changes
+- 025-landing-profile-cleanup: Added TypeScript 5.x, React (latest stable), Vite + React Router, react-markdown, Lucide React; Vitest +
 - 022-improve-mcp-tools: Added Java 21 (LTS) + Spring Boot 3.5.x, Spring AI 1.1.4, Spring Data MongoDB, Spring Data Elasticsearch
 - 021-embabel-news-events: Added Java 21 (LTS) + Spring Boot 3.5.x, Embabel Agent 0.3.5, Spring AI 1.1.4, JSoup 1.18.x, Rome 2.1.x
-- 020-tour-blog-content: Fixed site tour with cross-page navigation, auto-advance timer with CSS progress bar, interactive demos (chat, drawers, search simulation), 10-step tour flow. Added blog post on RAG quality.
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
-- Java 21 (LTS) + Spring Boot 3.5.x, Spring AI 1.1.4, Spring Data MongoDB, Spring Data Elasticsearch (022-improve-mcp-tools)
-- MongoDB (primary), Elasticsearch (search indices: `site_search`, `blog_search`) (022-improve-mcp-tools)
+- TypeScript 5.x, React (latest stable), Vite + React Router, react-markdown, Lucide React; Vitest + (025-landing-profile-cleanup)
+- N/A (reuses existing profile data via existing API; no schema/seed (025-landing-profile-cleanup)
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->

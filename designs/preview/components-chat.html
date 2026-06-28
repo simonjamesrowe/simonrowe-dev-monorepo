@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_base.css">
+<style>
+  body { padding: 18px 22px; display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+  .row { display: flex; gap: 10px; align-items: flex-end; }
+  .row.right { justify-content: flex-end; }
+  .avatar { width: 30px; height: 30px; border-radius: 999px; background: linear-gradient(135deg,#77d1ff,#a78bfa); flex: none; display: grid; place-items: center; color: #001b2e; font-family: var(--font-heading); font-weight: 700; font-size: 0.78rem; }
+  .bubble { padding: 10px 14px; border-radius: 16px; max-width: 78%; font-family: var(--font-main); font-size: 0.88rem; line-height: 1.5; }
+  .bubble.assistant { background: var(--surface-container); border: 1px solid var(--border-subtle); border-bottom-left-radius: 4px; color: var(--on-surface); }
+  .bubble.user { background: linear-gradient(135deg,#77d1ff,#a78bfa); color: #001b2e; border-bottom-right-radius: 4px; }
+  .typing { display: inline-flex; gap: 4px; padding: 12px 14px; background: var(--surface-container); border: 1px solid var(--border-subtle); border-radius: 16px; border-bottom-left-radius: 4px; }
+  .typing span { width: 6px; height: 6px; border-radius: 999px; background: var(--on-surface-variant); animation: bounce 1.2s infinite ease-in-out; }
+  .typing span:nth-child(2){ animation-delay: 0.15s; }
+  .typing span:nth-child(3){ animation-delay: 0.3s; }
+  @keyframes bounce { 0%,80%,100% { transform: translateY(0); opacity: .5;} 40% { transform: translateY(-4px); opacity: 1; } }
+</style>
+</head>
+<body>
+  <div class="row"><div class="avatar">S</div><div class="bubble assistant">Hi! I'm an AI trained on Simon's experience. Ask me about his work in fin-tech, AI-native engineering, or his Spring Boot patterns.</div></div>
+  <div class="row right"><div class="bubble user">What is he blogging about recently?</div></div>
+  <div class="row"><div class="avatar">S</div><div class="typing"><span></span><span></span><span></span></div></div>
+</body>
+</html>

@@ -11,7 +11,6 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
-import reactor.core.scheduler.Schedulers;
 
 @Service
 public class ChatService {
@@ -34,15 +33,12 @@ public class ChatService {
     sessionActivity.put(sessionId, Instant.now());
     LOG.info("Processing message for session: {}", sessionId);
 
-    return Flux.defer(() -> {
-      ChatResponse response = chatClient.prompt()
+    return Flux.defer(() -> chatClient.prompt()
           .user(message)
           .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
           .toolContext(Map.of("sessionId", sessionId))
-          .call()
-          .chatResponse();
-      return Flux.just(response);
-    }).subscribeOn(Schedulers.boundedElastic());
+          .stream()
+          .chatResponse());
   }
 
   public ConcurrentHashMap<String, Instant> getSessionActivity() {

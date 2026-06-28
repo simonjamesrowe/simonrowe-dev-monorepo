@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The outbox pattern — Simon Rowe</title>
+<link rel="icon" href="assets/favicon.ico">
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="pages.css">
+</head>
+<body data-screen-label="Article">
+
+<nav class="nav">
+  <a href="Landing%20Page.html" class="nav__brand"><span class="nav__mono">SR</span> Simon Rowe</a>
+  <div class="nav__center">
+    <div class="nav__links">
+      <a href="Landing%20Page.html">Home</a>
+      <a href="Landing%20Page.html#about">About</a>
+      <a href="Experience.html">Experience</a>
+      <a href="Blog.html" class="is-active">Blog</a>
+      <a href="News.html">News</a>
+    </div>
+    <label class="nav__search">
+      <i data-lucide="search"></i>
+      <input type="text" placeholder="Search or ask anything…">
+    </label>
+  </div>
+  <div class="nav__right">
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme">
+      <i data-lucide="moon" class="icon-moon"></i><i data-lucide="sun" class="icon-sun"></i>
+    </button>
+    <button class="icon-btn nav__menu-btn" id="menu-toggle" aria-label="Open menu"><i data-lucide="menu"></i></button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobile-menu">
+  <a href="Landing%20Page.html">Home</a>
+  <a href="Landing%20Page.html#about">About</a>
+  <a href="Experience.html">Experience</a>
+  <a href="Blog.html" class="is-active">Blog</a>
+  <a href="News.html">News</a>
+  <a href="Contact.html">Contact</a>
+</div>
+
+<main>
+  <article class="page-head" style="padding-bottom: 0;">
+    <div class="container container--narrow">
+      <a href="Blog.html" class="tag" style="margin-bottom: 1.25rem;"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Back to blog</a>
+      <div class="article">
+        <div class="blog-featured__tags" style="margin-bottom: 1rem;">
+          <span class="tag tag--primary">Architecture</span>
+          <span class="tag">Kafka</span>
+          <span class="tag">Event-Driven</span>
+        </div>
+        <h1 class="page-head__title" style="font-size: clamp(1.9rem, 5vw, 2.6rem);">The outbox pattern: reliable events without distributed transactions</h1>
+        <div class="article__meta">
+          <div class="article__author">
+            <span class="av">SR</span>
+            <span><b>Simon Rowe</b><span>Head of Engineering, Global</span></span>
+          </div>
+          <span class="dot" style="width:3px;height:3px;border-radius:50%;background:var(--outline);"></span>
+          <span>24 Apr 2026</span>
+          <span class="dot" style="width:3px;height:3px;border-radius:50%;background:var(--outline);"></span>
+          <span>9 min read</span>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <section class="section" style="padding-top: 2rem;">
+    <div class="container container--narrow">
+      <div class="article">
+        <div class="article__cover ph-img"><span>cover — 16:7</span></div>
+
+        <div class="prose">
+          <p>Almost every event-driven system starts with the same innocent line of code: save a row, then publish a message. It works on your machine. It works in the demo. Then one day the broker is briefly unreachable after the database commit, the message is never sent, and two services quietly disagree about reality.</p>
+
+          <p>This is the <strong>dual-write problem</strong>, and you can't solve it by wrapping a database transaction and a Kafka send in the same <code>try</code> block — they're two separate systems with no shared commit. The fix I reach for every time is the <strong>transactional outbox</strong>.</p>
+
+          <h2>The core idea</h2>
+          <p>Instead of writing to the database <em>and</em> the broker, you only ever write to the database. The event is inserted into an <code>outbox</code> table in the <em>same</em> local transaction as your business change. A separate process then reads that table and publishes to Kafka.</p>
+
+          <blockquote>One transaction, one source of truth. If the business write commits, the event exists. If it rolls back, so does the event.</blockquote>
+
+          <h2>What the write looks like</h2>
+          <p>The aggregate and its event are persisted atomically — there is no window where one exists without the other.</p>
+          <pre><code><span class="k">@Transactional</span>
+<span class="k">public</span> Order place(OrderRequest req) {
+  <span class="k">var</span> order = orderRepository.save(Order.from(req));
+  outbox.save(<span class="k">new</span> OutboxEvent(
+      <span class="s">"order.placed"</span>,            <span class="c">// type</span>
+      order.id(),                   <span class="c">// aggregate id</span>
+      avro.serialize(order)         <span class="c">// schema-registry payload</span>
+  ));
+  <span class="k">return</span> order;                    <span class="c">// both commit together</span>
+}</code></pre>
+
+          <h2>Getting it onto the topic</h2>
+          <p>A relay moves rows from the outbox to Kafka. You have two good options:</p>
+          <ul>
+            <li><strong>Change Data Capture</strong> (Debezium tailing the WAL) — lowest latency, no polling, but more infrastructure to run.</li>
+            <li><strong>A polling publisher</strong> — a scheduled job that claims unpublished rows, sends them, and marks them done. Boring, debuggable, and good enough for most teams.</li>
+          </ul>
+
+          <h3>Don't forget idempotency</h3>
+          <p>The relay guarantees <em>at-least-once</em> delivery, which means consumers <strong>will</strong> occasionally see a duplicate. Make the consumer idempotent — key on the event id, dedupe on the read side, and a redelivery becomes a non-event rather than a double order.</p>
+
+          <h2>When it's worth it</h2>
+          <p>Not every service needs this. If you're emitting fire-and-forget analytics, skip it. But the moment an event drives money, inventory, or another service's state, the outbox is the cheapest insurance you'll ever buy. It's saved me from the 2am "why are these two systems disagreeing" page more times than I can count.</p>
+
+          <p>I'll go deeper on the polling-relay implementation — claim batching, backoff, and poison-message handling — in a follow-up. Until then: stop dual-writing.</p>
+        </div>
+
+        <div class="article__footer">
+          <div class="article__tags">
+            <span class="tag">Architecture</span>
+            <span class="tag">Kafka</span>
+            <span class="tag">Spring Boot</span>
+          </div>
+          <a href="Blog.html" class="btn btn--ghost btn--sm"><i data-lucide="arrow-left"></i> All posts</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <div class="site-footer__brand">
+      <a href="Landing%20Page.html" class="nav__brand"><span class="nav__mono">SR</span> Simon Rowe</a>
+      <p>Head of Engineering, Commercial Trading at Global. Building AI-native, cloud-native, event-driven systems.</p>
+    </div>
+    <div class="site-footer__col">
+      <h4>Explore</h4>
+      <a href="Experience.html">Experience</a>
+      <a href="Blog.html">Blog</a>
+      <a href="News.html">News &amp; Events</a>
+      <a href="Contact.html">Contact</a>
+    </div>
+    <div class="site-footer__col">
+      <h4>Connect</h4>
+      <a href="#">GitHub</a>
+      <a href="#">LinkedIn</a>
+      <a href="#">Download CV</a>
+    </div>
+  </div>
+  <div class="site-footer__bar">
+    <span>© 2026 Simon Rowe</span>
+    <span>Built with AI-native engineering</span>
+  </div>
+</footer>
+
+<div id="chat-dock"></div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="site.js"></script>
+<script type="text/babel" src="chat.jsx"></script>
+
+</body>
+</html>

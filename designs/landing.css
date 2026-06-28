@@ -1,0 +1,119 @@
+/* ==========================================================================
+   simonrowe.dev — Home page specifics
+   Shared chrome (nav, footer, buttons, chat widget) lives in site.css.
+   ========================================================================== */
+
+/* ─────────────────────────  HERO  ───────────────────────── */
+.hero {
+  position: relative; overflow: hidden;
+  min-height: 100svh;
+  padding: 96px clamp(1rem, 4vw, 2rem) 3rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+/* Subtle ambient backdrop — clean, lets the chat lead */
+.hero__ambient {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(60% 50% at 50% 0%, rgba(var(--primary-rgb), 0.10) 0%, transparent 70%),
+    radial-gradient(40% 40% at 85% 30%, rgba(167, 139, 250, 0.07) 0%, transparent 70%);
+}
+.hero__ambient::after {
+  content: ''; position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(70% 60% at 50% 10%, #000 0%, transparent 75%);
+  mask-image: radial-gradient(70% 60% at 50% 10%, #000 0%, transparent 75%);
+}
+[data-theme="light"] .hero__ambient::after {
+  background-image: radial-gradient(rgba(0,0,0,0.04) 1px, transparent 1px);
+}
+
+.hero__inner {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 680px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+
+.hero__eyebrow {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.35rem 0.9rem; margin-bottom: 1.5rem;
+  border-radius: var(--radius-pill); border: 1px solid var(--border-faint);
+  background: var(--surface-container-low);
+  font-size: 0.72rem; font-weight: 500; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--on-surface-variant);
+  white-space: nowrap;
+}
+.hero__title {
+  font-family: var(--font-heading);
+  font-size: clamp(2.4rem, 7vw, 3.6rem); font-weight: 700;
+  line-height: 1.04; letter-spacing: -0.03em; margin-bottom: 0.6rem;
+}
+.hero__role {
+  font-size: clamp(0.95rem, 2.5vw, 1.05rem); font-weight: 500;
+  color: var(--on-surface); margin-bottom: 0.5rem;
+}
+.hero__tag {
+  font-size: 0.95rem; color: var(--on-surface-variant);
+  max-width: 38rem; margin: 0 auto 2rem; text-wrap: pretty;
+}
+
+#chat-root { width: 100%; }
+
+.hero__hint {
+  margin-top: 1.25rem; font-size: 0.8rem; color: var(--on-surface-variant);
+  display: flex; align-items: center; gap: 0.45rem; opacity: 0.85;
+}
+.hero__hint .lucide { width: 14px; height: 14px; }
+
+/* ─────────────────────────  ABOUT  ───────────────────────── */
+.about {
+  max-width: 880px; margin: 0 auto;
+  padding: clamp(3rem, 8vw, 5.5rem) clamp(1.25rem, 4vw, 2rem);
+  display: grid; grid-template-columns: 200px 1fr; gap: clamp(1.5rem, 4vw, 3rem);
+  align-items: start;
+}
+.about__portrait {
+  position: relative; border-radius: var(--radius-lg); overflow: hidden;
+  aspect-ratio: 3 / 4; border: 1px solid var(--border-subtle);
+  background: var(--surface-container-low);
+}
+.about__portrait .ph {
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(135deg, var(--surface-container) 0 12px, var(--surface-container-low) 12px 24px);
+  display: grid; place-items: center;
+}
+.about__portrait .ph span {
+  font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.04em;
+  color: var(--on-surface-variant); background: var(--glass-bg);
+  padding: 0.3rem 0.6rem; border-radius: var(--radius-sm);
+}
+.about__body h2 {
+  font-family: var(--font-heading); font-size: clamp(1.6rem, 4vw, 2rem);
+  font-weight: 700; letter-spacing: -0.02em; margin-bottom: 1rem;
+}
+.about__body p {
+  color: var(--on-surface-variant); font-size: 0.97rem; margin-bottom: 0.85rem; text-wrap: pretty;
+}
+.about__body strong { color: var(--on-surface); font-weight: 600; }
+.about__stack { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 1.25rem 0 1.5rem; }
+.about__stack span {
+  padding: 0.3rem 0.7rem; border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle); background: var(--surface-container-low);
+  font-size: 0.78rem; color: var(--on-surface-variant);
+}
+.about__actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+.about__socials { display: flex; gap: 0.5rem; }
+.about__socials a {
+  min-width: 44px; height: 40px; padding: 0 0.9rem; border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle); background: var(--surface-container-low);
+  display: grid; place-items: center; color: var(--on-surface-variant);
+  font-size: 0.82rem; font-weight: 600; letter-spacing: 0.02em;
+  text-decoration: none; transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+.about__socials a:hover { border-color: rgba(var(--primary-rgb), 0.45); color: var(--primary); }
+
+@media (max-width: 760px) {
+  .hero { padding-top: 84px; }
+  .about { grid-template-columns: 1fr; }
+  .about__portrait { max-width: 180px; }
+}

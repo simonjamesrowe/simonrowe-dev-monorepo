@@ -34,7 +34,10 @@ public class ChatConfig {
       final ChatMemory chatMemory, final ProfileMcpTools profileMcpTools,
       final VectorStore vectorStore) {
     return builder
-        .defaultSystem(systemPrompt)
+        .defaultSystem(systemPrompt + "\n\n"
+            + "When you call the skills, jobs, code example, or blog tools, "
+            + "the visitor already sees a visual card with the details. Add a brief "
+            + "framing sentence and do not re-list the data the card shows.")
         .defaultAdvisors(
             MessageChatMemoryAdvisor.builder(chatMemory).build(),
             ContextAwareQuestionAnswerAdvisor.builder(vectorStore, chatMemory)

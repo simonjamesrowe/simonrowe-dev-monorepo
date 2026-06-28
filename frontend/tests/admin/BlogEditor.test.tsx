@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { BlogEditor } from '../../src/pages/admin/BlogEditor'
 
-vi.mock('@mdxeditor/editor', () => {
-  const React = require('react')
+vi.mock('@mdxeditor/editor', async () => {
+  const React = await import('react')
   return {
     MDXEditor: React.forwardRef(function MockMDXEditor(
       { markdown, onChange }: { markdown: string; onChange?: (val: string) => void },

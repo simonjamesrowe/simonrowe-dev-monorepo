@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Menu, Moon, Sun, X } from 'lucide-react'
+import { Menu, MessageSquare, Moon, Sun, X } from 'lucide-react'
+import { useChat } from '../../contexts/ChatContext'
 import { useTheme } from '../../contexts/ThemeContext'
 
 const navItems = [
   { label: 'Home', to: '/' },
+  { label: 'Profile', to: '/profile' },
   { label: 'Experience', to: '/experience' },
   { label: 'Blog', to: '/blogs' },
   { label: 'News & Events', to: '/news-events' },
@@ -13,6 +15,7 @@ const navItems = [
 
 export function MobileMenu() {
   const [isOpen, setIsOpen] = useState(false)
+  const { openChat } = useChat()
   const { theme, toggleTheme } = useTheme()
 
   return (
@@ -41,6 +44,19 @@ export function MobileMenu() {
               </NavLink>
             </li>
           ))}
+          <li>
+            <button
+              className="mobile-menu__link mobile-menu__ask-ai"
+              onClick={() => {
+                openChat()
+                setIsOpen(false)
+              }}
+              type="button"
+            >
+              <MessageSquare size={18} />
+              <span>Ask AI</span>
+            </button>
+          </li>
           <li>
             <button
               className="mobile-menu__link mobile-menu__theme-toggle"
