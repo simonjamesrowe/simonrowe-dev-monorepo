@@ -7,6 +7,11 @@ cors:
 uploads:
   path: ${UPLOADS_PATH:backend/uploads/}
 
+mongock:
+  enabled: ${MONGOCK_ENABLED:true}
+  migration-scan-package:
+    - com.simonrowe.migration.changeunits
+
 management:
   server:
     port: 8081
@@ -79,7 +84,7 @@ spring:
           model: text-embedding-3-small
       image:
         options:
-          model: dall-e-3
+          model: gpt-image-1
     openai-sdk:
       api-key: ${OPENAI_API_KEY:not-set}
       chat:

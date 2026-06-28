@@ -105,37 +105,9 @@ public class ExternalImageDownloader {
         }
       }
 
-      String mimeType = Files.probeContentType(originalFile);
-      if (mimeType == null) {
-        mimeType = "image/" + extension;
-      }
-
-      Map<String, MediaAsset.VariantInfo> variants;
-      try {
-        variants = variantGenerator.generateVariants(
-            originalFile, assetId, assetDir.toString());
-      } catch (Exception e) {
-        LOG.warn("Variant generation failed for {}, keeping original",
-            externalUrl, e);
-        variants = Map.of();
-      }
-
-      long fileSize = Files.size(originalFile);
-      String originalPath = "/uploads/" + assetId + "/" + storedFileName;
-
-      Instant now = Instant.now();
-      MediaAsset asset = new MediaAsset(
-          assetId,
-          extractFileName(externalUrl),
-          mimeType,
-          fileSize,
-          originalPath,
-          variants,
-          now,
-          now,
-          null);
-
-      repository.save(asset);
+      String originalPath = finalizeAsset(
+          assetId, assetDir, originalFile, storedFileName, extension,
+          extractFileName(externalUrl));
       LOG.info("Downloaded external image: {} -> {}", externalUrl, originalPath);
       return originalPath;
 
@@ -143,6 +115,91 @@ public class ExternalImageDownloader {
       LOG.debug("Failed to download image: {}", externalUrl, e);
       return null;
     }
+  }
+
+  /**
+   * Stores raw image bytes (e.g. a base64-decoded image returned inline by an
+   * image-generation model) locally with variants, and returns the local path
+   * (e.g. /uploads/{assetId}/original.png). Returns null on any failure.
+   */
+  public String storeImageBytes(
+      final byte[] data,
+      final String extension,
+      final String sourceName) {
+    if (data == null || data.length == 0) {
+      return null;
+    }
+    if (!ALLOWED_EXTENSIONS.contains(extension)) {
+      LOG.warn("Refusing to store unsupported image format '{}' for {}",
+          extension, sourceName);
+      return null;
+    }
+    if (data.length > MAX_FILE_SIZE) {
+      LOG.warn("Generated image too large ({} bytes) for {}, skipping",
+          data.length, sourceName);
+      return null;
+    }
+
+    try {
+      String assetId = UUID.randomUUID().toString();
+      Path assetDir = Path.of(uploadsPath, assetId);
+      Files.createDirectories(assetDir);
+
+      String storedFileName = "original." + extension;
+      Path originalFile = assetDir.resolve(storedFileName);
+      Files.write(originalFile, data);
+
+      String originalPath = finalizeAsset(
+          assetId, assetDir, originalFile, storedFileName, extension, sourceName);
+      LOG.info("Stored generated image for '{}' -> {}", sourceName, originalPath);
+      return originalPath;
+
+    } catch (Exception e) {
+      LOG.warn("Failed to store generated image for '{}': {}",
+          sourceName, e.getMessage());
+      return null;
+    }
+  }
+
+  private String finalizeAsset(
+      final String assetId,
+      final Path assetDir,
+      final Path originalFile,
+      final String storedFileName,
+      final String extension,
+      final String sourceName) throws IOException {
+    String mimeType = Files.probeContentType(originalFile);
+    if (mimeType == null) {
+      mimeType = "image/" + extension;
+    }
+
+    Map<String, MediaAsset.VariantInfo> variants;
+    try {
+      variants = variantGenerator.generateVariants(
+          originalFile, assetId, assetDir.toString());
+    } catch (Exception e) {
+      LOG.warn("Variant generation failed for {}, keeping original",
+          sourceName, e);
+      variants = Map.of();
+    }
+
+    long fileSize = Files.size(originalFile);
+    String originalPath = "/uploads/" + assetId + "/" + storedFileName;
+
+    Instant now = Instant.now();
+    MediaAsset asset = new MediaAsset(
+        assetId,
+        sourceName,
+        mimeType,
+        fileSize,
+        originalPath,
+        variants,
+        now,
+        now,
+        null);
+
+    repository.save(asset);
+    return originalPath;
   }
 
   private String guessExtension(final String url) {
