@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 
 import { ProfilePage } from '../../src/pages/ProfilePage'
+import { API_BASE_URL } from '../../src/config/api'
 import type { Profile } from '../../src/types/Profile'
 
 const mockUseProfile = vi.fn()
@@ -83,7 +84,7 @@ describe('ProfilePage', () => {
 
     expect(screen.getByText('Profile biography copy')).toBeInTheDocument()
     expect(document.querySelector('.tour-profile')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Download CV/i })).toHaveAttribute('href', 'http://localhost:8080/api/resume')
+    expect(screen.getByRole('link', { name: /Download CV/i })).toHaveAttribute('href', `${API_BASE_URL}/api/resume`)
     expect(screen.getByRole('link', { name: /GitHub profile/i })).toHaveAttribute('href', 'https://github.com/simonrowe')
     expect(document.querySelector('#contact.tour-contact')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Contact form/i })).toBeInTheDocument()

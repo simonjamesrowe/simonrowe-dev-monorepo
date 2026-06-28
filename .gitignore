@@ -43,6 +43,24 @@ docker-data/
 
 # Uploaded media files (restored from backup)
 backend/uploads/
+# Accidental nested uploads tree (created when backend ran from the wrong CWD)
+backend/backend/
+
+# Accidental scratch/design duplicates at the repo root
+# (the canonical copies live under designs/)
+/Article.html
+/Blog.html
+/Contact.html
+/Experience.html
+/Landing Page.html
+/News.html
+/SKILL.md
+/chat.jsx
+/colors_and_type.css
+/landing.css
+/pages.css
+/site.css
+/site.js
 
 # Logs
 *.log
