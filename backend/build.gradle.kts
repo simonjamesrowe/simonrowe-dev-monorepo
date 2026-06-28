@@ -20,6 +20,7 @@ repositories {
 dependencyManagement {
     imports {
         mavenBom(libs.spring.ai.bom.get().toString())
+        mavenBom(libs.mongock.bom.get().toString())
     }
 }
 
@@ -105,6 +106,8 @@ dependencies {
     implementation(libs.bucket4j.core)
     implementation(libs.spring.boot.starter.oauth2.resource.server)
     implementation(libs.thumbnailator)
+    implementation(libs.mongock.springboot.v3)
+    implementation(libs.mongock.mongodb.springdata.v4)
     implementation(libs.google.api.client)
     implementation(libs.google.api.services.drive)
     implementation(libs.google.auth.library.oauth2.http)
