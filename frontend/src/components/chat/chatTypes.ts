@@ -1,4 +1,4 @@
-export type WidgetKind = 'skills' | 'employment' | 'code' | 'blogs'
+export type WidgetKind = 'skills' | 'employment' | 'code' | 'blogs' | 'news' | 'events'
 
 export interface SkillWidgetPayload {
   groups: Array<{
@@ -37,6 +37,34 @@ export interface BlogWidgetPayload {
     tags?: string[]
     publishedDate?: string | null
     url?: string | null
+    imageUrl?: string | null
+  }>
+}
+
+export interface NewsWidgetPayload {
+  articles: Array<{
+    id?: string | null
+    title: string
+    summary?: string | null
+    sourceName?: string | null
+    originalUrl?: string | null
+    publishedDate?: string | null
+    imageUrl?: string | null
+  }>
+}
+
+export interface EventWidgetPayload {
+  events: Array<{
+    id?: string | null
+    title: string
+    summary?: string | null
+    sourceName?: string | null
+    originalUrl?: string | null
+    eventDate?: string | null
+    eventEndDate?: string | null
+    venue?: string | null
+    location?: string | null
+    imageUrl?: string | null
   }>
 }
 
