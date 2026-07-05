@@ -2,15 +2,15 @@ package com.simonrowe.chat;
 
 import java.util.List;
 
-public record BlogWidgetPayload(List<Post> posts) {
+public record NewsWidgetPayload(List<Article> articles) {
 
-  public record Post(
+  public record Article(
       String id,
       String title,
       String summary,
-      List<String> tags,
+      String sourceName,
+      String originalUrl,
       String publishedDate,
-      String url,
       String imageUrl
   ) {
   }

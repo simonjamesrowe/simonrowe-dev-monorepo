@@ -4488,6 +4488,20 @@ a:hover {
   padding-top: 0.75rem;
 }
 
+.chat-widget__media {
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.chat-widget__image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
 .chat-widget__item-head {
   display: flex;
   align-items: baseline;
@@ -4548,6 +4562,22 @@ a:hover {
   background: transparent;
   padding: 0;
   color: var(--on-surface);
+}
+
+.chat-widget__source {
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-accent, #2563eb);
+}
+
+.chat-widget__detail {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.35rem 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #64748b);
 }
 
 .chat-widget__link {

@@ -3,9 +3,12 @@ package com.simonrowe.agents;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,6 +49,7 @@ class WeeklyDigestAgentTest {
   private AssistantMessage assistantMessage;
 
   private WeeklyDigestAgent agent;
+  private DigestMetadataGenerator metadataGenerator;
 
   private static final Tag DIGEST_TAG =
       new Tag("tag-1", "Weekly Digest");
@@ -61,10 +65,11 @@ class WeeklyDigestAgentTest {
     lenient().when(promptRunner.respond(anyList()))
         .thenReturn(assistantMessage);
 
+    metadataGenerator = new DigestMetadataGenerator(ai);
     agent = new WeeklyDigestAgent(
         blogRepository, tagRepository,
         articleRepository, ai, changePublisher,
-        blogImageGenerationService);
+        blogImageGenerationService, metadataGenerator);
   }
 
   @Test
@@ -157,15 +162,56 @@ class WeeklyDigestAgentTest {
 
     assertThat(created.id()).isNull();
     assertThat(created.title())
-        .startsWith("AI & Tech Roundup:");
+        .doesNotStartWith("AI & Tech Roundup:");
+    assertThat(created.title())
+        .contains("Spring Boot 4 Released");
     assertThat(created.shortDescription())
-        .isEqualTo(
-            "Latest roundup of site activity and tech news");
+        .contains("Spring Boot 4 Released");
     assertThat(created.published()).isTrue();
     assertThat(created.content())
         .isEqualTo("# Week in Review\n\nGenerated.");
     assertThat(created.tags())
         .containsExactly(DIGEST_TAG);
+  }
+
+  @Test
+  void generateDigest_passesSourceSpecificContextToImageGeneration() {
+    Instant recentFetch =
+        Instant.now().minus(1, ChronoUnit.DAYS);
+    AggregatedArticle article = new AggregatedArticle(
+        "art-image", "Agent frameworks mature", "AI Native Dev",
+        "https://ainativedev.io",
+        "https://ainativedev.io/agents",
+        "Agent frameworks are becoming more practical.",
+        "Full content", null,
+        recentFetch, recentFetch, true, "/uploads/article/original.png");
+
+    Blog savedDigest = new Blog(
+        "blog-digest-image", "Digest",
+        "Summary",
+        "Content.", true, null,
+        Instant.now(), Instant.now(),
+        List.of(DIGEST_TAG), List.of());
+
+    when(blogRepository
+        .findByPublishedTrueOrderByCreatedDateDesc())
+        .thenReturn(List.of());
+    when(articleRepository
+        .findByVisibleTrueOrderByPublishedDateDesc())
+        .thenReturn(List.of(article));
+    when(tagRepository.findByName("Weekly Digest"))
+        .thenReturn(Optional.of(DIGEST_TAG));
+    when(assistantMessage.getContent())
+        .thenReturn("Content.");
+    when(blogRepository.save(any()))
+        .thenReturn(savedDigest);
+
+    agent.generateDigest();
+
+    verify(blogImageGenerationService).generateAndStore(
+        contains("Agent frameworks mature"),
+        contains("Agent frameworks mature"),
+        contains("AI Native Dev"));
   }
 
   @Test
@@ -239,8 +285,8 @@ class WeeklyDigestAgentTest {
 
     agent.generateDigest();
 
-    verify(ai).withLlm("gpt-4o-mini");
-    verify(promptRunner).respond(anyList());
+    verify(ai, atLeastOnce()).withLlm("gpt-4o-mini");
+    verify(promptRunner, times(2)).respond(anyList());
 
     ArgumentCaptor<Blog> captor =
         ArgumentCaptor.forClass(Blog.class);

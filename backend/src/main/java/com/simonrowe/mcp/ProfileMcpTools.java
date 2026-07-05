@@ -13,6 +13,8 @@ import com.simonrowe.chat.ChatStreamPublisher;
 import com.simonrowe.chat.ChatContactTracker;
 import com.simonrowe.chat.CodeWidgetPayload;
 import com.simonrowe.chat.EmploymentWidgetPayload;
+import com.simonrowe.chat.EventWidgetPayload;
+import com.simonrowe.chat.NewsWidgetPayload;
 import com.simonrowe.chat.SkillsWidgetPayload;
 import com.simonrowe.contact.ContactService;
 import com.simonrowe.contact.ContactSubmission;
@@ -52,6 +54,8 @@ public class ProfileMcpTools {
   private static final String JOBS_LABEL = "Pulling up employment history";
   private static final String CODE_LABEL = "Fetching code examples";
   private static final String BLOGS_LABEL = "Searching blog posts";
+  private static final String NEWS_LABEL = "Searching tech news";
+  private static final String EVENTS_LABEL = "Finding upcoming events";
 
   private final ProfileService profileService;
   private final SearchService searchService;
@@ -259,6 +263,10 @@ public class ProfileMcpTools {
     }
   }
 
+  public Object searchNews(final String query) {
+    return searchNews(query, null);
+  }
+
   @WithSpan
   @Tool(description = "Search aggregated tech news articles from external sources like "
       + "AI Native Dev, Rundown AI, and Spring Blog. Returns recent articles with "
@@ -267,37 +275,50 @@ public class ProfileMcpTools {
   public Object searchNews(
       @ToolParam(description = "Search keywords to match against news article titles "
           + "and summaries. Pass null or empty for latest articles.")
-      final String query) {
-    if (query != null && !query.isBlank()) {
-      try {
-        List<SearchResult> results = searchService.searchByType(query, "news");
-        return results.stream()
-            .map(r -> {
-              Map<String, Object> map = new LinkedHashMap<>();
-              map.put("title", r.name());
-              map.put("url", r.url());
-              return map;
-            })
-            .toList();
-      } catch (SearchUnavailableException e) {
-        return SEARCH_UNAVAILABLE;
+      final String query,
+      final ToolContext toolContext) {
+    String sessionId = sessionId(toolContext);
+    publishToolStart(sessionId, NEWS_LABEL);
+    try {
+      if (query != null && !query.isBlank()) {
+        try {
+          List<SearchResult> results = searchService.searchByType(query, "news");
+          return results.stream()
+              .map(r -> {
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("title", r.name());
+                map.put("url", r.url());
+                return map;
+              })
+              .toList();
+        } catch (SearchUnavailableException e) {
+          return SEARCH_UNAVAILABLE;
+        }
       }
+      List<AggregatedArticle> articles = articleRepository
+          .findByVisibleTrueOrderByPublishedDateDesc(
+              org.springframework.data.domain.PageRequest.of(0, 10))
+          .getContent();
+      publishWidgetIfNotEmpty(sessionId, "news", toNewsPayload(articles));
+      return articles.stream()
+          .map(a -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("title", a.title());
+            map.put("summary", a.summary());
+            map.put("sourceName", a.sourceName());
+            map.put("originalUrl", a.originalUrl());
+            map.put("publishedDate", a.publishedDate());
+            map.put("imageUrl", a.imageUrl());
+            return map;
+          })
+          .toList();
+    } finally {
+      publishToolEnd(sessionId, NEWS_LABEL);
     }
-    List<AggregatedArticle> articles = articleRepository
-        .findByVisibleTrueOrderByPublishedDateDesc(
-            org.springframework.data.domain.PageRequest.of(0, 10))
-        .getContent();
-    return articles.stream()
-        .map(a -> {
-          Map<String, Object> map = new LinkedHashMap<>();
-          map.put("title", a.title());
-          map.put("summary", a.summary());
-          map.put("sourceName", a.sourceName());
-          map.put("originalUrl", a.originalUrl());
-          map.put("publishedDate", a.publishedDate());
-          return map;
-        })
-        .toList();
+  }
+
+  public Object getUpcomingEvents(final String query) {
+    return getUpcomingEvents(query, null);
   }
 
   @WithSpan
@@ -307,31 +328,40 @@ public class ProfileMcpTools {
   public Object getUpcomingEvents(
       @ToolParam(description = "Optional search keywords to filter events. "
           + "Pass null or empty for all upcoming events.")
-      final String query) {
-    if (query != null && !query.isBlank()) {
-      try {
-        return searchService.searchByType(query, "event");
-      } catch (SearchUnavailableException e) {
-        return SEARCH_UNAVAILABLE;
+      final String query,
+      final ToolContext toolContext) {
+    String sessionId = sessionId(toolContext);
+    publishToolStart(sessionId, EVENTS_LABEL);
+    try {
+      if (query != null && !query.isBlank()) {
+        try {
+          return searchService.searchByType(query, "event");
+        } catch (SearchUnavailableException e) {
+          return SEARCH_UNAVAILABLE;
+        }
       }
+      List<AggregatedEvent> events = eventRepository
+          .findByVisibleTrueAndEventDateAfterOrderByEventDateAsc(
+              java.time.Instant.now());
+      List<AggregatedEvent> limitedEvents = events.stream().limit(10).toList();
+      publishWidgetIfNotEmpty(sessionId, "events", toEventPayload(limitedEvents));
+      return limitedEvents.stream()
+          .map(e -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("title", e.title());
+            map.put("summary", e.summary());
+            map.put("sourceName", e.sourceName());
+            map.put("originalUrl", e.originalUrl());
+            map.put("eventDate", e.eventDate());
+            map.put("eventEndDate", e.eventEndDate());
+            map.put("venue", e.venue());
+            map.put("location", e.location());
+            return map;
+          })
+          .toList();
+    } finally {
+      publishToolEnd(sessionId, EVENTS_LABEL);
     }
-    List<AggregatedEvent> events = eventRepository
-        .findByVisibleTrueAndEventDateAfterOrderByEventDateAsc(
-            java.time.Instant.now());
-    return events.stream()
-        .limit(10)
-        .map(e -> {
-          Map<String, Object> map = new LinkedHashMap<>();
-          map.put("title", e.title());
-          map.put("summary", e.summary());
-          map.put("sourceName", e.sourceName());
-          map.put("originalUrl", e.originalUrl());
-          map.put("eventDate", e.eventDate());
-          map.put("venue", e.venue());
-          map.put("location", e.location());
-          return map;
-        })
-        .toList();
   }
 
   @WithSpan
@@ -416,6 +446,8 @@ public class ProfileMcpTools {
       case EmploymentWidgetPayload employment -> employment.jobs().isEmpty();
       case CodeWidgetPayload code -> code.examples().isEmpty();
       case BlogWidgetPayload blogs -> blogs.posts().isEmpty();
+      case NewsWidgetPayload news -> news.articles().isEmpty();
+      case EventWidgetPayload events -> events.events().isEmpty();
       default -> payload == null;
     };
   }
@@ -471,7 +503,8 @@ public class ProfileMcpTools {
                 .map(tag -> tag.name())
                 .toList(),
             blog.createdDate() == null ? null : blog.createdDate().toString(),
-            blog.url()))
+            blog.url(),
+            blog.featuredImageUrl()))
         .toList());
   }
 
@@ -483,7 +516,37 @@ public class ProfileMcpTools {
             blog.shortDescription(),
             List.of(),
             blog.publishedDate() == null ? null : blog.publishedDate().toString(),
-            blog.url()))
+            blog.url(),
+            blog.image()))
+        .toList());
+  }
+
+  private static NewsWidgetPayload toNewsPayload(final List<AggregatedArticle> articles) {
+    return new NewsWidgetPayload(articles.stream()
+        .map(article -> new NewsWidgetPayload.Article(
+            article.id(),
+            article.title(),
+            article.summary(),
+            article.sourceName(),
+            article.originalUrl(),
+            article.publishedDate() == null ? null : article.publishedDate().toString(),
+            article.imageUrl()))
+        .toList());
+  }
+
+  private static EventWidgetPayload toEventPayload(final List<AggregatedEvent> events) {
+    return new EventWidgetPayload(events.stream()
+        .map(event -> new EventWidgetPayload.Event(
+            event.id(),
+            event.title(),
+            event.summary(),
+            event.sourceName(),
+            event.originalUrl(),
+            event.eventDate() == null ? null : event.eventDate().toString(),
+            event.eventEndDate() == null ? null : event.eventEndDate().toString(),
+            event.venue(),
+            event.location(),
+            null))
         .toList());
   }
 

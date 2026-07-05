@@ -58,6 +58,24 @@ class BlogImageGenerationServiceTest {
   }
 
   @Test
+  void generateAndStore_withSourceContextPassesContextIntoPrompt() {
+    ImageResponse response = new ImageResponse(
+        List.of(new ImageGeneration(new Image("https://img.example.com/context.png", null))));
+    when(imageModel.call(any(ImagePrompt.class))).thenReturn(response);
+    when(externalImageDownloader.downloadAndStore(anyString()))
+        .thenReturn("/uploads/context/original.png");
+
+    service.generateAndStore(
+        "What caught my eye: Agent frameworks mature",
+        "A few practical notes.",
+        "External sources: Agent frameworks mature from AI Native Dev");
+
+    ArgumentCaptor<ImagePrompt> captor = ArgumentCaptor.forClass(ImagePrompt.class);
+    verify(imageModel).call(captor.capture());
+    assertThat(promptOf(captor)).contains("AI Native Dev");
+  }
+
+  @Test
   void generateAndStore_base64Response_decodesAndStoresBytes() {
     byte[] raw = "some-image-bytes".getBytes();
     String b64 = Base64.getEncoder().encodeToString(raw);
@@ -147,6 +165,21 @@ class BlogImageGenerationServiceTest {
 
     // Distinct titles should not all collapse to the same hero image prompt.
     assertThat(prompts.size()).isGreaterThan(1);
+  }
+
+  @Test
+  void buildPrompt_withSourceContextIncludesEditorialContext() {
+    String prompt = service.buildPrompt(
+        "What caught my eye: Agent frameworks mature",
+        "A few practical notes on agent frameworks.",
+        "External sources: Agent frameworks mature from AI Native Dev; "
+            + "Spring AI advisors from Spring Blog");
+
+    assertThat(prompt).contains("Agent frameworks mature");
+    assertThat(prompt).contains("AI Native Dev");
+    assertThat(prompt).contains("Spring Blog");
+    assertThat(prompt).contains("editorial");
+    assertThat(prompt).contains("No text");
   }
 
   @Test

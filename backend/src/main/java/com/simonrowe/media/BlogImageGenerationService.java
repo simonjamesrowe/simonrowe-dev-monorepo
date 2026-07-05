@@ -28,10 +28,12 @@ public class BlogImageGenerationService {
   private static final String IMAGE_QUALITY = "medium";
 
   private static final String PROMPT_TEMPLATE =
-      "A professional tech blog hero image. Abstract digital illustration on a "
-          + "%s background, featuring %s. Modern, clean composition with subtle "
-          + "gradients, depth, and a sense of motion. The imagery should evoke: "
-          + "%s. No text, no words, no letters, no logos. "
+      "A personal editorial hero image for a technical blog. Use a %s visual "
+          + "direction with %s. The image should feel specific to these topics: "
+          + "%s. Prefer practical engineering cues such as notes, architecture "
+          + "sketches, tooling dashboards, event streams, model orchestration, "
+          + "search indexes, or delivery pipelines when relevant. "
+          + "No text, no words, no letters, no logos. "
           + "Wide cinematic landscape format.";
 
   /** Colour palettes selected deterministically per blog title for variety. */
@@ -48,14 +50,14 @@ public class BlogImageGenerationService {
 
   /** Visual compositions selected deterministically per blog title. */
   private static final String[] COMPOSITIONS = {
-      "isometric 3D geometric shapes and connected glowing nodes",
-      "flowing wave forms and drifting particle networks",
-      "abstract circuit-board patterns and microchip motifs",
-      "layered low-poly mountains and crystalline structures",
-      "orbiting concentric rings and streaming data flows",
-      "interlocking hexagonal grids and floating translucent cubes",
-      "swirling nebula-like clouds with constellation points",
-      "stacked layered planes with light beams and depth of field",
+      "desk/workbench scene with annotated system sketches and browser windows",
+      "architecture sketchbook with service boundaries and data flow arrows",
+      "tooling dashboard with charts, logs, and deployment signals",
+      "event-stream visualization with messages flowing between services",
+      "model orchestration workspace with prompts, tools, and retrieval layers",
+      "search index map with documents, vectors, and ranked result paths",
+      "testing and delivery pipeline with checks, traces, and release gates",
+      "curated reading board with pinned article cards and technical notes",
   };
 
   private final ImageModel imageModel;
@@ -76,8 +78,15 @@ public class BlogImageGenerationService {
   public String generateAndStore(
       final String blogTitle,
       final String blogSummary) {
+    return generateAndStore(blogTitle, blogSummary, null);
+  }
+
+  public String generateAndStore(
+      final String blogTitle,
+      final String blogSummary,
+      final String sourceContext) {
     try {
-      String prompt = buildPrompt(blogTitle, blogSummary);
+      String prompt = buildPrompt(blogTitle, blogSummary, sourceContext);
 
       OpenAiImageOptions options = OpenAiImageOptions.builder()
           .model(IMAGE_MODEL)
@@ -117,21 +126,32 @@ public class BlogImageGenerationService {
    * roundups, which share a description) don't all look the same.
    */
   String buildPrompt(final String blogTitle, final String blogSummary) {
+    return buildPrompt(blogTitle, blogSummary, null);
+  }
+
+  String buildPrompt(
+      final String blogTitle,
+      final String blogSummary,
+      final String sourceContext) {
     String title = blogTitle == null ? "" : blogTitle;
     int hash = title.hashCode();
     String colorTheme = COLOR_THEMES[Math.floorMod(hash, COLOR_THEMES.length)];
     String composition = COMPOSITIONS[Math.floorMod(hash * 31 + 17, COMPOSITIONS.length)];
-    String visualDescription = buildVisualDescription(title, blogSummary);
+    String visualDescription = buildVisualDescription(title, blogSummary, sourceContext);
     return String.format(PROMPT_TEMPLATE, colorTheme, composition, visualDescription);
   }
 
   private String buildVisualDescription(
       final String blogTitle,
-      final String blogSummary) {
+      final String blogSummary,
+      final String sourceContext) {
     StringBuilder sb = new StringBuilder();
-    sb.append("tech concepts related to: ").append(blogTitle);
+    sb.append("editorial technical concepts related to: ").append(blogTitle);
     if (blogSummary != null && !blogSummary.isBlank()) {
       sb.append(". ").append(blogSummary);
+    }
+    if (sourceContext != null && !sourceContext.isBlank()) {
+      sb.append(". Source context: ").append(sourceContext);
     }
     return sb.toString();
   }
