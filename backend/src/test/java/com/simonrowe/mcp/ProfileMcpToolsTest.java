@@ -11,12 +11,17 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.simonrowe.admin.AdminCodeExampleRepository;
 import com.simonrowe.admin.CodeExample;
+import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
+import com.simonrowe.aggregation.AggregatedEvent;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.BlogService;
 import com.simonrowe.blog.BlogSummaryResponse;
+import com.simonrowe.chat.BlogWidgetPayload;
 import com.simonrowe.chat.ChatContactTracker;
 import com.simonrowe.chat.ChatStreamPublisher;
+import com.simonrowe.chat.EventWidgetPayload;
+import com.simonrowe.chat.NewsWidgetPayload;
 import com.simonrowe.contact.ContactService;
 import com.simonrowe.contact.ContactSubmission;
 import com.simonrowe.contact.EmailDeliveryException;
@@ -31,10 +36,12 @@ import com.simonrowe.search.SearchService;
 import com.simonrowe.search.SearchUnavailableException;
 import com.simonrowe.skills.SkillGroupService;
 import com.simonrowe.skills.SkillGroupSummaryDto;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -266,6 +273,21 @@ class ProfileMcpToolsTest {
   }
 
   @Test
+  void getRecentBlogsPublishesImageUrlInBlogWidgetPayload() {
+    final ToolContext context = new ToolContext(Map.of("sessionId", "sess-blog-image"));
+    given(blogService.getLatest(10)).willReturn(List.of(sampleBlogSummaryResponse()));
+
+    profileMcpTools.getRecentBlogs(context);
+
+    ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+    verify(streamPublisher).widget(eq("sess-blog-image"), eq("blogs"), payload.capture());
+
+    BlogWidgetPayload blogs = (BlogWidgetPayload) payload.getValue();
+    assertThat(blogs.posts()).hasSize(1);
+    assertThat(blogs.posts().getFirst().imageUrl()).isEqualTo("/images/blog.jpg");
+  }
+
+  @Test
   void getCodeExamplesPublishesCodeWidgetWhenResultsExist() {
     final ToolContext context = new ToolContext(Map.of("sessionId", "sess-code"));
     given(codeExampleRepository.findAll()).willReturn(List.of(
@@ -290,6 +312,33 @@ class ProfileMcpToolsTest {
     assertThat(result).isInstanceOf(List.class);
     verify(searchService, never()).searchByType(org.mockito.ArgumentMatchers.any(),
         org.mockito.ArgumentMatchers.eq("event"));
+  }
+
+  @Test
+  void getUpcomingEventsPublishesEventsWidgetWhenEventsExist() {
+    final ToolContext context = new ToolContext(Map.of("sessionId", "sess-events"));
+    final AggregatedEvent event = new AggregatedEvent(
+        "evt-1", "London Java Meetup", "Luma",
+        "https://lu.ma/java", "Production Java talks.", "Detailed description",
+        Instant.parse("2026-07-20T18:30:00Z"),
+        Instant.parse("2026-07-20T20:30:00Z"),
+        "CodeNode", "London",
+        Instant.parse("2026-07-01T10:00:00Z"), true);
+    given(eventRepository.findByVisibleTrueAndEventDateAfterOrderByEventDateAsc(
+        org.mockito.ArgumentMatchers.any())).willReturn(List.of(event));
+
+    profileMcpTools.getUpcomingEvents(null, context);
+
+    ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+    InOrder order = inOrder(streamPublisher);
+    order.verify(streamPublisher).toolStart("sess-events", "Finding upcoming events");
+    order.verify(streamPublisher).widget(eq("sess-events"), eq("events"), payload.capture());
+    order.verify(streamPublisher).toolEnd("sess-events", "Finding upcoming events");
+
+    EventWidgetPayload events = (EventWidgetPayload) payload.getValue();
+    assertThat(events.events()).hasSize(1);
+    assertThat(events.events().getFirst().title()).isEqualTo("London Java Meetup");
+    assertThat(events.events().getFirst().venue()).isEqualTo("CodeNode");
   }
 
   @Test
@@ -329,6 +378,48 @@ class ProfileMcpToolsTest {
     assertThat(result).isInstanceOf(List.class);
     verify(searchService, never()).searchByType(
         org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("news"));
+  }
+
+  @Test
+  void searchNewsWithoutQueryPublishesNewsWidgetWhenArticlesExist() {
+    final ToolContext context = new ToolContext(Map.of("sessionId", "sess-news"));
+    final AggregatedArticle article = new AggregatedArticle(
+        "art-1", "Spring AI Advisors", "Spring Blog",
+        "https://spring.io", "https://spring.io/blog/advisors",
+        "Advisor APIs improve RAG composition.", "Full content", "Simon",
+        Instant.parse("2026-07-01T09:00:00Z"),
+        Instant.parse("2026-07-01T10:00:00Z"),
+        true, "/uploads/art-1/small.webp");
+    given(articleRepository.findByVisibleTrueOrderByPublishedDateDesc(
+        org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)))
+        .willReturn(new org.springframework.data.domain.PageImpl<>(List.of(article)));
+
+    profileMcpTools.searchNews(null, context);
+
+    ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+    InOrder order = inOrder(streamPublisher);
+    order.verify(streamPublisher).toolStart("sess-news", "Searching tech news");
+    order.verify(streamPublisher).widget(eq("sess-news"), eq("news"), payload.capture());
+    order.verify(streamPublisher).toolEnd("sess-news", "Searching tech news");
+
+    NewsWidgetPayload news = (NewsWidgetPayload) payload.getValue();
+    assertThat(news.articles()).hasSize(1);
+    assertThat(news.articles().getFirst().title()).isEqualTo("Spring AI Advisors");
+    assertThat(news.articles().getFirst().imageUrl()).isEqualTo("/uploads/art-1/small.webp");
+  }
+
+  @Test
+  void searchNewsSkipsWidgetWhenNoArticlesExist() {
+    final ToolContext context = new ToolContext(Map.of("sessionId", "sess-news-empty"));
+    given(articleRepository.findByVisibleTrueOrderByPublishedDateDesc(
+        org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)))
+        .willReturn(org.springframework.data.domain.Page.empty());
+
+    profileMcpTools.searchNews(null, context);
+
+    verify(streamPublisher).toolStart("sess-news-empty", "Searching tech news");
+    verify(streamPublisher, never()).widget(eq("sess-news-empty"), eq("news"), any());
+    verify(streamPublisher).toolEnd("sess-news-empty", "Searching tech news");
   }
 
   @Test
@@ -454,7 +545,7 @@ class ProfileMcpToolsTest {
         "b-1",
         "Streaming chat",
         "How real streaming improves UX",
-        null,
+        "/images/blog.jpg",
         java.time.Instant.parse("2026-05-01T00:00:00Z"),
         List.of(),
         List.of(),
