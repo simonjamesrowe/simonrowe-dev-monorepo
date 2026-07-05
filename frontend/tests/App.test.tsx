@@ -63,11 +63,12 @@ describe('App', () => {
     expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()
   })
 
-  it('routes /profile to ProfilePage', () => {
+  it('routes /profile to ProfilePage', async () => {
     window.history.pushState({}, '', '/profile')
     render(<App />)
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Profile')
+    // ProfilePage is lazy-loaded, so it resolves via Suspense on the next tick.
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Profile')
     expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()
   })
 })
