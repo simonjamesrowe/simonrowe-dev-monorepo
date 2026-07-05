@@ -16,6 +16,7 @@ import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
 import com.simonrowe.media.BlogImageGenerationService;
 import com.simonrowe.media.ExternalImageDownloader;
+import com.simonrowe.media.MediaVariantResolver;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
@@ -62,6 +63,7 @@ public class ContentAggregationAgent {
   private final ContentChangePublisher changePublisher;
   private final ExternalImageDownloader imageDownloader;
   private final BlogImageGenerationService blogImageGenerationService;
+  private final MediaVariantResolver mediaVariantResolver;
 
   public ContentAggregationAgent(
       final ContentSourceRepository sourceRepository,
@@ -72,7 +74,8 @@ public class ContentAggregationAgent {
       final Ai ai,
       final ContentChangePublisher changePublisher,
       final ExternalImageDownloader imageDownloader,
-      final BlogImageGenerationService blogImageGenerationService) {
+      final BlogImageGenerationService blogImageGenerationService,
+      final MediaVariantResolver mediaVariantResolver) {
     this.sourceRepository = sourceRepository;
     this.articleRepository = articleRepository;
     this.eventRepository = eventRepository;
@@ -82,6 +85,7 @@ public class ContentAggregationAgent {
     this.changePublisher = changePublisher;
     this.imageDownloader = imageDownloader;
     this.blogImageGenerationService = blogImageGenerationService;
+    this.mediaVariantResolver = mediaVariantResolver;
   }
 
   @Action(description = "Import a single article or event from a URL")
@@ -210,6 +214,10 @@ public class ContentAggregationAgent {
     if (localImageUrl == null && content.imageUrl() == null) {
       localImageUrl = blogImageGenerationService.generateAndStore(
           content.title(), classification.summary());
+    }
+    if (localImageUrl != null) {
+      localImageUrl = mediaVariantResolver.resolvePath(
+          localImageUrl, "large", "medium", "small", "thumbnail");
     }
     Instant publishedDate = content.publishedDate();
     if (publishedDate == null) {
