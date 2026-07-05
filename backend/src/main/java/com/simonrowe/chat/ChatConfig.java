@@ -34,10 +34,7 @@ public class ChatConfig {
       final ChatMemory chatMemory, final ProfileMcpTools profileMcpTools,
       final VectorStore vectorStore) {
     return builder
-        .defaultSystem(systemPrompt + "\n\n"
-            + "When you call the skills, jobs, code example, or blog tools, "
-            + "the visitor already sees a visual card with the details. Add a brief "
-            + "framing sentence and do not re-list the data the card shows.")
+        .defaultSystem(systemPrompt + "\n\n" + widgetPromptGuidance())
         .defaultAdvisors(
             MessageChatMemoryAdvisor.builder(chatMemory).build(),
             ContextAwareQuestionAnswerAdvisor.builder(vectorStore, chatMemory)
@@ -49,5 +46,12 @@ public class ChatConfig {
         )
         .defaultTools(profileMcpTools)
         .build();
+  }
+
+  static String widgetPromptGuidance() {
+    return "When you call the skills, jobs, code example, blog, news, or event tools, "
+        + "the visitor already sees a visual card with the details. Add a brief "
+        + "framing sentence and do not re-list the data the card shows. "
+        + "Do not start a new answer unless the visitor has sent a new prompt.";
   }
 }
