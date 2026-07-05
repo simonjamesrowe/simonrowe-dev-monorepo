@@ -15,9 +15,6 @@ import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
 import com.simonrowe.media.BlogImageGenerationService;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -44,15 +41,13 @@ public class WeeklyDigestAgent {
           + "separately). Group by sections (blog posts, tech "
           + "news) if both are present.\n\n";
 
-  private static final String DIGEST_SHORT_DESCRIPTION =
-      "Latest roundup of site activity and tech news";
-
   private final BlogRepository blogRepository;
   private final TagRepository tagRepository;
   private final AggregatedArticleRepository articleRepository;
   private final Ai ai;
   private final ContentChangePublisher changePublisher;
   private final BlogImageGenerationService blogImageGenerationService;
+  private final DigestMetadataGenerator metadataGenerator;
 
   public WeeklyDigestAgent(
       final BlogRepository blogRepository,
@@ -60,13 +55,15 @@ public class WeeklyDigestAgent {
       final AggregatedArticleRepository articleRepository,
       final Ai ai,
       final ContentChangePublisher changePublisher,
-      final BlogImageGenerationService blogImageGenerationService) {
+      final BlogImageGenerationService blogImageGenerationService,
+      final DigestMetadataGenerator metadataGenerator) {
     this.blogRepository = blogRepository;
     this.tagRepository = tagRepository;
     this.articleRepository = articleRepository;
     this.ai = ai;
     this.changePublisher = changePublisher;
     this.blogImageGenerationService = blogImageGenerationService;
+    this.metadataGenerator = metadataGenerator;
   }
 
   @Action(description = "Generate a digest blog post")
@@ -99,31 +96,25 @@ public class WeeklyDigestAgent {
         buildActivitySummary(recentBlogs, recentArticles);
     String digestContent =
         generateDigestContent(activitySummary);
-
-    LocalDate now = LocalDate.now(ZoneOffset.UTC);
-    LocalDate periodStart = sinceDate.atZone(ZoneOffset.UTC)
-        .toLocalDate();
-    DateTimeFormatter fmt =
-        DateTimeFormatter.ofPattern("MMM d");
-    String title = "AI & Tech Roundup: "
-        + periodStart.format(fmt) + " - " + now.format(fmt)
-        + ", " + now.getYear();
+    DigestMetadata metadata = metadataGenerator.generate(
+        recentBlogs, recentArticles, activitySummary);
+    String imageContext = buildImageContext(recentBlogs, recentArticles);
 
     String featuredImageUrl =
         blogImageGenerationService.generateAndStore(
-            title, DIGEST_SHORT_DESCRIPTION);
+            metadata.title(), metadata.shortDescription(), imageContext);
 
     Instant createdAt = Instant.now();
     Blog digest = new Blog(
-        null, title,
-        DIGEST_SHORT_DESCRIPTION,
+        null, metadata.title(),
+        metadata.shortDescription(),
         digestContent, true, featuredImageUrl,
         createdAt, createdAt,
         List.of(digestTag), List.<Skill>of());
 
     Blog saved = blogRepository.save(digest);
     changePublisher.publishCreated(ContentType.BLOG, saved.id());
-    log.info("Published digest: {}", title);
+    log.info("Published digest: {}", metadata.title());
   }
 
   private Instant findLastDigestDate(final Tag digestTag) {
@@ -163,6 +154,31 @@ public class WeeklyDigestAgent {
             .append(" (").append(a.sourceName()).append(")")
             .append(": ").append(a.summary()).append("\n");
       }
+    }
+    return sb.toString();
+  }
+
+  private String buildImageContext(
+      final List<Blog> recentBlogs,
+      final List<AggregatedArticle> recentArticles) {
+    StringBuilder sb = new StringBuilder();
+    if (!recentBlogs.isEmpty()) {
+      sb.append("Recent Simon posts: ");
+      recentBlogs.stream().limit(5)
+          .forEach(blog -> sb.append(blog.title())
+              .append(" - ")
+              .append(blog.shortDescription())
+              .append("; "));
+    }
+    if (!recentArticles.isEmpty()) {
+      sb.append("External sources: ");
+      recentArticles.stream().limit(8)
+          .forEach(article -> sb.append(article.title())
+              .append(" from ")
+              .append(article.sourceName())
+              .append(" - ")
+              .append(article.summary())
+              .append("; "));
     }
     return sb.toString();
   }
