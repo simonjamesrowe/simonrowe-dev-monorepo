@@ -27,6 +27,7 @@ import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
 import com.simonrowe.media.BlogImageGenerationService;
 import com.simonrowe.media.ExternalImageDownloader;
+import com.simonrowe.media.MediaVariantResolver;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,7 @@ class ContentAggregationAgentTest {
   @Mock private ContentChangePublisher changePublisher;
   @Mock private ExternalImageDownloader imageDownloader;
   @Mock private BlogImageGenerationService blogImageGenerationService;
+  @Mock private MediaVariantResolver mediaVariantResolver;
 
   private PromptRunner promptRunner;
   @SuppressWarnings("rawtypes")
@@ -76,7 +78,8 @@ class ContentAggregationAgentTest {
     agent = new ContentAggregationAgent(
         sourceRepository, articleRepository,
         eventRepository, scraperFactory, htmlScraper, ai,
-        changePublisher, imageDownloader, blogImageGenerationService);
+        changePublisher, imageDownloader, blogImageGenerationService,
+        mediaVariantResolver);
   }
 
   @Test
