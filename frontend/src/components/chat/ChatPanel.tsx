@@ -43,6 +43,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
   const streamFinalized = useRef(false)
   const cancelledRef = useRef(false)
   const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const initialQueryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const activeAssistantRef = useRef<ChatMessageModel | null>(null)
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length
@@ -75,6 +76,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
 
   const onMessage = useCallback((response: ChatResponse) => {
     if (cancelledRef.current) return
+    if (response.sessionId && response.sessionId !== sessionIdRef.current) return
     if (response.type === 'STREAM_START') {
       streamFinalized.current = false
       setActiveAssistant(createEmptyAssistantMessage(formatTimestamp()))
@@ -124,8 +126,6 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
     }
     setActiveAssistant(null)
 
-    let sendTimeout: ReturnType<typeof setTimeout>
-
     chatService.connect(
       sessionId,
       onMessage,
@@ -133,7 +133,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
         if (cancelledRef.current) return
         setConnected(true)
         if (initialQuery) {
-          sendTimeout = setTimeout(() => {
+          initialQueryTimeoutRef.current = setTimeout(() => {
             if (!cancelledRef.current) {
               chatService.sendMessage({ sessionId, message: initialQuery })
             }
@@ -148,7 +148,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
 
     return () => {
       cancelledRef.current = true
-      clearTimeout(sendTimeout)
+      clearTimeout(initialQueryTimeoutRef.current)
       clearTimeout(streamTimeoutRef.current)
       chatService.disconnect()
     }
@@ -193,6 +193,8 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
     setConnected(false)
     streamFinalized.current = false
     cancelledRef.current = false
+    clearTimeout(initialQueryTimeoutRef.current)
+    clearTimeout(streamTimeoutRef.current)
 
     const newSessionId = crypto.randomUUID()
     sessionIdRef.current = newSessionId
@@ -200,8 +202,16 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
     chatService.connect(
       newSessionId,
       onMessage,
-      () => setConnected(true),
-      () => setConnected(false)
+      () => {
+        if (!cancelledRef.current) {
+          setConnected(true)
+        }
+      },
+      () => {
+        if (!cancelledRef.current) {
+          setConnected(false)
+        }
+      }
     )
   }
 
