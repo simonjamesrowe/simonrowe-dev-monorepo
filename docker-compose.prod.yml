@@ -66,6 +66,8 @@ services:
     env_file:
       - .env
     environment:
+      # Disable Class Data Sharing to prevent G1GC SIGSEGV crash on aarch64 (JDK-21 bug)
+      JAVA_TOOL_OPTIONS: "-Xshare:off"
       SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/simonrowe
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
@@ -172,7 +174,7 @@ services:
       retries: 3
 
   portainer:
-    image: portainer/portainer-ce:latest
+    image: portainer/portainer-ce:2.39.2
     restart: unless-stopped
     command:
       - --host
