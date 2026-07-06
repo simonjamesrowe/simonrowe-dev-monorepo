@@ -23,8 +23,9 @@ public class DigestMetadataGenerator {
           + "Return exactly two lines in this format:\n"
           + "Title: <human title, under 90 characters>\n"
           + "Description: <one sentence, under 160 characters>\n"
-          + "Use first-person curated phrasing. Do not use the phrase "
-          + "'AI & Tech Roundup'. Base the title on the source material.\n\n";
+          + "Use first-person curated phrasing. Do not use the phrases "
+          + "'AI & Tech Roundup' or 'This week in AI'. Base the title on the specific themes "
+          + "of the source material.\n\n";
 
   private final Ai ai;
 
@@ -71,6 +72,7 @@ public class DigestMetadataGenerator {
     return metadata.title() != null
         && !metadata.title().isBlank()
         && !metadata.title().startsWith("AI & Tech Roundup")
+        && !metadata.title().toLowerCase().contains("this week in ai")
         && metadata.shortDescription() != null
         && !metadata.shortDescription().isBlank();
   }
