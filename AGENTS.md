@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/024-landing-profile-split/plan.md
+specs/026-fix-ai-blog-titles/plan.md
 <!-- SPECKIT END -->
 
 ## Active Technologies
