@@ -29,7 +29,7 @@ export function BlogListingPage() {
   const gridBlogs = blogs.slice(1)
 
   if (loading) {
-    return <LoadingIndicator />
+    return <LoadingIndicator message="Loading blogs..." />
   }
 
   if (error) {

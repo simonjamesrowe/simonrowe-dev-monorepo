@@ -31,7 +31,7 @@ export function EventsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <LoadingIndicator />
+  if (loading) return <LoadingIndicator message="Loading events..." />
   if (error) return <ErrorMessage message={error} />
 
   return (

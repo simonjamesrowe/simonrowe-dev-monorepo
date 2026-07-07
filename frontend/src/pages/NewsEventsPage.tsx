@@ -47,7 +47,7 @@ export function NewsEventsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <LoadingIndicator />
+  if (loading) return <LoadingIndicator message="Loading news and events..." />
   if (error) return <ErrorMessage message={error} />
 
   // Get unique sources for filter pills

@@ -49,7 +49,7 @@ export function BlogDetailPage() {
   }, [id])
 
   if (loading) {
-    return <LoadingIndicator />
+    return <LoadingIndicator message="Loading blog post..." />
   }
 
   if (error || !blog) {

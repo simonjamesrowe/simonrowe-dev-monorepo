@@ -38,7 +38,7 @@ describe('BlogDetailPage', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Loading profile...')).toBeInTheDocument()
+    expect(screen.getByText('Loading blog post...')).toBeInTheDocument()
   })
 
   it('renders blog detail when data loads', async () => {

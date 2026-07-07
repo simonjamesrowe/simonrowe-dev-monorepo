@@ -20,7 +20,7 @@ export function HomePage() {
   }, [profile])
 
   if (profileLoading) {
-    return <LoadingIndicator />
+    return <LoadingIndicator message="Loading profile..." />
   }
 
   if (profileError || !profile) {
