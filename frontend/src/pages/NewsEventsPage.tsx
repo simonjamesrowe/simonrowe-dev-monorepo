@@ -108,12 +108,22 @@ export function NewsEventsPage() {
               rel="noopener noreferrer"
               target="_blank"
             >
-              {article.imageUrl && (
+              {resolveImageUrl(article.imageUrl) ? (
                 <img
                   alt=""
                   className="feed__hero-image"
                   src={resolveImageUrl(article.imageUrl)}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    (e.target as HTMLImageElement).parentElement!.classList.add('feed__hero-image--fallback');
+                  }}
                 />
+              ) : (
+                <div className="feed__hero-image feed__hero-image--fallback">
+                  <div className="feed__hero-image-placeholder">
+                    {article.sourceName.substring(0, 2).toUpperCase()}
+                  </div>
+                </div>
               )}
               <div className="feed__hero-overlay">
                 <span className="feed__source-badge">{article.sourceName}</span>
@@ -141,11 +151,22 @@ export function NewsEventsPage() {
               rel="noopener noreferrer"
               target="_blank"
             >
-              {article.imageUrl && (
-                <div className="feed__card-image">
-                  <img alt="" src={resolveImageUrl(article.imageUrl)} />
-                </div>
-              )}
+              <div className="feed__card-image">
+                {resolveImageUrl(article.imageUrl) ? (
+                  <img 
+                    alt="" 
+                    src={resolveImageUrl(article.imageUrl)} 
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      (e.target as HTMLImageElement).parentElement!.classList.add('feed__card-image--fallback');
+                    }}
+                  />
+                ) : (
+                  <div className="feed__card-image-placeholder">
+                    {article.sourceName.substring(0, 2).toUpperCase()}
+                  </div>
+                )}
+              </div>
               <div className="feed__card-body">
                 <span className="feed__source-badge">{article.sourceName}</span>
                 <h3 className="feed__card-title">{article.title}</h3>

@@ -8396,6 +8396,21 @@ a:hover {
   object-fit: cover;
 }
 
+.feed__hero-image--fallback {
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-background) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feed__hero-image-placeholder {
+  font-size: 6rem;
+  font-family: var(--font-heading);
+  color: var(--color-border);
+  opacity: 0.3;
+  font-weight: 800;
+}
+
 .feed__hero-overlay {
   position: relative;
   z-index: 1;
@@ -8467,6 +8482,23 @@ a:hover {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.feed__card-image--fallback {
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-background) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.feed__card-image-placeholder {
+  font-size: 3.5rem;
+  font-family: var(--font-heading);
+  color: var(--color-border);
+  opacity: 0.3;
+  font-weight: 800;
 }
 
 .feed__card-body {

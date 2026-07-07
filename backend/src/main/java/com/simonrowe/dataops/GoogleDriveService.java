@@ -1,5 +1,7 @@
 package com.simonrowe.dataops;
 
+import com.google.api.client.googleapis.media.MediaHttpDownloader;
+import com.google.api.client.googleapis.media.MediaHttpDownloaderProgressListener;
 import com.google.api.client.googleapis.media.MediaHttpUploader;
 import com.google.api.client.http.InputStreamContent;
 import com.google.api.services.drive.Drive;
@@ -181,7 +183,17 @@ public class GoogleDriveService {
   public void downloadFile(final String fileId, final OutputStream outputStream)
       throws IOException {
     checkDrive();
-    drive.files().get(fileId).executeMediaAndDownloadTo(outputStream);
+    Drive.Files.Get request = drive.files().get(fileId);
+    MediaHttpDownloader downloader = request.getMediaHttpDownloader();
+    downloader.setDirectDownloadEnabled(false);
+    downloader.setChunkSize(10 * 1024 * 1024); // 10MB chunks
+    downloader.setProgressListener(new MediaHttpDownloaderProgressListener() {
+      public void progressChanged(MediaHttpDownloader d) {
+        LOG.info("Download progress: {} ({} bytes)", 
+            d.getDownloadState(), d.getNumBytesDownloaded());
+      }
+    });
+    request.executeMediaAndDownloadTo(outputStream);
   }
 
   public void deleteFile(final String fileId) throws IOException {

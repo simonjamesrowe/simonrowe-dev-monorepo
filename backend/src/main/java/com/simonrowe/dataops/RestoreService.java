@@ -118,9 +118,10 @@ public class RestoreService {
     boolean hasManifest = false;
     boolean hasCollections = false;
 
-    try (var zis = new ZipInputStream(Files.newInputStream(zipFile))) {
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
+    try (var zip = new java.util.zip.ZipFile(zipFile.toFile())) {
+      var entries = zip.entries();
+      while (entries.hasMoreElements()) {
+        var entry = entries.nextElement();
         if ("manifest.json".equals(entry.getName())) {
           hasManifest = true;
         }
@@ -206,9 +207,10 @@ public class RestoreService {
   }
 
   private boolean zipHasUploads(final Path zipFile) throws IOException {
-    try (var zis = new ZipInputStream(Files.newInputStream(zipFile))) {
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
+    try (var zip = new java.util.zip.ZipFile(zipFile.toFile())) {
+      var entries = zip.entries();
+      while (entries.hasMoreElements()) {
+        var entry = entries.nextElement();
         if (entry.getName().startsWith("uploads/") && !entry.isDirectory()) {
           return true;
         }
@@ -250,14 +252,21 @@ public class RestoreService {
 
     Files.createDirectories(uploadsDir);
 
-    try (var zis = new ZipInputStream(Files.newInputStream(zipFile))) {
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
+    try (var zip = new java.util.zip.ZipFile(zipFile.toFile())) {
+      var entries = zip.entries();
+      while (entries.hasMoreElements()) {
+        var entry = entries.nextElement();
         if (entry.getName().startsWith("uploads/") && !entry.isDirectory()) {
           String relativePath = entry.getName().substring("uploads/".length());
           Path targetFile = uploadsDir.resolve(relativePath);
           Files.createDirectories(targetFile.getParent());
-          Files.copy(zis, targetFile, StandardCopyOption.REPLACE_EXISTING);
+          try {
+            try (var is = zip.getInputStream(entry)) {
+              Files.copy(is, targetFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+          } catch (Exception e) {
+            LOG.warn("Failed to extract {}, skipping. Error: {}", entry.getName(), e.getMessage());
+          }
         }
       }
     }
@@ -265,11 +274,11 @@ public class RestoreService {
 
   private String readEntryFromZip(final Path zipFile, final String entryName)
       throws IOException {
-    try (var zis = new ZipInputStream(Files.newInputStream(zipFile))) {
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
-        if (entryName.equals(entry.getName())) {
-          return new String(zis.readAllBytes(), StandardCharsets.UTF_8);
+    try (var zip = new java.util.zip.ZipFile(zipFile.toFile())) {
+      var entry = zip.getEntry(entryName);
+      if (entry != null) {
+        try (var is = zip.getInputStream(entry)) {
+          return new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
       }
     }
