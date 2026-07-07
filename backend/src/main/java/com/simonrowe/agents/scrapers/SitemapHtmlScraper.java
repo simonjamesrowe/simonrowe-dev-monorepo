@@ -424,9 +424,14 @@ public class SitemapHtmlScraper {
     if (ogTitle != null && !ogTitle.attr("content").isEmpty()) {
       title = ogTitle.attr("content");
     }
+    
+    if (title != null) {
+      title = title.replaceAll("(?i)\\s*\\|\\s*Claude\\s*by\\s*Anthropic$", "");
+      title = title.replaceAll("(?i)\\s*\\|\\s*Claude$", "");
+    }
 
     String content = extractArticleContent(doc);
-    if (title.isEmpty() || content.isEmpty()) {
+    if (title == null || title.isEmpty() || content.isEmpty()) {
       return null;
     }
 
@@ -438,8 +443,13 @@ public class SitemapHtmlScraper {
 
     String imageUrl = null;
     Element ogImage = doc.selectFirst("meta[property=og:image]");
-    if (ogImage != null) {
+    if (ogImage != null && !ogImage.attr("content").isEmpty()) {
       imageUrl = ogImage.attr("content");
+    } else {
+      Element img = doc.selectFirst("article img[src], main img[src], img[src]");
+      if (img != null) {
+        imageUrl = img.absUrl("src");
+      }
     }
 
     // Fix 2: normalize the URL stored in ScrapedContent
@@ -667,8 +677,38 @@ public class SitemapHtmlScraper {
   }
 
   private boolean looksLikeArticle(String url) {
-    return url.contains("/article") || url.contains("/blog")
-        || url.contains("/post") || url.contains("/news")
-        || url.matches(".*\\/\\d{4}\\/.*");
+    if (url == null || url.isEmpty()) {
+      return false;
+    }
+    try {
+      URI uri = new URI(url);
+      String path = uri.getPath();
+      if (path == null) {
+        return false;
+      }
+
+      String[] segments = path.split("/");
+      java.util.List<String> validSegments = java.util.Arrays.stream(segments)
+          .filter(s -> !s.isEmpty())
+          .toList();
+
+      if (validSegments.size() < 2) {
+        return false;
+      }
+
+      String lastSegment = validSegments.get(validSegments.size() - 1);
+      if (lastSegment.equals("category") || lastSegment.equals("tag")
+          || lastSegment.equals("author") || lastSegment.equals("page")
+          || lastSegment.equals("blog") || lastSegment.equals("news")
+          || lastSegment.equals("developers") || lastSegment.equals("article")
+          || lastSegment.equals("post") || lastSegment.equals("newsletter")) {
+        return false;
+      }
+
+      return validSegments.contains("blog") || validSegments.contains("news")
+          || validSegments.contains("article") || validSegments.contains("post");
+    } catch (Exception e) {
+      return false;
+    }
   }
 }
