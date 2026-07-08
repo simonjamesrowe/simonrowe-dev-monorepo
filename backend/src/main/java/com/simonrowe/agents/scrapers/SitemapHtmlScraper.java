@@ -56,6 +56,7 @@ public class SitemapHtmlScraper {
 
   public List<ScrapedContent> scrape(String sitemapUrl) {
     List<ScrapedContent> results = new ArrayList<>();
+    Set<String> seenTitles = new LinkedHashSet<>();
     try {
       Document sitemap = Jsoup.connect(sitemapUrl)
           .timeout(TIMEOUT_MS)
@@ -74,7 +75,8 @@ public class SitemapHtmlScraper {
         }
         try {
           ScrapedContent content = scrapeArticlePage(articleUrl);
-          if (content != null) {
+          if (content != null && !seenTitles.contains(content.title())) {
+            seenTitles.add(content.title());
             results.add(content);
             count++;
           }
@@ -97,6 +99,7 @@ public class SitemapHtmlScraper {
 
   public List<ScrapedContent> scrapeListingPage(String listingUrl) {
     List<ScrapedContent> results = new ArrayList<>();
+    Set<String> seenTitles = new LinkedHashSet<>();
     try {
       Document doc = Jsoup.connect(listingUrl)
           .timeout(TIMEOUT_MS)
@@ -122,7 +125,8 @@ public class SitemapHtmlScraper {
         }
         try {
           ScrapedContent content = scrapeArticlePage(articleUrl);
-          if (content != null) {
+          if (content != null && !seenTitles.contains(content.title())) {
+            seenTitles.add(content.title());
             results.add(content);
             count++;
           }
@@ -446,7 +450,12 @@ public class SitemapHtmlScraper {
     if (ogImage != null && !ogImage.attr("content").isEmpty()) {
       imageUrl = ogImage.attr("content");
     } else {
-      Element img = doc.selectFirst("article img[src], main img[src], img[src]");
+      Element img = doc.select("article img[src], main img[src], img[src]").stream()
+          .filter(e -> {
+            String src = e.absUrl("src").toLowerCase();
+            return !src.endsWith(".svg") && !src.contains("icon") && !src.contains("logo");
+          })
+          .findFirst().orElse(null);
       if (img != null) {
         imageUrl = img.absUrl("src");
       }
@@ -684,6 +693,11 @@ public class SitemapHtmlScraper {
       URI uri = new URI(url);
       String path = uri.getPath();
       if (path == null) {
+        return false;
+      }
+
+      // Skip localized URLs like /de/blog/, /ja/blog/
+      if (path.matches("(?i)^/(de|fr|it|ja|ko|es|zh|ru|pt|nl)/(blog|news|article|post).*")) {
         return false;
       }
 

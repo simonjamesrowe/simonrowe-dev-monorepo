@@ -12,3 +12,32 @@ specs/026-fix-ai-blog-titles/plan.md
 ## Recent Changes
 - feat/frontend/landing-chat-widgets: Added Java 21, TypeScript 5.7, React 19 + Spring Boot 3.5.x, Spring AI 1.1.4, Spring WebSocket STOMP, MongoDB, Elasticsearch, Kafka, Vite 6, @stomp/stompjs, lucide-react, react-markdown, react-syntax-highlighter
 - feat/frontend/landing-chat-widgets: Planned landing/profile split with centered chat-first homepage, public Profile page, and retargeted tour seed data
+
+## Project Structure
+```text
+backend/           # Spring Boot application
+  src/main/java/   # Java source (com.simonrowe.*)
+  src/test/java/   # Tests with Testcontainers
+  uploads/         # Media asset storage
+frontend/          # React + Vite application
+  src/             # TypeScript source
+  tests/           # Vitest tests
+scripts/           # Bash scripts for backup, restore, migration
+```
+
+## Commands
+```bash
+# Start/stop applications (sources env vars from .env files)
+./scripts/start.sh                      # Start both backend and frontend together
+./scripts/stop.sh                       # Stop both backend and frontend
+./scripts/start-backend.sh              # Start backend only (port 8080)
+./scripts/start-frontend.sh             # Start frontend only (port 5173)
+
+# Tests
+cd backend && ../gradlew test           # Run backend tests
+cd frontend && npm test                 # Run frontend tests (vitest)
+
+# Backup & Restore
+./scripts/backup.sh                     # Create backup to /Users/simonrowe/backups/
+./scripts/restore.sh                    # Restore latest backup
+```

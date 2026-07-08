@@ -24,7 +24,7 @@ export function NewsPage() {
   }, [])
 
   if (loading) {
-    return <LoadingIndicator />
+    return <LoadingIndicator message="Loading news..." />
   }
 
   if (error) {

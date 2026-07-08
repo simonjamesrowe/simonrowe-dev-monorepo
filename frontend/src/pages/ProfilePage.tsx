@@ -28,7 +28,7 @@ export function ProfilePage() {
   }, [])
 
   if (loading) {
-    return <LoadingIndicator />
+    return <LoadingIndicator message="Loading profile..." />
   }
 
   if (error || !profile) {

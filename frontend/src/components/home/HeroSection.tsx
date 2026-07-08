@@ -56,11 +56,17 @@ export function HeroSection({ name, title, tagline, backgroundImageUrl }: HeroSe
           </p>
 
           <form className="hero__chat-input" onSubmit={handleChatSubmit}>
-            <input
-              type="text"
+            <textarea
+              rows={6}
               placeholder="Ask me anything about Simon..."
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleChatSubmit(e)
+                }
+              }}
             />
             <button type="submit" disabled={!chatInput.trim()} aria-label="Send">
               <ArrowRight size={18} />

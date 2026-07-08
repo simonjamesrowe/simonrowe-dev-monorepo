@@ -1009,29 +1009,31 @@ a:hover {
 
 .hero__chat-input {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 0.5rem;
   background: var(--surface-container-lowest);
   border: 1px solid var(--border-faint);
-  border-radius: 3rem;
-  padding: 0.25rem 0.25rem 0.25rem 1.5rem;
+  border-radius: 1.5rem;
+  padding: 0.5rem 0.5rem 0.5rem 1.5rem;
   width: 100%;
-  max-width: 38rem;
+  max-width: 48rem;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
   margin-bottom: 1.25rem;
 }
 
-.hero__chat-input input {
+.hero__chat-input textarea {
   flex: 1;
   background: transparent;
   border: none;
   outline: none;
   color: var(--on-surface);
   font-size: 0.9rem;
-  padding: 0.625rem 0;
+  font-family: inherit;
+  padding: 0.5rem 0;
+  resize: none;
 }
 
-.hero__chat-input input::placeholder {
+.hero__chat-input textarea::placeholder {
   color: var(--on-surface-variant);
 }
 
@@ -8394,6 +8396,21 @@ a:hover {
   object-fit: cover;
 }
 
+.feed__hero-image--fallback {
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-background) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feed__hero-image-placeholder {
+  font-size: 6rem;
+  font-family: var(--font-heading);
+  color: var(--color-border);
+  opacity: 0.3;
+  font-weight: 800;
+}
+
 .feed__hero-overlay {
   position: relative;
   z-index: 1;
@@ -8465,6 +8482,23 @@ a:hover {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.feed__card-image--fallback {
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-background) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.feed__card-image-placeholder {
+  font-size: 3.5rem;
+  font-family: var(--font-heading);
+  color: var(--color-border);
+  opacity: 0.3;
+  font-weight: 800;
 }
 
 .feed__card-body {
