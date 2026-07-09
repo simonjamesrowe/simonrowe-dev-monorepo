@@ -192,13 +192,13 @@ services:
     image: postgres:15
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=langfuse
+      - POSTGRES_USER=${LANGFUSE_DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${LANGFUSE_DB_PASSWORD:-postgres}
+      - POSTGRES_DB=${LANGFUSE_DB_NAME:-langfuse}
     volumes:
       - langfuse-db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${LANGFUSE_DB_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -212,7 +212,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@langfuse-db:5432/langfuse
+      - DATABASE_URL=postgresql://${LANGFUSE_DB_USER:-postgres}:${LANGFUSE_DB_PASSWORD:-postgres}@langfuse-db:5432/${LANGFUSE_DB_NAME:-langfuse}
 
 volumes:
   mongodb-data:

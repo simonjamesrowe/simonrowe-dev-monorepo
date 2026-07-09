@@ -8,93 +8,99 @@
 // OTLP Trace Receiver
 // ---------------------
 otelcol.receiver.otlp "default" {
-  grpc {
-    endpoint = "0.0.0.0:4317"
-  }
+	grpc {
+		endpoint = "0.0.0.0:4317"
+	}
 
-  output {
-    traces = [otelcol.processor.batch.default.input]
-  }
+	output {
+		traces = [otelcol.processor.batch.default.input]
+	}
 }
 
 // ---------------------
 // Batch Processor
 // ---------------------
 otelcol.processor.batch "default" {
-  output {
-    traces = [otelcol.exporter.otlphttp.tempo.input, otelcol.exporter.otlphttp.langfuse.input]
-  }
+	output {
+		traces = [otelcol.exporter.otlphttp.tempo.input, otelcol.exporter.otlphttp.langfuse.input]
+	}
 }
 
 // ---------------------
 // Grafana Cloud Auth
 // ---------------------
 otelcol.auth.basic "grafana_cloud" {
-  username = sys.env("GRAFANA_CLOUD_TEMPO_USER")
-  password = sys.env("GRAFANA_CLOUD_API_KEY")
+	username = sys.env("GRAFANA_CLOUD_TEMPO_USER")
+	password = sys.env("GRAFANA_CLOUD_API_KEY")
 }
 
 // ---------------------
 // Tempo Trace Exporter
 // ---------------------
 otelcol.exporter.otlphttp "tempo" {
-  client {
-    endpoint = sys.env("GRAFANA_CLOUD_TEMPO_ENDPOINT")
-    auth     = otelcol.auth.basic.grafana_cloud.handler
-  }
+	client {
+		endpoint = sys.env("GRAFANA_CLOUD_TEMPO_ENDPOINT")
+		auth     = otelcol.auth.basic.grafana_cloud.handler
+	}
 }
 
 // ---------------------
 // Docker Log Discovery
 // ---------------------
 discovery.docker "containers" {
-  host = "unix:///var/run/docker.sock"
+	host = "unix:///var/run/docker.sock"
 }
 
 discovery.relabel "docker_logs" {
-  targets = []
+	targets = []
 
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "/(.*)"
-    target_label  = "container"
-  }
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
 
-  rule {
-    source_labels = ["__meta_docker_container_image"]
-    target_label  = "image"
-  }
+	rule {
+		source_labels = ["__meta_docker_container_image"]
+		target_label  = "image"
+	}
 }
 
 // ---------------------
 // Docker Log Collection
 // ---------------------
 loki.source.docker "default" {
-  host          = "unix:///var/run/docker.sock"
-  targets       = discovery.docker.containers.targets
-  relabel_rules = discovery.relabel.docker_logs.rules
-  forward_to    = [loki.write.grafana_cloud.receiver]
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.docker.containers.targets
+	relabel_rules = discovery.relabel.docker_logs.rules
+	forward_to    = [loki.write.grafana_cloud.receiver]
 }
 
 // ---------------------
 // Loki Log Exporter
 // ---------------------
 loki.write "grafana_cloud" {
-  endpoint {
-    url = sys.env("GRAFANA_CLOUD_LOKI_ENDPOINT")
+	endpoint {
+		url = sys.env("GRAFANA_CLOUD_LOKI_ENDPOINT")
 
-    basic_auth {
-      username = sys.env("GRAFANA_CLOUD_LOKI_USER")
-      password = sys.env("GRAFANA_CLOUD_API_KEY")
-    }
-  }
+		basic_auth {
+			username = sys.env("GRAFANA_CLOUD_LOKI_USER")
+			password = sys.env("GRAFANA_CLOUD_API_KEY")
+		}
+	}
 }
 
 // ---------------------
 // Langfuse Trace Exporter
 // ---------------------
+otelcol.auth.basic "langfuse" {
+	username = sys.env("LANGFUSE_PUBLIC_KEY")
+	password = sys.env("LANGFUSE_SECRET_KEY")
+}
+
 otelcol.exporter.otlphttp "langfuse" {
-  client {
-    endpoint = "http://langfuse:3000/api/public/otel"
-  }
+	client {
+		endpoint = "http://langfuse:3000/api/public/otel"
+		auth     = otelcol.auth.basic.langfuse
+	}
 }
