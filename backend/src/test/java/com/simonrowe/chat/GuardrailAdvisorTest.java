@@ -64,8 +64,57 @@ class GuardrailAdvisorTest {
     ChatClientResponse response = advisor.adviseCall(request, chain);
     String expectedMsg =
         "I'm Simon's portfolio assistant and can only answer questions "
-            + "related to his professional experience.";
+            + "related to his professional experience. Please check out Simon's "
+            + "profile to learn more about his skills and experience.";
     assertEquals(expectedMsg, response.chatResponse().getResult().getOutput().getText());
     verify(chain, never()).nextCall(any());
+  }
+
+  @Test
+  void testExceptionFailOpen() {
+    ChatModel chatModel = mock(ChatModel.class);
+    when(chatModel.call(any(Prompt.class))).thenThrow(new RuntimeException("API Error"));
+
+    GuardrailAdvisor advisor = new GuardrailAdvisor(chatModel);
+    ChatClientRequest request =
+        new ChatClientRequest(
+            new Prompt(new UserMessage("What languages do you know?")), new HashMap<>());
+
+    CallAdvisorChain chain = mock(CallAdvisorChain.class);
+
+    ChatClientResponse expectedResponse =
+        new ChatClientResponse(
+            new ChatResponse(List.of(new Generation(new AssistantMessage("Java")))),
+            new HashMap<>());
+
+    when(chain.nextCall(request)).thenReturn(expectedResponse);
+
+    ChatClientResponse response = advisor.adviseCall(request, chain);
+    assertEquals("Java", response.chatResponse().getResult().getOutput().getText());
+    verify(chain, times(1)).nextCall(request);
+  }
+
+  @Test
+  void testNullGenerationFailOpen() {
+    ChatModel chatModel = mock(ChatModel.class);
+    when(chatModel.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of()));
+
+    GuardrailAdvisor advisor = new GuardrailAdvisor(chatModel);
+    ChatClientRequest request =
+        new ChatClientRequest(
+            new Prompt(new UserMessage("What languages do you know?")), new HashMap<>());
+
+    CallAdvisorChain chain = mock(CallAdvisorChain.class);
+
+    ChatClientResponse expectedResponse =
+        new ChatClientResponse(
+            new ChatResponse(List.of(new Generation(new AssistantMessage("Java")))),
+            new HashMap<>());
+
+    when(chain.nextCall(request)).thenReturn(expectedResponse);
+
+    ChatClientResponse response = advisor.adviseCall(request, chain);
+    assertEquals("Java", response.chatResponse().getResult().getOutput().getText());
+    verify(chain, times(1)).nextCall(request);
   }
 }
