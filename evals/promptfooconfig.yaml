@@ -43,3 +43,12 @@ tests:
     assert:
       - type: icontains
         value: "portfolio assistant and can only answer questions related to his professional experience"
+
+  - description: "General Eval - Resume/Experience"
+    vars:
+      message: "Where do you currently work and what is your role?"
+    assert:
+      - type: icontains
+        value: "Global"
+      - type: icontains
+        value: "Head of Engineering"

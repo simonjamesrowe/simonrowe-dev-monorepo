@@ -59,6 +59,15 @@ jobs:
           ../gradlew bootRun &
           # Wait for backend to be ready
           timeout 120 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep "\"status\":\"UP\""; do sleep 5; done'
+          
+      - name: Seed Local Data
+        run: |
+          MONGO_CONTAINER=$(docker ps --filter "ancestor=mongo:6.0" -q | head -n 1)
+          docker cp evals/seed-data.js $MONGO_CONTAINER:/seed-data.js
+          docker exec $MONGO_CONTAINER mongosh simonrowe /seed-data.js
+          curl -s -X POST http://localhost:8080/api/admin/data-operations/reembed
+          # Wait for re-embed to finish
+          timeout 120 bash -c 'while curl -s http://localhost:8080/api/admin/data-operations/status | grep "\"operationInProgress\":true"; do sleep 5; done'
         
       - name: Run Promptfoo Evals
         env:
