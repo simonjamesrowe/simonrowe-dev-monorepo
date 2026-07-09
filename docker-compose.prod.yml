@@ -131,6 +131,8 @@ services:
         condition: service_healthy
       portainer:
         condition: service_healthy
+      langfuse:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/"]
       interval: 10s

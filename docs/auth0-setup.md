@@ -209,3 +209,4 @@ Langfuse requires an Auth0 Application to manage user access via SSO.
    - `AUTH_AUTH0_CLIENT_ID`
    - `AUTH_AUTH0_CLIENT_SECRET`
    - `AUTH_AUTH0_ISSUER_BASE_URL` (format: `https://YOUR_DOMAIN`)
+   - `NEXTAUTH_URL=https://langfuse.simonrowe.dev` (for production environments)
