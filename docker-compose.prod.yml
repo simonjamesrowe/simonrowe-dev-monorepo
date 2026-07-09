@@ -188,6 +188,32 @@ services:
       timeout: 5s
       retries: 3
 
+  langfuse-db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=langfuse
+    volumes:
+      - langfuse-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  langfuse:
+    image: langfuse/langfuse:2.82.2
+    restart: unless-stopped
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@langfuse-db:5432/langfuse
+
 volumes:
   mongodb-data:
   kafka-data:
@@ -195,3 +221,4 @@ volumes:
   elasticsearch-backups:
   backend-uploads:
   portainer-data:
+  langfuse-db-data:
