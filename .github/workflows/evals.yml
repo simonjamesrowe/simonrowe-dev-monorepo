@@ -56,7 +56,7 @@ jobs:
           SPRING_AI_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           cd backend
-          ./gradlew bootRun &
+          ../gradlew bootRun &
           # Wait for backend to be ready
           timeout 120 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep "\"status\":\"UP\""; do sleep 5; done'
         
