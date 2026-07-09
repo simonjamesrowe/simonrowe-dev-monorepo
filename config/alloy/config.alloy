@@ -22,7 +22,7 @@ otelcol.receiver.otlp "default" {
 // ---------------------
 otelcol.processor.batch "default" {
   output {
-    traces = [otelcol.exporter.otlphttp.tempo.input]
+    traces = [otelcol.exporter.otlphttp.tempo.input, otelcol.exporter.otlphttp.langfuse.input]
   }
 }
 
@@ -87,5 +87,14 @@ loki.write "grafana_cloud" {
       username = sys.env("GRAFANA_CLOUD_LOKI_USER")
       password = sys.env("GRAFANA_CLOUD_API_KEY")
     }
+  }
+}
+
+// ---------------------
+// Langfuse Trace Exporter
+// ---------------------
+otelcol.exporter.otlphttp "langfuse" {
+  client {
+    endpoint = "http://langfuse:3000/api/public/otel"
   }
 }
