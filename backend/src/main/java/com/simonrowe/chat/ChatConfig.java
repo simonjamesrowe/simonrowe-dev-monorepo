@@ -6,6 +6,7 @@ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,10 +33,11 @@ public class ChatConfig {
   @Bean
   public ChatClient chatClient(final ChatClient.Builder builder,
       final ChatMemory chatMemory, final ProfileMcpTools profileMcpTools,
-      final VectorStore vectorStore) {
+      final VectorStore vectorStore, final ChatModel chatModel) {
     return builder
         .defaultSystem(systemPrompt + "\n\n" + widgetPromptGuidance())
         .defaultAdvisors(
+            new GuardrailAdvisor(chatModel),
             MessageChatMemoryAdvisor.builder(chatMemory).build(),
             ContextAwareQuestionAnswerAdvisor.builder(vectorStore, chatMemory)
                 .searchRequest(SearchRequest.builder()

@@ -190,3 +190,23 @@ section.
 
 - The backend CORS configuration allows `http://localhost:5173` by default
 - For other origins, update the `allowed-origins` in `backend/src/main/resources/application.yml`
+
+## Langfuse Single Sign-On (SSO)
+
+Langfuse requires an Auth0 Application to manage user access via SSO.
+
+1. In the Auth0 Dashboard, go to **Applications** > **Applications**.
+2. Click **Create Application**.
+3. Set the name to **Langfuse** and select **Regular Web Applications**.
+4. Click **Create**.
+5. Go to the **Settings** tab.
+6. In **Allowed Callback URLs**, add:
+   - `http://localhost:3000/api/auth/callback/auth0`
+   - `https://langfuse.simonrowe.dev/api/auth/callback/auth0`
+7. Click **Save Changes** at the bottom.
+8. Copy the **Client ID**, **Client Secret**, and **Domain** from the top of the Settings tab.
+9. Add these to your `.env` file as:
+   - `AUTH_AUTH0_CLIENT_ID`
+   - `AUTH_AUTH0_CLIENT_SECRET`
+   - `AUTH_AUTH0_ISSUER_BASE_URL` (format: `https://YOUR_DOMAIN`)
+   - `NEXTAUTH_URL=https://langfuse.simonrowe.dev` (for production environments)

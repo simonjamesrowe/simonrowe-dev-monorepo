@@ -1,0 +1,10 @@
+{
+  "name": "simonrowe-evals",
+  "version": "1.0.0",
+  "scripts": {
+    "eval": "promptfoo eval"
+  },
+  "dependencies": {
+    "promptfoo": "^0.100.0"
+  }
+}
