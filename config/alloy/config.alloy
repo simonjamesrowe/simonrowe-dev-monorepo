@@ -1,7 +1,8 @@
 // =============================================================================
 // Grafana Alloy Configuration
-// Receives OTLP traces from the backend and sends to Grafana Cloud Tempo.
-// Collects Docker container logs and sends to Grafana Cloud Loki.
+// Receives OTLP traces from the backend and (when enabled) forwards to Grafana
+// Cloud Tempo / Langfuse. Collects Docker container logs and sends to Grafana
+// Cloud Loki.
 // =============================================================================
 
 // ---------------------
@@ -22,12 +23,22 @@ otelcol.receiver.otlp "default" {
 // ---------------------
 otelcol.processor.batch "default" {
 	output {
-		traces = [otelcol.exporter.otlphttp.tempo.input, otelcol.exporter.otlphttp.langfuse.input]
+		// Trace exporters disabled 2026-07-11 (both returned HTTP 404):
+		//  - Tempo:    GRAFANA_CLOUD_TEMPO_ENDPOINT points at gb-south-1, but this
+		//              account's Tempo instance + token are US region (Loki push on the
+		//              US cluster works with the same key). Set the correct US OTLP
+		//              endpoint (Grafana Cloud > Connections > OTLP) and re-enable below.
+		//  - Langfuse: v2.95.1 has no OTLP ingest endpoint (/api/public/otel is v3+).
+		//              Re-enable after upgrading Langfuse to v3.
+		// To re-enable, restore the exporter blocks below and list their inputs here, e.g.
+		//   traces = [otelcol.exporter.otlphttp.tempo.input]
+		traces = []
 	}
 }
 
+/*
 // ---------------------
-// Grafana Cloud Auth
+// Grafana Cloud Auth  (DISABLED — see note in batch processor above)
 // ---------------------
 otelcol.auth.basic "grafana_cloud" {
 	username = sys.env("GRAFANA_CLOUD_TEMPO_USER")
@@ -35,7 +46,7 @@ otelcol.auth.basic "grafana_cloud" {
 }
 
 // ---------------------
-// Tempo Trace Exporter
+// Tempo Trace Exporter  (DISABLED — wrong-region endpoint, 404)
 // ---------------------
 otelcol.exporter.otlphttp "tempo" {
 	client {
@@ -43,6 +54,7 @@ otelcol.exporter.otlphttp "tempo" {
 		auth     = otelcol.auth.basic.grafana_cloud.handler
 	}
 }
+*/
 
 // ---------------------
 // Docker Log Discovery
@@ -90,8 +102,9 @@ loki.write "grafana_cloud" {
 	}
 }
 
+/*
 // ---------------------
-// Langfuse Trace Exporter
+// Langfuse Trace Exporter  (DISABLED — Langfuse v2.95.1 has no OTLP endpoint, 404)
 // ---------------------
 otelcol.auth.basic "langfuse" {
 	username = sys.env("LANGFUSE_PUBLIC_KEY")
@@ -101,6 +114,7 @@ otelcol.auth.basic "langfuse" {
 otelcol.exporter.otlphttp "langfuse" {
 	client {
 		endpoint = "http://langfuse:3000/api/public/otel"
-		auth     = otelcol.auth.basic.langfuse
+		auth     = otelcol.auth.basic.langfuse.handler
 	}
 }
+*/
