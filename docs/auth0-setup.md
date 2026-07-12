@@ -80,8 +80,23 @@ Auth0 does not include role names in tokens by default. Add an Action:
      const roles = event.authorization?.roles ?? [];
      api.accessToken.setCustomClaim('https://simonrowe.dev/roles', roles);
      api.idToken.setCustomClaim('https://simonrowe.dev/roles', roles);
+
+     // Deny access to protected applications unless user has DEV_PORTAL_ADMIN role
+     const protectedClientIds = [
+       event.secrets.LANGFUSE_CLIENT_ID, // Langfuse application
+     ];
+     if (protectedClientIds.includes(event.client.client_id)) {
+       if (!roles.includes('DEV_PORTAL_ADMIN')) {
+         api.access.deny('You do not have permission to access this application.');
+       }
+     }
    };
    ```
+
+   > **Secrets configuration:** In the Action editor, go to the **Secrets** tab
+   > (lock icon) and add `LANGFUSE_CLIENT_ID` with the Client ID of the Langfuse
+   > application created in the [Langfuse SSO](#langfuse-single-sign-on-sso) section.
+   > This avoids hardcoding the Client ID in the Action code.
 
 4. Click **Deploy**.
 5. **Actions** → **Flows** → **Login** → drag the new Action into the flow → **Apply**.
@@ -194,6 +209,8 @@ section.
 ## Langfuse Single Sign-On (SSO)
 
 Langfuse requires an Auth0 Application to manage user access via SSO.
+Access is restricted to users with the `DEV_PORTAL_ADMIN` role (enforced by
+the Post-Login Action in [step 5c](#5c-add-a-post-login-action-that-injects-roles-into-the-tokens)).
 
 1. In the Auth0 Dashboard, go to **Applications** > **Applications**.
 2. Click **Create Application**.
@@ -205,8 +222,17 @@ Langfuse requires an Auth0 Application to manage user access via SSO.
    - `https://langfuse.simonrowe.dev/api/auth/callback/auth0`
 7. Click **Save Changes** at the bottom.
 8. Copy the **Client ID**, **Client Secret**, and **Domain** from the top of the Settings tab.
-9. Add these to your `.env` file as:
-   - `AUTH_AUTH0_CLIENT_ID`
-   - `AUTH_AUTH0_CLIENT_SECRET`
-   - `AUTH_AUTH0_ISSUER_BASE_URL` (format: `https://YOUR_DOMAIN`)
-   - `NEXTAUTH_URL=https://langfuse.simonrowe.dev` (for production environments)
+9. Add the Langfuse Client ID as a secret in the **Add roles to tokens** Action:
+   - Go to **Actions** → **Library** → open `Add roles to tokens`
+   - Click the **Secrets** tab (lock icon)
+   - Add key `LANGFUSE_CLIENT_ID` with the Client ID from step 8
+   - Click **Deploy** to save
+10. Add these to your `.env` file as:
+    - `AUTH_AUTH0_CLIENT_ID`
+    - `AUTH_AUTH0_CLIENT_SECRET`
+    - `AUTH_AUTH0_ISSUER_BASE_URL` (format: `https://YOUR_DOMAIN`)
+    - `NEXTAUTH_URL=https://langfuse.simonrowe.dev` (for production environments)
+
+> **Note:** Users without the `DEV_PORTAL_ADMIN` role will see an
+> "Access denied" error from Auth0 when attempting to log into Langfuse.
+> Assign the role per [step 5b](#5b-assign-the-role-to-your-admin-user).
