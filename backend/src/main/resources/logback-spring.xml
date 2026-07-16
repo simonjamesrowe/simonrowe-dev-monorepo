@@ -2,19 +2,15 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <springProfile name="default">
-        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
-        <root level="INFO">
-            <appender-ref ref="CONSOLE"/>
-        </root>
-    </springProfile>
-
-    <springProfile name="json">
-        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
-            <encoder class="ch.qos.logback.classic.encoder.JsonEncoder"/>
-        </appender>
-        <root level="INFO">
-            <appender-ref ref="JSON"/>
-        </root>
-    </springProfile>
+    <!--
+      Single console appender for all environments. Output format is controlled by
+      Spring Boot's structured logging support (`logging.structured.format.console`):
+        - unset (local dev)  -> human-readable plain text
+        - `ecs` (prod)       -> one-line JSON per event for Loki ingestion
+      In prod this is enabled via LOGGING_STRUCTURED_FORMAT_CONSOLE in docker-compose.prod.yml.
+    -->
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
 </configuration>
