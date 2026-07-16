@@ -80,6 +80,9 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_METRICS_EXPORTER: none
       OTEL_LOGS_EXPORTER: none
+      # Emit one-line JSON (Elastic Common Schema) to stdout so Alloy/Loki can
+      # ingest and query structured fields (trace.id/span.id included for correlation).
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
       UPLOADS_PATH: uploads/
     volumes:
       - backend-uploads:/workspace/uploads

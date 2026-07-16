@@ -75,6 +75,22 @@ discovery.relabel "docker_logs" {
 		source_labels = ["__meta_docker_container_image"]
 		target_label  = "image"
 	}
+
+	// Expose the compose service name (stable across host/project-name changes)
+	// as a label, then use it to drop high-volume containers below.
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+
+	// Skip shipping logs for these containers entirely — they generate too much
+	// volume for the Grafana Cloud free tier. Add service names to the regex to
+	// exclude more (they stay visible via Portainer / `docker logs`).
+	rule {
+		source_labels = ["service"]
+		regex         = "kafka|mongodb|frontend|langfuse-db"
+		action        = "drop"
+	}
 }
 
 // ---------------------
