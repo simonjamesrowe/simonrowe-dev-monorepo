@@ -23,16 +23,15 @@ otelcol.receiver.otlp "default" {
 // ---------------------
 otelcol.processor.batch "default" {
 	output {
-		// Trace exporters disabled 2026-07-11 (both returned HTTP 404):
-		//  - Tempo:    GRAFANA_CLOUD_TEMPO_ENDPOINT points at gb-south-1, but this
-		//              account's Tempo instance + token are US region (Loki push on the
-		//              US cluster works with the same key). Set the correct US OTLP
-		//              endpoint (Grafana Cloud > Connections > OTLP) and re-enable below.
-		//  - Langfuse: v2.95.1 has no OTLP ingest endpoint (/api/public/otel is v3+).
-		//              Re-enable after upgrading Langfuse to v3.
-		// To re-enable, restore the exporter blocks below and list their inputs here, e.g.
-		//   traces = [otelcol.exporter.otlphttp.tempo.input]
-		traces = []
+		// Tempo exporter disabled 2026-07-11 (HTTP 404): GRAFANA_CLOUD_TEMPO_ENDPOINT
+		// points at gb-south-1, but this account's Tempo instance + token are US region
+		// (Loki push on the US cluster works with the same key). Set the correct US OTLP
+		// endpoint (Grafana Cloud > Connections > OTLP), restore the exporter block below,
+		// and add otelcol.exporter.otlphttp.tempo.input back to this list.
+		//
+		// Langfuse exporter re-enabled 2026-07-12 after upgrading to Langfuse v3, which
+		// added the /api/public/otel OTLP ingest endpoint.
+		traces = [otelcol.exporter.otlphttp.langfuse.input]
 	}
 }
 
@@ -102,9 +101,8 @@ loki.write "grafana_cloud" {
 	}
 }
 
-/*
 // ---------------------
-// Langfuse Trace Exporter  (DISABLED — Langfuse v2.95.1 has no OTLP endpoint, 404)
+// Langfuse Trace Exporter
 // ---------------------
 otelcol.auth.basic "langfuse" {
 	username = sys.env("LANGFUSE_PUBLIC_KEY")
@@ -117,4 +115,3 @@ otelcol.exporter.otlphttp "langfuse" {
 		auth     = otelcol.auth.basic.langfuse.handler
 	}
 }
-*/

@@ -230,7 +230,7 @@ the Post-Login Action in [step 5c](#5c-add-a-post-login-action-that-injects-role
 10. Add these to your `.env` file as:
     - `AUTH_AUTH0_CLIENT_ID`
     - `AUTH_AUTH0_CLIENT_SECRET`
-    - `AUTH_AUTH0_ISSUER_BASE_URL` (format: `https://YOUR_DOMAIN`)
+    - `AUTH_AUTH0_ISSUER` (format: `https://YOUR_DOMAIN`)
     - `NEXTAUTH_URL=https://langfuse.simonrowe.dev` (for production environments)
 
 > **Note:** Users without the `DEV_PORTAL_ADMIN` role will see an
