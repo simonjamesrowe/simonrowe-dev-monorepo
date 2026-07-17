@@ -147,7 +147,7 @@ public class SitemapHtmlScraper {
     return results;
   }
 
-  private boolean isArticleLink(String href, String listingUrl) {
+  boolean isArticleLink(String href, String listingUrl) {
     if (href == null || href.isEmpty()) {
       return false;
     }
@@ -161,6 +161,11 @@ public class SitemapHtmlScraper {
 
       String path = hrefUri.getPath();
       if (path == null || path.isEmpty()) {
+        return false;
+      }
+
+      // Skip localized URLs like /de/blog/, /ja/news/ (non-English duplicates)
+      if (path.matches("(?i)^/(de|fr|it|ja|ko|es|zh|ru|pt|nl)/.*")) {
         return false;
       }
 
@@ -181,6 +186,16 @@ public class SitemapHtmlScraper {
 
       String listingPath = listingUri.getPath();
       if (path.equals(listingPath) || path.equals(listingPath + "/")) {
+        return false;
+      }
+
+      // Only accept links within the listing's own section (e.g. /blog/*,
+      // /articles/*). This excludes site navigation, product and solution
+      // links that share the listing page but live elsewhere in the site
+      // hierarchy — otherwise those (which appear first in the DOM) would
+      // exhaust the article cap before any real posts are reached.
+      String sectionPath = listingPath.replaceAll("/+$", "");
+      if (!sectionPath.isEmpty() && !path.startsWith(sectionPath + "/")) {
         return false;
       }
 
@@ -630,9 +645,16 @@ public class SitemapHtmlScraper {
   private Instant parseInstantOrDate(String value) {
     try {
       return Instant.parse(value);
-    } catch (Exception e) {
-      return parseDateOnly(value);
+    } catch (Exception ignored) {
+      // not an ISO-8601 instant; fall through to other formats
     }
+    Instant dateOnly = parseDateOnly(value);
+    if (dateOnly != null) {
+      return dateOnly;
+    }
+    // Handle human-readable formats like "Jul 16, 2026" used in
+    // Claude blog JSON-LD datePublished fields.
+    return extractDateFromText(value);
   }
 
   private Instant parseDateTime(String value) {
