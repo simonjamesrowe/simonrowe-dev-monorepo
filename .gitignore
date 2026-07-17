@@ -72,6 +72,12 @@ coverage/
 # Playwright MCP
 .playwright-mcp/
 
+# Playwright e2e output
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
 # Screenshots
 *.png
 

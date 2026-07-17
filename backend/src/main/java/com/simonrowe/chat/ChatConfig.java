@@ -53,7 +53,21 @@ public class ChatConfig {
   static String widgetPromptGuidance() {
     return "When you call the skills, jobs, code example, blog, news, or event tools, "
         + "the visitor already sees a visual card with the details. Add a brief "
-        + "framing sentence and do not re-list the data the card shows. "
-        + "Do not start a new answer unless the visitor has sent a new prompt.";
+        + "framing sentence and do not re-list the data the card shows.\n\n"
+        + "Link the content you mention so the visitor can explore it, using ONLY URLs "
+        + "and ids present in the tool results or retrieval context. ALWAYS use markdown "
+        + "link syntax [visible name](url) — NEVER paste a bare/raw URL into your prose, "
+        + "because a bare URL is not clickable and looks broken:\n"
+        + "- Blog post: [Blog Title](/blogs/{id}) using the post id.\n"
+        + "- A specific role or job: [Company or Role](/experience?job={id}) using the "
+        + "job id — e.g. [Y-Tree](/experience?job=5eedd4803c8d74001e4497f5).\n"
+        + "- A specific skill group: [Skill Group](/experience?skillGroup={id}) using the "
+        + "group id.\n"
+        + "- News article or event: [Title](originalUrl) using its external URL.\n"
+        + "- Embed an image ONLY with markdown image syntax ![alt](imageUrl) and ONLY "
+        + "using an image URL you were explicitly given (blog/news images); skills and "
+        + "jobs have no images.\n"
+        + "Never invent, guess, or construct a URL or id you were not given. If you have "
+        + "no URL or id for something, mention it in plain text and link nothing.";
   }
 }

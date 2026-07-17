@@ -44,8 +44,12 @@ export function applyChatStreamEvent(
   }
 
   if (response.type === 'STREAM_END') {
-    if (blocks.length === 0 && response.content) {
-      appendText(blocks, response.content)
+    // The server accumulates the full answer and sends it here. Treat it as
+    // authoritative for the prose so the final answer is clean even if the
+    // intermediate chunks arrived scrambled or interleaved. Tool/widget blocks
+    // are preserved; only the streamed text is reconciled.
+    if (response.content && response.content.trim().length > 0) {
+      return { ...message, blocks: reconcileProse(blocks, response.content), finalized: true }
     }
     return { ...message, blocks, finalized: true }
   }
@@ -70,6 +74,34 @@ function appendText(blocks: ChatBlock[], content: string) {
   } else {
     blocks.push({ kind: 'text', content })
   }
+}
+
+// Replace all streamed text blocks with a single authoritative prose block,
+// keeping tool/widget blocks in their arrival order. The reconciled prose is
+// placed where the first streamed text block appeared; if no prose was streamed
+// it is appended after the tool/widget blocks.
+function reconcileProse(blocks: ChatBlock[], authoritative: string): ChatBlock[] {
+  const proseBlock: ChatBlock = { kind: 'text', content: authoritative }
+  const hasText = blocks.some((block) => block.kind === 'text')
+
+  if (!hasText) {
+    return [...blocks, proseBlock]
+  }
+
+  const result: ChatBlock[] = []
+  let inserted = false
+  for (const block of blocks) {
+    if (block.kind === 'text') {
+      if (!inserted) {
+        result.push(proseBlock)
+        inserted = true
+      }
+      // Drop any further streamed text fragments; the authoritative prose wins.
+    } else {
+      result.push(block)
+    }
+  }
+  return result
 }
 
 function findLastRunningToolIndex(blocks: ChatBlock[], label: string): number {

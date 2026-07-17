@@ -106,6 +106,22 @@ spring:
         protocol: STREAMABLE
         annotation-scanner:
           enabled: true
+    # Observability content capture (evaluated for chat fix-up, Langfuse tracing).
+    #
+    # gen_ai spans are already exported (backend -> Alloy :4317 -> Langfuse OTLP) without
+    # any property here, so traces are visible regardless. Capturing the prompt/completion
+    # TEXT in those spans is DISABLED BY DEFAULT: it would store visitor chat content in
+    # Langfuse (ClickHouse), a privacy trade-off not justified for a public portfolio chat.
+    #
+    # To enable it (e.g. temporarily, for debugging), verify the exact property names for
+    # the pinned Spring AI version (1.1.4, OpenAI SDK starter) against the Spring AI
+    # reference before relying on them, then set the observation content-capture flags,
+    # e.g.:
+    #   chat:
+    #     observations:
+    #       log-prompt: true
+    #       log-completion: true
+    # Decision (2026-07-17): leave content capture OFF; keep spans only.
 
 google:
   drive:
@@ -150,7 +166,27 @@ chat:
     experiences, mention them by name and include markdown links so visitors can navigate to
     the content. Use these link formats:
     - Blog posts: [Blog Title](/blogs/BLOG_ID)
-    - Experience page: [Company Name](/experience)
+    - A specific role/job: [Company or Role Name](/experience?job=JOB_ID)
+    - A specific skill group: [Skill Group Name](/experience?skillGroup=GROUP_ID)
+    - The experience page in general: [Experience](/experience)
+
+
+    WRITING STYLE: Write in clear, grammatically correct, complete sentences. Start every
+    bullet point and every sentence with a capital letter. Keep list items parallel and
+    well-formed. Do not output run-on or jumbled phrases.
+
+
+    CRITICAL LINK FORMATTING: ALWAYS write links using markdown syntax [visible text](url).
+    The visible text MUST be the human-readable name (the company, role, skill group, or blog
+    title). NEVER paste a bare or raw URL into your prose — a bare URL like
+    /experience?job=5eedd4803c8d74001e4497f5 is NOT clickable and looks broken. It must be
+    written as [Y-Tree](/experience?job=5eedd4803c8d74001e4497f5). This applies to every link.
+
+
+    IMAGES: When a tool result or context gives you an image URL (e.g. a blog's featured image
+    or a news article image), you MAY embed it using markdown image syntax
+    ![short alt text](IMAGE_URL). Only use an image URL you were explicitly given — never
+    invent one. Do not embed images for skills or job cards (those have no images).
 
 
     CRITICAL RULE FOR BLOG LINKS: NEVER invent or guess blog titles or URLs. ONLY link to

@@ -44,6 +44,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
   const cancelledRef = useRef(false)
   const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const initialQueryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const initialQuerySentRef = useRef(false)
   const activeAssistantRef = useRef<ChatMessageModel | null>(null)
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length
@@ -100,6 +101,9 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
       setActiveAssistant(null)
       setMessages((msgs) => [...msgs, finalMessage])
     } else {
+      // Ignore any late chunk/tool/widget frame that arrives after the answer was
+      // finalized (e.g. a duplicate delivery), so it cannot rebuild a garbled bubble.
+      if (streamFinalized.current) return
       const current = activeAssistantRef.current ?? createEmptyAssistantMessage(formatTimestamp())
       const next = applyChatStreamEvent(current, response)
       setActiveAssistant(next)
@@ -112,6 +116,8 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
     sessionIdRef.current = sessionId
     streamFinalized.current = false
     cancelledRef.current = false
+    // A fresh session for this initialQuery; allow exactly one initial-query send.
+    initialQuerySentRef.current = false
 
     if (initialQuery) {
       setMessages([
@@ -132,7 +138,10 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
       () => {
         if (cancelledRef.current) return
         setConnected(true)
-        if (initialQuery) {
+        // Send the initial query exactly once, even if onConnect fires again on a
+        // STOMP reconnect (reconnectDelay), which would otherwise duplicate the prompt.
+        if (initialQuery && !initialQuerySentRef.current) {
+          initialQuerySentRef.current = true
           initialQueryTimeoutRef.current = setTimeout(() => {
             if (!cancelledRef.current) {
               chatService.sendMessage({ sessionId, message: initialQuery })
@@ -221,7 +230,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
 
   return (
     <div className="chat-drawer-backdrop" onClick={onClose}>
-      <div className="chat-panel" onClick={(e) => e.stopPropagation()}>
+      <div className="chat-panel" onClick={(e) => e.stopPropagation()} data-testid="chat-panel">
         <div className="chat-panel__header">
           <h3>Ask me anything</h3>
           <div className="chat-panel__header-actions">

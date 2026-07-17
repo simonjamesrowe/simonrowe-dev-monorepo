@@ -456,6 +456,7 @@ public class ProfileMcpTools {
       final List<SkillGroupSummaryDto> groups) {
     return new SkillsWidgetPayload(groups.stream()
         .map(group -> new SkillsWidgetPayload.Group(
+            group.id(),
             group.name(),
             group.skills() == null ? List.of() : group.skills().stream()
                 .map(skill -> new SkillsWidgetPayload.Skill(
@@ -469,6 +470,7 @@ public class ProfileMcpTools {
       final List<JobSummaryDto> jobs) {
     return new EmploymentWidgetPayload(jobs.stream()
         .map(job -> new EmploymentWidgetPayload.Job(
+            job.id(),
             job.company(),
             job.title(),
             job.startDate(),
