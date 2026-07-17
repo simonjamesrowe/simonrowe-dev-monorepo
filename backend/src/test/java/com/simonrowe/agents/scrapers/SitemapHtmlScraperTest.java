@@ -106,6 +106,21 @@ class SitemapHtmlScraperTest {
   }
 
   @Test
+  void extractPublishedDate_parsesJsonLdHumanReadableDate() {
+    // Claude blog articles expose dates like "Jul 16, 2026" in JSON-LD,
+    // which is not ISO-8601 and previously failed to parse.
+    String jsonLd = "{\"@type\":\"Article\",\"datePublished\":\"Jul 16, 2026\"}";
+    Document doc = Jsoup.parse(
+        "<html><head>"
+            + "<script type=\"application/ld+json\">" + jsonLd + "</script>"
+            + "</head><body></body></html>");
+
+    Instant result = scraper.extractPublishedDate(doc);
+
+    assertThat(result).isEqualTo(Instant.parse("2026-07-16T00:00:00Z"));
+  }
+
+  @Test
   void extractPublishedDate_parsesItempropDatePublishedContent() {
     Document doc = Jsoup.parse(
         "<html><head></head><body>"
@@ -139,6 +154,48 @@ class SitemapHtmlScraperTest {
 
     // article:published_time is checked first
     assertThat(result).isEqualTo(Instant.parse("2025-01-01T00:00:00Z"));
+  }
+
+  // ---------------------------------------------------------------------------
+  // isArticleLink — package-private; restricts listing-page links to the
+  // listing's own section (e.g. /blog/*) so site nav/product links are ignored.
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void isArticleLink_acceptsLinkWithinBlogSection() {
+    assertThat(scraper.isArticleLink(
+        "https://claude.com/blog/ai-code-migration", "https://claude.com/blog"))
+        .isTrue();
+  }
+
+  @Test
+  void isArticleLink_rejectsSiteNavAndProductLinks() {
+    assertThat(scraper.isArticleLink(
+        "https://claude.com/product/claude-code", "https://claude.com/blog"))
+        .isFalse();
+    assertThat(scraper.isArticleLink(
+        "https://claude.com/solutions/coding", "https://claude.com/blog"))
+        .isFalse();
+  }
+
+  @Test
+  void isArticleLink_rejectsLocalizedBlogLinks() {
+    assertThat(scraper.isArticleLink(
+        "https://claude.com/ja/blog/ai-code-migration", "https://claude.com/blog"))
+        .isFalse();
+  }
+
+  @Test
+  void isArticleLink_acceptsSectionLinkWhenListingHasTrailingSlashOrQuery() {
+    // Tessl blog listing has a trailing slash
+    assertThat(scraper.isArticleLink(
+        "https://tessl.io/blog/some-post", "https://tessl.io/blog/"))
+        .isTrue();
+    // Rundown listing carries a query string
+    assertThat(scraper.isArticleLink(
+        "https://www.rundown.ai/articles/kimi-k3",
+        "https://www.rundown.ai/articles?category=AI"))
+        .isTrue();
   }
 
   // ---------------------------------------------------------------------------
