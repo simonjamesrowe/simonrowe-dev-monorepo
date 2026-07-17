@@ -7,12 +7,18 @@ import org.junit.jupiter.api.Test;
 class ChatConfigPromptTest {
 
   @Test
-  void widgetPromptGuidanceIncludesVisualWidgetAndPromptLifecycleRules() {
+  void widgetPromptGuidanceIncludesVisualWidgetAndLinkRules() {
     String guidance = ChatConfig.widgetPromptGuidance();
 
     assertThat(guidance).contains("blog", "news", "event");
     assertThat(guidance).contains("visual card");
     assertThat(guidance).contains("do not re-list");
-    assertThat(guidance).contains("unless the visitor has sent a new prompt");
+    // Band-aid removed (US1): the model is no longer told about answer lifecycle.
+    assertThat(guidance).doesNotContain("unless the visitor has sent a new prompt");
+    // Rich, safe link/image guidance (US3).
+    assertThat(guidance).contains("/blogs/");
+    assertThat(guidance).contains("/experience?job=");
+    assertThat(guidance).contains("/experience?skillGroup=");
+    assertThat(guidance).contains("Never invent");
   }
 }

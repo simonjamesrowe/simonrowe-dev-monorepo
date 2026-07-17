@@ -4437,25 +4437,11 @@ a:hover {
 }
 
 .chat-tool--done {
-  width: fit-content;
-  padding: 0.3rem 0.7rem;
-}
-
-.chat-tool summary {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  cursor: pointer;
-  list-style: none;
-}
-
-.chat-tool summary::-webkit-details-marker {
-  display: none;
-}
-
-.chat-tool__details {
-  margin-top: 0.35rem;
-  color: var(--on-surface);
+  gap: 0.45rem;
+  width: fit-content;
+  padding: 0.3rem 0.7rem;
 }
 
 .chat-tool__spinner {
@@ -4650,6 +4636,15 @@ a:hover {
 
 .chat-message--assistant .chat-message__bubble a:hover {
   opacity: 0.8;
+}
+
+.chat-message--assistant .chat-message__bubble .chat-message__image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.5rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
 }
 
 .chat-message--assistant .chat-message__bubble code {

@@ -89,16 +89,23 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 027-chat-fixup: Chat drawer fixes — one clean answer per prompt (STREAM_END reconciled to
+  authoritative `fullResponse` + single initial-query send guard), contextual tool labels
+  (dropped "Used 1 tool" expander), safe allowlisted link/image rendering in answers
+  (`chat/linkPolicy.ts`, custom react-markdown `a`/`img` renderers, no `rehype-raw`),
+  item-level deep links (`/experience?job=`/`?skillGroup=` via `useDrawer` + `useScrollToHash`,
+  job/skill-group ids added to widget payloads), Playwright e2e (`frontend/e2e/`), and
+  deterministic Langfuse bootstrap (`LANGFUSE_INIT_*` in `docker-compose.prod.yml`,
+  `scripts/verify-langfuse-trace.sh`, `docs/runbooks/langfuse-observability.md`).
 - 025-landing-profile-cleanup: Added TypeScript 5.x, React (latest stable), Vite + React Router, react-markdown, Lucide React; Vitest +
 - 022-improve-mcp-tools: Added Java 21 (LTS) + Spring Boot 3.5.x, Spring AI 1.1.4, Spring Data MongoDB, Spring Data Elasticsearch
-- 021-embabel-news-events: Added Java 21 (LTS) + Spring Boot 3.5.x, Embabel Agent 0.3.5, Spring AI 1.1.4, JSoup 1.18.x, Rome 2.1.x
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
-- TypeScript 5.x, React (latest stable), Vite + React Router, react-markdown, Lucide React; Vitest + (025-landing-profile-cleanup)
-- N/A (reuses existing profile data via existing API; no schema/seed (025-landing-profile-cleanup)
+- Java 21 (backend), TypeScript 5.x / React 19 (frontend, Vite) + Spring Boot 3.5.9, Spring AI 1.1.4 (OpenAI SDK starter + MCP (027-chat-fixup)
+- MongoDB (primary), Elasticsearch (vector + keyword). No schema changes — job (027-chat-fixup)
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,

@@ -5,6 +5,7 @@ import java.util.List;
 public record EmploymentWidgetPayload(List<Job> jobs) {
 
   public record Job(
+      String id,
       String company,
       String title,
       String start,

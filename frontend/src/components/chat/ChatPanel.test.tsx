@@ -44,7 +44,30 @@ describe('ChatPanel', () => {
     vi.useRealTimers()
   })
 
-  it('renders streamed tool activity, widget cards, and framing text in order', () => {
+  it('renders one clean answer even when chunks and STREAM_END are delivered twice (duplicate subscription)', () => {
+    render(<ChatPanel onClose={() => {}} visible />)
+
+    const clean = 'He uses Kafka encoding and decoding with Testcontainers.'
+    // Simulate a duplicate STOMP subscription: every frame delivered twice, interleaved.
+    act(() => {
+      chatMock.onMessage?.(response({ type: 'STREAM_START' }))
+      chatMock.onMessage?.(response({ type: 'STREAM_START' }))
+      const chunks = ['He uses Kafka ', 'encoding ', 'and decoding ', 'with Testcontainers.']
+      for (const c of chunks) {
+        chatMock.onMessage?.(response({ type: 'STREAM_CHUNK', content: c }))
+        chatMock.onMessage?.(response({ type: 'STREAM_CHUNK', content: c }))
+      }
+      chatMock.onMessage?.(response({ type: 'STREAM_END', content: clean }))
+      chatMock.onMessage?.(response({ type: 'STREAM_END', content: clean }))
+    })
+
+    // The finalized answer must equal the authoritative text exactly, once.
+    expect(screen.getAllByText(clean)).toHaveLength(1)
+    // No scrambled/doubled fragment like "He uses Kafka He uses Kafka" should survive.
+    expect(screen.queryByText(/He uses Kafka He uses Kafka/)).not.toBeInTheDocument()
+  })
+
+  it('renders streamed tool activity and framing text; hides the widget detail card', () => {
     render(<ChatPanel onClose={() => {}} visible />)
 
     act(() => {
@@ -80,9 +103,12 @@ describe('ChatPanel', () => {
       chatMock.onMessage?.(response({ type: 'STREAM_END' }))
     })
 
-    expect(screen.getByText('Used 1 tool')).toBeInTheDocument()
-    expect(screen.getByText('Streaming chat')).toBeInTheDocument()
+    // Finished tool block shows the contextual label, not "Used 1 tool".
+    expect(screen.queryByText('Used 1 tool')).not.toBeInTheDocument()
+    expect(screen.getByText('Searching blog posts')).toBeInTheDocument()
     expect(screen.getByText('These posts are a good starting point.')).toBeInTheDocument()
+    // The widget detail card is intentionally hidden (its title must not render).
+    expect(screen.queryByText('Streaming chat')).not.toBeInTheDocument()
   })
 
   it('does not send a message or render an assistant response on initial mount without an initial query', () => {

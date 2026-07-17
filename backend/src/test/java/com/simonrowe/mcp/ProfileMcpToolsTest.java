@@ -20,8 +20,10 @@ import com.simonrowe.blog.BlogSummaryResponse;
 import com.simonrowe.chat.BlogWidgetPayload;
 import com.simonrowe.chat.ChatContactTracker;
 import com.simonrowe.chat.ChatStreamPublisher;
+import com.simonrowe.chat.EmploymentWidgetPayload;
 import com.simonrowe.chat.EventWidgetPayload;
 import com.simonrowe.chat.NewsWidgetPayload;
+import com.simonrowe.chat.SkillsWidgetPayload;
 import com.simonrowe.contact.ContactService;
 import com.simonrowe.contact.ContactSubmission;
 import com.simonrowe.contact.EmailDeliveryException;
@@ -145,10 +147,16 @@ class ProfileMcpToolsTest {
 
     profileMcpTools.getJobs(null, context);
 
+    ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
     InOrder order = inOrder(streamPublisher);
     order.verify(streamPublisher).toolStart("sess-jobs", "Pulling up employment history");
-    order.verify(streamPublisher).widget(eq("sess-jobs"), eq("employment"), any());
+    order.verify(streamPublisher).widget(eq("sess-jobs"), eq("employment"), payload.capture());
     order.verify(streamPublisher).toolEnd("sess-jobs", "Pulling up employment history");
+
+    EmploymentWidgetPayload employment = (EmploymentWidgetPayload) payload.getValue();
+    assertThat(employment.jobs()).singleElement()
+        .extracting(EmploymentWidgetPayload.Job::id)
+        .isEqualTo("j-1");
   }
 
   @Test
@@ -205,10 +213,16 @@ class ProfileMcpToolsTest {
 
     profileMcpTools.getSkills(null, context);
 
+    ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
     InOrder order = inOrder(streamPublisher);
     order.verify(streamPublisher).toolStart("sess-skills", "Looking up Simon's skills");
-    order.verify(streamPublisher).widget(eq("sess-skills"), eq("skills"), any());
+    order.verify(streamPublisher).widget(eq("sess-skills"), eq("skills"), payload.capture());
     order.verify(streamPublisher).toolEnd("sess-skills", "Looking up Simon's skills");
+
+    SkillsWidgetPayload skills = (SkillsWidgetPayload) payload.getValue();
+    assertThat(skills.groups()).singleElement()
+        .extracting(SkillsWidgetPayload.Group::id)
+        .isEqualTo("g-1");
   }
 
   @Test
