@@ -197,6 +197,65 @@ verified manually.
 correct ordering, contextual tool labels, working in-site links (including drawer deep
 links), and inline images.
 
+## Section 5 — End-to-end tests that hit the running site
+
+There is **no e2e/Playwright setup today** — only Vitest unit/component tests in
+`frontend/tests`. Add Playwright as the e2e harness.
+
+- **Primary (deterministic, CI): local full stack.** Bring the stack up
+  (`./scripts/start.sh` or docker-compose) and drive the real chat drawer end-to-end
+  against a live backend. Asserted flows:
+  - Ask a skills question → **exactly one** assistant bubble (regression test for the
+    double-answer bug), text is coherent/ordered (regression for the scramble),
+    the contextual tool label renders ("Looking up Simon's skills", not "Used 1 tool"),
+    and the skills widget renders.
+  - An answer containing an internal link → clicking it navigates in-site (blog page, or
+    `/experience` with the correct drawer open); an answer image renders.
+  - A fabricated/non-allowlisted URL is not rendered as a live link.
+- **Secondary (read-only smoke): prod.** A minimal check against the deployed site that
+  the chat drawer opens, connects over WebSocket, and returns a non-empty answer.
+  Read-only; no data mutation.
+
+To keep e2e deterministic despite a real LLM, assertions target **structure/behaviour**
+(bubble count, ordering, tool label present, link/image rendering rules) rather than
+exact answer wording.
+
+## Section 6 — Langfuse observability: make it actually work + verify
+
+**Verified live (2026-07-17):** `langfuse.simonrowe.dev` is healthy (v3.212.0), Auth0 SSO
+login works, but `admin@simonrowe.dev` belongs to **no organization/project**, so no
+traces are visible. The trace path exists
+(`backend → Alloy :4317 → http://langfuse:3000/api/public/otel`, authed with
+`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` — `config/alloy/config.alloy:121-132`), but
+`docker-compose.prod.yml` has **no `LANGFUSE_INIT_*` bootstrap**, so the project those
+keys reference was never provisioned for this account.
+
+**Design:**
+
+1. **Deterministic bootstrap.** Add `LANGFUSE_INIT_*` to the `langfuse` service env in
+   `docker-compose.prod.yml` so startup provisions the org, project, an admin membership
+   for `admin@simonrowe.dev`, and **fixed** project keys:
+   `LANGFUSE_INIT_ORG_ID`, `LANGFUSE_INIT_PROJECT_ID`,
+   `LANGFUSE_INIT_PROJECT_PUBLIC_KEY`, `LANGFUSE_INIT_PROJECT_SECRET_KEY`,
+   `LANGFUSE_INIT_USER_EMAIL`, `LANGFUSE_INIT_USER_NAME`. Source the two keys from the
+   same `.env` values Alloy already uses so exporter and project agree by construction.
+   (Init only creates resources that don't already exist — safe to leave in.)
+2. **Reconcile `.env`** in the deploy dir (`~/workspace/simonjamesrowe/simonrowe-dev-monorepo`)
+   so `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` match the init keys, then restart
+   `langfuse` and `alloy`. *(Prod-touching, outside this workspace — executed by the
+   owner; documented as a runbook step, not automated here.)*
+3. **Spring AI content capture.** Traces currently carry gen_ai spans but likely **no
+   prompt/completion text**. Evaluate enabling Spring AI observation content capture in
+   `application.yml` (verify the exact property names for the pinned Spring AI version)
+   so prompts/completions show in Langfuse — weighed against the privacy trade-off of
+   storing visitor chat content.
+4. **Verification / smoke check.** Document (and, where possible, script) a check: send a
+   chat message, then confirm a corresponding trace appears in the Langfuse project via
+   its API using the project keys.
+
+**Success:** `admin@simonrowe.dev` sees a project on login; a chat message produces a
+visible trace (ideally with prompt/completion content) within a minute.
+
 ## Success criteria (rollup)
 
 - Finished tool blocks show the contextual label.
@@ -204,3 +263,7 @@ links), and inline images.
 - Answer prose can link to blogs (page), jobs/skills (drawer deep link), and
   news/events (external), and can embed allowlisted images.
 - The model cannot render a fabricated or unsafe URL/image.
+- Playwright e2e tests drive the real chat and lock in the above (one bubble, ordering,
+  tool label, link/image rules), with a read-only prod smoke check.
+- Langfuse shows a project for `admin@simonrowe.dev`, and a chat message produces a
+  visible trace; the compose bootstraps this deterministically via `LANGFUSE_INIT_*`.
