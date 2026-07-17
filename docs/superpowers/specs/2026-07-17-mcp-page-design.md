@@ -18,6 +18,8 @@ page automatically, with **zero frontend changes**.
 - An interactive harness to execute tools and view their results.
 - Fully dynamic: new backend tools appear without editing the page.
 - No abuse surface for destructive tools on a public page.
+- Copy-paste setup instructions for connecting popular MCP clients (Claude Code,
+  Codex CLI, Gemini CLI) to the server.
 
 ## Non-Goals
 
@@ -80,9 +82,12 @@ Kept small and independently testable:
   envelope types.
 - **`src/pages/McpPage.tsx`** — orchestration: connect → list, `loading`/`error`/`data`
   states (reusing `LoadingIndicator` and `ErrorMessage`), `trackPageView()` +
-  `document.title` in an effect (per `NewsPage` pattern), a connection-info section
-  (the public `/mcp` URL and a copy-paste MCP client config snippet), and the grid of
-  tool cards.
+  `document.title` in an effect (per `NewsPage` pattern), the "Connect your client"
+  section (see below), and the grid of tool cards.
+- **`src/components/mcp/ConnectInstructions.tsx`** — the "Connect your client" section:
+  shows the public MCP URL and a copy-paste snippet per client (Claude Code, Codex CLI,
+  Gemini CLI), each with a copy button. Static boilerplate parameterised only by the MCP
+  URL, so it needs no change when tools are added.
 - **`src/components/mcp/ToolCard.tsx`** — renders one tool's name/description/params and
   a **dynamically generated form** from its JSON schema: text input by default,
   `enum` → `<select>`, `boolean` → checkbox; marks required fields. Includes a Run
@@ -100,6 +105,31 @@ existing 60 req/min rate limiter on `/mcp/**`.
 
 **Accepted trade-off:** adding a *new* destructive tool later requires adding its name
 to this one-line denylist. All non-destructive tools remain fully automatic.
+
+## Connect-your-client instructions
+
+The page includes a "Connect your client" section with a copy-paste snippet per client.
+External clients point at the already-live public endpoint `https://api.simonrowe.dev/mcp`
+(the prod nginx-proxy already routes `api.simonrowe.dev → backend:8080`, so this works
+today independent of the frontend `/mcp` proxy). Planned content:
+
+- **Claude Code:**
+  ```
+  claude mcp add --transport http simonrowe-dev https://api.simonrowe.dev/mcp
+  ```
+- **Gemini CLI** (`~/.gemini/settings.json`):
+  ```json
+  { "mcpServers": { "simonrowe-dev": { "httpUrl": "https://api.simonrowe.dev/mcp" } } }
+  ```
+- **Codex CLI** (`~/.codex/config.toml`), via the `mcp-remote` bridge for HTTP transport:
+  ```toml
+  [mcp_servers.simonrowe-dev]
+  command = "npx"
+  args = ["-y", "mcp-remote", "https://api.simonrowe.dev/mcp"]
+  ```
+
+The exact flags/fields for all three CLIs must be **verified against current docs at
+implementation time** — these tools change their MCP configuration surface frequently.
 
 ## Wiring
 
@@ -147,6 +177,8 @@ ToolCard "Run"
 - `src/components/mcp/ToolCard.test.tsx` — assert form generated from schema
   (text/enum/boolean); Run invokes `callTool` and renders the result; a denylisted tool
   shows the badge and no form.
+- `src/components/mcp/ConnectInstructions.test.tsx` — assert the per-client snippets
+  render and contain the MCP URL.
 
 ## Risks
 
