@@ -31,6 +31,7 @@ const ExperiencePage = named(() => import('./pages/ExperiencePage'), 'Experience
 const BlogListingPage = named(() => import('./pages/BlogListingPage'), 'BlogListingPage')
 const BlogDetailPage = named(() => import('./pages/BlogDetailPage'), 'BlogDetailPage')
 const NewsEventsPage = named(() => import('./pages/NewsEventsPage'), 'NewsEventsPage')
+const McpPage = named(() => import('./pages/McpPage'), 'McpPage')
 
 const AdminLayout = named(() => import('./components/admin/AdminLayout'), 'AdminLayout')
 const AggregatedContentAdmin = named(() => import('./pages/admin/AggregatedContentAdmin'), 'AggregatedContentAdmin')
@@ -142,6 +143,7 @@ function App() {
         <Route element={<PublicLayout><BlogListingPage /></PublicLayout>} path="/blogs" />
         <Route element={<PublicLayout><BlogDetailPage /></PublicLayout>} path="/blogs/:id" />
         <Route element={<PublicLayout><NewsEventsPage /></PublicLayout>} path="/news-events" />
+        <Route element={<PublicLayout><McpPage /></PublicLayout>} path="/mcp" />
         <Route
           path="/admin"
           element={

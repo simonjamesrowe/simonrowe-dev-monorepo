@@ -8774,3 +8774,320 @@ a:hover {
     display: none;
   }
 }
+
+/* =========================================================================
+   MCP Tools page (/mcp)
+   ========================================================================= */
+.mcp-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.mcp-page__header {
+  margin-bottom: 2.5rem;
+}
+
+.mcp-page__title {
+  font-family: var(--font-heading);
+  font-size: 2.25rem;
+  margin: 0 0 0.5rem;
+  color: var(--color-text);
+}
+
+.mcp-page__intro {
+  max-width: 46rem;
+  color: var(--color-text-muted);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.mcp-page__section-title {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  margin: 0 0 1.25rem;
+  color: var(--color-text);
+}
+
+.mcp-page__tools {
+  margin-top: 3rem;
+}
+
+.mcp-page__empty {
+  color: var(--color-text-muted);
+}
+
+.mcp-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.25rem;
+}
+
+/* --- Connect your client --- */
+.mcp-connect__intro {
+  color: var(--color-text-muted);
+  margin: 0 0 1.25rem;
+}
+
+.mcp-connect__intro code,
+.mcp-tool-card__param code {
+  font-size: 0.85em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+}
+
+.mcp-connect__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.mcp-connect__card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1rem 1.1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mcp-connect__card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.mcp-connect__client-name {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  margin: 0;
+  color: var(--color-text);
+}
+
+.mcp-connect__location {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.mcp-connect__snippet-wrap {
+  position: relative;
+}
+
+.mcp-connect__snippet,
+.mcp-tool-card__result {
+  margin: 0;
+  padding: 0.85rem 0.9rem;
+  background: var(--surface-container-lowest, var(--color-surface-subtle));
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.mcp-connect__copy {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.72rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.mcp-connect__copy:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* --- Tool card --- */
+.mcp-tool-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.mcp-tool-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.mcp-tool-card__name {
+  font-family: var(--font-mono, monospace);
+  font-size: 1rem;
+  margin: 0;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.mcp-tool-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.72rem;
+  border-radius: 999px;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+.mcp-tool-card__desc {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.mcp-tool-card__params {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.mcp-tool-card__param {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.mcp-tool-card__param-type {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.mcp-tool-card__param-desc {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+
+.mcp-tool-card__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.mcp-tool-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.mcp-tool-card__field--checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mcp-tool-card__label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.mcp-tool-card__required {
+  color: var(--danger, var(--color-accent));
+}
+
+.mcp-tool-card__input {
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.mcp-tool-card__input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.mcp-tool-card__run {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: none;
+  background: var(--color-accent);
+  color: var(--on-primary, #fff);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.mcp-tool-card__run:hover:not(:disabled) {
+  background: var(--color-accent-hover, var(--color-accent));
+}
+
+.mcp-tool-card__run:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mcp-tool-card__spin {
+  animation: mcp-spin 0.8s linear infinite;
+}
+
+@keyframes mcp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mcp-tool-card__error {
+  padding: 0.65rem 0.8rem;
+  border-radius: 8px;
+  background: var(--error-container, rgba(220, 38, 38, 0.1));
+  border: 1px solid var(--danger, #dc2626);
+  color: var(--on-error, var(--color-text));
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mcp-tool-card__result {
+  max-height: 20rem;
+}
+
+@media (max-width: 768px) {
+  .mcp-page {
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .mcp-page__grid,
+  .mcp-connect__grid {
+    grid-template-columns: 1fr;
+  }
+}
