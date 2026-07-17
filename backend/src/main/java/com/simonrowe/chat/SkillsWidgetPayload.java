@@ -4,7 +4,7 @@ import java.util.List;
 
 public record SkillsWidgetPayload(List<Group> groups) {
 
-  public record Group(String name, List<Skill> skills) {
+  public record Group(String id, String name, List<Skill> skills) {
   }
 
   public record Skill(String name, Integer rating) {

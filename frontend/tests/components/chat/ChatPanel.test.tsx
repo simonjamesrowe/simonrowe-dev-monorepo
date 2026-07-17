@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -83,6 +83,33 @@ describe('ChatPanel', () => {
     render(<ChatPanel {...defaultProps} />)
     await vi.advanceTimersByTimeAsync(100)
 
+    expect(chatService.sendMessage).toHaveBeenCalledWith({
+      sessionId: 'test-session-uuid',
+      message: 'Tell me about Simon',
+    })
+    vi.useRealTimers()
+  })
+
+  it('sends the initial query only once even when onConnect fires again on reconnect', async () => {
+    vi.useFakeTimers()
+    let capturedOnConnect: (() => void) | undefined
+    vi.mocked(chatService.connect).mockImplementation(
+      (_sessionId, _onMessage, onConnect) => {
+        capturedOnConnect = onConnect
+        onConnect?.()
+      },
+    )
+
+    render(<ChatPanel {...defaultProps} />)
+    await vi.advanceTimersByTimeAsync(100)
+
+    // Simulate a STOMP reconnect firing onConnect a second time.
+    act(() => {
+      capturedOnConnect?.()
+    })
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(chatService.sendMessage).toHaveBeenCalledTimes(1)
     expect(chatService.sendMessage).toHaveBeenCalledWith({
       sessionId: 'test-session-uuid',
       message: 'Tell me about Simon',

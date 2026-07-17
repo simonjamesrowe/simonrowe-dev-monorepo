@@ -304,6 +304,21 @@ services:
       - .env
     environment:
       <<: *langfuse-env
+      # Deterministic bootstrap: on startup Langfuse provisions the org, project, an admin
+      # membership, and FIXED project keys — but only creates resources that do not already
+      # exist, so this is idempotent and safe to leave in permanently. The project public/
+      # secret keys are sourced from the same values Alloy uses as its OTLP basic-auth
+      # credentials (config/alloy/config.alloy), so the exporter and the project agree by
+      # construction and traces land in the provisioned project without manual key copying.
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-simonrowe}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-Simon Rowe}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-simonrowe-dev}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-simonrowe.dev}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-admin@simonrowe.dev}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-Simon Rowe}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
 
 volumes:
   mongodb-data:

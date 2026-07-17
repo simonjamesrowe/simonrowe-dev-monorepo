@@ -2,6 +2,7 @@ export type WidgetKind = 'skills' | 'employment' | 'code' | 'blogs' | 'news' | '
 
 export interface SkillWidgetPayload {
   groups: Array<{
+    id?: string | null
     name: string
     skills: Array<{ name: string; rating?: number | null }>
   }>
@@ -9,6 +10,7 @@ export interface SkillWidgetPayload {
 
 export interface EmploymentWidgetPayload {
   jobs: Array<{
+    id?: string | null
     company: string
     title: string
     start?: string | null

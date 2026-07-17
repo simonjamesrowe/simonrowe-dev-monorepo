@@ -3,6 +3,7 @@ import { Calendar, ExternalLink, MapPin } from 'lucide-react'
 
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
+import { useScrollToHash } from '../hooks/useScrollToHash'
 import { trackPageView } from '../services/analytics'
 import { fetchNews } from '../services/newsApi'
 import { fetchEvents } from '../services/eventsApi'
@@ -26,6 +27,9 @@ export function NewsEventsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
+
+  // Scroll to #news / #events once content has loaded (section ids exist).
+  useScrollToHash(!loading)
 
   useEffect(() => {
     trackPageView('/news-events')
@@ -96,6 +100,9 @@ export function NewsEventsPage() {
           </button>
         )}
       </div>
+
+      {/* Anchor target for /news-events#news deep links */}
+      <div id="news" className="feed__anchor" aria-hidden="true" />
 
       {/* Featured hero section */}
       {sourceFilter !== 'events' && featured.length > 0 && (
@@ -187,7 +194,7 @@ export function NewsEventsPage() {
 
       {/* Events timeline */}
       {showEvents && allEvents.length > 0 && (
-        <div className="feed__events">
+        <div id="events" className="feed__events">
           <h2 className="feed__events-title">Timeline</h2>
           {upcomingEvents.length > 0 && (
             <div className="feed__timeline">

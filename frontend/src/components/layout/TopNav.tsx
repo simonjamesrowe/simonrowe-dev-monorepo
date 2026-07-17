@@ -22,7 +22,7 @@ export function TopNav() {
         <NavLink to="/news-events" className={({ isActive }) => `top-nav__link${isActive ? ' top-nav__link--active' : ''}`}>News & Events</NavLink>
       </div>
       <div className="top-nav__actions">
-        <button className="top-nav__ask-ai" onClick={() => openChat()} type="button">
+        <button className="top-nav__ask-ai" onClick={() => openChat()} type="button" data-testid="open-chat">
           <MessageSquare size={18} />
           <span className="top-nav__ask-ai-label">ASK AI</span>
         </button>

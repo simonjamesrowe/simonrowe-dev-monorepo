@@ -1,4 +1,4 @@
-import { Client, IMessage } from '@stomp/stompjs'
+import { Client, IMessage, StompSubscription } from '@stomp/stompjs'
 
 import { API_BASE_URL } from '../config/api'
 
@@ -31,6 +31,7 @@ const WS_URL = buildWsUrl()
 
 let stompClient: Client | null = null
 let activeSessionId: string | null = null
+let subscription: StompSubscription | null = null
 
 export function connect(
   sessionId: string,
@@ -46,11 +47,18 @@ export function connect(
     reconnectDelay: 5000,
     onConnect: () => {
       if (activeSessionId !== sessionId) return
-      stompClient?.subscribe(`/topic/chat.${sessionId}`, (message: IMessage) => {
+      // Guard against duplicate subscriptions if onConnect fires again on a STOMP
+      // reconnect: a second subscription would deliver every frame twice and could
+      // interleave the streamed answer. Drop any prior subscription first.
+      if (subscription) {
+        subscription.unsubscribe()
+        subscription = null
+      }
+      subscription = stompClient?.subscribe(`/topic/chat.${sessionId}`, (message: IMessage) => {
         if (activeSessionId !== sessionId) return
         const response: ChatResponse = JSON.parse(message.body) as ChatResponse
         onMessage(response)
-      })
+      }) ?? null
       onConnect?.()
     },
     onStompError: (frame) => {
@@ -77,6 +85,7 @@ export function sendMessage(request: ChatRequest): void {
 
 export function disconnect(): void {
   activeSessionId = null
+  subscription = null
   if (stompClient) {
     const client = stompClient
     stompClient = null
