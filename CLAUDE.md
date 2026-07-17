@@ -89,16 +89,16 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 027-mcp-page: Added TypeScript 5.x (frontend); Java 21 / Spring Boot 3.5.x (backend — config only, no Java code) + React (latest stable), React Router v7, Vite, Vitest, Lucide React; Spring AI 1.1.4 `spring-ai-starter-mcp-server-webmvc` (existing)
 - 025-landing-profile-cleanup: Added TypeScript 5.x, React (latest stable), Vite + React Router, react-markdown, Lucide React; Vitest +
 - 022-improve-mcp-tools: Added Java 21 (LTS) + Spring Boot 3.5.x, Spring AI 1.1.4, Spring Data MongoDB, Spring Data Elasticsearch
-- 021-embabel-news-events: Added Java 21 (LTS) + Spring Boot 3.5.x, Embabel Agent 0.3.5, Spring AI 1.1.4, JSoup 1.18.x, Rome 2.1.x
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
-- TypeScript 5.x, React (latest stable), Vite + React Router, react-markdown, Lucide React; Vitest + (025-landing-profile-cleanup)
-- N/A (reuses existing profile data via existing API; no schema/seed (025-landing-profile-cleanup)
+- TypeScript 5.x (frontend); Java 21 / Spring Boot 3.5.x (backend — config only, no Java code) + React (latest stable), React Router v7, Vite, Vitest, Lucide React; Spring AI 1.1.4 `spring-ai-starter-mcp-server-webmvc` (existing) (027-mcp-page)
+- N/A — no persistence. Tool catalogue is fetched live from the MCP server at page load. (027-mcp-page)
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,

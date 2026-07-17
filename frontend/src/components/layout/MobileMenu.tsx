@@ -10,6 +10,7 @@ const navItems = [
   { label: 'Experience', to: '/experience' },
   { label: 'Blog', to: '/blogs' },
   { label: 'News & Events', to: '/news-events' },
+  { label: 'MCP', to: '/mcp' },
   { label: 'Admin', to: '/admin' },
 ]
 

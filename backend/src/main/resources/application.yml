@@ -99,6 +99,11 @@ spring:
     mcp:
       server:
         type: SYNC
+        # STREAMABLE exposes the modern Streamable-HTTP transport at /mcp (POST JSON-RPC).
+        # The default (sse) serves /sse + /mcp/message instead. Tools are consumed
+        # in-process by the chat client (ChatConfig.defaultTools), so this only affects
+        # external HTTP MCP clients (the /mcp page and CLIs like Claude Code/Codex/Gemini).
+        protocol: STREAMABLE
         annotation-scanner:
           enabled: true
 
