@@ -1,0 +1,29 @@
+# SearXNG configuration for the internal web-search backing service.
+#
+# This instance is NOT public — it is reached only by the backend container at
+# http://searxng:8080 for the chat assistant's `webSearch` tool. It therefore:
+#   * enables the JSON output format (required for programmatic queries), and
+#   * disables the bot limiter (server-to-server calls have no browser fingerprint).
+#
+# `secret_key` below is the placeholder the official image's entrypoint replaces with the
+# $SEARXNG_SECRET environment variable at startup (set in docker-compose.prod.yml). It only
+# signs local session state for this internal instance.
+
+use_default_settings: true
+
+server:
+  secret_key: "ultrasecretkey"
+  limiter: false
+  public_instance: false
+  image_proxy: false
+
+search:
+  # `json` is required so the backend can consume results; `html` is kept for manual debugging.
+  formats:
+    - html
+    - json
+  safe_search: 0
+  autocomplete: ""
+
+ui:
+  static_use_hash: true

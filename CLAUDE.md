@@ -89,6 +89,7 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 028-chat-ontopic-web-search: Added Java 21 (backend only) + Spring Boot 3.5.x, Spring AI 1.1.4 (OpenAI SDK starter + `@Tool`),
 - 027-mcp-page: Added TypeScript 5.x (frontend); Java 21 / Spring Boot 3.5.x (backend — MCP server config + ToolCallbackProvider) + React (latest stable), React Router v7, Vite, Vitest, Lucide React; Spring AI 1.1.4 `spring-ai-starter-mcp-server-webmvc` (existing)
 - 027-chat-fixup: Chat drawer fixes — one clean answer per prompt (STREAM_END reconciled to
   authoritative `fullResponse` + single initial-query send guard), contextual tool labels
@@ -99,12 +100,13 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   deterministic Langfuse bootstrap (`LANGFUSE_INIT_*` in `docker-compose.prod.yml`,
   `scripts/verify-langfuse-trace.sh`, `docs/runbooks/langfuse-observability.md`).
 - 025-landing-profile-cleanup: Added TypeScript 5.x, React (latest stable), Vite + React Router, react-markdown, Lucide React; Vitest +
-- 022-improve-mcp-tools: Added Java 21 (LTS) + Spring Boot 3.5.x, Spring AI 1.1.4, Spring Data MongoDB, Spring Data Elasticsearch
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
+- Java 21 (backend only) + Spring Boot 3.5.x, Spring AI 1.1.4 (OpenAI SDK starter + `@Tool`), (028-chat-ontopic-web-search)
+- None new. No MongoDB / Elasticsearch schema changes. (028-chat-ontopic-web-search)
 - TypeScript 5.x (frontend); Java 21 / Spring Boot 3.5.x (backend — MCP server config + ToolCallbackProvider) + React (latest stable), React Router v7, Vite, Vitest, Lucide React; Spring AI 1.1.4 `spring-ai-starter-mcp-server-webmvc` (existing) (027-mcp-page)
 - N/A — no persistence. Tool catalogue is fetched live from the MCP server at page load. (027-mcp-page)
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend, Vite) + Spring Boot 3.5.9, Spring AI 1.1.4 (OpenAI SDK starter + MCP (027-chat-fixup)
