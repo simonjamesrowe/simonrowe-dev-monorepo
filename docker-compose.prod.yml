@@ -84,6 +84,9 @@ services:
       # ingest and query structured fields (trace.id/span.id included for correlation).
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
       UPLOADS_PATH: uploads/
+      # Self-hosted SearXNG web search (no API key). Points at the internal searxng container;
+      # if searxng is down the tool degrades gracefully (returns "unavailable", never errors).
+      SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}
     volumes:
       - backend-uploads:/workspace/uploads
       - /var/run/docker.sock:/var/run/docker.sock
@@ -192,6 +195,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    # Internal-only metasearch used by the backend's webSearch chat tool. No published host
+    # ports and not an nginx upstream — reachable only in-cluster at http://searxng:8080.
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-searxng-internal-signing-key-change-me}
+    volumes:
+      # Not read-only: the SearXNG entrypoint substitutes $SEARXNG_SECRET into settings.yml.
+      - ./config/searxng/settings.yml:/etc/searxng/settings.yml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null 'http://localhost:8080/healthz' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   langfuse-db:
     image: postgres:15

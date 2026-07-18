@@ -111,6 +111,40 @@ describe('ChatPanel', () => {
     expect(screen.queryByText('Streaming chat')).not.toBeInTheDocument()
   })
 
+  it('keeps the typing indicator visible in the gap after a tool finishes until answer text streams', () => {
+    render(<ChatPanel onClose={() => {}} visible />)
+
+    // Before any block: typing indicator shows.
+    act(() => {
+      chatMock.onMessage?.(response({ type: 'STREAM_START' }))
+    })
+    expect(screen.getByTestId('typing-indicator')).toBeInTheDocument()
+
+    // While a tool runs: indicator still shows (last block is a running tool, not text).
+    act(() => {
+      chatMock.onMessage?.(response({ type: 'TOOL_START', toolLabel: 'Searching the web' }))
+    })
+    expect(screen.getByTestId('typing-indicator')).toBeInTheDocument()
+
+    // Tool finished but no answer text yet: indicator must remain (this is the gap we fixed).
+    act(() => {
+      chatMock.onMessage?.(response({ type: 'TOOL_END', toolLabel: 'Searching the web' }))
+    })
+    expect(screen.getByTestId('typing-indicator')).toBeInTheDocument()
+
+    // Once answer text starts streaming: indicator disappears (the text itself is the output).
+    act(() => {
+      chatMock.onMessage?.(response({ type: 'STREAM_CHUNK', content: 'Here is what I found.' }))
+    })
+    expect(screen.queryByTestId('typing-indicator')).not.toBeInTheDocument()
+
+    // After the stream ends: no indicator.
+    act(() => {
+      chatMock.onMessage?.(response({ type: 'STREAM_END', content: 'Here is what I found.' }))
+    })
+    expect(screen.queryByTestId('typing-indicator')).not.toBeInTheDocument()
+  })
+
   it('does not send a message or render an assistant response on initial mount without an initial query', () => {
     render(<ChatPanel onClose={() => {}} visible />)
 
