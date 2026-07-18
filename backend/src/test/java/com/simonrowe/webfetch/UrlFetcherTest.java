@@ -1,7 +1,13 @@
 package com.simonrowe.webfetch;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import org.jsoup.Connection;
+import org.jsoup.Jsoup;
 import org.junit.jupiter.api.Test;
 
 class UrlFetcherTest {
@@ -55,6 +61,41 @@ class UrlFetcherTest {
     final WebPageContent content = UrlFetcher.extract(doc, "https://example.com", 10);
 
     assertThat(content.title()).isEqualTo("Head of Engineering");
+    assertThat(content.url()).isEqualTo("https://example.com");
+    assertThat(content.text()).hasSize(10);
+  }
+
+  @Test
+  void readResponseReturnsNullOnNon200() throws Exception {
+    final Connection.Response res = mock(Connection.Response.class);
+    when(res.statusCode()).thenReturn(999);
+
+    assertThat(UrlFetcher.readResponse(res, "https://example.com", 8000)).isNull();
+    verify(res, never()).parse();
+  }
+
+  @Test
+  void readResponseReturnsNullForNonHtmlContentType() throws Exception {
+    final Connection.Response res = mock(Connection.Response.class);
+    when(res.statusCode()).thenReturn(200);
+    when(res.contentType()).thenReturn("application/pdf");
+
+    assertThat(UrlFetcher.readResponse(res, "https://example.com", 8000)).isNull();
+    verify(res, never()).parse();
+  }
+
+  @Test
+  void readResponseExtractsOn200Html() throws Exception {
+    final Connection.Response res = mock(Connection.Response.class);
+    when(res.statusCode()).thenReturn(200);
+    when(res.contentType()).thenReturn("text/html;charset=utf-8");
+    when(res.parse()).thenReturn(Jsoup.parse(
+        "<html><head><title>Head of Eng</title></head>"
+            + "<body><p>abcdefghijklmnop</p></body></html>"));
+
+    final WebPageContent content = UrlFetcher.readResponse(res, "https://example.com", 10);
+
+    assertThat(content.title()).isEqualTo("Head of Eng");
     assertThat(content.url()).isEqualTo("https://example.com");
     assertThat(content.text()).hasSize(10);
   }

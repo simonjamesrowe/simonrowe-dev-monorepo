@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.util.Locale;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -30,6 +31,7 @@ public class UrlFetcher {
   private static final int MILLIS_PER_SECOND = 1000;
   private static final int MAX_BODY_BYTES = 2 * 1024 * 1024;
   private static final int MAX_REDIRECTS = 5;
+  private static final int HTTP_OK = 200;
   private static final int HTTP_REDIRECT_MIN = 300;
   private static final int HTTP_REDIRECT_MAX = 399;
 
@@ -139,12 +141,40 @@ public class UrlFetcher {
         response = execute(next);
         hops++;
       }
-      final Document doc = response.parse();
-      return extract(doc, current.toString(), maxChars);
+      return readResponse(response, current.toString(), maxChars);
     } catch (Exception e) {
       LOG.warn("Failed to fetch URL: {}", url, e);
       return null;
     }
+  }
+
+  /**
+   * Read a terminal (non-redirect) response into content, rejecting anything that is not a
+   * successful HTML/text read so blocked pages (403/429, LinkedIn's 999) and binary bodies
+   * (e.g. PDFs) degrade to the "couldn't read that page" path instead of feeding noise to the
+   * model.
+   *
+   * @param response the terminal jsoup response
+   * @param finalUrl the effective (post-redirect) URL to record
+   * @param maxChars maximum number of characters of body text to keep
+   * @return extracted content, or {@code null} if the response is not a readable HTML page
+   * @throws IOException if parsing the response body fails
+   */
+  static WebPageContent readResponse(
+      final Connection.Response response, final String finalUrl, final int maxChars)
+      throws IOException {
+    if (response.statusCode() != HTTP_OK) {
+      return null;
+    }
+    final String contentType = response.contentType();
+    if (contentType != null) {
+      final String lower = contentType.toLowerCase(Locale.ROOT);
+      if (!lower.contains("html") && !lower.contains("xml") && !lower.startsWith("text/")) {
+        return null;
+      }
+    }
+    final Document doc = response.parse();
+    return extract(doc, finalUrl, maxChars);
   }
 
   private Connection.Response execute(final String url) throws IOException {
