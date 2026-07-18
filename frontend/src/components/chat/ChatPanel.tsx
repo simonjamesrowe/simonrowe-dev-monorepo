@@ -292,7 +292,8 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
           {/* Show the typing indicator whenever the assistant is streaming but has no
               in-progress text yet — before the first block AND in the gap after a tool/widget
               block finishes while the model composes its answer. */}
-          {isStreaming && activeAssistant.blocks?.at(-1)?.kind !== 'text' && (
+          {isStreaming
+            && activeAssistant.blocks?.[activeAssistant.blocks.length - 1]?.kind !== 'text' && (
             <div className="chat-message chat-message--assistant">
               <ChatTypingIndicator />
             </div>
