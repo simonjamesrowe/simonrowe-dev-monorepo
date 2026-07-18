@@ -6,8 +6,6 @@ import org.junit.jupiter.api.Test;
 
 class UrlFetcherTest {
 
-  private final UrlFetcher fetcher = new UrlFetcher(8000, 8);
-
   @Test
   void rejectsNonHttpSchemes() {
     assertThat(UrlFetcher.isFetchableUrl("file:///etc/passwd")).isFalse();
@@ -28,6 +26,8 @@ class UrlFetcherTest {
     assertThat(UrlFetcher.isFetchableUrl("http://localhost:8080/x")).isFalse();
     assertThat(UrlFetcher.isFetchableUrl("http://127.0.0.1/x")).isFalse();
     assertThat(UrlFetcher.isFetchableUrl("http://[::1]/x")).isFalse();
+    // These internal container names have no public DNS, so they exercise the
+    // UnknownHostException branch (unresolvable host) in this environment.
     assertThat(UrlFetcher.isFetchableUrl("http://searxng:8080/x")).isFalse();
     assertThat(UrlFetcher.isFetchableUrl("http://portainer:9000/x")).isFalse();
   }
@@ -48,17 +48,14 @@ class UrlFetcherTest {
 
   @Test
   void extractsTitleAndTruncatesText() {
-    UrlFetcher small = new UrlFetcher(10, 8);
-    org.jsoup.nodes.Document doc =
+    final org.jsoup.nodes.Document doc =
         org.jsoup.Jsoup.parse("<html><head><title>Head of Engineering</title></head>"
             + "<body><h1>Role</h1><p>abcdefghijklmnop</p></body></html>");
-    // Exercise the same extraction rules the fetch() method uses.
-    String title = doc.title();
-    String text = doc.body().text();
-    if (text.length() > 10) {
-      text = text.substring(0, 10);
-    }
-    assertThat(title).isEqualTo("Head of Engineering");
-    assertThat(text).hasSize(10);
+
+    final WebPageContent content = UrlFetcher.extract(doc, "https://example.com", 10);
+
+    assertThat(content.title()).isEqualTo("Head of Engineering");
+    assertThat(content.url()).isEqualTo("https://example.com");
+    assertThat(content.text()).hasSize(10);
   }
 }
