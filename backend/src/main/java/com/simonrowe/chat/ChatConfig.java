@@ -41,7 +41,7 @@ public class ChatConfig {
   @Bean
   public ChatClient chatClient(final ChatClient.Builder builder,
       final ChatMemory chatMemory, final ProfileMcpTools profileMcpTools,
-      final WebSearchTools webSearchTools,
+      final WebSearchTools webSearchTools, final FetchUrlTools fetchUrlTools,
       final VectorStore vectorStore, final ChatModel chatModel) {
     return builder
         .defaultSystem(systemPrompt + "\n\n" + widgetPromptGuidance())
@@ -55,7 +55,7 @@ public class ChatConfig {
                     .build())
                 .build()
         )
-        .defaultTools(profileMcpTools, webSearchTools)
+        .defaultTools(profileMcpTools, webSearchTools, fetchUrlTools)
         .build();
   }
 
