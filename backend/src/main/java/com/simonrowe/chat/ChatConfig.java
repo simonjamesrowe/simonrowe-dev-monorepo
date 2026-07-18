@@ -1,6 +1,7 @@
 package com.simonrowe.chat;
 
 import com.simonrowe.mcp.ProfileMcpTools;
+import com.simonrowe.webfetch.UrlFetcher;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 
@@ -31,8 +32,16 @@ public class ChatConfig {
   }
 
   @Bean
+  public UrlFetcher urlFetcher(
+      @Value("${web-fetch.max-chars:8000}") final int maxChars,
+      @Value("${web-fetch.timeout-seconds:8}") final int timeoutSeconds) {
+    return new UrlFetcher(maxChars, timeoutSeconds);
+  }
+
+  @Bean
   public ChatClient chatClient(final ChatClient.Builder builder,
       final ChatMemory chatMemory, final ProfileMcpTools profileMcpTools,
+      final WebSearchTools webSearchTools,
       final VectorStore vectorStore, final ChatModel chatModel) {
     return builder
         .defaultSystem(systemPrompt + "\n\n" + widgetPromptGuidance())
@@ -46,7 +55,7 @@ public class ChatConfig {
                     .build())
                 .build()
         )
-        .defaultTools(profileMcpTools)
+        .defaultTools(profileMcpTools, webSearchTools)
         .build();
   }
 
