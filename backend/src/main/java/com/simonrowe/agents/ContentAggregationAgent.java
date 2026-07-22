@@ -219,6 +219,7 @@ public class ContentAggregationAgent {
       localImageUrl = mediaVariantResolver.resolvePath(
           localImageUrl, "large", "medium", "small", "thumbnail");
     }
+    Instant fetchedAt = Instant.now();
     Instant publishedDate = content.publishedDate();
     if (publishedDate == null) {
       publishedDate =
@@ -230,10 +231,18 @@ public class ContentAggregationAgent {
       publishedDate =
           htmlScraper.extractPublishedDateFromUrl(content.url());
     }
+    if (publishedDate == null) {
+      // No date could be discovered; default to the date the article
+      // was added so it still surfaces (sorted by publishedDate) on the
+      // news page instead of being buried behind dated articles.
+      log.info("No date found for '{}'; defaulting to fetch date",
+          content.title());
+      publishedDate = fetchedAt;
+    }
     AggregatedArticle article = new AggregatedArticle(
         null, content.title(), source.name(), source.baseUrl(),
         content.url(), classification.summary(), content.content(),
-        content.author(), publishedDate, Instant.now(), true,
+        content.author(), publishedDate, fetchedAt, true,
         localImageUrl != null
             ? localImageUrl : content.imageUrl());
 

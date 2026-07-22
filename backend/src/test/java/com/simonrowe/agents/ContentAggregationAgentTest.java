@@ -162,6 +162,55 @@ class ContentAggregationAgentTest {
   }
 
   @Test
+  void runAggregation_defaultsPublishedDateToFetchedAtWhenNoneFound() {
+    ContentClassification articleClassification =
+        new ContentClassification(
+            "article", "A summary with no date anywhere.",
+            null, null, null, null);
+    // No published date from the scraper.
+    ScrapedContent content = new ScrapedContent(
+        "Dateless Post", "https://example.com/dateless",
+        "This is a long enough content string to pass the "
+            + "fifty character threshold for classification.",
+        null, "Jane Doe", "https://example.com/img.jpg", false);
+
+    when(sourceRepository.findByActiveTrue())
+        .thenReturn(List.of(ACTIVE_SOURCE));
+    when(scraperFactory.scrape(ACTIVE_SOURCE))
+        .thenReturn(List.of(content));
+    when(articleRepository.existsByOriginalUrl(content.url()))
+        .thenReturn(false);
+    when(eventRepository.existsByOriginalUrl(content.url()))
+        .thenReturn(false);
+    when(creating.fromPrompt(anyString()))
+        .thenReturn(articleClassification);
+    when(imageDownloader.downloadAndStore(content.imageUrl()))
+        .thenReturn(null);
+    // No date from the LLM and none from the detail page either.
+    when(htmlScraper.extractPublishedDateFromUrl(content.url()))
+        .thenReturn(null);
+    when(articleRepository.save(any()))
+        .thenAnswer(invocation -> {
+          AggregatedArticle a = invocation.getArgument(0);
+          return new AggregatedArticle(
+              "art-dateless", a.title(), a.sourceName(), a.sourceUrl(),
+              a.originalUrl(), a.summary(), a.fullContent(), a.author(),
+              a.publishedDate(), a.fetchedAt(), a.visible(), a.imageUrl());
+        });
+
+    agent.runAggregation();
+
+    ArgumentCaptor<AggregatedArticle> captor =
+        ArgumentCaptor.forClass(AggregatedArticle.class);
+    verify(articleRepository).save(captor.capture());
+    AggregatedArticle saved = captor.getValue();
+    assertThat(saved.publishedDate())
+        .as("publishedDate should default to the date the article was added")
+        .isNotNull()
+        .isEqualTo(saved.fetchedAt());
+  }
+
+  @Test
   void runAggregation_savesNewEvent() {
     ContentClassification eventClassification =
         new ContentClassification(
