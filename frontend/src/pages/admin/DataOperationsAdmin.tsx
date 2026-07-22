@@ -143,12 +143,12 @@ export function DataOperationsAdmin() {
   const driveConnected = status?.googleDriveConnected ?? false
 
   // --- Backup ---
-  const handleBackup = async (includeMedia: boolean = true) => {
+  const handleBackup = async () => {
     try {
       setError(null)
       setSuccess(null)
       await connectSse()
-      await startBackup(getAccessToken, includeMedia)
+      await startBackup(getAccessToken)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start backup')
     }
@@ -296,25 +296,16 @@ export function DataOperationsAdmin() {
           <div className="data-ops__card-icon"><CloudUpload size={24} /></div>
           <h3 className="data-ops__card-title">Backup to Google Drive</h3>
           <p className="data-ops__card-desc">
-            Create a backup to Google Drive. Data-only is small and quick;
-            full backup also bundles uploaded media files.
+            Create a backup to Google Drive. Includes the database and uploaded media files.
           </p>
           <div className="data-ops__card-actions">
             <button
-              className="admin-btn admin-btn--primary"
-              disabled={operationInProgress || !driveConnected}
-              onClick={() => handleBackup(false)}
-              type="button"
-            >
-              Backup Data Only
-            </button>
-            <button
               className="admin-btn admin-btn--secondary"
               disabled={operationInProgress || !driveConnected}
-              onClick={() => handleBackup(true)}
+              onClick={() => handleBackup()}
               type="button"
             >
-              Full Backup (with media)
+              Backup Now (full)
             </button>
           </div>
         </div>
