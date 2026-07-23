@@ -339,3 +339,10 @@ aggregation:
     cron: "0 0 */6 * * *"
   digest:
     cron: "0 0 8 * * MON"
+
+backup:
+  schedule:
+    cron: "0 0 22 * * *"
+    zone: "Europe/London"
+  retention:
+    max-backups: 7

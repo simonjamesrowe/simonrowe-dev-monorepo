@@ -84,10 +84,9 @@ export async function fetchDataOpsStatus(
 
 export async function startBackup(
   getAccessToken: GetAccessToken,
-  includeMedia: boolean = true,
 ): Promise<DataOperation> {
   const token = await getAccessToken()
-  const url = `${DATA_OPS_URL}/backup?includeMedia=${includeMedia}`
+  const url = `${DATA_OPS_URL}/backup`
   const response = await authFetch(url, token, { method: 'POST' })
   return handleResponse<DataOperation>(response)
 }

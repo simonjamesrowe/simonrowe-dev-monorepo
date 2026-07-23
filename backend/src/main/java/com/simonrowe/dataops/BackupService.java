@@ -6,14 +6,11 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,9 +43,6 @@ public class BackupService {
       "code_examples", "aggregated_articles", "aggregated_events",
       "content_sources"
   );
-  /** Sidecar file in the backups folder tracking which full backup last contained
-   * the uploads/ tree, so subsequent backups can dedupe when uploads/ is unchanged. */
-  static final String MEDIA_STATE_FILENAME = ".media-state.json";
 
   private final MongoClient mongoClient;
   private final String databaseName;
@@ -73,40 +67,24 @@ public class BackupService {
     this.uploadsPath = uploadsPath;
   }
 
-  public void performBackup() {
-    performBackup(true);
-  }
-
-  public void performBackup(final boolean includeMedia) {
+  /**
+   * Runs a full, self-contained backup (all collections + media + embeddings)
+   * and uploads it to Google Drive.
+   *
+   * @return {@code true} if the backup completed and uploaded successfully
+   */
+  public boolean performBackup() {
     Path tempFile = null;
     try {
       operationsService.updateProgress("Exporting database collections...", 10);
       String timestamp = TIMESTAMP_FORMAT.format(Instant.now());
-      String fileName = "backup-" + timestamp + (includeMedia ? "" : "-data") + ".zip";
+      String fileName = "backup-" + timestamp + ".zip";
       tempFile = Files.createTempFile("backup-", ".zip");
 
       Map<String, Integer> collectionCounts = new LinkedHashMap<>();
       int mediaFileCount = 0;
 
-      // Decide whether to actually bundle uploads/ in this zip. Even when the
-      // caller requested a full backup, skip media if uploads/ is byte-identical
-      // to the last full backup we shipped — the new manifest will reference
-      // that prior backup so restore still works end-to-end.
       String folderId = googleDriveService.findOrCreateFolder();
-      String mediaFingerprint = includeMedia ? computeMediaFingerprint() : null;
-      MediaState priorState = includeMedia ? readMediaState(folderId) : null;
-      boolean reuseMedia = false;
-      String mediaSourceName = null;
-      if (includeMedia && priorState != null
-          && priorState.fingerprint() != null
-          && priorState.fingerprint().equals(mediaFingerprint)
-          && priorState.sourceBackupName() != null
-          && googleDriveService.findFileIdByName(folderId,
-              priorState.sourceBackupName()) != null) {
-        reuseMedia = true;
-        mediaSourceName = priorState.sourceBackupName();
-      }
-      boolean writeMediaIntoZip = includeMedia && !reuseMedia;
 
       try (OutputStream fos = new BufferedOutputStream(Files.newOutputStream(tempFile));
            ZipOutputStream zos = new ZipOutputStream(fos)) {
@@ -140,30 +118,19 @@ public class BackupService {
           progress += progressPerCollection;
         }
 
-        if (writeMediaIntoZip) {
-          operationsService.updateProgress("Adding media files...", 60);
-          Path uploadsDir = Path.of(uploadsPath);
-          if (Files.exists(uploadsDir) && Files.isDirectory(uploadsDir)) {
-            List<Path> mediaFiles = Files.walk(uploadsDir)
-                .filter(Files::isRegularFile)
-                .toList();
-            mediaFileCount = mediaFiles.size();
-            for (Path mediaFile : mediaFiles) {
-              String entryPath = "uploads/" + uploadsDir.relativize(mediaFile);
-              zos.putNextEntry(new ZipEntry(entryPath));
-              Files.copy(mediaFile, zos);
-              zos.closeEntry();
-            }
+        operationsService.updateProgress("Adding media files...", 60);
+        Path uploadsDir = Path.of(uploadsPath);
+        if (Files.exists(uploadsDir) && Files.isDirectory(uploadsDir)) {
+          List<Path> mediaFiles = Files.walk(uploadsDir)
+              .filter(Files::isRegularFile)
+              .toList();
+          mediaFileCount = mediaFiles.size();
+          for (Path mediaFile : mediaFiles) {
+            String entryPath = "uploads/" + uploadsDir.relativize(mediaFile);
+            zos.putNextEntry(new ZipEntry(entryPath));
+            Files.copy(mediaFile, zos);
+            zos.closeEntry();
           }
-        } else if (reuseMedia) {
-          operationsService.updateProgress(
-              "Skipping media files (unchanged since last full backup)", 60);
-          mediaFileCount = priorState != null ? priorState.fileCount() : 0;
-          LOG.info("Reusing media from previous backup '{}' "
-                  + "(uploads/ unchanged, fingerprint={})",
-              mediaSourceName, mediaFingerprint);
-        } else {
-          operationsService.updateProgress("Skipping media files (data-only backup)", 60);
         }
 
         operationsService.updateProgress("Exporting vector embeddings...", 70);
@@ -177,8 +144,7 @@ public class BackupService {
         }
 
         operationsService.updateProgress("Writing manifest...", 75);
-        String manifest = buildManifest(
-            timestamp, collectionCounts, mediaFileCount, mediaSourceName);
+        String manifest = buildManifest(timestamp, collectionCounts, mediaFileCount);
         zos.putNextEntry(new ZipEntry("manifest.json"));
         zos.write(manifest.getBytes(StandardCharsets.UTF_8));
         zos.closeEntry();
@@ -202,35 +168,19 @@ public class BackupService {
             });
       }
 
-      // Update the media-state sidecar only when this backup actually carries
-      // fresh media bytes — that's what subsequent incremental backups will
-      // reference. If we reused a prior backup's media, the sidecar already
-      // points at the right place and we leave it alone.
-      if (writeMediaIntoZip && mediaFingerprint != null) {
-        try {
-          writeMediaState(folderId, new MediaState(
-              mediaFingerprint, fileName, mediaFileCount));
-        } catch (IOException ex) {
-          LOG.warn("Backup uploaded OK but failed to update media-state sidecar: {}",
-              ex.getMessage());
-        }
-      }
-
       int totalDocs = collectionCounts.values().stream()
           .mapToInt(Integer::intValue).sum();
-      String mediaPart = reuseMedia
-          ? String.format("%d media files referenced from '%s'",
-              mediaFileCount, mediaSourceName)
-          : String.format("%d media files", mediaFileCount);
       String summary = String.format(
-          "%d collections, %d documents, %s backed up (%s)",
-          collectionCounts.size(), totalDocs, mediaPart,
+          "%d collections, %d documents, %d media files backed up (%s)",
+          collectionCounts.size(), totalDocs, mediaFileCount,
           BackupMetadata.formatFileSize(fileSize));
       operationsService.completeOperation(summary);
+      return true;
 
     } catch (Exception ex) {
       LOG.error("Backup failed", ex);
       operationsService.failOperation("Backup failed: " + ex.getMessage());
+      return false;
     } finally {
       deleteTempFile(tempFile);
     }
@@ -282,8 +232,7 @@ public class BackupService {
 
   private String buildManifest(final String timestamp,
       final Map<String, Integer> collectionCounts,
-      final int mediaFileCount,
-      final String mediaSourceName) {
+      final int mediaFileCount) {
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
     sb.append("  \"version\": \"1.1\",\n");
@@ -291,11 +240,6 @@ public class BackupService {
     sb.append("  \"databaseName\": \"simonrowe\",\n");
     sb.append("  \"collectionCount\": ").append(collectionCounts.size()).append(",\n");
     sb.append("  \"mediaFileCount\": ").append(mediaFileCount).append(",\n");
-    if (mediaSourceName != null) {
-      sb.append("  \"mediaSource\": \"")
-          .append(jsonEscape(mediaSourceName))
-          .append("\",\n");
-    }
     sb.append("  \"collections\": {\n");
     int i = 0;
     for (Map.Entry<String, Integer> entry : collectionCounts.entrySet()) {
@@ -319,121 +263,5 @@ public class BackupService {
         LOG.warn("Failed to delete temp file: {}", file, ex);
       }
     }
-  }
-
-  /**
-   * Returns a stable hex digest summarising the contents of {@code uploadsPath}
-   * by relative path + size + last-modified time, sorted. Two backups produce
-   * the same fingerprint iff the set of media files (and their sizes/mtimes)
-   * is identical, so we can reuse the previous backup's media bytes.
-   */
-  String computeMediaFingerprint() {
-    Path uploadsDir = Path.of(uploadsPath);
-    if (!Files.exists(uploadsDir) || !Files.isDirectory(uploadsDir)) {
-      return "empty";
-    }
-    try (var stream = Files.walk(uploadsDir)) {
-      List<String> entries = stream
-          .filter(Files::isRegularFile)
-          .map(p -> {
-            try {
-              return uploadsDir.relativize(p) + ":" + Files.size(p)
-                  + ":" + Files.getLastModifiedTime(p).toMillis();
-            } catch (IOException ex) {
-              return uploadsDir.relativize(p) + ":?:?";
-            }
-          })
-          .sorted()
-          .toList();
-      MessageDigest md = MessageDigest.getInstance("SHA-256");
-      for (String entry : entries) {
-        md.update(entry.getBytes(StandardCharsets.UTF_8));
-        md.update((byte) '\n');
-      }
-      return HexFormat.of().formatHex(md.digest());
-    } catch (IOException | NoSuchAlgorithmException ex) {
-      LOG.warn("Failed to compute media fingerprint, treating as changed: {}",
-          ex.getMessage());
-      return "error-" + Instant.now().toEpochMilli();
-    }
-  }
-
-  @org.springframework.lang.Nullable
-  private MediaState readMediaState(final String folderId) {
-    try {
-      byte[] bytes = googleDriveService.readSmallFile(folderId, MEDIA_STATE_FILENAME);
-      if (bytes == null) {
-        return null;
-      }
-      String body = new String(bytes, StandardCharsets.UTF_8);
-      return new MediaState(
-          extractJsonString(body, "fingerprint"),
-          extractJsonString(body, "sourceBackupName"),
-          (int) extractJsonNumber(body, "fileCount"));
-    } catch (IOException ex) {
-      LOG.warn("Failed to read media-state sidecar, falling back to full media backup: {}",
-          ex.getMessage());
-      return null;
-    }
-  }
-
-  private void writeMediaState(final String folderId, final MediaState state)
-      throws IOException {
-    String json = "{\n"
-        + "  \"version\": \"1.0\",\n"
-        + "  \"updatedAt\": \"" + Instant.now() + "\",\n"
-        + "  \"fingerprint\": \"" + jsonEscape(state.fingerprint()) + "\",\n"
-        + "  \"sourceBackupName\": \""
-        + jsonEscape(state.sourceBackupName()) + "\",\n"
-        + "  \"fileCount\": " + state.fileCount() + "\n"
-        + "}\n";
-    googleDriveService.upsertSmallFile(folderId, MEDIA_STATE_FILENAME,
-        json.getBytes(StandardCharsets.UTF_8), "application/json");
-  }
-
-  private static String jsonEscape(final String s) {
-    if (s == null) {
-      return "";
-    }
-    return s.replace("\\", "\\\\").replace("\"", "\\\"");
-  }
-
-  private static String extractJsonString(final String json, final String key) {
-    String marker = "\"" + key + "\"";
-    int k = json.indexOf(marker);
-    if (k < 0) {
-      return null;
-    }
-    int colon = json.indexOf(':', k);
-    int q1 = json.indexOf('"', colon + 1);
-    int q2 = json.indexOf('"', q1 + 1);
-    if (q1 < 0 || q2 < 0) {
-      return null;
-    }
-    return json.substring(q1 + 1, q2);
-  }
-
-  private static long extractJsonNumber(final String json, final String key) {
-    String marker = "\"" + key + "\"";
-    int k = json.indexOf(marker);
-    if (k < 0) {
-      return 0;
-    }
-    int colon = json.indexOf(':', k);
-    int end = colon + 1;
-    while (end < json.length() && (Character.isDigit(json.charAt(end))
-        || json.charAt(end) == ' ')) {
-      end++;
-    }
-    String num = json.substring(colon + 1, end).trim();
-    try {
-      return Long.parseLong(num);
-    } catch (NumberFormatException ex) {
-      return 0;
-    }
-  }
-
-  /** State stored in the .media-state.json sidecar on Drive. */
-  record MediaState(String fingerprint, String sourceBackupName, int fileCount) {
   }
 }
