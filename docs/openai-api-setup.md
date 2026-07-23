@@ -47,7 +47,6 @@ spring:
       chat:
         options:
           model: gpt-5.4-nano
-          reasoning-effort: high
       embedding:
         options:
           model: text-embedding-3-small
@@ -60,12 +59,9 @@ spring:
 
 No changes are needed — just set the `OPENAI_API_KEY` environment variable.
 
-Both the chat model and its reasoning effort are overridable via environment variables (defaults shown):
+The chat model is overridable via the `OPENAI_CHAT_MODEL` environment variable (default `gpt-5.4-nano`). It is cheaper per token than the older `gpt-5-mini` ($0.20/$1.25 vs $0.25/$2.00 per 1M).
 
-- `OPENAI_CHAT_MODEL` (default `gpt-5.4-nano`)
-- `OPENAI_CHAT_REASONING_EFFORT` (default `high`; valid: `minimal`, `low`, `medium`, `high`, `xhigh`)
-
-Higher reasoning effort improves answer quality at the cost of more (billed) reasoning tokens and latency. `gpt-5.4-nano` is cheaper per token than the older `gpt-5-mini` ($0.20/$1.25 vs $0.25/$2.00 per 1M), so even at `high` effort the chat stays inexpensive at this site's traffic.
+Do not configure `reasoning-effort` in the shared chat defaults. Spring AI merges these defaults into every per-call `OpenAiChatOptions`, and `reasoning_effort` breaks two calls: OpenAI rejects function tools combined with `reasoning_effort` for `gpt-5.4-nano` on `/v1/chat/completions` (the tool-enabled chat), and `gpt-4o-mini` (the guardrail classifier) rejects the argument entirely, silently disabling the topic gate.
 
 ## Models Used
 
