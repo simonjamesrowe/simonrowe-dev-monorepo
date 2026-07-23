@@ -208,7 +208,8 @@ public class SitemapHtmlScraper {
           || lastSegment.equals("page")) {
         return false;
       }
-      // Reject path-style pagination such as /blog/2 or /news/3
+      // Fix 6: reject path-style pagination such as /blog/2 or /news/3. Assumes
+      // HTML_LISTING sources don't use bare-numeric article slugs; revisit if one does.
       if (lastSegment.matches("\\d+")) {
         return false;
       }
