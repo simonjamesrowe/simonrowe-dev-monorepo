@@ -90,13 +90,15 @@ spring:
       chat:
         options:
           # gpt-5.4-nano: newer generation than gpt-5-mini, cheaper per token
-          # ($0.20/$1.25 vs $0.25/$2.00 per 1M) and faster. reasoning-effort=high
-          # lifts its answer quality above gpt-5-mini for this portfolio chat.
-          # Both are env-overridable (e.g. OPENAI_CHAT_REASONING_EFFORT=medium to
-          # trade some quality for lower latency/cost). Valid effort values:
-          # minimal | low | medium | high | xhigh.
+          # ($0.20/$1.25 vs $0.25/$2.00 per 1M) and faster.
+          #
+          # Do NOT set reasoning-effort here. These defaults are merged into EVERY
+          # per-call OpenAiChatOptions, and reasoning_effort 400s twice over:
+          # OpenAI rejects function tools + reasoning_effort for gpt-5.4-nano on
+          # /v1/chat/completions (breaking the tool-enabled portfolio chat), and
+          # gpt-4o-mini (GuardrailAdvisor's classifier) rejects the argument
+          # outright, silently disabling the topic gate.
           model: ${OPENAI_CHAT_MODEL:gpt-5.4-nano}
-          reasoning-effort: ${OPENAI_CHAT_REASONING_EFFORT:high}
     vectorstore:
       elasticsearch:
         index-name: content-embeddings
