@@ -29,6 +29,7 @@ import com.simonrowe.media.BlogImageGenerationService;
 import com.simonrowe.media.ExternalImageDownloader;
 import com.simonrowe.media.MediaVariantResolver;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,6 +63,12 @@ class ContentAggregationAgentTest {
           "src1", "Test Blog", "https://example.com",
           "https://example.com/feed", null,
           SourceType.BLOG, ScrapeStrategy.RSS,
+          true, null, null);
+
+  private static final ContentSource DAN_VEGA_SOURCE =
+      new ContentSource(
+          "src-dv", "Dan Vega", "https://www.danvega.dev/blog",
+          null, null, SourceType.BLOG, ScrapeStrategy.HTML_LISTING,
           true, null, null);
 
   @SuppressWarnings("unchecked")
@@ -349,5 +356,94 @@ class ContentAggregationAgentTest {
     assertThat(result.type()).isEqualTo("article");
     assertThat(result.summary()).isEqualTo("Failing Post");
     assertThat(result.eventDate()).isNull();
+  }
+
+  @Test
+  void backfillSource_savesRecentPostAndSkipsPostBeforeCutoff() {
+    Instant now = Instant.now();
+
+    ScrapedContent recent = new ScrapedContent(
+        "Recent Post", "https://www.danvega.dev/blog/recent",
+        "This is a long enough content string to pass the "
+            + "fifty character threshold for classification.",
+        now.minus(5, ChronoUnit.DAYS), "Dan Vega", null, false);
+    ScrapedContent old = new ScrapedContent(
+        "Old Post", "https://www.danvega.dev/blog/old",
+        "This is a long enough content string to pass the "
+            + "fifty character threshold for classification.",
+        now.minus(100, ChronoUnit.DAYS), "Dan Vega", null, false);
+
+    ContentClassification articleClassification =
+        new ContentClassification(
+            "article", "A concise summary.", null, null, null, null);
+
+    when(scraperFactory.scrape(DAN_VEGA_SOURCE))
+        .thenReturn(List.of(recent, old));
+    when(articleRepository.existsByOriginalUrl(anyString()))
+        .thenReturn(false);
+    when(eventRepository.existsByOriginalUrl(anyString()))
+        .thenReturn(false);
+    when(creating.fromPrompt(anyString()))
+        .thenReturn(articleClassification);
+    lenient().when(imageDownloader.downloadAndStore(any()))
+        .thenReturn(null);
+    lenient().when(blogImageGenerationService.generateAndStore(
+        anyString(), anyString())).thenReturn(null);
+    when(articleRepository.save(any()))
+        .thenAnswer(invocation -> {
+          AggregatedArticle a = invocation.getArgument(0);
+          return new AggregatedArticle(
+              "art-recent", a.title(), a.sourceName(), a.sourceUrl(),
+              a.originalUrl(), a.summary(), a.fullContent(), a.author(),
+              a.publishedDate(), a.fetchedAt(), a.visible(), a.imageUrl());
+        });
+
+    Instant since = now.minus(30, ChronoUnit.DAYS);
+    agent.backfillSource(DAN_VEGA_SOURCE, since);
+
+    ArgumentCaptor<AggregatedArticle> captor =
+        ArgumentCaptor.forClass(AggregatedArticle.class);
+    verify(articleRepository).save(captor.capture());
+    assertThat(captor.getValue().title()).isEqualTo("Recent Post");
+    verify(changePublisher).publishCreated(
+        ContentType.AGGREGATED_ARTICLE, "art-recent");
+  }
+
+  @Test
+  void backfillSource_processesDatelessPost() {
+    ScrapedContent dateless = new ScrapedContent(
+        "Dateless Post", "https://www.danvega.dev/blog/dateless",
+        "This is a long enough content string to pass the "
+            + "fifty character threshold for classification.",
+        null, "Dan Vega", null, false);
+
+    when(scraperFactory.scrape(DAN_VEGA_SOURCE))
+        .thenReturn(List.of(dateless));
+    when(articleRepository.existsByOriginalUrl(anyString()))
+        .thenReturn(false);
+    when(eventRepository.existsByOriginalUrl(anyString()))
+        .thenReturn(false);
+    when(creating.fromPrompt(anyString()))
+        .thenReturn(new ContentClassification(
+            "article", "Summary.", null, null, null, null));
+    lenient().when(imageDownloader.downloadAndStore(any()))
+        .thenReturn(null);
+    lenient().when(blogImageGenerationService.generateAndStore(
+        anyString(), anyString())).thenReturn(null);
+    when(htmlScraper.extractPublishedDateFromUrl(anyString()))
+        .thenReturn(null);
+    when(articleRepository.save(any()))
+        .thenAnswer(invocation -> {
+          AggregatedArticle a = invocation.getArgument(0);
+          return new AggregatedArticle(
+              "art-dateless", a.title(), a.sourceName(), a.sourceUrl(),
+              a.originalUrl(), a.summary(), a.fullContent(), a.author(),
+              a.publishedDate(), a.fetchedAt(), a.visible(), a.imageUrl());
+        });
+
+    Instant since = Instant.now().minus(30, ChronoUnit.DAYS);
+    agent.backfillSource(DAN_VEGA_SOURCE, since);
+
+    verify(articleRepository).save(any());
   }
 }
