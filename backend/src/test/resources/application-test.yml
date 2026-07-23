@@ -35,3 +35,5 @@ management:
       enabled: false
 uploads:
   path: target/test-uploads
+mongock:
+  enabled: false
