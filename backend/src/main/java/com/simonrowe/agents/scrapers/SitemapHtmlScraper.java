@@ -204,7 +204,12 @@ public class SitemapHtmlScraper {
         lastSegment = segments[segments.length - 2];
       }
       if (lastSegment.equals("category") || lastSegment.equals("tag")
-          || lastSegment.equals("author") || lastSegment.equals("page")) {
+          || lastSegment.equals("tags") || lastSegment.equals("author")
+          || lastSegment.equals("page")) {
+        return false;
+      }
+      // Reject path-style pagination such as /blog/2 or /news/3
+      if (lastSegment.matches("\\d+")) {
         return false;
       }
 

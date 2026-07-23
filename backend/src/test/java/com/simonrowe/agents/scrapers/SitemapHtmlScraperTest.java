@@ -439,4 +439,38 @@ class SitemapHtmlScraperTest {
     assertThat(ogTitle.attr("content")).isEqualTo("Better Article Title");
     assertThat(doc.title()).isEqualTo("Raw Page Title");
   }
+
+  // ---------------------------------------------------------------------------
+  // isArticleLink — package-private section/utility filter
+  // ---------------------------------------------------------------------------
+
+  private static final String DAN_VEGA_LISTING = "https://www.danvega.dev/blog";
+
+  @Test
+  void isArticleLink_acceptsDanVegaBlogPost() {
+    assertThat(scraper.isArticleLink(
+        "https://www.danvega.dev/blog/embabel-1-0-ga", DAN_VEGA_LISTING))
+        .isTrue();
+  }
+
+  @Test
+  void isArticleLink_rejectsTagsIndex() {
+    assertThat(scraper.isArticleLink(
+        "https://www.danvega.dev/blog/tags", DAN_VEGA_LISTING))
+        .isFalse();
+  }
+
+  @Test
+  void isArticleLink_rejectsNumericPagination() {
+    assertThat(scraper.isArticleLink(
+        "https://www.danvega.dev/blog/2", DAN_VEGA_LISTING))
+        .isFalse();
+  }
+
+  @Test
+  void isArticleLink_stillAcceptsWordSlugOnOtherHosts() {
+    assertThat(scraper.isArticleLink(
+        "https://claude.com/blog/some-post", "https://claude.com/blog"))
+        .isTrue();
+  }
 }
