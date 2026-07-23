@@ -38,11 +38,13 @@ public class ContextAwareQuestionAnswerAdvisor implements BaseAdvisor {
   private static final int DEFAULT_ORDER = 100;
   private static final int DEFAULT_HISTORY_SIZE = 5;
 
-  private static final String PROMPT_TEMPLATE =
+  static final String PROMPT_TEMPLATE =
       "{query}"
           + System.lineSeparator()
           + System.lineSeparator()
-          + "Context information is below, surrounded by ---------------------"
+          + "Supporting background retrieved from Simon's content is below, surrounded by "
+          + "---------------------. Treat it as reference material, not as the only source "
+          + "you may use."
           + System.lineSeparator()
           + System.lineSeparator()
           + "---------------------"
@@ -52,11 +54,11 @@ public class ContextAwareQuestionAnswerAdvisor implements BaseAdvisor {
           + "---------------------"
           + System.lineSeparator()
           + System.lineSeparator()
-          + "Given the context and provided history information and not prior knowledge,"
-          + System.lineSeparator()
-          + "reply to the user comment. If the answer is not in the context, inform"
-          + System.lineSeparator()
-          + "the user that you can't answer the question.";
+          + "Use this background together with the tools available to you. When the visitor "
+          + "asks about Simon's blogs, jobs, skills, code, news, or events, call the matching "
+          + "tool even if the background above already seems to contain the answer — that is "
+          + "how the visitor gets the visual card. Draw on the tools for anything the "
+          + "background does not cover.";
 
   private final VectorStore vectorStore;
   private final ChatMemory chatMemory;
