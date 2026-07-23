@@ -89,7 +89,14 @@ spring:
       api-key: ${OPENAI_API_KEY:not-set}
       chat:
         options:
-          model: ${OPENAI_CHAT_MODEL:gpt-5-mini}
+          # gpt-5.4-nano: newer generation than gpt-5-mini, cheaper per token
+          # ($0.20/$1.25 vs $0.25/$2.00 per 1M) and faster. reasoning-effort=high
+          # lifts its answer quality above gpt-5-mini for this portfolio chat.
+          # Both are env-overridable (e.g. OPENAI_CHAT_REASONING_EFFORT=medium to
+          # trade some quality for lower latency/cost). Valid effort values:
+          # minimal | low | medium | high | xhigh.
+          model: ${OPENAI_CHAT_MODEL:gpt-5.4-nano}
+          reasoning-effort: ${OPENAI_CHAT_REASONING_EFFORT:high}
     vectorstore:
       elasticsearch:
         index-name: content-embeddings
