@@ -1,5 +1,6 @@
 package com.simonrowe.migration.changeunits;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -42,10 +43,8 @@ class V011SeedAndBackfillDanVegaBlogTest {
     ArgumentCaptor<ContentSource> captor =
         ArgumentCaptor.forClass(ContentSource.class);
     verify(sourceRepository).save(captor.capture());
-    org.assertj.core.api.Assertions.assertThat(captor.getValue().name())
-        .isEqualTo("Dan Vega");
-    org.assertj.core.api.Assertions.assertThat(
-        captor.getValue().scrapeStrategy())
+    assertThat(captor.getValue().name()).isEqualTo("Dan Vega");
+    assertThat(captor.getValue().scrapeStrategy())
         .isEqualTo(ContentSource.ScrapeStrategy.HTML_LISTING);
     verify(aggregationAgent).backfillSource(eq(saved), any(Instant.class));
   }
