@@ -11,11 +11,31 @@ within ~1 minute — provisioned deterministically so it survives redeploys.
 
 ## Background
 
-- Trace path already exists: `backend → Alloy :4317 (gRPC) → http://langfuse:3000/api/public/otel`,
+- Trace path: `backend → Alloy :4317 (gRPC) → http://langfuse:3000/api/public/otel`,
   authed with `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` (`config/alloy/config.alloy`).
-- The only gap was that the account had no org/project for those keys. `docker-compose.prod.yml`
-  now bootstraps the org, project, admin membership, and **fixed** project keys via
-  `LANGFUSE_INIT_*` (idempotent — only creates what's missing).
+- `docker-compose.prod.yml` bootstraps the org, project, admin membership, and **fixed**
+  project keys via `LANGFUSE_INIT_*` (idempotent — only creates what's missing).
+
+### Getting the chat generations into Langfuse (fixed 2026-07-23)
+
+Spring AI's ChatClient/ChatModel emit `gen_ai` telemetry through the **Micrometer Observation
+API**, not the OpenTelemetry API directly. The `opentelemetry-spring-boot-starter` only creates
+spans from its own library instrumentation (HTTP server, MongoDB) and bridges Micrometer
+**metrics** — it does **not** bridge the Micrometer Observation API to spans. So before the fix,
+Langfuse received only HTTP/Mongo noise and **zero** chat generations (Model cost / usage empty;
+`GET`/`POST`/`find …` trace names). Two changes fixed it:
+
+1. **`micrometer-tracing-bridge-otel`** (backend dependency) registers the tracing
+   `ObservationHandler`, so Spring AI observations become OTel spans. It is wired to export via
+   `management.otlp.tracing.endpoint` (= `OTEL_EXPORTER_OTLP_ENDPOINT`, Alloy gRPC :4317) with
+   `management.tracing.sampling.probability: 1.0` (see `backend/.../application.yml`).
+2. **Alloy `ai_only` filter** (`config/alloy/config.alloy`) drops every span that is not a Spring
+   AI span before the Langfuse exporter, so **Langfuse captures AI traces only** — no HTTP/Mongo/
+   `@WithSpan` spans. It keys off `gen_ai.operation.name` / `gen_ai.system` / `spring.ai.kind`.
+
+Note on cost: Langfuse derives cost from its model-price table. A brand-new model id (e.g.
+`gpt-5.4-nano`) may not be priced out of the box — token **usage** will still show; add a custom
+model price in Langfuse (Settings → Models) if you want the **cost** figure populated.
 
 ## One-time / after key changes
 

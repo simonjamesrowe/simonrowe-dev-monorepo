@@ -33,6 +33,12 @@ management:
       enabled: false
     elasticsearch:
       enabled: false
+  # Keep the tracing bridge wired (so we can assert it works) but don't ship spans anywhere
+  # in tests — there is no collector, and a live gRPC exporter would log noisy retries.
+  otlp:
+    tracing:
+      export:
+        enabled: false
 uploads:
   path: target/test-uploads
 mongock:
