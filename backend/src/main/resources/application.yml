@@ -27,6 +27,19 @@ management:
     health:
       show-details: always
       show-components: always
+  # Tracing: Spring AI (ChatClient/ChatModel) emits gen_ai observations via the Micrometer
+  # Observation API. micrometer-tracing-bridge-otel turns those observations into OpenTelemetry
+  # spans and this OTLP exporter ships them to Alloy (which forwards only the AI spans to
+  # Langfuse — see config/alloy/config.alloy). Sample everything: chat volume is low and every
+  # generation is worth capturing.
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      # Reuses the same collector endpoint as the OTel starter (Alloy gRPC :4317 in prod).
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+      transport: grpc
 
 spring:
   application:
@@ -117,10 +130,11 @@ spring:
           enabled: true
     # Observability content capture (evaluated for chat fix-up, Langfuse tracing).
     #
-    # gen_ai spans are already exported (backend -> Alloy :4317 -> Langfuse OTLP) without
-    # any property here, so traces are visible regardless. Capturing the prompt/completion
-    # TEXT in those spans is DISABLED BY DEFAULT: it would store visitor chat content in
-    # Langfuse (ClickHouse), a privacy trade-off not justified for a public portfolio chat.
+    # gen_ai spans are exported (backend -> Alloy :4317 -> Langfuse OTLP) via the Micrometer
+    # Observation -> OTel span bridge (micrometer-tracing-bridge-otel + management.otlp.tracing
+    # above). Capturing the prompt/completion TEXT in those spans is DISABLED BY DEFAULT: it
+    # would store visitor chat content in Langfuse (ClickHouse), a privacy trade-off not
+    # justified for a public portfolio chat.
     #
     # To enable it (e.g. temporarily, for debugging), verify the exact property names for
     # the pinned Spring AI version (1.1.4, OpenAI SDK starter) against the Spring AI

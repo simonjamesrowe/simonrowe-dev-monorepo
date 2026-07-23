@@ -94,6 +94,11 @@ dependencies {
     implementation(libs.spring.kafka)
     implementation(libs.micrometer.registry.prometheus)
     implementation(libs.opentelemetry.spring.boot.starter)
+    // Bridges the Micrometer Observation API (used by Spring AI's ChatClient/ChatModel to
+    // emit gen_ai observations) into OpenTelemetry spans. Without it, only the OTel
+    // library instrumentation (HTTP, Mongo) produced spans and the chat generations never
+    // reached Langfuse. See docs/runbooks/langfuse-observability.md.
+    implementation(libs.micrometer.tracing.bridge.otel)
     implementation(libs.openpdf)
     implementation(libs.commonmark)
     implementation(libs.spring.boot.starter.mail)

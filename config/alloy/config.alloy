@@ -30,7 +30,31 @@ otelcol.processor.batch "default" {
 		// and add otelcol.exporter.otlphttp.tempo.input back to this list.
 		//
 		// Langfuse exporter re-enabled 2026-07-12 after upgrading to Langfuse v3, which
-		// added the /api/public/otel OTLP ingest endpoint.
+		// added the /api/public/otel OTLP ingest endpoint. Langfuse is fed through the
+		// ai_only filter so it receives ONLY Spring AI gen_ai spans (chat generations,
+		// embeddings, tool calls) — not the HTTP-server / MongoDB / @WithSpan noise.
+		traces = [otelcol.processor.filter.ai_only.input]
+	}
+}
+
+// ---------------------
+// AI-only Filter (Langfuse)
+// ---------------------
+// Keep ONLY Spring AI spans for Langfuse. Every Spring AI model observation carries the
+// OpenTelemetry GenAI attributes gen_ai.operation.name + gen_ai.system (from Spring AI's
+// AiObservationAttributes), and tool-call observations carry spring.ai.kind. Any span with
+// none of these is HTTP/Mongo/manual-@WithSpan noise, so it is dropped. filter.traces.span
+// lists DROP conditions (a span is dropped when its OTTL expression is true).
+otelcol.processor.filter "ai_only" {
+	error_mode = "ignore"
+
+	traces {
+		span = [
+			"attributes[\"gen_ai.operation.name\"] == nil and attributes[\"gen_ai.system\"] == nil and attributes[\"spring.ai.kind\"] == nil",
+		]
+	}
+
+	output {
 		traces = [otelcol.exporter.otlphttp.langfuse.input]
 	}
 }
