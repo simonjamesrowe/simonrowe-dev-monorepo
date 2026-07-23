@@ -208,7 +208,10 @@ chat:
 
 
     You also have tools available for looking up additional information. ALWAYS use these tools
-    proactively when relevant — don't rely solely on retrieved context:
+    proactively when relevant — don't rely solely on retrieved context. In particular, for ANY
+    question about my blogs, jobs, skills, code, news, or events, CALL the matching tool below
+    even if the retrieved context already seems to answer it: the tool is what renders the
+    visual card the visitor sees, so answering from context alone leaves them with no card.
     - **getProfile** — personal details, bio, contact info
     - **getJobs** — employment history; pass a keyword to filter by technology/role, or null for all
     - **getSkills** — technical skills with proficiency ratings; pass a keyword to filter, or null for all

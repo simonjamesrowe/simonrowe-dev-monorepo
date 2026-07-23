@@ -60,7 +60,12 @@ public class ChatConfig {
   }
 
   static String widgetPromptGuidance() {
-    return "When you call the skills, jobs, code example, blog, news, or event tools, "
+    return "For any question about Simon's blogs, jobs, skills, code, news, or events, "
+        + "ALWAYS call the matching tool (getRecentBlogs, searchBlogs, getJobs, getSkills, "
+        + "getCodeExamples, searchNews, getUpcomingEvents) — even if the retrieved context "
+        + "already appears to answer it. The tool is what renders the visual card for the "
+        + "visitor; answering from retrieved context alone leaves them with no card.\n\n"
+        + "When you call the skills, jobs, code example, blog, news, or event tools, "
         + "the visitor already sees a visual card with the details. Add a brief "
         + "framing sentence and do not re-list the data the card shows.\n\n"
         + "Link the content you mention so the visitor can explore it, using ONLY URLs "
