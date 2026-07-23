@@ -56,6 +56,17 @@ const sources = [
     active: true,
     lastFetchedAt: null,
     lastError: null
+  },
+  {
+    name: 'Dan Vega',
+    baseUrl: 'https://www.danvega.dev/blog',
+    feedUrl: null,
+    sitemapUrl: null,
+    sourceType: 'BLOG',
+    scrapeStrategy: 'HTML_LISTING',
+    active: true,
+    lastFetchedAt: null,
+    lastError: null
   }
 ];
 

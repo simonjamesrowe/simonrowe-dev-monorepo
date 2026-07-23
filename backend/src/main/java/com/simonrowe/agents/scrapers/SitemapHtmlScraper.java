@@ -204,7 +204,13 @@ public class SitemapHtmlScraper {
         lastSegment = segments[segments.length - 2];
       }
       if (lastSegment.equals("category") || lastSegment.equals("tag")
-          || lastSegment.equals("author") || lastSegment.equals("page")) {
+          || lastSegment.equals("tags") || lastSegment.equals("author")
+          || lastSegment.equals("page")) {
+        return false;
+      }
+      // Fix 6: reject path-style pagination such as /blog/2 or /news/3. Assumes
+      // HTML_LISTING sources don't use bare-numeric article slugs; revisit if one does.
+      if (lastSegment.matches("\\d+")) {
         return false;
       }
 

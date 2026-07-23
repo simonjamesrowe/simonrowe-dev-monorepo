@@ -185,23 +185,54 @@ public class ContentAggregationAgent {
     log.info("Fetched {} items from {}", scraped.size(), source.name());
 
     for (ScrapedContent content : scraped) {
-      boolean alreadyExists =
-          articleRepository.existsByOriginalUrl(content.url())
-              || eventRepository.existsByOriginalUrl(content.url());
-      if (alreadyExists) {
+      processScrapedItem(source, content);
+    }
+  }
+
+  /**
+   * Scrapes a source and processes only items published on or after {@code since}.
+   * Used to pre-populate a newly added source (e.g. from a Mongock change unit)
+   * without waiting for the scheduled aggregation run. Items whose scraped
+   * {@code publishedDate} is absent are processed normally (they fall back to the
+   * fetch date and are treated as recent).
+   *
+   * @param source the content source to scrape
+   * @param since  the earliest publish date to keep
+   */
+  public void backfillSource(final ContentSource source, final Instant since) {
+    List<ScrapedContent> scraped = scraperFactory.scrape(source);
+    log.info("Backfilling {} items from {} published on/after {}",
+        scraped.size(), source.name(), since);
+
+    for (ScrapedContent content : scraped) {
+      if (content.publishedDate() != null
+          && content.publishedDate().isBefore(since)) {
+        log.info("Skipping '{}' — published {} is before cutoff {}",
+            content.title(), content.publishedDate(), since);
         continue;
       }
+      processScrapedItem(source, content);
+    }
+  }
 
-      ContentClassification classification =
-          classifyAndSummarize(content);
+  private void processScrapedItem(
+      final ContentSource source, final ScrapedContent content) {
+    boolean alreadyExists =
+        articleRepository.existsByOriginalUrl(content.url())
+            || eventRepository.existsByOriginalUrl(content.url());
+    if (alreadyExists) {
+      return;
+    }
 
-      if (classification.isEvent()
-          || source.sourceType() == ContentSource.SourceType.EVENTS
-          || content.isEvent()) {
-        processEvent(source, content, classification);
-      } else {
-        processArticle(source, content, classification);
-      }
+    ContentClassification classification =
+        classifyAndSummarize(content);
+
+    if (classification.isEvent()
+        || source.sourceType() == ContentSource.SourceType.EVENTS
+        || content.isEvent()) {
+      processEvent(source, content, classification);
+    } else {
+      processArticle(source, content, classification);
     }
   }
 
