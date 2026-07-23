@@ -16,5 +16,7 @@ public interface AggregatedArticleRepository
   Page<AggregatedArticle> findByVisibleTrueAndSourceNameOrderByPublishedDateDesc(
       String sourceName, Pageable pageable);
 
+  List<AggregatedArticle> findBySourceName(String sourceName);
+
   boolean existsByOriginalUrl(String originalUrl);
 }
