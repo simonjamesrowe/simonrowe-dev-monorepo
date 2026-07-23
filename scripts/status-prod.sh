@@ -40,10 +40,10 @@ done <<< "$compose_output"
 
 printf "\n"
 
-if curl -sf -o /dev/null -m 5 https://simonrowe.dev 2>/dev/null; then
-  printf "%-30s %s\n" "External: simonrowe.dev" "reachable"
+if curl -sf -o /dev/null -m 5 https://www.simonrowe.dev 2>/dev/null; then
+  printf "%-30s %s\n" "External: www.simonrowe.dev" "reachable"
 else
-  printf "%-30s %s\n" "External: simonrowe.dev" "UNREACHABLE"
+  printf "%-30s %s\n" "External: www.simonrowe.dev" "UNREACHABLE"
 fi
 
 printf "\n"

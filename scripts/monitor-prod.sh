@@ -7,7 +7,12 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FAILURE_THRESHOLD=${FAILURE_THRESHOLD:-3}
 MAX_RESTARTS=${MAX_RESTARTS:-3}
 BACKOFF_WINDOW=${BACKOFF_WINDOW:-600}
-CHECK_URL=${CHECK_URL:-https://simonrowe.dev}
+# NOTE: must be a URL nginx actually serves. https://simonrowe.dev (bare domain)
+# 301-redirects to www at the Cloudflare edge, so `curl -f` (which treats 3xx as
+# success) reports "healthy" even when nginx/frontend/backend/pinggy are all down,
+# because the request never reaches origin. www.simonrowe.dev has no such redirect
+# and always requires a live origin round-trip.
+CHECK_URL=${CHECK_URL:-https://www.simonrowe.dev}
 STATE_DIR=${STATE_DIR:-/tmp/prod-health}
 
 COMPOSE_FILE="$PROJECT_DIR/docker-compose.prod.yml"
@@ -101,12 +106,28 @@ if (( recent_restarts >= MAX_RESTARTS )); then
   exit 1
 fi
 
-log "ERROR" "Restarting pinggy container ($failure_count consecutive failures)"
-if docker compose -f "$COMPOSE_FILE" restart pinggy; then
-  record_restart
-  log "INFO" "Pinggy container restarted successfully"
+# Reconcile the whole stack rather than just bouncing pinggy: an interrupted
+# `docker compose up` can leave nginx/frontend/backend/pinggy stuck in `Created`
+# (never started), which a plain `restart` cannot fix since there is no running
+# process to restart. `up -d` starts any non-running container, in dependency
+# order, and is a no-op for services that are already healthy.
+log "ERROR" "Reconciling compose stack ($failure_count consecutive failures)"
+if docker compose -f "$COMPOSE_FILE" up -d; then
+  # nginx has no `resolver` directive, so it resolves the frontend/backend/
+  # portainer/langfuse hostnames once at startup and caches those IPs. If `up -d`
+  # (re)created any upstream container, it gets a new IP while a still-running
+  # nginx keeps proxying to the old dead address (502 / connection refused). All
+  # upstreams are confirmed up at this point, so it's always safe to bounce nginx
+  # here to force it to re-resolve.
+  log "INFO" "Compose stack reconciled successfully; restarting nginx to refresh upstream DNS"
+  if docker compose -f "$COMPOSE_FILE" restart nginx; then
+    record_restart
+  else
+    log "ERROR" "Failed to restart nginx after reconciling stack"
+    record_restart
+  fi
 else
-  log "ERROR" "Failed to restart pinggy container"
+  log "ERROR" "Failed to reconcile compose stack"
 fi
 
 set_failure_count 0

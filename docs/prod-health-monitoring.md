@@ -1,18 +1,44 @@
 # Production Health Monitoring
 
 The production environment uses a cron-based health monitor that checks whether
-`simonrowe.dev` is reachable and automatically restarts the Pinggy tunnel
-container when it isn't.
+`www.simonrowe.dev` is reachable and automatically reconciles the Docker Compose
+stack when it isn't.
 
 ## How it works
 
 `scripts/monitor-prod.sh` is a single-run script designed to be called by cron.
 Each invocation:
 
-1. Checks if `https://simonrowe.dev` is reachable (10s timeout)
+1. Checks if `https://www.simonrowe.dev` is reachable (10s timeout)
 2. Tracks consecutive failures in a state file (`/tmp/prod-health/failure_count`)
-3. After 3 consecutive failures, restarts the Pinggy container
-4. Limits restarts to 3 per 10-minute window to prevent restart storms
+3. After 3 consecutive failures, runs `docker compose -f docker-compose.prod.yml up -d`
+   to reconcile the stack — this starts any container that is stopped or stuck in
+   `Created` (e.g. after an interrupted `docker compose up`), in dependency order,
+   and is a no-op for services that are already healthy
+4. Restarts `nginx` so it re-resolves the frontend/backend/portainer/langfuse
+   hostnames (see the stale-DNS gotcha below) — safe at this point since step 3
+   guarantees all upstreams are up
+5. Limits restarts to 3 per 10-minute window to prevent restart storms
+
+> **Why `www.simonrowe.dev` and not the bare domain?** `https://simonrowe.dev`
+> 301-redirects to `www.simonrowe.dev` via a Cloudflare edge rule, answered before
+> the request ever reaches origin. `curl -f` treats a 3xx response as success, so
+> checking the bare domain reports "healthy" even when nginx/frontend/backend/pinggy
+> are all down — this blind spot let a real outage run undetected. Always check a
+> URL Cloudflare can only satisfy by proxying to origin.
+
+> **Stale upstream DNS after `restart-prod.sh` / image updates:** nginx has no
+> `resolver` directive (see CLAUDE.md), so it resolves `frontend`/`backend`/
+> `portainer`/`langfuse` once at container startup and caches those IPs for its
+> whole lifetime. `docker compose up -d` only recreates containers whose
+> image/config actually changed — pulling a new `backend`/`frontend` image gives
+> that container a fresh IP on the Docker network, but nginx (unchanged) keeps
+> running against the old, now-dead address, producing `502`/connection-refused
+> errors while every container reports healthy. Both `scripts/restart-prod.sh`
+> and `scripts/monitor-prod.sh` restart `nginx` immediately after `up -d` to
+> force it to re-resolve; if you ever reconcile the stack manually, do the same
+> (`docker compose -f docker-compose.prod.yml restart nginx`) once you've
+> confirmed all four upstreams are up.
 
 The Docker Compose file also includes a process-level health check on the Pinggy
 container (`kill -0 1`) so `docker ps` and `scripts/status-prod.sh` can report
@@ -107,7 +133,7 @@ set them inline in the crontab entry:
 
 | Variable | Default | Description |
 | -------- | ------- | ----------- |
-| `CHECK_URL` | `https://simonrowe.dev` | URL to check for reachability |
+| `CHECK_URL` | `https://www.simonrowe.dev` | URL to check for reachability |
 | `FAILURE_THRESHOLD` | `3` | Consecutive failures before restart |
 | `MAX_RESTARTS` | `3` | Maximum restarts per backoff window |
 | `BACKOFF_WINDOW` | `600` | Backoff window in seconds (10 minutes) |
@@ -135,10 +161,12 @@ desired behaviour since production will need to be started fresh anyway.
 
 ### Monitor logs show repeated CRIT messages
 
-The site has been unreachable for an extended period and Pinggy restarts aren't
-helping. Check:
+The site has been unreachable for an extended period and stack reconciliation
+isn't helping. Check:
 
 - Host internet connectivity: `curl -I https://google.com`
+- Container states: `docker compose -f docker-compose.prod.yml ps -a` — look for
+  anything stuck in `Created` or `Restarting`, and check its logs
 - Pinggy token validity: `docker compose -f docker-compose.prod.yml logs pinggy`
 - Pinggy service status: check [status.pinggy.io](https://status.pinggy.io)
 
