@@ -86,9 +86,11 @@ jobs:
         run: |
           cd backend
           ../gradlew bootRun &
-          # Wait for backend to be ready. Startup runs all Mongock migrations plus Embabel
-          # agent init, which exceeds the old 120s budget.
-          timeout 300 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep "\"status\":\"UP\""; do sleep 5; done'
+          # Wait for backend to be ready. Actuator runs on the management port 8082
+          # (management.server.port), not the app port 8080; probing 8080 returns 404 and
+          # never matches UP. Startup also runs all Mongock migrations plus Embabel init,
+          # so allow a generous budget.
+          timeout 300 bash -c 'while ! curl -s http://localhost:8082/actuator/health | grep "\"status\":\"UP\""; do sleep 5; done'
           
       - name: Seed Local Data
         run: |
