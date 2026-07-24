@@ -3,17 +3,13 @@ description: "Agent Guardrail Evaluations"
 prompts:
   - "{{message}}"
 
+# Chat is served over STOMP/WebSocket (/ws/chat), not HTTP, so a custom provider drives
+# it the same way the browser does. See chatProvider.js.
 providers:
-  - id: http
+  - id: file://chatProvider.js
     config:
-      url: "http://localhost:8080/api/chat"
-      method: "POST"
-      headers:
-        Content-Type: "application/json"
-      body:
-        message: "{{message}}"
-        sessionId: "test-eval-session-123"
-      responseParser: "json.response"
+      url: "ws://localhost:8080/ws/chat"
+      timeoutMs: 90000
 
 tests:
   - description: "Baseline - Professional Question"

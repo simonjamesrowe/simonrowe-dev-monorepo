@@ -94,12 +94,16 @@ jobs:
           
       - name: Seed Local Data
         run: |
+          # Restore a lightweight slice of real production data (profile, jobs, skills,
+          # skill groups, blogs, tags, etc.) so the chat has genuine content to answer
+          # from. --drop replaces whatever the startup migrations seeded.
           MONGO_CONTAINER=$(docker ps --filter "ancestor=mongo:6.0" -q | head -n 1)
-          docker cp evals/seed-data.js $MONGO_CONTAINER:/seed-data.js
-          docker exec $MONGO_CONTAINER mongosh simonrowe /seed-data.js
+          docker cp evals/seed/simonrowe $MONGO_CONTAINER:/tmp/seed
+          docker exec $MONGO_CONTAINER mongorestore --db simonrowe --drop /tmp/seed
+          # Re-embed the restored content into Elasticsearch for retrieval.
           curl -s -X POST http://localhost:8080/api/admin/data-operations/reembed
           # Wait for re-embed to finish
-          timeout 120 bash -c 'while curl -s http://localhost:8080/api/admin/data-operations/status | grep "\"operationInProgress\":true"; do sleep 5; done'
+          timeout 180 bash -c 'while curl -s http://localhost:8080/api/admin/data-operations/status | grep "\"operationInProgress\":true"; do sleep 5; done'
         
       - name: Run Promptfoo Evals
         # OPENAI_API_KEY inherited from the normalize step via $GITHUB_ENV.
