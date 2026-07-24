@@ -2,7 +2,7 @@
   "name": "simonrowe-evals",
   "version": "1.0.0",
   "scripts": {
-    "eval": "promptfoo eval"
+    "eval": "promptfoo eval --no-write"
   },
   "dependencies": {
     "promptfoo": "^0.100.0"
