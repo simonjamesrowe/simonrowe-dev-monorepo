@@ -135,6 +135,9 @@ function App() {
   return (
     <ThemeProvider>
     <BrowserRouter>
+      {/* Auth context is global: public pages need it for favourites (hearts render
+          logged-out state and the heart click runs loginWithPopup). */}
+      <AuthProvider>
       <Suspense fallback={<LoadingIndicator />}>
       <Routes>
         <Route element={<PublicLayout><HomePage /></PublicLayout>} path="/" />
@@ -144,14 +147,7 @@ function App() {
         <Route element={<PublicLayout><BlogDetailPage /></PublicLayout>} path="/blogs/:id" />
         <Route element={<PublicLayout><NewsEventsPage /></PublicLayout>} path="/news-events" />
         <Route element={<PublicLayout><McpPage /></PublicLayout>} path="/mcp" />
-        <Route
-          path="/admin"
-          element={
-            <AuthProvider>
-              <AdminLayout />
-            </AuthProvider>
-          }
-        >
+        <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardAdmin />} />
           <Route path="blogs" element={<BlogsAdmin />} />
@@ -173,6 +169,7 @@ function App() {
         </Route>
       </Routes>
       </Suspense>
+      </AuthProvider>
     </BrowserRouter>
     </ThemeProvider>
   )

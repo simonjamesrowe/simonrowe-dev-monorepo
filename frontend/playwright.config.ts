@@ -26,7 +26,7 @@ export default defineConfig({
   projects: [
     {
       name: 'local',
-      testMatch: /chat\.local\.spec\.ts/,
+      testMatch: /\.local\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'], baseURL: LOCAL_BASE_URL },
     },
     {
