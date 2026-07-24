@@ -7,6 +7,9 @@ on:
 jobs:
   evaluate:
     runs-on: ubuntu-latest
+    # Optional signal only: the AI evals depend on external services and an OpenAI key,
+    # so a failure here must not block the PR. Backend and frontend CI remain required.
+    continue-on-error: true
 
     services:
       mongodb:
@@ -14,23 +17,36 @@ jobs:
         ports:
           - 27017:27017
       elasticsearch:
-        image: elasticsearch:8.11.1
+        # Must match the app's ES client (docker-compose uses 8.17.0). On 8.11.1 the
+        # cluster-health response lacks unassignedPrimaryShards, so the backend health
+        # indicator throws and /actuator/health never reports UP.
+        image: elasticsearch:8.17.0
         env:
           discovery.type: single-node
           xpack.security.enabled: false
         ports:
           - 9200:9200
       kafka:
-        image: bitnami/kafka:3.5
+        # confluentinc/cp-kafka mirrors the local docker-compose stack; the previous
+        # bitnami/kafka:3.5 tag was removed upstream and no longer pulls.
+        image: confluentinc/cp-kafka:7.8.0
         env:
-          KAFKA_CFG_NODE_ID: 0
-          KAFKA_CFG_PROCESS_ROLES: controller,broker
-          KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-          KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-          KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
-          KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_NODE_ID: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:9093,PLAINTEXT_HOST://:9092
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+          KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+          CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
         ports:
           - 9092:9092
+        options: >-
+          --health-cmd "kafka-broker-api-versions --bootstrap-server localhost:9092"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -48,30 +64,49 @@ jobs:
           cache: 'npm'
           cache-dependency-path: evals/package.json
 
+      - name: Normalize OpenAI API key
+        env:
+          RAW_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          # A trailing newline/whitespace in the secret yields "Illegal character(s) in
+          # message header value" when the key is sent as a Bearer header. Strip whitespace
+          # and export for every later step (Spring AI + Embabel + promptfoo all read it).
+          CLEAN_KEY="$(printf '%s' "$RAW_OPENAI_API_KEY" | tr -d '[:space:]')"
+          echo "::add-mask::$CLEAN_KEY"
+          echo "OPENAI_API_KEY=$CLEAN_KEY" >> "$GITHUB_ENV"
+
       - name: Start Spring Boot Backend
         env:
           SPRING_DATA_MONGODB_URI: mongodb://localhost:27017/simonrowe
           SPRING_ELASTICSEARCH_URIS: http://localhost:9200
           SPRING_KAFKA_BOOTSTRAP_SERVERS: localhost:9092
-          SPRING_AI_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # OPENAI_API_KEY comes from the normalize step via $GITHUB_ENV. Both Spring AI
+          # (application.yml ${OPENAI_API_KEY}) and the Embabel agent read it; the old
+          # SPRING_AI_OPENAI_API_KEY name was consumed by nothing.
         run: |
           cd backend
           ../gradlew bootRun &
-          # Wait for backend to be ready
-          timeout 120 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep "\"status\":\"UP\""; do sleep 5; done'
+          # Wait for backend to be ready. Actuator runs on the management port 8082
+          # (management.server.port), not the app port 8080; probing 8080 returns 404 and
+          # never matches UP. Startup also runs all Mongock migrations plus Embabel init,
+          # so allow a generous budget.
+          timeout 300 bash -c 'while ! curl -s http://localhost:8082/actuator/health | grep "\"status\":\"UP\""; do sleep 5; done'
           
       - name: Seed Local Data
         run: |
+          # Restore a lightweight slice of real production data (profile, jobs, skills,
+          # skill groups, blogs, tags, etc.) so the chat has genuine content to answer
+          # from. --drop replaces whatever the startup migrations seeded.
           MONGO_CONTAINER=$(docker ps --filter "ancestor=mongo:6.0" -q | head -n 1)
-          docker cp evals/seed-data.js $MONGO_CONTAINER:/seed-data.js
-          docker exec $MONGO_CONTAINER mongosh simonrowe /seed-data.js
+          docker cp evals/seed/simonrowe $MONGO_CONTAINER:/tmp/seed
+          docker exec $MONGO_CONTAINER mongorestore --db simonrowe --drop /tmp/seed
+          # Re-embed the restored content into Elasticsearch for retrieval.
           curl -s -X POST http://localhost:8080/api/admin/data-operations/reembed
           # Wait for re-embed to finish
-          timeout 120 bash -c 'while curl -s http://localhost:8080/api/admin/data-operations/status | grep "\"operationInProgress\":true"; do sleep 5; done'
+          timeout 180 bash -c 'while curl -s http://localhost:8080/api/admin/data-operations/status | grep "\"operationInProgress\":true"; do sleep 5; done'
         
       - name: Run Promptfoo Evals
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        # OPENAI_API_KEY inherited from the normalize step via $GITHUB_ENV.
         run: |
           cd evals
           npm install

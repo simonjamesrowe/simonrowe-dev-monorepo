@@ -7,9 +7,11 @@ import type { FavouriteContentType } from '../types/favourites'
 /**
  * Owns the favourite-id set for one content type ('news' or 'events').
  *
- * Logged out, the set is empty (hearts render unfilled) and any toggle first runs the
- * Auth0 login popup — the page never navigates away — then completes the pending action.
- * Toggles apply optimistically and revert if the API call fails.
+ * Favourites are globally shared: the id set is loaded for every visitor (logged in or
+ * not), so hearts render filled for everyone. Toggling a favourite still requires a
+ * session — logged out, a toggle first runs the Auth0 login popup (the page never
+ * navigates away) then completes the pending action. Toggles apply optimistically and
+ * revert if the API call fails.
  */
 export function useFavourites(type: FavouriteContentType) {
   const { isAuthenticated, getAccessToken, loginWithPopup } = useAuth()
@@ -19,22 +21,18 @@ export function useFavourites(type: FavouriteContentType) {
   const loadIds = useCallback(async () => {
     setLoading(true)
     try {
-      const ids = await getFavouriteIds(getAccessToken, type)
+      const ids = await getFavouriteIds(type)
       setFavouriteIds(new Set(ids))
     } catch {
       // Leave the current set untouched — hearts just stay as they are.
     } finally {
       setLoading(false)
     }
-  }, [getAccessToken, type])
+  }, [type])
 
   useEffect(() => {
-    if (isAuthenticated) {
-      void loadIds()
-    } else {
-      setFavouriteIds(new Set())
-    }
-  }, [isAuthenticated, loadIds])
+    void loadIds()
+  }, [loadIds])
 
   /**
    * Ensures a session exists, running the login popup when needed.
@@ -57,7 +55,6 @@ export function useFavourites(type: FavouriteContentType) {
 
   const toggleFavourite = useCallback(
     async (id: string) => {
-      const wasAuthenticated = isAuthenticated
       if (!(await ensureAuthenticated())) return
 
       const removing = favouriteIds.has(id)
@@ -76,10 +73,6 @@ export function useFavourites(type: FavouriteContentType) {
         } else {
           await addFavourite(getAccessToken, type, id)
         }
-        if (!wasAuthenticated) {
-          // Fresh login: sync with whatever this user had favourited on other devices.
-          await loadIds()
-        }
       } catch {
         setFavouriteIds(prev => {
           const next = new Set(prev)
@@ -92,7 +85,7 @@ export function useFavourites(type: FavouriteContentType) {
         })
       }
     },
-    [ensureAuthenticated, favouriteIds, getAccessToken, isAuthenticated, loadIds, type],
+    [ensureAuthenticated, favouriteIds, getAccessToken, type],
   )
 
   return { isFavourite, toggleFavourite, ensureAuthenticated, loading }

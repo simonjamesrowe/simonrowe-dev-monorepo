@@ -2,9 +2,11 @@
   "name": "simonrowe-evals",
   "version": "1.0.0",
   "scripts": {
-    "eval": "promptfoo eval"
+    "eval": "promptfoo eval --no-write"
   },
   "dependencies": {
-    "promptfoo": "^0.100.0"
+    "@stomp/stompjs": "^7.0.0",
+    "promptfoo": "^0.100.0",
+    "ws": "^8.18.0"
   }
 }
