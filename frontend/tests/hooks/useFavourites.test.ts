@@ -43,7 +43,7 @@ describe('useFavourites', () => {
     mockRemoveFavourite.mockResolvedValue(undefined)
   })
 
-  it('loads the id set when authenticated', async () => {
+  it('loads the id set on mount', async () => {
     setAuth(true)
     mockGetFavouriteIds.mockResolvedValue(['a-1', 'a-2'])
 
@@ -52,16 +52,17 @@ describe('useFavourites', () => {
     await waitFor(() => expect(result.current.isFavourite('a-1')).toBe(true))
     expect(result.current.isFavourite('a-2')).toBe(true)
     expect(result.current.isFavourite('a-3')).toBe(false)
-    expect(mockGetFavouriteIds).toHaveBeenCalledWith(getAccessToken, 'news')
+    expect(mockGetFavouriteIds).toHaveBeenCalledWith('news')
   })
 
-  it('does not fetch and renders empty hearts when logged out', () => {
+  it('loads the id set even when logged out (favourites are public)', async () => {
     setAuth(false)
+    mockGetFavouriteIds.mockResolvedValue(['a-1'])
 
     const { result } = renderHook(() => useFavourites('news'))
 
-    expect(mockGetFavouriteIds).not.toHaveBeenCalled()
-    expect(result.current.isFavourite('a-1')).toBe(false)
+    await waitFor(() => expect(result.current.isFavourite('a-1')).toBe(true))
+    expect(mockGetFavouriteIds).toHaveBeenCalledWith('news')
   })
 
   it('toggles optimistically and calls addFavourite for a new favourite', async () => {
@@ -111,8 +112,6 @@ describe('useFavourites', () => {
   it('runs the login popup when toggling while logged out, then completes the save', async () => {
     setAuth(false)
     loginWithPopup.mockResolvedValue(undefined)
-    // After the save completes the hook re-syncs ids; the server now includes the item.
-    mockGetFavouriteIds.mockResolvedValue(['a-1'])
 
     const { result } = renderHook(() => useFavourites('news'))
 

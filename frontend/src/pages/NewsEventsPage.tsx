@@ -4,7 +4,6 @@ import { Calendar, ExternalLink, Heart, MapPin } from 'lucide-react'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { FavouriteButton } from '../components/common/FavouriteButton'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
-import { useAuth } from '../auth/useAuth'
 import { useFavourites } from '../hooks/useFavourites'
 import { useScrollToHash } from '../hooks/useScrollToHash'
 import { trackPageView } from '../services/analytics'
@@ -37,7 +36,6 @@ export function NewsEventsPage() {
   const [favouriteEvents, setFavouriteEvents] = useState<EventResponse[]>([])
   const [favouritesLoading, setFavouritesLoading] = useState(false)
 
-  const { getAccessToken } = useAuth()
   const newsFavourites = useFavourites('news')
   const eventFavourites = useFavourites('events')
 
@@ -68,8 +66,8 @@ export function NewsEventsPage() {
     if (!favouritesOnly) return
     setFavouritesLoading(true)
     Promise.all([
-      getFavourites(getAccessToken, 'news', 0, 100),
-      getFavourites(getAccessToken, 'events', 0, 100),
+      getFavourites('news', 0, 100),
+      getFavourites('events', 0, 100),
     ])
       .then(([newsPage, eventsPage]) => {
         setFavouriteArticles(newsPage.content)
@@ -80,17 +78,11 @@ export function NewsEventsPage() {
         setFavouriteEvents([])
       })
       .finally(() => setFavouritesLoading(false))
-  }, [favouritesOnly, getAccessToken])
+  }, [favouritesOnly])
 
-  const handleFavouritesToggle = async () => {
-    if (favouritesOnly) {
-      setFavouritesOnly(false)
-      return
-    }
-    // Logged out this runs the login popup first; cancelling stays on the normal feed.
-    if (await newsFavourites.ensureAuthenticated()) {
-      setFavouritesOnly(true)
-    }
+  // Favourites are globally shared, so viewing them needs no session — just flip the view.
+  const handleFavouritesToggle = () => {
+    setFavouritesOnly(prev => !prev)
   }
 
   if (loading) return <LoadingIndicator message="Loading news and events..." />
@@ -152,7 +144,7 @@ export function NewsEventsPage() {
         <button
           aria-pressed={favouritesOnly}
           className={`feed__pill feed__favourites-toggle${favouritesOnly ? ' feed__pill--active' : ''}`}
-          onClick={() => void handleFavouritesToggle()}
+          onClick={handleFavouritesToggle}
           type="button"
         >
           <Heart aria-hidden="true" fill={favouritesOnly ? 'currentColor' : 'none'} size={14} />

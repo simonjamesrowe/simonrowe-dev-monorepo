@@ -47,12 +47,12 @@ class FavouritesControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(put("/api/favourites/news/a-1").with(userJwt(USER_A)))
         .andExpect(status().isNoContent());
 
-    mockMvc.perform(get("/api/favourites/news/ids").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/news/ids"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(1))
         .andExpect(jsonPath("$[0]").value("a-1"));
 
-    mockMvc.perform(get("/api/favourites/news").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/news"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].id").value("a-1"))
@@ -69,11 +69,11 @@ class FavouritesControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(put("/api/favourites/events/e-1").with(userJwt(USER_A)))
         .andExpect(status().isNoContent());
 
-    mockMvc.perform(get("/api/favourites/events/ids").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/events/ids"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0]").value("e-1"));
 
-    mockMvc.perform(get("/api/favourites/events").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/events"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value("e-1"))
         .andExpect(jsonPath("$.content[0].venue").value("Test Venue"));
@@ -88,10 +88,10 @@ class FavouritesControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(delete("/api/favourites/news/a-1").with(userJwt(USER_A)))
         .andExpect(status().isNoContent());
 
-    mockMvc.perform(get("/api/favourites/news/ids").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/news/ids"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(0));
-    mockMvc.perform(get("/api/favourites/news").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/news"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(0));
   }
@@ -115,31 +115,31 @@ class FavouritesControllerTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void allEndpoints_requireAuthentication() throws Exception {
+  void reads_arePublic_writesRequireAuthentication() throws Exception {
     mockMvc.perform(put("/api/favourites/news/a-1")).andExpect(status().isUnauthorized());
     mockMvc.perform(delete("/api/favourites/news/a-1")).andExpect(status().isUnauthorized());
-    mockMvc.perform(get("/api/favourites/news/ids")).andExpect(status().isUnauthorized());
-    mockMvc.perform(get("/api/favourites/news")).andExpect(status().isUnauthorized());
+    mockMvc.perform(get("/api/favourites/news/ids")).andExpect(status().isOk());
+    mockMvc.perform(get("/api/favourites/news")).andExpect(status().isOk());
   }
 
   @Test
-  void favourites_areScopedPerUser() throws Exception {
-    articleRepository.save(sampleArticle("a-1", "User A's Article", true));
+  void favourites_areGlobal_notScopedPerUser() throws Exception {
+    articleRepository.save(sampleArticle("a-1", "Shared Article", true));
     mockMvc.perform(put("/api/favourites/news/a-1").with(userJwt(USER_A)))
         .andExpect(status().isNoContent());
 
+    // A different user sees the same favourite...
     mockMvc.perform(get("/api/favourites/news/ids").with(userJwt(USER_B)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(0));
-    mockMvc.perform(get("/api/favourites/news").with(userJwt(USER_B)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content.length()").value(0));
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0]").value("a-1"));
 
+    // ...and can remove it for everyone.
     mockMvc.perform(delete("/api/favourites/news/a-1").with(userJwt(USER_B)))
         .andExpect(status().isNoContent());
-    mockMvc.perform(get("/api/favourites/news/ids").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/news/ids"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(1));
+        .andExpect(jsonPath("$.length()").value(0));
   }
 
   @Test
@@ -157,9 +157,9 @@ class FavouritesControllerTest extends AbstractIntegrationTest {
         .andExpect(status().isBadRequest());
     mockMvc.perform(delete("/api/favourites/podcasts/x").with(userJwt(USER_A)))
         .andExpect(status().isBadRequest());
-    mockMvc.perform(get("/api/favourites/podcasts/ids").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/podcasts/ids"))
         .andExpect(status().isBadRequest());
-    mockMvc.perform(get("/api/favourites/podcasts").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/podcasts"))
         .andExpect(status().isBadRequest());
   }
 
@@ -168,11 +168,11 @@ class FavouritesControllerTest extends AbstractIntegrationTest {
     articleRepository.save(sampleArticle("a-1", "First Saved", true));
     articleRepository.save(sampleArticle("a-2", "Second Saved", true));
     favouriteRepository.insert(new Favourite(
-        null, USER_A, FavouriteType.NEWS, "a-1", Instant.parse("2026-07-01T10:00:00Z")));
+        null, FavouriteType.NEWS, "a-1", Instant.parse("2026-07-01T10:00:00Z")));
     favouriteRepository.insert(new Favourite(
-        null, USER_A, FavouriteType.NEWS, "a-2", Instant.parse("2026-07-02T10:00:00Z")));
+        null, FavouriteType.NEWS, "a-2", Instant.parse("2026-07-02T10:00:00Z")));
 
-    mockMvc.perform(get("/api/favourites/news").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/news"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(2))
         .andExpect(jsonPath("$.content[0].id").value("a-2"))
@@ -185,7 +185,7 @@ class FavouritesControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(put("/api/favourites/news/a-1").with(userJwt(USER_A)))
         .andExpect(status().isNoContent());
 
-    mockMvc.perform(get("/api/favourites/news").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/news"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].id").value("a-1"))
@@ -202,7 +202,7 @@ class FavouritesControllerTest extends AbstractIntegrationTest {
         .andExpect(status().isNoContent());
     articleRepository.deleteById("a-2");
 
-    mockMvc.perform(get("/api/favourites/news").with(userJwt(USER_A)))
+    mockMvc.perform(get("/api/favourites/news"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].id").value("a-1"));

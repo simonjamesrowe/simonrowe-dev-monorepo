@@ -7,14 +7,11 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface FavouriteRepository extends MongoRepository<Favourite, String> {
 
-  List<Favourite> findByUserIdAndType(String userId, FavouriteType type);
+  List<Favourite> findByType(FavouriteType type);
 
-  Page<Favourite> findByUserIdAndTypeOrderByCreatedAtDesc(
-      String userId, FavouriteType type, Pageable pageable);
+  Page<Favourite> findByTypeOrderByCreatedAtDesc(FavouriteType type, Pageable pageable);
 
-  boolean existsByUserIdAndTypeAndContentId(
-      String userId, FavouriteType type, String contentId);
+  boolean existsByTypeAndContentId(FavouriteType type, String contentId);
 
-  void deleteByUserIdAndTypeAndContentId(
-      String userId, FavouriteType type, String contentId);
+  void deleteByTypeAndContentId(FavouriteType type, String contentId);
 }

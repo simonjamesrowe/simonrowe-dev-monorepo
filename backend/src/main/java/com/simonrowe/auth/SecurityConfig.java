@@ -2,6 +2,7 @@ package com.simonrowe.auth;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -23,7 +24,9 @@ public class SecurityConfig {
         .cors(Customizer.withDefaults())
         .authorizeHttpRequests(auth -> auth
             .requestMatchers("/api/admin/**").hasRole(ADMIN_ROLE)
-            .requestMatchers("/api/favourites/**").authenticated()
+            // Favourites are globally shared: reads are public, only writes need a session.
+            .requestMatchers(HttpMethod.PUT, "/api/favourites/**").authenticated()
+            .requestMatchers(HttpMethod.DELETE, "/api/favourites/**").authenticated()
             .anyRequest().permitAll()
         )
         .headers(headers -> headers.cacheControl(cache -> cache.disable()))

@@ -37,36 +37,29 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return (await response.json()) as T
 }
 
-export async function getFavouriteIds(
-  getAccessToken: GetAccessToken,
-  type: FavouriteContentType,
-): Promise<string[]> {
-  const token = await getAccessToken()
-  const response = await authFetch(`${FAVOURITES_URL}/${type}/ids`, token)
+// Favourites are globally shared, so reads are public — no auth token required.
+export async function getFavouriteIds(type: FavouriteContentType): Promise<string[]> {
+  const response = await fetch(`${FAVOURITES_URL}/${type}/ids`)
   return handleResponse<string[]>(response)
 }
 
 export async function getFavourites(
-  getAccessToken: GetAccessToken,
   type: 'news',
   page?: number,
   size?: number,
 ): Promise<ArticlePage>
 export async function getFavourites(
-  getAccessToken: GetAccessToken,
   type: 'events',
   page?: number,
   size?: number,
 ): Promise<EventPage>
 export async function getFavourites(
-  getAccessToken: GetAccessToken,
   type: FavouriteContentType,
   page = 0,
   size = 20,
 ): Promise<ArticlePage | EventPage> {
-  const token = await getAccessToken()
   const params = new URLSearchParams({ page: String(page), size: String(size) })
-  const response = await authFetch(`${FAVOURITES_URL}/${type}?${params}`, token)
+  const response = await fetch(`${FAVOURITES_URL}/${type}?${params}`)
   return handleResponse<ArticlePage | EventPage>(response)
 }
 

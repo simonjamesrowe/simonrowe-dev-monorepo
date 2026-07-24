@@ -32,49 +32,41 @@ describe('favouritesApi', () => {
   })
 
   describe('getFavouriteIds', () => {
-    it('fetches ids with a bearer token', async () => {
+    it('fetches ids without auth (favourites are public)', async () => {
       mockFetchOk(['a-1', 'a-2'])
 
-      const result = await getFavouriteIds(getAccessToken, 'news')
+      const result = await getFavouriteIds('news')
 
-      expect(fetch).toHaveBeenCalledWith('/api/favourites/news/ids', {
-        headers: { Authorization: 'Bearer test-token' },
-      })
+      expect(fetch).toHaveBeenCalledWith('/api/favourites/news/ids')
       expect(result).toEqual(['a-1', 'a-2'])
     })
 
     it('uses the events path for events', async () => {
       mockFetchOk([])
 
-      await getFavouriteIds(getAccessToken, 'events')
+      await getFavouriteIds('events')
 
-      expect(fetch).toHaveBeenCalledWith('/api/favourites/events/ids', {
-        headers: { Authorization: 'Bearer test-token' },
-      })
+      expect(fetch).toHaveBeenCalledWith('/api/favourites/events/ids')
     })
   })
 
   describe('getFavourites', () => {
-    it('fetches the paged listing with pagination params', async () => {
+    it('fetches the paged listing with pagination params and no auth', async () => {
       const page = { content: [], totalElements: 0, totalPages: 0, number: 1, size: 5 }
       mockFetchOk(page)
 
-      const result = await getFavourites(getAccessToken, 'news', 1, 5)
+      const result = await getFavourites('news', 1, 5)
 
-      expect(fetch).toHaveBeenCalledWith('/api/favourites/news?page=1&size=5', {
-        headers: { Authorization: 'Bearer test-token' },
-      })
+      expect(fetch).toHaveBeenCalledWith('/api/favourites/news?page=1&size=5')
       expect(result).toEqual(page)
     })
 
     it('defaults to page 0 and size 20', async () => {
       mockFetchOk({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 })
 
-      await getFavourites(getAccessToken, 'events')
+      await getFavourites('events')
 
-      expect(fetch).toHaveBeenCalledWith('/api/favourites/events?page=0&size=20', {
-        headers: { Authorization: 'Bearer test-token' },
-      })
+      expect(fetch).toHaveBeenCalledWith('/api/favourites/events?page=0&size=20')
     })
   })
 
