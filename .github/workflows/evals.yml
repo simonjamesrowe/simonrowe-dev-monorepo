@@ -61,15 +61,25 @@ jobs:
           cache: 'npm'
           cache-dependency-path: evals/package.json
 
+      - name: Normalize OpenAI API key
+        env:
+          RAW_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          # A trailing newline/whitespace in the secret yields "Illegal character(s) in
+          # message header value" when the key is sent as a Bearer header. Strip whitespace
+          # and export for every later step (Spring AI + Embabel + promptfoo all read it).
+          CLEAN_KEY="$(printf '%s' "$RAW_OPENAI_API_KEY" | tr -d '[:space:]')"
+          echo "::add-mask::$CLEAN_KEY"
+          echo "OPENAI_API_KEY=$CLEAN_KEY" >> "$GITHUB_ENV"
+
       - name: Start Spring Boot Backend
         env:
           SPRING_DATA_MONGODB_URI: mongodb://localhost:27017/simonrowe
           SPRING_ELASTICSEARCH_URIS: http://localhost:9200
           SPRING_KAFKA_BOOTSTRAP_SERVERS: localhost:9092
-          # Both Spring AI (application.yml ${OPENAI_API_KEY}) and the Embabel agent read
-          # OPENAI_API_KEY; the old SPRING_AI_OPENAI_API_KEY name was consumed by nothing,
-          # so the backend booted with an unset key and failed to start.
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # OPENAI_API_KEY comes from the normalize step via $GITHUB_ENV. Both Spring AI
+          # (application.yml ${OPENAI_API_KEY}) and the Embabel agent read it; the old
+          # SPRING_AI_OPENAI_API_KEY name was consumed by nothing.
         run: |
           cd backend
           ../gradlew bootRun &
@@ -86,8 +96,7 @@ jobs:
           timeout 120 bash -c 'while curl -s http://localhost:8080/api/admin/data-operations/status | grep "\"operationInProgress\":true"; do sleep 5; done'
         
       - name: Run Promptfoo Evals
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        # OPENAI_API_KEY inherited from the normalize step via $GITHUB_ENV.
         run: |
           cd evals
           npm install
