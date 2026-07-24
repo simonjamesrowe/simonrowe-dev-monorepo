@@ -17,7 +17,10 @@ jobs:
         ports:
           - 27017:27017
       elasticsearch:
-        image: elasticsearch:8.11.1
+        # Must match the app's ES client (docker-compose uses 8.17.0). On 8.11.1 the
+        # cluster-health response lacks unassignedPrimaryShards, so the backend health
+        # indicator throws and /actuator/health never reports UP.
+        image: elasticsearch:8.17.0
         env:
           discovery.type: single-node
           xpack.security.enabled: false
