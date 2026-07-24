@@ -104,7 +104,18 @@ services:
       elasticsearch:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8081"]
+      # A bare TCP connect (the previous `echo > /dev/tcp` check) only proves the socket
+      # accepts connections - it stays "healthy" even if Tomcat's accepted the connection
+      # but the app is wedged and never sends a response. Send a real HTTP request over
+      # /dev/tcp (no curl/wget in this buildpack image) and require an actual 200 OK with
+      # an UP body, so a hung JVM is correctly reported unhealthy.
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/localhost/8081 && printf 'GET /actuator/health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 4 cat <&3 | grep -q '\"status\":\"UP\"'",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
