@@ -83,8 +83,9 @@ jobs:
         run: |
           cd backend
           ../gradlew bootRun &
-          # Wait for backend to be ready
-          timeout 120 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep "\"status\":\"UP\""; do sleep 5; done'
+          # Wait for backend to be ready. Startup runs all Mongock migrations plus Embabel
+          # agent init, which exceeds the old 120s budget.
+          timeout 300 bash -c 'while ! curl -s http://localhost:8080/actuator/health | grep "\"status\":\"UP\""; do sleep 5; done'
           
       - name: Seed Local Data
         run: |
