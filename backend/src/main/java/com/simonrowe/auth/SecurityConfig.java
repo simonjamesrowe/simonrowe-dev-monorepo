@@ -23,6 +23,7 @@ public class SecurityConfig {
         .cors(Customizer.withDefaults())
         .authorizeHttpRequests(auth -> auth
             .requestMatchers("/api/admin/**").hasRole(ADMIN_ROLE)
+            .requestMatchers("/api/favourites/**").authenticated()
             .anyRequest().permitAll()
         )
         .headers(headers -> headers.cacheControl(cache -> cache.disable()))

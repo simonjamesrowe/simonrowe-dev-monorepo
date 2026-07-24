@@ -1,0 +1,181 @@
+openapi: 3.0.3
+info:
+  title: Favourites API
+  description: >
+    Owner favourites for aggregated news articles and events. All endpoints require a valid
+    Auth0 JWT (any authenticated identity — not admin-role gated). Every read/write is scoped
+    to the caller's `sub` claim.
+  version: 1.0.0
+servers:
+  - url: /
+tags:
+  - name: favourites
+paths:
+  /api/favourites/{type}/{id}:
+    put:
+      tags: [favourites]
+      summary: Add a favourite (idempotent)
+      operationId: addFavourite
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FavouriteTypePath'
+        - name: id
+          in: path
+          required: true
+          description: Id of the aggregated article or event to favourite.
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Favourite recorded (or already existed — idempotent).
+        '400':
+          description: '`type` is not `news` or `events`.'
+        '401':
+          description: Missing or invalid bearer token.
+        '404':
+          description: Referenced article/event does not exist.
+    delete:
+      tags: [favourites]
+      summary: Remove a favourite (idempotent)
+      operationId: removeFavourite
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FavouriteTypePath'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Favourite removed, or was not present (idempotent — no error).
+        '400':
+          description: '`type` is not `news` or `events`.'
+        '401':
+          description: Missing or invalid bearer token.
+  /api/favourites/{type}/ids:
+    get:
+      tags: [favourites]
+      summary: Ids of the caller's favourited content for a type
+      description: Used to fill hearts on the normal listing.
+      operationId: getFavouriteIds
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FavouriteTypePath'
+      responses:
+        '200':
+          description: Set of favourited content ids (empty set when none).
+          content:
+            application/json:
+              schema:
+                type: array
+                uniqueItems: true
+                items:
+                  type: string
+        '400':
+          description: '`type` is not `news` or `events`.'
+        '401':
+          description: Missing or invalid bearer token.
+  /api/favourites/{type}:
+    get:
+      tags: [favourites]
+      summary: The caller's favourited items, newest-saved first
+      description: >
+        Backs the "favourites only" view. Returns the referenced articles/events in the order
+        they were favourited (most recent first), regardless of their `visible` flag.
+        Favourites whose referenced content no longer exists are silently skipped.
+      operationId: listFavourites
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FavouriteTypePath'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: >
+            Spring `Page` JSON (`content`, `totalElements`, `totalPages`, `number`, `size`).
+            `content` items are `ArticleResponse` when type=news, `EventResponse` when
+            type=events — identical shapes to `/api/news` and `/api/events`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavouritesPage'
+        '400':
+          description: '`type` is not `news` or `events`.'
+        '401':
+          description: Missing or invalid bearer token.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    FavouriteTypePath:
+      name: type
+      in: path
+      required: true
+      description: Content type — `news` or `events`. Anything else → 400.
+      schema:
+        type: string
+        enum: [news, events]
+  schemas:
+    FavouritesPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/ArticleResponse'
+              - $ref: '#/components/schemas/EventResponse'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        number:
+          type: integer
+        size:
+          type: integer
+    ArticleResponse:
+      type: object
+      description: Existing DTO — unchanged (com.simonrowe.aggregation.ArticleResponse).
+      properties:
+        id: { type: string }
+        title: { type: string }
+        sourceName: { type: string }
+        originalUrl: { type: string }
+        summary: { type: string }
+        author: { type: string }
+        publishedDate: { type: string, format: date-time }
+        fetchedAt: { type: string, format: date-time }
+        visible: { type: boolean }
+        imageUrl: { type: string }
+    EventResponse:
+      type: object
+      description: Existing DTO — unchanged (com.simonrowe.aggregation.EventResponse).
+      properties:
+        id: { type: string }
+        title: { type: string }
+        sourceName: { type: string }
+        originalUrl: { type: string }
+        summary: { type: string }
+        description: { type: string }
+        eventDate: { type: string, format: date-time }
+        eventEndDate: { type: string, format: date-time }
+        venue: { type: string }
+        location: { type: string }
+        fetchedAt: { type: string, format: date-time }
+        visible: { type: boolean }
