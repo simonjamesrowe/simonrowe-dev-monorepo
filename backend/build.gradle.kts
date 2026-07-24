@@ -121,6 +121,10 @@ dependencies {
     implementation("com.embabel.agent:embabel-agent-starter-openai:0.3.5")
     implementation("org.jsoup:jsoup:1.18.3")
     implementation("com.rometools:rome:2.1.0")
+    // Required for the <if>/<then>/<else> conditional in logback-spring.xml that picks
+    // between plain-text and structured (JSON) console output. Version managed by the
+    // Spring Boot BOM.
+    runtimeOnly("org.codehaus.janino:janino")
 
     developmentOnly(libs.spring.boot.devtools)
 

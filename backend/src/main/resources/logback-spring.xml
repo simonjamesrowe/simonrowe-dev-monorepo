@@ -8,8 +8,20 @@
         - unset (local dev)  -> human-readable plain text
         - `ecs` (prod)       -> one-line JSON per event for Loki ingestion
       In prod this is enabled via LOGGING_STRUCTURED_FORMAT_CONSOLE in docker-compose.prod.yml.
+
+      Spring Boot ships two mutually exclusive appender fragments for this - console-appender.xml
+      (plain PatternLayoutEncoder) and structured-console-appender.xml (StructuredLogEncoder) -
+      and normally chooses between them itself, but only when there's no custom logback-spring.xml.
+      Since this file exists, we have to pick explicitly; the <if> requires Janino (see build.gradle.kts).
     -->
-    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    <if condition='property("CONSOLE_LOG_STRUCTURED_FORMAT").equals("")'>
+        <then>
+            <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+        </then>
+        <else>
+            <include resource="org/springframework/boot/logging/logback/structured-console-appender.xml"/>
+        </else>
+    </if>
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
