@@ -66,7 +66,10 @@ jobs:
           SPRING_DATA_MONGODB_URI: mongodb://localhost:27017/simonrowe
           SPRING_ELASTICSEARCH_URIS: http://localhost:9200
           SPRING_KAFKA_BOOTSTRAP_SERVERS: localhost:9092
-          SPRING_AI_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Both Spring AI (application.yml ${OPENAI_API_KEY}) and the Embabel agent read
+          # OPENAI_API_KEY; the old SPRING_AI_OPENAI_API_KEY name was consumed by nothing,
+          # so the backend booted with an unset key and failed to start.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           cd backend
           ../gradlew bootRun &
