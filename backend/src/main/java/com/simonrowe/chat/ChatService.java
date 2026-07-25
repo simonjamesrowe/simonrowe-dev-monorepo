@@ -1,5 +1,7 @@
 package com.simonrowe.chat;
 
+import io.opentelemetry.api.baggage.Baggage;
+import io.opentelemetry.context.Scope;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.time.Instant;
 import java.util.Map;
@@ -33,12 +35,24 @@ public class ChatService {
     sessionActivity.put(sessionId, Instant.now());
     LOG.info("Processing message for session: {}", sessionId);
 
-    return Flux.defer(() -> chatClient.prompt()
-          .user(message)
-          .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
-          .toolContext(Map.of("sessionId", sessionId))
-          .stream()
-          .chatResponse());
+    // Baggage is captured into the reactive chain's context at assembly time (same mechanism
+    // that already propagates the @WithSpan span across this Flux.defer boundary), then copied
+    // onto every downstream span - including the gen_ai.* spans Spring AI creates - by the
+    // OTEL_JAVA_EXPERIMENTAL_SPAN_ATTRIBUTES_COPY_FROM_BAGGAGE_INCLUDE SDK setting. This is what
+    // lets Langfuse group chat traces into Sessions (see config/alloy/config.alloy's ai_only
+    // filter, which drops every span except these, so the id must live on the gen_ai spans
+    // themselves rather than on the (dropped) @WithSpan root span).
+    try (Scope scope = Baggage.current().toBuilder()
+        .put("langfuse.session.id", sessionId)
+        .build()
+        .makeCurrent()) {
+      return Flux.defer(() -> chatClient.prompt()
+            .user(message)
+            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
+            .toolContext(Map.of("sessionId", sessionId))
+            .stream()
+            .chatResponse());
+    }
   }
 
   public ConcurrentHashMap<String, Instant> getSessionActivity() {
