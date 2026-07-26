@@ -10,6 +10,7 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.observation.ChatModelObservationContext;
+import org.springframework.ai.tool.observation.ToolCallingObservationContext;
 
 /**
  * Copies prompt and completion content onto the span attribute names Langfuse recognises.
@@ -19,16 +20,20 @@ import org.springframework.ai.chat.observation.ChatModelObservationContext;
  * prompt or completion constant. Without this filter, Langfuse shows generations with null
  * input and output, which also makes LLM-as-a-judge evaluators useless.
  *
- * <p>Registered at lowest precedence so it runs after Spring AI's own
- * {@code ToolCallingContentObservationFilter}, whose output it remaps.
+ * <p>Both chat-model and tool-call content are read from the observation context's own public
+ * accessors, so this filter does not depend on its registration order relative to any other
+ * filter. An earlier version instead copied the {@code spring.ai.tool.call.arguments} /
+ * {@code .result} key values written by Spring AI's {@code ToolCallingContentObservationFilter},
+ * which requires that filter to run first. It does not: both beans end up at
+ * {@code Ordered.LOWEST_PRECEDENCE} ({@code Integer.MAX_VALUE}) — explicitly here, implicitly
+ * there — and Boot's {@code ObservationRegistryConfigurer} sorts them with a stable sort that
+ * falls back to bean-registration order, which places component-scanned configuration ahead of
+ * deferred auto-configuration. The copy therefore always found nothing.
  */
 public class LangfuseContentObservationFilter implements ObservationFilter {
 
   private static final Logger LOG =
       LoggerFactory.getLogger(LangfuseContentObservationFilter.class);
-
-  private static final String TOOL_ARGUMENTS_KEY = "spring.ai.tool.call.arguments";
-  private static final String TOOL_RESULT_KEY = "spring.ai.tool.call.result";
 
   private final LangfuseProperties properties;
 
@@ -44,8 +49,9 @@ public class LangfuseContentObservationFilter implements ObservationFilter {
     try {
       if (context instanceof ChatModelObservationContext chatContext) {
         mapChatContent(chatContext);
+      } else if (context instanceof ToolCallingObservationContext toolContext) {
+        mapToolContent(toolContext);
       }
-      remapToolContent(context);
     } catch (Exception e) {
       // Never let observability break the call it is observing.
       LOG.warn("Failed to attach Langfuse content attributes", e);
@@ -70,17 +76,13 @@ public class LangfuseContentObservationFilter implements ObservationFilter {
     }
   }
 
-  private void remapToolContent(final Observation.Context context) {
-    copyKey(context, TOOL_ARGUMENTS_KEY, LangfuseAttributes.OBSERVATION_INPUT);
-    copyKey(context, TOOL_RESULT_KEY, LangfuseAttributes.OBSERVATION_OUTPUT);
-  }
-
-  private void copyKey(final Observation.Context context, final String from, final String to) {
-    context.getHighCardinalityKeyValues().stream()
-        .filter(keyValue -> keyValue.getKey().equals(from))
-        .map(KeyValue::getValue)
-        .findFirst()
-        .ifPresent(value -> put(context, to, value));
+  /**
+   * Reads the tool arguments and result straight off the context. {@code getToolCallResult()} is
+   * null until the tool has returned, so an in-flight or failed tool call contributes input only.
+   */
+  private void mapToolContent(final ToolCallingObservationContext context) {
+    put(context, LangfuseAttributes.OBSERVATION_INPUT, context.getToolCallArguments());
+    put(context, LangfuseAttributes.OBSERVATION_OUTPUT, context.getToolCallResult());
   }
 
   private void put(final Observation.Context context, final String key, final String value) {

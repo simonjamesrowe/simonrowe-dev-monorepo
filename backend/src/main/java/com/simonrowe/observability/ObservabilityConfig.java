@@ -6,8 +6,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.client.RestClient;
 
@@ -17,11 +15,10 @@ import org.springframework.web.client.RestClient;
 public class ObservabilityConfig {
 
   /**
-   * Lowest precedence so this runs after Spring AI's ToolCallingContentObservationFilter,
-   * whose spring.ai.tool.call.* key values this filter remaps onto Langfuse names.
+   * Deliberately unordered: the filter reads content from the observation context's own
+   * accessors, so it is independent of where it lands relative to Spring AI's own filters.
    */
   @Bean
-  @Order(Ordered.LOWEST_PRECEDENCE)
   public LangfuseContentObservationFilter langfuseContentObservationFilter(
       final LangfuseProperties properties) {
     return new LangfuseContentObservationFilter(properties);
