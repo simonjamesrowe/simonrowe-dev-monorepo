@@ -20,7 +20,7 @@
 - The Dependency-Track team name must match the claim value **exactly, including case**: `DEV_PORTAL_ADMIN`.
 - No credential values ever appear in committed files. All secrets come from `.env` (sourced from `~/workspace/simonjamesrowe/env`) or GitHub Actions secrets.
 - Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`). No Jira references. No Claude attribution.
-- There is **no SSH access to the Pi** from the dev machine. Any step needing to run there must be emitted as a single copy-paste command block for Simon.
+- **SSH access to the Pi exists** (`ssh simonrowe@192.168.4.66`, LAN only; credentials in the usual store). This corrects an earlier assumption in this document that there was none. Recovery from a bad deploy is therefore possible directly, which softens — but does not remove — the nginx risk below.
 
 ---
 
@@ -968,7 +968,7 @@ change, and records the langfuse-db coupling."
 
 ## Deployment sequence
 
-Deployment is pull-based: the Pi runs `docker compose` from its own checkout at `~/workspace/simonjamesrowe/simonrowe-dev-monorepo`. **There is no SSH access from the dev machine** — emit this as a copy-paste block for Simon and ask for the output.
+Deployment is pull-based: the Pi runs `docker compose` from its own checkout at `~/workspace/simonjamesrowe/simonrowe-dev-monorepo`. SSH access exists (`ssh simonrowe@192.168.4.66`, LAN only), so these can be run directly rather than handed over as a copy-paste block.
 
 Task 1 ships and is verified in production **first, on its own**. Then Tasks 2–4 together, then 5–6.
 

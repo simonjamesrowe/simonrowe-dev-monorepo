@@ -112,7 +112,9 @@ that is down.
 
 **This is the highest-risk change in the whole piece.** It touches all four existing
 upstreams, and a mistake takes the entire public site plus Portainer offline on a host with
-no SSH access. Two required mitigations:
+no SSH access at the time this was written. (SSH access was subsequently found to exist —
+`ssh simonrowe@192.168.4.66`, LAN only — so recovery is possible directly. The risk is real but
+not unrecoverable.) Two required mitigations:
 
 1. Validate with `nginx -t` inside the container before reloading.
 2. Dry-run the complete production compose locally on OrbStack first (documented in
