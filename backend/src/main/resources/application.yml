@@ -130,7 +130,15 @@ spring:
           enabled: true
     tools:
       observations:
-        include-content: true
+        # Bound to the SAME switch as langfuse.content-capture-enabled, deliberately.
+        # Spring AI's ToolCallingContentObservationFilter writes spring.ai.tool.call.arguments as
+        # a span attribute; Alloy keeps the span (it has spring.ai.kind) and Langfuse stores it as
+        # observation metadata. Tool arguments include ProfileMcpTools.submitContactForm's
+        # firstName/lastName/email/subject/message — third-party PII. If this stayed hardcoded
+        # true, setting LANGFUSE_CONTENT_CAPTURE_ENABLED=false would only silence our own filter
+        # and that PII would keep flowing. LANGFUSE_CONTENT_CAPTURE_ENABLED=false is therefore
+        # the single, complete off-switch for ALL content capture, framework included.
+        include-content: ${LANGFUSE_CONTENT_CAPTURE_ENABLED:true}
     # Observability content capture.
     #
     # NOTE: spring.ai.chat.observations.log-prompt / log-completion do NOT write span
@@ -139,7 +147,8 @@ spring:
     # gen_ai.prompt / gen_ai.completion are never emitted by the framework at any 1.x or 2.x
     # version. Prompt and completion capture is therefore done by
     # com.simonrowe.observability.LangfuseContentObservationFilter, toggled with
-    # langfuse.content-capture-enabled above.
+    # langfuse.content-capture-enabled below — the same LANGFUSE_CONTENT_CAPTURE_ENABLED variable
+    # that gates spring.ai.tools.observations.include-content above.
     #
     # Decision (2026-07-26): content capture is ON, reversing the 2026-07-17 decision. Visitor
     # chat text — including recruiter-pasted job specs and contact-form details — is stored in
