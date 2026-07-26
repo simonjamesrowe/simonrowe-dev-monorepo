@@ -192,7 +192,8 @@ and Langfuse already have.
 
 | Risk | Severity | Mitigation |
 |---|---|---|
-| DT needs 4 GB heap and the Pi cannot spare it — the design is unbuildable as specified | **Blocking** | Resolve before implementation: establish the real working floor and actual free memory. Fall back to hosting off the Pi if it cannot be closed |
+| Postgres co-located on a shared Pi instance, against explicit upstream guidance (dedicated host, 8 GB, NVMe) | **High** | Accepted for a 4-project portfolio; monitor `df -h` and database size a week after deployment, not just on day one |
+| Unbounded Postgres disk growth via daily `DEPENDENCYMETRICS_*` partitions fills the Pi's disk | Medium | Small portfolio makes this slow; runbook covers checking and pruning |
 | nginx refactor breaks the site and Portainer with no SSH recovery | **High** | `nginx -t` validation; full OrbStack dry-run before deploying |
 | Memory pressure OOM-kills another container | **High** | `mem_limit` on the API server; size against real `free -m`; verify all containers healthy after the first vulnerability sync |
 | v5 config uses `DT_*`, but most documentation and examples online still show `ALPINE_*`, which fail silently | Medium | Variable names verified against ADR 018; documented in this spec |
