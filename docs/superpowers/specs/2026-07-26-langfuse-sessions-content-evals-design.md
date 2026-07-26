@@ -12,7 +12,9 @@ trace-level input/output → enable scores and LLM-as-a-judge evaluators. It als
 local stack to production parity so the work is verifiable before it reaches the Raspberry Pi.
 
 Target versions, both source-verified while researching this design:
-**Langfuse v3.212.0** (self-hosted) and **Spring AI 1.1.4**.
+**Langfuse v3.212.0** (self-hosted) and **Spring AI 1.1.8** (upgraded from 1.1.4 as part of this
+work — see §2.2). Every Spring AI finding below was verified at both 1.1.4 and 1.1.8, which are
+byte-identical across the observability source tree.
 
 ## 1. Diagnosis
 
@@ -61,7 +63,10 @@ trace-level *fields* are lost.
 Separately, **no span in the pipeline carries a session id at all.** Spring AI never emits
 one. Even without the shallow-trace problem, Sessions would be empty.
 
-### 1.3 Prompts and completions are absent — Spring AI 1.1.4 cannot emit them
+### 1.3 Prompts and completions are absent — no Spring AI version emits them
+
+(Diagnosed at the pinned 1.1.4. It holds unchanged at 1.1.8, and — verified — at 2.0.0 too, so
+no upgrade fixes this.)
 
 `backend/src/main/resources/application.yml` carries a commented block suggesting
 `spring.ai.chat.observations.log-prompt: true` / `log-completion: true`. Those property names
@@ -100,6 +105,41 @@ They are, however, useless against traces with empty input and output, so they d
 | Historical data | **Wipe the Langfuse project entirely** | Accepts the loss of ~2k legitimate AI traces. |
 | Local environment | **Full parity** — Langfuse v3 and Alloy locally | Verification happens against local Langfuse, never prod. |
 | Transport | Keep OTel → Alloy → Langfuse OTLP | Direct `/api/public/ingestion` rejected; see §3.1. |
+| Dependency versions | Patch-level bumps only; **stay on Spring AI 1.x** | See §2.2. |
+
+### 2.2 Dependency upgrades — patch level only
+
+Current pins are behind. The bumps taken here are all patch-level and carry no behavioural
+change relevant to this work:
+
+| Component | Pinned | Target | Rationale |
+| --- | --- | --- | --- |
+| Spring Boot | 3.5.9 | **3.5.16** | Patch-level. Spring AI 1.1.8 itself targets 3.5.15. |
+| Spring AI | 1.1.4 | **1.1.8** | Patch-level. Buys nothing for this design (see below) but keeps the floor current. |
+| `opentelemetry-spring-boot-starter` | 2.25.0 | **2.30.0** | Keep the OTLP exporter current; realign the `opentelemetry.version` ext pin (currently `1.59.0`). |
+
+**Spring AI 2.0.0 is explicitly rejected.** It is GA, but it does not solve any part of this
+problem and costs a great deal:
+
+- It still emits **zero** prompt/completion span attributes, **zero** GenAI content span events
+  (`gen_ai.user.message`, `gen_ai.choice`, `gen_ai.client.inference.operation.details` are all
+  absent from the tree), and still uses `spring.ai.chat.client.conversation.id` rather than
+  `gen_ai.conversation.id`. The custom filter in §4.2 would be required regardless. The class
+  javadoc was even softened from "Based on" to "*Inspired by* the OpenTelemetry Semantic
+  Conventions" — a deliberate signal they are not tracking semconv.
+- Its `pom.xml` sets `<spring-boot.version>4.1.0</spring-boot.version>`, and this is a **hard
+  requirement**: its autoconfigure modules import Boot 4's modularised packages
+  (`org.springframework.boot.elasticsearch.autoconfigure`, `…data.mongodb.autoconfigure`,
+  `…restclient.autoconfigure`, …) which do not exist in 3.5.x. It would force a
+  Spring Boot 4.1 / Spring Framework 7 migration of the entire backend.
+- It **deletes `spring-ai-starter-model-openai-sdk`**, which this project depends on, and renames
+  `spring-ai-advisors-vector-store` → `spring-ai-vector-store-advisor`.
+- Most insidiously, chat-memory advisors move outside the tool-call loop and stop seeing tool
+  messages — a silent behavioural change to conversation history, not a compile error.
+
+Verified by diffing tags: `git diff v1.1.4 v1.1.8 -- '*/src/main/java/*bservation*'` is **empty**,
+and `AiObservationAttributes` is byte-identical between the two. The 1.1.8 bump is therefore
+opportunistic hygiene, not a fix.
 
 ### 2.1 Privacy reversal, recorded deliberately
 
@@ -209,9 +249,9 @@ the method returns the `Flux` — before any streaming happens.
 
 `backend/src/main/java/com/simonrowe/observability/LangfuseContentObservationFilter.java`
 
-`ObservationFilter` beans that copy prompt and completion out of `ChatModelObservationContext`
-into high-cardinality key values named `langfuse.observation.input` and
-`langfuse.observation.output`. A second filter does the same for tool-call observations.
+An `ObservationFilter` bean that copies prompt and completion out of
+`ChatModelObservationContext` into high-cardinality key values named
+`langfuse.observation.input` and `langfuse.observation.output`.
 
 - Content is serialised to JSON.
 - Each value is **truncated to 32 KB**, with a `…[truncated]` marker appended (§7.2).
@@ -220,6 +260,32 @@ into high-cardinality key values named `langfuse.observation.input` and
 Registered in a new `ObservabilityConfig`, guarded by
 `langfuse.content-capture.enabled` (default `true`) so capture can be switched off without a
 redeploy.
+
+**Tool call content needs almost no code.** Spring AI already ships
+`ToolCallingContentObservationFilter` (present in 1.1.4 and unchanged in 1.1.8), auto-configured
+behind a property that is `false` by default:
+
+```yaml
+spring:
+  ai:
+    tools:
+      observations:
+        include-content: true
+```
+
+That alone adds `spring.ai.tool.call.arguments` and `spring.ai.tool.call.result` as span
+attributes. Langfuse has no native mapping for the `spring.ai.*` prefix, so those land in
+observation metadata rather than input/output. The filter therefore does one extra cheap thing:
+**remap** those two attributes onto `langfuse.observation.input`/`.output` for tool-call
+observations. This is materially less code than extracting tool arguments from the observation
+context by hand.
+
+**Expect several chat-model observations per turn.** `OpenAiSdkChatModel.internalStream`
+*recurses* after each tool execution, opening a fresh observation per model round-trip. A
+tool-using turn therefore produces N generation spans, each carrying the prompt and completion
+for *its own* round-trip, not the whole conversation. This is correct and is what Langfuse's
+nested view expects — the whole-turn view is the chat-turn span's `langfuse.trace.input`/
+`.output`.
 
 ### 4.3 `GuardrailVerdictRegistry` (new)
 
@@ -358,16 +424,23 @@ if any is down, which would also take Portainer offline.
 
 ## 7. Risks
 
-### 7.1 Streaming completion capture is unverified
+### 7.1 Streaming completion capture — RESOLVED, no longer a risk
 
-`LangfuseContentObservationFilter` reads `ChatModelObservationContext.getResponse()`. Whether
-1.1.4 populates that with the aggregated response for a **streaming** call has not been
-confirmed.
+An earlier draft flagged this as the design's main unknown. It has since been verified in source
+and is **confirmed to work**.
 
-**Mitigation:** prove it with a spike as the first implementation task. Blast radius is
-contained — trace-level input and output come from the chat-turn span, which is what the
-evaluators read. If per-generation capture proves impossible for streaming, the feature still
-delivers sessions, trace IO and evaluators.
+`OpenAiSdkChatModel.internalStream` calls `observationContext.setResponse(aggregated)`
+*synchronously inside the stream body*, while `.doOnError(observation::error)` and
+`.doFinally(s -> observation.stop())` are the outer terminal handlers. The response is therefore
+populated **before** the observation stops. Micrometer computes convention key values and applies
+`ObservationFilter.map()` in that same `stop()` call, so a filter reading `getResponse()` sees
+exactly what the convention sees: the fully aggregated completion.
+
+Spring AI's own `OpenAiChatModelObservationIT.observationForStreamingChatOperation()` corroborates
+this — it asserts `gen_ai.usage.*`, `gen_ai.response.id` and `gen_ai.response.finish_reasons` on a
+*stopped* streaming observation, and every one of those is derived from `context.getResponse()`.
+
+No spike is needed.
 
 ### 7.2 Attribute size
 
@@ -397,7 +470,7 @@ low-traffic site.
 | Level | Coverage |
 | --- | --- |
 | Integration (highest value) | OTel `InMemorySpanExporter`: one chat turn produces exactly one `chat-turn` span carrying `session.id`, `langfuse.trace.input` and `langfuse.trace.output`; Spring AI spans share its trace id. |
-| Unit | `LangfuseContentObservationFilter` attribute mapping, including the truncation boundary and a serialisation failure. |
+| Unit | `LangfuseContentObservationFilter` attribute mapping, including the truncation boundary, a serialisation failure, and the `spring.ai.tool.call.*` → `langfuse.observation.*` remap. |
 | Unit | `GuardrailVerdictRegistry` publish/read/evict; entries removed on read. |
 | Unit | `GuardrailAdvisor` refactor — existing tests must pass unchanged, plus verdict publication from both the call and stream paths. |
 | Unit | `LangfuseScoreClient` against a mocked server: request shape, basic auth, and that a server error never propagates. |
@@ -414,10 +487,11 @@ All backend work must satisfy Checkstyle and the pre-commit hook (see the `backe
 
 Local parity lands first so that every subsequent step is verifiable before it reaches the Pi.
 
-1. Spike: confirm whether streaming populates `ChatModelObservationContext.getResponse()` (§7.1).
+1. Dependency bumps (§2.2): Spring Boot 3.5.16, Spring AI 1.1.8, OTel starter 2.30.0. Land this
+   first and on its own, so a regression here is unambiguously separable from the feature work.
 2. Local compose → Langfuse v3 plus traces-only Alloy.
-3. Backend: `ChatTurnTracer`, content filters, `GuardrailVerdictRegistry`, `GuardrailAdvisor`
-   refactor, `LangfuseScoreClient`.
+3. Backend: `ChatTurnTracer`, content filter, `spring.ai.tools.observations.include-content`,
+   `GuardrailVerdictRegistry`, `GuardrailAdvisor` refactor, `LangfuseScoreClient`.
 4. Alloy keep-list, in both `config.alloy` and `config.local.alloy`.
 5. Verify end-to-end locally; extend `verify-langfuse-trace.sh`.
 6. Documentation corrections.
