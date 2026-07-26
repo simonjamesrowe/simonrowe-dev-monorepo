@@ -663,6 +663,21 @@ observation context across `Schedulers.boundedElastic`**, not filtering by trace
 a name filter would hide the orphans from view without un-orphaning them or giving them a session.
 Status: open, no fix attempted.
 
+**Defect B follow-up — the OTel baggage mechanism from PR #81 does not work.** PR #81 attempted to
+tag the Defect B orphans by putting `langfuse.session.id` into OTel baggage in
+`ChatService.processMessage` and relying on
+`OTEL_JAVA_EXPERIMENTAL_SPAN_ATTRIBUTES_COPY_FROM_BAGGAGE_INCLUDE` to copy it onto every span it
+was current for. It was merged into this branch and kept on the theory it might reach the orphans
+the tracer cannot. It does not: testing showed `langfuse.session.id` on zero of 16 spans from a
+real chat turn. Root cause — that env var is an OpenTelemetry **Java agent** property; this backend
+runs `opentelemetry-spring-boot-starter`, which does not implement it (`BaggageSpanProcessor` is on
+the classpath but nothing registers it). A secondary, unrefuted obstacle: the baggage `Scope` closed
+in a `try-with-resources` around `processMessage` anyway, while the orphaned spans are created later
+at subscription time, after the method has already returned. The mechanism has been removed. The
+only approach that survives the `Schedulers.boundedElastic` hop is restoring the observation context
+there, which is the real Defect B fix above — it also makes the orphans nest under `chat-turn`
+instead of becoming root traces, which removes any need to tag them with a session at all.
+
 **Correction — `elasticsearch query` is not noise.** The plan's Task 11 end-to-end verification
 step treated `elasticsearch query` as noise the `ai_only` filter should drop, in the same category
 as `security filterchain` and `http get` (§1.1's "All time" row lists all three together as
