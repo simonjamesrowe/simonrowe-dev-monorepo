@@ -2,6 +2,7 @@ package com.simonrowe.observability;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -31,6 +32,27 @@ public class LangfuseScoreClient {
     this.restClient = builder.build();
     this.properties = properties;
     this.executor = executor;
+    logConfiguration();
+  }
+
+  /**
+   * States once, at startup, whether scores will be submitted and why not if they will not.
+   * {@link #submit} is a per-turn hot path and stays silent, so without this line a production
+   * "no scores in Langfuse" report is undiagnosable from the logs.
+   */
+  private void logConfiguration() {
+    if (!properties.isScoresEnabled()) {
+      LOG.info("Langfuse score submission is DISABLED by configuration "
+          + "(langfuse.scores-enabled=false); no chat-turn scores will be sent to {}.",
+          properties.getHost());
+    } else if (!hasCredentials()) {
+      LOG.warn("Langfuse score submission is enabled but DISABLED IN PRACTICE: "
+          + "langfuse.public-key/secret-key are missing or blank. Set LANGFUSE_PUBLIC_KEY and "
+          + "LANGFUSE_SECRET_KEY to send chat-turn scores to {}.", properties.getHost());
+    } else {
+      LOG.info("Langfuse score submission is ENABLED: chat-turn scores will be sent to {} "
+          + "in environment '{}'.", properties.getHost(), properties.getEnvironment());
+    }
   }
 
   /**
@@ -50,8 +72,11 @@ public class LangfuseScoreClient {
   }
 
   private boolean enabled() {
-    return properties.isScoresEnabled()
-        && properties.getPublicKey() != null && !properties.getPublicKey().isBlank()
+    return properties.isScoresEnabled() && hasCredentials();
+  }
+
+  private boolean hasCredentials() {
+    return properties.getPublicKey() != null && !properties.getPublicKey().isBlank()
         && properties.getSecretKey() != null && !properties.getSecretKey().isBlank();
   }
 
@@ -61,16 +86,31 @@ public class LangfuseScoreClient {
           .uri(stripTrailingSlash(properties.getHost()) + "/api/public/scores")
           .header(HttpHeaders.AUTHORIZATION, basicAuth())
           .contentType(MediaType.APPLICATION_JSON)
-          .body(Map.of(
-              "traceId", traceId,
-              "name", score.name(),
-              "value", score.value(),
-              "dataType", score.dataType()))
+          .body(body(traceId, score))
           .retrieve()
           .toBodilessEntity();
     } catch (Exception e) {
       LOG.warn("Failed to submit Langfuse score '{}' for trace {}", score.name(), traceId, e);
     }
+  }
+
+  /**
+   * Builds the score payload. {@code environment} is load-bearing: the chat-turn span sets
+   * {@code langfuse.environment}, so a score posted without it lands in Langfuse's {@code default}
+   * environment bucket while its own trace is tagged {@code production} — every
+   * environment-filtered score view and dashboard would then read empty.
+   */
+  private Map<String, Object> body(final String traceId, final LangfuseScore score) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("traceId", traceId);
+    payload.put("name", score.name());
+    payload.put("value", score.value());
+    payload.put("dataType", score.dataType());
+    String environment = properties.getEnvironment();
+    if (environment != null && !environment.isBlank()) {
+      payload.put("environment", environment);
+    }
+    return payload;
   }
 
   private String basicAuth() {
