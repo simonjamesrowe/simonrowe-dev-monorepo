@@ -133,7 +133,13 @@ jobs:
           upload-artifact: false
           upload-release-assets: false
 
+      # Each upload is individually continue-on-error so that one unreachable upload does not
+      # skip the remaining three - otherwise a single blip leaves three SBOMs never even
+      # attempted, and the summary below can only report "skipped" for them. The job-level
+      # continue-on-error above still guarantees none of this can fail a release.
       - name: Upload backend dependency SBOM
+        id: upload-backend-dep
+        continue-on-error: true
         uses: DependencyTrack/gh-upload-sbom@v4.1.0
         with:
           serverhostname: dependency-track.simonrowe.dev
@@ -144,6 +150,8 @@ jobs:
           autocreate: true
 
       - name: Upload frontend dependency SBOM
+        id: upload-frontend-dep
+        continue-on-error: true
         uses: DependencyTrack/gh-upload-sbom@v4.1.0
         with:
           serverhostname: dependency-track.simonrowe.dev
@@ -154,6 +162,8 @@ jobs:
           autocreate: true
 
       - name: Upload backend image SBOM
+        id: upload-backend-image
+        continue-on-error: true
         uses: DependencyTrack/gh-upload-sbom@v4.1.0
         with:
           serverhostname: dependency-track.simonrowe.dev
@@ -164,6 +174,8 @@ jobs:
           autocreate: true
 
       - name: Upload frontend image SBOM
+        id: upload-frontend-image
+        continue-on-error: true
         uses: DependencyTrack/gh-upload-sbom@v4.1.0
         with:
           serverhostname: dependency-track.simonrowe.dev
@@ -172,3 +184,49 @@ jobs:
           projectversion: main
           bomfilename: frontend-image-bom.json
           autocreate: true
+
+      # This job is continue-on-error, so the workflow shows a green tick even when every
+      # upload failed. Without an explicit report, a silent failure is indistinguishable from
+      # success at a glance. Write the outcome of all four uploads into the job summary so the
+      # answer is visible on the run page without opening any logs.
+      - name: Report SBOM upload outcomes
+        if: always()
+        env:
+          BACKEND_DEP: ${{ steps.upload-backend-dep.outcome }}
+          FRONTEND_DEP: ${{ steps.upload-frontend-dep.outcome }}
+          BACKEND_IMAGE: ${{ steps.upload-backend-image.outcome }}
+          FRONTEND_IMAGE: ${{ steps.upload-frontend-image.outcome }}
+        run: |
+          failed=0
+          for outcome in "$BACKEND_DEP" "$FRONTEND_DEP" "$BACKEND_IMAGE" "$FRONTEND_IMAGE"; do
+            [ "$outcome" = "success" ] || failed=$((failed + 1))
+          done
+
+          if [ "$failed" -eq 0 ]; then
+            verdict="✅ All 4 SBOMs uploaded to Dependency-Track."
+          else
+            verdict="⚠️ $failed of 4 SBOM uploads did NOT succeed. This job is continue-on-error, so the workflow still reports success - the release is fine, but Dependency-Track is now stale. See docs/runbooks/dependency-track.md (\"Manual SBOM upload\")."
+          fi
+
+          # Also log it, so it is greppable in the raw job output.
+          echo "backend dependencies : $BACKEND_DEP"
+          echo "frontend dependencies: $FRONTEND_DEP"
+          echo "backend image        : $BACKEND_IMAGE"
+          echo "frontend image       : $FRONTEND_IMAGE"
+          echo "$verdict"
+
+          {
+            echo "### Dependency-Track SBOM uploads"
+            echo
+            echo "| SBOM | Dependency-Track project | Outcome |"
+            echo "| --- | --- | --- |"
+            echo "| Backend dependencies | \`simonrowe-dev/backend\` | $BACKEND_DEP |"
+            echo "| Frontend dependencies | \`simonrowe-dev/frontend\` | $FRONTEND_DEP |"
+            echo "| Backend image | \`simonrowe-dev/backend-image\` | $BACKEND_IMAGE |"
+            echo "| Frontend image | \`simonrowe-dev/frontend-image\` | $FRONTEND_IMAGE |"
+            echo
+            echo "$verdict"
+            echo
+            echo "An empty outcome means the step never ran (an earlier step in this job failed);"
+            echo "\`skipped\` likewise means no upload was attempted."
+          } >> "$GITHUB_STEP_SUMMARY"
