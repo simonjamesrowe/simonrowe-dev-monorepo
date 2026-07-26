@@ -128,23 +128,22 @@ spring:
         protocol: STREAMABLE
         annotation-scanner:
           enabled: true
-    # Observability content capture (evaluated for chat fix-up, Langfuse tracing).
+    tools:
+      observations:
+        include-content: true
+    # Observability content capture.
     #
-    # gen_ai spans are exported (backend -> Alloy :4317 -> Langfuse OTLP) via the Micrometer
-    # Observation -> OTel span bridge (micrometer-tracing-bridge-otel + management.otlp.tracing
-    # above). Capturing the prompt/completion TEXT in those spans is DISABLED BY DEFAULT: it
-    # would store visitor chat content in Langfuse (ClickHouse), a privacy trade-off not
-    # justified for a public portfolio chat.
+    # NOTE: spring.ai.chat.observations.log-prompt / log-completion do NOT write span
+    # attributes — verified in Spring AI 1.1.8 source, ChatModelPromptContentObservationHandler
+    # only calls logger.info(). AiObservationAttributes has no prompt/completion constant, so
+    # gen_ai.prompt / gen_ai.completion are never emitted by the framework at any 1.x or 2.x
+    # version. Prompt and completion capture is therefore done by
+    # com.simonrowe.observability.LangfuseContentObservationFilter, toggled with
+    # langfuse.content-capture-enabled above.
     #
-    # To enable it (e.g. temporarily, for debugging), verify the exact property names for
-    # the pinned Spring AI version (1.1.4, OpenAI SDK starter) against the Spring AI
-    # reference before relying on them, then set the observation content-capture flags,
-    # e.g.:
-    #   chat:
-    #     observations:
-    #       log-prompt: true
-    #       log-completion: true
-    # Decision (2026-07-17): leave content capture OFF; keep spans only.
+    # Decision (2026-07-26): content capture is ON, reversing the 2026-07-17 decision. Visitor
+    # chat text — including recruiter-pasted job specs and contact-form details — is stored in
+    # Langfuse. See docs/superpowers/specs/2026-07-26-langfuse-sessions-content-evals-design.md.
 
 google:
   drive:
@@ -372,3 +371,11 @@ backup:
     zone: "Europe/London"
   retention:
     max-backups: 7
+
+langfuse:
+  host: ${LANGFUSE_HOST:https://langfuse.simonrowe.dev}
+  public-key: ${LANGFUSE_PUBLIC_KEY:}
+  secret-key: ${LANGFUSE_SECRET_KEY:}
+  environment: ${LANGFUSE_ENVIRONMENT:development}
+  scores-enabled: ${LANGFUSE_SCORES_ENABLED:false}
+  content-capture-enabled: ${LANGFUSE_CONTENT_CAPTURE_ENABLED:true}
