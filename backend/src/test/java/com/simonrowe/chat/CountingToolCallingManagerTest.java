@@ -112,8 +112,30 @@ class CountingToolCallingManagerTest {
   }
 
   @Test
-  void stillDelegatesAndSwallowsWhenCountingLogicThrows() {
+  void countsNothingAndStillDelegatesWhenTheOptionsAreNotToolCallingOptions() {
+    // Null options are handled gracefully rather than by the catch block: null fails the
+    // instanceof check, so no session id is resolved and nothing is counted.
     Prompt prompt = new Prompt("Jobs?", (ChatOptions) null);
+    ChatResponse response = responseWithToolCalls(1);
+    ToolExecutionResult expected = mock(ToolExecutionResult.class);
+    when(delegate.executeToolCalls(prompt, response)).thenReturn(expected);
+
+    ToolExecutionResult actual = manager.executeToolCalls(prompt, response);
+
+    assertThat(actual).isSameAs(expected);
+    assertThat(counter.takeCount("s1")).isZero();
+    verify(delegate).executeToolCalls(prompt, response);
+  }
+
+  @Test
+  void stillDelegatesAndSwallowsWhenCountingLogicThrows() {
+    // Drives a real exception into countQuietly's try block, so the catch that protects tool
+    // execution from telemetry failures is actually exercised. Without the catch, this throw
+    // would escape executeToolCalls and the delegate would never be reached.
+    ToolCallingChatOptions options = mock(ToolCallingChatOptions.class);
+    when(options.getToolContext()).thenThrow(new IllegalStateException("tool context unavailable"));
+
+    Prompt prompt = new Prompt("Jobs?", options);
     ChatResponse response = responseWithToolCalls(1);
     ToolExecutionResult expected = mock(ToolExecutionResult.class);
     when(delegate.executeToolCalls(prompt, response)).thenReturn(expected);
