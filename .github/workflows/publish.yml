@@ -70,10 +70,33 @@ jobs:
             VITE_RECAPTCHA_SITE_KEY=${{ secrets.VITE_RECAPTCHA_SITE_KEY }}
             VITE_GA_MEASUREMENT_ID=${{ secrets.VITE_GA_MEASUREMENT_ID }}
 
+  publish-reviewer:
+    name: Publish Temporal Reviewer Image
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push reviewer image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.reviewer
+          push: true
+          tags: |
+            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:latest
+            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:${{ github.sha }}
+
   sbom:
     name: Publish SBOMs to Dependency-Track
     runs-on: ubuntu-latest
-    needs: [publish-backend, publish-frontend]
+    needs: [publish-backend, publish-frontend, publish-reviewer]
     # Never block a deploy on Dependency-Track being reachable. It runs on a
     # Raspberry Pi behind a tunnel and may be down, rebooting, or saturated
     # mid-analysis; none of that should fail a production release.
@@ -133,8 +156,19 @@ jobs:
           upload-artifact: false
           upload-release-assets: false
 
+      - name: Generate reviewer image SBOM
+        uses: anchore/sbom-action@v0.24.0
+        with:
+          image: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:${{ github.sha }}
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+          format: cyclonedx-json
+          output-file: reviewer-image-bom.json
+          upload-artifact: false
+          upload-release-assets: false
+
       # Each upload is individually continue-on-error so that one unreachable upload does not
-      # skip the remaining three - otherwise a single blip leaves three SBOMs never even
+      # skip the remaining uploads - otherwise a single blip leaves later SBOMs never even
       # attempted, and the summary below can only report "skipped" for them. The job-level
       # continue-on-error above still guarantees none of this can fail a release.
       - name: Upload backend dependency SBOM
@@ -185,9 +219,21 @@ jobs:
           bomfilename: frontend-image-bom.json
           autocreate: true
 
+      - name: Upload reviewer image SBOM
+        id: upload-reviewer-image
+        continue-on-error: true
+        uses: DependencyTrack/gh-upload-sbom@v4.1.0
+        with:
+          serverhostname: dependency-track.simonrowe.dev
+          apikey: ${{ secrets.DEPENDENCYTRACK_API_KEY }}
+          projectname: simonrowe-dev/reviewer-image
+          projectversion: main
+          bomfilename: reviewer-image-bom.json
+          autocreate: true
+
       # This job is continue-on-error, so the workflow shows a green tick even when every
       # upload failed. Without an explicit report, a silent failure is indistinguishable from
-      # success at a glance. Write the outcome of all four uploads into the job summary so the
+      # success at a glance. Write every upload outcome into the job summary so the
       # answer is visible on the run page without opening any logs.
       - name: Report SBOM upload outcomes
         if: always()
@@ -196,16 +242,17 @@ jobs:
           FRONTEND_DEP: ${{ steps.upload-frontend-dep.outcome }}
           BACKEND_IMAGE: ${{ steps.upload-backend-image.outcome }}
           FRONTEND_IMAGE: ${{ steps.upload-frontend-image.outcome }}
+          REVIEWER_IMAGE: ${{ steps.upload-reviewer-image.outcome }}
         run: |
           failed=0
-          for outcome in "$BACKEND_DEP" "$FRONTEND_DEP" "$BACKEND_IMAGE" "$FRONTEND_IMAGE"; do
+          for outcome in "$BACKEND_DEP" "$FRONTEND_DEP" "$BACKEND_IMAGE" "$FRONTEND_IMAGE" "$REVIEWER_IMAGE"; do
             [ "$outcome" = "success" ] || failed=$((failed + 1))
           done
 
           if [ "$failed" -eq 0 ]; then
-            verdict="✅ All 4 SBOMs uploaded to Dependency-Track."
+            verdict="✅ All 5 SBOMs uploaded to Dependency-Track."
           else
-            verdict="⚠️ $failed of 4 SBOM uploads did NOT succeed. This job is continue-on-error, so the workflow still reports success - the release is fine, but Dependency-Track is now stale. See docs/runbooks/dependency-track.md (\"Manual SBOM upload\")."
+            verdict="⚠️ $failed of 5 SBOM uploads did NOT succeed. This job is continue-on-error, so the workflow still reports success - the release is fine, but Dependency-Track is now stale. See docs/runbooks/dependency-track.md (\"Manual SBOM upload\")."
           fi
 
           # Also log it, so it is greppable in the raw job output.
@@ -213,6 +260,7 @@ jobs:
           echo "frontend dependencies: $FRONTEND_DEP"
           echo "backend image        : $BACKEND_IMAGE"
           echo "frontend image       : $FRONTEND_IMAGE"
+          echo "reviewer image       : $REVIEWER_IMAGE"
           echo "$verdict"
 
           {
@@ -224,6 +272,7 @@ jobs:
             echo "| Frontend dependencies | \`simonrowe-dev/frontend\` | $FRONTEND_DEP |"
             echo "| Backend image | \`simonrowe-dev/backend-image\` | $BACKEND_IMAGE |"
             echo "| Frontend image | \`simonrowe-dev/frontend-image\` | $FRONTEND_IMAGE |"
+            echo "| Reviewer image | \`simonrowe-dev/reviewer-image\` | $REVIEWER_IMAGE |"
             echo
             echo "$verdict"
             echo

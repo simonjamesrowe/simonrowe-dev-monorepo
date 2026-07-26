@@ -1,0 +1,26 @@
+FROM eclipse-temurin:21-jdk AS build
+
+WORKDIR /workspace
+
+COPY gradlew build.gradle.kts settings.gradle.kts ./
+COPY gradle/ gradle/
+COPY config/checkstyle/ config/checkstyle/
+COPY backend/build.gradle.kts backend/build.gradle.kts
+COPY reviewer/build.gradle.kts reviewer/build.gradle.kts
+COPY reviewer/src/ reviewer/src/
+
+RUN --mount=type=cache,target=/root/.gradle \
+    ./gradlew :reviewer:bootJar --no-daemon
+
+FROM eclipse-temurin:21-jre
+
+RUN groupadd --system --gid 10003 reviewer \
+    && useradd --system --uid 10003 --gid reviewer --home-dir /app reviewer
+
+WORKDIR /app
+COPY --from=build --chown=reviewer:reviewer \
+    /workspace/reviewer/build/libs/reviewer-*.jar /app/reviewer.jar
+
+USER reviewer
+EXPOSE 8090 8091
+ENTRYPOINT ["java", "-jar", "/app/reviewer.jar"]

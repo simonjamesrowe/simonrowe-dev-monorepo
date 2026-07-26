@@ -123,6 +123,28 @@ npm test
 
 Runs Checkstyle, tests, and JaCoCo coverage verification.
 
+## Temporal Code Reviewer
+
+The `reviewer/` subproject is a separate Spring Boot service that turns signed
+GitHub pull-request events into durable Temporal workflows and runs a read-only
+Claude Code review against an exact commit SHA.
+
+```bash
+docker compose up -d temporal
+./gradlew :reviewer:bootRun
+```
+
+- Reviewer API: http://localhost:8090
+- Reviewer health: http://localhost:8091/actuator/health
+- Temporal UI: http://localhost:8233
+- Production: API container plus a host-side worker, so the worker can safely
+  invoke the Claude installation on the Raspberry Pi
+
+See [docs/temporal-code-reviewer.md](docs/temporal-code-reviewer.md) for
+configuration, security boundaries, and the software-factory roadmap. Production
+setup and recovery are covered by the
+[Temporal reviewer runbook](docs/runbooks/temporal-reviewer.md).
+
 ## Build Container Images
 
 ### Backend (GraalVM native image via Cloud Native Buildpacks)
