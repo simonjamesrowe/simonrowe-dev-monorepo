@@ -92,7 +92,18 @@ if any is down, which would also take Portainer offline.
 
 - **Content capture is ON** (decision 2026-07-26, reversing 2026-07-17). Visitor chat text —
   including recruiter-pasted job specs and contact-form details — is stored in Langfuse.
-  Toggle with `LANGFUSE_CONTENT_CAPTURE_ENABLED`.
+  Toggle with `LANGFUSE_CONTENT_CAPTURE_ENABLED`. Setting it to `false` is a **complete**
+  off-switch: it gates both our `LangfuseContentObservationFilter` and Spring AI's own
+  `spring.ai.tools.observations.include-content`. Both must stay bound to it — Spring AI's filter
+  writes tool arguments as span attributes independently of ours, and those include the contact
+  form's name, email, subject and message.
+- **"No scores in Langfuse?" check the startup log first.** `LangfuseScoreClient` logs exactly once
+  at boot whether score submission is enabled, and if not, whether that is because
+  `LANGFUSE_SCORES_ENABLED=false` or because `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` are
+  missing. Submission itself is silent — it is a per-turn hot path.
+- Scores carry `environment` (from `LANGFUSE_ENVIRONMENT`) to match the `langfuse.environment` on
+  their trace. Without it, scores file under `default` and environment-filtered dashboards read
+  empty.
 - `spring.ai.chat.observations.log-prompt` / `log-completion` **do not work** for this purpose
   and never did. Verified in Spring AI 1.1.8 source: `ChatModelPromptContentObservationHandler`
   only calls `logger.info()`, and `AiObservationAttributes` has no prompt/completion constant,

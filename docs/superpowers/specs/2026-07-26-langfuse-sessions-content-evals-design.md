@@ -237,7 +237,8 @@ Responsibilities:
   it and share its trace id.
 - Accumulate streamed text to reconstruct the final answer.
 - On completion, set `langfuse.trace.output`, then end the span.
-- On error, record the exception, set `langfuse.observation.level=ERROR`, then end the span.
+- On error, record the exception, then end the span. (The originally specified
+  `langfuse.observation.level=ERROR` attribute was **dropped** — see §11.)
 - Use `doFinally` as a backstop so a span can never leak.
 - After the span ends, hand the trace id, verdict, tool-call count and error/empty flags to
   `LangfuseScoreClient`.
@@ -275,10 +276,30 @@ spring:
 
 That alone adds `spring.ai.tool.call.arguments` and `spring.ai.tool.call.result` as span
 attributes. Langfuse has no native mapping for the `spring.ai.*` prefix, so those land in
-observation metadata rather than input/output. The filter therefore does one extra cheap thing:
-**remap** those two attributes onto `langfuse.observation.input`/`.output` for tool-call
-observations. This is materially less code than extracting tool arguments from the observation
-context by hand.
+observation metadata rather than input/output.
+
+This design originally had the filter **remap** those two key values onto
+`langfuse.observation.input`/`.output`, on the assumption that `@Order(LOWEST_PRECEDENCE)` would
+place our filter after Spring AI's. **It does not, and the remap was a silent no-op.**
+`Ordered.LOWEST_PRECEDENCE` is `Integer.MAX_VALUE`, which is *also* the implicit order of the
+unannotated `toolCallingContentObservationFilter` bean, and Boot's
+`ObservationRegistryConfigurer.registerFilters` sorts via `ObjectProvider.orderedStream()` — a
+*stable* sort, so equal orders fall back to bean-registration order, and component-scanned user
+`@Configuration` beans register **before** deferred auto-configuration beans. Our filter ran
+first and found nothing to copy.
+
+The shipped filter instead reads tool content straight off `ToolCallingObservationContext` via its
+public `getToolCallArguments()` / `getToolCallResult()` accessors, exactly as it already handled
+`ChatModelObservationContext`, and carries no `@Order` at all. Registration order is now
+irrelevant. **Do not reintroduce an order-dependent remap.**
+
+`spring.ai.tools.observations.include-content` is nevertheless still bound — to
+`${LANGFUSE_CONTENT_CAPTURE_ENABLED:true}`, the same switch as `langfuse.content-capture-enabled`.
+It must not be hardcoded `true`: Spring AI's filter writes tool arguments as span attributes
+independently of ours, Alloy keeps those spans (they carry `spring.ai.kind`), and tool arguments
+include `ProfileMcpTools.submitContactForm`'s `firstName`/`lastName`/`email`/`subject`/`message` —
+the third-party PII §2.1 singles out. Binding both to one variable is what makes
+`LANGFUSE_CONTENT_CAPTURE_ENABLED=false` a genuine, complete off-switch rather than a partial one.
 
 **Expect several chat-model observations per turn.** `OpenAiSdkChatModel.internalStream`
 *recurses* after each tool execution, opening a fresh observation per model round-trip. A
@@ -324,12 +345,37 @@ Four deterministic scores per turn:
 | Name | Data type | Value |
 | --- | --- | --- |
 | `guardrail` | `CATEGORICAL` | `SAFE` / `OFF_TOPIC` / `HARMFUL` |
-| `tool-call-count` | `NUMERIC` | tool invocations in the turn, counted by `ChatTurnTracer` as the number of streamed `ChatResponse`s for which `hasToolCalls()` is true |
+| `tool-call-count` | `NUMERIC` | tool invocations in the turn, counted by `CountingToolCallingManager` (see the correction below) |
 | `error` | `BOOLEAN` | whether the turn terminated in error |
 | `empty-answer` | `BOOLEAN` | whether the assembled answer was blank |
 
 Latency is deliberately excluded: Langfuse already records it as a first-class field, so a score
 would duplicate it.
+
+Every score also carries `environment`, taken from `LangfuseProperties.getEnvironment()` — the
+same value the chat-turn span puts in `langfuse.environment`. Omitting it files the score under
+Langfuse's `default` environment while its own trace is tagged `production`, so every
+environment-filtered score view and dashboard reads empty.
+
+#### Correction — how `tool-call-count` is actually counted
+
+This design originally specified the count as *"the number of streamed `ChatResponse`s for which
+`hasToolCalls()` is true"*, read by `ChatTurnTracer` off the response stream. **That is
+impossible, and was replaced during implementation.** `OpenAiSdkChatModel.internalStream` never
+emits the aggregated tool-call `ChatResponse` to its subscriber: it consumes that response
+internally and replaces it with a *recursive* call into the model with the tool results appended.
+A `ChatResponse` with `hasToolCalls() == true` therefore never reaches `ChatService`, and the
+counter as designed is unreachable dead code that always reports zero.
+
+The shipped mechanism is `CountingToolCallingManager`, a decorator around Spring AI's
+autoconfigured `ToolCallingManager`. `ToolCallingManager.executeToolCalls(Prompt, ChatResponse)`
+is the one place upstream that provably sees every tool-execution round — including several
+parallel calls within a single round — so the decorator counts there and hands the total to
+`ToolCallCounter`, which `ChatTurnTracer` reads at the end of the turn. Counting failures are
+swallowed so tool execution can never break on telemetry bookkeeping.
+
+**Do not "fix" this back to reading `hasToolCalls()` off the stream.** It was tried; it is
+structurally unreachable, not merely buggy.
 
 Configuration under a `langfuse.*` prefix: `scores.enabled` (default `false`, enabled per
 environment), `host`, `public-key`, `secret-key`, `environment`.
@@ -364,16 +410,26 @@ Cost: four additional local containers. Accepted as the price of verifiability.
 
 ### 4.8 `scripts/bootstrap-langfuse-evaluators.sh` (new)
 
-Idempotent shell script, in the style of `scripts/verify-langfuse-trace.sh`, reading keys from
-the environment or the directory's `.env`, defaulting `LANGFUSE_HOST` to
-`https://langfuse.simonrowe.dev`.
+Shell script in the style of `scripts/verify-langfuse-trace.sh`, reading keys from the environment
+or the directory's `.env`, defaulting `LANGFUSE_HOST` to `https://langfuse.simonrowe.dev`.
+
+Two corrections to the original wording of this section (both in §11):
+
+- It is **not** idempotent throughout. Steps 1 and 2 below are re-run safe; step 3 is not, so rule
+  creation is gated behind `--create-rules` and skips evaluators that already have a rule.
+- An explicitly-set variable must win over `.env`. `.env`'s assignments are unconditional, so
+  `set -a; . .env` clobbered a caller-supplied `LANGFUSE_HOST` (also `JUDGE_MODEL`, `SAMPLING`,
+  `OPENAI_API_KEY`) — turning the documented local invocation into a run against **production**.
+  The script now snapshots caller-supplied values before sourcing and restores them after.
 
 1. `PUT /api/public/llm-connections` — upsert an OpenAI connection keyed on `provider`, using
    `OPENAI_API_KEY`. The judge model must support structured output.
 2. `POST /api/public/unstable/evaluators` — create the evaluators. Re-posting an existing `name`
    creates a new version and migrates existing rules to it, so re-runs are safe.
 3. `POST /api/public/unstable/evaluation-rules` — one rule per evaluator, `target: observation`,
-   `sampling: 0.2`, with a complete variable mapping.
+   `sampling: 0.2`, with a complete variable mapping. **Only with `--create-rules`**, and only for
+   evaluators with no existing rule: this endpoint has no upsert, so a bare re-post duplicates
+   every rule and multiplies the OpenAI judge spend.
 
 Evaluators: **hallucination, helpfulness, toxicity, context-relevance** — all available as
 managed templates. The exact managed-template catalogue is not published; the script enumerates
@@ -470,7 +526,7 @@ low-traffic site.
 | Level | Coverage |
 | --- | --- |
 | Integration (highest value) | OTel `InMemorySpanExporter`: one chat turn produces exactly one `chat-turn` span carrying `session.id`, `langfuse.trace.input` and `langfuse.trace.output`; Spring AI spans share its trace id. |
-| Unit | `LangfuseContentObservationFilter` attribute mapping, including the truncation boundary, a serialisation failure, and the `spring.ai.tool.call.*` → `langfuse.observation.*` remap. |
+| Unit | `LangfuseContentObservationFilter` attribute mapping, including the truncation boundary, a serialisation failure, and tool content read from a real `ToolCallingObservationContext` (§4.2 — asserting against hand-injected `spring.ai.tool.call.*` key values passed while production was broken). |
 | Unit | `GuardrailVerdictRegistry` publish/read/evict; entries removed on read. |
 | Unit | `GuardrailAdvisor` refactor — existing tests must pass unchanged, plus verdict publication from both the call and stream paths. |
 | Unit | `LangfuseScoreClient` against a mocked server: request shape, basic auth, and that a server error never propagates. |
@@ -478,8 +534,9 @@ low-traffic site.
 
 The OTTL filter cannot be unit-tested. Local parity exists precisely to cover it.
 
-`scripts/verify-langfuse-trace.sh` gains `--expect-session` and `--expect-io` flags so
-verification is a command with an exit code rather than a visual inspection.
+`scripts/verify-langfuse-trace.sh` was to gain `--expect-session` and `--expect-io` flags so
+verification is a command with an exit code rather than a visual inspection. **Not delivered** —
+see §11.
 
 All backend work must satisfy Checkstyle and the pre-commit hook (see the `backend-test` skill).
 
@@ -498,7 +555,8 @@ Local parity lands first so that every subsequent step is verifiable before it r
 7. Merge → the Publish workflow builds images → deploy to the Pi.
 8. **On the Pi**, as a single copy-paste block: pull the deploy dir, delete the Langfuse project
    in the UI, restart `langfuse` (bootstrap recreates it with the same keys), restart `alloy`.
-9. Run `bootstrap-langfuse-evaluators.sh` against prod.
+9. Run `bootstrap-langfuse-evaluators.sh` against prod, then **once** with `--create-rules`
+   (rule creation is opt-in because `POST /evaluation-rules` has no upsert — see §11).
 10. Send a real chat message; verify session, input, output, scores and evaluator results.
 
 Production runs on a Raspberry Pi with **no SSH access from the development machine**. Steps 8
@@ -512,3 +570,33 @@ back.
 - PII redaction or masking of captured content (§2.1).
 - Re-enabling the Grafana Cloud Tempo exporter, which remains disabled on a wrong-region endpoint.
 - Metrics scraping — `/actuator/prometheus` is still unscraped.
+
+## 11. Delivered differently / not delivered
+
+Recorded rather than silently edited away, so that a later reader does not "restore" a design
+decision that was tried and found broken. Each entry says what this document originally specified,
+what shipped, and why.
+
+### Delivered differently
+
+| Originally specified | What shipped | Why |
+| --- | --- | --- |
+| §4.5 — `tool-call-count` counted by `ChatTurnTracer` from streamed `ChatResponse`s with `hasToolCalls() == true` | `CountingToolCallingManager`, a `ToolCallingManager` decorator counting at `executeToolCalls` | `OpenAiSdkChatModel.internalStream` consumes the tool-call response internally and replaces it with a recursion, so `hasToolCalls()` is never true at the subscriber. The design was unreachable, not merely buggy. Detail in §4.5. |
+| §4.2 — tool content obtained by remapping Spring AI's `spring.ai.tool.call.*` key values, ordered with `@Order(LOWEST_PRECEDENCE)` | Tool content read directly from `ToolCallingObservationContext.getToolCallArguments()` / `getToolCallResult()`; no `@Order` at all | `LOWEST_PRECEDENCE` equals Spring AI's own implicit order, and Boot's stable ordered sort then puts our component-scanned bean first, so the remap always found nothing. Detail in §4.2. |
+| §4.8 — the bootstrap script described as idempotent throughout | Only the LLM connection and the evaluators are re-run safe; evaluation **rules** are opt-in behind `--create-rules`, plus a best-effort existence check | `POST /api/public/unstable/evaluation-rules` has no upsert: re-running duplicated all four rules, multiplying the per-trace OpenAI judge spend that `sampling: 0.2` exists to control. The failure mode was a bill, not an error. |
+
+### Dropped
+
+- **§4.1's `langfuse.observation.level=ERROR` attribute.** Not set. `ChatTurnTracer` records the
+  exception on the observation and lets the Micrometer → OTel bridge set the span status to
+  `ERROR`, which Langfuse already surfaces. An explicit attribute would have been a second,
+  independently-maintained source of the same truth.
+
+### Not delivered
+
+- **§8's `scripts/verify-langfuse-trace.sh --expect-session` / `--expect-io` flags.** The task was
+  blocked: the local Docker environment was wedged (VM inconsistent after disk exhaustion), so the
+  flags could not be written against a running Langfuse, let alone verified. Production must not be
+  used for this — the evaluator bootstrap creates real resources and incurs real OpenAI spend.
+  End-to-end trace verification therefore remains a manual UI inspection, as it was before this
+  branch. This is outstanding work, not a decision.
