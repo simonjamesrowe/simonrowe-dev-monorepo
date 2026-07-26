@@ -49,8 +49,10 @@ model price in Langfuse (Settings → Models) if you want the **cost** figure po
      created. Auth0 SSO then links to that user by email, so the SSO login lands in the org.
    See `.env.example` for the full block.
 
-2. **Restart only `langfuse` and `alloy`** (do NOT restart nginx unless all four upstreams —
-   frontend, backend, portainer, langfuse — are running, per the nginx restart gotcha):
+2. **Restart only `langfuse` and `alloy`.** (Restarting nginx is no longer risky: since commit
+   `62d26cc` the proxy resolves upstreams at request time, so it boots regardless of which
+   upstreams are running and returns 502 only for the downed ones. The old "all four upstreams
+   must be up before restarting nginx" rule has been retired — see `CLAUDE.md`.)
    ```bash
    docker start simonrowe-dev-monorepo-langfuse-1
    docker start simonrowe-dev-monorepo-alloy-1

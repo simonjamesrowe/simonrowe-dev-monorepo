@@ -27,18 +27,26 @@ Each invocation:
 > are all down — this blind spot let a real outage run undetected. Always check a
 > URL Cloudflare can only satisfy by proxying to origin.
 
-> **Stale upstream DNS after `restart-prod.sh` / image updates:** nginx has no
-> `resolver` directive (see CLAUDE.md), so it resolves `frontend`/`backend`/
-> `portainer`/`langfuse` once at container startup and caches those IPs for its
-> whole lifetime. `docker compose up -d` only recreates containers whose
-> image/config actually changed — pulling a new `backend`/`frontend` image gives
-> that container a fresh IP on the Docker network, but nginx (unchanged) keeps
-> running against the old, now-dead address, producing `502`/connection-refused
-> errors while every container reports healthy. Both `scripts/restart-prod.sh`
-> and `scripts/monitor-prod.sh` restart `nginx` immediately after `up -d` to
-> force it to re-resolve; if you ever reconcile the stack manually, do the same
-> (`docker compose -f docker-compose.prod.yml restart nginx`) once you've
-> confirmed all four upstreams are up.
+> **Stale upstream DNS after `restart-prod.sh` / image updates — fixed in commit
+> `62d26cc`, kept here as history.** nginx used to have no `resolver` directive, so
+> it resolved `frontend`/`backend`/`portainer`/`langfuse` once at container startup
+> and cached those IPs for its whole lifetime. `docker compose up -d` only recreates
+> containers whose image/config actually changed, so pulling a new `backend`/
+> `frontend` image gave that container a fresh IP while nginx (unchanged) kept
+> running against the old, now-dead address — producing `502`/connection-refused
+> errors while every container reported healthy. `config/nginx/nginx-proxy.conf` now
+> sets `resolver 127.0.0.11 valid=10s ipv6=off;` and uses a variable in every
+> `proxy_pass`, so nginx re-resolves each upstream at request time (within the 10s
+> TTL) and picks up new container IPs on its own. Two consequences:
+>
+> - The `nginx` restart that `scripts/restart-prod.sh` and `scripts/monitor-prod.sh`
+>   do after `up -d` is now belt-and-braces rather than load-bearing.
+> - **The old rule that all four upstreams had to be running before restarting nginx
+>   no longer applies.** nginx boots regardless of what is down and 502s only the
+>   affected hostname. Its own healthcheck hits `/healthz` in a `default_server`
+>   block that proxies to nothing, so nginx health no longer depends on the frontend
+>   (which previously kept `pinggy` from starting and took every hostname offline).
+>   See `CLAUDE.md`, "nginx resolves upstreams at runtime, not just at boot".
 
 The Docker Compose file also includes a process-level health check on the Pinggy
 container (`kill -0 1`) so `docker ps` and `scripts/status-prod.sh` can report
