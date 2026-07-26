@@ -10,7 +10,7 @@ plugins {
 group = "com.simonrowe"
 version = "0.0.1-SNAPSHOT"
 
-ext["opentelemetry.version"] = "1.59.0"
+ext["opentelemetry.version"] = "1.64.0"
 
 repositories {
     mavenCentral()
