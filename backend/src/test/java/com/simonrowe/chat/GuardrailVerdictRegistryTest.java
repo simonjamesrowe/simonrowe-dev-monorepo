@@ -1,6 +1,7 @@
 package com.simonrowe.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import org.junit.jupiter.api.Test;
 
@@ -51,5 +52,10 @@ class GuardrailVerdictRegistryTest {
     registry.clearSession("session-1");
 
     assertThat(registry.takeVerdict("session-1")).isNull();
+  }
+
+  @Test
+  void clearSessionIgnoresNullSessionId() {
+    assertThatCode(() -> registry.clearSession(null)).doesNotThrowAnyException();
   }
 }

@@ -44,7 +44,16 @@ public class GuardrailVerdictRegistry {
     return verdicts.remove(sessionId);
   }
 
+  /**
+   * Removes any verdict held for a session. Null is ignored rather than throwing, because
+   * guardrail bookkeeping must never break a chat turn.
+   *
+   * @param sessionId the chat session id
+   */
   public void clearSession(final String sessionId) {
+    if (sessionId == null) {
+      return;
+    }
     verdicts.remove(sessionId);
   }
 }
