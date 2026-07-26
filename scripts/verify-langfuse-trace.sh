@@ -6,8 +6,16 @@ set -euo pipefail
 # window). Read-only — it never mutates Langfuse.
 #
 # Usage:
-#   scripts/verify-langfuse-trace.sh                 # checks any trace exists
+#   scripts/verify-langfuse-trace.sh                    # checks any trace exists
 #   scripts/verify-langfuse-trace.sh --since-minutes 5
+#   scripts/verify-langfuse-trace.sh --since-minutes 5 --expect-session --expect-io
+#
+# --expect-session  fail unless the newest matching trace has a sessionId (proves the
+#                   chat-turn span survived Alloy's ai_only filter and Langfuse applied it)
+# --expect-io       fail unless that trace has non-empty input AND output (proves content
+#                   capture is working end to end)
+#
+# Requires python3 for the field assertions (present on macOS and Raspberry Pi OS).
 #
 # Env (falls back to values in the deploy-dir .env if present):
 #   LANGFUSE_HOST          default https://langfuse.simonrowe.dev
@@ -31,12 +39,22 @@ fi
 
 LANGFUSE_HOST="${LANGFUSE_HOST:-https://langfuse.simonrowe.dev}"
 SINCE_MINUTES=""
+EXPECT_SESSION="false"
+EXPECT_IO="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --since-minutes)
       SINCE_MINUTES="${2:-}"
       shift 2
+      ;;
+    --expect-session)
+      EXPECT_SESSION="true"
+      shift
+      ;;
+    --expect-io)
+      EXPECT_IO="true"
+      shift
       ;;
     *)
       echo "Unknown argument: $1" >&2
@@ -50,7 +68,7 @@ if [[ -z "${LANGFUSE_PUBLIC_KEY:-}" || -z "${LANGFUSE_SECRET_KEY:-}" ]]; then
   exit 1
 fi
 
-query="?limit=1"
+query="?limit=1&orderBy=timestamp.desc"
 if [[ -n "$SINCE_MINUTES" ]]; then
   # Langfuse accepts an ISO-8601 fromTimestamp filter.
   from_ts="$(date -u -v-"${SINCE_MINUTES}"M +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
@@ -77,6 +95,43 @@ fi
 
 if [[ "$total" -gt 0 ]]; then
   echo "OK: found ${total} matching trace(s) in the Langfuse project."
+
+  if [[ "$EXPECT_SESSION" == "true" || "$EXPECT_IO" == "true" ]]; then
+    summary="$(printf '%s' "$response" | python3 -c '
+import json, sys
+payload = json.load(sys.stdin)
+traces = payload.get("data") or []
+if not traces:
+    print("NO_TRACE")
+    sys.exit(0)
+trace = traces[0]
+def present(value):
+    return "yes" if value not in (None, "", [], {}) else "no"
+print("name=%s session=%s input=%s output=%s" % (
+    trace.get("name") or "<unnamed>",
+    present(trace.get("sessionId")),
+    present(trace.get("input")),
+    present(trace.get("output")),
+))
+')"
+    echo "Newest trace: ${summary}"
+
+    if [[ "$EXPECT_SESSION" == "true" && "$summary" != *"session=yes"* ]]; then
+      echo "FAIL: newest trace has no sessionId. The chat-turn span carrying session.id was" >&2
+      echo "      dropped, or Alloy is running a config without langfuse.trace.name in the" >&2
+      echo "      ai_only keep-list. Restart Alloy after pulling config changes." >&2
+      exit 1
+    fi
+    if [[ "$EXPECT_IO" == "true" ]]; then
+      if [[ "$summary" != *"input=yes"* || "$summary" != *"output=yes"* ]]; then
+        echo "FAIL: newest trace has empty input and/or output. Check that" >&2
+        echo "      langfuse.content-capture-enabled is true and that LangfuseContentObservationFilter" >&2
+        echo "      is registered." >&2
+        exit 1
+      fi
+    fi
+  fi
+
   exit 0
 fi
 
