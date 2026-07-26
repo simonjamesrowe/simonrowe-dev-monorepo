@@ -56,7 +56,7 @@ ingress is through nginx, matching how Portainer is handled today.
 alongside MongoDB, Elasticsearch, Kafka, ClickHouse, MinIO, Redis, Postgres, two Langfuse
 containers, searxng, Alloy, Portainer and the application itself. The API server therefore
 gets a container `mem_limit` — the first resource limit in this compose file, which
-currently sets none. Because the image already defaults to `-XX:MaxRAMPercentage=90.0`, the
+currently sets none. Because the image already defaults to `-XX:MaxRAMPercentage=80.0`, the
 limit constrains the heap on its own without needing the bug-prone `EXTRA_JAVA_OPTIONS`
 lever.
 
@@ -72,7 +72,7 @@ being the next-largest JVM).
 
 ### Database
 
-A new `dependencytrack` database and role inside the existing `langfuse-db` (postgres:15).
+A new `dtrack` database and role inside the existing `langfuse-db` (postgres:15).
 
 The `langfuse-db-data` volume already exists, so Postgres' first-run initialisation scripts
 will never execute again. Creating the database therefore needs a one-shot
@@ -111,10 +111,11 @@ nginx then starts regardless of what is running and returns 502 only for the spe
 that is down.
 
 **This is the highest-risk change in the whole piece.** It touches all four existing
-upstreams, and a mistake takes the entire public site plus Portainer offline on a host with
-no SSH access at the time this was written. (SSH access was subsequently found to exist —
-`ssh simonrowe@192.168.4.66`, LAN only — so recovery is possible directly. The risk is real but
-not unrecoverable.) Two required mitigations:
+upstreams, and a mistake takes the entire public site plus Portainer offline. This was
+originally written on the assumption that the host had no SSH access; SSH access was
+subsequently found to exist (as the usual admin user, LAN only — host and credentials live in
+the env store, not in this public repo), so recovery is possible directly. The risk is real
+but not unrecoverable. Two required mitigations:
 
 1. Validate with `nginx -t` inside the container before reloading.
 2. Dry-run the complete production compose locally on OrbStack first (documented in
@@ -144,7 +145,8 @@ needed — Dependency-Track slots into the pattern Langfuse already uses.
    `DEV_PORTAL_ADMIN` are then rejected by Auth0 before ever reaching Dependency-Track.
 5. **Keep break-glass access.** Dependency-Track's local `admin` account stays enabled with
    a strong password from the env file. Without it, a misconfigured OIDC setup means being
-   locked out of an application on a host with no SSH.
+   locked out of the application entirely — SSH to the host gets you the containers back, but
+   not an authenticated Dependency-Track session.
 
 `docs/auth0-setup.md` gains a Dependency-Track section mirroring the Langfuse one.
 
@@ -196,7 +198,7 @@ and Langfuse already have.
 |---|---|---|
 | Postgres co-located on a shared Pi instance, against explicit upstream guidance (dedicated host, 8 GB, NVMe) | **High** | Accepted for a 4-project portfolio; monitor `df -h` and database size a week after deployment, not just on day one |
 | Unbounded Postgres disk growth via daily `DEPENDENCYMETRICS_*` partitions fills the Pi's disk | Medium | Small portfolio makes this slow; runbook covers checking and pruning |
-| nginx refactor breaks the site and Portainer with no SSH recovery | **High** | `nginx -t` validation; full OrbStack dry-run before deploying |
+| nginx refactor breaks the site and Portainer | **High** | `nginx -t` validation; full OrbStack dry-run before deploying; SSH access to the host exists, so recovery does not depend on the tunnel |
 | Memory pressure OOM-kills another container | **High** | `mem_limit` on the API server; size against real `free -m`; verify all containers healthy after the first vulnerability sync |
 | v5 config uses `DT_*`, but most documentation and examples online still show `ALPINE_*`, which fail silently | Medium | Variable names verified against ADR 018; documented in this spec |
 | OIDC misconfiguration locks out the UI | Medium | Local `admin` break-glass account retained |
@@ -343,8 +345,15 @@ validated.
 
 ### Also unverified
 
-- [ ] The exact `gh-upload-sbom@v4.1.0` input schema (the v3 schema is known; v4 may differ).
-- [ ] v5 API key permission names and the upload endpoint verb.
+- [x] The exact `gh-upload-sbom@v4.1.0` input schema — **verified.** Read from the action's
+      `action.yml` at the `v4.1.0` tag: `serverhostname`, `port`, `protocol`, `apikey`,
+      `project`, `projectname`, `projectversion`, `projecttags`, `autocreate`, `bomfilename`,
+      `parent`, `parentname`, `parentversion`, `isLatest`, `token`, `projectUuid`. The six
+      inputs the workflow uses all exist.
+- [x] v5 API key permission names — **verified.** Read from `Permissions.java` at tag `5.0.3`:
+      the CI team needs `BOM_UPLOAD`, `PROJECT_CREATION_UPLOAD` and `VIEW_PORTFOLIO`, all of
+      which exist under those exact names. (The upload endpoint verb is `POST /api/v1/bom`,
+      as used by both the action and the runbook's manual command.)
 - [ ] First-run vulnerability mirror size, duration on ARM, and which sources can be
       disabled to reduce it.
 

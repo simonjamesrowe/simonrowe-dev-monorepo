@@ -20,7 +20,7 @@
 - The Dependency-Track team name must match the claim value **exactly, including case**: `DEV_PORTAL_ADMIN`.
 - No credential values ever appear in committed files. All secrets come from `.env` (sourced from `~/workspace/simonjamesrowe/env`) or GitHub Actions secrets.
 - Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`). No Jira references. No Claude attribution.
-- **SSH access to the Pi exists** (`ssh simonrowe@192.168.4.66`, LAN only; credentials in the usual store). This corrects an earlier assumption in this document that there was none. Recovery from a bad deploy is therefore possible directly, which softens — but does not remove — the nginx risk below.
+- **SSH access to the Pi exists** — as the usual admin user, on the LAN only; the host address and credentials live in the usual env store, never in this public repo. This corrects an earlier assumption in this document that there was none. Recovery from a bad deploy is therefore possible directly, which softens — but does not remove — the nginx risk below.
 
 ---
 
@@ -41,7 +41,7 @@
 
 ## Task 1: Make nginx boot-resilient
 
-This task is independently valuable and **should ship as its own PR, merged and verified in production before any Dependency-Track work is deployed.** It removes an existing landmine rather than adding a feature. If it regresses, it takes the entire public site and Portainer offline on a host with no SSH — so it is isolated deliberately.
+This task is independently valuable and **should ship as its own PR, merged and verified in production before any Dependency-Track work is deployed.** It removes an existing landmine rather than adding a feature. If it regresses, it takes the entire public site and Portainer offline — recoverable over SSH, but only from the LAN — so it is isolated deliberately.
 
 **Files:**
 - Modify: `config/nginx/nginx-proxy.conf:26-110`
@@ -968,7 +968,7 @@ change, and records the langfuse-db coupling."
 
 ## Deployment sequence
 
-Deployment is pull-based: the Pi runs `docker compose` from its own checkout at `~/workspace/simonjamesrowe/simonrowe-dev-monorepo`. SSH access exists (`ssh simonrowe@192.168.4.66`, LAN only), so these can be run directly rather than handed over as a copy-paste block.
+Deployment is pull-based: the Pi runs `docker compose` from its own checkout at `~/workspace/simonjamesrowe/simonrowe-dev-monorepo`. SSH access exists (usual admin user, LAN only; address and credentials in the env store, not in this public repo), so these can be run directly rather than handed over as a copy-paste block.
 
 Task 1 ships and is verified in production **first, on its own**. Then Tasks 2–4 together, then 5–6.
 
