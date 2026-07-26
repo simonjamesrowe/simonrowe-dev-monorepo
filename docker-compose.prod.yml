@@ -151,7 +151,12 @@ services:
       langfuse:
         condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      # Must hit the self-contained /healthz in the default_server block, NOT `/`.
+      # `/` with Host: localhost falls through to the simonrowe.dev block and proxies
+      # to `frontend`, so a stopped frontend would mark nginx unhealthy - and pinggy
+      # waits on nginx being service_healthy, which would take every public hostname
+      # (including Portainer) offline. See config/nginx/nginx-proxy.conf.
+      test: ["CMD", "curl", "-f", "http://localhost:80/healthz"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -367,7 +372,15 @@ services:
       PGHOST: langfuse-db
       PGUSER: ${LANGFUSE_DB_USER:-postgres}
       PGPASSWORD: ${LANGFUSE_DB_PASSWORD:-postgres}
-      DT_DB_PASSWORD: ${DEPENDENCYTRACK_DB_PASSWORD}
+      DT_DB_PASSWORD: ${DEPENDENCYTRACK_DB_PASSWORD:?set DEPENDENCYTRACK_DB_PASSWORD in .env}
+    # The ALTER ROLE is deliberately UNCONDITIONAL, while the CREATE stays guarded.
+    # Reason: if this ever ran with DEPENDENCYTRACK_DB_PASSWORD empty, Postgres logs
+    # "empty string is not a valid password, clearing password" and CREATE ROLE still
+    # SUCCEEDS - the role exists with no password and this service exits 0, while the
+    # apiserver then fails authentication forever. Because the pg_roles guard skips the
+    # CREATE from then on, simply adding the variable and re-running would NOT repair it.
+    # ALTER ROLE is idempotent, so running it every time both fixes that state and
+    # re-syncs the role after a deliberate password rotation in .env.
     entrypoint:
       - /bin/sh
       - -c
@@ -375,6 +388,7 @@ services:
         set -e
         psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='dtrack'" | grep -q 1 || \
           psql -c "CREATE ROLE dtrack LOGIN PASSWORD '$$DT_DB_PASSWORD'"
+        psql -c "ALTER ROLE dtrack LOGIN PASSWORD '$$DT_DB_PASSWORD'"
         psql -tAc "SELECT 1 FROM pg_database WHERE datname='dtrack'" | grep -q 1 || \
           psql -c "CREATE DATABASE dtrack OWNER dtrack"
         echo "dependency-track database ready"
@@ -394,22 +408,45 @@ services:
     # 2g matches the upstream Helm chart default for v5. The old 4GB startup
     # gate was removed in 4.14.0; v5 documents 2GB as the starting point with a
     # 1GB floor, and the project's own quickstart runs at 1Gi.
+    #
+    # ⚠️ This limit is NOT currently enforced on the production Pi: its kernel boots
+    # with `cgroup_disable=memory`, so Docker accepts the value but nothing applies it
+    # (and `docker stats` reports 0B/0B). Do not treat it as a real cap until that is
+    # fixed - see "Memory limit is currently NOT enforced" in
+    # docs/runbooks/dependency-track.md.
     mem_limit: 2g
+    volumes:
+      # The image sets HOME=/data/, and /data holds the Lucene search indexes plus
+      # analyzer working state. Without a volume every container recreation (image
+      # pull, version bump, --force-recreate) wipes it and forces a full index rebuild
+      # on four ARM cores. It also means that if DT_SECRET_MANAGEMENT_DATABASE_KEK were
+      # ever empty, the fallback keyset file under /data would be ephemeral too - the
+      # bug commit a3079b0 fixed. Persisting /data closes both.
+      - dependencytrack-data:/data
     environment:
       DT_DATASOURCE_URL: jdbc:postgresql://langfuse-db:5432/dtrack
       DT_DATASOURCE_USERNAME: dtrack
-      DT_DATASOURCE_PASSWORD: ${DEPENDENCYTRACK_DB_PASSWORD}
+      DT_DATASOURCE_PASSWORD: ${DEPENDENCYTRACK_DB_PASSWORD:?set DEPENDENCYTRACK_DB_PASSWORD in .env}
+      # Cap the connection pool (v5 default is 30). langfuse-db is stock postgres:15 at
+      # max_connections=100 and is now shared by the Langfuse app, the Langfuse worker
+      # and this apiserver, which opens more than one pool. An unbounded-by-default
+      # apiserver could exhaust the server's connection slots, and the visible symptom
+      # would be LANGFUSE failing to connect - a confusing place to start debugging.
+      # 10 is ample for a four-project portfolio.
+      DT_DATASOURCE_POOL_MAX_SIZE: "10"
       # By default DT generates a key encryption key (KEK) and writes it to a
-      # keyset file at ${user.home}/.dependency-track/keys/ inside the
-      # container filesystem. We have no volume mounted there, so every
-      # container recreation (image pull, version bump) would generate a new
-      # KEK and permanently fail to start against the existing encrypted
-      # secrets in Postgres. Setting the KEK explicitly makes it stable across
-      # recreations.
-      DT_SECRET_MANAGEMENT_DATABASE_KEK: ${DEPENDENCYTRACK_KEK}
+      # keyset file at ${user.home}/.dependency-track/keys/ - and the image sets
+      # HOME=/data/. When nothing was mounted at /data, every container
+      # recreation (image pull, version bump) generated a new KEK and then
+      # permanently failed to start against the existing encrypted secrets in
+      # Postgres. Setting the KEK explicitly is what actually makes it stable;
+      # the dependencytrack-data volume above now also persists the fallback
+      # keyset, but the pinned value in .env is the copy that gets backed up, so
+      # it stays required (hence the :? guard).
+      DT_SECRET_MANAGEMENT_DATABASE_KEK: ${DEPENDENCYTRACK_KEK:?set DEPENDENCYTRACK_KEK in .env}
       DT_OIDC_ENABLED: "true"
-      DT_OIDC_ISSUER: ${DEPENDENCYTRACK_OIDC_ISSUER}
-      DT_OIDC_CLIENT_ID: ${DEPENDENCYTRACK_OIDC_CLIENT_ID}
+      DT_OIDC_ISSUER: ${DEPENDENCYTRACK_OIDC_ISSUER:?set DEPENDENCYTRACK_OIDC_ISSUER in .env, with a trailing slash}
+      DT_OIDC_CLIENT_ID: ${DEPENDENCYTRACK_OIDC_CLIENT_ID:?set DEPENDENCYTRACK_OIDC_CLIENT_ID in .env}
       DT_OIDC_USERNAME_CLAIM: email
       DT_OIDC_TEAMS_CLAIM: https://simonrowe.dev/roles
       DT_OIDC_USER_PROVISIONING: "true"
@@ -429,8 +466,8 @@ services:
         condition: service_started
     environment:
       API_BASE_URL: https://dependency-track.simonrowe.dev
-      OIDC_ISSUER: ${DEPENDENCYTRACK_OIDC_ISSUER}
-      OIDC_CLIENT_ID: ${DEPENDENCYTRACK_OIDC_CLIENT_ID}
+      OIDC_ISSUER: ${DEPENDENCYTRACK_OIDC_ISSUER:?set DEPENDENCYTRACK_OIDC_ISSUER in .env, with a trailing slash}
+      OIDC_CLIENT_ID: ${DEPENDENCYTRACK_OIDC_CLIENT_ID:?set DEPENDENCYTRACK_OIDC_CLIENT_ID in .env}
       # MUST be set explicitly. The entrypoint assigns config via jq
       # unconditionally, and an unset variable becomes null - which silently
       # removes the OpenID login button with no error anywhere.
@@ -450,3 +487,6 @@ volumes:
   langfuse-clickhouse-logs:
   langfuse-redis-data:
   langfuse-minio-data:
+  # Dependency-Track's /data (HOME): Lucene indexes and analyzer working state.
+  # Persisted so container recreation does not trigger a full index rebuild.
+  dependencytrack-data:

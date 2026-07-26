@@ -79,6 +79,13 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   nginx resolved all upstream hostnames once at startup and aborted (`host not found in upstream`) if any of
   them were not running — that failure mode is what older incident reports referring to a "nginx restart gotcha"
   describe; it no longer applies.
+- **nginx's healthcheck must stay upstream-independent.** It hits `/healthz`, served by a `default_server`
+  block in `config/nginx/nginx-proxy.conf` that proxies to nothing. Do not point it back at `/`: with no
+  `default_server`, a `Host: localhost` request falls through to the first block (`simonrowe.dev`) and proxies
+  to `frontend`, so a stopped frontend marked nginx unhealthy — and because `pinggy` waits on nginx being
+  `service_healthy`, the tunnel never started and *every* public hostname, Portainer included, went offline.
+  Adding `default_server` does not change which block serves the five public hostnames: `server_name` matching
+  takes precedence, and the default block's `server_name _` cannot match a real `Host` header.
 - **`langfuse-db` (Postgres) is now a shared dependency of two tools**: it hosts both the
   `langfuse` database and, since Dependency-Track was added, a `dtrack` database (see
   `docs/runbooks/dependency-track.md`). Stopping or restarting `langfuse-db` takes down both
