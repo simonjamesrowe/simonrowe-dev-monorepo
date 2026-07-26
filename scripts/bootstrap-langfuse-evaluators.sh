@@ -37,6 +37,13 @@ set -euo pipefail
 #
 # Never point this at production while iterating: it creates/versions real Langfuse
 # resources and triggers real OpenAI spend.
+#
+# Output/failure behaviour:
+#   - Any non-2xx HTTP status aborts immediately, naming the endpoint and the code.
+#   - The llm-connections upsert prints its status only — never its body, which may echo
+#     the submitted key. Response bodies that are printed are scrubbed of secretKey/apiKey
+#     values and sk-* tokens as a second line of defence.
+#   - --list is read-only and prints the fetched JSON (those GETs return no secrets).
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -77,13 +84,57 @@ fi
 
 auth=(-u "${LANGFUSE_PUBLIC_KEY}:${LANGFUSE_SECRET_KEY}")
 
+# Defensive scrub applied to every response body before it reaches the terminal, even for
+# endpoints believed to return no credentials. Belt and braces alongside body suppression.
+redact() {
+  printf '%s' "$1" | sed -E \
+    -e 's/("secretKey"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"[REDACTED]"/g' \
+    -e 's/("secret_key"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"[REDACTED]"/g' \
+    -e 's/("apiKey"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"[REDACTED]"/g' \
+    -e 's/(sk-[A-Za-z0-9_-]{6})[A-Za-z0-9_-]+/\1[REDACTED]/g'
+}
+
+# api <method> <path> [json-body] [suppress-body]
+#
+# Aborts on any non-2xx HTTP status. `curl -sS` on its own only fails on transport errors,
+# so an expired key, wrong host or malformed payload would otherwise print an error body and
+# let the loop carry on announcing the next evaluator as though this one had succeeded.
+#
+# suppress-body=true prints only the status, never the body. Used for the llm-connections
+# upsert: it is not established whether Langfuse echoes the submitted secretKey back (masked
+# or raw), and that is treated as unsafe by default rather than assumed benign.
 api() {
-  local method="$1" path="$2" body="${3:-}"
+  local method="$1" path="$2" body="${3:-}" suppress="${4:-false}"
+  local response status payload
+  local -a args=(-sS -w '\n%{http_code}' -X "$method" "${auth[@]}")
+
   if [[ -n "$body" ]]; then
-    curl -sS -X "$method" "${auth[@]}" -H 'Content-Type: application/json' \
-      -d "$body" "${LANGFUSE_HOST}${path}"
+    args+=(-H 'Content-Type: application/json' -d "$body")
+  fi
+
+  if ! response="$(curl "${args[@]}" "${LANGFUSE_HOST}${path}")"; then
+    echo "ERROR: ${method} ${path} failed at the transport level (host unreachable?)." >&2
+    exit 1
+  fi
+
+  # -w appends the status on its own trailing line; everything before it is the body.
+  status="${response##*$'\n'}"
+  payload="${response%$'\n'*}"
+
+  if [[ ! "$status" =~ ^2[0-9][0-9]$ ]]; then
+    echo "ERROR: ${method} ${path} returned HTTP ${status}." >&2
+    if [[ "$suppress" == true ]]; then
+      echo "       Response body suppressed (may contain credentials)." >&2
+    else
+      printf '%s\n' "$(redact "$payload")" >&2
+    fi
+    exit 1
+  fi
+
+  if [[ "$suppress" == true ]]; then
+    echo "HTTP ${status} OK (response body suppressed — may echo the submitted key)."
   else
-    curl -sS -X "$method" "${auth[@]}" "${LANGFUSE_HOST}${path}"
+    printf '%s\n' "$(redact "$payload")"
   fi
 }
 
@@ -114,10 +165,16 @@ api PUT /api/public/llm-connections "$(cat <<JSON
   "withDefaultModels": true
 }
 JSON
-)"
+)" true
 echo
 
 # name|prompt. Each evaluator scores 0..1 and receives {{input}} and {{output}}.
+#
+# WARNING to future editors: these entries are split on the FIRST "|" only
+# (name="${entry%%|*}", prompt="${entry#*|}"). A literal "|" anywhere in a name, or a name
+# containing no "|" at all, will misparse silently. None of the four prompts below contain
+# one. If a prompt ever needs a pipe character, switch this to two parallel arrays or an
+# associative array rather than escaping it.
 evaluators=(
   "hallucination|Assess whether the assistant's answer is fully supported by the input context. Score 1.0 if every factual claim is grounded, 0.0 if the answer invents facts, links, job titles or blog posts. Input: {{input}} Output: {{output}}"
   "helpfulness|Assess how well the answer addresses what the visitor actually asked. Score 1.0 for a direct, complete, useful answer and 0.0 for an evasive or off-target one. Input: {{input}} Output: {{output}}"
