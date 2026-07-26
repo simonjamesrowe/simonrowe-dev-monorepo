@@ -352,6 +352,84 @@ services:
       LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-Simon Rowe}
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
 
+  # One-shot: create the Dependency-Track database and role inside the existing
+  # langfuse Postgres. The langfuse-db-data volume predates this service, so
+  # Postgres' own /docker-entrypoint-initdb.d scripts will never run again -
+  # this is the only way to add a database to an initialised cluster.
+  # Idempotent: safe to re-run on every `docker compose up`.
+  dependencytrack-db-init:
+    image: postgres:15
+    restart: "no"
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    environment:
+      PGHOST: langfuse-db
+      PGUSER: ${LANGFUSE_DB_USER:-postgres}
+      PGPASSWORD: ${LANGFUSE_DB_PASSWORD:-postgres}
+      DT_DB_PASSWORD: ${DEPENDENCYTRACK_DB_PASSWORD}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='dtrack'" | grep -q 1 || \
+          psql -c "CREATE ROLE dtrack LOGIN PASSWORD '$$DT_DB_PASSWORD'"
+        psql -tAc "SELECT 1 FROM pg_database WHERE datname='dtrack'" | grep -q 1 || \
+          psql -c "CREATE DATABASE dtrack OWNER dtrack"
+        echo "dependency-track database ready"
+
+  dependencytrack-apiserver:
+    image: dependencytrack/apiserver:5.0.3
+    restart: unless-stopped
+    depends_on:
+      dependencytrack-db-init:
+        condition: service_completed_successfully
+    # The image sets -XX:MaxRAMPercentage=80.0 with no fixed -Xmx, so the heap
+    # tracks this limit (~1.6GB here) and the remaining 20% covers off-heap
+    # memory, thread stacks and the OS. Do not use EXTRA_JAVA_OPTIONS to set
+    # -Xmx: it has a history of argument-parsing bugs, and a fixed heap equal to
+    # the cgroup limit is an OOMKill recipe.
+    #
+    # 2g matches the upstream Helm chart default for v5. The old 4GB startup
+    # gate was removed in 4.14.0; v5 documents 2GB as the starting point with a
+    # 1GB floor, and the project's own quickstart runs at 1Gi.
+    mem_limit: 2g
+    environment:
+      DT_DATASOURCE_URL: jdbc:postgresql://langfuse-db:5432/dtrack
+      DT_DATASOURCE_USERNAME: dtrack
+      DT_DATASOURCE_PASSWORD: ${DEPENDENCYTRACK_DB_PASSWORD}
+      DT_OIDC_ENABLED: "true"
+      DT_OIDC_ISSUER: ${DEPENDENCYTRACK_OIDC_ISSUER}
+      DT_OIDC_CLIENT_ID: ${DEPENDENCYTRACK_OIDC_CLIENT_ID}
+      DT_OIDC_USERNAME_CLAIM: email
+      DT_OIDC_TEAMS_CLAIM: https://simonrowe.dev/roles
+      DT_OIDC_USER_PROVISIONING: "true"
+      DT_OIDC_TEAM_SYNCHRONIZATION: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+
+  dependencytrack-frontend:
+    image: dependencytrack/frontend:5.0.3
+    restart: unless-stopped
+    depends_on:
+      dependencytrack-apiserver:
+        condition: service_started
+    environment:
+      API_BASE_URL: https://dependency-track.simonrowe.dev
+      OIDC_ISSUER: ${DEPENDENCYTRACK_OIDC_ISSUER}
+      OIDC_CLIENT_ID: ${DEPENDENCYTRACK_OIDC_CLIENT_ID}
+      # MUST be set explicitly. The entrypoint assigns config via jq
+      # unconditionally, and an unset variable becomes null - which silently
+      # removes the OpenID login button with no error anywhere.
+      OIDC_SCOPE: "openid profile email"
+      OIDC_FLOW: "code"
+      OIDC_LOGIN_BUTTON_TEXT: "Login with Auth0"
+
 volumes:
   mongodb-data:
   kafka-data:
