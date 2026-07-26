@@ -46,24 +46,29 @@ Two new services in `docker-compose.prod.yml`:
 
 | Service | Image | Notes |
 |---|---|---|
-| `dependencytrack-apiserver` | `dependencytrack/apiserver` | JVM API + analysis engine |
-| `dependencytrack-frontend` | `dependencytrack/frontend` | Static SPA |
+| `dependencytrack-apiserver` | `dependencytrack/apiserver:5.0.3` | JVM API + analysis engine |
+| `dependencytrack-frontend` | `dependencytrack/frontend:5.0.3` | Static SPA |
 
 Both listen on `8080` inside their own containers. Neither publishes a host port — all
 ingress is through nginx, matching how Portainer is handled today.
 
-**Memory tuning.** Dependency-Track's documented recommendation is ~4.5 GB for the API
-server. The Pi cannot spare that alongside MongoDB, Elasticsearch, Kafka, ClickHouse, MinIO,
-Redis, Postgres, two Langfuse containers, searxng, Alloy, Portainer and the application
-itself. The API server therefore gets an explicit JVM heap cap and a container `mem_limit`
-— the first resource limits in this compose file, which currently sets none.
+**Memory tuning.** Dependency-Track documents a 4 GB minimum heap. The Pi cannot spare that
+alongside MongoDB, Elasticsearch, Kafka, ClickHouse, MinIO, Redis, Postgres, two Langfuse
+containers, searxng, Alloy, Portainer and the application itself. The API server therefore
+gets a container `mem_limit` — the first resource limit in this compose file, which
+currently sets none. Because the image already defaults to `-XX:MaxRAMPercentage=90.0`, the
+limit constrains the heap on its own without needing the bug-prone `EXTRA_JAVA_OPTIONS`
+lever.
 
-Actual values are sized against real free memory on the Pi during implementation, not
-guessed here. The starting point is a ~1.5 GB heap under a 2 GB limit.
+Concrete values are deliberately **not** fixed here. See "Memory — unresolved" below: the
+gap between the documented 4 GB minimum and what the Pi can spare is a genuine go/no-go that
+must be closed before implementation starts. If it cannot be closed, the hosting decision
+is revisited.
 
-The trade-off is accepted and explicit: slower analysis, a much slower initial vulnerability
-database sync, and a risk that memory pressure causes the kernel OOM-killer to target a
-different container (Elasticsearch is the most likely victim, being the next-largest JVM).
+The trade-off, assuming it is viable, is accepted and explicit: slower analysis, a much
+slower initial vulnerability database sync, and a risk that memory pressure causes the
+kernel OOM-killer to target a different container (Elasticsearch is the most likely victim,
+being the next-largest JVM).
 
 ### Database
 
@@ -187,28 +192,144 @@ and Langfuse already have.
 
 | Risk | Severity | Mitigation |
 |---|---|---|
+| DT needs 4 GB heap and the Pi cannot spare it — the design is unbuildable as specified | **Blocking** | Resolve before implementation: establish the real working floor and actual free memory. Fall back to hosting off the Pi if it cannot be closed |
 | nginx refactor breaks the site and Portainer with no SSH recovery | **High** | `nginx -t` validation; full OrbStack dry-run before deploying |
-| Memory pressure OOM-kills another container | **High** | Explicit heap cap and `mem_limit`; size against real `free -m`; verify all containers healthy after the first NVD sync |
+| Memory pressure OOM-kills another container | **High** | `mem_limit` on the API server; size against real `free -m`; verify all containers healthy after the first vulnerability sync |
+| v5 config uses `DT_*`, but most documentation and examples online still show `ALPINE_*`, which fail silently | Medium | Variable names verified against ADR 018; documented in this spec |
 | OIDC misconfiguration locks out the UI | Medium | Local `admin` break-glass account retained |
 | First vulnerability-database sync saturates the Pi for hours | Medium | Deploy at a quiet time; expect degraded site performance during the initial sync |
 | `langfuse-db` becomes a shared point of failure | Medium | Accepted; documented here and in `CLAUDE.md` |
 | Silent SBOM upload failures | Low | Explicit logging and job summary |
 
-## Verification checklist
+## Verified implementation facts
 
-These must be confirmed against current upstream documentation during implementation rather
-than assumed:
+Confirmed against the Docker registry API, the GitHub releases API, the npm registry and
+current upstream documentation on 2026-07-26.
 
-- [ ] `dependencytrack/apiserver` and `dependencytrack/frontend` publish `linux/arm64`
-      images, and the current stable version is identified.
-- [ ] The exact environment variable names for OIDC on both containers, and for the heap cap
-      on the API server.
-- [ ] The exact Auth0 callback path Dependency-Track's frontend expects.
-- [ ] The correct Postgres connection environment variables and the minimum supported
-      Postgres version (must be satisfied by postgres:15).
-- [ ] The official SBOM upload GitHub Action and its current version.
-- [ ] The `@cyclonedx/cyclonedx-npm` package name, version and invocation.
-- [ ] The real free memory on the Pi, before choosing heap and limit values.
+### Versions
+
+| Component | Pinned version |
+|---|---|
+| `dependencytrack/apiserver` | `5.0.3` |
+| `dependencytrack/frontend` | `5.0.3` |
+| `DependencyTrack/gh-upload-sbom` | `v4.1.0` |
+| `@cyclonedx/cyclonedx-npm` | `6.0.0` |
+| `anchore/sbom-action` | `v0.24.0` |
+| CycloneDX Gradle plugin | `2.1.0` (already in `gradle/libs.versions.toml`) |
+
+Both Dependency-Track images publish `linux/arm64` on all current tags, so the Pi is
+supported.
+
+**Do not use `latest`.** On `dependencytrack/apiserver` it currently resolves to `4.14.3`,
+not the v5 line. Tags are pinned explicitly.
+
+**The `bundled` single-container image is v4-only** — its highest tag is `4.14.3`. Choosing
+v5 means the two-container split is mandatory, not a preference.
+
+v5.0.0 reached GA on 2026-06-07; 5.0.3 followed on 2026-07-20. v4.14.x remains maintained
+in parallel with an end-of-support around December 2026. There is no in-place v4→v5 upgrade
+path, which is the main reason a greenfield install starts on v5.
+
+### Database
+
+v5 is **PostgreSQL-only** (H2, MySQL and SQL Server were all dropped) and requires
+**PostgreSQL 14+**. The existing `langfuse-db` runs postgres:15, which satisfies this.
+
+### Configuration variables
+
+⚠️ **The API server's variable names changed completely in v5.** [ADR 018](https://github.com/DependencyTrack/dependency-track/blob/main/docs/adr/018-dissolve-alpine-config.md)
+replaced Alpine config with MicroProfile Config, renaming every `ALPINE_*` variable to
+`DT_*`. Most Dependency-Track material online — including much of the official docs site —
+still shows the v4 names, which silently do nothing on v5.
+
+| Purpose | v5 variable |
+|---|---|
+| OIDC enabled | `DT_OIDC_ENABLED` |
+| Issuer | `DT_OIDC_ISSUER` |
+| Client ID | `DT_OIDC_CLIENT_ID` |
+| Username claim | `DT_OIDC_USERNAME_CLAIM` |
+| User provisioning | `DT_OIDC_USER_PROVISIONING` |
+| Team synchronisation | `DT_OIDC_TEAM_SYNCHRONIZATION` |
+| Teams claim | `DT_OIDC_TEAMS_CLAIM` |
+| Default teams | `DT_OIDC_DEFAULT_TEAMS` (note the word-order change from v4's `ALPINE_OIDC_TEAMS_DEFAULT`) |
+
+The **frontend** variables are unchanged between v4 and v5: `API_BASE_URL`, `OIDC_ISSUER`,
+`OIDC_CLIENT_ID`, `OIDC_SCOPE`, `OIDC_FLOW`, `OIDC_LOGIN_BUTTON_TEXT`. There is no frontend
+enable flag — OIDC activates when issuer, client ID and scope are all truthy *and* the API
+server reports OIDC as available.
+
+### Three silent-failure traps
+
+All three fail with no error message, which matters disproportionately here because there is
+no local environment to debug in:
+
+1. **`OIDC_SCOPE` must be set explicitly.** The frontend entrypoint assigns config via `jq`
+   unconditionally, and an unset variable evaluates to `null` — so omitting it overwrites
+   the shipped default with `null`, and because the login button requires a truthy scope,
+   the button silently disappears. Set `OIDC_SCOPE=openid profile email`.
+2. **The Auth0 issuer needs its trailing slash.** Dependency-Track does a strict string
+   equality check against the discovery document, and Auth0 reports the issuer *with* a
+   trailing slash. Use `https://<tenant>.auth0.com/`. A mismatch makes
+   `/v1/oidc/available` return false and the login button never appears.
+3. **Register the full callback path, not just the origin.** The frontend redirects to
+   `https://dependency-track.simonrowe.dev/static/oidc-callback.html`. That exact path goes
+   in Auth0's Allowed Callback URLs; the bare origin goes in Allowed Web Origins and Allowed
+   Logout URLs. The official docs' Auth0 section understates this.
+
+Auth0 application type is **Single Page Application**.
+
+### Claims
+
+Since v4.3.0 Dependency-Track validates the **ID token** and prefers it over the
+`/userinfo` endpoint. The existing `Add roles to tokens` Action already sets the custom
+claim on both the ID and access tokens, so Auth0's opaque access tokens are not a problem
+here.
+
+`DT_OIDC_TEAMS_CLAIM` is set to `https://simonrowe.dev/roles`. The Dependency-Track team
+name **must match the claim value exactly, including case**, so the team is named
+`DEV_PORTAL_ADMIN`. `DT_OIDC_USERNAME_CLAIM` is set to `email`.
+
+### Memory — unresolved, and the main open risk
+
+The documented minimum heap is **4GB**, attributed to the ORM's level-2 cache being enabled
+by default. That is more than a Pi 4 has and most of a Pi 5's 8GB, on a host already running
+Elasticsearch, Kafka, ClickHouse, MongoDB, Redis, MinIO and two Langfuse containers.
+
+The container defaults to `-XX:MaxRAMPercentage=90.0`, so a `mem_limit` alone constrains the
+heap; `EXTRA_JAVA_OPTIONS` exists for an explicit `-Xmx` but has a history of parsing bugs
+and is the less reliable lever. Preferring `mem_limit` avoids that.
+
+Still unverified, and blocking final sizing:
+
+- [ ] The lowest heap v5 actually runs on, and what degrades below the documented minimum.
+- [ ] Whether v5's re-architecture moved the memory floor at all.
+- [ ] The v5 equivalent of v4's `ALPINE_DATANUCLEUS_CACHE_LEVEL2_TYPE=none` cache-disabling
+      workaround, and whether v5 still uses DataNucleus.
+- [ ] Actual free memory on the Pi.
+
+**If Dependency-Track cannot run in the memory the Pi can spare, the hosting decision has to
+be revisited before any code is written.** This is a genuine go/no-go, not a tuning detail.
+
+### Also unverified
+
+- [ ] The exact `gh-upload-sbom@v4.1.0` input schema (the v3 schema is known; v4 may differ).
+- [ ] v5 API key permission names and the upload endpoint verb.
+- [ ] First-run vulnerability mirror size, duration on ARM, and which sources can be
+      disabled to reduce it.
+
+### Frontend SBOM command
+
+```bash
+npx @cyclonedx/cyclonedx-npm@6 \
+  --package-lock-only \
+  --spec-version 1.6 \
+  --output-format JSON \
+  --output-file frontend-bom.json
+```
+
+`--package-lock-only` avoids needing `node_modules`. Note that `--omit dev` only applies
+automatically when `NODE_ENV=production`, so dev dependency inclusion must be set
+deliberately.
 
 ## Documentation to update on completion
 
