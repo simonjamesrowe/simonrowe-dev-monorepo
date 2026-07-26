@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test --project=local",
     "e2e:prod-smoke": "playwright test --project=prod-smoke",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "sbom": "cyclonedx-npm --package-lock-only --omit dev --spec-version 1.6 --output-format JSON --output-file bom.json"
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.15.0",
@@ -37,6 +38,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@cyclonedx/cyclonedx-npm": "^6.0.0",
     "@eslint/js": "^9.21.0",
     "@playwright/test": "^1.50.0",
     "@testing-library/jest-dom": "^6.6.3",
