@@ -11,7 +11,6 @@ import io.micrometer.tracing.handler.TracingObservationHandler;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,15 +40,18 @@ public class ChatTurnTracer {
 
   private final ObservationRegistry observationRegistry;
   private final GuardrailVerdictRegistry verdictRegistry;
+  private final ToolCallCounter toolCallCounter;
   private final LangfuseScoreClient scoreClient;
   private final LangfuseProperties properties;
 
   public ChatTurnTracer(final ObservationRegistry observationRegistry,
       final GuardrailVerdictRegistry verdictRegistry,
+      final ToolCallCounter toolCallCounter,
       final LangfuseScoreClient scoreClient,
       final LangfuseProperties properties) {
     this.observationRegistry = observationRegistry;
     this.verdictRegistry = verdictRegistry;
+    this.toolCallCounter = toolCallCounter;
     this.scoreClient = scoreClient;
     this.properties = properties;
   }
@@ -67,7 +69,6 @@ public class ChatTurnTracer {
     return Flux.defer(() -> {
       Observation observation = start(sessionId, message);
       StringBuilder answer = new StringBuilder();
-      AtomicInteger toolCalls = new AtomicInteger();
       AtomicBoolean failed = new AtomicBoolean();
 
       Flux<ChatResponse> stream;
@@ -79,18 +80,17 @@ public class ChatTurnTracer {
         // to close it: the span leaks and no scores are submitted. Rethrow afterwards, because
         // this is a chat failure and the subscriber must see it.
         recordError(observation, e);
-        finish(observation, sessionId, answer, toolCalls.get(), true);
+        finish(observation, sessionId, answer, true);
         throw e;
       }
 
       return stream
-          .doOnNext(response -> accumulate(response, answer, toolCalls))
+          .doOnNext(response -> accumulate(response, answer))
           .doOnError(error -> {
             failed.set(true);
             recordError(observation, error);
           })
-          .doFinally(signal ->
-              finish(observation, sessionId, answer, toolCalls.get(), failed.get()))
+          .doFinally(signal -> finish(observation, sessionId, answer, failed.get()))
           .contextWrite(context ->
               context.put(ObservationThreadLocalAccessor.KEY, observation));
     });
@@ -130,13 +130,15 @@ public class ChatTurnTracer {
     }
   }
 
-  private void accumulate(final ChatResponse response, final StringBuilder answer,
-      final AtomicInteger toolCalls) {
+  private void accumulate(final ChatResponse response, final StringBuilder answer) {
     if (response == null) {
       return;
     }
+    // Mirrors ChatController's own accumulation: a tool-call response is never the final answer
+    // the visitor saw, so it is excluded here too, keeping langfuse.trace.output equal to what
+    // was actually rendered. (Tool calls themselves are counted separately, at the point they
+    // are executed, by CountingToolCallingManager / ToolCallCounter.)
     if (response.hasToolCalls()) {
-      toolCalls.incrementAndGet();
       return;
     }
     if (response.getResult() != null && response.getResult().getOutput() != null) {
@@ -148,14 +150,14 @@ public class ChatTurnTracer {
   }
 
   private void finish(final Observation observation, final String sessionId,
-      final StringBuilder answer, final int toolCalls, final boolean failed) {
+      final StringBuilder answer, final boolean failed) {
     try {
       String text = textOf(answer);
       observation.highCardinalityKeyValue(LangfuseAttributes.TRACE_OUTPUT,
           nullSafe(LangfuseAttributes.truncate(text)));
       String traceId = traceIdOf(observation);
       observation.stop();
-      scoreClient.submit(traceId, scoresFor(sessionId, text, toolCalls, failed));
+      scoreClient.submit(traceId, scoresFor(sessionId, text, failed));
     } catch (Exception e) {
       LOG.warn("Failed to finalise chat turn observation for session {}", sessionId, e);
     }
@@ -177,13 +179,13 @@ public class ChatTurnTracer {
   }
 
   private List<LangfuseScore> scoresFor(final String sessionId, final String answer,
-      final int toolCalls, final boolean failed) {
+      final boolean failed) {
     List<LangfuseScore> scores = new ArrayList<>();
     String verdict = verdictRegistry.takeVerdict(sessionId);
     if (verdict != null) {
       scores.add(LangfuseScore.categorical("guardrail", verdict));
     }
-    scores.add(LangfuseScore.numeric("tool-call-count", toolCalls));
+    scores.add(LangfuseScore.numeric("tool-call-count", toolCallCounter.takeCount(sessionId)));
     scores.add(LangfuseScore.bool("error", failed));
     scores.add(LangfuseScore.bool("empty-answer", answer.isBlank()));
     return scores;

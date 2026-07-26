@@ -3,6 +3,7 @@ package com.simonrowe.chat;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -34,6 +35,7 @@ class ChatTurnTracerTest {
 
   private TestObservationRegistry observationRegistry;
   private GuardrailVerdictRegistry verdictRegistry;
+  private ToolCallCounter toolCallCounter;
   private LangfuseScoreClient scoreClient;
   private StopRecorder stopRecorder;
   private ChatTurnTracer tracer;
@@ -44,10 +46,12 @@ class ChatTurnTracerTest {
     stopRecorder = new StopRecorder();
     observationRegistry.observationConfig().observationHandler(stopRecorder);
     verdictRegistry = new GuardrailVerdictRegistry();
+    toolCallCounter = new ToolCallCounter();
     scoreClient = mock(LangfuseScoreClient.class);
     LangfuseProperties properties = new LangfuseProperties();
     properties.setEnvironment("test");
-    tracer = new ChatTurnTracer(observationRegistry, verdictRegistry, scoreClient, properties);
+    tracer = new ChatTurnTracer(
+        observationRegistry, verdictRegistry, toolCallCounter, scoreClient, properties);
   }
 
   /**
@@ -235,21 +239,21 @@ class ChatTurnTracerTest {
   }
 
   @Test
-  void submitsToolCallCount() {
-    ChatResponse toolCall = ChatResponse.builder()
-        .generations(List.of(new Generation(
-            AssistantMessage.builder()
-                .content("")
-                .properties(java.util.Map.of())
-                .toolCalls(
-                    List.of(new AssistantMessage.ToolCall("id", "function", "getJobs", "{}")))
-                .build())))
-        .build();
+  void submitsToolCallCountFromTheToolCallCounterAndConsumesIt() {
+    // The production pipeline never emits a tool-call ChatResponse to the subscriber (see
+    // CountingToolCallingManager's Javadoc), so the count is seeded the way it is actually
+    // produced: via ToolCallCounter, populated at tool-execution time.
+    toolCallCounter.increment("session-1", 2);
 
-    tracer.trace("session-1", "Jobs?", streamOf(toolCall, responseWith("Here they are")))
-        .blockLast();
+    tracer.trace("session-1", "Jobs?", streamOf(responseWith("Here they are"))).blockLast();
 
-    assertThat(submittedScores()).contains(LangfuseScore.numeric("tool-call-count", 1));
+    // A second turn for the same session must not see the first turn's count again.
+    tracer.trace("session-1", "Anything else?", streamOf(responseWith("Nope"))).blockLast();
+
+    List<List<LangfuseScore>> submissions = allSubmittedScores();
+    assertThat(submissions).hasSize(2);
+    assertThat(submissions.get(0)).contains(LangfuseScore.numeric("tool-call-count", 2));
+    assertThat(submissions.get(1)).contains(LangfuseScore.numeric("tool-call-count", 0));
   }
 
   @SuppressWarnings("unchecked")
@@ -257,5 +261,12 @@ class ChatTurnTracerTest {
     ArgumentCaptor<List<LangfuseScore>> captor = ArgumentCaptor.forClass(List.class);
     verify(scoreClient).submit(any(), captor.capture());
     return captor.getValue();
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<List<LangfuseScore>> allSubmittedScores() {
+    ArgumentCaptor<List<LangfuseScore>> captor = ArgumentCaptor.forClass(List.class);
+    verify(scoreClient, atLeastOnce()).submit(any(), captor.capture());
+    return captor.getAllValues();
   }
 }
