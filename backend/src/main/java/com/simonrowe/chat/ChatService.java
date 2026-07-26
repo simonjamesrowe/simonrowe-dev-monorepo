@@ -1,6 +1,5 @@
 package com.simonrowe.chat;
 
-import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,26 +18,28 @@ public class ChatService {
 
   private final ChatClient chatClient;
   private final ChatMemory chatMemory;
+  private final ChatTurnTracer turnTracer;
   private final ConcurrentHashMap<String, Instant> sessionActivity =
       new ConcurrentHashMap<>();
 
-  public ChatService(final ChatClient chatClient, final ChatMemory chatMemory) {
+  public ChatService(final ChatClient chatClient, final ChatMemory chatMemory,
+      final ChatTurnTracer turnTracer) {
     this.chatClient = chatClient;
     this.chatMemory = chatMemory;
+    this.turnTracer = turnTracer;
   }
 
-  @WithSpan
   public Flux<ChatResponse> processMessage(
       final String sessionId, final String message) {
     sessionActivity.put(sessionId, Instant.now());
     LOG.info("Processing message for session: {}", sessionId);
 
-    return Flux.defer(() -> chatClient.prompt()
-          .user(message)
-          .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
-          .toolContext(Map.of("sessionId", sessionId))
-          .stream()
-          .chatResponse());
+    return turnTracer.trace(sessionId, message, () -> chatClient.prompt()
+        .user(message)
+        .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
+        .toolContext(Map.of("sessionId", sessionId))
+        .stream()
+        .chatResponse());
   }
 
   public ConcurrentHashMap<String, Instant> getSessionActivity() {
