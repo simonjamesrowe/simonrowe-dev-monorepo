@@ -21,14 +21,20 @@ public class ChatSessionCleanupService {
 
   private final ChatService chatService;
   private final ChatContactTracker contactTracker;
+  private final GuardrailVerdictRegistry verdictRegistry;
+  private final ToolCallCounter toolCallCounter;
   private final long maxInactiveMinutes;
 
   public ChatSessionCleanupService(
       final ChatService chatService,
       final ChatContactTracker contactTracker,
+      final GuardrailVerdictRegistry verdictRegistry,
+      final ToolCallCounter toolCallCounter,
       @Value("${chat.session.max-inactive-minutes:30}") final long maxInactiveMinutes) {
     this.chatService = chatService;
     this.contactTracker = contactTracker;
+    this.verdictRegistry = verdictRegistry;
+    this.toolCallCounter = toolCallCounter;
     this.maxInactiveMinutes = maxInactiveMinutes;
   }
 
@@ -48,6 +54,8 @@ public class ChatSessionCleanupService {
       staleIds.forEach(id -> {
         chatService.evictSession(id);
         contactTracker.clearSession(id);
+        verdictRegistry.clearSession(id);
+        toolCallCounter.clearSession(id);
       });
     }
   }

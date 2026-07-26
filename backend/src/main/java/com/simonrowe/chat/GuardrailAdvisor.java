@@ -10,6 +10,7 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -54,9 +55,12 @@ public class GuardrailAdvisor implements CallAdvisor, StreamAdvisor {
           + "Output ONLY ONE WORD: 'SAFE', 'OFF_TOPIC', or 'HARMFUL'.\n\nInput: <input>";
 
   private final ChatModel chatModel;
+  private final GuardrailVerdictRegistry verdictRegistry;
 
-  public GuardrailAdvisor(ChatModel chatModel) {
+  public GuardrailAdvisor(final ChatModel chatModel,
+      final GuardrailVerdictRegistry verdictRegistry) {
     this.chatModel = chatModel;
+    this.verdictRegistry = verdictRegistry;
   }
 
   static String classificationPrompt(final String userText) {
@@ -73,18 +77,23 @@ public class GuardrailAdvisor implements CallAdvisor, StreamAdvisor {
     return 0; // Highest precedence
   }
 
-  @Override
-  public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
+  /**
+   * Classifies the request and records the verdict for scoring. Returns null when the input
+   * cannot be classified or the classifier fails, which callers treat as "proceed" — the gate
+   * fails open by design.
+   *
+   * @param request the inbound chat request
+   * @return SAFE, OFF_TOPIC, HARMFUL, or null to proceed without a verdict
+   */
+  private String classify(final ChatClientRequest request) {
     String userText = null;
     if (request.prompt() != null && request.prompt().getUserMessage() != null) {
       userText = request.prompt().getUserMessage().getText();
     }
-
     if (userText == null || userText.isBlank()) {
-      return chain.nextCall(request);
+      return null;
     }
 
-    String classification;
     try {
       ChatResponse classificationResponse = chatModel.call(
           new Prompt(classificationPrompt(userText),
@@ -95,64 +104,52 @@ public class GuardrailAdvisor implements CallAdvisor, StreamAdvisor {
       if (classificationResponse == null || classificationResponse.getResult() == null
           || classificationResponse.getResult().getOutput() == null
           || classificationResponse.getResult().getOutput().getText() == null) {
-        return chain.nextCall(request);
+        return null;
       }
-      classification =
+      String classification =
           classificationResponse.getResult().getOutput().getText().trim().toUpperCase();
+      verdictRegistry.record(conversationId(request), classification);
+      return classification;
     } catch (Exception e) {
       log.warn("Error calling classification model in GuardrailAdvisor. Failing open.", e);
-      return chain.nextCall(request);
+      return null;
     }
+  }
 
-    if (classification.contains("OFF_TOPIC") || classification.contains("HARMFUL")) {
-      ChatResponse pivotResponse =
-          new ChatResponse(List.of(new Generation(new AssistantMessage(PIVOT_MESSAGE))));
-      return new ChatClientResponse(
-          pivotResponse, request.context() != null ? request.context() : new HashMap<>());
+  private static String conversationId(final ChatClientRequest request) {
+    if (request.context() == null) {
+      return null;
     }
+    Object id = request.context().get(ChatMemory.CONVERSATION_ID);
+    return id instanceof String value ? value : null;
+  }
 
+  private static boolean isBlocked(final String classification) {
+    return classification != null
+        && (classification.contains("OFF_TOPIC") || classification.contains("HARMFUL"));
+  }
+
+  private static ChatClientResponse pivotResponse(final ChatClientRequest request) {
+    ChatResponse response =
+        new ChatResponse(List.of(new Generation(new AssistantMessage(PIVOT_MESSAGE))));
+    return new ChatClientResponse(
+        response, request.context() != null ? request.context() : new HashMap<>());
+  }
+
+  @Override
+  public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
+    if (isBlocked(classify(request))) {
+      return pivotResponse(request);
+    }
     return chain.nextCall(request);
   }
 
   @Override
   public Flux<ChatClientResponse> adviseStream(
       ChatClientRequest request, StreamAdvisorChain chain) {
-    String userText = null;
-    if (request.prompt() != null && request.prompt().getUserMessage() != null) {
-      userText = request.prompt().getUserMessage().getText();
+    if (isBlocked(classify(request))) {
+      return Flux.just(pivotResponse(request));
     }
-
-    if (userText == null || userText.isBlank()) {
-      return chain.nextStream(request);
-    }
-
-    String classification;
-    try {
-      ChatResponse classificationResponse = chatModel.call(
-          new Prompt(classificationPrompt(userText),
-              OpenAiChatOptions.builder()
-                  .model("gpt-4o-mini")
-                  .temperature(0.0)
-                  .build()));
-      if (classificationResponse == null || classificationResponse.getResult() == null
-          || classificationResponse.getResult().getOutput() == null
-          || classificationResponse.getResult().getOutput().getText() == null) {
-        return chain.nextStream(request);
-      }
-      classification =
-          classificationResponse.getResult().getOutput().getText().trim().toUpperCase();
-    } catch (Exception e) {
-      log.warn("Error calling classification model in GuardrailAdvisor (stream). Failing open.", e);
-      return chain.nextStream(request);
-    }
-
-    if (classification.contains("OFF_TOPIC") || classification.contains("HARMFUL")) {
-      ChatResponse pivotResponse =
-          new ChatResponse(List.of(new Generation(new AssistantMessage(PIVOT_MESSAGE))));
-      return Flux.just(new ChatClientResponse(
-          pivotResponse, request.context() != null ? request.context() : new HashMap<>()));
-    }
-
     return chain.nextStream(request);
   }
 }

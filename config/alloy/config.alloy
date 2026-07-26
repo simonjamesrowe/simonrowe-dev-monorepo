@@ -40,17 +40,18 @@ otelcol.processor.batch "default" {
 // ---------------------
 // AI-only Filter (Langfuse)
 // ---------------------
-// Keep ONLY Spring AI spans for Langfuse. Every Spring AI model observation carries the
-// OpenTelemetry GenAI attributes gen_ai.operation.name + gen_ai.system (from Spring AI's
-// AiObservationAttributes), and tool-call observations carry spring.ai.kind. Any span with
-// none of these is HTTP/Mongo/manual-@WithSpan noise, so it is dropped. filter.traces.span
-// lists DROP conditions (a span is dropped when its OTTL expression is true).
+// Keep ONLY Spring AI spans and the backend's chat-turn span. Spring AI model observations
+// carry gen_ai.operation.name + gen_ai.system; tool-call observations carry spring.ai.kind.
+// The chat-turn span (com.simonrowe.chat.ChatTurnTracer) carries langfuse.trace.name and is
+// the ONLY carrier of session.id and langfuse.trace.input/output — drop it and every Langfuse
+// trace reverts to "shallow": unnamed, sessionless, with empty input and output.
+// filter.traces.span lists DROP conditions (a span is dropped when its OTTL expression is true).
 otelcol.processor.filter "ai_only" {
 	error_mode = "ignore"
 
 	traces {
 		span = [
-			"attributes[\"gen_ai.operation.name\"] == nil and attributes[\"gen_ai.system\"] == nil and attributes[\"spring.ai.kind\"] == nil",
+			"attributes[\"gen_ai.operation.name\"] == nil and attributes[\"gen_ai.system\"] == nil and attributes[\"spring.ai.kind\"] == nil and attributes[\"langfuse.trace.name\"] == nil",
 		]
 	}
 

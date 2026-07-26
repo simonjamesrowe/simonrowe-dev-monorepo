@@ -2,14 +2,20 @@ package com.simonrowe.chat;
 
 import com.simonrowe.mcp.ProfileMcpTools;
 import com.simonrowe.webfetch.UrlFetcher;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
+import org.springframework.ai.tool.observation.ToolCallingObservationConvention;
+import org.springframework.ai.tool.resolution.ToolCallbackResolver;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,15 +44,40 @@ public class ChatConfig {
     return new UrlFetcher(maxChars, timeoutSeconds);
   }
 
+  /**
+   * Overrides the autoconfigured {@link ToolCallingManager} so tool calls can be counted for
+   * {@code tool-call-count} Langfuse scoring. {@code ToolCallingAutoConfiguration}'s own bean
+   * method is {@code @ConditionalOnMissingBean}, so defining this bean makes Spring AI back off
+   * in favour of it rather than both being registered.
+   *
+   * <p>The delegate is built exactly as the autoconfiguration builds its own bean, so this must
+   * be kept in sync with Spring AI's {@code ToolCallingAutoConfiguration} across upgrades.
+   */
+  @Bean
+  public ToolCallingManager toolCallingManager(final ToolCallbackResolver toolCallbackResolver,
+      final ToolExecutionExceptionProcessor toolExecutionExceptionProcessor,
+      final ObjectProvider<ObservationRegistry> observationRegistry,
+      final ObjectProvider<ToolCallingObservationConvention> observationConvention,
+      final ToolCallCounter toolCallCounter) {
+    var toolCallingManager = ToolCallingManager.builder()
+        .observationRegistry(observationRegistry.getIfUnique(() -> ObservationRegistry.NOOP))
+        .toolCallbackResolver(toolCallbackResolver)
+        .toolExecutionExceptionProcessor(toolExecutionExceptionProcessor)
+        .build();
+    observationConvention.ifAvailable(toolCallingManager::setObservationConvention);
+    return new CountingToolCallingManager(toolCallingManager, toolCallCounter);
+  }
+
   @Bean
   public ChatClient chatClient(final ChatClient.Builder builder,
       final ChatMemory chatMemory, final ProfileMcpTools profileMcpTools,
       final WebSearchTools webSearchTools, final FetchUrlTools fetchUrlTools,
-      final VectorStore vectorStore, final ChatModel chatModel) {
+      final VectorStore vectorStore, final ChatModel chatModel,
+      final GuardrailVerdictRegistry verdictRegistry) {
     return builder
         .defaultSystem(systemPrompt + "\n\n" + widgetPromptGuidance())
         .defaultAdvisors(
-            new GuardrailAdvisor(chatModel),
+            new GuardrailAdvisor(chatModel, verdictRegistry),
             MessageChatMemoryAdvisor.builder(chatMemory).build(),
             ContextAwareQuestionAnswerAdvisor.builder(vectorStore, chatMemory)
                 .searchRequest(SearchRequest.builder()

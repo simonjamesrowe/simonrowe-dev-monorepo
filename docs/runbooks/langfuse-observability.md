@@ -71,11 +71,60 @@ model price in Langfuse (Settings → Models) if you want the **cost** figure po
    It queries the Langfuse public API with the project keys and confirms a matching trace
    exists. Read-only.
 
+## Purging trace data
+
+Langfuse data-retention policies are enterprise-gated, so there is no scheduled deletion. To
+wipe a project's traces, delete the project in the UI and let the bootstrap recreate it — the
+idempotent `LANGFUSE_INIT_*` block restores the org, project, admin membership and the **same
+fixed project keys**, so Alloy's OTLP basic auth keeps matching with no key copying.
+
+1. Langfuse UI → project settings → Delete project.
+2. Restart Langfuse so the bootstrap runs:
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d langfuse
+   ```
+3. Confirm the project is back with the same keys: `scripts/verify-langfuse-trace.sh`.
+
+**Do not restart nginx** as part of this. It resolves all four upstreams at startup and aborts
+if any is down, which would also take Portainer offline.
+
 ## Notes
 
-- Content capture (prompt/completion text) is **off by default** — gen_ai spans are exported
-  but visitor chat text is not stored, for privacy. See the commented block in
-  `backend/src/main/resources/application.yml` to enable temporarily (verify the exact
-  Spring AI 1.1.4 property names first).
+- **Content capture is ON** (decision 2026-07-26, reversing 2026-07-17). Visitor chat text —
+  including recruiter-pasted job specs and contact-form details — is stored in Langfuse.
+  Toggle with `LANGFUSE_CONTENT_CAPTURE_ENABLED`. Setting it to `false` is a **complete**
+  off-switch: it gates both our `LangfuseContentObservationFilter` and Spring AI's own
+  `spring.ai.tools.observations.include-content`. Both must stay bound to it — Spring AI's filter
+  writes tool arguments as span attributes independently of ours, and those include the contact
+  form's name, email, subject and message.
+- **"No scores in Langfuse?" check the startup log first.** `LangfuseScoreClient` logs exactly once
+  at boot whether score submission is enabled, and if not, whether that is because
+  `LANGFUSE_SCORES_ENABLED=false` or because `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` are
+  missing. Submission itself is silent — it is a per-turn hot path.
+- Scores carry `environment` (from `LANGFUSE_ENVIRONMENT`) to match the `langfuse.environment` on
+  their trace. Without it, scores file under `default` and environment-filtered dashboards read
+  empty.
+- `spring.ai.chat.observations.log-prompt` / `log-completion` **do not work** for this purpose
+  and never did. Verified in Spring AI 1.1.8 source: `ChatModelPromptContentObservationHandler`
+  only calls `logger.info()`, and `AiObservationAttributes` has no prompt/completion constant,
+  so `gen_ai.prompt` / `gen_ai.completion` are never emitted as span attributes at any 1.x or
+  2.x version. Content capture is done by `com.simonrowe.observability.LangfuseContentObservationFilter`.
+- **Traces are named and grouped into Sessions by the `chat-turn` span**
+  (`com.simonrowe.chat.ChatTurnTracer`), which carries `session.id`, `langfuse.trace.name` and
+  `langfuse.trace.input`/`.output`. Langfuse's `hasTraceUpdates()` applies these to the trace
+  even though the span is not the trace root — the HTTP root is still dropped by `ai_only`.
+  If the chat-turn span is ever filtered out, every trace reverts to shallow: unnamed,
+  sessionless and empty.
+- **⚠️ `config/alloy/config.alloy` is bind-mounted from the deploy directory.** Merging to
+  `main` does NOT update it. The deploy dir must be `git pull`ed *and* Alloy restarted. This is
+  why the `ai_only` filter appeared broken for two days after shipping on 2026-07-23 — it only
+  took effect at the 2026-07-25 restart. Same trap as the frontend `nginx.conf`.
+- **`POST /api/public/otel` is not a useful v2-vs-v3 probe** — it returns **404 on both**
+  Langfuse v3 and v2, so a 404 there tells you nothing about which version is running. The real
+  OTLP ingest path is `POST /api/public/otel/v1/traces`, which returns **401** without auth
+  credentials; that 401 (not a 404) is the proof the route exists. Despite this, do **not** add
+  `/v1/traces` to the exporter endpoint in `config/alloy/config.alloy` — `otelcol.exporter.otlphttp`
+  appends `/v1/traces` itself, so the configured `http://langfuse:3000/api/public/otel` is
+  already correct, and appending the suffix there would double the path and break ingest.
 - Init is idempotent: leaving `LANGFUSE_INIT_*` in place is safe and keeps observability
   working across redeploys and volume resets.

@@ -25,12 +25,19 @@ class ChatSessionCleanupServiceTest {
   @Mock
   private ChatContactTracker contactTracker;
 
+  @Mock
+  private GuardrailVerdictRegistry verdictRegistry;
+
+  @Mock
+  private ToolCallCounter toolCallCounter;
+
   private ChatSessionCleanupService cleanupService;
 
   @BeforeEach
   void setUp() {
     cleanupService = new ChatSessionCleanupService(
-        chatService, contactTracker, DEFAULT_MAX_INACTIVE_MINUTES);
+        chatService, contactTracker, verdictRegistry, toolCallCounter,
+        DEFAULT_MAX_INACTIVE_MINUTES);
   }
 
   @Test
@@ -48,6 +55,8 @@ class ChatSessionCleanupServiceTest {
     verify(chatService).evictSession("stale-session-2");
     verify(contactTracker).clearSession("stale-session-1");
     verify(contactTracker).clearSession("stale-session-2");
+    verify(toolCallCounter).clearSession("stale-session-1");
+    verify(toolCallCounter).clearSession("stale-session-2");
   }
 
   @Test
@@ -101,8 +110,11 @@ class ChatSessionCleanupServiceTest {
     final long maxInactiveMinutes = 5;
     final ChatService localChatService = mock(ChatService.class);
     final ChatContactTracker localTracker = mock(ChatContactTracker.class);
-    final ChatSessionCleanupService shortTimeoutService =
-        new ChatSessionCleanupService(localChatService, localTracker, maxInactiveMinutes);
+    final GuardrailVerdictRegistry localVerdictRegistry = mock(GuardrailVerdictRegistry.class);
+    final ToolCallCounter localToolCallCounter = mock(ToolCallCounter.class);
+    final ChatSessionCleanupService shortTimeoutService = new ChatSessionCleanupService(
+        localChatService, localTracker, localVerdictRegistry, localToolCallCounter,
+        maxInactiveMinutes);
 
     final ConcurrentHashMap<String, Instant> sessionActivity = new ConcurrentHashMap<>();
     sessionActivity.put("stale-under-5min",
