@@ -399,6 +399,14 @@ services:
       DT_DATASOURCE_URL: jdbc:postgresql://langfuse-db:5432/dtrack
       DT_DATASOURCE_USERNAME: dtrack
       DT_DATASOURCE_PASSWORD: ${DEPENDENCYTRACK_DB_PASSWORD}
+      # By default DT generates a key encryption key (KEK) and writes it to a
+      # keyset file at ${user.home}/.dependency-track/keys/ inside the
+      # container filesystem. We have no volume mounted there, so every
+      # container recreation (image pull, version bump) would generate a new
+      # KEK and permanently fail to start against the existing encrypted
+      # secrets in Postgres. Setting the KEK explicitly makes it stable across
+      # recreations.
+      DT_SECRET_MANAGEMENT_DATABASE_KEK: ${DEPENDENCYTRACK_KEK}
       DT_OIDC_ENABLED: "true"
       DT_OIDC_ISSUER: ${DEPENDENCYTRACK_OIDC_ISSUER}
       DT_OIDC_CLIENT_ID: ${DEPENDENCYTRACK_OIDC_CLIENT_ID}
