@@ -80,6 +80,10 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_METRICS_EXPORTER: none
       OTEL_LOGS_EXPORTER: none
+      # Copies the langfuse.session.id baggage entry (set in ChatService.processMessage) onto
+      # every span created while it's current, including the gen_ai.* spans Spring AI emits -
+      # that's what lets Langfuse populate its Sessions view for chat traces.
+      OTEL_JAVA_EXPERIMENTAL_SPAN_ATTRIBUTES_COPY_FROM_BAGGAGE_INCLUDE: "langfuse.session.id"
       # Emit one-line JSON (Elastic Common Schema) to stdout so Alloy/Loki can
       # ingest and query structured fields (trace.id/span.id included for correlation).
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
