@@ -89,6 +89,14 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 030-langfuse-sessions-content-evals: `chat-turn` Micrometer observation carries `session.id` +
+  `langfuse.trace.input`/`.output` (fixes empty Sessions and shallow traces);
+  `LangfuseContentObservationFilter` writes prompt/completion span attributes (Spring AI's
+  `log-prompt`/`log-completion` only log, they never set attributes); `LangfuseScoreClient`
+  posts guardrail/tool-count/error/empty-answer scores; Alloy `ai_only` keep-list gains
+  `langfuse.trace.name`; local Langfuse upgraded to v3 with an Alloy traces pipeline;
+  `scripts/bootstrap-langfuse-evaluators.sh` provisions LLM-as-a-judge. Spring Boot 3.5.16,
+  Spring AI 1.1.8, OTel instrumentation 2.30.0.
 - 029-favourite-news-events: Added Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.9 (web, security OAuth2 resource server, data-mongodb), `@auth0/auth0-react` (adds `loginWithPopup` usage), Lucide React `Heart` icon. No new dependencies.
 - 028-chat-ontopic-web-search: Added Java 21 (backend only) + Spring Boot 3.5.x, Spring AI 1.1.4 (OpenAI SDK starter + `@Tool`),
 - 027-mcp-page: Added TypeScript 5.x (frontend); Java 21 / Spring Boot 3.5.x (backend — MCP server config + ToolCallbackProvider) + React (latest stable), React Router v7, Vite, Vitest, Lucide React; Spring AI 1.1.4 `spring-ai-starter-mcp-server-webmvc` (existing)
