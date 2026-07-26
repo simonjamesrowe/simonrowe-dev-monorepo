@@ -2429,11 +2429,16 @@ Start the backend against the local stack, pointing it at the local Alloy and en
 
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 export LANGFUSE_HOST=http://localhost:3000
 export LANGFUSE_ENVIRONMENT=development
 export LANGFUSE_SCORES_ENABLED=true
 ./scripts/start.sh
 ```
+
+`OTEL_EXPORTER_OTLP_PROTOCOL=grpc` is required, not optional — production sets it. Without it the
+OpenTelemetry starter defaults to `http/protobuf`, and every export silently fails against
+Alloy's gRPC receiver on `4317`.
 
 Open `http://localhost:5173`, open the ASK AI panel and ask an **on-topic** question that forces a tool call, e.g. *"What jobs has Simon had with Kafka?"*. An off-topic question is answered by `GuardrailAdvisor` with a fixed pivot and produces no main generation.
 
@@ -2460,7 +2465,13 @@ curl -s -u "$LANGFUSE_PUBLIC_KEY:$LANGFUSE_SECRET_KEY" \
   | python3 -c "import json,sys; d=json.load(sys.stdin); \
 print([(s['name'], s.get('value'), s.get('stringValue')) for s in d['data']])"
 ```
-Expected: trace names are only `chat-turn`, `chat …`, `spring_ai chat_client`, `tool_call …`, `embedding …` — **no** `security filterchain`, `http get`, or `elasticsearch query`. Scores include `guardrail`, `tool-call-count`, `error` and `empty-answer`.
+Expected: trace names are `chat-turn`, `chat …`, `spring_ai chat_client`, `tool_call …`,
+`embedding …` and `elasticsearch query` — **no** `security filterchain` or `http get`.
+`elasticsearch query` is Spring AI's vector-store span (carries `spring.ai.kind=vector_store`) and
+the `ai_only` keep-list keeps it correctly; it is not noise, so do not treat its presence as a
+filter regression (it may still appear as its own orphaned root trace — that is the span-orphaning
+defect tracked in the design spec §11, not an `ai_only` problem). Scores include `guardrail`,
+`tool-call-count`, `error` and `empty-answer`.
 
 - [ ] **Step 9: Open the UI and confirm Sessions is populated**
 

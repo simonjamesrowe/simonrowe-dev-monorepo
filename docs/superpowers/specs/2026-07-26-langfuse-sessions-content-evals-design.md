@@ -480,10 +480,16 @@ if any is down, which would also take Portainer offline.
 
 ## 7. Risks
 
-### 7.1 Streaming completion capture — RESOLVED, no longer a risk
+### 7.1 Streaming completion capture — wrongly closed as resolved; confirmed open defect
 
-An earlier draft flagged this as the design's main unknown. It has since been verified in source
-and is **confirmed to work**.
+An earlier draft flagged this as the design's main unknown. It was closed early on the strength of
+a source reading, which concluded there was no risk, and the planned verification spike was
+deleted as unnecessary on that basis. **The end-to-end proof (plan Task 11) disproved it: this is
+now a confirmed open defect (Defect A — see §11).** The original reasoning is kept below, unedited,
+because the mistake is the useful part of the record: a source reading is not a substitute for
+executing the code.
+
+**What was believed:**
 
 `OpenAiSdkChatModel.internalStream` calls `observationContext.setResponse(aggregated)`
 *synchronously inside the stream body*, while `.doOnError(observation::error)` and
@@ -496,7 +502,30 @@ Spring AI's own `OpenAiChatModelObservationIT.observationForStreamingChatOperati
 this — it asserts `gen_ai.usage.*`, `gen_ai.response.id` and `gen_ai.response.finish_reasons` on a
 *stopped* streaming observation, and every one of those is derived from `context.getResponse()`.
 
-No spike is needed.
+The conclusion drawn from this reading was "No spike is needed." **That conclusion was wrong.**
+
+**What the end-to-end run actually showed:**
+
+In a real `chat-turn` trace, both `chat gpt-5.4-nano` GENERATION observations carry `input`
+populated and `output` null. The non-streaming guardrail generation (`chat gpt-4o-mini`) captures
+both input and output correctly, so `LangfuseContentObservationFilter` itself is not at fault —
+only the streaming path is affected.
+
+A temporary log statement in the filter (added to diagnose this, since reverted) established why:
+at `ObservationFilter` time, the `ChatResponse` on the `ChatModelObservationContext` **is**
+present, but has one result with **zero-length text**. `doFinally(observation.stop())` in fact runs
+**upstream** of the `MessageAggregator` that assembles the full streamed text and calls
+`setResponse` with the complete aggregate — the opposite ordering from what the source reading
+concluded. The cited IT doesn't catch this because it asserts usage/id/finish-reason metadata,
+none of which requires the aggregated text to be present; it never asserts on the completion text
+itself.
+
+**Impact — genuinely limited:** the LLM-as-a-judge evaluators (§4.8) map from `object: "trace"`
+fields, not per-generation ones, and trace-level `langfuse.trace.output` **is** correctly
+populated by `ChatTurnTracer` — confirmed by the same end-to-end run (§11). So this defect costs
+per-generation debugging detail in the Langfuse UI, not evaluator function or Sessions.
+
+**Status: open.** No fix has been attempted. See §11 for the full write-up and the fix direction.
 
 ### 7.2 Attribute size
 
@@ -600,3 +629,63 @@ what shipped, and why.
   used for this — the evaluator bootstrap creates real resources and incurs real OpenAI spend.
   End-to-end trace verification therefore remains a manual UI inspection, as it was before this
   branch. This is outstanding work, not a decision.
+
+### Known open defects (found by the Task 11 end-to-end proof)
+
+Recorded here, not minimized or deleted, because the branch must not ship a spec asserting a
+defect is resolved when it is not. Both were found by actually running the stack end to end —
+neither was visible from source reading alone, which is itself the lesson of §7.1.
+
+**Defect A — streaming generation output is never captured.** In a `chat-turn` trace, both
+`chat gpt-5.4-nano` GENERATION observations show `input` present and `output` null. The
+non-streaming guardrail generation (`chat gpt-4o-mini`) captures both correctly, so
+`LangfuseContentObservationFilter` itself works — only the streaming path loses output. Root
+cause, confirmed with a temporary (since reverted) log statement: at `ObservationFilter` time the
+`ChatResponse` on the context has one result but zero-length text, because
+`doFinally(observation.stop())` runs upstream of the `MessageAggregator` that assembles the full
+streamed text and calls `setResponse`. Full account, including the wrong source-reading reasoning
+that originally closed this as resolved, is in §7.1. **Impact is limited**: the LLM-as-a-judge
+evaluators map from `object: "trace"` fields, and trace-level `langfuse.trace.output` is correctly
+populated by `ChatTurnTracer`, so this costs per-generation debugging detail, not evaluator
+function or Sessions. Status: open, no fix attempted.
+
+**Defect B — span orphaning.** One chat turn produces roughly 6–7 Langfuse traces instead of one:
+measured 19 traces from 3 chat turns (16 orphans + 3 `chat-turn`). `tool_call`, `embedding` and
+the vector-store span (`elasticsearch query`, which carries `spring.ai.kind=vector_store` — see
+the correction below) lose the observation context across `Schedulers.boundedElastic` and become
+their own root traces with `sessionId` null. The `chat-turn` trace itself correctly nests all 8
+observations that stay on the synchronous part of the chain (`spring_ai chat_client`, `guardrail`,
+the memory and QA advisors, and both generations), so Reactor-context propagation works throughout
+the synchronous path and is lost only where Spring AI hops schedulers. **Impact:** cosmetic
+clutter in the Langfuse UI, and the orphaned traces carry no session; Sessions itself is
+unaffected, because the `chat-turn` trace is correctly grouped. **The real fix is restoring
+observation context across `Schedulers.boundedElastic`**, not filtering by trace name in tooling —
+a name filter would hide the orphans from view without un-orphaning them or giving them a session.
+Status: open, no fix attempted.
+
+**Correction — `elasticsearch query` is not noise.** The plan's Task 11 end-to-end verification
+step treated `elasticsearch query` as noise the `ai_only` filter should drop, in the same category
+as `security filterchain` and `http get` (§1.1's "All time" row lists all three together as
+historical pre-fix noise, but that row is about traces from before the `ai_only` filter existed at
+all — it does not claim `elasticsearch query` should disappear afterwards). **The Task 11
+expectation was wrong.** `elasticsearch query` is Spring AI's vector-store span, carrying
+`spring.ai.kind=vector_store`, and the `ai_only` keep-list (§4.6) keeps anything carrying
+`spring.ai.kind` — correctly. The filter was never broken here; the expected-trace-name list used
+to verify it was. `elasticsearch query` traces are expected and correct; their appearance as their
+own root traces is Defect B (orphaning), not an `ai_only` regression. (The plan document has been
+corrected to match.)
+
+### Confirmed working (the same end-to-end proof)
+
+So the above reads as a balanced account rather than a list of failures — the following was
+verified by actually sending a chat message through the local stack, not merely designed:
+
+- The `chat-turn` trace has a name, a non-null `sessionId`, and both `langfuse.trace.input` and
+  `langfuse.trace.output` populated.
+- All four deterministic scores land on the trace: `guardrail=SAFE`, `tool-call-count=4`
+  (non-zero, proving `CountingToolCallingManager` counts real tool rounds rather than reporting the
+  dead-code zero described in §4.5), `error=False`, `empty-answer=False`.
+- Tool-call observations carry both input and output.
+- Generation `input` is captured correctly — Defect A above is an output-only loss.
+- No `security filterchain` or `http get` trace noise reached Langfuse: the `ai_only` fix in §1.1
+  holds under real traffic.
