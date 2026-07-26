@@ -25,12 +25,15 @@ class ChatSessionCleanupServiceTest {
   @Mock
   private ChatContactTracker contactTracker;
 
+  @Mock
+  private GuardrailVerdictRegistry verdictRegistry;
+
   private ChatSessionCleanupService cleanupService;
 
   @BeforeEach
   void setUp() {
     cleanupService = new ChatSessionCleanupService(
-        chatService, contactTracker, DEFAULT_MAX_INACTIVE_MINUTES);
+        chatService, contactTracker, verdictRegistry, DEFAULT_MAX_INACTIVE_MINUTES);
   }
 
   @Test
@@ -101,8 +104,9 @@ class ChatSessionCleanupServiceTest {
     final long maxInactiveMinutes = 5;
     final ChatService localChatService = mock(ChatService.class);
     final ChatContactTracker localTracker = mock(ChatContactTracker.class);
-    final ChatSessionCleanupService shortTimeoutService =
-        new ChatSessionCleanupService(localChatService, localTracker, maxInactiveMinutes);
+    final GuardrailVerdictRegistry localVerdictRegistry = mock(GuardrailVerdictRegistry.class);
+    final ChatSessionCleanupService shortTimeoutService = new ChatSessionCleanupService(
+        localChatService, localTracker, localVerdictRegistry, maxInactiveMinutes);
 
     final ConcurrentHashMap<String, Instant> sessionActivity = new ConcurrentHashMap<>();
     sessionActivity.put("stale-under-5min",

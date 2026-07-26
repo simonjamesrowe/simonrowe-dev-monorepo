@@ -42,11 +42,12 @@ public class ChatConfig {
   public ChatClient chatClient(final ChatClient.Builder builder,
       final ChatMemory chatMemory, final ProfileMcpTools profileMcpTools,
       final WebSearchTools webSearchTools, final FetchUrlTools fetchUrlTools,
-      final VectorStore vectorStore, final ChatModel chatModel) {
+      final VectorStore vectorStore, final ChatModel chatModel,
+      final GuardrailVerdictRegistry verdictRegistry) {
     return builder
         .defaultSystem(systemPrompt + "\n\n" + widgetPromptGuidance())
         .defaultAdvisors(
-            new GuardrailAdvisor(chatModel),
+            new GuardrailAdvisor(chatModel, verdictRegistry),
             MessageChatMemoryAdvisor.builder(chatMemory).build(),
             ContextAwareQuestionAnswerAdvisor.builder(vectorStore, chatMemory)
                 .searchRequest(SearchRequest.builder()
