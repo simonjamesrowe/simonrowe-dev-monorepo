@@ -1,0 +1,52 @@
+// =============================================================================
+// Grafana Alloy — LOCAL development configuration
+//
+// Traces only. Receives OTLP from the backend running on the host and forwards the AI spans
+// to the local Langfuse. Deliberately contains NO Loki writer and NO Docker log discovery:
+// local container logs must not be shipped to Grafana Cloud.
+//
+// Prod uses config/alloy/config.alloy instead. Keep the ai_only filter in the two files
+// identical — it is the thing under test locally.
+// =============================================================================
+
+otelcol.receiver.otlp "default" {
+	grpc {
+		endpoint = "0.0.0.0:4317"
+	}
+
+	output {
+		traces = [otelcol.processor.batch.default.input]
+	}
+}
+
+otelcol.processor.batch "default" {
+	output {
+		traces = [otelcol.processor.filter.ai_only.input]
+	}
+}
+
+otelcol.processor.filter "ai_only" {
+	error_mode = "ignore"
+
+	traces {
+		span = [
+			"attributes[\"gen_ai.operation.name\"] == nil and attributes[\"gen_ai.system\"] == nil and attributes[\"spring.ai.kind\"] == nil and attributes[\"langfuse.trace.name\"] == nil",
+		]
+	}
+
+	output {
+		traces = [otelcol.exporter.otlphttp.langfuse.input]
+	}
+}
+
+otelcol.auth.basic "langfuse" {
+	username = sys.env("LANGFUSE_PUBLIC_KEY")
+	password = sys.env("LANGFUSE_SECRET_KEY")
+}
+
+otelcol.exporter.otlphttp "langfuse" {
+	client {
+		endpoint = "http://langfuse:3000/api/public/otel"
+		auth     = otelcol.auth.basic.langfuse.handler
+	}
+}
