@@ -289,26 +289,54 @@ here.
 name **must match the claim value exactly, including case**, so the team is named
 `DEV_PORTAL_ADMIN`. `DT_OIDC_USERNAME_CLAIM` is set to `email`.
 
-### Memory — unresolved, and the main open risk
+### Memory — resolved
 
-The documented minimum heap is **4GB**, attributed to the ORM's level-2 cache being enabled
-by default. That is more than a Pi 4 has and most of a Pi 5's 8GB, on a host already running
-Elasticsearch, Kafka, ClickHouse, MongoDB, Redis, MinIO and two Langfuse containers.
+The 4 GB figure that shaped the original design **no longer applies**. It was a hard startup
+gate in the API server (`RequirementsVerifier`), removed in 4.14.0 by
+[PR #5058](https://github.com/DependencyTrack/dependency-track/pull/5058): "the previous
+system requirements are no longer accurate."
 
-The container defaults to `-XX:MaxRAMPercentage=90.0`, so a `mem_limit` alone constrains the
-heap; `EXTRA_JAVA_OPTIONS` exists for an explicit `-Xmx` but has a history of parsing bugs
-and is the less reliable lever. Preferring `mem_limit` avoids that.
+The requirement moved in three steps, which is why stale figures are everywhere:
 
-Still unverified, and blocking final sizing:
+| Version | Documented minimum |
+|---|---|
+| 4.13 and earlier | 4.5 GB RAM, plus a hard `-Xmx4G` startup gate |
+| 4.14.x | 2 GB RAM, gate removed |
+| 5.0.x | 2 GB / 4 cores starting point; below 1 GB "unlikely to sustain any meaningful load" |
 
-- [ ] The lowest heap v5 actually runs on, and what degrades below the documented minimum.
-- [ ] Whether v5's re-architecture moved the memory floor at all.
-- [ ] The v5 equivalent of v4's `ALPINE_DATANUCLEUS_CACHE_LEVEL2_TYPE=none` cache-disabling
-      workaround, and whether v5 still uses DataNucleus.
-- [ ] Actual free memory on the Pi.
+The upstream v5 Helm chart defaults to 2Gi and its quickstart runs the API server at 1Gi. The
+API server therefore gets `mem_limit: 2g` — at the documented starting point, not below a
+minimum.
 
-**If Dependency-Track cannot run in the memory the Pi can spare, the hosting decision has to
-be revisited before any code is written.** This is a genuine go/no-go, not a tuning detail.
+The image sets `-XX:MaxRAMPercentage=80.0` with no fixed `-Xmx`, so the heap tracks the
+container limit and the remaining 20% covers off-heap memory, thread stacks and the OS.
+`EXTRA_JAVA_OPTIONS` is deliberately not used: it has a history of argument-parsing bugs, and
+a fixed `-Xmx` equal to the cgroup limit leaves nothing for non-heap memory.
+
+Note the Docker Hub overview page for `dependencytrack/apiserver` still shows the v4-era
+"4.5GB minimum" text while serving v5 images. It is stale.
+
+### Postgres is the real constraint
+
+Upstream's v5 production guide asks for 8 GB / 4 cores for the database, says not to go below
+4 GB / 2 cores "even for evaluation workloads", and says to run it on a **dedicated host**
+because co-locating it with the API server makes them compete for CPU, memory and I/O.
+
+This design co-locates it on a shared Pi Postgres that also serves Langfuse — precisely what
+that guidance warns against. Accepted for a four-project portfolio, with two things to watch
+after deployment:
+
+- **Disk growth is unbounded by default.** `DEPENDENCYMETRICS_*` uses daily partitions; one
+  operator saw Postgres grow ~50 GB → ~500 GB in a month on a large portfolio
+  ([discussion #6711](https://github.com/DependencyTrack/dependency-track/discussions/6711)).
+  Four projects should be negligible, but the Pi's disk is finite — check a week in, not just
+  on day one.
+- **CPU contention** between Postgres, Elasticsearch and the API server on four ARM cores is
+  the likeliest cause of the site feeling slow.
+
+**Honest caveat:** no v5 result on Raspberry Pi–class hardware has been published by anyone
+outside the project. The 1Gi/2Gi figures are maintainer defaults, not independently
+validated.
 
 ### Also unverified
 

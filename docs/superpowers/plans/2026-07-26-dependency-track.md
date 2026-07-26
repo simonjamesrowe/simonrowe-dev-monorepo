@@ -286,12 +286,16 @@ Note the `$$DT_DB_PASSWORD` — the doubled `$` escapes Compose's own variable i
     depends_on:
       dependencytrack-db-init:
         condition: service_completed_successfully
-    # The image defaults to -XX:MaxRAMPercentage=90.0, so this limit caps the
-    # JVM heap at ~2.7GB without needing EXTRA_JAVA_OPTIONS (which has a history
-    # of argument-parsing bugs). Upstream documents a 4GB minimum; this runs
-    # deliberately below it, trading analysis speed for coexistence with
-    # Elasticsearch, Kafka, ClickHouse and MongoDB on the same host.
-    mem_limit: 3g
+    # The image sets -XX:MaxRAMPercentage=80.0 with no fixed -Xmx, so the heap
+    # tracks this limit (~1.6GB here) and the remaining 20% covers off-heap
+    # memory, thread stacks and the OS. Do not use EXTRA_JAVA_OPTIONS to set
+    # -Xmx: it has a history of argument-parsing bugs, and a fixed heap equal to
+    # the cgroup limit is an OOMKill recipe.
+    #
+    # 2g matches the upstream Helm chart default for v5. The old 4GB startup
+    # gate was removed in 4.14.0; v5 documents 2GB as the starting point with a
+    # 1GB floor, and the project's own quickstart runs at 1Gi.
+    mem_limit: 2g
     environment:
       DT_DATASOURCE_URL: jdbc:postgresql://langfuse-db:5432/dtrack
       DT_DATASOURCE_USERNAME: dtrack
@@ -994,6 +998,15 @@ Any OOM kill in that output means `mem_limit` on `dependencytrack-apiserver` is 
 
 ## Open risk carried into implementation
 
-Upstream documents a **4 GB minimum heap**; this plan runs the API server under a 3 GB limit. Simon has confirmed the Pi has the RAM, but the *behaviour* below the documented minimum is unverified — the failure mode would be OOM or stalled analysis during the first vulnerability mirror, not a clean error at startup.
+**The heap risk is largely resolved.** The 4 GB figure that shaped the original design was a hard startup gate in the API server, removed in 4.14.0 by [PR #5058](https://github.com/DependencyTrack/dependency-track/pull/5058) on the grounds that "the previous system requirements are no longer accurate." v5's production guide gives **2 GB memory / 4 CPU cores as the starting point** and states that below 1 GB an instance is unlikely to sustain load. The upstream Helm chart defaults to 2Gi and the quickstart runs at 1Gi. This plan's `mem_limit: 2g` is therefore at the documented starting point, not below a minimum.
 
-Task 2 Step 6 and the deployment memory check are where this surfaces. If the API server is OOM-killed during the initial sync, the levers in order of preference are: raise `mem_limit` if the host allows it, disable vulnerability sources that are not needed, or move Dependency-Track off the Pi.
+**PostgreSQL is now the binding constraint, and the plan knowingly violates upstream guidance.** The v5 production guide says to run the database on 8 GB / 4 cores, "do not go below 4 GB and 2 cores even for evaluation workloads," to use a **dedicated host**, and to prefer NVMe. This plan co-locates it on a shared Pi Postgres instance that also serves Langfuse — explicitly the thing the guide warns against.
+
+That is an accepted trade for a four-project portfolio, but two things must be watched after deployment:
+
+1. **Disk growth.** `DEPENDENCYMETRICS_*` uses daily partitions. One operator reported Postgres growing from ~50 GB to ~500 GB in a month on a large portfolio ([discussion #6711](https://github.com/DependencyTrack/dependency-track/discussions/6711)). Four projects should be negligible by comparison, but the growth is unbounded by default and the Pi's disk is not. Check `df -h` and the `dtrack` database size a week after deployment, not just on day one.
+2. **CPU contention.** Postgres competing with Elasticsearch and the API server on four ARM cores is the likeliest cause of a slow-feeling site.
+
+**Honest caveat:** nobody outside the project has published a v5 result on Raspberry Pi–class hardware. The 1Gi/2Gi figures are maintainer defaults, not independently validated, and the Docker Hub overview page still shows stale v4-era requirements ("4.5GB minimum") — do not be alarmed by that page, but do not trust it either.
+
+If the API server is OOM-killed during the initial vulnerability mirror, the levers in order of preference are: raise `mem_limit` if the host allows it, disable vulnerability sources that are not needed, then move Dependency-Track off the Pi.
