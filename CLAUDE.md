@@ -67,13 +67,29 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - **Single `nginx:alpine` reverse proxy** (`config/nginx/nginx-proxy.conf`) fronts every public hostname:
   `www/simonrowe.dev → frontend:80`, `api.simonrowe.dev → backend:8080`,
   `console.simonrowe.dev → portainer:9000` (Portainer has **no** published port — only reachable through nginx),
-  `langfuse.simonrowe.dev → langfuse:3000`.
-- **⚠️ nginx restart gotcha:** the proxy conf uses static `proxy_pass http://<name>` with **no `resolver`**,
-  so nginx resolves all four upstream hostnames at startup and aborts (`host not found in upstream`) if any
-  upstream container is not running. A long-running nginx tolerates a downed upstream at runtime (returns 502),
-  but **restarting** nginx while any of `frontend`/`backend`/`portainer`/`langfuse` is stopped/`created` will fail
-  to boot — and since Portainer is behind the same nginx, that also takes the management UI offline. Before
-  restarting prod nginx, confirm all four upstreams are running.
+  `langfuse.simonrowe.dev → langfuse:3000`, `dependency-track.simonrowe.dev → dependencytrack-frontend:8080`
+  (with `/api/` routed to `dependencytrack-apiserver:8080`).
+- **nginx resolves upstreams at runtime, not just at boot** (fixed in commit `62d26cc`): the proxy conf sets
+  `resolver 127.0.0.11 valid=10s ipv6=off;` (Docker's embedded DNS) and every `proxy_pass` target is a variable
+  (e.g. `set $upstream_frontend frontend; proxy_pass http://$upstream_frontend:80;`), which forces nginx to defer
+  DNS resolution instead of caching it at startup. As a result, **nginx now boots regardless of which upstreams
+  are running**, and simply returns `502` for any hostname whose upstream is down or not yet started — restarting
+  nginx no longer risks taking the whole stack (including Portainer, which sits behind the same nginx) offline.
+  Historical context: before this fix, the proxy conf used static `proxy_pass http://<name>` with no resolver, so
+  nginx resolved all upstream hostnames once at startup and aborted (`host not found in upstream`) if any of
+  them were not running — that failure mode is what older incident reports referring to a "nginx restart gotcha"
+  describe; it no longer applies.
+- **nginx's healthcheck must stay upstream-independent.** It hits `/healthz`, served by a `default_server`
+  block in `config/nginx/nginx-proxy.conf` that proxies to nothing. Do not point it back at `/`: with no
+  `default_server`, a `Host: localhost` request falls through to the first block (`simonrowe.dev`) and proxies
+  to `frontend`, so a stopped frontend marked nginx unhealthy — and because `pinggy` waits on nginx being
+  `service_healthy`, the tunnel never started and *every* public hostname, Portainer included, went offline.
+  Adding `default_server` does not change which block serves the five public hostnames: `server_name` matching
+  takes precedence, and the default block's `server_name _` cannot match a real `Host` header.
+- **`langfuse-db` (Postgres) is now a shared dependency of two tools**: it hosts both the
+  `langfuse` database and, since Dependency-Track was added, a `dtrack` database (see
+  `docs/runbooks/dependency-track.md`). Stopping or restarting `langfuse-db` takes down both
+  Langfuse and Dependency-Track, not just Langfuse.
 - **Recover a downed/partial stack** from the deploy directory: `docker compose -f docker-compose.prod.yml up -d`
   (reconciles containers stuck in `created`, respecting `depends_on` ordering). Minimal alternative:
   `docker start simonrowe-dev-monorepo-langfuse-1 && docker start simonrowe-dev-monorepo-nginx-1`.
@@ -118,7 +134,6 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - There is a management-port mismatch between environments: `docker-compose.prod.yml` sets `MANAGEMENT_SERVER_PORT: 8081`, while `application.yml` defaults `management.server.port` to `8082`; local health checks should target `8082` unless an env override is in effect.
 - The README's backup/restore instructions are stale: `scripts/create-backup.sh`, `scripts/restore-backup.sh`, and `scripts/migrate-strapi-data.js` no longer exist in the repo — use `scripts/backup.sh` and `scripts/restore.sh` instead.
 - The backend exposes a self-redeploy endpoint, `POST /api/admin/data-operations/redeploy`, which pulls the backend, frontend, and nginx images and restarts the backend container via an ephemeral `docker:cli` helper container (since the backend can't safely recreate its own running container).
-- Never restart prod nginx unless all four upstreams (frontend, backend, portainer, langfuse) are running — this is duplicated here deliberately, as it is the highest-cost gotcha in the stack.
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
