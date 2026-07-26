@@ -84,6 +84,7 @@ Auth0 does not include role names in tokens by default. Add an Action:
      // Deny access to protected applications unless user has DEV_PORTAL_ADMIN role
      const protectedClientIds = [
        event.secrets.LANGFUSE_CLIENT_ID, // Langfuse application
+       event.secrets.DEPENDENCY_TRACK_CLIENT_ID, // Dependency-Track application
      ];
      if (protectedClientIds.includes(event.client.client_id)) {
        if (!roles.includes('DEV_PORTAL_ADMIN')) {
@@ -94,9 +95,16 @@ Auth0 does not include role names in tokens by default. Add an Action:
    ```
 
    > **Secrets configuration:** In the Action editor, go to the **Secrets** tab
-   > (lock icon) and add `LANGFUSE_CLIENT_ID` with the Client ID of the Langfuse
-   > application created in the [Langfuse SSO](#langfuse-single-sign-on-sso) section.
-   > This avoids hardcoding the Client ID in the Action code.
+   > (lock icon) and add:
+   >
+   > - `LANGFUSE_CLIENT_ID` — Client ID of the Langfuse application created in the
+   >   [Langfuse SSO](#langfuse-single-sign-on-sso) section.
+   > - `DEPENDENCY_TRACK_CLIENT_ID` — Client ID of the Dependency-Track application
+   >   created in the [Dependency-Track SSO](#dependency-track-single-sign-on-sso) section.
+   >
+   > This avoids hardcoding Client IDs in the Action code. A secret referenced in the
+   > code but not defined here evaluates to `undefined`, which silently drops that
+   > application out of `protectedClientIds` — so the deny check stops applying to it.
 
 4. Click **Deploy**.
 5. **Actions** → **Flows** → **Login** → drag the new Action into the flow → **Apply**.
@@ -236,3 +244,106 @@ the Post-Login Action in [step 5c](#5c-add-a-post-login-action-that-injects-role
 > **Note:** Users without the `DEV_PORTAL_ADMIN` role will see an
 > "Access denied" error from Auth0 when attempting to log into Langfuse.
 > Assign the role per [step 5b](#5b-assign-the-role-to-your-admin-user).
+
+## Dependency-Track Single Sign-On (SSO)
+
+Dependency-Track uses its own native OIDC support (not a proxy), against this same Auth0
+tenant and the same `DEV_PORTAL_ADMIN` role. Both the API server and the SPA are configured
+from `.env` — see `docker-compose.prod.yml` and `docs/runbooks/dependency-track.md`.
+
+Every step here is human-gated: none of it can be automated from the repo.
+
+1. In the Auth0 Dashboard, go to **Applications** > **Applications**.
+2. Click **Create Application**.
+3. Set the name to **Dependency-Track** and select **Single Page Application**.
+   (Not "Regular Web Application" — unlike Langfuse, the Dependency-Track SPA runs the
+   authorization-code flow in the browser with no client secret.)
+4. Click **Create**.
+5. Go to the **Settings** tab.
+6. In **Allowed Callback URLs**, add the **full callback path**, not just the origin:
+   - `https://dependency-track.simonrowe.dev/static/oidc-callback.html`
+
+   > ⚠️ This is the single most common way to get stuck. The SPA redirects to
+   > `/static/oidc-callback.html` (a static asset, deliberately routed to the frontend
+   > container rather than the API server). Registering only the origin
+   > `https://dependency-track.simonrowe.dev` produces an Auth0 callback-mismatch error
+   > after an otherwise successful login. The official Dependency-Track docs understate this.
+
+7. In **Allowed Logout URLs**, add:
+   - `https://dependency-track.simonrowe.dev`
+8. In **Allowed Web Origins**, add:
+   - `https://dependency-track.simonrowe.dev`
+9. Click **Save Changes** at the bottom.
+10. Copy the **Client ID** and **Domain** from the top of the Settings tab. (There is no
+    client secret to copy for an SPA, and Dependency-Track does not need one.)
+11. Add the Dependency-Track Client ID as a secret in the **Add roles to tokens** Action, so
+    users without `DEV_PORTAL_ADMIN` are rejected by Auth0 before reaching Dependency-Track:
+    - Go to **Actions** → **Library** → open `Add roles to tokens`
+    - Click the **Secrets** tab (lock icon)
+    - Add key `DEPENDENCY_TRACK_CLIENT_ID` with the Client ID from step 10
+    - Confirm the Action's `protectedClientIds` array includes it, following the existing
+      `LANGFUSE_CLIENT_ID` pattern (see
+      [step 5c](#5c-add-a-post-login-action-that-injects-roles-into-the-tokens)):
+
+      ```js
+      const protectedClientIds = [
+        event.secrets.LANGFUSE_CLIENT_ID, // Langfuse application
+        event.secrets.DEPENDENCY_TRACK_CLIENT_ID, // Dependency-Track application
+      ];
+      ```
+
+    - Click **Deploy** to save
+12. Add these to your `.env` file (they are consumed by both the `dependencytrack-apiserver`
+    and `dependencytrack-frontend` services):
+    - `DEPENDENCYTRACK_OIDC_ISSUER` — `https://YOUR_DOMAIN/` — **the trailing slash is
+      required.** Dependency-Track does a strict string comparison against the `issuer` field
+      of Auth0's discovery document, which always ends in `/`. Without it,
+      `/api/v1/oidc/available` returns `false` and the login button silently never renders.
+      Confirm the exact value Auth0 serves:
+
+      ```bash
+      curl -s "https://YOUR_DOMAIN/.well-known/openid-configuration" | grep -o '"issuer":"[^"]*"'
+      ```
+
+    - `DEPENDENCYTRACK_OIDC_CLIENT_ID` — the Client ID from step 10.
+
+    Both are declared in `docker-compose.prod.yml` with compose's required-variable syntax, so
+    a missing or empty value fails `docker compose` immediately rather than producing a broken
+    deployment. (`DEPENDENCYTRACK_DB_PASSWORD` and `DEPENDENCYTRACK_KEK` are also required, but
+    are not Auth0 concerns — see the runbook.)
+
+13. **Create the Dependency-Track team.** Log in to Dependency-Track with the local
+    break-glass `admin` account and go to
+    **Administration → Access Management → Teams → Create Team**:
+    - Name the team **exactly** `DEV_PORTAL_ADMIN` — uppercase, underscores, no spaces. It
+      must match the value inside the `https://simonrowe.dev/roles` claim byte-for-byte,
+      because Dependency-Track maps claim values onto team names by exact string match. A
+      near-miss (`Dev_Portal_Admin`, `dev_portal_admin`) maps the user into no team at all, so
+      they log in successfully and see nothing.
+    - Grant it administrative permissions (at minimum `SYSTEM_CONFIGURATION`,
+      `ACCESS_MANAGEMENT`, `PORTFOLIO_MANAGEMENT`, `VIEW_PORTFOLIO`,
+      `VIEW_VULNERABILITY` — or all permissions, for a single-operator install).
+
+14. **Verify.** Dependency-Track reports whether it considers OIDC usable:
+
+    ```bash
+    curl -s https://dependency-track.simonrowe.dev/api/v1/oidc/available
+    ```
+
+    Expect `true`. If it returns `false`, the issuer is wrong (step 12) — the SPA hides the
+    login button entirely rather than showing an error. Then log in via
+    **Login with Auth0** and confirm you land in the portfolio with admin navigation visible.
+
+> ⚠️ **Team synchronisation reconciles on every login.** The API server runs with
+> `DT_OIDC_TEAM_SYNCHRONIZATION: "true"`, which means Dependency-Track re-derives each user's
+> team membership from the `https://simonrowe.dev/roles` claim **on every single login** — it
+> does not merely add teams. If that claim is missing or empty in the ID token (the
+> `Add roles to tokens` Action undeployed, dropped from the Login flow, or the user's role
+> unassigned), then teams you assigned by hand in the Dependency-Track UI are **stripped** at
+> their next login. The symptom is access that worked yesterday being gone today, with
+> re-assigning the team "fixing" it only until the next login. Fix the claim, not the team.
+
+> **Note:** Users without the `DEV_PORTAL_ADMIN` role will see an "Access denied" error from
+> Auth0 when attempting to log into Dependency-Track, exactly as with Langfuse — provided
+> step 11 was completed. The local `admin` account is unaffected and remains the break-glass
+> path if OIDC is misconfigured.
