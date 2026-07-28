@@ -315,19 +315,70 @@ Every step here is human-gated: none of it can be automated from the repo.
     deployment. (`DEPENDENCYTRACK_DB_PASSWORD` and `DEPENDENCYTRACK_KEK` are also required, but
     are not Auth0 concerns — see the runbook.)
 
-13. **Create the Dependency-Track team.** Log in to Dependency-Track with the local
-    break-glass `admin` account and go to
-    **Administration → Access Management → Teams → Create Team**:
-    - Name the team **exactly** `DEV_PORTAL_ADMIN` — uppercase, underscores, no spaces. It
-      must match the value inside the `https://simonrowe.dev/roles` claim byte-for-byte,
-      because Dependency-Track maps claim values onto team names by exact string match. A
-      near-miss (`Dev_Portal_Admin`, `dev_portal_admin`) maps the user into no team at all, so
-      they log in successfully and see nothing.
-    - Grant it administrative permissions (at minimum `SYSTEM_CONFIGURATION`,
-      `ACCESS_MANAGEMENT`, `PORTFOLIO_MANAGEMENT`, `VIEW_PORTFOLIO`,
-      `VIEW_VULNERABILITY` — or all permissions, for a single-operator install).
+13. **Create the OIDC group, the team, and the mapping between them.** Log in to
+    Dependency-Track with the local break-glass `admin` account.
 
-14. **Verify.** Dependency-Track reports whether it considers OIDC usable:
+    > ⚠️ Dependency-Track does **not** match claim values against team names. Creating a team
+    > called `DEV_PORTAL_ADMIN` and stopping there produces "Login succeeded, but you don't
+    > seem to have any permissions yet" — the exact symptom this step exists to avoid. There
+    > are three objects and you need all of them:
+    >
+    > ```text
+    > Auth0 claim value  →  OpenID Connect Group  →  mapping  →  Team  →  permissions
+    >    DEV_PORTAL_ADMIN     name must match             you create      name is
+    >                         byte-for-byte               this link       arbitrary
+    > ```
+
+    a. **Administration → Access Management → OpenID Connect Groups → Create Group.** Name it
+       **exactly** `DEV_PORTAL_ADMIN` — uppercase, underscores, no spaces. *This* is the name
+       that must equal the `https://simonrowe.dev/roles` claim value byte-for-byte, including
+       case. A near-miss (`Dev_Portal_Admin`, `dev_portal_admin`) matches nothing and the user
+       lands in no team at all, silently.
+
+    b. **Administration → Access Management → Teams → Create Team.** The team name is
+       arbitrary and is *not* matched against anything; `DEV_PORTAL_ADMIN` is a sensible
+       choice purely for legibility. Grant it administrative permissions (at minimum
+       `SYSTEM_CONFIGURATION`, `ACCESS_MANAGEMENT`, `PORTFOLIO_MANAGEMENT`, `VIEW_PORTFOLIO`,
+       `VIEW_VULNERABILITY` — or all permissions, for a single-operator install).
+
+    c. **Map the group to the team** — from either side: the group's **Mapped Teams** menu, or
+       the team's **Mapped OpenID Connect Groups** list.
+
+    Note that Dependency-Track never auto-creates OIDC groups from claims it sees, so an empty
+    **OpenID Connect Groups** list is *not* evidence that the claim is missing.
+
+    Verify the whole chain landed (run on the Pi, from the deploy directory):
+
+    ```bash
+    PW=$(grep '^DEPENDENCYTRACK_DB_PASSWORD=' .env | cut -d= -f2-)
+    docker exec -e PGPASSWORD="$PW" simonrowe-dev-monorepo-langfuse-db-1 \
+      psql -h 127.0.0.1 -U dtrack -d dtrack -c \
+      'SELECT g."NAME" AS oidc_group, t."NAME" AS mapped_team,
+              (SELECT count(*) FROM "TEAMS_PERMISSIONS" tp WHERE tp."TEAM_ID"=t."ID") AS perms
+       FROM "MAPPEDOIDCGROUP" m
+       JOIN "OIDCGROUP" g ON g."ID"=m."GROUP_ID"
+       JOIN "TEAM" t ON t."ID"=m."TEAM_ID";'
+    ```
+
+    One row with a non-zero `perms` count means the mapping is in place.
+
+14. **Change the local `admin` password immediately.** Dependency-Track seeds `admin`/`admin`
+    with a forced password change, and this instance is reachable from the public internet at
+    `https://dependency-track.simonrowe.dev`. That account bypasses Auth0 entirely, so until
+    the password is changed anyone who finds the hostname is one step from taking it over
+    (the forced change means they would also lock you out). Confirm it is no longer default:
+
+    ```bash
+    curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+      -H 'Content-Type: application/x-www-form-urlencoded' \
+      --data-urlencode 'username=admin' --data-urlencode 'password=admin' \
+      https://dependency-track.simonrowe.dev/api/v1/user/login
+    ```
+
+    `401` with an empty body is correct. `401` with the body `FORCE_PASSWORD_CHANGE` means the
+    default password is **still live** — fix it now.
+
+15. **Verify.** Dependency-Track reports whether it considers OIDC usable:
 
     ```bash
     curl -s https://dependency-track.simonrowe.dev/api/v1/oidc/available
