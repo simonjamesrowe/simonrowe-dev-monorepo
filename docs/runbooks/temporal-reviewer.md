@@ -53,7 +53,7 @@ REVIEWER_IMAGE=ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:COMMIT_SHA
 ```
 
 The API container does not need `GITHUB_APP_PRIVATE_KEY_PATH`,
-`GITHUB_APP_CLIENT_ID`, or `ANTHROPIC_API_KEY`.
+`GITHUB_APP_CLIENT_ID`, or any Claude credential.
 
 After the installer in the next section has created the service account, copy
 `config/systemd/reviewer.env.example` to
@@ -62,17 +62,49 @@ After the installer in the next section has created the service account, copy
 ```dotenv
 GITHUB_APP_CLIENT_ID=...
 GITHUB_APP_PRIVATE_KEY_PATH=/opt/temporal-reviewer/github-app-private-key.pem
-ANTHROPIC_API_KEY=...
+CLAUDE_CODE_OAUTH_TOKEN=...
 CLAUDE_COMMAND=/usr/local/bin/claude
 ```
 
 Never put the PEM contents directly in `.env`, Compose, Temporal inputs, or a
 Claude configuration file.
 
+### Claude authentication
+
+Use **either** a Claude Pro/Max subscription token **or** a pay-as-you-go API
+key. Setting both is a silent trap: `ANTHROPIC_API_KEY` takes precedence and is
+billed per token even though a subscription token is present.
+
+For the subscription route, run `claude setup-token` as a human and put the
+result in `CLAUDE_CODE_OAUTH_TOKEN`. Reviews then consume subscription usage
+limits shared with your own interactive Claude Code use, so a burst of pull
+requests can exhaust the limit that your interactive session depends on.
+
+Both variable names are allowlisted in `ClaudeCliReviewEngine`. That engine
+strips every environment variable whose name contains `TOKEN`, `SECRET` or
+`PASSWORD`, or ends in `_KEY`, before invoking Claude, so a Claude credential
+under any *other* name is silently removed and the review fails to
+authenticate. Add new credential variables to `SAFE_SECRET_ENVIRONMENT`, never
+to the worker environment alone.
+
+Do not attempt to authenticate the worker by copying a human's
+`~/.claude/.credentials.json` into the service account's home directory. The
+worker and the interactive session would refresh the same OAuth credential
+independently and can invalidate each other.
+
 ## First deployment
 
 The repository must be current on the Pi and Java 21 plus Claude Code must be
-installed on the host.
+installed on the host. Both must be installed **system-wide**, because the
+`temporal-reviewer` service account cannot see a per-user installation:
+
+- Java must be at `/usr/bin/java`, which the unit hardcodes in `ExecStart`. Use
+  the distribution package (`apt install openjdk-21-jre-headless`), not SDKMAN
+  or another per-user JDK manager.
+- Claude Code must be at `CLAUDE_COMMAND` (default `/usr/local/bin/claude`) and
+  readable by the service account. A default `~/.local/bin/claude` install is
+  unreachable: the unit sets `ProtectHome=true`, so `/home` is invisible to the
+  worker.
 
 Validate Compose before changing running services:
 

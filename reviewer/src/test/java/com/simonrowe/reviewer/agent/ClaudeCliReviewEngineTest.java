@@ -10,6 +10,7 @@ import com.simonrowe.reviewer.domain.Verdict;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class ClaudeCliReviewEngineTest {
@@ -66,6 +67,23 @@ class ClaudeCliReviewEngineTest {
     assertThat(report.findings()).hasSize(1);
     assertThat(report.findings().getFirst().severity()).isEqualTo(Severity.WARNING);
     assertThat(report.findings().getFirst().file()).isEqualTo("src/App.java");
+  }
+
+  @Test
+  void keepsClaudeCredentialsButStripsUnrelatedSecrets() {
+    var removed =
+        ClaudeCliReviewEngine.sensitiveEnvironmentVariables(
+            Set.of(
+                "CLAUDE_CODE_OAUTH_TOKEN",
+                "ANTHROPIC_API_KEY",
+                "GITHUB_WEBHOOK_SECRET",
+                "REVIEWER_TRIGGER_TOKEN",
+                "TEMPORAL_DB_PASSWORD",
+                "PATH"));
+
+    assertThat(removed)
+        .containsExactlyInAnyOrder(
+            "GITHUB_WEBHOOK_SECRET", "REVIEWER_TRIGGER_TOKEN", "TEMPORAL_DB_PASSWORD");
   }
 
   private static ReviewerProperties properties() {

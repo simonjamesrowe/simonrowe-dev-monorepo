@@ -29,6 +29,7 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
   private static final Set<String> SAFE_SECRET_ENVIRONMENT =
       Set.of(
           "ANTHROPIC_API_KEY",
+          "CLAUDE_CODE_OAUTH_TOKEN",
           "ANTHROPIC_BASE_URL",
           "AWS_ACCESS_KEY_ID",
           "AWS_SECRET_ACCESS_KEY",
@@ -190,8 +191,12 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
   }
 
   private Set<String> sensitiveEnvironmentVariables() {
+    return sensitiveEnvironmentVariables(System.getenv().keySet());
+  }
+
+  static Set<String> sensitiveEnvironmentVariables(final Set<String> names) {
     Set<String> removed = new HashSet<>();
-    for (String name : System.getenv().keySet()) {
+    for (String name : names) {
       String upper = name.toUpperCase(Locale.ROOT);
       boolean looksSensitive =
           upper.contains("TOKEN")
