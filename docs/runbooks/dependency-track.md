@@ -72,9 +72,28 @@ looks like it succeeded while the hostname simply does not resolve.
       mirroring vulnerability data — expect sustained high CPU on ARM and a slower-feeling site
       while it runs, so deploy at a quiet time.
 
-- [ ] **Step 5: create the `DEV_PORTAL_ADMIN` team** in Dependency-Track and grant it admin
-      permissions (again, see `docs/auth0-setup.md`), then log in via Auth0 and confirm you can
-      see the portfolio.
+- [ ] **Step 5: change the local `admin` password — do this before anything else in the UI.**
+      Dependency-Track seeds `admin`/`admin` with a forced password change, and this instance is
+      public. That account bypasses Auth0 completely. Confirm the default is dead:
+
+      ```bash
+      curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+        -H 'Content-Type: application/x-www-form-urlencoded' \
+        --data-urlencode 'username=admin' --data-urlencode 'password=admin' \
+        https://dependency-track.simonrowe.dev/api/v1/user/login
+      ```
+
+      `401` with an empty body is correct; `401` with the body `FORCE_PASSWORD_CHANGE` means the
+      default password is still live.
+
+- [ ] **Step 6: create the OIDC group, the team, and the mapping between them** — all three, per
+      step 13 of `docs/auth0-setup.md`. A team on its own is **not** enough: Dependency-Track
+      does not match claim values to team names. Then log in via Auth0 and confirm you can see
+      the portfolio.
+
+- [ ] **Step 7: create the `CI Upload` team** with `BOM_UPLOAD`, `PROJECT_CREATION_UPLOAD` and
+      `VIEW_PORTFOLIO`, generate its API key, and store it as the `DEPENDENCYTRACK_API_KEY`
+      GitHub secret — otherwise the publish workflow's SBOM uploads fail invisibly.
 
 ## The passwordless-role trap (fixed — do not undo it)
 
@@ -310,13 +329,38 @@ this order:
    ```
 
 4. **Logs in but sees nothing.** There are two distinct causes, and both come back to
-   `DT_OIDC_TEAM_SYNCHRONIZATION: "true"`. Check under
-   **Administration → Access Management → Teams**.
+   `DT_OIDC_TEAM_SYNCHRONIZATION: "true"`. Check under **Administration → Access Management**,
+   in both **OpenID Connect Groups** and **Teams** — the mapping between the two is the part
+   most often missing.
 
-   a. **Team name case mismatch.** The Dependency-Track team must be named exactly
-      `DEV_PORTAL_ADMIN` — matching the `https://simonrowe.dev/roles` claim value
-      byte-for-byte, including case. A near-miss (`Dev_Portal_Admin`, `dev_portal_admin`)
-      means team synchronisation maps the user into no team at all, silently.
+   a. **The OIDC group or its team mapping is missing.** Dependency-Track does **not** match
+      claim values against team names, so a team called `DEV_PORTAL_ADMIN` on its own grants
+      nothing. Three objects are required — see step 13 of
+      [the Auth0 setup guide](../auth0-setup.md#dependency-track-single-sign-on-sso):
+
+      ```text
+      claim value  →  OpenID Connect Group  →  mapping  →  Team  →  permissions
+      ```
+
+      The **group** name is the one that must equal the `https://simonrowe.dev/roles` claim
+      byte-for-byte, including case; the team name is arbitrary. Check all three at once
+      rather than guessing, from the deploy directory:
+
+      ```bash
+      PW=$(grep '^DEPENDENCYTRACK_DB_PASSWORD=' .env | cut -d= -f2-)
+      docker exec -e PGPASSWORD="$PW" simonrowe-dev-monorepo-langfuse-db-1 \
+        psql -h 127.0.0.1 -U dtrack -d dtrack -c \
+        'SELECT g."NAME" AS oidc_group, t."NAME" AS mapped_team,
+                (SELECT count(*) FROM "TEAMS_PERMISSIONS" tp WHERE tp."TEAM_ID"=t."ID") AS perms
+         FROM "MAPPEDOIDCGROUP" m
+         JOIN "OIDCGROUP" g ON g."ID"=m."GROUP_ID"
+         JOIN "TEAM" t ON t."ID"=m."TEAM_ID";'
+      ```
+
+      Zero rows means the group, the team or the mapping between them is absent. Note that
+      Dependency-Track never auto-creates groups from claims it observes, so an empty
+      `OIDCGROUP` table says nothing about whether the claim is arriving — rule this cause out
+      first, then move to (b).
 
    b. **The claim is missing from the ID token, so previously assigned teams get STRIPPED.**
       With team synchronisation enabled, Dependency-Track *reconciles* the user's team
