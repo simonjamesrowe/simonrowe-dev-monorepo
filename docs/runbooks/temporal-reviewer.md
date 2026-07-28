@@ -95,16 +95,33 @@ independently and can invalidate each other.
 ## First deployment
 
 The repository must be current on the Pi and Java 21 plus Claude Code must be
-installed on the host. Both must be installed **system-wide**, because the
+installed on the host. Install both with:
+
+```bash
+sudo ./scripts/install-reviewer-host-deps.sh
+```
+
+Pin a Claude Code version with `CLAUDE_VERSION=x.y.z` if you do not want the
+latest release. The script installs the Java **JRE**, which is all the worker
+needs; building this repository on the Pi additionally requires
+`openjdk-21-jdk-headless`. Both must be installed **system-wide**, because the
 `temporal-reviewer` service account cannot see a per-user installation:
 
 - Java must be at `/usr/bin/java`, which the unit hardcodes in `ExecStart`. Use
-  the distribution package (`apt install openjdk-21-jre-headless`), not SDKMAN
-  or another per-user JDK manager.
+  the distribution package (`openjdk-21-jre-headless`), not SDKMAN or another
+  per-user JDK manager.
 - Claude Code must be at `CLAUDE_COMMAND` (default `/usr/local/bin/claude`) and
   readable by the service account. A default `~/.local/bin/claude` install is
   unreachable: the unit sets `ProtectHome=true`, so `/home` is invisible to the
   worker.
+
+The script installs Claude Code itself rather than calling
+`https://claude.ai/install.sh`, which refuses to run under `sudo` and installs
+into the invoking user's `~/.local/bin`. It downloads from the same release
+endpoint and verifies the published SHA-256 before installing. The binary is
+left root-owned at mode 0755, so the service account can execute but not
+replace it: the reviewer's Claude version changes only when the script is
+re-run, rather than through a background self-update.
 
 Validate Compose before changing running services:
 
