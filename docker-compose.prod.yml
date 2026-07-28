@@ -51,6 +51,131 @@ services:
       timeout: 5s
       retries: 5
 
+  temporal-db-init:
+    image: postgres:15
+    restart: "no"
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    environment:
+      PGHOST: langfuse-db
+      PGUSER: ${LANGFUSE_DB_USER:-postgres}
+      PGPASSWORD: ${LANGFUSE_DB_PASSWORD:-postgres}
+      TEMPORAL_DB_PASSWORD: ${TEMPORAL_DB_PASSWORD:?set TEMPORAL_DB_PASSWORD in .env}
+    volumes:
+      - ./scripts/temporal:/scripts/temporal:ro
+    entrypoint: ["/bin/sh", "/scripts/temporal/init-database.sh"]
+
+  temporal-schema-init:
+    image: temporalio/admin-tools:1.31.2
+    restart: "no"
+    depends_on:
+      temporal-db-init:
+        condition: service_completed_successfully
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:?set TEMPORAL_DB_PASSWORD in .env}
+      POSTGRES_SEEDS: langfuse-db
+      SQL_PASSWORD: ${TEMPORAL_DB_PASSWORD:?set TEMPORAL_DB_PASSWORD in .env}
+    volumes:
+      - ./scripts/temporal:/scripts/temporal:ro
+    entrypoint: ["/bin/sh", "/scripts/temporal/setup-postgres.sh"]
+
+  temporal:
+    image: temporalio/server:1.31.2
+    restart: unless-stopped
+    depends_on:
+      temporal-schema-init:
+        condition: service_completed_successfully
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:?set TEMPORAL_DB_PASSWORD in .env}
+      POSTGRES_SEEDS: langfuse-db
+      BIND_ON_IP: 0.0.0.0
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/production-sql.yaml
+    ports:
+      # The host worker needs gRPC; binding loopback keeps it off the public network.
+      - "127.0.0.1:7233:7233"
+    volumes:
+      - ./config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "7233"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  temporal-create-namespace:
+    image: temporalio/admin-tools:1.31.2
+    restart: "no"
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_NAMESPACE_RETENTION: 30d
+    volumes:
+      - ./scripts/temporal:/scripts/temporal:ro
+    entrypoint: ["/bin/sh", "/scripts/temporal/create-namespace.sh"]
+
+  temporal-ui:
+    image: temporalio/ui:2.52.1
+    restart: unless-stopped
+    depends_on:
+      temporal:
+        condition: service_healthy
+      temporal-create-namespace:
+        condition: service_completed_successfully
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_AUTH_ENABLED: "true"
+      TEMPORAL_AUTH_TYPE: oidc
+      TEMPORAL_AUTH_PROVIDER_URL: ${TEMPORAL_AUTH0_ISSUER:?set TEMPORAL_AUTH0_ISSUER in .env}
+      TEMPORAL_AUTH_ISSUER_URL: ${TEMPORAL_AUTH0_ISSUER:?set TEMPORAL_AUTH0_ISSUER in .env}
+      TEMPORAL_AUTH_CLIENT_ID: ${TEMPORAL_AUTH0_CLIENT_ID:?set TEMPORAL_AUTH0_CLIENT_ID in .env}
+      TEMPORAL_AUTH_CLIENT_SECRET: ${TEMPORAL_AUTH0_CLIENT_SECRET:?set TEMPORAL_AUTH0_CLIENT_SECRET in .env}
+      TEMPORAL_AUTH_CALLBACK_URL: https://temporal.simonrowe.dev/auth/sso/callback
+      TEMPORAL_AUTH_SCOPES: openid,profile,email
+      TEMPORAL_AUTH_REDIRECT_TO_PROVIDER: "true"
+      TEMPORAL_CORS_ORIGINS: https://temporal.simonrowe.dev
+      TEMPORAL_DISABLE_WRITE_ACTIONS: "true"
+
+  reviewer-api:
+    image: ${REVIEWER_IMAGE:-ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:latest}
+    pull_policy: always
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xshare:off"
+      SPRING_PROFILES_ACTIVE: api
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?set GITHUB_WEBHOOK_SECRET in .env}
+      REVIEWER_TRIGGER_TOKEN: ${REVIEWER_TRIGGER_TOKEN:?set REVIEWER_TRIGGER_TOKEN in .env}
+    depends_on:
+      temporal:
+        condition: service_healthy
+      temporal-create-namespace:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/localhost/8091 && printf 'GET /actuator/health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 4 cat <&3 | grep -q '\"status\":\"UP\"'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
   uploads-init:
     image: busybox
     volumes:

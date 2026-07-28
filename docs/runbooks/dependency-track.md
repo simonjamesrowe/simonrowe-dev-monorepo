@@ -36,7 +36,7 @@ looks like it succeeded while the hostname simply does not resolve.
       ```
 
       An empty `dig` result, or `dt=000`/`530`, means DNS or the tunnel mapping is missing.
-      Fix that first: until it resolves, CI's four SBOM uploads fail **invisibly**, because the
+      Fix that first: until it resolves, CI's five SBOM uploads fail **invisibly**, because the
       `sbom` job is `continue-on-error: true` (see "The `continue-on-error: true` trap").
 
 - [ ] **Step 1: put the required variables in the deploy-dir `.env`.**
@@ -179,7 +179,7 @@ Two things now protect against this, in order of importance:
    database (see "Restoring after data loss" below) and re-supply a fresh
    `DEPENDENCYTRACK_KEK`. This is an acceptable last resort because all Dependency-Track state
    is a **derived cache** — projects, findings and metrics can be rebuilt by re-running the
-   `publish` workflow, which re-uploads all four SBOMs.
+   `publish` workflow, which re-uploads all five SBOMs.
 
 Verify the KEK is actually being honoured (already done once during implementation, evidence in
 `.superpowers/sdd/2026-07-26-dependency-track/kek-verification.md` — repeat only if you suspect
@@ -256,7 +256,7 @@ docker exec simonrowe-dev-monorepo-langfuse-db-1 psql -U postgres -c "\l+"
 ```
 
 Watch the `dtrack` row's `Size` column over time. One operator reported unbounded growth from
-~50 GB to ~500 GB in a month on a large portfolio; this deployment only tracks four projects so
+~50 GB to ~500 GB in a month on a large portfolio; this deployment only tracks five projects so
 growth should be far smaller, but it is not bounded by default and the disk is shared with
 everything else. If `dtrack` grows into a real share of the 72 GB free (measured 2026-07-26),
 either configure Dependency-Track's built-in metrics retention (`DT_METRICS_RETENTION_DAYS` or
@@ -355,14 +355,14 @@ The `sbom` job in `.github/workflows/publish.yml` is deliberately `continue-on-e
 Dependency-Track running on a Pi behind a tunnel must never block a production deploy. That means
 **the Publish workflow can show fully green while every SBOM upload silently failed** (expired
 API key, DT down, network blip). The workflow's status is not evidence of anything. The only real
-confirmation is checking the four projects directly:
+confirmation is checking the five projects directly:
 
 Export the API key from your usual env store first (never paste it inline, never commit it):
 
 ```bash
 export DEPENDENCYTRACK_API_KEY="<value from env store>"
 
-for project in "simonrowe-dev/backend" "simonrowe-dev/frontend" "simonrowe-dev/backend-image" "simonrowe-dev/frontend-image"; do
+for project in "simonrowe-dev/backend" "simonrowe-dev/frontend" "simonrowe-dev/backend-image" "simonrowe-dev/frontend-image" "simonrowe-dev/reviewer-image"; do
   echo "=== $project ==="
   curl -s -H "X-Api-Key: ${DEPENDENCYTRACK_API_KEY}" \
     "https://dependency-track.simonrowe.dev/api/v1/project/lookup?name=${project}&version=main" \
@@ -370,7 +370,7 @@ for project in "simonrowe-dev/backend" "simonrowe-dev/frontend" "simonrowe-dev/b
 done
 ```
 
-Expect a recent (non-null) `lastBomImport` timestamp for all four. A missing project, a `null`
+Expect a recent (non-null) `lastBomImport` timestamp for all five. A missing project, a `null`
 timestamp, or a stale timestamp older than the last merge to `main` means the upload failed —
 check the `sbom` job's logs directly (`gh run view <run-id> --log`) rather than trusting the
 overall workflow conclusion.
@@ -406,8 +406,8 @@ curl -X POST "https://dependency-track.simonrowe.dev/api/v1/bom" \
 ```
 
 For the container image SBOMs, generate with the same tool CI uses (`anchore/sbom-action`'s
-underlying `syft`) and upload with `projectName=simonrowe-dev/backend-image` /
-`simonrowe-dev/frontend-image`:
+underlying `syft`) and upload with `projectName=simonrowe-dev/backend-image`,
+`simonrowe-dev/frontend-image`, or `simonrowe-dev/reviewer-image`:
 
 ```bash
 cd ..  # back to the repo root if you ran the frontend block above
@@ -418,6 +418,14 @@ curl -X POST "https://dependency-track.simonrowe.dev/api/v1/bom" \
   -F "projectName=simonrowe-dev/backend-image" \
   -F "projectVersion=main" \
   -F "bom=@backend-image-bom.json"
+
+syft ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:latest -o cyclonedx-json > reviewer-image-bom.json
+curl -X POST "https://dependency-track.simonrowe.dev/api/v1/bom" \
+  -H "X-Api-Key: ${DEPENDENCYTRACK_API_KEY}" \
+  -F "autoCreate=true" \
+  -F "projectName=simonrowe-dev/reviewer-image" \
+  -F "projectVersion=main" \
+  -F "bom=@reviewer-image-bom.json"
 ```
 
 (`${DEPENDENCYTRACK_API_KEY}` must be exported from the usual env store first — never paste the
@@ -426,7 +434,7 @@ key inline into a command you might paste into a shared terminal or commit to a 
 ## Restoring after data loss
 
 Dependency-Track's own state (projects, findings, metrics history) is a **derived cache**: it can
-always be rebuilt from source (the four SBOMs) plus a re-run of the `publish` workflow. It is
+always be rebuilt from source (the five SBOMs) plus a re-run of the `publish` workflow. It is
 **deliberately excluded from `scripts/backup.sh`**, which only backs up MongoDB and
 `backend/uploads` — not the `langfuse-db` Postgres container at all.
 
@@ -453,7 +461,7 @@ docker volume rm simonrowe-dev-monorepo_dependencytrack-data
 # the apiserver against the empty database, then:
 docker compose -f docker-compose.prod.yml up -d dependencytrack-apiserver dependencytrack-frontend
 
-# Re-populate by re-running the last publish workflow (re-uploads all four SBOMs)
+# Re-populate by re-running the last publish workflow (re-uploads all five SBOMs)
 gh run list --repo simonjamesrowe/simonrowe-dev-monorepo --workflow publish.yml --limit 1
 gh run rerun --repo simonjamesrowe/simonrowe-dev-monorepo <run-id>
 ```

@@ -85,6 +85,7 @@ Auth0 does not include role names in tokens by default. Add an Action:
      const protectedClientIds = [
        event.secrets.LANGFUSE_CLIENT_ID, // Langfuse application
        event.secrets.DEPENDENCY_TRACK_CLIENT_ID, // Dependency-Track application
+       event.secrets.TEMPORAL_UI_CLIENT_ID, // Temporal UI application
      ];
      if (protectedClientIds.includes(event.client.client_id)) {
        if (!roles.includes('DEV_PORTAL_ADMIN')) {
@@ -101,6 +102,8 @@ Auth0 does not include role names in tokens by default. Add an Action:
    >   [Langfuse SSO](#langfuse-single-sign-on-sso) section.
    > - `DEPENDENCY_TRACK_CLIENT_ID` — Client ID of the Dependency-Track application
    >   created in the [Dependency-Track SSO](#dependency-track-single-sign-on-sso) section.
+   > - `TEMPORAL_UI_CLIENT_ID` — Client ID of the Temporal UI application
+   >   created in the [Temporal UI SSO](#temporal-ui-single-sign-on-sso) section.
    >
    > This avoids hardcoding Client IDs in the Action code. A secret referenced in the
    > code but not defined here evaluates to `undefined`, which silently drops that
@@ -347,3 +350,40 @@ Every step here is human-gated: none of it can be automated from the repo.
 > Auth0 when attempting to log into Dependency-Track, exactly as with Langfuse — provided
 > step 11 was completed. The local `admin` account is unaffected and remains the break-glass
 > path if OIDC is misconfigured.
+
+## Temporal UI Single Sign-On (SSO)
+
+Temporal Web UI uses native server-side OIDC. It therefore needs a dedicated
+Auth0 **Regular Web Application** with a client secret. Do not reuse the public
+portfolio SPA client.
+
+1. In **Applications → Applications**, create a **Regular Web Application**
+   named `Temporal UI`.
+2. Configure:
+   - Allowed Callback URLs:
+     `https://temporal.simonrowe.dev/auth/sso/callback`
+   - Allowed Logout URLs: `https://temporal.simonrowe.dev`
+   - Allowed Web Origins: `https://temporal.simonrowe.dev`
+3. Copy its Client ID and Client Secret into:
+   - `TEMPORAL_AUTH0_CLIENT_ID`
+   - `TEMPORAL_AUTH0_CLIENT_SECRET`
+4. Set `TEMPORAL_AUTH0_ISSUER` to the Auth0 issuer URL, including its trailing
+   slash, for example `https://YOUR_DOMAIN/`.
+5. Add an Action secret named `TEMPORAL_UI_CLIENT_ID` with this application's
+   Client ID. Confirm `protectedClientIds` contains:
+
+   ```js
+   event.secrets.TEMPORAL_UI_CLIENT_ID
+   ```
+
+   Deploy the Action and keep it in the Login flow. This is the access-control
+   gate: Temporal UI authenticates an OIDC user but does not interpret the
+   custom `DEV_PORTAL_ADMIN` claim as application RBAC.
+6. Visit `https://temporal.simonrowe.dev`:
+   - your `DEV_PORTAL_ADMIN` user should reach the Workflow list;
+   - a user without that role must be denied by Auth0;
+   - the UI must not offer terminate, cancel, signal, reset, or batch actions
+     while `TEMPORAL_DISABLE_WRITE_ACTIONS=true`.
+
+Port `7233` is deliberately bound only to `127.0.0.1` for the host reviewer
+worker and remains unreachable through nginx/Pinggy.

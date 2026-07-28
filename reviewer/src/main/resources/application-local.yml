@@ -1,0 +1,10 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  temporal:
+    workers-auto-discovery:
+      enabled: true
+      workflow-packages:
+        - com.simonrowe.reviewer.workflow
+      register-activity-beans: true

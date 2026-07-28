@@ -18,6 +18,8 @@ googleApiClient = "2.8.0"
 googleApiServicesDrive = "v3-rev20250511-2.0.0"
 googleAuthLibrary = "1.35.0"
 googleHttpClient = "1.45.0"
+temporal = "1.36.0"
+bouncycastle = "1.85"
 
 [libraries]
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
@@ -58,6 +60,9 @@ google-api-client = { module = "com.google.api-client:google-api-client", versio
 google-api-services-drive = { module = "com.google.apis:google-api-services-drive", version.ref = "googleApiServicesDrive" }
 google-auth-library-oauth2-http = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "googleAuthLibrary" }
 google-http-client-apache-v5 = { module = "com.google.http-client:google-http-client-apache-v5", version.ref = "googleHttpClient" }
+temporal-spring-boot-starter = { module = "io.temporal:temporal-spring-boot-starter", version.ref = "temporal" }
+temporal-testing = { module = "io.temporal:temporal-testing", version.ref = "temporal" }
+bouncycastle-pkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

@@ -1,4 +1,26 @@
 services:
+  # Local/CI Temporal development service. This official image bundles the
+  # server, SQLite persistence, CLI and Web UI. Use Temporal Cloud or the
+  # supported production server deployment when this moves beyond one host.
+  temporal-data-init:
+    image: busybox:1.37
+    command: ["sh", "-c", "chown -R 1000:1000 /var/lib/temporal"]
+    volumes:
+      - temporal-data:/var/lib/temporal
+    restart: "no"
+
+  temporal:
+    image: temporalio/temporal:1.8.1
+    command: server start-dev --ip 0.0.0.0 --db-filename /var/lib/temporal/temporal.db
+    depends_on:
+      temporal-data-init:
+        condition: service_completed_successfully
+    ports:
+      - "7233:7233"
+      - "8233:8233"
+    volumes:
+      - temporal-data:/var/lib/temporal
+
   mongodb:
     image: mongo:8
     ports:
@@ -193,6 +215,7 @@ services:
       - /etc/alloy/config.alloy
 
 volumes:
+  temporal-data:
   mongodb-data:
   kafka-data:
   elasticsearch-data:
