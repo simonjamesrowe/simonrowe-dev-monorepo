@@ -80,9 +80,12 @@ install -o root -g root -m 0644 \
   /etc/systemd/system/temporal-reviewer-worker.service
 systemctl daemon-reload
 
-# Records which image the installed jar came from, so a deploy can tell whether the
-# host worker has drifted from REVIEWER_IMAGE and reinstall only when it has.
-printf '%s\n' "$reviewer_image" >"$install_directory/installed-image"
+# Records the resolved image ID, not the tag, so a deploy can tell whether the host
+# worker has drifted and reinstall only when it has. It must be the ID: a moving tag
+# such as :latest keeps the same name across rebuilds, so comparing names would report
+# "unchanged" forever while the API container quietly moved on.
+printf '%s\n' "$(docker image inspect --format '{{.Id}}' "$reviewer_image")" \
+  >"$install_directory/installed-image"
 chmod 0644 "$install_directory/installed-image"
 
 echo "Reviewer worker installed from $reviewer_image."

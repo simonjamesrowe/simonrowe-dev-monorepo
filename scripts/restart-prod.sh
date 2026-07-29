@@ -48,15 +48,26 @@ ensure_reviewer_worker() {
     return 0
   fi
 
+  # Refresh first so a moving tag such as :latest resolves to whatever was just
+  # published, then compare image IDs. Comparing the tag string instead would report
+  # "unchanged" forever for :latest and leave the worker on a stale jar.
+  local wanted_id
+  docker pull --quiet "$image" >/dev/null 2>&1 || true
+  wanted_id="$(docker image inspect --format '{{.Id}}' "$image" 2>/dev/null || true)"
+  if [[ -z "$wanted_id" ]]; then
+    warn "cannot resolve $image; skipping the reviewer worker."
+    return 0
+  fi
+
   installed_image="$(sudo cat "$REVIEWER_INSTALL_DIR/installed-image" 2>/dev/null || true)"
-  if [[ ! -f "/etc/systemd/system/$REVIEWER_UNIT" || "$installed_image" != "$image" ]]; then
+  if [[ ! -f "/etc/systemd/system/$REVIEWER_UNIT" || "$installed_image" != "$wanted_id" ]]; then
     echo "Installing the reviewer worker from $image..."
     if ! (cd "$PROJECT_DIR" && sudo REVIEWER_IMAGE="$image" "$SCRIPT_DIR/install-reviewer-worker.sh"); then
       warn "reviewer worker install failed; containers are unaffected."
       return 0
     fi
   else
-    echo "Reviewer worker already matches $image."
+    echo "Reviewer worker already matches $image (${wanted_id:7:12})."
   fi
 
   # Starting without credentials just crash-loops the unit, so check first and leave a

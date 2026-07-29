@@ -214,19 +214,37 @@ request. Confirm:
 
 ## Updating and rollback
 
-The publish workflow creates immutable reviewer image tags using the Git commit
-SHA. Set `REVIEWER_IMAGE` to that tag so the API and host worker are identical.
+The publish workflow pushes both `:latest` and an immutable commit-SHA tag on
+every merge to `main`.
 
-After changing the tag:
+Normal updates need no manual step. `REVIEWER_IMAGE` tracks `:latest`, and a
+deploy carries both halves forward:
 
 ```bash
-docker compose -f docker-compose.prod.yml pull reviewer-api
-docker compose -f docker-compose.prod.yml up -d reviewer-api
-sudo REVIEWER_IMAGE="$REVIEWER_IMAGE" ./scripts/install-reviewer-worker.sh
-sudo systemctl restart temporal-reviewer-worker
+./scripts/restart-prod.sh
 ```
 
-Rollback uses the same commands with the previous commit-SHA image.
+`reviewer-api` updates through `pull_policy: always`. The host worker is not a
+Compose service, so `restart-prod.sh` reconciles it: it pulls, resolves the
+image **ID**, and reinstalls only when that differs from
+`/opt/temporal-reviewer/installed-image`.
+
+That comparison must stay on the ID rather than the tag. `:latest` keeps the
+same name across rebuilds, so comparing names would report "unchanged" forever
+— the API container would move to the new image while the worker silently kept
+running the old jar, which is the drift this reconciliation exists to prevent.
+
+To roll back, or to hold the worker on a known build, pin the commit-SHA tag:
+
+```bash
+# in .env
+REVIEWER_IMAGE=ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:COMMIT_SHA
+```
+
+then `./scripts/restart-prod.sh`. Pinning also removes the one window in which
+the two halves can differ: `:latest` is pulled twice within a deploy, once for
+the container and once for the worker, so a publish landing between them leaves
+them mismatched until the next run.
 
 Temporal schema migrations are forward-moving. Before upgrading the pinned
 Temporal server/admin-tools version, take logical dumps:
