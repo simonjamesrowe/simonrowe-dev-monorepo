@@ -16,7 +16,10 @@ Create a private, organization-owned GitHub App named `simonrowe-code-reviewer`:
 
 - Homepage URL: `https://simonrowe.dev`
 - Webhook URL: `https://api.simonrowe.dev/webhooks/github`
-- Webhook secret: generate a new random value
+- Webhook secret: the existing `GITHUB_WEBHOOK_SECRET` from the deploy `.env`.
+  Generate a new value only if `.env` has none — changing it means restarting
+  `reviewer-api`, which reads it at boot, or every delivery fails signature
+  verification with `401`.
 - Repository permissions:
   - Contents: read
   - Issues: read and write
@@ -40,7 +43,10 @@ The Auth0 Post-Login Action must deny the Temporal client unless the user has
 
 ## Secrets
 
-Populate the production `.env`:
+There is one secrets file: the production `.env` in the deploy directory. The
+host worker reads it too, because `scripts/install-reviewer-worker.sh` links
+`/opt/temporal-reviewer/reviewer.env` to it. The unit keeps referencing that
+stable path, so the tracked unit file stays host-agnostic.
 
 ```dotenv
 GITHUB_WEBHOOK_SECRET=...
@@ -50,29 +56,87 @@ TEMPORAL_AUTH0_CLIENT_ID=...
 TEMPORAL_AUTH0_CLIENT_SECRET=...
 TEMPORAL_AUTH0_ISSUER=https://YOUR_AUTH0_DOMAIN/
 REVIEWER_IMAGE=ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:COMMIT_SHA
-```
 
-The API container does not need `GITHUB_APP_PRIVATE_KEY_PATH`,
-`GITHUB_APP_CLIENT_ID`, or `ANTHROPIC_API_KEY`.
-
-After the installer in the next section has created the service account, copy
-`config/systemd/reviewer.env.example` to
-`/opt/temporal-reviewer/reviewer.env` and populate:
-
-```dotenv
+# Read only by the host worker; see the reviewer section of .env.example.
 GITHUB_APP_CLIENT_ID=...
 GITHUB_APP_PRIVATE_KEY_PATH=/opt/temporal-reviewer/github-app-private-key.pem
-ANTHROPIC_API_KEY=...
+CLAUDE_CODE_OAUTH_TOKEN=...
 CLAUDE_COMMAND=/usr/local/bin/claude
 ```
 
+Keep that file at mode `0600`. It is the only copy of these credentials, and
+the trust-zone separation now rests on file permissions plus the two controls
+below rather than on the secrets living in separate files.
+
+**`reviewer-api` must never regain `env_file: .env`.** It previously loaded the
+whole file, which would have handed the Claude token and GitHub App identity to
+the internet-facing webhook receiver. It now declares only the variables it
+actually needs, and everything else in `.env` is invisible to it.
+
 Never put the PEM contents directly in `.env`, Compose, Temporal inputs, or a
-Claude configuration file.
+Claude configuration file. Only the *path* belongs in `.env`.
+
+### Claude authentication
+
+Use **either** a Claude Pro/Max subscription token **or** a pay-as-you-go API
+key. Setting both is a silent trap: `ANTHROPIC_API_KEY` takes precedence and is
+billed per token even though a subscription token is present.
+
+For the subscription route, run `claude setup-token` as a human and put the
+result in `CLAUDE_CODE_OAUTH_TOKEN`. Reviews then consume subscription usage
+limits shared with your own interactive Claude Code use, so a burst of pull
+requests can exhaust the limit that your interactive session depends on.
+
+Both variable names are allowlisted in `ClaudeCliReviewEngine`. That engine
+strips **everything** from the agent's environment except `SAFE_SECRET_ENVIRONMENT`
+(Claude's own credentials) and `PROCESS_ENVIRONMENT` (`PATH`, `HOME`, proxy
+settings and similar). So a Claude credential under any *other* name is silently
+removed and the review fails to authenticate. Add new credential variables to
+`SAFE_SECRET_ENVIRONMENT`, never to the worker environment alone.
+
+The allowlist replaced a blocklist of suspicious-looking name patterns, which
+was unsafe once the worker started reading the full production `.env`: pattern
+matching on `TOKEN`/`SECRET`/`PASSWORD`/`_KEY` misses real secrets such as
+`DEPENDENCYTRACK_KEK`, `REDIS_AUTH` and `SALT`. That matters because the agent
+reads attacker-authored pull request branches, so anything left in its
+environment is reachable by a prompt-injection payload. Do not reintroduce
+pattern-based filtering.
+
+Do not attempt to authenticate the worker by copying a human's
+`~/.claude/.credentials.json` into the service account's home directory. The
+worker and the interactive session would refresh the same OAuth credential
+independently and can invalidate each other.
 
 ## First deployment
 
 The repository must be current on the Pi and Java 21 plus Claude Code must be
-installed on the host.
+installed on the host. Install both with:
+
+```bash
+sudo ./scripts/install-reviewer-host-deps.sh
+```
+
+Pin a Claude Code version with `CLAUDE_VERSION=x.y.z` if you do not want the
+latest release. The script installs the Java **JRE**, which is all the worker
+needs; building this repository on the Pi additionally requires
+`openjdk-21-jdk-headless`. Both must be installed **system-wide**, because the
+`temporal-reviewer` service account cannot see a per-user installation:
+
+- Java must be at `/usr/bin/java`, which the unit hardcodes in `ExecStart`. Use
+  the distribution package (`openjdk-21-jre-headless`), not SDKMAN or another
+  per-user JDK manager.
+- Claude Code must be at `CLAUDE_COMMAND` (default `/usr/local/bin/claude`) and
+  readable by the service account. A default `~/.local/bin/claude` install is
+  unreachable: the unit sets `ProtectHome=true`, so `/home` is invisible to the
+  worker.
+
+The script installs Claude Code itself rather than calling
+`https://claude.ai/install.sh`, which refuses to run under `sudo` and installs
+into the invoking user's `~/.local/bin`. It downloads from the same release
+endpoint and verifies the published SHA-256 before installing. The binary is
+left root-owned at mode 0755, so the service account can execute but not
+replace it: the reviewer's Claude version changes only when the script is
+re-run, rather than through a background self-update.
 
 Validate Compose before changing running services:
 
@@ -101,20 +165,17 @@ sudo install \
   -o root \
   -g temporal-reviewer \
   -m 0640 \
-  config/systemd/reviewer.env.example \
-  /opt/temporal-reviewer/reviewer.env
-sudo install \
-  -o root \
-  -g temporal-reviewer \
-  -m 0640 \
   github-app-private-key.pem \
   /opt/temporal-reviewer/github-app-private-key.pem
-sudo editor /opt/temporal-reviewer/reviewer.env
+chmod 0600 .env
 sudo systemctl enable --now temporal-reviewer-worker
 ```
 
-If the installer created `reviewer.env` before the example copy, edit the
-existing file rather than overwriting populated secrets.
+The installer links `/opt/temporal-reviewer/reviewer.env` to the deploy `.env`,
+so the worker's settings are edited there — see the "Temporal Code Reviewer"
+section of `.env.example` for the variables it reads. The installer never
+overwrites an existing `reviewer.env`, so re-running it cannot clobber
+populated secrets.
 
 ## Verification
 
@@ -153,19 +214,37 @@ request. Confirm:
 
 ## Updating and rollback
 
-The publish workflow creates immutable reviewer image tags using the Git commit
-SHA. Set `REVIEWER_IMAGE` to that tag so the API and host worker are identical.
+The publish workflow pushes both `:latest` and an immutable commit-SHA tag on
+every merge to `main`.
 
-After changing the tag:
+Normal updates need no manual step. `REVIEWER_IMAGE` tracks `:latest`, and a
+deploy carries both halves forward:
 
 ```bash
-docker compose -f docker-compose.prod.yml pull reviewer-api
-docker compose -f docker-compose.prod.yml up -d reviewer-api
-sudo REVIEWER_IMAGE="$REVIEWER_IMAGE" ./scripts/install-reviewer-worker.sh
-sudo systemctl restart temporal-reviewer-worker
+./scripts/restart-prod.sh
 ```
 
-Rollback uses the same commands with the previous commit-SHA image.
+`reviewer-api` updates through `pull_policy: always`. The host worker is not a
+Compose service, so `restart-prod.sh` reconciles it: it pulls, resolves the
+image **ID**, and reinstalls only when that differs from
+`/opt/temporal-reviewer/installed-image`.
+
+That comparison must stay on the ID rather than the tag. `:latest` keeps the
+same name across rebuilds, so comparing names would report "unchanged" forever
+— the API container would move to the new image while the worker silently kept
+running the old jar, which is the drift this reconciliation exists to prevent.
+
+To roll back, or to hold the worker on a known build, pin the commit-SHA tag:
+
+```bash
+# in .env
+REVIEWER_IMAGE=ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:COMMIT_SHA
+```
+
+then `./scripts/restart-prod.sh`. Pinning also removes the one window in which
+the two halves can differ: `:latest` is pulled twice within a deploy, once for
+the container and once for the worker, so a publish landing between them leaves
+them mismatched until the next run.
 
 Temporal schema migrations are forward-moving. Before upgrading the pinned
 Temporal server/admin-tools version, take logical dumps:

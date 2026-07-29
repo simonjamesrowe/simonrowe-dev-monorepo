@@ -26,9 +26,16 @@ import org.springframework.stereotype.Component;
 public class ClaudeCliReviewEngine implements ReviewEngine {
 
   private static final int MAX_FINDINGS = 20;
+
+  /**
+   * Credentials Claude itself needs. Everything outside this set and {@link #PROCESS_ENVIRONMENT}
+   * is stripped before the agent runs, because the agent reads attacker-authored pull request
+   * branches.
+   */
   private static final Set<String> SAFE_SECRET_ENVIRONMENT =
       Set.of(
           "ANTHROPIC_API_KEY",
+          "CLAUDE_CODE_OAUTH_TOKEN",
           "ANTHROPIC_BASE_URL",
           "AWS_ACCESS_KEY_ID",
           "AWS_SECRET_ACCESS_KEY",
@@ -36,6 +43,32 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
           "AWS_REGION",
           "AWS_DEFAULT_REGION",
           "GOOGLE_APPLICATION_CREDENTIALS");
+
+  /** Non-secret variables a child process needs to run at all. */
+  private static final Set<String> PROCESS_ENVIRONMENT =
+      Set.of(
+          "PATH",
+          "HOME",
+          "USER",
+          "LOGNAME",
+          "SHELL",
+          "PWD",
+          "TMPDIR",
+          "TZ",
+          "TERM",
+          "LANG",
+          "LC_ALL",
+          "LC_CTYPE",
+          "XDG_CONFIG_HOME",
+          "XDG_CACHE_HOME",
+          "XDG_DATA_HOME",
+          "XDG_RUNTIME_DIR",
+          "HTTP_PROXY",
+          "HTTPS_PROXY",
+          "NO_PROXY",
+          "http_proxy",
+          "https_proxy",
+          "no_proxy");
 
   private final ReviewerProperties properties;
   private final GitWorkspaceFactory workspaceFactory;
@@ -190,16 +223,21 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
   }
 
   private Set<String> sensitiveEnvironmentVariables() {
+    return sensitiveEnvironmentVariables(System.getenv().keySet());
+  }
+
+  /**
+   * Returns the variables to strip: everything the agent has no reason to see. This is an
+   * allowlist rather than a blocklist of suspicious names, because patterns miss real secrets —
+   * {@code DEPENDENCYTRACK_KEK}, {@code REDIS_AUTH} and {@code SALT} all match none of
+   * TOKEN/SECRET/PASSWORD/_KEY. Anything genuinely needed must be added to {@link
+   * #SAFE_SECRET_ENVIRONMENT} or {@link #PROCESS_ENVIRONMENT}, never to the worker environment
+   * alone.
+   */
+  static Set<String> sensitiveEnvironmentVariables(final Set<String> names) {
     Set<String> removed = new HashSet<>();
-    for (String name : System.getenv().keySet()) {
-      String upper = name.toUpperCase(Locale.ROOT);
-      boolean looksSensitive =
-          upper.contains("TOKEN")
-              || upper.contains("SECRET")
-              || upper.contains("PASSWORD")
-              || upper.endsWith("_KEY")
-              || upper.contains("PRIVATE_KEY");
-      if (looksSensitive && !SAFE_SECRET_ENVIRONMENT.contains(name)) {
+    for (String name : names) {
+      if (!SAFE_SECRET_ENVIRONMENT.contains(name) && !PROCESS_ENVIRONMENT.contains(name)) {
         removed.add(name);
       }
     }
