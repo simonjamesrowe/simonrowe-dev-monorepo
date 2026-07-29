@@ -86,6 +86,35 @@ class ClaudeCliReviewEngineTest {
             "GITHUB_WEBHOOK_SECRET", "REVIEWER_TRIGGER_TOKEN", "TEMPORAL_DB_PASSWORD");
   }
 
+  @Test
+  void stripsSecretsWhoseNamesLookHarmless() {
+    var removed =
+        ClaudeCliReviewEngine.sensitiveEnvironmentVariables(
+            Set.of("DEPENDENCYTRACK_KEK", "REDIS_AUTH", "SALT", "MINIO_ROOT_USER"));
+
+    assertThat(removed)
+        .containsExactlyInAnyOrder("DEPENDENCYTRACK_KEK", "REDIS_AUTH", "SALT", "MINIO_ROOT_USER");
+  }
+
+  @Test
+  void keepsTheProcessEnvironmentTheAgentNeedsToRun() {
+    var removed =
+        ClaudeCliReviewEngine.sensitiveEnvironmentVariables(
+            Set.of("PATH", "HOME", "LANG", "TMPDIR", "HTTPS_PROXY"));
+
+    assertThat(removed).isEmpty();
+  }
+
+  @Test
+  void stripsUnrecognisedVariablesByDefault() {
+    var removed =
+        ClaudeCliReviewEngine.sensitiveEnvironmentVariables(
+            Set.of("SOME_FUTURE_PROD_SETTING", "LANGFUSE_ENVIRONMENT"));
+
+    assertThat(removed)
+        .containsExactlyInAnyOrder("SOME_FUTURE_PROD_SETTING", "LANGFUSE_ENVIRONMENT");
+  }
+
   private static ReviewerProperties properties() {
     return new ReviewerProperties(
         new ReviewerProperties.Github(

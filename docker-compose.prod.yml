@@ -149,8 +149,9 @@ services:
     image: ${REVIEWER_IMAGE:-ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:latest}
     pull_policy: always
     restart: unless-stopped
-    env_file:
-      - .env
+    # Deliberately no `env_file: .env`. This container is the internet-facing webhook
+    # receiver and must hold no Claude or GitHub App credential; the host worker owns
+    # those. Everything it legitimately needs is declared explicitly below.
     environment:
       JAVA_TOOL_OPTIONS: "-Xshare:off"
       SPRING_PROFILES_ACTIVE: api

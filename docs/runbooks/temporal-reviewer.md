@@ -16,7 +16,10 @@ Create a private, organization-owned GitHub App named `simonrowe-code-reviewer`:
 
 - Homepage URL: `https://simonrowe.dev`
 - Webhook URL: `https://api.simonrowe.dev/webhooks/github`
-- Webhook secret: generate a new random value
+- Webhook secret: the existing `GITHUB_WEBHOOK_SECRET` from the deploy `.env`.
+  Generate a new value only if `.env` has none — changing it means restarting
+  `reviewer-api`, which reads it at boot, or every delivery fails signature
+  verification with `401`.
 - Repository permissions:
   - Contents: read
   - Issues: read and write
@@ -40,7 +43,10 @@ The Auth0 Post-Login Action must deny the Temporal client unless the user has
 
 ## Secrets
 
-Populate the production `.env`:
+There is one secrets file: the production `.env` in the deploy directory. The
+host worker reads it too, because `scripts/install-reviewer-worker.sh` links
+`/opt/temporal-reviewer/reviewer.env` to it. The unit keeps referencing that
+stable path, so the tracked unit file stays host-agnostic.
 
 ```dotenv
 GITHUB_WEBHOOK_SECRET=...
@@ -50,24 +56,25 @@ TEMPORAL_AUTH0_CLIENT_ID=...
 TEMPORAL_AUTH0_CLIENT_SECRET=...
 TEMPORAL_AUTH0_ISSUER=https://YOUR_AUTH0_DOMAIN/
 REVIEWER_IMAGE=ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:COMMIT_SHA
-```
 
-The API container does not need `GITHUB_APP_PRIVATE_KEY_PATH`,
-`GITHUB_APP_CLIENT_ID`, or any Claude credential.
-
-After the installer in the next section has created the service account, copy
-`config/systemd/reviewer.env.example` to
-`/opt/temporal-reviewer/reviewer.env` and populate:
-
-```dotenv
+# Read only by the host worker; see the reviewer section of .env.example.
 GITHUB_APP_CLIENT_ID=...
 GITHUB_APP_PRIVATE_KEY_PATH=/opt/temporal-reviewer/github-app-private-key.pem
 CLAUDE_CODE_OAUTH_TOKEN=...
 CLAUDE_COMMAND=/usr/local/bin/claude
 ```
 
+Keep that file at mode `0600`. It is the only copy of these credentials, and
+the trust-zone separation now rests on file permissions plus the two controls
+below rather than on the secrets living in separate files.
+
+**`reviewer-api` must never regain `env_file: .env`.** It previously loaded the
+whole file, which would have handed the Claude token and GitHub App identity to
+the internet-facing webhook receiver. It now declares only the variables it
+actually needs, and everything else in `.env` is invisible to it.
+
 Never put the PEM contents directly in `.env`, Compose, Temporal inputs, or a
-Claude configuration file.
+Claude configuration file. Only the *path* belongs in `.env`.
 
 ### Claude authentication
 
@@ -81,11 +88,19 @@ limits shared with your own interactive Claude Code use, so a burst of pull
 requests can exhaust the limit that your interactive session depends on.
 
 Both variable names are allowlisted in `ClaudeCliReviewEngine`. That engine
-strips every environment variable whose name contains `TOKEN`, `SECRET` or
-`PASSWORD`, or ends in `_KEY`, before invoking Claude, so a Claude credential
-under any *other* name is silently removed and the review fails to
-authenticate. Add new credential variables to `SAFE_SECRET_ENVIRONMENT`, never
-to the worker environment alone.
+strips **everything** from the agent's environment except `SAFE_SECRET_ENVIRONMENT`
+(Claude's own credentials) and `PROCESS_ENVIRONMENT` (`PATH`, `HOME`, proxy
+settings and similar). So a Claude credential under any *other* name is silently
+removed and the review fails to authenticate. Add new credential variables to
+`SAFE_SECRET_ENVIRONMENT`, never to the worker environment alone.
+
+The allowlist replaced a blocklist of suspicious-looking name patterns, which
+was unsafe once the worker started reading the full production `.env`: pattern
+matching on `TOKEN`/`SECRET`/`PASSWORD`/`_KEY` misses real secrets such as
+`DEPENDENCYTRACK_KEK`, `REDIS_AUTH` and `SALT`. That matters because the agent
+reads attacker-authored pull request branches, so anything left in its
+environment is reachable by a prompt-injection payload. Do not reintroduce
+pattern-based filtering.
 
 Do not attempt to authenticate the worker by copying a human's
 `~/.claude/.credentials.json` into the service account's home directory. The
@@ -150,20 +165,17 @@ sudo install \
   -o root \
   -g temporal-reviewer \
   -m 0640 \
-  config/systemd/reviewer.env.example \
-  /opt/temporal-reviewer/reviewer.env
-sudo install \
-  -o root \
-  -g temporal-reviewer \
-  -m 0640 \
   github-app-private-key.pem \
   /opt/temporal-reviewer/github-app-private-key.pem
-sudo editor /opt/temporal-reviewer/reviewer.env
+chmod 0600 .env
 sudo systemctl enable --now temporal-reviewer-worker
 ```
 
-If the installer created `reviewer.env` before the example copy, edit the
-existing file rather than overwriting populated secrets.
+The installer links `/opt/temporal-reviewer/reviewer.env` to the deploy `.env`,
+so the worker's settings are edited there — see the "Temporal Code Reviewer"
+section of `.env.example` for the variables it reads. The installer never
+overwrites an existing `reviewer.env`, so re-running it cannot clobber
+populated secrets.
 
 ## Verification
 
