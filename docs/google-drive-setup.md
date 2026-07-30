@@ -127,6 +127,33 @@ environment:
 - Backup file names follow the format: `backup-YYYYMMDD-HHMMSS.zip`
 - Backups use your personal Google Drive storage quota
 
+## Retention
+
+`BackupScheduler` runs nightly at 22:00 Europe/London, and on success calls
+`BackupRetentionService.pruneToLimit()`, which deletes everything beyond the
+newest `backup.retention.max-backups` (default 7, in `application.yml`).
+
+Pruning is reported separately from the backup itself. `Nightly backup
+succeeded but retention pruning failed` means the archive uploaded fine and
+only the cleanup broke — no data was lost, but backups are accumulating and
+will keep consuming Drive quota until it is fixed.
+
+A single file that cannot be deleted is logged and skipped; the sweep continues
+through the rest. Look for the summary line to confirm what actually happened:
+
+```text
+Backup retention: deleted N of M over-limit backups
+```
+
+### After deploying the retention NPE fix
+
+Pruning was failing on every run, so the first successful sweep after this
+deploy clears the whole accumulated backlog at once — `N` will be much larger
+than the usual nightly delta of one. That is expected. Check that line the
+morning after the deploy and confirm the count matches the overage you expect
+before leaving it unattended; the folder should settle at
+`backup.retention.max-backups` files from then on.
+
 ## Troubleshooting
 
 ### "Google Drive OAuth2 credentials not configured"

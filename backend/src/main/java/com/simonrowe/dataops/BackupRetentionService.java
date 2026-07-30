@@ -29,7 +29,9 @@ public class BackupRetentionService {
   /**
    * Deletes all but the newest {@code maxBackups} backups. Safe no-op when
    * Drive is not connected. A failure deleting one backup is logged and does
-   * not abort the sweep.
+   * not abort the sweep, whether or not it is an {@link IOException} — Drive
+   * client failures are not always checked exceptions, and one file must never
+   * cost the whole sweep.
    *
    * @return the number of backups successfully deleted
    */
@@ -53,9 +55,8 @@ public class BackupRetentionService {
           googleDriveService.deleteFile(backup.fileId());
           LOG.info("Backup retention: deleted old backup {}", backup.fileName());
           deleted++;
-        } catch (IOException ex) {
-          LOG.error("Backup retention: failed to delete {}: {}",
-              backup.fileName(), ex.getMessage());
+        } catch (IOException | RuntimeException ex) {
+          LOG.error("Backup retention: failed to delete {}", backup.fileName(), ex);
         }
       }
       LOG.info("Backup retention: deleted {} of {} over-limit backups",

@@ -17,7 +17,7 @@ mongock = "5.5.1"
 googleApiClient = "2.8.0"
 googleApiServicesDrive = "v3-rev20250511-2.0.0"
 googleAuthLibrary = "1.35.0"
-googleHttpClient = "1.45.0"
+googleHttpClient = "1.47.0"
 temporal = "1.36.0"
 bouncycastle = "1.85"
 

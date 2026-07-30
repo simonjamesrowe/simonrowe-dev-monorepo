@@ -92,4 +92,40 @@ class BackupRetentionServiceTest {
     assertThat(deleted).isEqualTo(2);
     verify(googleDriveService, times(3)).deleteFile(anyString());
   }
+
+  /**
+   * Regression: the sweep only caught {@link IOException}, so an unchecked failure from the Drive
+   * client aborted it entirely. A {@code files.delete} returning 204 No Content made
+   * {@code Apache5HttpResponse.getContent()} dereference a null entity, and the resulting NPE
+   * escaped to the scheduler — leaving every remaining over-limit backup in place.
+   */
+  @Test
+  void continuesSweepWhenOneDeleteThrowsAnUncheckedException() throws IOException {
+    when(googleDriveService.isConnected()).thenReturn(true);
+    when(googleDriveService.findOrCreateFolder()).thenReturn("folder-1");
+    when(googleDriveService.listBackups("folder-1")).thenReturn(backups(10));
+    doThrow(new NullPointerException("Cannot invoke \"HttpEntity.getContent()\""))
+        .when(googleDriveService).deleteFile("id-7");
+
+    BackupRetentionService service = newService(7);
+    int deleted = service.pruneToLimit();
+
+    assertThat(deleted).isEqualTo(2);
+    verify(googleDriveService, times(3)).deleteFile(anyString());
+  }
+
+  @Test
+  void keepsSweepingWhenEveryDeleteThrowsUnchecked() throws IOException {
+    when(googleDriveService.isConnected()).thenReturn(true);
+    when(googleDriveService.findOrCreateFolder()).thenReturn("folder-1");
+    when(googleDriveService.listBackups("folder-1")).thenReturn(backups(10));
+    doThrow(new IllegalStateException("drive unhappy"))
+        .when(googleDriveService).deleteFile(anyString());
+
+    BackupRetentionService service = newService(7);
+    int deleted = service.pruneToLimit();
+
+    assertThat(deleted).isZero();
+    verify(googleDriveService, times(3)).deleteFile(anyString());
+  }
 }
