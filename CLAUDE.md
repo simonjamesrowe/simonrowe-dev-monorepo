@@ -67,7 +67,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - **Single `nginx:alpine` reverse proxy** (`config/nginx/nginx-proxy.conf`) fronts every public hostname:
   `www/simonrowe.dev → frontend:80`, `api.simonrowe.dev → backend:8080`,
   `console.simonrowe.dev → portainer:9000` (Portainer has **no** published port — only reachable through nginx),
-  `langfuse.simonrowe.dev → langfuse:3000`, `dependency-track.simonrowe.dev → dependencytrack-frontend:8080`
+  `langfuse.simonrowe.dev → langfuse:3000`, `temporal.simonrowe.dev → temporal-ui:8080`,
+  `dependency-track.simonrowe.dev → dependencytrack-frontend:8080`
   (with `/api/` routed to `dependencytrack-apiserver:8080`).
 - **nginx resolves upstreams at runtime, not just at boot** (fixed in commit `62d26cc`): the proxy conf sets
   `resolver 127.0.0.11 valid=10s ipv6=off;` (Docker's embedded DNS) and every `proxy_pass` target is a variable
@@ -90,6 +91,15 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   `langfuse` database and, since Dependency-Track was added, a `dtrack` database (see
   `docs/runbooks/dependency-track.md`). Stopping or restarting `langfuse-db` takes down both
   Langfuse and Dependency-Track, not just Langfuse.
+- **`software-factory`** (formerly `reviewer-api` + a `temporal-reviewer-worker` host service) is
+  one container running the GitHub webhook receiver and the Temporal code-review worker in one JVM,
+  with `git` and a pinned Claude Code binary baked into the image. There are no host prerequisites
+  and no systemd unit — it is reconciled by `docker compose up -d` like everything else.
+  Only `POST /webhooks/github` is routed by nginx (exact-match `location =`); the internal
+  `/api/reviews` endpoints are unrouted *and* token-protected. It deliberately has no `env_file`.
+  A container can be `healthy` while having registered no Temporal poller, in which case webhooks
+  return `202` and nothing ever reviews — check pollers on the `code-review` task queue, not just
+  the healthcheck. See `docs/runbooks/software-factory.md`.
 - **Recover a downed/partial stack** from the deploy directory: `docker compose -f docker-compose.prod.yml up -d`
   (reconciles containers stuck in `created`, respecting `depends_on` ordering). Minimal alternative:
   `docker start simonrowe-dev-monorepo-langfuse-1 && docker start simonrowe-dev-monorepo-nginx-1`.

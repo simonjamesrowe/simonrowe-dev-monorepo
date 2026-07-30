@@ -145,20 +145,33 @@ services:
       TEMPORAL_CORS_ORIGINS: https://temporal.simonrowe.dev
       TEMPORAL_DISABLE_WRITE_ACTIONS: "true"
 
-  reviewer-api:
-    image: ${REVIEWER_IMAGE:-ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:latest}
+  software-factory:
+    image: ${FACTORY_IMAGE:-ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory:latest}
     pull_policy: always
     restart: unless-stopped
-    # Deliberately no `env_file: .env`. This container is the internet-facing webhook
-    # receiver and must hold no Claude or GitHub App credential; the host worker owns
-    # those. Everything it legitimately needs is declared explicitly below.
+    # Deliberately no `env_file: .env`. This container terminates untrusted internet
+    # traffic (the GitHub webhook) and also holds the Claude and GitHub App credentials
+    # now that the API and the Temporal worker share one JVM. Loading the whole file
+    # would put every unrelated production secret in that process; declare what it
+    # needs, and nothing else.
     environment:
       JAVA_TOOL_OPTIONS: "-Xshare:off"
-      SPRING_PROFILES_ACTIVE: api
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?set GITHUB_WEBHOOK_SECRET in .env}
-      REVIEWER_TRIGGER_TOKEN: ${REVIEWER_TRIGGER_TOKEN:?set REVIEWER_TRIGGER_TOKEN in .env}
+      FACTORY_TRIGGER_TOKEN: ${FACTORY_TRIGGER_TOKEN:?set FACTORY_TRIGGER_TOKEN in .env}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?set GITHUB_APP_CLIENT_ID in .env}
+      # The host path in .env is the bind-mount source below; inside the container the
+      # PEM always lives here. Only the path is ever configured, never the key itself.
+      GITHUB_APP_PRIVATE_KEY_PATH: /run/secrets/github-app.pem
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set CLAUDE_CODE_OAUTH_TOKEN in .env}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-sonnet}
+      CLAUDE_EFFORT: ${CLAUDE_EFFORT:-medium}
+      CLAUDE_MAX_TURNS: ${CLAUDE_MAX_TURNS:-12}
+      CLAUDE_TIMEOUT: ${CLAUDE_TIMEOUT:-15m}
+    volumes:
+      - ${GITHUB_APP_PRIVATE_KEY_PATH:?set GITHUB_APP_PRIVATE_KEY_PATH in .env}:/run/secrets/github-app.pem:ro
+      - software-factory-workspace:/workspace
     depends_on:
       temporal:
         condition: service_healthy
@@ -616,3 +629,6 @@ volumes:
   # Dependency-Track's /data (HOME): Lucene indexes and analyzer working state.
   # Persisted so container recreation does not trigger a full index rebuild.
   dependencytrack-data:
+  # Where the software factory clones pull-request branches. A named volume rather
+  # than a host bind so contributor-authored code never lands on the host filesystem.
+  software-factory-workspace:

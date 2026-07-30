@@ -123,27 +123,28 @@ npm test
 
 Runs Checkstyle, tests, and JaCoCo coverage verification.
 
-## Temporal Code Reviewer
+## Software Factory
 
-The `reviewer/` subproject is a separate Spring Boot service that turns signed
-GitHub pull-request events into durable Temporal workflows and runs a read-only
-Claude Code review against an exact commit SHA.
+The `software-factory/` subproject is a Spring Boot service intended to grow
+into a modular monolith. Its first module, `codereview`, turns signed GitHub
+pull-request events into durable Temporal workflows and runs a read-only Claude
+Code review against an exact commit SHA.
 
 ```bash
 docker compose up -d temporal
-./gradlew :reviewer:bootRun
+./gradlew :software-factory:bootRun
 ```
 
-- Reviewer API: http://localhost:8090
-- Reviewer health: http://localhost:8091/actuator/health
+- Webhook + internal API: http://localhost:8090
+- Health: http://localhost:8091/actuator/health
 - Temporal UI: http://localhost:8233
-- Production: API container plus a host-side worker, so the worker can safely
-  invoke the Claude installation on the Raspberry Pi
+- Production: a single container running the webhook receiver and the Temporal
+  worker in one JVM, with `git` and a pinned Claude Code binary in the image
 
 See [docs/temporal-code-reviewer.md](docs/temporal-code-reviewer.md) for
-configuration, security boundaries, and the software-factory roadmap. Production
-setup and recovery are covered by the
-[Temporal reviewer runbook](docs/runbooks/temporal-reviewer.md).
+configuration, security boundaries, and the roadmap. Production setup and
+recovery are covered by the
+[software factory runbook](docs/runbooks/software-factory.md).
 
 ## Build Container Images
 

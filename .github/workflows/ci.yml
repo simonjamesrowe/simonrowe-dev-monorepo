@@ -92,8 +92,8 @@ jobs:
       - name: Build
         run: npm run build
 
-  reviewer:
-    name: Temporal Reviewer Build & Test
+  software-factory:
+    name: Software Factory Build & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -107,8 +107,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run reviewer checks
-        run: ./gradlew :reviewer:check
+      - name: Run software factory checks
+        run: ./gradlew :software-factory:check
 
-      - name: Build reviewer container
-        run: docker build -f Dockerfile.reviewer -t temporal-reviewer:test .
+      - name: Build software factory container
+        run: docker build -f Dockerfile.software-factory -t software-factory:test .

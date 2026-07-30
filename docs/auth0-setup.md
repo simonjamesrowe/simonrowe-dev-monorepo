@@ -436,5 +436,6 @@ portfolio SPA client.
    - the UI must not offer terminate, cancel, signal, reset, or batch actions
      while `TEMPORAL_DISABLE_WRITE_ACTIONS=true`.
 
-Port `7233` is deliberately bound only to `127.0.0.1` for the host reviewer
-worker and remains unreachable through nginx/Pinggy.
+Port `7233` is deliberately bound only to `127.0.0.1` and remains unreachable
+through nginx/Pinggy. `software-factory` reaches Temporal over the Compose
+network rather than that published port.
