@@ -140,56 +140,56 @@ exact request body, and publishes by default.
 - The agent Activity has one attempt. Temporal does not blindly repeat a
   cost-bearing model run after an ambiguous timeout.
 - A checkout is capped at 80 changed files and a 2 MiB diff by default.
-- The worker runs as a dedicated non-root OS user under the hardened systemd
-  unit in `config/systemd/temporal-reviewer-worker.service`.
+- The service runs as a dedicated non-root user (uid/gid 10003) inside the
+  container, with the Claude binary root-owned at 0755 so it can be executed but
+  not replaced.
 - Do not rely on an interactive consumer Claude login as an unattended service
   credential. Use a supported Anthropic API key or workload identity for
   production.
 
 ## Raspberry Pi topology
 
-For the first single-user deployment:
-
 ```text
-Cloudflare/pinggy -> nginx -> reviewer API container
-                                  |
-                                  v
-                        Temporal container/service
-                                  |
-                           code-review queue
-                                  |
-                                  v
-                       reviewer worker on Pi host
-                                  |
-                                  v
-                       host-installed Claude Code
+Cloudflare/pinggy -> nginx -> software-factory container
+                              (POST /webhooks/github only)
+                                      |
+                                      v
+                            Temporal container/service
+                                      |
+                               code-review queue
+                                      |
+                                      v
+                        same software-factory container
+                                      |
+                                      v
+                        Claude Code binary in the image
 ```
 
-Do not mount the host Claude executable, its home directory, or Docker socket
-into the API container. The same reviewer JAR has two production roles:
+The webhook receiver and the Temporal worker are one process. That was not
+always so: the worker previously ran as a systemd service on the host, keeping
+the internet-facing container free of Claude and GitHub App credentials. The two
+were merged to fit a single Raspberry Pi — one JVM instead of two — and to stop
+the worker being a host service that no `docker compose up` ever reconciled,
+which is exactly how it once sat dead for a day while webhooks were still being
+accepted.
 
-```bash
-# Containerized HTTP ingress/client: starts Workflows but never executes work.
-SPRING_PROFILES_ACTIVE=api
-TEMPORAL_ADDRESS=temporal:7233
+The trade accepted in that merge: the process terminating untrusted internet
+traffic now also holds long-lived credentials. What makes it defensible is that
+the exposed surface is a single exact-match route whose signature check is
+tested, and that the agent runs read-only (`--tools Read,Glob,Grep`, no Bash, no
+Write, MCP disabled) inside a container rather than on the host. Cloning
+contributor branches into a container is stricter isolation than the host
+service had, which offsets part of what the merge gave up.
 
-# Host service: no HTTP listener; polls Temporal and can execute host Claude.
-SPRING_PROFILES_ACTIVE=worker
-TEMPORAL_ADDRESS=127.0.0.1:7233
-```
+The container declares no `env_file`. It receives only the variables named in
+its Compose `environment:` block, and `ClaudeCliReviewEngine` strips everything
+outside `SAFE_SECRET_ENVIRONMENT`/`PROCESS_ENVIRONMENT` before spawning Claude,
+so a prompt-injection payload in a pull request cannot read unrelated secrets.
 
-The host service should run under a dedicated unprivileged user with its own
-workspace and Anthropic credentials. `scripts/install-reviewer-worker.sh`
-extracts `/app/reviewer.jar` from the published reviewer image, ensuring the
-host worker and API container use the same build. The systemd unit restarts it
-and applies filesystem/kernel hardening. The API container needs the webhook
-secret; only the host worker needs the GitHub App private key and Anthropic
-credentials.
-
-Keep the public ingress limited to the signed webhook; the manual endpoint
-stays internal and token-protected. Production Compose uses the pinned
-`temporalio/server` image with `temporal` and `temporal_visibility` schemas in
-Postgres. The SQLite development service remains local-only.
+Keep the public ingress limited to the signed webhook; the manual endpoint and
+the status endpoint stay unrouted and token-protected. Production Compose uses
+the pinned `temporalio/server` image with `temporal` and `temporal_visibility`
+schemas in Postgres. The SQLite development service remains local-only.
 
 ### GitHub App for `simonjamesrowe`
 

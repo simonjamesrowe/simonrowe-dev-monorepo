@@ -1,0 +1,52 @@
+server:
+  port: ${FACTORY_SERVER_PORT:${REVIEWER_SERVER_PORT:8090}}
+
+management:
+  server:
+    port: ${FACTORY_MANAGEMENT_PORT:${REVIEWER_MANAGEMENT_PORT:8091}}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+spring:
+  application:
+    name: software-factory
+  temporal:
+    connection:
+      target: ${TEMPORAL_ADDRESS:local}
+    namespace: ${TEMPORAL_NAMESPACE:default}
+    # The webhook API and the Temporal worker run in one JVM. They were once
+    # separate deployables so the internet-facing receiver held no Claude or
+    # GitHub App credential; that separation was given up deliberately to fit a
+    # single Raspberry Pi, on the basis that the only route in from the internet
+    # is the signature-verified webhook. See docs/runbooks/software-factory.md.
+    workers-auto-discovery:
+      enabled: true
+      workflow-packages:
+        - com.simonrowe.factory.codereview.workflow
+      register-activity-beans: true
+
+factory:
+  codereview:
+    github:
+      api-base-url: ${GITHUB_API_URL:https://api.github.com}
+      token: ${GITHUB_TOKEN:}
+      webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
+      app-client-id: ${GITHUB_APP_CLIENT_ID:}
+      app-private-key-path: ${GITHUB_APP_PRIVATE_KEY_PATH:}
+      request-timeout: 30s
+    agent:
+      command: ${CLAUDE_COMMAND:claude}
+      model: ${CLAUDE_MODEL:sonnet}
+      effort: ${CLAUDE_EFFORT:medium}
+      max-turns: ${CLAUDE_MAX_TURNS:12}
+      timeout: ${CLAUDE_TIMEOUT:15m}
+      # FACTORY_* is the current name; REVIEWER_* is accepted for one release so a
+      # stale deploy .env cannot break the boot. Remove the fallbacks after that.
+      workspace-root: ${FACTORY_WORKSPACE_ROOT:${REVIEWER_WORKSPACE_ROOT:${java.io.tmpdir}/software-factory}}
+      max-diff-bytes: ${FACTORY_MAX_DIFF_BYTES:${REVIEWER_MAX_DIFF_BYTES:2097152}}
+      max-changed-files: ${FACTORY_MAX_CHANGED_FILES:${REVIEWER_MAX_CHANGED_FILES:80}}
+      prompt-version: v1
+    api:
+      trigger-token: ${FACTORY_TRIGGER_TOKEN:${REVIEWER_TRIGGER_TOKEN:}}

@@ -1,0 +1,347 @@
+# Software Factory Production Runbook
+
+The software factory is one container, `software-factory`, running the GitHub
+webhook receiver and the Temporal code-review worker in the same JVM. It is the
+first module of what is intended to become a modular monolith; today it hosts
+only `codereview`.
+
+It was previously two deployables — a credential-free `reviewer-api` container
+and a `temporal-reviewer-worker` host service that owned the GitHub App key and
+the Claude token. They were merged deliberately, to fit a single Raspberry Pi
+and to stop the worker being a host service that no deploy ever reconciled.
+
+The cost of that merge is explicit and accepted: the process that terminates
+untrusted internet traffic now also holds long-lived credentials. What keeps it
+defensible is that the attack surface is exactly one route.
+
+## Entry points
+
+`software-factory` exposes four things, and only the first is reachable from the
+internet:
+
+| Endpoint | Port | Auth | Routed by nginx |
+| --- | --- | --- | --- |
+| `POST /webhooks/github` | 8090 | HMAC-SHA256 over the raw body | yes, exact-match |
+| `POST /api/reviews` | 8090 | `X-Factory-Token` | no |
+| `GET /api/reviews/{workflowId}` | 8090 | `X-Factory-Token` | no |
+| `/actuator/{health,info,prometheus}` | 8091 | none | no |
+
+nginx uses `location = /webhooks/github` — an exact match, not a prefix — so no
+other path on this service is routable from outside. That is defence in depth,
+not the boundary: both `/api/reviews` endpoints check the trigger token
+themselves, because a proxy rule is a routing decision and not an authorisation
+one. `GET /api/reviews/{workflowId}` was unauthenticated until the merge; it is
+covered by `ReviewControllerTest` now.
+
+Signature verification lives in `WebhookSignatureVerifier`. It computes
+HMAC-SHA256 over the exact request bytes, compares with `MessageDigest.isEqual`
+so the comparison is constant-time, and fails closed when the configured secret
+is missing or blank — an unset `GITHUB_WEBHOOK_SECRET` resolves to the empty
+string, and accepting that would let anyone sign their own payloads. Do not
+change this class without keeping `WebhookSignatureVerifierTest` and
+`GitHubWebhookControllerTest` green; between them they pin unsigned, wrongly
+signed, replayed-onto-a-different-body, non-JSON and malformed deliveries.
+
+## One-time external setup
+
+### GitHub App
+
+Create a private, organization-owned GitHub App named `simonrowe-code-reviewer`:
+
+- Homepage URL: `https://simonrowe.dev`
+- Webhook URL: `https://api.simonrowe.dev/webhooks/github`
+- Webhook secret: the existing `GITHUB_WEBHOOK_SECRET` from the deploy `.env`.
+  Generate a new value only if `.env` has none — changing it means restarting
+  `software-factory`, which reads it at boot, or every delivery fails signature
+  verification with `401`.
+- Repository permissions:
+  - Contents: read
+  - Issues: read and write
+  - Pull requests: read
+  - Metadata: read (implicit)
+- Subscribe to: Pull request
+- User authorization: disabled
+
+Install it on the `simonjamesrowe` organization, initially selecting only the
+repositories to review. Generate a private key and record the App **Client ID**
+(GitHub recommends the client ID as the JWT issuer).
+
+The webhook receiver handles `opened`, `reopened`, `synchronize`, and
+`ready_for_review`. Draft pull requests are ignored.
+
+### Auth0
+
+Complete [Temporal UI Single Sign-On](../auth0-setup.md#temporal-ui-single-sign-on-sso).
+The Auth0 Post-Login Action must deny the Temporal client unless the user has
+`DEV_PORTAL_ADMIN`.
+
+## Secrets
+
+There is one secrets file: the production `.env` in the deploy directory.
+Compose interpolates from it; `software-factory` receives only the variables its
+`environment:` block names.
+
+```dotenv
+GITHUB_WEBHOOK_SECRET=...
+FACTORY_TRIGGER_TOKEN=...
+TEMPORAL_DB_PASSWORD=...
+TEMPORAL_AUTH0_CLIENT_ID=...
+TEMPORAL_AUTH0_CLIENT_SECRET=...
+TEMPORAL_AUTH0_ISSUER=https://YOUR_AUTH0_DOMAIN/
+FACTORY_IMAGE=ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory:COMMIT_SHA
+
+GITHUB_APP_CLIENT_ID=...
+# Host path. Compose bind-mounts this file to /run/secrets/github-app.pem and
+# overrides the in-container value of this variable to that path.
+GITHUB_APP_PRIVATE_KEY_PATH=/opt/software-factory/github-app-private-key.pem
+CLAUDE_CODE_OAUTH_TOKEN=...
+```
+
+`FACTORY_*` replaced `REVIEWER_*`. The application reads `FACTORY_*` first and
+falls back to the old names for one release, so an un-migrated `.env` still
+boots; `docker-compose.prod.yml` does **not** carry that fallback, so a deploy
+needs the new names present. Delete the `REVIEWER_*` keys once this is verified.
+
+Keep `.env` at mode `0600`. It is the only copy of these credentials.
+
+**`software-factory` must never gain `env_file: .env`.** It would load all ~83
+production variables into the process that terminates untrusted internet
+traffic. It declares only what it needs, and everything else in `.env` is
+invisible to it. This matters more since the merge, not less: the credential
+separation that used to come from running the agent in a different process now
+comes only from this list.
+
+Never put the PEM contents directly in `.env`, Compose, Temporal inputs, or a
+Claude configuration file. Only the *path* belongs in `.env`.
+
+The PEM is bind-mounted read-only. The container runs as uid/gid `10003`, so the
+file on the host must be readable by that gid:
+
+```bash
+sudo install -o root -g 10003 -m 0640 \
+  github-app-private-key.pem /opt/software-factory/github-app-private-key.pem
+```
+
+A PEM left at `0640 root:root`, or owned by the retired `temporal-reviewer`
+group, is unreadable inside the container and every review fails when it tries
+to mint an installation token.
+
+### Claude authentication
+
+Use **either** a Claude Pro/Max subscription token **or** a pay-as-you-go API
+key. Setting both is a silent trap: `ANTHROPIC_API_KEY` takes precedence and is
+billed per token even though a subscription token is present.
+
+For the subscription route, run `claude setup-token` as a human and put the
+result in `CLAUDE_CODE_OAUTH_TOKEN`. Reviews then consume subscription usage
+limits shared with your own interactive Claude Code use, so a burst of pull
+requests can exhaust the limit that your interactive session depends on.
+
+Both variable names are allowlisted in `ClaudeCliReviewEngine`. That engine
+strips **everything** from the agent's environment except `SAFE_SECRET_ENVIRONMENT`
+(Claude's own credentials) and `PROCESS_ENVIRONMENT` (`PATH`, `HOME`, proxy
+settings and similar). So a Claude credential under any *other* name is silently
+removed and the review fails to authenticate. Add new credential variables to
+`SAFE_SECRET_ENVIRONMENT`, never to the service environment alone.
+
+The allowlist replaced a blocklist of suspicious-looking name patterns, which
+was unsafe once the service started reading production credentials: pattern
+matching on `TOKEN`/`SECRET`/`PASSWORD`/`_KEY` misses real secrets such as
+`DEPENDENCYTRACK_KEK`, `REDIS_AUTH` and `SALT`. That matters because the agent
+reads attacker-authored pull request branches, so anything left in its
+environment is reachable by a prompt-injection payload. Do not reintroduce
+pattern-based filtering.
+
+Do not attempt to authenticate the service by copying a human's
+`~/.claude/.credentials.json` into the container. The service and the
+interactive session would refresh the same OAuth credential independently and
+can invalidate each other.
+
+## First deployment
+
+There are no host prerequisites. Java and Claude Code both ship inside the
+image; the Pi needs only Docker and a current checkout. (The retired host path
+needed a system-wide JRE at `/usr/bin/java` and a root-owned
+`/usr/local/bin/claude`, installed by two scripts that no longer exist.)
+
+Claude Code is pinned by the `CLAUDE_VERSION` build arg in
+`Dockerfile.software-factory`, downloaded from the same release endpoint the old
+installer used and checked against the published SHA-256. It is installed
+root-owned at mode 0755 so the service user executes it but cannot replace it,
+which keeps the version tied to an explicit image rebuild rather than a
+background self-update.
+
+Place the GitHub App private key where Compose expects it, readable by the
+container's gid:
+
+```bash
+sudo mkdir -p /opt/software-factory
+sudo install -o root -g 10003 -m 0640 \
+  github-app-private-key.pem /opt/software-factory/github-app-private-key.pem
+chmod 0600 .env
+```
+
+Validate Compose before changing running services:
+
+```bash
+docker compose -f docker-compose.prod.yml config --quiet
+```
+
+Then start the stack:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d \
+  temporal-db-init \
+  temporal-schema-init \
+  temporal \
+  temporal-create-namespace \
+  temporal-ui \
+  software-factory
+docker compose -f docker-compose.prod.yml restart nginx
+```
+
+## Verification
+
+On the Pi:
+
+```bash
+docker compose -f docker-compose.prod.yml ps \
+  temporal temporal-ui software-factory
+docker compose -f docker-compose.prod.yml logs --tail=100 \
+  temporal temporal-ui software-factory
+ss -ltn | grep 7233
+```
+
+The `ss` output must show `127.0.0.1:7233`, never `0.0.0.0:7233`.
+
+The single most useful check is whether the worker half actually joined its task
+queue. A healthy container that never registered a poller looks identical from
+the outside, and webhooks will be accepted and then sit unprocessed:
+
+```bash
+docker run --rm --network simonrowe-dev-monorepo_default \
+  temporalio/admin-tools:1.31.2 \
+  temporal task-queue describe --address temporal:7233 \
+  --namespace default --task-queue code-review
+```
+
+Expect one `workflow` and one `activity` poller. Zero pollers means the webhook
+is live but nothing will ever review a pull request.
+
+Externally:
+
+```bash
+curl -I https://temporal.simonrowe.dev
+```
+
+Expect an Auth0 redirect. Sign in with the admin account and confirm the UI is
+read-only.
+
+Confirm the internal API is not exposed. Both must fail from outside:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://api.simonrowe.dev/api/reviews/x
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://api.simonrowe.dev/api/reviews
+```
+
+Anything other than a backend `404`/`405` means nginx is routing more than the
+webhook and the exact-match `location` has been loosened.
+
+An unsigned delivery must be rejected:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  https://api.simonrowe.dev/webhooks/github \
+  -H 'X-GitHub-Event: pull_request' -d '{"action":"opened"}'
+```
+
+Expect `401`.
+
+For an end-to-end check without publishing a comment, trigger a dry run from
+inside the Docker network (the manual API is deliberately unrouted):
+
+```bash
+docker run --rm --network simonrowe-dev-monorepo_default curlimages/curl -s \
+  -X POST http://software-factory:8090/api/reviews \
+  -H "X-Factory-Token: $(grep '^FACTORY_TRIGGER_TOKEN=' .env | cut -d= -f2-)" \
+  -H 'Content-Type: application/json' \
+  -d '{"owner":"simonjamesrowe","repository":"simonrowe-dev-monorepo","pullNumber":NN,"publish":false}'
+```
+
+`publish:false` exercises the clone, the Claude invocation and the parse without
+writing to GitHub. Note it consumes Claude subscription usage shared with your
+interactive sessions.
+
+Then, in the GitHub App settings, send a webhook test delivery or update a pull
+request. Confirm:
+
+1. delivery returns HTTP `202`;
+2. a `code-review-*` Workflow appears in Temporal;
+3. the Activities complete;
+4. one marker-based advisory comment appears on the pull request;
+5. redelivery updates/deduplicates rather than creating another Workflow or
+   comment.
+
+## Updating and rollback
+
+The publish workflow pushes both `:latest` and an immutable commit-SHA tag on
+every merge to `main`.
+
+Normal updates need no manual step. `FACTORY_IMAGE` tracks `:latest` and the
+service carries `pull_policy: always`:
+
+```bash
+./scripts/restart-prod.sh
+```
+
+That script used to reconcile a host service as well, comparing resolved image
+**IDs** against `/opt/temporal-reviewer/installed-image` because a moving
+`:latest` tag would otherwise report "unchanged" forever and leave the worker on
+a stale jar. None of that is needed now — there is one image, pulled by Compose,
+and the API/worker drift it defended against is structurally impossible when
+both halves are the same process.
+
+To roll back, or to hold on a known build, pin the commit-SHA tag:
+
+```bash
+# in .env
+FACTORY_IMAGE=ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory:COMMIT_SHA
+```
+
+then `./scripts/restart-prod.sh`.
+
+Claude Code's version is pinned separately, by `CLAUDE_VERSION` in
+`Dockerfile.software-factory`. Bumping it is an image rebuild, so a Claude
+upgrade is a reviewable commit rather than something that happens underneath a
+running service.
+
+Temporal schema migrations are forward-moving. Before upgrading the pinned
+Temporal server/admin-tools version, take logical dumps:
+
+```bash
+docker exec simonrowe-dev-monorepo-langfuse-db-1 \
+  pg_dump -U temporal -Fc temporal > temporal.dump
+docker exec simonrowe-dev-monorepo-langfuse-db-1 \
+  pg_dump -U temporal -Fc temporal_visibility > temporal_visibility.dump
+```
+
+Treat those dumps as sensitive because Workflow inputs and review summaries
+are stored in Event History.
+
+## Failure boundaries
+
+- GitHub webhook unavailable: GitHub records a failed delivery for redelivery.
+- `software-factory` unavailable: deliveries fail at the door and Workflows
+  already running are suspended, resuming when Compose restarts the container.
+  Merging the API and the worker means these two no longer fail independently —
+  losing the container now loses both ingress and processing, where previously a
+  live API would still queue work for a dead worker.
+- Claude/model failure: the cost-bearing Activity is not automatically retried.
+- Temporal UI unavailable: review processing continues.
+- Temporal/Postgres unavailable: new triggers fail; do not delete the Postgres
+  volume while recovering.
+
+A container that is `healthy` but registered no Temporal poller is the quiet
+failure to watch for: the webhook returns `202`, Workflows accumulate, and
+nothing reviews them. The task-queue check under Verification is what catches
+it. The actuator healthcheck on 8091 does not — it reports the web half only.
