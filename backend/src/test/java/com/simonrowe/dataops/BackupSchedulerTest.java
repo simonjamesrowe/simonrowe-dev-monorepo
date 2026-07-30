@@ -1,5 +1,7 @@
 package com.simonrowe.dataops;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -72,5 +74,22 @@ class BackupSchedulerTest {
 
     verify(backupService).performBackup();
     verify(retentionService, never()).pruneToLimit();
+  }
+
+  /**
+   * A prune that blows up must not be reported as a backup failure. The upload had already
+   * completed, and "Nightly backup job errored" reads as lost data when nothing was lost.
+   */
+  @Test
+  void survivesPruneFailureAfterSuccessfulBackup() {
+    when(googleDriveService.isConnected()).thenReturn(true);
+    when(operationsService.tryStartOperation(OperationType.BACKUP)).thenReturn(runningOp());
+    when(backupService.performBackup()).thenReturn(true);
+    doThrow(new NullPointerException("boom")).when(retentionService).pruneToLimit();
+
+    assertThatCode(() -> scheduler.runNightlyBackup()).doesNotThrowAnyException();
+
+    verify(backupService).performBackup();
+    verify(retentionService).pruneToLimit();
   }
 }

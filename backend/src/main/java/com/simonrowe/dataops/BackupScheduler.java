@@ -52,10 +52,18 @@ public class BackupScheduler {
       }
       LOG.info("Nightly backup starting");
       boolean ok = backupService.performBackup();
-      if (ok) {
-        retentionService.pruneToLimit();
-      } else {
+      if (!ok) {
         LOG.error("Nightly backup failed; skipping retention prune");
+        return;
+      }
+      // Reported separately from the backup itself. A prune failure used to
+      // surface as "Nightly backup job errored" even though the backup had
+      // uploaded successfully, which reads as data loss when it is not.
+      try {
+        retentionService.pruneToLimit();
+      } catch (Exception ex) {
+        LOG.error("Nightly backup succeeded but retention pruning failed; "
+            + "old backups are accumulating in Drive", ex);
       }
     } catch (Exception ex) {
       LOG.error("Nightly backup job errored", ex);
