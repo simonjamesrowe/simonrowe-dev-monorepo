@@ -14,6 +14,44 @@ The cost of that merge is explicit and accepted: the process that terminates
 untrusted internet traffic now also holds long-lived credentials. What keeps it
 defensible is that the attack surface is exactly one route.
 
+## Migrating from the split deployment
+
+**This is the one-time cutover. Run it after merging, not before.**
+
+```bash
+cd ~/workspace/simonjamesrowe/simonrowe-dev-monorepo
+git pull
+sudo -v && ./scripts/cutover-software-factory.sh
+```
+
+The script is idempotent and every step checks its own end state, so a re-run
+after a failure is safe. It installs the GitHub App private key where the
+container can read it, repoints `.env`, retires the host service, starts the
+container and verifies the result. Delete it once the cutover has stuck.
+
+Two things it exists to stop you getting wrong by hand:
+
+- **Order.** `FACTORY_IMAGE` points at a ghcr image that CI only publishes once
+  this change is on `main`. Running the cutover before that leaves the host
+  worker disabled with nothing to replace it. The script checks the image is
+  obtainable *before* it mutates anything, and tells you how to build locally if
+  you want to test ahead of the merge.
+- **The PEM.** It is `0640 root:temporal-reviewer` on the host, which uid 10003
+  inside the container cannot read. Skip the re-install and everything looks
+  fine until the first review fails minting an installation token, with an error
+  that does not point back here.
+
+Verification goes past "the container is healthy": it asserts a live poller on
+the `code-review` task queue, a `401` for an unsigned webhook, and that
+`/api/reviews` is not routable from outside. On failure it prints logs and
+rollback steps — rollback works because the old `REVIEWER_*` keys are left in
+`.env` on purpose.
+
+Two steps are deliberately left to you, and are printed at the end: a
+`publish:false` dry run (the only thing that exercises Claude auth and the clone
+path end to end), and the cleanup — dropping the `REVIEWER_*` keys, removing
+`/opt/temporal-reviewer` and the old unit file, and deleting the script.
+
 ## Entry points
 
 `software-factory` exposes four things, and only the first is reachable from the
@@ -158,6 +196,10 @@ interactive session would refresh the same OAuth credential independently and
 can invalidate each other.
 
 ## First deployment
+
+For a host that already runs the split deployment, use
+[Migrating from the split deployment](#migrating-from-the-split-deployment)
+instead — this section is for a clean install.
 
 There are no host prerequisites. Java and Claude Code both ship inside the
 image; the Pi needs only Docker and a current checkout. (The retired host path
