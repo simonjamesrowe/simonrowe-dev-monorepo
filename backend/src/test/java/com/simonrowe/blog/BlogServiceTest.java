@@ -81,7 +81,7 @@ class BlogServiceTest {
     );
     given(blogRepository.findByPublishedTrueOrderByCreatedDateDesc()).willReturn(blogs);
 
-    List<BlogSummaryResponse> result = blogService.getLatest(3);
+    List<BlogSummaryResponse> result = blogService.getLatest(3, null);
 
     assertThat(result).hasSize(3);
     assertThat(result.get(0).id()).isEqualTo("b-1");
@@ -94,7 +94,7 @@ class BlogServiceTest {
     Tag tag = new Tag("t-1", "Kubernetes");
     Blog blog = new Blog("b-1", "Post", "Short", "Content", true, null,
         Instant.parse("2024-01-01T00:00:00Z"), Instant.parse("2024-01-01T00:00:00Z"),
-        List.of(tag), List.of());
+        List.of(tag), List.of(), BlogContentType.ENGINEERING);
     given(blogRepository.findByPublishedTrueOrderByCreatedDateDesc()).willReturn(List.of(blog));
 
     List<BlogSummaryResponse> result = blogService.listPublished();
@@ -114,7 +114,8 @@ class BlogServiceTest {
         Instant.parse("2024-06-01T10:00:00Z"),
         Instant.parse("2024-06-01T10:00:00Z"),
         List.of(),
-        List.of()
+        List.of(),
+        BlogContentType.ENGINEERING
     );
   }
 

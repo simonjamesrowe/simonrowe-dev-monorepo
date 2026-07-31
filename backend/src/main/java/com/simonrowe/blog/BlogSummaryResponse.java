@@ -11,7 +11,8 @@ public record BlogSummaryResponse(
     Instant createdDate,
     List<TagRef> tags,
     List<SkillRef> skills,
-    String url
+    String url,
+    BlogContentType contentType
 ) {
 
   public static BlogSummaryResponse fromEntity(final Blog blog) {
@@ -38,7 +39,8 @@ public record BlogSummaryResponse(
         blog.createdDate(),
         tagRefs,
         skillRefs,
-        "/blogs/" + blog.id()
+        "/blogs/" + blog.id(),
+        BlogContentType.orDefault(blog.contentType())
     );
   }
 }

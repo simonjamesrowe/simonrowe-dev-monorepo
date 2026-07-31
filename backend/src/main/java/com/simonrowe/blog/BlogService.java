@@ -39,8 +39,24 @@ public class BlogService {
             new ResponseStatusException(HttpStatus.NOT_FOUND, "Blog post not found"));
   }
 
-  public List<BlogSummaryResponse> getLatest(final int limit) {
+  /**
+   * Returns the most recent published posts, optionally restricted to one content type.
+   *
+   * <p>The content-type filter is applied <em>before</em> the limit, so a request for
+   * three engineering posts returns three even when newer digests occupy the top of the
+   * list.
+   *
+   * @param limit maximum number of posts to return
+   * @param contentType the content type to restrict to, or {@code null} for no filtering
+   * @return at most {@code limit} posts, newest first
+   */
+  public List<BlogSummaryResponse> getLatest(
+      final int limit,
+      final BlogContentType contentType
+  ) {
     return blogRepository.findByPublishedTrueOrderByCreatedDateDesc().stream()
+        .filter(blog -> contentType == null
+            || BlogContentType.orDefault(blog.contentType()) == contentType)
         .limit(limit)
         .map(blog -> BlogSummaryResponse.fromEntity(
             blog,

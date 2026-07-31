@@ -77,6 +77,7 @@ public class BlogImageBackfillService {
         blog.createdDate(),
         blog.updatedDate(),
         blog.tags(),
-        blog.skills());
+        blog.skills(),
+        blog.contentType());
   }
 }

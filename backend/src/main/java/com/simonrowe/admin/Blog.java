@@ -1,5 +1,6 @@
 package com.simonrowe.admin;
 
+import com.simonrowe.blog.BlogContentType;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.annotation.Id;
@@ -24,6 +25,7 @@ public record Blog(
     @DBRef List<Skill> skills,
     @Field("createdDate") Instant createdAt,
     @Field("updatedDate") Instant updatedAt,
-    @Indexed(unique = true, sparse = true) String legacyId
+    @Indexed(unique = true, sparse = true) String legacyId,
+    BlogContentType contentType
 ) {
 }

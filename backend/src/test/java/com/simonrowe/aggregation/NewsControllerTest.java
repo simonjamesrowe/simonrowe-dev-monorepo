@@ -1,14 +1,17 @@
 package com.simonrowe.aggregation;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.simonrowe.AbstractIntegrationTest;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.json.JsonCompareMode;
 
 class NewsControllerTest extends AbstractIntegrationTest {
 
@@ -88,6 +91,69 @@ class NewsControllerTest extends AbstractIntegrationTest {
 
     mockMvc.perform(get("/api/news/a-1"))
         .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void getSources_returnsDistinctNamesFromDuplicatedSources() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticleWithSource("a-1", "One", "InfoQ", true),
+        sampleArticleWithSource("a-2", "Two", "InfoQ", true),
+        sampleArticleWithSource("a-3", "Three", "Dan Vega", true),
+        sampleArticleWithSource("a-4", "Four", "Dan Vega", true),
+        sampleArticleWithSource("a-5", "Five", "Ars Technica", true)
+    ));
+
+    mockMvc.perform(get("/api/news/sources"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(3));
+  }
+
+  @Test
+  void getSources_returnsNamesInAlphabeticalOrder() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticleWithSource("a-1", "One", "The Pragmatic Engineer", true),
+        sampleArticleWithSource("a-2", "Two", "Ars Technica", true),
+        sampleArticleWithSource("a-3", "Three", "InfoQ", true),
+        sampleArticleWithSource("a-4", "Four", "Claude Blog", true)
+    ));
+
+    mockMvc.perform(get("/api/news/sources"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(4))
+        .andExpect(jsonPath("$[0]").value("Ars Technica"))
+        .andExpect(jsonPath("$[1]").value("Claude Blog"))
+        .andExpect(jsonPath("$[2]").value("InfoQ"))
+        .andExpect(jsonPath("$[3]").value("The Pragmatic Engineer"));
+  }
+
+  @Test
+  void getSources_excludesSourcesOnlyHiddenArticlesHave() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticleWithSource("a-1", "Visible", "InfoQ", true),
+        sampleArticleWithSource("a-2", "Hidden", "Hidden Source", false)
+    ));
+
+    mockMvc.perform(get("/api/news/sources"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0]").value("InfoQ"));
+  }
+
+  @Test
+  void getSources_returnsEmptyArrayWhenNoArticles() throws Exception {
+    mockMvc.perform(get("/api/news/sources"))
+        .andExpect(status().isOk())
+        .andExpect(content().json("[]", JsonCompareMode.STRICT));
+  }
+
+  @Test
+  void getSources_isNotShadowedByTheByIdMapping() throws Exception {
+    articleRepository.save(sampleArticle("sources", "Article Whose Id Is sources", true));
+
+    mockMvc.perform(get("/api/news/sources"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$").isArray())
+        .andExpect(jsonPath("$[0]").value("Tech Blog"));
   }
 
   private AggregatedArticle sampleArticle(

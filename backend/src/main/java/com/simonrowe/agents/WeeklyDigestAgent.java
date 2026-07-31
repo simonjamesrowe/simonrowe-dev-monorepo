@@ -7,6 +7,7 @@ import com.embabel.chat.UserMessage;
 import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.blog.Blog;
+import com.simonrowe.blog.BlogContentType;
 import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.blog.Skill;
 import com.simonrowe.blog.Tag;
@@ -110,7 +111,8 @@ public class WeeklyDigestAgent {
         metadata.shortDescription(),
         digestContent, true, featuredImageUrl,
         createdAt, createdAt,
-        List.of(digestTag), List.<Skill>of());
+        List.of(digestTag), List.<Skill>of(),
+        BlogContentType.DIGEST);
 
     Blog saved = blogRepository.save(digest);
     changePublisher.publishCreated(ContentType.BLOG, saved.id());

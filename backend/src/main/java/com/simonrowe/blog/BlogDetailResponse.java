@@ -11,7 +11,8 @@ public record BlogDetailResponse(
     String featuredImageUrl,
     Instant createdDate,
     List<TagRef> tags,
-    List<SkillRef> skills
+    List<SkillRef> skills,
+    BlogContentType contentType
 ) {
 
   public static BlogDetailResponse fromEntity(final Blog blog) {
@@ -38,7 +39,8 @@ public record BlogDetailResponse(
         featuredImageUrl,
         blog.createdDate(),
         tagRefs,
-        skillRefs
+        skillRefs,
+        BlogContentType.orDefault(blog.contentType())
     );
   }
 }

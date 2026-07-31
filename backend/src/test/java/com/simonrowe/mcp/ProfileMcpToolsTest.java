@@ -15,6 +15,7 @@ import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.AggregatedEvent;
 import com.simonrowe.aggregation.AggregatedEventRepository;
+import com.simonrowe.blog.BlogContentType;
 import com.simonrowe.blog.BlogService;
 import com.simonrowe.blog.BlogSummaryResponse;
 import com.simonrowe.chat.BlogWidgetPayload;
@@ -265,18 +266,18 @@ class ProfileMcpToolsTest {
   @Test
   void getRecentBlogsDelegatesToBlogService() {
     final List<BlogSummaryResponse> expectedBlogs = List.of();
-    given(blogService.getLatest(10)).willReturn(expectedBlogs);
+    given(blogService.getLatest(10, null)).willReturn(expectedBlogs);
 
     final List<BlogSummaryResponse> result = profileMcpTools.getRecentBlogs();
 
     assertThat(result).isSameAs(expectedBlogs);
-    verify(blogService).getLatest(10);
+    verify(blogService).getLatest(10, null);
   }
 
   @Test
   void getRecentBlogsPublishesBlogsWidgetWhenResultsExist() {
     final ToolContext context = new ToolContext(Map.of("sessionId", "sess-blogs"));
-    given(blogService.getLatest(10)).willReturn(List.of(sampleBlogSummaryResponse()));
+    given(blogService.getLatest(10, null)).willReturn(List.of(sampleBlogSummaryResponse()));
 
     profileMcpTools.getRecentBlogs(context);
 
@@ -289,7 +290,7 @@ class ProfileMcpToolsTest {
   @Test
   void getRecentBlogsPublishesImageUrlInBlogWidgetPayload() {
     final ToolContext context = new ToolContext(Map.of("sessionId", "sess-blog-image"));
-    given(blogService.getLatest(10)).willReturn(List.of(sampleBlogSummaryResponse()));
+    given(blogService.getLatest(10, null)).willReturn(List.of(sampleBlogSummaryResponse()));
 
     profileMcpTools.getRecentBlogs(context);
 
@@ -563,7 +564,8 @@ class ProfileMcpToolsTest {
         java.time.Instant.parse("2026-05-01T00:00:00Z"),
         List.of(),
         List.of(),
-        "/blogs/b-1"
+        "/blogs/b-1",
+        BlogContentType.ENGINEERING
     );
   }
 }

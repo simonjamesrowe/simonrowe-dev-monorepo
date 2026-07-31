@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.simonrowe.AbstractIntegrationTest;
+import com.simonrowe.blog.BlogContentType;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -152,7 +153,8 @@ class AdminBlogControllerTest extends AbstractIntegrationTest {
         List.of(),
         now,
         now,
-        null
+        null,
+        BlogContentType.ENGINEERING
     );
   }
 }
