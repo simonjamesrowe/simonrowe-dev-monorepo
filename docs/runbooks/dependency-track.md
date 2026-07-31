@@ -95,6 +95,88 @@ looks like it succeeded while the hostname simply does not resolve.
       `VIEW_PORTFOLIO`, generate its API key, and store it as the `DEPENDENCYTRACK_API_KEY`
       GitHub secret — otherwise the publish workflow's SBOM uploads fail invisibly.
 
+- [ ] **Step 8: enable the OSV vulnerability source.** A fresh install only enables NVD, which
+      matches by CPE and therefore cannot produce a single finding for a Maven or npm dependency.
+      See "Zero vulnerabilities on the dependency SBOMs" below — without this step the whole
+      deployment looks healthy and reports nothing.
+
+## Zero vulnerabilities on the dependency SBOMs (out-of-the-box configuration)
+
+**Symptom.** All five projects import cleanly with sensible component counts, but only the
+container-image projects show any findings. `simonrowe-dev/backend` and `simonrowe-dev/frontend`
+sit at 0 vulnerabilities forever, and the portfolio dashboard looks reassuringly quiet.
+
+**This is not an SBOM or upload problem.** Confirm that first — the component counts prove the
+BOMs arrived intact:
+
+```bash
+# Any API key with VIEW_PORTFOLIO works; the CI Upload key already has it
+curl -s -H "X-Api-Key: ${DEPENDENCYTRACK_API_KEY}" \
+  'https://dependency-track.simonrowe.dev/api/v1/project?pageSize=100' \
+  | jq -r '.[] | "\(.name) components=\(.metrics.components) vulns=\(.metrics.vulnerabilities)"'
+```
+
+**Root cause.** A default install enables exactly one vulnerability source, NVD, and one
+analyzer, `internal`. NVD describes affected products as **CPEs**, and — in Dependency-Track's
+own words — *"the internal analyzer skips components that lack a valid CPE when evaluating NVD
+data."* The matching identifier per source is:
+
+| Source | Matches on | Enabled by default |
+|:-------|:-----------|:-------------------|
+| NVD | CPE | yes |
+| OSV | PURL | **no** |
+| GitHub advisories | PURL | **no** (also needs a PAT) |
+
+The CycloneDX Gradle plugin and `@cyclonedx/cyclonedx-npm` both emit **PURLs only, no CPEs**
+(verified: 476/476 Maven components and 493/493 npm components had `cpe: null`). So with only
+NVD mirrored, those two projects are *structurally* unmatchable — nothing is broken, there is
+simply no data source that speaks their identifier.
+
+The image projects appeared to work only because `syft` stamps CPEs on `deb`, `apk` and `golang`
+packages. Every finding they had came back `source: NVD`, `analyzer: internal`, and all of it on
+`pkg:deb/ubuntu/openssl` and `pkg:golang/stdlib`. Note that `syft` *also* synthesises CPEs for
+jars inside an image, but they are vendor-guessed from the artifact name
+(`cpe:2.3:a:a2a-java-sdk-common:a2a-java-sdk-common:...`), so they almost never match a real NVD
+CPE — the image projects were not covering the Java dependencies either.
+
+**Fix — enable OSV** (Administration → Vulnerability Sources → Osv): tick **Enabled**, keep the
+default ecosystems (`npm`, `Go`, `Maven`, `NuGet`, `PyPI`), **Save**, then **Mirror now**. OSV
+needs no credentials. Because OSV re-publishes GHSA records under their GHSA IDs, the findings
+land attributed `source: GITHUB` — **enabling the GitHub source separately is largely redundant**
+and only buys alias/CVSS detail in exchange for having to manage a PAT.
+
+Measured on the production Pi, 2026-07-30:
+
+- The mirror took **~31 minutes** and grew the vulnerability database from **371,149 → 636,750**
+  records. Much of that bulk is `MAL-*` malicious-package advisories, which OSV ships inside the
+  npm and PyPI ecosystems. Budget for the disk growth — see "Disk and database size" below.
+- Mirroring alone does **not** re-evaluate existing projects. Trigger re-analysis, then refresh
+  metrics, or the UI keeps showing the old zeros:
+
+  ```bash
+  for uuid in $(curl -s -H "X-Api-Key: ${DEPENDENCYTRACK_API_KEY}" \
+      'https://dependency-track.simonrowe.dev/api/v1/project?pageSize=100' | jq -r '.[].uuid'); do
+    curl -s -X POST -H "X-Api-Key: ${DEPENDENCYTRACK_API_KEY}" \
+      "https://dependency-track.simonrowe.dev/api/v1/finding/project/${uuid}/analyze"
+    curl -s -H "X-Api-Key: ${DEPENDENCYTRACK_API_KEY}" \
+      "https://dependency-track.simonrowe.dev/api/v1/metrics/project/${uuid}/refresh"
+  done
+  curl -s -H "X-Api-Key: ${DEPENDENCYTRACK_API_KEY}" \
+    https://dependency-track.simonrowe.dev/api/v1/metrics/portfolio/refresh
+  ```
+
+- Result: portfolio findings went from 49 to 189, projects at risk from 2 to 4, vulnerable
+  components from 3 to 32. Per project: `backend` 0 → 13, `frontend` 0 → 36,
+  `backend-image` 25 → 76, `reviewer-image` 24 → 64.
+
+**Still outstanding:** `simonrowe-dev/frontend-image` remains at 0. It contains only `pkg:apk/*`
+Alpine packages, and the `Alpine` OSV ecosystem is not in the mirrored list. Add `Alpine`
+(and `Ubuntu` for the two Ubuntu-based images) under **Add Ecosystem** if distro-aware findings
+are wanted there. Distro ecosystems are also the *accurate* source for OS packages: NVD CPE
+matching flags every CVE ever filed against `openssl 3.0.13` regardless of whether Canonical
+already backported the fix into `3.0.13-0ubuntu3`, so a good share of the 25 NVD openssl
+findings on `backend-image` are likely false positives.
+
 ## The passwordless-role trap (fixed — do not undo it)
 
 `dependencytrack-db-init` creates the `dtrack` role, and its `CREATE ROLE` is guarded by a
@@ -273,6 +355,11 @@ Run this monthly, or any time the site feels slow. On the Pi:
 df -h /
 docker exec simonrowe-dev-monorepo-langfuse-db-1 psql -U postgres -c "\l+"
 ```
+
+Since 2026-07-30 the mirrored vulnerability data is itself a significant share of that size:
+enabling OSV took the `VULNERABILITY` table from 371k to 637k rows (see "Zero vulnerabilities on
+the dependency SBOMs" above). That part is bounded by what upstream publishes, unlike the metrics
+partitions below, but it is a one-off step change worth knowing about when reading the numbers.
 
 Watch the `dtrack` row's `Size` column over time. One operator reported unbounded growth from
 ~50 GB to ~500 GB in a month on a large portfolio; this deployment only tracks five projects so
