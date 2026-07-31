@@ -1,4 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 
 import { ProfilePage } from '../../src/pages/ProfilePage'
@@ -15,12 +17,10 @@ vi.mock('../../src/services/analytics', () => ({
   trackPageView: vi.fn(),
 }))
 
-vi.mock('../../src/components/contact/ContactSection', () => ({
-  ContactSection: () => (
-    <section className="contact-section tour-contact" id="contact">
-      <h2>Contact form</h2>
-    </section>
-  ),
+// The drawer's real form pulls in reCAPTCHA and react-hook-form; the page's contract is
+// that the drawer is present and openable, not how the form itself behaves.
+vi.mock('../../src/components/contact/ContactForm', () => ({
+  ContactForm: () => <h2>Contact form</h2>,
 }))
 
 function setMatchMedia(matches: boolean) {
@@ -60,6 +60,23 @@ const profile: Profile = {
   ],
 }
 
+function renderProfilePage(initialPath = '/profile') {
+  return render(
+    <MemoryRouter initialEntries={[initialPath]}>
+      <ProfilePage />
+    </MemoryRouter>,
+  )
+}
+
+function loaded() {
+  mockUseProfile.mockReturnValue({
+    profile,
+    loading: false,
+    error: null,
+    retry: vi.fn(),
+  })
+}
+
 describe('ProfilePage', () => {
   beforeEach(() => {
     mockUseProfile.mockReset()
@@ -68,15 +85,10 @@ describe('ProfilePage', () => {
 
   afterEach(() => vi.unstubAllGlobals())
 
-  it('renders the real About content, CV/social actions, and contact on one page', async () => {
-    mockUseProfile.mockReturnValue({
-      profile,
-      loading: false,
-      error: null,
-      retry: vi.fn(),
-    })
+  it('renders the real About content, with no full-width Connect section', async () => {
+    loaded()
 
-    render(<ProfilePage />)
+    renderProfilePage()
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: /About Simon/i })).toBeInTheDocument()
@@ -84,21 +96,83 @@ describe('ProfilePage', () => {
 
     expect(screen.getByText('Profile biography copy')).toBeInTheDocument()
     expect(document.querySelector('.tour-profile')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Download CV/i })).toHaveAttribute('href', `${API_BASE_URL}/api/resume`)
-    expect(screen.getByRole('link', { name: /GitHub profile/i })).toHaveAttribute('href', 'https://github.com/simonrowe')
-    expect(document.querySelector('#contact.tour-contact')).toBeInTheDocument()
+
+    // The Connect section was replaced by a drawer, so the page itself no longer carries
+    // a Connect heading or an in-page contact anchor.
+    expect(screen.queryByRole('heading', { name: /^Connect$/ })).not.toBeInTheDocument()
+    expect(document.querySelector('.profile-page__connect')).toBeNull()
+    expect(document.querySelector('#contact')).toBeNull()
+  })
+
+  it('keeps the CV and social links, moved into the contact drawer', async () => {
+    loaded()
+
+    // Opened first: a closed drawer is aria-hidden, so its links are correctly absent
+    // from the accessibility tree.
+    renderProfilePage('/profile#contact')
+
+    await waitFor(() => {
+      expect(document.querySelector('.contact-drawer--open')).not.toBeNull()
+    })
+
+    expect(screen.getByRole('link', { name: /Download CV/i })).toHaveAttribute(
+      'href',
+      `${API_BASE_URL}/api/resume`,
+    )
+    expect(screen.getByRole('link', { name: /GitHub profile/i })).toHaveAttribute(
+      'href',
+      'https://github.com/simonrowe',
+    )
+    // The raw URL is no longer printed under each label.
+    expect(screen.queryByText('https://github.com/simonrowe')).not.toBeInTheDocument()
+  })
+
+  it('opens the contact drawer from the About section call to action', async () => {
+    loaded()
+
+    renderProfilePage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /About Simon/i })).toBeInTheDocument()
+    })
+
+    expect(document.querySelector('.contact-drawer--open')).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: /Get in touch/i }))
+
+    expect(document.querySelector('.contact-drawer--open')).not.toBeNull()
     expect(screen.getByRole('heading', { name: /Contact form/i })).toBeInTheDocument()
   })
 
-  it('does not show the fabricated headline or invented statistics', async () => {
-    mockUseProfile.mockReturnValue({
-      profile,
-      loading: false,
-      error: null,
-      retry: vi.fn(),
+  it('opens the drawer straight away when arriving at /profile#contact', async () => {
+    loaded()
+
+    // This is the path the footer bar and the home CTA band both link to.
+    renderProfilePage('/profile#contact')
+
+    await waitFor(() => {
+      expect(document.querySelector('.contact-drawer--open')).not.toBeNull()
+    })
+  })
+
+  it('closes the drawer from its close button', async () => {
+    loaded()
+
+    renderProfilePage('/profile#contact')
+
+    await waitFor(() => {
+      expect(document.querySelector('.contact-drawer--open')).not.toBeNull()
     })
 
-    render(<ProfilePage />)
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+    expect(document.querySelector('.contact-drawer--open')).toBeNull()
+  })
+
+  it('does not show the fabricated headline or invented statistics', async () => {
+    loaded()
+
+    renderProfilePage()
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: /About Simon/i })).toBeInTheDocument()

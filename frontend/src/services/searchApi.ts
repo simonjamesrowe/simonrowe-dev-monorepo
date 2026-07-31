@@ -21,34 +21,31 @@ export interface GroupedSearchResponse {
 }
 
 import { API_BASE_URL } from '../config/api'
+import { fetchWithRetry } from './fetchWithRetry'
 
 const SITE_SEARCH_ENDPOINT = `${API_BASE_URL}/api/search`
 const BLOG_SEARCH_ENDPOINT = `${API_BASE_URL}/api/search/blogs`
+
+// Both searches are keystroke-driven and the caller aborts the in-flight request on
+// every new keystroke; `fetchWithRetry` honours the signal and does not retry after an
+// abort, so the retry behaviour never fights the debounce.
 
 export async function siteSearch(
   query: string,
   signal?: AbortSignal
 ): Promise<GroupedSearchResponse> {
-  const response = await fetch(
+  return fetchWithRetry<GroupedSearchResponse>(
     `${SITE_SEARCH_ENDPOINT}?q=${encodeURIComponent(query)}`,
-    { signal }
+    { signal, fallbackMessage: 'Search request failed' }
   )
-  if (!response.ok) {
-    throw new Error('Search request failed')
-  }
-  return (await response.json()) as GroupedSearchResponse
 }
 
 export async function blogSearch(
   query: string,
   signal?: AbortSignal
 ): Promise<BlogSearchResult[]> {
-  const response = await fetch(
+  return fetchWithRetry<BlogSearchResult[]>(
     `${BLOG_SEARCH_ENDPOINT}?q=${encodeURIComponent(query)}`,
-    { signal }
+    { signal, fallbackMessage: 'Blog search request failed' }
   )
-  if (!response.ok) {
-    throw new Error('Blog search request failed')
-  }
-  return (await response.json()) as BlogSearchResult[]
 }

@@ -7,6 +7,16 @@ export interface SkillRef {
   name: string
 }
 
+/**
+ * How a post is classified: hand-written engineering writing, or a generated
+ * weekly digest of other people's writing.
+ *
+ * Non-optional on the payload types below: the backend DTOs coerce a missing
+ * stored value to `ENGINEERING`, so the field is never `null` over the wire, and
+ * making it optional would push a redundant `?? 'ENGINEERING'` into every call site.
+ */
+export type BlogContentType = 'ENGINEERING' | 'DIGEST'
+
 export interface BlogSummary {
   id: string
   title: string
@@ -15,6 +25,7 @@ export interface BlogSummary {
   createdDate: string
   tags: TagRef[]
   skills?: SkillRef[]
+  contentType: BlogContentType
 }
 
 export interface BlogDetail {
@@ -26,6 +37,7 @@ export interface BlogDetail {
   createdDate: string
   tags: TagRef[]
   skills?: SkillRef[]
+  contentType: BlogContentType
 }
 
 export interface BlogSearchResult {

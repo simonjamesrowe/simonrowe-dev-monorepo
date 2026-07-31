@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 
 import { AuthProvider } from './auth/AuthProvider'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -7,6 +7,7 @@ import { ChatPanel } from './components/chat/ChatPanel'
 import { RecaptchaGate } from './components/chat/RecaptchaGate'
 import { LoadingIndicator } from './components/common/LoadingIndicator'
 import { JobDetailDrawer } from './components/experience/JobDetailDrawer'
+import { Footer } from './components/layout/Footer'
 import { MobileMenu } from './components/layout/MobileMenu'
 import { TopNav } from './components/layout/TopNav'
 import { SkillGroupDetail } from './components/skills/SkillGroupDetail'
@@ -32,6 +33,7 @@ const BlogListingPage = named(() => import('./pages/BlogListingPage'), 'BlogList
 const BlogDetailPage = named(() => import('./pages/BlogDetailPage'), 'BlogDetailPage')
 const NewsEventsPage = named(() => import('./pages/NewsEventsPage'), 'NewsEventsPage')
 const McpPage = named(() => import('./pages/McpPage'), 'McpPage')
+const NotFoundPage = named(() => import('./pages/NotFoundPage'), 'NotFoundPage')
 
 const AdminLayout = named(() => import('./components/admin/AdminLayout'), 'AdminLayout')
 const AggregatedContentAdmin = named(() => import('./pages/admin/AggregatedContentAdmin'), 'AggregatedContentAdmin')
@@ -108,6 +110,18 @@ function ChatOverlay() {
   )
 }
 
+/**
+ * Redirects a legacy `/blog/:id` link to its canonical `/blogs/:id` address.
+ *
+ * `<Navigate>` cannot interpolate route params, so the id is read here and the
+ * replacement is built by hand. `replace` keeps the stale URL out of history, so Back
+ * leaves the site rather than bouncing between the two addresses.
+ */
+function LegacyBlogDetailRedirect() {
+  const { id } = useParams<{ id: string }>()
+  return <Navigate replace to={id === undefined ? '/blogs' : `/blogs/${id}`} />
+}
+
 function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <ChatProvider>
@@ -120,6 +134,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
             <main className="app-layout__main">
               {children}
             </main>
+            <Footer />
             <TourButton />
             <TourOverlay />
             <GlobalDrawers />
@@ -147,6 +162,9 @@ function App() {
         <Route element={<PublicLayout><BlogDetailPage /></PublicLayout>} path="/blogs/:id" />
         <Route element={<PublicLayout><NewsEventsPage /></PublicLayout>} path="/news-events" />
         <Route element={<PublicLayout><McpPage /></PublicLayout>} path="/mcp" />
+        {/* Legacy singular paths, still shared externally. */}
+        <Route element={<Navigate replace to="/blogs" />} path="/blog" />
+        <Route element={<LegacyBlogDetailRedirect />} path="/blog/:id" />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardAdmin />} />
@@ -167,6 +185,7 @@ function App() {
           <Route path="aggregated-content" element={<AggregatedContentAdmin />} />
           <Route path="content-sources" element={<ContentSourcesAdmin />} />
         </Route>
+        <Route element={<PublicLayout><NotFoundPage /></PublicLayout>} path="*" />
       </Routes>
       </Suspense>
       </AuthProvider>

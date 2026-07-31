@@ -17,4 +17,6 @@ export interface ArticlePage {
   totalPages: number
   number: number
   size: number
+  /** True on the final page — what hides the "Load more" action (FR-038). */
+  last: boolean
 }

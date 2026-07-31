@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Calendar, ExternalLink, Heart, MapPin } from 'lucide-react'
 
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { FavouriteButton } from '../components/common/FavouriteButton'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { useFavourites } from '../hooks/useFavourites'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { useScrollToHash } from '../hooks/useScrollToHash'
 import { trackPageView } from '../services/analytics'
-import { fetchNews } from '../services/newsApi'
+import { fetchNews, fetchNewsSources } from '../services/newsApi'
 import { fetchEvents } from '../services/eventsApi'
 import { getFavourites } from '../services/favouritesApi'
 import { API_BASE_URL } from '../config/api'
@@ -15,6 +16,9 @@ import type { ArticleResponse } from '../types/news'
 import type { EventResponse } from '../types/events'
 
 type SourceFilter = 'all' | string
+
+/** Articles per request. Was a single `size=100` fetch — the slowest public page. */
+const NEWS_PAGE_SIZE = 24
 
 function resolveImageUrl(url: string | null): string | undefined {
   if (!url) return undefined
@@ -25,10 +29,18 @@ function resolveImageUrl(url: string | null): string | undefined {
 
 export function NewsEventsPage() {
   const [articles, setArticles] = useState<ArticleResponse[]>([])
+  const [newsPageNumber, setNewsPageNumber] = useState(0)
+  const [isLastNewsPage, setIsLastNewsPage] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [refreshingNews, setRefreshingNews] = useState(true)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
+  const [sources, setSources] = useState<string[]>([])
   const [upcomingEvents, setUpcomingEvents] = useState<EventResponse[]>([])
   const [pastEvents, setPastEvents] = useState<EventResponse[]>([])
-  const [loading, setLoading] = useState(true)
+  const [newsSettled, setNewsSettled] = useState(false)
+  const [eventsSettled, setEventsSettled] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
 
   const [favouritesOnly, setFavouritesOnly] = useState(false)
@@ -39,27 +51,101 @@ export function NewsEventsPage() {
   const newsFavourites = useFavourites('news')
   const eventFavourites = useFavourites('events')
 
+  // 'all' and 'events' are local-only view modes; only a real source name is a query
+  // parameter, so the backend does the filtering and paging continues within a source.
+  const activeSource =
+    sourceFilter === 'all' || sourceFilter === 'events' ? undefined : sourceFilter
+
+  const loading = !newsSettled || !eventsSettled
+
+  // Discards any news response that has been superseded — switching source while a
+  // "Load more" is in flight would otherwise append the previous source's articles.
+  const newsRequestId = useRef(0)
+
   // Scroll to #news / #events once content has loaded (section ids exist).
   useScrollToHash(!loading)
+  usePageTitle('News & Events')
 
   useEffect(() => {
     trackPageView('/news-events')
-    document.title = 'News & Events'
   }, [])
 
   useEffect(() => {
-    Promise.all([
-      fetchNews(0, 100),
-      fetchEvents(0, 50, true),
-      fetchEvents(0, 20, false),
-    ])
-      .then(([newsPage, upcomingPage, pastPage]) => {
+    const requestId = newsRequestId.current + 1
+    newsRequestId.current = requestId
+
+    setLoadMoreError(null)
+    setRefreshingNews(true)
+    fetchNews(0, NEWS_PAGE_SIZE, activeSource)
+      .then((newsPage) => {
+        if (newsRequestId.current !== requestId) return
         setArticles(newsPage.content)
+        setNewsPageNumber(newsPage.number)
+        setIsLastNewsPage(newsPage.last)
+      })
+      .catch((err: Error) => {
+        if (newsRequestId.current !== requestId) return
+        setError(err.message)
+      })
+      .finally(() => {
+        if (newsRequestId.current !== requestId) return
+        setRefreshingNews(false)
+        setNewsSettled(true)
+      })
+  }, [activeSource, attempt])
+
+  // Events and the source list are independent of news paging, so they load once.
+  useEffect(() => {
+    Promise.all([fetchEvents(0, 50, true), fetchEvents(0, 20, false)])
+      .then(([upcomingPage, pastPage]) => {
         setUpcomingEvents(upcomingPage.content)
         setPastEvents(pastPage.content)
       })
       .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false))
+      .finally(() => setEventsSettled(true))
+  }, [attempt])
+
+  useEffect(() => {
+    // Chips list every source the site holds, not just those in the loaded page.
+    // A failure here is not fatal: the chips fall back to the loaded articles.
+    fetchNewsSources()
+      .then(setSources)
+      .catch(() => setSources([]))
+  }, [attempt])
+
+  const handleLoadMore = () => {
+    const requestId = newsRequestId.current + 1
+    newsRequestId.current = requestId
+
+    setLoadingMore(true)
+    setLoadMoreError(null)
+    fetchNews(newsPageNumber + 1, NEWS_PAGE_SIZE, activeSource)
+      .then((newsPage) => {
+        if (newsRequestId.current !== requestId) return
+        // Append, never replace: the container stays put so scroll position holds.
+        setArticles((previous) => [...previous, ...newsPage.content])
+        setNewsPageNumber(newsPage.number)
+        setIsLastNewsPage(newsPage.last)
+      })
+      .catch((err: Error) => {
+        if (newsRequestId.current !== requestId) return
+        setLoadMoreError(err.message)
+      })
+      .finally(() => {
+        if (newsRequestId.current !== requestId) return
+        setLoadingMore(false)
+      })
+  }
+
+  const handleSourceSelect = (next: SourceFilter) => {
+    setSourceFilter(next)
+  }
+
+  const retry = useCallback(() => {
+    setError(null)
+    setNewsSettled(false)
+    setEventsSettled(false)
+    setAttempt((value) => value + 1)
   }, [])
 
   useEffect(() => {
@@ -86,10 +172,14 @@ export function NewsEventsPage() {
   }
 
   if (loading) return <LoadingIndicator message="Loading news and events..." />
-  if (error) return <ErrorMessage message={error} />
+  if (error) {
+    return <ErrorMessage message={error} onRetry={retry} title="Unable to load News & Events" />
+  }
 
-  // Get unique sources for filter pills
-  const sources = [...new Set(articles.map(a => a.sourceName))]
+  // Every source the site holds (FR-039), so a source with no article on page 0 is
+  // still selectable. Falls back to the loaded articles if that request failed.
+  const sourceNames =
+    sources.length > 0 ? sources : [...new Set(articles.map(a => a.sourceName))]
 
   // Unfavouriting while in favourites-only mode removes the card immediately.
   const visibleArticles = favouritesOnly
@@ -117,16 +207,16 @@ export function NewsEventsPage() {
       <div className="feed__filters">
         <button
           className={`feed__pill${sourceFilter === 'all' ? ' feed__pill--active' : ''}`}
-          onClick={() => setSourceFilter('all')}
+          onClick={() => handleSourceSelect('all')}
           type="button"
         >
           All
         </button>
-        {sources.map(source => (
+        {sourceNames.map(source => (
           <button
             className={`feed__pill${sourceFilter === source ? ' feed__pill--active' : ''}`}
             key={source}
-            onClick={() => setSourceFilter(source)}
+            onClick={() => handleSourceSelect(source)}
             type="button"
           >
             {source}
@@ -135,7 +225,7 @@ export function NewsEventsPage() {
         {allEvents.length > 0 && (
           <button
             className={`feed__pill feed__pill--events${sourceFilter === 'events' ? ' feed__pill--active' : ''}`}
-            onClick={() => setSourceFilter('events')}
+            onClick={() => handleSourceSelect('events')}
             type="button"
           >
             Events
@@ -257,6 +347,31 @@ export function NewsEventsPage() {
                 </a>
               ))}
             </div>
+          )}
+
+          {/* Backend-driven paging: appends below the grid, so scroll position holds.
+              Favourites are a complete in-memory list and are never paged (FR-040). */}
+          {!favouritesOnly && sourceFilter !== 'events' && !isLastNewsPage && (
+            <div className="feed__load-more">
+              <button
+                className="button button--secondary"
+                // Disabled while a source re-query is in flight: paging off the previous
+                // source's page number would append the wrong articles.
+                disabled={loadingMore || refreshingNews}
+                onClick={handleLoadMore}
+                type="button"
+              >
+                {loadingMore ? 'Loading...' : 'Load more'}
+              </button>
+            </div>
+          )}
+
+          {loadMoreError && (
+            <ErrorMessage
+              message={loadMoreError}
+              onRetry={handleLoadMore}
+              title="Unable to load more articles"
+            />
           )}
 
           {/* Events timeline */}

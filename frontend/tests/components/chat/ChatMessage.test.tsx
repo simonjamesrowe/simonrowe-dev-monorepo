@@ -78,7 +78,7 @@ describe('ChatMessage link/image policy', () => {
     expect(links[0].getAttribute('href')).toBe('/experience?job=5eedd4803c8d74001e4497f5')
   })
 
-  it('keeps the code-example widget card but hides skills/blog widget cards', () => {
+  it('hides every widget card, including the code example', () => {
     const blocks: ChatBlock[] = [
       { kind: 'text', content: 'Here is a snippet and my skills.' },
       { kind: 'widget', widgetKind: 'skills', payload: { groups: [{ id: 'g1', name: 'Java', skills: [{ name: 'Java 21' }] }] } },
@@ -86,11 +86,16 @@ describe('ChatMessage link/image policy', () => {
     ]
     const { container } = renderMessage(blocks)
 
-    // Code card visible; skills card hidden.
-    expect(container.querySelector('.chat-widget--code')).not.toBeNull()
+    // The code card used to be the one exception; it now goes the same way as the rest,
+    // leaving the tool label as the only signal that the tool ran.
+    expect(container.querySelector('.chat-widget--code')).toBeNull()
     expect(container.querySelector('.chat-widget--skills')).toBeNull()
-    expect(screen.getByText('Kafka Consumer')).toBeInTheDocument()
+    expect(screen.queryByText('Kafka Consumer')).not.toBeInTheDocument()
+    expect(screen.queryByText('class C {}')).not.toBeInTheDocument()
     expect(screen.queryByText('Java 21')).not.toBeInTheDocument()
+
+    // The prose answer itself is untouched.
+    expect(screen.getByText('Here is a snippet and my skills.')).toBeInTheDocument()
   })
 
   it('renders an uploads-origin image and drops a non-allowlisted image', () => {

@@ -40,6 +40,7 @@ import { TogglePill } from '../../components/admin/TogglePill'
 import { TagInput } from '../../components/admin/TagInput'
 import { ImagePicker } from '../../components/admin/ImagePicker'
 import { MediaLibrary } from '../../components/admin/MediaLibrary'
+import type { BlogContentType } from '../../types/blog'
 
 interface BlogFormState {
   title: string
@@ -49,6 +50,7 @@ interface BlogFormState {
   featuredImageUrl: string
   tags: string[]
   skills: string[]
+  contentType: BlogContentType
 }
 
 const emptyForm: BlogFormState = {
@@ -59,6 +61,8 @@ const emptyForm: BlogFormState = {
   featuredImageUrl: '',
   tags: [],
   skills: [],
+  // Preselected rather than an empty option, so the default is visible not implied.
+  contentType: 'ENGINEERING',
 }
 
 export function BlogEditor() {
@@ -108,6 +112,7 @@ export function BlogEditor() {
         featuredImageUrl: blog.featuredImageUrl ?? '',
         tags: blog.tags ?? [],
         skills: blog.skills ?? [],
+        contentType: blog.contentType ?? 'ENGINEERING',
       })
       setEditorKey((k) => k + 1)
     } catch (err) {
@@ -140,6 +145,7 @@ export function BlogEditor() {
         featuredImageUrl: form.featuredImageUrl,
         tags: form.tags,
         skills: form.skills,
+        contentType: form.contentType,
       }
       if (isNew) {
         await createAdminBlog(getAccessToken, payload)
@@ -196,6 +202,24 @@ export function BlogEditor() {
                 required
                 rows={3}
               />
+            </div>
+
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label" htmlFor="contentType">
+                Content type
+              </label>
+              <select
+                className="admin-form__input"
+                id="contentType"
+                value={form.contentType}
+                onChange={(e) => {
+                  setForm({ ...form, contentType: e.target.value as BlogContentType })
+                  setDirty(true)
+                }}
+              >
+                <option value="ENGINEERING">Engineering</option>
+                <option value="DIGEST">Weekly Digest</option>
+              </select>
             </div>
           </div>
 

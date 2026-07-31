@@ -1,12 +1,14 @@
 import { Link, NavLink } from 'react-router-dom'
 import { MessageSquare, Moon, Sun, UserCircle } from 'lucide-react'
 import { SiteSearch } from '../search/SiteSearch'
+import { useAdminRole } from '../../auth/useAdminRole'
 import { useChat } from '../../contexts/ChatContext'
 import { useTheme } from '../../contexts/ThemeContext'
 
 export function TopNav() {
   const { openChat } = useChat()
   const { theme, toggleTheme } = useTheme()
+  const isAdmin = useAdminRole()
 
   return (
     <nav className="top-nav glass-panel elevation-ambient">
@@ -36,9 +38,11 @@ export function TopNav() {
         >
           {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
         </button>
-        <NavLink to="/admin" className="top-nav__user-btn">
-          <UserCircle size={24} />
-        </NavLink>
+        {isAdmin ? (
+          <NavLink aria-label="Admin" className="top-nav__user-btn" to="/admin">
+            <UserCircle size={24} />
+          </NavLink>
+        ) : null}
       </div>
     </nav>
   )

@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { MessageCircle } from 'lucide-react'
 import { blogSearch, siteSearch, type GroupedSearchResponse } from '../../services/searchApi'
 import { SearchDropdown } from './SearchDropdown'
+import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { useTour } from '../../hooks/useTour'
 
 const DEBOUNCE_MS = 300
@@ -31,6 +32,7 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { pathname } = useLocation()
   const isBlogPage = pathname.startsWith('/blogs')
+  const isNarrow = useMediaQuery('(max-width: 768px)')
 
   const { isActive: tourActive, searchValue: tourSearchValue, currentStepIndex, steps } = useTour()
   const isSearchTourStep = tourActive && steps[currentStepIndex]?.targetSelector === '.tour-search'
@@ -133,6 +135,11 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
     }
   }, [query, onChatStart])
 
+  // The full placeholder clips mid-word once the nav is down to a phone width.
+  const placeholder = isBlogPage
+    ? (isNarrow ? 'Search posts...' : 'Search blog posts...')
+    : (isNarrow ? 'Search...' : 'Search or ask me anything...')
+
   return (
     <div className="site-search tour-search" ref={containerRef}>
       <div className="site-search__input-wrapper">
@@ -142,7 +149,7 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
           onFocus={() => setSuggestionsOpen(true)}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isBlogPage ? "Search blog posts..." : "Search or ask me anything..."}
+          placeholder={placeholder}
           type="search"
           value={query}
         />

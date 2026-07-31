@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { McpPage } from './McpPage'
@@ -56,6 +56,37 @@ describe('McpPage', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Unable to reach the MCP server.')
     })
     expect(screen.queryByRole('heading', { name: 'searchBlogs' })).not.toBeInTheDocument()
+    // A page-appropriate heading, never the homepage's.
+    expect(screen.getByRole('heading', { name: 'Unable to load MCP tools' })).toBeInTheDocument()
+    expect(screen.queryByText(/Unable to load homepage/i)).not.toBeInTheDocument()
+  })
+
+  it('retries the connection and clears the error on success', async () => {
+    const connect = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Unable to reach the MCP server.'))
+      .mockResolvedValue(undefined)
+    render(<McpPage client={fakeClient({ connect })} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'searchBlogs' })).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(connect).toHaveBeenCalledTimes(2)
+  })
+
+  it('sets a page-identifying document title', async () => {
+    render(<McpPage client={fakeClient()} />)
+
+    await waitFor(() => {
+      expect(document.title).toBe('MCP Tools · Simon Rowe')
+    })
   })
 
   it('renders an empty-state message when the catalogue has no tools', async () => {

@@ -46,9 +46,11 @@ describe('HeroSection', () => {
     expect(screen.getByRole('button', { name: /What Spring Boot and Kafka patterns/i })).toBeInTheDocument()
     expect(document.querySelector('.tour-home-chat')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Download CV/i })).not.toBeInTheDocument()
+    // All four suggested prompts on desktop.
+    expect(document.querySelectorAll('.hero__prompt-chip')).toHaveLength(4)
   })
 
-  it('hides the badge, tagline, and prompt chips on mobile but keeps name, role, and chat input', () => {
+  it('shows the badge, tagline, and exactly two prompt chips on mobile', () => {
     setMatchMedia(true)
     render(
       <HeroSection
@@ -64,10 +66,42 @@ describe('HeroSection', () => {
     expect(screen.getByText(/Chat with an AI assistant/i)).toBeInTheDocument()
     expect(screen.getByPlaceholderText(/Ask me anything about Simon/i)).toBeInTheDocument()
 
-    // Badge, tagline, and prompt chips are not rendered
-    expect(screen.queryByText(/Engineering Leadership \/\/ AI-Native Systems/i)).not.toBeInTheDocument()
-    expect(screen.queryByText('Passionate about AI-native development.')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /What Spring Boot and Kafka patterns/i })).not.toBeInTheDocument()
+    // Badge and tagline are now rendered at mobile widths too (FR-024).
+    expect(screen.getByText(/Engineering Leadership \/\/ AI-Native Systems/i)).toBeInTheDocument()
+    expect(screen.getByText('Passionate about AI-native development.')).toBeInTheDocument()
+
+    // Exactly the first two suggested prompts.
+    const chips = document.querySelectorAll('.hero__prompt-chip')
+    expect(chips).toHaveLength(2)
+    expect(screen.getByRole('button', { name: /What Spring Boot and Kafka patterns/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /What is he blogging about recently/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /event sourcing and CQRS/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /How big are the teams/i })).not.toBeInTheDocument()
+  })
+
+  it('shrinks the chat textarea at mobile widths so the input stays above the fold', () => {
+    setMatchMedia(true)
+    const { unmount } = render(
+      <HeroSection name="Simon Rowe" title="Head of Engineering" tagline="Tagline." />,
+    )
+    const mobileRows = screen.getByPlaceholderText(/Ask me anything about Simon/i).getAttribute('rows')
+    unmount()
+
+    setMatchMedia(false)
+    render(<HeroSection name="Simon Rowe" title="Head of Engineering" tagline="Tagline." />)
+    const desktopRows = screen.getByPlaceholderText(/Ask me anything about Simon/i).getAttribute('rows')
+
+    expect(desktopRows).toBe('6')
+    expect(Number(mobileRows)).toBeLessThan(Number(desktopRows))
+  })
+
+  it('starts the chat from a mobile prompt chip', () => {
+    setMatchMedia(true)
+    render(<HeroSection name="Simon Rowe" title="Head of Engineering" tagline="Tagline." />)
+
+    fireEvent.click(screen.getByRole('button', { name: /What Spring Boot and Kafka patterns/i }))
+
+    expect(openChat).toHaveBeenCalledWith('What Spring Boot and Kafka patterns does he use?')
   })
 
   it('submits hero chat text to the chat context', () => {

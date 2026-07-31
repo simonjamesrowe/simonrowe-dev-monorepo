@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config/api'
+import { fetchWithRetry } from './fetchWithRetry'
 
 export interface CodeExample {
   id: string
@@ -12,7 +13,7 @@ export interface CodeExample {
 }
 
 export async function fetchCodeExample(id: string): Promise<CodeExample> {
-  const response = await fetch(`${API_BASE_URL}/api/code-examples/${id}`)
-  if (!response.ok) throw new Error('Code example not found')
-  return response.json()
+  return fetchWithRetry<CodeExample>(`${API_BASE_URL}/api/code-examples/${id}`, {
+    fallbackMessage: 'Code example not found',
+  })
 }

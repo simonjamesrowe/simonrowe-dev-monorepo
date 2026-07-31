@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -78,5 +78,24 @@ describe('ExperiencePage deep links', () => {
     const skills = document.getElementById('skills')
     expect(skills).not.toBeNull()
     expect(skills!.scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('sets a page-identifying document title', () => {
+    renderAt('/experience')
+
+    expect(document.title).toBe('Experience & Skills · Simon Rowe')
+  })
+
+  /**
+   * The page owns no fetch of its own: each section component owns its request and its
+   * own error frame, so one failing section leaves the other rendered. These assertions
+   * pin that contract rather than a page-level error state.
+   */
+  it('renders both sections independently, with no page-level error frame', () => {
+    renderAt('/experience')
+
+    expect(screen.getByTestId('role-timeline')).toBeInTheDocument()
+    expect(screen.getByTestId('skill-group-grid')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

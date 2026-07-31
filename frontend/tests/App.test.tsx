@@ -50,6 +50,14 @@ vi.mock('../src/components/tour/TourOverlay', () => ({
   TourOverlay: () => null,
 }))
 
+vi.mock('../src/pages/BlogListingPage', () => ({
+  BlogListingPage: () => <h1>Blog listing</h1>,
+}))
+
+vi.mock('../src/pages/BlogDetailPage', () => ({
+  BlogDetailPage: () => <h1>Blog detail</h1>,
+}))
+
 describe('App', () => {
   beforeEach(() => {
     vi.stubGlobal('scrollTo', vi.fn())
@@ -60,7 +68,6 @@ describe('App', () => {
     render(<App />)
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Homepage')
-    expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()
   })
 
   it('routes /profile to ProfilePage', async () => {
@@ -69,6 +76,39 @@ describe('App', () => {
 
     // ProfilePage is lazy-loaded, so it resolves via Suspense on the next tick.
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Profile')
-    expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()
+  })
+
+  it('renders the site footer inside the public layout', () => {
+    window.history.pushState({}, '', '/')
+    render(<App />)
+
+    expect(screen.getByRole('contentinfo')).toBeInTheDocument()
+  })
+
+  it('redirects the legacy /blog path to the blog listing', async () => {
+    window.history.pushState({}, '', '/blog')
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Blog listing')
+    expect(window.location.pathname).toBe('/blogs')
+  })
+
+  it('redirects a legacy /blog/:id path to the canonical post address', async () => {
+    window.history.pushState({}, '', '/blog/6612f0a1c3d4e5f60718293a')
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Blog detail')
+    expect(window.location.pathname).toBe('/blogs/6612f0a1c3d4e5f60718293a')
+  })
+
+  it('renders the not-found page for an unknown path, inside the site chrome', async () => {
+    window.history.pushState({}, '', '/no-such-page')
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Page not found')
+    // The 404 must sit inside the normal layout, not on a bare page.
+    expect(screen.getByRole('contentinfo')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /back to home/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /read the blog/i })).toBeInTheDocument()
   })
 })

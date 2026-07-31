@@ -18,6 +18,17 @@ const platformLabels: Record<SocialMediaPlatform, string> = {
   twitter: 'Twitter',
 }
 
+/**
+ * A link's own name when it has one, else a label derived from its platform.
+ *
+ * The site has two GitHub links; preferring the configured name is what keeps them
+ * distinguishable instead of both reading "GitHub".
+ */
+function labelFor(link: SocialMediaLink): string {
+  const name = link.name?.trim()
+  return name !== undefined && name !== '' ? name : platformLabels[link.type]
+}
+
 export function SocialLinks({ links }: SocialLinksProps) {
   if (links.length === 0) {
     return null
@@ -31,17 +42,14 @@ export function SocialLinks({ links }: SocialLinksProps) {
             href={link.url}
             rel="noopener noreferrer"
             target="_blank"
-            aria-label={`${platformLabels[link.type] ?? link.name} profile`}
+            aria-label={`${labelFor(link)} profile`}
           >
             <span className="social-links__icon" aria-hidden="true">
               {platformIcons[link.type] ?? null}
             </span>
-            <span className="social-links__details">
-              <span className="social-links__platform">
-                {platformLabels[link.type] ?? link.name}
-              </span>
-              <span className="social-links__url">{link.url}</span>
-            </span>
+            {/* The label is the whole link text; the raw URL is deliberately not shown —
+                it added a wrapping second line per entry and said nothing useful. */}
+            <span className="social-links__platform">{labelFor(link)}</span>
           </a>
         </li>
       ))}

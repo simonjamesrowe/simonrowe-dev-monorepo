@@ -4,9 +4,17 @@ import { useSearchParams } from 'react-router-dom'
 import { RoleTimeline } from '../components/experience/RoleTimeline'
 import { SkillGroupGrid } from '../components/skills/SkillGroupGrid'
 import { useDrawer } from '../hooks/useDrawer'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { useScrollToHash } from '../hooks/useScrollToHash'
 import { trackPageView } from '../services/analytics'
 
+/**
+ * Experience & Skills.
+ *
+ * The page has no fetch of its own — `RoleTimeline` and `SkillGroupGrid` each own
+ * their request, loading skeleton and error frame, so a failure in one section never
+ * blanks the other. There is therefore deliberately no page-level `ErrorMessage`.
+ */
 export function ExperiencePage() {
   const { openJob, openSkillGroup, selectedJobId, selectedGroupId } = useDrawer()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -16,10 +24,10 @@ export function ExperiencePage() {
   const groupDrawerOpenedRef = useRef(false)
 
   useScrollToHash()
+  usePageTitle('Experience & Skills')
 
   useEffect(() => {
     trackPageView('/experience')
-    document.title = 'Experience & Skills'
   }, [])
 
   // Open the matching drawer from the URL (item-level deep link). A stale/unknown id

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { ErrorMessage } from '../common/ErrorMessage'
 import { fetchJobs } from '../../services/jobsApi'
 import type { IJob } from '../../types/job'
 import { API_BASE_URL } from '../../config/api'
@@ -25,6 +26,7 @@ export function RoleTimeline({ onJobClick }: RoleTimelineProps) {
   const [jobs, setJobs] = useState<IJob[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -52,7 +54,7 @@ export function RoleTimeline({ onJobClick }: RoleTimelineProps) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [attempt])
 
   if (loading) {
     return (
@@ -73,9 +75,11 @@ export function RoleTimeline({ onJobClick }: RoleTimelineProps) {
 
   if (error) {
     return (
-      <div className="role-timeline" role="alert">
-        <p className="role-timeline__error">{error}</p>
-      </div>
+      <ErrorMessage
+        message={error}
+        onRetry={() => setAttempt(prev => prev + 1)}
+        title="Unable to load roles"
+      />
     )
   }
 

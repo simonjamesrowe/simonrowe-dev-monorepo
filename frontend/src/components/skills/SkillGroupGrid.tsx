@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
+import { ErrorMessage } from '../common/ErrorMessage'
 import { fetchSkillGroups } from '../../services/skillsApi'
 import type { ISkillGroup } from '../../types/skill'
 import { SkillGroupCard } from './SkillGroupCard'
@@ -12,6 +13,8 @@ export function SkillGroupGrid({ onGroupClick }: SkillGroupGridProps) {
   const [groups, setGroups] = useState<ISkillGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Bumping the attempt counter re-runs the effect, which is what Retry does.
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -37,6 +40,10 @@ export function SkillGroupGrid({ onGroupClick }: SkillGroupGridProps) {
 
     void load()
     return () => { cancelled = true }
+  }, [attempt])
+
+  const retry = useCallback(() => {
+    setAttempt((value) => value + 1)
   }, [])
 
   if (loading) {
@@ -56,7 +63,7 @@ export function SkillGroupGrid({ onGroupClick }: SkillGroupGridProps) {
   }
 
   if (error) {
-    return <p className="skill-group-grid__error">{error}</p>
+    return <ErrorMessage message={error} onRetry={retry} title="Unable to load skills" />
   }
 
   return (

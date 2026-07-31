@@ -1,12 +1,10 @@
 import { BlogListWidget } from './BlogListWidget'
-import { CodeExampleWidget } from './CodeExampleWidget'
 import { EmploymentWidget } from './EmploymentWidget'
 import { EventsWidget } from './EventsWidget'
 import { NewsWidget } from './NewsWidget'
 import { SkillsWidget } from './SkillsWidget'
 import type {
   BlogWidgetPayload,
-  CodeWidgetPayload,
   EmploymentWidgetPayload,
   EventWidgetPayload,
   NewsWidgetPayload,
@@ -25,8 +23,11 @@ export function ChatWidget({ widgetKind, payload }: ChatWidgetProps) {
   if (widgetKind === 'employment') {
     return <EmploymentWidget payload={payload as EmploymentWidgetPayload} />
   }
+  // Code examples are deliberately not rendered: the tool label ("Fetching code
+  // examples") is the whole intended signal. Dumping a title, description and a full code
+  // block into the transcript buried the assistant's actual answer underneath it.
   if (widgetKind === 'code') {
-    return <CodeExampleWidget payload={payload as CodeWidgetPayload} />
+    return null
   }
   if (widgetKind === 'blogs') {
     return <BlogListWidget payload={payload as BlogWidgetPayload} />
