@@ -258,7 +258,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      # The Pi needs ~90s to boot the backend, well past the old 10s+5x10s budget.
+      # Compose then aborted `up -d` with "backend is unhealthy" — leaving frontend
+      # in `created` and skipping the nginx restart — seconds before the app came up.
+      start_period: 120s
 
   frontend:
     image: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-frontend:latest
