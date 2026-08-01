@@ -49,7 +49,8 @@ rollback steps — rollback works because the old `REVIEWER_*` keys are left in
 
 Two steps are deliberately left to you, and are printed at the end: a
 `publish:false` dry run (the only thing that exercises Claude auth and the clone
-path end to end), and the cleanup — dropping the `REVIEWER_*` keys, removing
+path end to end, though it clones *anonymously* — see Verification), and the
+cleanup — dropping the `REVIEWER_*` keys, removing
 `/opt/temporal-reviewer` and the old unit file, and deleting the script.
 
 ## Entry points
@@ -314,6 +315,23 @@ docker run --rm --network simonrowe-dev-monorepo_default curlimages/curl -s \
 writing to GitHub. Note it consumes Claude subscription usage shared with your
 interactive sessions.
 
+It does **not** prove that an *authenticated* clone works. `ReviewController`
+sends no installation id, so `GitWorkspaceFactory` finds a blank token, sets no
+`http.extraHeader`, and clones this public repo anonymously. A credential bug on
+the authenticated path passes this check and then fails every real review — that
+is exactly how the bearer-token clone bug shipped and broke PRs 88–91. Only a
+webhook-triggered review carries an installation id, so treat the delivery below
+as the real end-to-end test, not an optional extra. If its clone step fails with
+
+```text
+clone failed: fatal: could not read Username for 'https://github.com':
+terminal prompts disabled
+```
+
+git was handed credentials GitHub's git-over-HTTPS endpoint rejected (it takes
+`Basic base64("x-access-token:<token>")`, not the bearer header the REST API
+accepts), got a 401, and fell back to prompting.
+
 Then, in the GitHub App settings, send a webhook test delivery or update a pull
 request. Confirm:
 
@@ -387,3 +405,9 @@ A container that is `healthy` but registered no Temporal poller is the quiet
 failure to watch for: the webhook returns `202`, Workflows accumulate, and
 nothing reviews them. The task-queue check under Verification is what catches
 it. The actuator healthcheck on 8091 does not — it reports the web half only.
+
+The near neighbour is a healthy container with a live poller whose every review
+dies in the clone Activity on `could not read Username for 'https://github.com'`
+— a credential fault, not an outage. Nothing external looks wrong, and the
+`publish:false` dry run stays green because it clones anonymously. Check the
+Activity failures in Temporal, not the container state.

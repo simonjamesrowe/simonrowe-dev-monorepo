@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -151,7 +152,7 @@ public class GitWorkspaceFactory {
                 "GIT_CONFIG_KEY_0",
                 "http.extraHeader",
                 "GIT_CONFIG_VALUE_0",
-                "Authorization: Bearer " + accessToken);
+                basicAuthorizationHeader(accessToken));
     ProcessRunner.ProcessResult result =
         processRunner.run(
             command, directory, null, environment, Set.of(), GIT_TIMEOUT, heartbeat);
@@ -160,6 +161,18 @@ public class GitWorkspaceFactory {
           command.get(1) + " failed: " + abbreviate(result.standardError(), 600));
     }
     return result;
+  }
+
+  /**
+   * GitHub's REST API accepts a bearer installation token, but its git-over-HTTPS endpoint only
+   * accepts basic credentials. Sending a bearer header there returns 401, git falls back to
+   * prompting, and GIT_TERMINAL_PROMPT=0 turns that into "could not read Username".
+   */
+  static String basicAuthorizationHeader(final String accessToken) {
+    String credential = "x-access-token:" + accessToken;
+    return "Authorization: Basic "
+        + Base64.getEncoder()
+            .encodeToString(credential.getBytes(java.nio.charset.StandardCharsets.UTF_8));
   }
 
   private static void removeUnsafeFiles(final Path repository) throws IOException {
