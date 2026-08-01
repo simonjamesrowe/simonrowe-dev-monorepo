@@ -1,23 +1,27 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Menu, MessageSquare, Moon, Sun, X } from 'lucide-react'
+import { useAdminRole } from '../../auth/useAdminRole'
 import { useChat } from '../../contexts/ChatContext'
 import { useTheme } from '../../contexts/ThemeContext'
 
-const navItems = [
+const publicNavItems = [
   { label: 'Home', to: '/' },
   { label: 'Profile', to: '/profile' },
   { label: 'Experience', to: '/experience' },
   { label: 'Blog', to: '/blogs' },
   { label: 'News & Events', to: '/news-events' },
   { label: 'MCP', to: '/mcp' },
-  { label: 'Admin', to: '/admin' },
 ]
+
+const adminNavItem = { label: 'Admin', to: '/admin' }
 
 export function MobileMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const { openChat } = useChat()
   const { theme, toggleTheme } = useTheme()
+  const isAdmin = useAdminRole()
+  const navItems = isAdmin ? [...publicNavItems, adminNavItem] : publicNavItems
 
   return (
     <div className="mobile-menu">

@@ -16,6 +16,7 @@ import co.elastic.clients.elasticsearch.core.IndexResponse;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
+import com.simonrowe.blog.BlogContentType;
 import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.blog.Tag;
 import com.simonrowe.common.Image;
@@ -72,7 +73,8 @@ class IndexServiceTest {
   void blogToSiteDocumentTransformsCorrectly() {
     Blog blog = new Blog(
         "blog1", "Test Blog", "Short desc", "Full content", true,
-        "/images/blog.jpg", Instant.now(), Instant.now(), List.of(), List.of());
+        "/images/blog.jpg", Instant.now(), Instant.now(), List.of(), List.of(),
+        BlogContentType.ENGINEERING);
 
     SiteSearchDocument doc = indexService.blogToSiteDocument(blog);
 
@@ -157,7 +159,7 @@ class IndexServiceTest {
         "blog1", "Spring Guide", "A guide to Spring",
         "Full markdown content", true, "/images/spring.jpg",
         created, Instant.now(),
-        List.of(tag1, tag2), List.of(blogSkill));
+        List.of(tag1, tag2), List.of(blogSkill), BlogContentType.ENGINEERING);
 
     BlogSearchDocument doc = indexService.blogToBlogDocument(blog);
 
@@ -176,7 +178,8 @@ class IndexServiceTest {
   void blogToBlogDocumentNullTagsReturnsEmptyList() {
     Blog blog = new Blog(
         "blog1", "Title", "Desc", "Content", true,
-        null, Instant.now(), Instant.now(), null, null);
+        null, Instant.now(), Instant.now(), null, null,
+        BlogContentType.ENGINEERING);
 
     BlogSearchDocument doc = indexService.blogToBlogDocument(blog);
 
@@ -241,7 +244,8 @@ class IndexServiceTest {
 
     Blog blog = new Blog(
         "b1", "Title", "Desc", "Content", true,
-        "/img.jpg", Instant.now(), Instant.now(), List.of(), List.of());
+        "/img.jpg", Instant.now(), Instant.now(), List.of(), List.of(),
+        BlogContentType.ENGINEERING);
 
     indexService.indexBlogContent(blog);
 

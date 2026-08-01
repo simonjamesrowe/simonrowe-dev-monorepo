@@ -458,7 +458,9 @@ public class DataMigrationService implements ApplicationRunner {
             skills,
             toInstant(doc.get("createdAt")),
             toInstant(doc.get("updatedAt")),
-            legacyId
+            legacyId,
+            // Left unset so the V015 backfill classifies it from its tags.
+            null
         );
         blogRepository.save(updated);
       } else {
@@ -473,7 +475,9 @@ public class DataMigrationService implements ApplicationRunner {
             skills,
             toInstant(doc.get("createdAt")),
             toInstant(doc.get("updatedAt")),
-            legacyId
+            legacyId,
+            // Left unset so the V015 backfill classifies it from its tags.
+            null
         );
         blogRepository.save(blog);
       }

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { ConnectInstructions } from '../components/mcp/ConnectInstructions'
 import { ToolCard } from '../components/mcp/ToolCard'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { createMcpClient, type McpClient } from '../services/mcpClient'
 import { trackPageView } from '../services/analytics'
 import type { McpTool } from '../types/mcp'
@@ -18,10 +19,13 @@ export function McpPage({ client }: McpPageProps) {
   const [tools, setTools] = useState<McpTool[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Bumping the attempt counter re-runs the connect/list effect, which is what Retry does.
+  const [attempt, setAttempt] = useState(0)
+
+  usePageTitle('MCP Tools')
 
   useEffect(() => {
     trackPageView('/mcp')
-    document.title = 'MCP Tools'
   }, [])
 
   useEffect(() => {
@@ -43,7 +47,11 @@ export function McpPage({ client }: McpPageProps) {
     return () => {
       cancelled = true
     }
-  }, [mcpClient])
+  }, [mcpClient, attempt])
+
+  const retry = useCallback(() => {
+    setAttempt((value) => value + 1)
+  }, [])
 
   return (
     <div className="mcp-page">
@@ -64,7 +72,7 @@ export function McpPage({ client }: McpPageProps) {
         {loading ? (
           <LoadingIndicator message="Connecting to the MCP server..." />
         ) : error ? (
-          <ErrorMessage message={error} />
+          <ErrorMessage message={error} onRetry={retry} title="Unable to load MCP tools" />
         ) : tools.length === 0 ? (
           <p className="mcp-page__empty">The MCP server reported no tools.</p>
         ) : (

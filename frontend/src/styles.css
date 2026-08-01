@@ -245,15 +245,28 @@ a:hover {
   transform: translateY(0);
 }
 
+/* Solid fill, not a gradient: the old fade to --primary-container washed out to
+   near-white, so "Get in touch" and "Download CV" read as disabled buttons. */
 .button--primary {
-  background: linear-gradient(135deg, var(--primary), var(--primary-container));
-  color: var(--on-primary-container);
-  border-radius: 0.75rem;
-  box-shadow: 0 4px 12px rgba(119, 209, 255, 0.1);
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.18);
 }
 
 .button--primary:hover {
-  filter: brightness(110%);
+  filter: brightness(108%);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Larger footprint for the closing call-to-action band. */
+.button--lg {
+  padding: 1.1rem 2.25rem;
+  border-radius: 1rem;
+  font-size: 1rem;
 }
 
 .button--secondary {
@@ -585,7 +598,10 @@ a:hover {
 @media (max-width: 768px) {
   .top-nav {
     height: 56px;
-    padding: 0 1rem;
+    gap: 0.5rem;
+    /* The menu trigger is position:fixed and a sibling of the nav, not a flex child, so
+       the bar reserves room for it with padding rather than a margin on one child. */
+    padding: 0 3.75rem 0 1rem;
   }
 
   .top-nav__links {
@@ -615,8 +631,13 @@ a:hover {
 
   .site-search {
     min-width: 0;
-    flex: 1;
-    margin-right: 3rem;
+    flex: 1 1 auto;
+  }
+
+  .top-nav__actions {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 0.5rem;
   }
 
   .site-search__input {
@@ -644,84 +665,62 @@ a:hover {
 
 /* ==================== Footer ==================== */
 
+/* One bar: copyright, connect icons, and a single way to get in touch. The brand block,
+   positioning statement and nav column were removed after review — the nav duplicated the
+   top navigation, which is on every page anyway. */
 .footer {
   width: 100%;
-  padding: 3.5rem 3rem 1.75rem;
+  padding: 1.25rem 3rem;
   margin-top: auto;
   display: block;
   border-top: 1px solid var(--border-subtle);
   background: var(--surface-container-lowest);
 }
 
-.footer__inner {
+/* Icon-only: the accessible name and the hover tooltip carry the full label, so the two
+   GitHub accounts remain distinguishable without six lines of text. */
+.footer__icons {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 3rem;
-  width: 100%;
-  max-width: 80rem;
-  margin: 0 auto;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.footer__brand {
-  max-width: 28rem;
-}
-
-.footer__brand-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.65rem;
-  color: var(--on-surface);
-  font-family: var(--font-heading);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.footer__brand-mark {
+.footer__icon-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.4rem;
+  height: 2.4rem;
   border: 1px solid var(--border-faint);
-  border-radius: 50%;
-  color: var(--primary);
-  background: var(--surface-container-low);
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
-}
-
-.footer__summary {
-  margin: 1rem 0 0;
+  border-radius: 0.6rem;
   color: var(--on-surface-variant);
-  line-height: 1.7;
+  transition: color var(--transition-fast), border-color var(--transition-fast),
+              background var(--transition-fast);
 }
 
-.footer__group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  min-width: 9rem;
+.footer__icon-link:hover {
+  border-color: rgba(var(--primary-rgb), 0.45);
+  background: rgba(var(--primary-rgb), 0.08);
+  color: var(--primary);
 }
 
-.footer__heading {
-  margin: 0 0 0.35rem;
-  color: var(--on-surface);
-  font-family: var(--font-heading);
-  font-size: 0.9rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.footer__icon-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .footer__bar {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   width: 100%;
   max-width: 80rem;
-  margin: 2.5rem auto 0;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border-subtle);
+  margin: 0 auto;
   color: var(--on-surface-variant);
   font-size: 0.8rem;
 }
@@ -751,15 +750,46 @@ a:hover {
   opacity: 1;
 }
 
+.footer__contact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1.1rem;
+  border: 1px solid var(--border-faint);
+  border-radius: 0.6rem;
+  color: var(--on-surface);
+  font-family: var(--font-main);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--transition-fast), border-color var(--transition-fast),
+              background var(--transition-fast);
+}
+
+.footer__contact-link:hover {
+  border-color: rgba(var(--primary-rgb), 0.45);
+  background: rgba(var(--primary-rgb), 0.08);
+  color: var(--primary);
+}
+
+.footer__contact-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 @media (max-width: 768px) {
   .footer {
     padding: 2rem 1.5rem;
   }
 
-  .footer__inner,
   .footer__bar {
     flex-direction: column;
-    gap: 1.5rem;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .footer__icons {
+    flex-wrap: wrap;
   }
 }
 
@@ -1159,11 +1189,19 @@ a:hover {
   }
 
   .hero__badge {
-    margin-bottom: 1rem;
+    margin-bottom: 0.6rem;
   }
 
+  /* Single mobile declaration. The badge, tagline and chips used to be removed by
+     HeroSection's isMobile check, which left four competing .hero__tagline rules as
+     dead CSS; they now render, so clamp and spacing live in one place. */
   .hero__tagline {
-    margin-bottom: 1.25rem;
+    display: -webkit-box;
+    margin-bottom: 0.9rem;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .hero__role {
@@ -1174,338 +1212,19 @@ a:hover {
     max-width: 100%;
   }
 
-  .hero__tagline {
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  /* Tighten the vertical rhythm so the chat input still lands inside the first screen
+     of a 390x844 viewport now that the hero carries badge, tagline and two chips. */
+  .hero__name {
+    margin-bottom: 0.35rem;
   }
-}
 
-/* ==================== AI Chat Module ==================== */
+  .hero__chat-intro {
+    margin-bottom: 0.75rem;
+  }
 
-.chat-module {
-  background: var(--surface-container-low);
-  border-radius: 1.5rem;
-  padding: 4px;
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-lg);
-}
-
-.chat-module__inner {
-  background: var(--surface-container-lowest);
-  border-radius: calc(1.5rem - 4px);
-  overflow: hidden;
-  border: 1px solid var(--border-subtle);
-}
-
-.chat-module__header {
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--on-surface-variant);
-}
-
-.chat-module__status {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.chat-module__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--primary);
-  animation: pulse-dot 2s ease-in-out infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.chat-module__body {
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.chat-module__messages {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  min-height: 80px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.chat-module__message {
-  max-width: 85%;
-}
-
-.chat-module__message--assistant {
-  background: var(--surface-container-high);
-  padding: 1rem;
-  border-radius: 1rem;
-  border-top-left-radius: 0;
-}
-
-.chat-module__message--user {
-  align-self: flex-end;
-  background: var(--primary);
-  color: var(--on-primary);
-  padding: 1rem;
-  border-radius: 1rem;
-  border-top-right-radius: 0;
-}
-
-.chat-module__message p {
-  margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-.chat-module__typing {
-  display: flex;
-  gap: 4px;
-  padding: 0.5rem 0;
-}
-
-.chat-module__typing span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--on-surface-variant);
-  animation: typing-bounce 1.2s ease-in-out infinite;
-}
-
-.chat-module__typing span:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.chat-module__typing span:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-@keyframes typing-bounce {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-  30% { transform: translateY(-4px); opacity: 1; }
-}
-
-.chat-module__prompts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.chat-module__prompts .chip {
-  cursor: pointer;
-  font-size: 0.75rem;
-  border: none;
-  background: var(--surface-container-high);
-  border: 1px solid var(--border-subtle);
-}
-
-.chat-module__prompts .chip:hover {
-  border-color: rgba(119, 209, 255, 0.4);
-}
-
-.chat-module__input-row {
-  position: relative;
-  padding-top: 0.5rem;
-}
-
-.chat-module__input {
-  padding-right: 3.5rem;
-}
-
-.chat-module__send {
-  position: absolute;
-  right: 0.5rem;
-  top: calc(0.5rem + 0.5rem);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: var(--primary);
-  color: var(--on-primary-container);
-  cursor: pointer;
-  transition: brightness var(--transition-fast);
-}
-
-.chat-module__send:hover {
-  filter: brightness(1.1);
-}
-
-.chat-module__send:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.chat-module__fallback {
-  padding: 0.75rem 1rem;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.15);
-  border-radius: 0.5rem;
-  margin: 0 1rem 0.5rem;
-}
-
-.chat-module__fallback p {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-/* ==================== Stats Grid ==================== */
-
-.stats-grid {
-  padding: 6rem 1.5rem;
-  max-width: 80rem;
-  margin: 0 auto;
-}
-
-.stats-grid__grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.5rem;
-}
-
-.stats-grid__summary {
-  grid-column: span 2;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.stats-grid__author {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding-top: 2rem;
-}
-
-.stats-grid__avatar {
-  width: 4rem;
-  height: 4rem;
-  border-radius: 50%;
-  object-fit: cover;
-  filter: grayscale(100%);
-  transition: filter 0.5s ease;
-  border: 2px solid rgba(119, 209, 255, 0.2);
-}
-
-.stats-grid__avatar:hover {
-  filter: grayscale(0);
-}
-
-.stats-grid__author-name {
-  color: var(--on-surface);
-  font-weight: 700;
-  margin: 0;
-}
-
-.stats-grid__author-title {
-  color: var(--on-surface-variant);
-  font-size: 0.875rem;
-  margin: 0;
-}
-
-.stats-grid__stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  background: var(--surface-container-high);
-  transition: background var(--transition-normal);
-}
-
-.stats-grid__stat:hover {
-  background: var(--surface-bright);
-}
-
-.stats-grid__stat-value {
-  font-family: var(--font-heading);
-  font-size: 3rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-}
-
-.stats-grid__stat-value--primary {
-  color: var(--primary);
-}
-
-.stats-grid__stat-value--secondary {
-  color: var(--secondary);
-}
-
-.stats-grid__stat-label {
-  color: var(--on-surface-variant);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.75rem;
-  font-weight: 500;
-  margin: 0;
-}
-
-.stats-grid__capabilities {
-  grid-column: span 2;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
-}
-
-.stats-grid__capability {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  aspect-ratio: 1;
-}
-
-.stats-grid__capability-icon--primary {
-  color: var(--primary);
-}
-
-.stats-grid__capability-icon--secondary {
-  color: var(--secondary);
-}
-
-.stats-grid__capability-title {
-  color: var(--on-surface);
-  font-weight: 700;
-  font-size: 1.25rem;
-  margin: 0;
-}
-
-.stats-grid__capability-desc {
-  color: var(--on-surface-variant);
-  font-size: 0.875rem;
-  margin: 0;
-}
-
-.stats-grid__showcase {
-  grid-column: span 2;
-  position: relative;
-  min-height: 300px;
-  overflow: hidden;
-  background: linear-gradient(to top, var(--surface-container), transparent),
-              var(--surface-container);
-}
-
-.stats-grid__showcase-content {
-  position: relative;
-  height: 100%;
-  padding: 2.5rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  .hero__prompts {
+    margin-top: 0.75rem;
+  }
 }
 
 /* ==================== About Section ==================== */
@@ -1654,6 +1373,18 @@ a:hover {
   .about-section {
     padding: 3rem 1rem;
   }
+
+  /* The 1024px rule above swaps in a landscape 16/9 panel, which crops the top and
+     bottom off a portrait photo. The asset is 400x600, so go back to a portrait box and
+     bias the crop upwards to keep the face. */
+  .about-section__image-panel {
+    aspect-ratio: 3 / 4;
+    max-height: none;
+  }
+
+  .about-section__photo {
+    object-position: center 20%;
+  }
 }
 
 /* ==================== Contact Drawer ==================== */
@@ -1679,7 +1410,9 @@ a:hover {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 480px;
+  /* Same width as the job and skill-group drawers (.drawer) so the three read as one
+     pattern rather than three different panels. */
+  width: min(75vw, 960px);
   max-width: 100vw;
   background: var(--surface-container);
   border-left: 1px solid var(--outline-variant);
@@ -1729,6 +1462,15 @@ a:hover {
   color: var(--on-surface);
 }
 
+/* The CV row and the social list are separate <ul>s; no gap between them so they read as
+   one continuous list of links. */
+.contact-drawer__extras {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 1.5rem;
+}
+
 .contact-drawer__body {
   padding: 2rem;
   flex: 1;
@@ -1773,40 +1515,6 @@ a:hover {
   margin-top: 2.5rem;
 }
 
-.cta-section__btn-primary {
-  display: inline-block;
-  background: var(--on-surface);
-  color: var(--surface);
-  padding: 1.25rem 2.5rem;
-  border-radius: 1rem;
-  font-weight: 700;
-  font-size: 1.1rem;
-  text-decoration: none;
-  transition: background var(--transition-fast);
-}
-
-.cta-section__btn-primary:hover {
-  background: var(--primary);
-  color: var(--on-primary);
-}
-
-.cta-section__btn-secondary {
-  display: inline-block;
-  border: 1px solid var(--border-faint);
-  color: var(--on-surface-variant);
-  padding: 1.25rem 2.5rem;
-  border-radius: 1rem;
-  font-weight: 700;
-  font-size: 1.1rem;
-  text-decoration: none;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.cta-section__btn-secondary:hover {
-  color: var(--on-surface);
-  border-color: var(--on-surface);
-}
-
 @media (min-width: 768px) {
   .cta-section__actions {
     flex-direction: row;
@@ -1829,9 +1537,6 @@ a:hover {
     font-size: 2.5rem;
   }
 
-  .hero__tagline {
-    font-size: 0.8rem;
-  }
 }
 
 @media (max-width: 375px) {
@@ -2504,13 +2209,14 @@ a:hover {
 
 .skill-rating-bar {
   height: 0.5rem;
-  background: #e5e7eb;
+  background: var(--surface-container-high);
   border-radius: 999px;
   overflow: hidden;
   width: 100%;
 }
 
 .skill-rating-bar__fill {
+  background: var(--primary);
   height: 100%;
   border-radius: 999px;
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -2601,11 +2307,6 @@ a:hover {
 
 .skill-group-card--skeleton {
   pointer-events: none;
-}
-
-.skill-group-grid__error {
-  color: #dc2626;
-  text-align: center;
 }
 
 /* ==================== Skeleton Loading ==================== */
@@ -4428,23 +4129,25 @@ a:hover {
   font-size: 0.78rem;
 }
 
-.chat-tool--running {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  width: fit-content;
-  padding: 0.35rem 0.7rem;
-}
-
+.chat-tool--running,
 .chat-tool--done {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
   width: fit-content;
-  padding: 0.3rem 0.7rem;
+  padding: 0.32rem 0.7rem;
+}
+
+/* The per-tool icon carries the meaning, so tint it rather than leaving it the same
+   muted grey as the label. */
+.chat-tool__icon {
+  flex: none;
+  color: var(--primary);
 }
 
 .chat-tool__spinner {
+  flex: none;
+  opacity: 0.7;
   animation: chat-tool-spin 1s linear infinite;
 }
 
@@ -7315,40 +7018,6 @@ a:hover {
 
 /* --- Connect Section --- */
 
-.profile-page__connect {
-  margin-top: 3rem;
-}
-
-.profile-page__connect-heading {
-  font-family: var(--font-display);
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 0.75rem;
-}
-
-.profile-page__connect > .body-lg {
-  color: var(--text-secondary);
-  margin-bottom: 2rem;
-  max-width: 600px;
-}
-
-.profile-page__connect-layout {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 3rem;
-}
-
-.profile-page__connect-info {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.profile-page__cv-link {
-  justify-content: center;
-  width: 100%;
-}
 
 /* --- Social Links --- */
 
@@ -7400,10 +7069,6 @@ a:hover {
   color: var(--text-tertiary);
 }
 
-.social-links__url {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
 
 /* --- Contact Section & Form (Profile Page Restyle) --- */
 
@@ -7504,10 +7169,6 @@ a:hover {
 /* Profile Responsive */
 
 @media (max-width: 768px) {
-  .profile-page__connect-layout {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-  }
 
   .social-links {
     flex-direction: row;
@@ -7515,9 +7176,6 @@ a:hover {
     justify-content: center;
   }
 
-  .social-links__url {
-    display: none;
-  }
 
   .contact-form__row {
     grid-template-columns: 1fr;
@@ -8742,87 +8400,6 @@ a:hover {
   }
 }
 
-/* ==================== Connect Strip (mobile only) ==================== */
-
-.connect-strip {
-  display: none;
-}
-
-@media (max-width: 768px) {
-  .connect-strip {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-    padding: 1.5rem 1.25rem;
-    margin: 0 1rem 1.5rem;
-    background: var(--surface-container-low);
-    border: 1px solid var(--border-faint);
-    border-radius: 1rem;
-  }
-
-  .connect-strip__eyebrow {
-    margin: 0;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--on-surface-variant);
-  }
-
-  .connect-strip__cv {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .connect-strip__socials {
-    display: flex;
-    gap: 1.25rem;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .connect-strip__social-link {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    color: var(--on-surface-variant);
-    transition: background var(--transition-fast), color var(--transition-fast);
-  }
-
-  .connect-strip__social-link:hover {
-    background: var(--surface-container-high);
-    color: var(--on-surface);
-  }
-}
-
-.about-section__read-more {
-  align-self: flex-start;
-  margin: 0 0 1rem;
-  padding: 0.4rem 0;
-  background: transparent;
-  border: none;
-  color: var(--primary);
-  font-family: inherit;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.about-section__read-more:hover {
-  text-decoration: none;
-}
-
-@media (min-width: 769px) {
-  .about-section__read-more {
-    display: none;
-  }
-}
-
 /* =========================================================================
    MCP Tools page (/mcp)
    ========================================================================= */
@@ -9137,5 +8714,507 @@ a:hover {
   .mcp-page__grid,
   .mcp-connect__grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ==================== UX Top-10: Blog listing on small screens ==================== */
+
+/* There were no mobile rules for the blog listing at all. At 384px the page contributed
+   2.5rem of side padding, the card another 2rem, and .featured-article__content another
+   2rem — 208px of nested padding out of 384 — while the title stayed at the 40px
+   headline-lg size. The result: a title wrapping one or two words per line, and a grid
+   track forced wider than the card by the title's min-content width. */
+@media (max-width: 768px) {
+  .blog-listing-page {
+    padding: 1rem 1rem 3rem;
+  }
+
+  .featured-article {
+    grid-template-columns: 1fr;
+    margin-bottom: 1.75rem;
+  }
+
+  /* Without this a 1fr track cannot shrink below its content's min-content width, which
+     is what pushed the card's own content past its rounded corners. */
+  .featured-article > * {
+    min-width: 0;
+  }
+
+  .featured-article__image {
+    min-height: 0;
+    aspect-ratio: 16 / 9;
+  }
+
+  .featured-article__content {
+    padding: 1.25rem;
+    gap: 0.75rem;
+  }
+
+  .featured-article__title {
+    font-size: 1.5rem;
+    line-height: 1.25;
+    /* Long single words ("Classification") would otherwise still force an overflow. */
+    overflow-wrap: anywhere;
+  }
+
+  .featured-article__meta {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .blog-listing-page__grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .article-card__title {
+    font-size: 1.15rem;
+    overflow-wrap: anywhere;
+  }
+
+  /* Three tabs on one row instead of wrapping onto two. */
+  .blog-content-tabs {
+    gap: 0.4rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .blog-content-tabs .chip {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* ==================== UX Top-10: Not Found ==================== */
+.not-found-page {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  min-height: 70vh;
+  padding: 4rem 1.5rem;
+  text-align: center;
+}
+
+.not-found-page__code {
+  margin: 0;
+  color: var(--primary);
+  font-family: var(--font-heading);
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  opacity: 0.5;
+}
+
+.not-found-page__title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 2rem;
+}
+
+.not-found-page__message {
+  max-width: 34rem;
+  margin: 0;
+  color: var(--on-surface-variant);
+  line-height: 1.7;
+}
+
+.not-found-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* ==================== UX Top-10: Blog content tabs ==================== */
+.blog-content-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.blog-content-tabs__tab {
+  border: 1px solid var(--border-faint);
+  cursor: pointer;
+  font: inherit;
+}
+
+.blog-listing-page__empty {
+  padding: 3rem 0;
+  color: var(--on-surface-variant);
+  text-align: center;
+}
+
+/* ==================== UX Top-10: Skill rating level ==================== */
+.skill-rating-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+}
+
+.skill-rating-bar-row .skill-rating-bar {
+  flex: 1;
+}
+
+.skill-rating-bar__level {
+  flex: none;
+  color: var(--on-surface-variant);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ==================== UX Top-10: Home sections ==================== */
+.currently-strip,
+.employer-logo-strip,
+.featured-writing {
+  padding: 4rem 3rem;
+}
+
+.currently-strip__inner,
+.employer-logo-strip__inner,
+.featured-writing__header,
+.featured-writing__track {
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.currently-strip {
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-container-lowest);
+}
+
+.currently-strip__heading,
+.employer-logo-strip__heading,
+.featured-writing__heading {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.currently-strip__role {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  line-height: 1.3;
+}
+
+.currently-strip__title {
+  color: var(--on-surface);
+}
+
+.currently-strip__company {
+  color: var(--primary);
+}
+
+.currently-strip__meta {
+  margin: 0.25rem 0 0;
+  color: var(--on-surface-variant);
+  font-size: 0.85rem;
+}
+
+.currently-strip__summary,
+.currently-strip__headline {
+  max-width: 48rem;
+  margin: 0.9rem 0 0;
+  color: var(--on-surface-variant);
+  line-height: 1.7;
+}
+
+/* ==================== UX Top-10: Employer logo carousel ==================== */
+
+/* The heading and the carousel share one 80rem column so the heading lines up with the
+   "Currently" copy above it — previously the heading sat on the section padding while
+   the list was centred inside its own max-width box, which pushed the logos ~230px in
+   on a wide viewport. */
+.employer-logo-strip__viewport {
+  position: relative;
+  margin-top: 1.5rem;
+  overflow: hidden;
+  /* Fade the cut-off chips at both ends so the loop reads as continuous motion rather
+     than items being clipped. */
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 5%,
+    #000 95%,
+    transparent 100%
+  );
+}
+
+.employer-logo-strip__track {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: max-content;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  animation: employer-logo-scroll 45s linear infinite;
+}
+
+/* Exactly -50%: the track holds two copies of the list, so the second lands where the
+   first started and the restart is invisible. */
+@keyframes employer-logo-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.employer-logo-strip__viewport:hover .employer-logo-strip__track,
+.employer-logo-strip__viewport:focus-within .employer-logo-strip__track {
+  animation-play-state: paused;
+}
+
+.employer-logo-strip__item {
+  flex: none;
+}
+
+/* Each logo sits on its own light chip. Four of the current assets are JPEGs with
+   opaque light backgrounds, so a per-theme monochrome filter would blacken the whole
+   rectangle; the chip sidesteps that and still works once the assets become SVGs. */
+.employer-logo-strip__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 9.5rem;
+  height: 5rem;
+  padding: 0.6rem 1.35rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.9rem;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), transform var(--transition-fast),
+              box-shadow var(--transition-fast);
+}
+
+.employer-logo-strip__chip:hover {
+  border-color: rgba(var(--primary-rgb), 0.5);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.employer-logo-strip__chip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Softened off-white in dark mode: pure #fff chips glared against the dark surface. */
+[data-theme="dark"] .employer-logo-strip__chip {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #eef1f5;
+}
+
+.employer-logo-strip__logo {
+  width: auto;
+  max-width: 100%;
+  height: 2.9rem;
+  object-fit: contain;
+  opacity: 0.92;
+  transition: opacity var(--transition-fast);
+}
+
+.employer-logo-strip__chip:hover .employer-logo-strip__logo {
+  opacity: 1;
+}
+
+.employer-logo-strip__name {
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+/* Motion is decorative; without it the row is a plain wrapped grid of every employer. */
+@media (prefers-reduced-motion: reduce) {
+  .employer-logo-strip__viewport {
+    mask-image: none;
+  }
+
+  .employer-logo-strip__track {
+    flex-wrap: wrap;
+    width: auto;
+    animation: none;
+  }
+
+  .employer-logo-strip__item[aria-hidden="true"] {
+    display: none;
+  }
+}
+
+/* ==================== UX Top-10: Currently strip logo ==================== */
+.currently-strip__role-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.currently-strip__logo-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.85rem;
+  background: #fff;
+}
+
+[data-theme="dark"] .currently-strip__logo-chip {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #eef1f5;
+}
+
+.currently-strip__logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.currently-strip__role-text {
+  min-width: 0;
+}
+
+/* ==================== UX Top-10: Recent writing carousel ==================== */
+.featured-writing {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.featured-writing__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.featured-writing__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.featured-writing__controls {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.featured-writing__arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1px solid var(--border-faint);
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast),
+              background var(--transition-fast);
+}
+
+.featured-writing__arrow:hover:not(:disabled) {
+  border-color: rgba(var(--primary-rgb), 0.45);
+  background: rgba(var(--primary-rgb), 0.08);
+  color: var(--primary);
+}
+
+.featured-writing__arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.featured-writing__arrow:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.featured-writing__link {
+  color: var(--primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.featured-writing__link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+/* Native horizontal scrolling with snap points, so trackpad, touch swipe and keyboard
+   all work without JS; the arrow buttons just call scrollBy on top of it. Deliberately
+   not auto-rotating — these cards carry text that has to stay readable. */
+.featured-writing__track {
+  display: flex;
+  gap: 1.5rem;
+  margin: 1.5rem auto 0;
+  padding: 0.25rem 0 1rem;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+
+.featured-writing__slide {
+  flex: 0 0 clamp(17rem, 30%, 22rem);
+  scroll-snap-align: start;
+}
+
+/* Cards stretch to the tallest in view so the row keeps a straight baseline. */
+.featured-writing__slide > * {
+  height: 100%;
+}
+
+/* ==================== UX Top-10: News load more ==================== */
+.feed__load-more {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0 0;
+}
+
+@media (max-width: 900px) {
+  .featured-writing__slide {
+    flex-basis: clamp(15rem, 45%, 20rem);
+  }
+}
+
+@media (max-width: 768px) {
+  .currently-strip,
+  .employer-logo-strip,
+  .featured-writing {
+    padding: 2.5rem 1.25rem;
+  }
+
+  .currently-strip__role {
+    font-size: 1.2rem;
+  }
+
+  .employer-logo-strip__chip {
+    min-width: 7.5rem;
+    height: 4rem;
+  }
+
+  .employer-logo-strip__logo {
+    height: 2.1rem;
+  }
+
+  .featured-writing__slide {
+    flex-basis: 82%;
   }
 }

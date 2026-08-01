@@ -222,6 +222,82 @@ describe('BlogEditor', () => {
     expect(getPublishedCheckbox()).toBeChecked()
   })
 
+  it('preselects Engineering as the content type for a new blog', async () => {
+    renderNewBlog()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'New Blog' })).toBeInTheDocument()
+    })
+
+    const select = screen.getByLabelText('Content type') as HTMLSelectElement
+    expect(select).toHaveValue('ENGINEERING')
+    expect(
+      Array.from(select.options).map((option) => [option.value, option.text]),
+    ).toEqual([
+      ['ENGINEERING', 'Engineering'],
+      ['DIGEST', 'Weekly Digest'],
+    ])
+  })
+
+  it('round-trips the content type of an existing digest post', async () => {
+    mockFetchAdminBlogById.mockResolvedValue({
+      id: 'blog-123',
+      title: 'Weekly Digest 42',
+      shortDescription: 'Links from the week',
+      content: '# Digest',
+      published: true,
+      featuredImageUrl: null,
+      tags: [],
+      skills: [],
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      contentType: 'DIGEST',
+    })
+
+    renderEditBlog('blog-123')
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Edit Blog' })).toBeInTheDocument()
+    })
+
+    expect(screen.getByLabelText('Content type')).toHaveValue('DIGEST')
+  })
+
+  it('includes the selected content type in the save payload', async () => {
+    mockCreateAdminBlog.mockResolvedValue({
+      id: 'new-id',
+      title: 'Test Blog',
+      shortDescription: 'A description',
+      content: '',
+      published: false,
+      featuredImageUrl: null,
+      tags: [],
+      skills: [],
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      contentType: 'DIGEST',
+    })
+
+    renderNewBlog()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'New Blog' })).toBeInTheDocument()
+    })
+
+    fireEvent.change(getTitleInput(), { target: { value: 'Test Blog' } })
+    fireEvent.change(getShortDescriptionTextarea(), { target: { value: 'A description' } })
+    fireEvent.change(screen.getByLabelText('Content type'), { target: { value: 'DIGEST' } })
+
+    fireEvent.submit(screen.getByRole('button', { name: 'Save' }).closest('form')!)
+
+    await waitFor(() => {
+      expect(mockCreateAdminBlog).toHaveBeenCalledWith(
+        mockGetAccessToken,
+        expect.objectContaining({ contentType: 'DIGEST' }),
+      )
+    })
+  })
+
   it('shows loading state while fetching existing blog', () => {
     mockFetchAdminBlogById.mockImplementation(() => new Promise(() => {}))
 

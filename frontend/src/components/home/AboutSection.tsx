@@ -54,7 +54,7 @@ export function AboutSection({ profile, onContact }: AboutSectionProps) {
             </button>
           )}
           <button type="button" className="button button--primary about-section__cta" onClick={onContact}>
-            Get In Touch
+            Get in touch
           </button>
         </div>
       </div>

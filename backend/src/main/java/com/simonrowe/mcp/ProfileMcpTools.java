@@ -206,7 +206,7 @@ public class ProfileMcpTools {
     String sessionId = sessionId(toolContext);
     publishToolStart(sessionId, BLOGS_LABEL);
     try {
-      List<BlogSummaryResponse> blogs = blogService.getLatest(10);
+      List<BlogSummaryResponse> blogs = blogService.getLatest(10, null);
       publishWidgetIfNotEmpty(sessionId, "blogs", toBlogSummaryPayload(blogs));
       return blogs;
     } finally {

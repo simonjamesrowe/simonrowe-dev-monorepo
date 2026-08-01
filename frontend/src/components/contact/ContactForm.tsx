@@ -50,7 +50,7 @@ export function ContactForm() {
       if (err instanceof ContactApiError) {
         setServerError(err.message)
       } else {
-        setServerError('An unexpected error occurred. Please try again later.')
+        setServerError('Message could not be sent. Please try again.')
       }
     }
   }
@@ -58,7 +58,7 @@ export function ContactForm() {
   if (submitSuccess) {
     return (
       <div className="contact-form__success" role="alert">
-        <p>Thank you for your message. I&apos;ll be in touch soon!</p>
+        <p>Message sent. Thanks &mdash; I&apos;ll be in touch soon.</p>
       </div>
     )
   }
@@ -129,7 +129,7 @@ export function ContactForm() {
         className="button button--primary"
         disabled={isSubmitting}
       >
-        {isSubmitting ? 'Sending...' : 'Initiate Connection \u2192'}
+        {isSubmitting ? 'Sending message...' : 'Send message'}
       </button>
     </form>
   )

@@ -1,41 +1,41 @@
 import { API_BASE_URL } from '../config/api'
-import type { BlogDetail, BlogSearchResult, BlogSummary } from '../types/blog'
+import { fetchWithRetry } from './fetchWithRetry'
+import type { BlogContentType, BlogDetail, BlogSearchResult, BlogSummary } from '../types/blog'
 
 const BLOGS_ENDPOINT = `${API_BASE_URL}/api/blogs`
 const SEARCH_ENDPOINT = `${API_BASE_URL}/api/search/blogs`
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    let message = 'Unable to load blog data.'
-    try {
-      const errorPayload = await response.json()
-      if (typeof errorPayload.message === 'string' && errorPayload.message.trim() !== '') {
-        message = errorPayload.message
-      }
-    } catch {
-      // Keep default fallback message
-    }
-    throw new Error(message)
-  }
-  return (await response.json()) as T
-}
+const FALLBACK_MESSAGE = 'Unable to load blog data.'
 
 export async function fetchBlogs(): Promise<BlogSummary[]> {
-  const response = await fetch(BLOGS_ENDPOINT)
-  return handleResponse<BlogSummary[]>(response)
+  return fetchWithRetry<BlogSummary[]>(BLOGS_ENDPOINT, { fallbackMessage: FALLBACK_MESSAGE })
 }
 
 export async function fetchBlogById(id: string): Promise<BlogDetail> {
-  const response = await fetch(`${BLOGS_ENDPOINT}/${id}`)
-  return handleResponse<BlogDetail>(response)
+  return fetchWithRetry<BlogDetail>(`${BLOGS_ENDPOINT}/${id}`, {
+    fallbackMessage: FALLBACK_MESSAGE,
+  })
 }
 
-export async function fetchLatestBlogs(limit: number = 3): Promise<BlogSummary[]> {
-  const response = await fetch(`${BLOGS_ENDPOINT}/latest?limit=${limit}`)
-  return handleResponse<BlogSummary[]>(response)
+/**
+ * Newest published posts, optionally restricted to one content type.
+ *
+ * The backend applies the `contentType` filter *before* the limit, so asking for
+ * three engineering posts always yields three even when digests occupy the top of
+ * the list.
+ */
+export async function fetchLatestBlogs(
+  limit: number = 3,
+  contentType?: BlogContentType,
+): Promise<BlogSummary[]> {
+  const query = contentType ? `?limit=${limit}&contentType=${contentType}` : `?limit=${limit}`
+  return fetchWithRetry<BlogSummary[]>(`${BLOGS_ENDPOINT}/latest${query}`, {
+    fallbackMessage: FALLBACK_MESSAGE,
+  })
 }
 
 export async function searchBlogs(query: string): Promise<BlogSearchResult[]> {
-  const response = await fetch(`${SEARCH_ENDPOINT}?q=${encodeURIComponent(query)}`)
-  return handleResponse<BlogSearchResult[]>(response)
+  return fetchWithRetry<BlogSearchResult[]>(`${SEARCH_ENDPOINT}?q=${encodeURIComponent(query)}`, {
+    fallbackMessage: FALLBACK_MESSAGE,
+  })
 }

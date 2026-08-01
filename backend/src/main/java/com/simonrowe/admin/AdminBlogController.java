@@ -1,9 +1,11 @@
 package com.simonrowe.admin;
 
+import com.simonrowe.blog.BlogContentType;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,7 +89,8 @@ public class AdminBlogController {
         (String) body.get("featuredImageUrl"),
         resolveTagsByIds(toStringList(body.get("tags"))),
         resolveSkillsByIds(toStringList(body.get("skills"))),
-        now, now, null
+        now, now, null,
+        resolveContentType(body, BlogContentType.DEFAULT)
     );
 
     Blog saved = blogRepository.save(blog);
@@ -128,7 +131,9 @@ public class AdminBlogController {
         resolveSkillsByIds(toStringList(body.get("skills"))),
         existing.createdAt(),
         Instant.now(),
-        existing.legacyId()
+        existing.legacyId(),
+        // Absent on update means "leave as it is", not "reset to the default".
+        resolveContentType(body, BlogContentType.orDefault(existing.contentType()))
     );
 
     Blog saved = blogRepository.save(updated);
@@ -173,7 +178,36 @@ public class AdminBlogController {
         : List.of());
     dto.put("createdAt", blog.createdAt());
     dto.put("updatedAt", blog.updatedAt());
+    dto.put("contentType", BlogContentType.orDefault(blog.contentType()));
     return dto;
+  }
+
+  /**
+   * Reads the content type from a request body.
+   *
+   * <p>An absent or blank value yields {@code fallback} — on create that is
+   * {@code ENGINEERING}, on update it is the stored value, so an admin edit that does
+   * not send the field cannot silently reclassify a generated digest.
+   *
+   * @param body the raw request body
+   * @param fallback the value to use when the key is absent or blank
+   * @return the resolved content type
+   * @throws ResponseStatusException with 400 when the value is present but unrecognised
+   */
+  private BlogContentType resolveContentType(
+      final Map<String, Object> body,
+      final BlogContentType fallback
+  ) {
+    Object raw = body.get("contentType");
+    if (raw == null || raw.toString().isBlank()) {
+      return fallback;
+    }
+    try {
+      return BlogContentType.valueOf(raw.toString().trim().toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw validationException(List.of(new ValidationErrorResponse.FieldError(
+          "contentType", "Content type must be either ENGINEERING or DIGEST")));
+    }
   }
 
   private List<Tag> resolveTagsByIds(final List<String> ids) {

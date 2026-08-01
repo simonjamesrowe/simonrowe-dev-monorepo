@@ -28,9 +28,10 @@ public class BlogController {
 
   @GetMapping("/latest")
   public List<BlogSummaryResponse> getLatestBlogs(
-      @RequestParam(defaultValue = "3") @Min(1) @Max(10) final int limit
+      @RequestParam(defaultValue = "3") @Min(1) @Max(10) final int limit,
+      @RequestParam(required = false) final BlogContentType contentType
   ) {
-    return blogService.getLatest(limit);
+    return blogService.getLatest(limit, contentType);
   }
 
   @GetMapping("/{id}")

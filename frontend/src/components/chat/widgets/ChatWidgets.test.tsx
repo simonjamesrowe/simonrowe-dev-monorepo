@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { ChatWidget } from './ChatWidgetRegistry'
 import { BlogListWidget } from './BlogListWidget'
-import { CodeExampleWidget } from './CodeExampleWidget'
 import { EmploymentWidget } from './EmploymentWidget'
 import { EventsWidget } from './EventsWidget'
 import { NewsWidget } from './NewsWidget'
@@ -28,23 +28,25 @@ describe('chat widgets', () => {
     expect(screen.getByText('Kafka')).toBeInTheDocument()
   })
 
-  it('renders code examples', () => {
-    render(<CodeExampleWidget payload={{
-      examples: [{
-        title: 'Outbox pattern',
-        description: 'Transactional messaging',
-        language: 'java',
-        code: '```java\nclass Outbox {}\n```',
-        skills: ['Spring Boot'],
-      }],
-    }} />)
+  it('renders nothing for code examples — the tool label is the whole signal', () => {
+    const { container } = render(
+      <ChatWidget
+        widgetKind="code"
+        payload={{
+          examples: [{
+            title: 'Outbox pattern',
+            description: 'Transactional messaging',
+            language: 'java',
+            code: '```java\nclass Outbox {}\n```',
+            skills: ['Spring Boot'],
+          }],
+        }}
+      />,
+    )
 
-    expect(screen.getByText('Outbox pattern')).toBeInTheDocument()
-    expect(screen.getByText('Transactional messaging')).toBeInTheDocument()
-    expect(screen.queryByText('java')).not.toBeInTheDocument()
-    expect(screen.getByText('Spring Boot')).toBeInTheDocument()
-    expect(screen.getByText('class Outbox {}')).toBeInTheDocument()
-    expect(screen.queryByText(/```java/)).not.toBeInTheDocument()
+    expect(container).toBeEmptyDOMElement()
+    expect(screen.queryByText('Outbox pattern')).not.toBeInTheDocument()
+    expect(screen.queryByText('class Outbox {}')).not.toBeInTheDocument()
   })
 
   it('renders blog posts', () => {

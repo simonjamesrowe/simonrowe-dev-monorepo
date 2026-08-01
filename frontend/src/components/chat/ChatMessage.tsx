@@ -9,13 +9,17 @@ import { remarkLinkify } from './remarkLinkify'
 
 const REMARK_PLUGINS = [remarkGfm, remarkLinkify]
 
-// Most widget detail cards (skills, employment, blogs, news, events) are hidden in chat:
-// the answer prose now carries the same links and inline images, so the cards were
-// redundant "tool detail". The CODE example card is kept because actual code cannot be
-// conveyed as a prose link (there is no public code-example page). Hidden widget blocks
-// are still kept in the message model so the per-message link/image allowlist can be
-// derived from them.
-const VISIBLE_WIDGET_KINDS = new Set<string>(['code'])
+// No widget detail cards are rendered in chat. Skills, employment, blogs, news and events
+// were already hidden because the answer prose carries the same links and inline images,
+// making the cards redundant "tool detail". The code-example card was the last one left,
+// and it went the same way: a title, a description and a full code block pushed the
+// assistant's actual answer far down the transcript, so the tool label ("Fetching code
+// examples") is now the whole signal.
+//
+// Widget blocks are still kept in the message model — the per-message link/image allowlist
+// is derived from them — and this set is the one place that decides what renders, so a
+// future widget only needs adding here.
+const VISIBLE_WIDGET_KINDS = new Set<string>()
 
 interface ChatMessageProps {
   role: 'user' | 'assistant'

@@ -65,7 +65,8 @@ public class V006FixAiBlogTitles {
               blog.createdDate(),
               blog.updatedDate(),
               blog.tags(),
-              blog.skills()
+              blog.skills(),
+              blog.contentType()
           );
           
           blogRepository.save(updatedBlog);

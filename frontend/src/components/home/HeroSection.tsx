@@ -18,6 +18,21 @@ const SUGGESTED_PROMPTS = [
   "How big are the teams he's led?",
 ]
 
+/**
+ * Suggested prompts shown at each width. Mobile gets the first two so the chips
+ * stay on a single row and the chat input still lands inside the first screen of a
+ * 390x844 viewport.
+ */
+const MOBILE_PROMPT_COUNT = 2
+
+/**
+ * Chat textarea height. Six rows is the desktop composition; on mobile it is the
+ * single biggest consumer of vertical space, so it shrinks to keep the input above
+ * the fold.
+ */
+const DESKTOP_CHAT_ROWS = 6
+const MOBILE_CHAT_ROWS = 3
+
 export function HeroSection({ name, title, tagline, backgroundImageUrl }: HeroSectionProps) {
   const bgUrl = backgroundImageUrl ? `${API_BASE_URL}${backgroundImageUrl}` : undefined
   const [chatInput, setChatInput] = useState('')
@@ -44,10 +59,10 @@ export function HeroSection({ name, title, tagline, backgroundImageUrl }: HeroSe
         />
       )}
       <div className="hero__content">
-        {!isMobile && <p className="hero__badge">Engineering Leadership // AI-Native Systems</p>}
+        <p className="hero__badge">Engineering Leadership // AI-Native Systems</p>
         <h1 className="hero__name display-lg">{firstName} <span className="hero__name--accent">{lastName}</span></h1>
         <p className="hero__role">{title}</p>
-        {!isMobile && <p className="hero__tagline">{tagline}</p>}
+        <p className="hero__tagline">{tagline}</p>
 
         <div className="hero__chat tour-home-chat">
           <p className="hero__chat-intro">
@@ -57,7 +72,7 @@ export function HeroSection({ name, title, tagline, backgroundImageUrl }: HeroSe
 
           <form className="hero__chat-input" onSubmit={handleChatSubmit}>
             <textarea
-              rows={6}
+              rows={isMobile ? MOBILE_CHAT_ROWS : DESKTOP_CHAT_ROWS}
               placeholder="Ask me anything about Simon..."
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
@@ -73,20 +88,18 @@ export function HeroSection({ name, title, tagline, backgroundImageUrl }: HeroSe
             </button>
           </form>
 
-          {!isMobile && (
-            <div className="hero__prompts">
-              {SUGGESTED_PROMPTS.map(prompt => (
-                <button
-                  key={prompt}
-                  className="hero__prompt-chip"
-                  onClick={() => openChat(prompt)}
-                  type="button"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="hero__prompts">
+            {SUGGESTED_PROMPTS.slice(0, isMobile ? MOBILE_PROMPT_COUNT : SUGGESTED_PROMPTS.length).map(prompt => (
+              <button
+                key={prompt}
+                className="hero__prompt-chip"
+                onClick={() => openChat(prompt)}
+                type="button"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </section>

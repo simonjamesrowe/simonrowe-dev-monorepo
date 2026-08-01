@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.simonrowe.blog.Blog;
+import com.simonrowe.blog.BlogContentType;
 import com.simonrowe.blog.BlogRepository;
 import java.time.Instant;
 import java.util.List;
@@ -30,7 +31,7 @@ class BlogImageBackfillServiceTest {
   private static Blog blog(final String id, final String title, final String imageUrl) {
     Instant now = Instant.now();
     return new Blog(id, title, "desc-" + id, "content", true,
-        imageUrl, now, now, List.of(), List.of());
+        imageUrl, now, now, List.of(), List.of(), BlogContentType.ENGINEERING);
   }
 
   @Test

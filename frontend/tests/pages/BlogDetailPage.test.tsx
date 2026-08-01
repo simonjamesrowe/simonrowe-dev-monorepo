@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -20,6 +20,17 @@ const blog: BlogDetail = {
   createdDate: '2024-06-01T10:00:00Z',
   tags: [{ name: 'Spring' }],
   skills: [],
+  contentType: 'ENGINEERING',
+}
+
+function renderDetail(path = '/blogs/b-1') {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route element={<BlogDetailPage />} path="/blogs/:id" />
+      </Routes>
+    </MemoryRouter>,
+  )
 }
 
 describe('BlogDetailPage', () => {
@@ -71,5 +82,34 @@ describe('BlogDetailPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Blog post not found')
     })
+  })
+
+  it('sets the document title from the loaded post', async () => {
+    vi.mocked(fetchBlogById).mockResolvedValue(blog)
+
+    renderDetail()
+
+    await waitFor(() => {
+      expect(document.title).toBe('Spring Boot Tips · Simon Rowe')
+    })
+  })
+
+  it('gives the error state a title and a retry that refetches', async () => {
+    vi.mocked(fetchBlogById)
+      .mockRejectedValueOnce(new Error('Unable to load blog data.'))
+      .mockResolvedValueOnce(blog)
+
+    renderDetail()
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Unable to load this post')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1, name: 'Spring Boot Tips' })).toBeInTheDocument()
+    })
+    expect(vi.mocked(fetchBlogById)).toHaveBeenCalledTimes(2)
   })
 })

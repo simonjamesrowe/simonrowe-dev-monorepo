@@ -20,6 +20,7 @@ public record Blog(
     @Field("createdDate") Instant createdDate,
     @Field("updatedDate") Instant updatedDate,
     @DBRef List<Tag> tags,
-    @DBRef List<Skill> skills
+    @DBRef List<Skill> skills,
+    BlogContentType contentType
 ) {
 }

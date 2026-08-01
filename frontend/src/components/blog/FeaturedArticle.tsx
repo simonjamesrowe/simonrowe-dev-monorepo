@@ -30,7 +30,7 @@ export function FeaturedArticle({ blog }: FeaturedArticleProps) {
         <h2 className="headline-lg featured-article__title">{blog.title}</h2>
         <p className="featured-article__excerpt">{blog.shortDescription}</p>
         <Link className="featured-article__link" to={`/blogs/${blog.id}`}>
-          Read Detailed Analysis &rarr;
+          Read post
         </Link>
       </div>
     </article>

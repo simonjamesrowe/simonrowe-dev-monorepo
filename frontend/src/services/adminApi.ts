@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config/api'
+import type { BlogContentType } from '../types/blog'
 
 const ADMIN_URL = `${API_BASE_URL}/api/admin`
 
@@ -17,6 +18,8 @@ export interface AdminBlog {
   skills: string[]
   createdAt: string
   updatedAt: string
+  /** Never null from the API — the DTO coerces a missing stored value to `ENGINEERING`. */
+  contentType: BlogContentType
 }
 
 export interface AdminJob {

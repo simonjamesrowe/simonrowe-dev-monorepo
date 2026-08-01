@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
+import com.simonrowe.blog.BlogContentType;
 import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
@@ -56,7 +57,8 @@ class ContentChangeConsumerTest {
   void handleBlogCreatedIndexesPublishedBlog() throws Exception {
     Blog blog = new Blog(
         "b1", "Title", "Desc", "Content", true,
-        "/img.jpg", Instant.now(), Instant.now(), List.of(), List.of());
+        "/img.jpg", Instant.now(), Instant.now(), List.of(), List.of(),
+        BlogContentType.ENGINEERING);
     when(blogRepository.findByIdAndPublishedTrue("b1")).thenReturn(Optional.of(blog));
 
     ContentChangeEvent event = new ContentChangeEvent(
@@ -81,7 +83,8 @@ class ContentChangeConsumerTest {
   void handleBlogUpdatedIndexesPublishedBlog() throws Exception {
     Blog blog = new Blog(
         "b1", "Updated", "Desc", "Content", true,
-        "/img.jpg", Instant.now(), Instant.now(), List.of(), List.of());
+        "/img.jpg", Instant.now(), Instant.now(), List.of(), List.of(),
+        BlogContentType.ENGINEERING);
     when(blogRepository.findByIdAndPublishedTrue("b1")).thenReturn(Optional.of(blog));
 
     ContentChangeEvent event = new ContentChangeEvent(

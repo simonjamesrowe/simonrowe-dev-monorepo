@@ -1,5 +1,9 @@
 package com.simonrowe.blog;
 
+import static com.simonrowe.blog.BlogContentType.DIGEST;
+import static com.simonrowe.blog.BlogContentType.ENGINEERING;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.everyItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,6 +19,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 class BlogControllerTest extends AbstractIntegrationTest {
+
+  private static final Instant ENGINEERING_CREATED = Instant.parse("2026-01-03T10:00:00Z");
+  private static final Instant DIGEST_CREATED = Instant.parse("2026-02-02T10:00:00Z");
 
   @Autowired
   private BlogRepository blogRepository;
@@ -126,7 +133,135 @@ class BlogControllerTest extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.length()").value(3));
   }
 
+  @Test
+  void listPublishedBlogsIncludesContentType() throws Exception {
+    blogRepository.saveAll(List.of(
+        sampleBlog("b-1", "Engineering Post", true, ENGINEERING_CREATED, ENGINEERING),
+        sampleBlog("b-2", "Digest Post", true, DIGEST_CREATED, DIGEST)
+    ));
+
+    mockMvc.perform(get("/api/blogs"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(2))
+        .andExpect(jsonPath("$[0].id").value("b-2"))
+        .andExpect(jsonPath("$[0].contentType").value("DIGEST"))
+        .andExpect(jsonPath("$[1].id").value("b-1"))
+        .andExpect(jsonPath("$[1].contentType").value("ENGINEERING"));
+  }
+
+  @Test
+  void listPublishedBlogsCoercesStoredNullContentTypeToEngineering() throws Exception {
+    blogRepository.save(sampleBlog("b-1", "Legacy Post", true, ENGINEERING_CREATED, null));
+
+    mockMvc.perform(get("/api/blogs"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].contentType").value("ENGINEERING"));
+  }
+
+  @Test
+  void getLatestBlogsAppliesContentTypeFilterBeforeLimit() throws Exception {
+    saveEngineeringPostsBelowNewerDigests();
+
+    mockMvc.perform(get("/api/blogs/latest")
+            .param("limit", "3")
+            .param("contentType", "ENGINEERING"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(3))
+        .andExpect(jsonPath("$[0].id").value("eng-3"))
+        .andExpect(jsonPath("$[1].id").value("eng-2"))
+        .andExpect(jsonPath("$[2].id").value("eng-1"))
+        .andExpect(jsonPath("$[*].contentType")
+            .value(everyItem(equalTo("ENGINEERING"))));
+  }
+
+  @Test
+  void getLatestBlogsUnfilteredStillReturnsNewestOfAnyType() throws Exception {
+    saveEngineeringPostsBelowNewerDigests();
+
+    mockMvc.perform(get("/api/blogs/latest").param("limit", "3"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(3))
+        .andExpect(jsonPath("$[0].id").value("dig-2"))
+        .andExpect(jsonPath("$[1].id").value("dig-1"))
+        .andExpect(jsonPath("$[2].id").value("eng-3"));
+  }
+
+  @Test
+  void getLatestBlogsFiltersToDigestsOnly() throws Exception {
+    saveEngineeringPostsBelowNewerDigests();
+
+    mockMvc.perform(get("/api/blogs/latest")
+            .param("limit", "3")
+            .param("contentType", "DIGEST"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(2))
+        .andExpect(jsonPath("$[0].id").value("dig-2"))
+        .andExpect(jsonPath("$[1].id").value("dig-1"));
+  }
+
+  @Test
+  void getLatestBlogsRejectsUnknownContentType() throws Exception {
+    mockMvc.perform(get("/api/blogs/latest").param("contentType", "NONSENSE"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void getLatestBlogsRejectsLimitBelowMinimum() throws Exception {
+    mockMvc.perform(get("/api/blogs/latest").param("limit", "0"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void getLatestBlogsRejectsLimitAboveMaximum() throws Exception {
+    mockMvc.perform(get("/api/blogs/latest").param("limit", "11"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void getBlogByIdIncludesContentType() throws Exception {
+    blogRepository.save(sampleBlog("b-1", "Digest Post", true, DIGEST_CREATED, DIGEST));
+
+    mockMvc.perform(get("/api/blogs/b-1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.contentType").value("DIGEST"));
+  }
+
+  /**
+   * Three engineering posts with two <em>newer</em> digests above them, so a limit applied
+   * before the content-type filter would return fewer than three engineering posts.
+   */
+  private void saveEngineeringPostsBelowNewerDigests() {
+    blogRepository.saveAll(List.of(
+        sampleBlog("eng-1", "Engineering One", true,
+            Instant.parse("2026-01-01T10:00:00Z"), ENGINEERING),
+        sampleBlog("eng-2", "Engineering Two", true,
+            Instant.parse("2026-01-02T10:00:00Z"), ENGINEERING),
+        sampleBlog("eng-3", "Engineering Three", true,
+            Instant.parse("2026-01-03T10:00:00Z"), ENGINEERING),
+        sampleBlog("dig-1", "Digest One", true,
+            Instant.parse("2026-02-01T10:00:00Z"), DIGEST),
+        sampleBlog("dig-2", "Digest Two", true,
+            Instant.parse("2026-02-02T10:00:00Z"), DIGEST)
+    ));
+  }
+
   private static Blog sampleBlog(final String id, final String title, final boolean published) {
+    return sampleBlog(
+        id,
+        title,
+        published,
+        Instant.parse("2024-06-01T10:00:00Z"),
+        BlogContentType.ENGINEERING);
+  }
+
+  private static Blog sampleBlog(
+      final String id,
+      final String title,
+      final boolean published,
+      final Instant createdDate,
+      final BlogContentType contentType
+  ) {
     return new Blog(
         id,
         title,
@@ -134,10 +269,11 @@ class BlogControllerTest extends AbstractIntegrationTest {
         "Full content here.",
         published,
         "/images/blogs/sample.jpg",
-        Instant.parse("2024-06-01T10:00:00Z"),
-        Instant.parse("2024-06-01T10:00:00Z"),
+        createdDate,
+        createdDate,
         null,
-        null
+        null,
+        contentType
     );
   }
 

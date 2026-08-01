@@ -32,7 +32,7 @@ export function ArticleCard({ blog }: ArticleCardProps) {
         <h3 className="title-lg article-card__title">{blog.title}</h3>
         <p className="article-card__excerpt">{blog.shortDescription}</p>
         <Link className="article-card__link" to={`/blogs/${blog.id}`}>
-          View Post &rarr;
+          Read post
         </Link>
       </div>
     </article>

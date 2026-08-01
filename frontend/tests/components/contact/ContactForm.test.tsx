@@ -43,7 +43,7 @@ describe('ContactForm', () => {
 
   it('shows validation errors when submitting empty form', async () => {
     render(<ContactForm />)
-    await userEvent.click(screen.getByRole('button', { name: /Initiate Connection/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Send message/ }))
 
     await waitFor(() => {
       expect(screen.getByText('First name is required')).toBeInTheDocument()
@@ -58,7 +58,7 @@ describe('ContactForm', () => {
     render(<ContactForm />)
 
     await userEvent.type(screen.getByLabelText('Email address'), 'not-an-email')
-    await userEvent.click(screen.getByRole('button', { name: /Initiate Connection/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Send message/ }))
 
     await waitFor(() => {
       expect(screen.getByText('Invalid email address')).toBeInTheDocument()
@@ -76,11 +76,11 @@ describe('ContactForm', () => {
     await userEvent.type(screen.getByLabelText('Subject'), 'Hello')
     await userEvent.type(screen.getByLabelText('Message'), 'Test message content')
     await userEvent.click(screen.getByText('Complete reCAPTCHA'))
-    await userEvent.click(screen.getByRole('button', { name: /Initiate Connection/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Send message/ }))
 
     await waitFor(() => {
       expect(
-        screen.getByText("Thank you for your message. I'll be in touch soon!"),
+        screen.getByText(/Message sent/),
       ).toBeInTheDocument()
     })
   })
@@ -98,7 +98,7 @@ describe('ContactForm', () => {
     await userEvent.type(screen.getByLabelText('Subject'), 'Hello')
     await userEvent.type(screen.getByLabelText('Message'), 'Test message content')
     await userEvent.click(screen.getByText('Complete reCAPTCHA'))
-    await userEvent.click(screen.getByRole('button', { name: /Initiate Connection/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Send message/ }))
 
     await waitFor(() => {
       expect(
@@ -116,7 +116,7 @@ describe('ContactForm', () => {
     await userEvent.type(screen.getByLabelText('Subject'), 'Hello')
     await userEvent.type(screen.getByLabelText('Message'), 'Test message content')
     // Do NOT click Complete reCAPTCHA
-    await userEvent.click(screen.getByRole('button', { name: /Initiate Connection/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Send message/ }))
 
     await waitFor(() => {
       expect(
@@ -136,11 +136,11 @@ describe('ContactForm', () => {
     await userEvent.type(screen.getByLabelText('Subject'), 'Hello')
     await userEvent.type(screen.getByLabelText('Message'), 'Test message content')
     await userEvent.click(screen.getByText('Complete reCAPTCHA'))
-    await userEvent.click(screen.getByRole('button', { name: /Initiate Connection/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Send message/ }))
 
     await waitFor(() => {
       expect(
-        screen.getByText("Thank you for your message. I'll be in touch soon!"),
+        screen.getByText(/Message sent/),
       ).toBeInTheDocument()
     })
 

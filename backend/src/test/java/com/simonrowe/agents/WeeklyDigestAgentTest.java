@@ -18,6 +18,7 @@ import com.embabel.chat.AssistantMessage;
 import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.blog.Blog;
+import com.simonrowe.blog.BlogContentType;
 import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.blog.Tag;
 import com.simonrowe.blog.TagRepository;
@@ -100,7 +101,8 @@ class WeeklyDigestAgentTest {
     Blog oldBlog = new Blog(
         "blog-old", "Old Post", "An old post",
         "Content", true, null,
-        twoWeeksAgo, twoWeeksAgo, List.of(), List.of());
+        twoWeeksAgo, twoWeeksAgo, List.of(), List.of(),
+        BlogContentType.ENGINEERING);
     AggregatedArticle oldArticle = new AggregatedArticle(
         "art-old", "Old Article", "Source",
         "https://src.com", "https://src.com/old",
@@ -138,7 +140,8 @@ class WeeklyDigestAgentTest {
         "Latest roundup of site activity and tech news",
         "Generated content.", true, null,
         Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of());
+        List.of(DIGEST_TAG), List.of(),
+        BlogContentType.DIGEST);
 
     when(blogRepository
         .findByPublishedTrueOrderByCreatedDateDesc())
@@ -191,7 +194,8 @@ class WeeklyDigestAgentTest {
         "Summary",
         "Content.", true, null,
         Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of());
+        List.of(DIGEST_TAG), List.of(),
+        BlogContentType.DIGEST);
 
     when(blogRepository
         .findByPublishedTrueOrderByCreatedDateDesc())
@@ -221,7 +225,8 @@ class WeeklyDigestAgentTest {
     Blog recentBlog = new Blog(
         "blog-1", "My New Post", "A short description",
         "Post content", true, null,
-        recentCreated, recentCreated, List.of(), List.of());
+        recentCreated, recentCreated, List.of(), List.of(),
+        BlogContentType.ENGINEERING);
 
     Blog savedDigest = new Blog(
         "blog-digest-2",
@@ -229,7 +234,8 @@ class WeeklyDigestAgentTest {
         "Latest roundup of site activity and tech news",
         "Generated content.", true, null,
         Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of());
+        List.of(DIGEST_TAG), List.of(),
+        BlogContentType.DIGEST);
 
     when(blogRepository
         .findByPublishedTrueOrderByCreatedDateDesc())
@@ -268,7 +274,8 @@ class WeeklyDigestAgentTest {
         "Latest roundup of site activity and tech news",
         "LLM generated content.", true, null,
         Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of());
+        List.of(DIGEST_TAG), List.of(),
+        BlogContentType.DIGEST);
 
     when(blogRepository
         .findByPublishedTrueOrderByCreatedDateDesc())
@@ -313,7 +320,8 @@ class WeeklyDigestAgentTest {
         "Latest roundup of site activity and tech news",
         "Content.", true, null,
         Instant.now(), Instant.now(),
-        List.of(newTag), List.of());
+        List.of(newTag), List.of(),
+        BlogContentType.DIGEST);
 
     when(blogRepository
         .findByPublishedTrueOrderByCreatedDateDesc())
@@ -356,7 +364,8 @@ class WeeklyDigestAgentTest {
         "Latest roundup of site activity and tech news",
         "Content.", true, null,
         Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of());
+        List.of(DIGEST_TAG), List.of(),
+        BlogContentType.DIGEST);
 
     when(blogRepository
         .findByPublishedTrueOrderByCreatedDateDesc())
@@ -394,7 +403,8 @@ class WeeklyDigestAgentTest {
         "Latest roundup of site activity and tech news",
         "Fallback content.", true, null,
         Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of());
+        List.of(DIGEST_TAG), List.of(),
+        BlogContentType.DIGEST);
 
     when(blogRepository
         .findByPublishedTrueOrderByCreatedDateDesc())
