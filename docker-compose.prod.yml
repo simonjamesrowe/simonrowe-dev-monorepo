@@ -388,7 +388,12 @@ services:
       retries: 5
 
   langfuse-clickhouse:
-    image: clickhouse/clickhouse-server
+    # Pinned to the exact build the data directory was created with. The upstream Langfuse
+    # compose file itself uses an unpinned tag; do NOT change this to a bare `latest` — 26.7
+    # broke the scores.all query (langfuse/langfuse#14065), fixed only by the
+    # CLICKHOUSE_DISABLE_LAZY_MATERIALIZATION env var below, not by the ClickHouse version.
+    # Only move this pin forward deliberately, verifying scores.all still works afterward.
+    image: clickhouse/clickhouse-server:26.7.1.1315
     restart: unless-stopped
     user: "101:101"
     environment:
@@ -460,6 +465,10 @@ services:
       REDIS_HOST: langfuse-redis
       REDIS_PORT: "6379"
       REDIS_AUTH: ${REDIS_AUTH}
+      # Works around a ClickHouse 26.x lazy-materialization bug that 500s the scores.all
+      # query (langfuse/langfuse#14065, confirmed fix in #13809). Keep this set even if the
+      # ClickHouse pin above is later upgraded, until upstream confirms it's no longer needed.
+      CLICKHOUSE_DISABLE_LAZY_MATERIALIZATION: "true"
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER}

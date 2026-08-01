@@ -289,7 +289,11 @@ print(json.dumps({
     "type": "llm_as_judge",
     "name": name,
     "prompt": prompt,
-    "outputDefinition": {"dataType": "NUMERIC"},
+    "outputDefinition": {
+        "dataType": "NUMERIC",
+        "reasoning": {"description": "One sentence reasoning for the score"},
+        "score": {"description": "Score between 0 and 1. Score 0 if false or negative and 1 if true or positive"},
+    },
     "modelConfig": {"provider": "openai", "model": model},
 }))
 PY
@@ -313,13 +317,17 @@ PY
 import json, sys
 name, sampling = sys.argv[1], float(sys.argv[2])
 print(json.dumps({
-    "evaluator": {"name": name, "scope": "project"},
+    "name": f"{name}-live",
+    "evaluator": {"name": name, "scope": "project", "type": "llm_as_judge"},
     "target": "observation",
     "enabled": True,
     "sampling": sampling,
-    "variableMapping": [
-        {"variableName": "input", "object": "trace", "objectField": "input"},
-        {"variableName": "output", "object": "trace", "objectField": "output"},
+    "filter": [
+        {"type": "stringOptions", "column": "type", "operator": "any of", "value": ["GENERATION"]},
+    ],
+    "mapping": [
+        {"variable": "input", "source": "input"},
+        {"variable": "output", "source": "output"},
     ],
 }))
 PY
