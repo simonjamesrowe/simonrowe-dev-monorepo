@@ -77,7 +77,7 @@ class GitWorkspaceFactoryTest {
   }
 
   @Test
-  void authenticatesGitWithBasicCredentialsRatherThanABearerToken() throws IOException {
+  void authenticatesGitWithBasicCredentialsRatherThanBearerToken() throws IOException {
     Path origin = temporaryDirectory.resolve("auth-origin.git");
     Path seed = temporaryDirectory.resolve("auth-seed");
     git(temporaryDirectory, "init", "--bare", origin.toString());
@@ -88,11 +88,11 @@ class GitWorkspaceFactoryTest {
     Files.writeString(seed.resolve("visible.txt"), "before\n");
     git(seed, "add", ".");
     git(seed, "commit", "-m", "base");
-    String baseSha = git(seed, "rev-parse", "HEAD").trim();
+    final String baseSha = git(seed, "rev-parse", "HEAD").trim();
 
     Files.writeString(seed.resolve("visible.txt"), "after\n");
     git(seed, "commit", "-am", "pull request");
-    String headSha = git(seed, "rev-parse", "HEAD").trim();
+    final String headSha = git(seed, "rev-parse", "HEAD").trim();
     git(seed, "push", origin.toString(), "HEAD:refs/pull/1/head");
 
     List<Map<String, String>> environments = new ArrayList<>();
@@ -148,7 +148,7 @@ class GitWorkspaceFactoryTest {
   }
 
   @Test
-  void buildsABasicAuthorizationHeaderFromTheInstallationToken() {
+  void buildsBasicAuthorizationHeaderFromTheInstallationToken() {
     assertThat(GitWorkspaceFactory.basicAuthorizationHeader("ghs_example"))
         .isEqualTo("Authorization: Basic eC1hY2Nlc3MtdG9rZW46Z2hzX2V4YW1wbGU=")
         .doesNotContain("Bearer");
