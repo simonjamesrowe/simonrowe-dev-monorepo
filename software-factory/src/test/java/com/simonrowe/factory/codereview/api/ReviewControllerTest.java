@@ -1,5 +1,6 @@
 package com.simonrowe.factory.codereview.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -11,8 +12,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.ReviewProgress;
+import com.simonrowe.factory.codereview.domain.ReviewRequest;
+import com.simonrowe.factory.codereview.github.GitHubCredentials;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -31,6 +35,7 @@ class ReviewControllerTest {
       """;
 
   private final ReviewWorkflowService workflowService = Mockito.mock(ReviewWorkflowService.class);
+  private final GitHubCredentials credentials = Mockito.mock(GitHubCredentials.class);
 
   private MockMvc mockMvcWithToken(final String configuredToken) {
     CodeReviewProperties properties =
@@ -39,7 +44,8 @@ class ReviewControllerTest {
                 "https://api.github.com", "", "", "", "", Duration.ofSeconds(30)),
             null,
             new CodeReviewProperties.Api(configuredToken));
-    return MockMvcBuilders.standaloneSetup(new ReviewController(properties, workflowService))
+    return MockMvcBuilders.standaloneSetup(
+            new ReviewController(properties, workflowService, credentials))
         .build();
   }
 
@@ -131,5 +137,28 @@ class ReviewControllerTest {
 
     verify(workflowService, never()).start(any());
     verify(workflowService, never()).progress(anyString());
+  }
+
+  /**
+   * Regression: this endpoint used to hardcode a null installation id, so the dry run documented as
+   * the pre-deploy check cloned anonymously and exercised no credential at all. A bearer-token
+   * clone bug passed that check and then failed every webhook-triggered review.
+   */
+  @Test
+  void startsManualReviewsAgainstTheResolvedAppInstallation() throws Exception {
+    when(workflowService.start(any())).thenReturn(new ReviewAccepted("workflow-1", true));
+    when(credentials.installationId("example", "project")).thenReturn(4242L);
+
+    mockMvcWithToken(TOKEN)
+        .perform(
+            post("/api/reviews")
+                .header("X-Factory-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(BODY))
+        .andExpect(status().isAccepted());
+
+    ArgumentCaptor<ReviewRequest> started = ArgumentCaptor.forClass(ReviewRequest.class);
+    verify(workflowService).start(started.capture());
+    assertThat(started.getValue().installationId()).isEqualTo(4242L);
   }
 }

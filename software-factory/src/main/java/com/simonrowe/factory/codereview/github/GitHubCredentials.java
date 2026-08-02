@@ -92,6 +92,64 @@ public class GitHubCredentials {
     return minted.value();
   }
 
+  /**
+   * Resolves the App's installation on a repository, so a manually triggered review runs the same
+   * credentialed path a webhook does.
+   *
+   * <p>Without this the manual trigger passed a null installation id, cloned this public repository
+   * anonymously, and so could not detect a credential fault at all. That is exactly how the
+   * bearer-token clone bug reached production: the documented {@code publish:false} dry run passed
+   * while every real review failed.
+   *
+   * <p>Returns {@code null} when no App is configured, leaving local development against a public
+   * repository working on the static token or anonymously.
+   */
+  public Long installationId(final String owner, final String repository) {
+    if (!appConfigured()) {
+      return null;
+    }
+    try {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(
+                  URI.create(
+                      properties.github().apiBaseUrl()
+                          + "/repos/"
+                          + owner
+                          + "/"
+                          + repository
+                          + "/installation"))
+              .timeout(properties.github().requestTimeout())
+              .header("Accept", "application/vnd.github+json")
+              .header("Authorization", "Bearer " + createAppJwt(clock.instant()))
+              .header("X-GitHub-Api-Version", API_VERSION)
+              .header("User-Agent", "temporal-code-reviewer")
+              .GET()
+              .build();
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() < 200 || response.statusCode() >= 300) {
+        throw new IllegalStateException(
+            "GitHub App installation lookup for "
+                + owner
+                + "/"
+                + repository
+                + " returned "
+                + response.statusCode());
+      }
+      long resolved = objectMapper.readTree(response.body()).path("id").asLong();
+      if (resolved <= 0) {
+        throw new IllegalStateException("GitHub App installation response carried no id");
+      }
+      return resolved;
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("GitHub App installation lookup interrupted", exception);
+    } catch (IOException exception) {
+      throw new IllegalStateException("GitHub App installation lookup failed", exception);
+    }
+  }
+
   private CachedToken mintInstallationToken(final long installationId, final Instant now) {
     try {
       ObjectNode permissions =

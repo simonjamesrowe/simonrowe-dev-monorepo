@@ -3,6 +3,7 @@ package com.simonrowe.factory.codereview.api;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.ReviewProgress;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
+import com.simonrowe.factory.codereview.github.GitHubCredentials;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -30,11 +31,15 @@ public class ReviewController {
 
   private final CodeReviewProperties properties;
   private final ReviewWorkflowService workflowService;
+  private final GitHubCredentials credentials;
 
   public ReviewController(
-      final CodeReviewProperties properties, final ReviewWorkflowService workflowService) {
+      final CodeReviewProperties properties,
+      final ReviewWorkflowService workflowService,
+      final GitHubCredentials credentials) {
     this.properties = properties;
     this.workflowService = workflowService;
+    this.credentials = credentials;
   }
 
   @PostMapping
@@ -49,7 +54,7 @@ public class ReviewController {
                 request.repository(),
                 request.pullNumber(),
                 request.expectedHeadSha(),
-                null,
+                credentials.installationId(request.owner(), request.repository()),
                 request.publish()));
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(accepted);
   }
