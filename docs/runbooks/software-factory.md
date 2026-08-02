@@ -48,8 +48,8 @@ rollback steps — rollback works because the old `REVIEWER_*` keys are left in
 `.env` on purpose.
 
 Two steps are deliberately left to you, and are printed at the end: a
-`publish:false` dry run (the only thing that exercises Claude auth and the clone
-path end to end, though it clones *anonymously* — see Verification), and the
+`publish:false` dry run (the only thing that exercises Claude auth and the
+authenticated clone path end to end — see Verification), and the
 cleanup — dropping the `REVIEWER_*` keys, removing
 `/opt/temporal-reviewer` and the old unit file, and deleting the script.
 
@@ -315,13 +315,19 @@ docker run --rm --network simonrowe-dev-monorepo_default curlimages/curl -s \
 writing to GitHub. Note it consumes Claude subscription usage shared with your
 interactive sessions.
 
-It does **not** prove that an *authenticated* clone works. `ReviewController`
-sends no installation id, so `GitWorkspaceFactory` finds a blank token, sets no
-`http.extraHeader`, and clones this public repo anonymously. A credential bug on
-the authenticated path passes this check and then fails every real review — that
-is exactly how the bearer-token clone bug shipped and broke PRs 88–91. Only a
-webhook-triggered review carries an installation id, so treat the delivery below
-as the real end-to-end test, not an optional extra. If its clone step fails with
+It also proves the *authenticated* clone. `ReviewController` resolves the App
+installation for the repository (`GET /repos/{owner}/{repo}/installation`) and
+puts it in the `ReviewRequest`, so a dry run mints a real installation token and
+clones with the same `http.extraHeader` credential a webhook-triggered review
+uses.
+
+It used to send no installation id, so `GitWorkspaceFactory` found a blank
+token, set no header, and cloned this public repo anonymously — a credential bug
+on the authenticated path passed this check and then failed every real review,
+which is exactly how the bearer-token clone bug shipped and broke PRs 88–93. The
+dry run is a genuine pre-deploy check now, but it still writes nothing to GitHub,
+so keep the webhook delivery below as the test of the publish path. If a clone
+step fails with
 
 ```text
 clone failed: fatal: could not read Username for 'https://github.com':
@@ -408,6 +414,7 @@ it. The actuator healthcheck on 8091 does not — it reports the web half only.
 
 The near neighbour is a healthy container with a live poller whose every review
 dies in the clone Activity on `could not read Username for 'https://github.com'`
-— a credential fault, not an outage. Nothing external looks wrong, and the
-`publish:false` dry run stays green because it clones anonymously. Check the
-Activity failures in Temporal, not the container state.
+— a credential fault, not an outage. Nothing external looks wrong, so check the
+Activity failures in Temporal, not the container state. This used to be invisible
+to the `publish:false` dry run, which cloned anonymously; the dry run now
+resolves an installation id and so fails the same way.

@@ -71,6 +71,47 @@ class GitHubCredentialsTest {
     }
   }
 
+  /**
+   * The manual trigger resolves this so a {@code publish:false} dry run clones with a real
+   * installation token instead of anonymously, which is what makes it a usable pre-deploy check.
+   */
+  @Test
+  void resolvesTheAppInstallationForOneRepository(@TempDir final Path directory)
+      throws Exception {
+    KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    Path privateKey = writePrivateKey(directory, keyPair);
+    AtomicReference<String> authorization = new AtomicReference<>();
+    HttpServer server = installationServer(authorization);
+
+    try {
+      GitHubCredentials credentials =
+          new GitHubCredentials(
+              properties(
+                  "http://127.0.0.1:" + server.getAddress().getPort(),
+                  "",
+                  "Iv1.test-client",
+                  privateKey.toString()),
+              objectMapper,
+              HttpClient.newHttpClient(),
+              Clock.fixed(NOW, ZoneOffset.UTC));
+
+      assertThat(credentials.installationId("example", "project")).isEqualTo(987L);
+      assertValidAppJwt(authorization.get().substring("Bearer ".length()), keyPair);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  /** Local development has no App configured and must keep working against a public repository. */
+  @Test
+  void resolvesNoInstallationWhenNoAppIsConfigured() {
+    GitHubCredentials credentials =
+        new GitHubCredentials(
+            properties("https://api.github.com", "development-token", "", ""), objectMapper);
+
+    assertThat(credentials.installationId("example", "project")).isNull();
+  }
+
   @Test
   void usesStaticTokenForManualDevelopmentRequests() {
     GitHubCredentials credentials =
@@ -105,6 +146,25 @@ class GitHubCredentialsTest {
     Path path = directory.resolve("github-app.pem");
     Files.writeString(path, pem.toString());
     return path;
+  }
+
+  private static HttpServer installationServer(final AtomicReference<String> authorization)
+      throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/repos/example/project/installation",
+        exchange -> {
+          authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+          byte[] response =
+              "{\"id\":987}".getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().add("Content-Type", "application/json");
+          exchange.sendResponseHeaders(200, response.length);
+          try (OutputStream output = exchange.getResponseBody()) {
+            output.write(response);
+          }
+        });
+    server.start();
+    return server;
   }
 
   private static HttpServer tokenServer(
