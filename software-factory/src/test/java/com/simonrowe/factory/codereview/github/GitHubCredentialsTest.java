@@ -61,10 +61,12 @@ class GitHubCredentialsTest {
       assertThat(credentials.accessToken(123L)).isEqualTo("installation-token");
 
       assertThat(requests).hasValue(1);
+      // pull_requests must stay write: GitHub governs comments on a pull request by the pull
+      // request permission, so read here fails the publish with 403 after a clean review.
       assertThat(requestBody.get())
           .contains("\"contents\":\"read\"")
           .contains("\"issues\":\"write\"")
-          .contains("\"pull_requests\":\"read\"");
+          .contains("\"pull_requests\":\"write\"");
       assertValidAppJwt(authorization.get().substring("Bearer ".length()), keyPair);
     } finally {
       server.stop(0);

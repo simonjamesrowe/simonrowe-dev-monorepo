@@ -152,12 +152,16 @@ public class GitHubCredentials {
 
   private CachedToken mintInstallationToken(final long installationId, final Instant now) {
     try {
+      // `pull_requests` must be write, not read. The advisory comment goes to the issue
+      // comments endpoint, but GitHub governs comments on a pull request by the pull request
+      // permission, not the issue one — a token holding issues:write and pull_requests:read
+      // clones and reviews fine and then fails the publish with 403.
       ObjectNode permissions =
           objectMapper
               .createObjectNode()
               .put("contents", "read")
               .put("issues", "write")
-              .put("pull_requests", "read");
+              .put("pull_requests", "write");
       ObjectNode payload = objectMapper.createObjectNode().set("permissions", permissions);
       HttpRequest request =
           HttpRequest.newBuilder()

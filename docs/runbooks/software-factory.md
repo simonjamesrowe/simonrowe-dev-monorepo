@@ -96,7 +96,12 @@ Create a private, organization-owned GitHub App named `simonrowe-code-reviewer`:
 - Repository permissions:
   - Contents: read
   - Issues: read and write
-  - Pull requests: read
+  - Pull requests: read and write — **write is required**, even though the
+    advisory comment is posted to the issue comments endpoint. GitHub governs
+    comments on a pull request by the pull request permission, not the issue
+    one, so `pull_requests: read` reviews cleanly and then fails publishing with
+    `403 for POST /repos/{owner}/{repo}/issues/{n}/comments`. `GitHubCredentials`
+    requests this scope on every installation token; the App must grant it.
   - Metadata: read (implicit)
 - Subscribe to: Pull request
 - User authorization: disabled
@@ -418,3 +423,10 @@ dies in the clone Activity on `could not read Username for 'https://github.com'`
 Activity failures in Temporal, not the container state. This used to be invisible
 to the `publish:false` dry run, which cloned anonymously; the dry run now
 resolves an installation id and so fails the same way.
+
+The furthest-along variant is a review that clones, reviews and parses, then
+fails the *last* Activity on `GitHub API returned 403 for POST
+/repos/.../issues/{n}/comments`. That is a token scope fault: comments on a pull
+request need `pull_requests: write`, not `issues: write`. Note the dry run cannot
+catch this one — `publish:false` never reaches the publish Activity — so a
+webhook delivery remains the only test of the publish path.
