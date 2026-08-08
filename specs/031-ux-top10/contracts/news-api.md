@@ -8,6 +8,13 @@ accepts.
 
 ## `GET /api/news/sources` — NEW
 
+> **Superseded by `2026-08-08-ai4jvm-ingest-and-source-pills`.** The response shape
+> below (`string[]`) is historical: the endpoint now returns
+> `[{ "name": string, "count": number }]`, sorted by count descending then name
+> ascending, so the news page can collapse low-volume sources behind a "More"
+> overflow. The rest of this contract — visible-articles-only, never `null`/`404`,
+> and the `/{id}` route-ordering note — still holds.
+
 The complete set of distinct article source names, so filter chips can list every
 source the site holds rather than only those in the first page of results
 (FR-037, FR-039).
