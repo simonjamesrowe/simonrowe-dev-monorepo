@@ -33,6 +33,10 @@ about each piece rather than pointing at it.
   model inferring an angle from the article text, not Simon's recorded reason.
   Capturing the real reason at favourite time would be better, but it is a
   frontend and API change and is scoped separately.
+- **Spring AI 2.0.** It requires Spring Boot 4.0, removes the
+  `spring-ai-openai-sdk` module the chatbot and guardrail run on, and moves
+  Jackson to 3.x and the MCP Java SDK to 2.0. That is a Boot 4 migration in its
+  own right. Embabel 1.0.0 does not need it.
 - **Schedule changes.** `application.yml` already sets
   `aggregation.digest.cron: "0 0 8 * * MON"`, so the job is already weekly and
   aligns with the 7-day window. The `0 0 0 */3 * *` in the `@Scheduled`
@@ -169,8 +173,8 @@ verified against `GET /v1/models`, alongside `gpt-5.6-sol` and `gpt-5.6-terra`.
 **Upgrading Embabel does not fix this.** The bundled registry in the current
 release (1.0.0) carries the same 2026-03-29 header and still stops at GPT-5.4 —
 it adds `gpt-5.3-chat-latest` and nothing newer. Explicit registration is
-required either way, so the Embabel upgrade is independent of this work and is
-tracked separately.
+required either way. The Embabel upgrade is included in this work regardless
+(see below), but it is not what unblocks the model.
 
 The chosen fix is to register the model ourselves in `AgentConfig` via
 Embabel's `OpenAiCompatibleModelFactory`, adding one bean and leaving the
@@ -204,6 +208,47 @@ These values still want confirming with one live call before the first
 scheduled run, since a wrong `supports_temperature` surfaces as a 400 rather
 than as degraded output.
 
+## Embabel upgrade
+
+Embabel goes from 0.3.5 to 1.0.0 as part of this work, at
+`backend/build.gradle.kts:120-121,142`. The version is repeated across three
+lines there; it moves into `gradle/libs.versions.toml` alongside `springBoot`
+and `springAi` so the next bump is one edit.
+
+1.0.0 targets Spring Boot 3.5.14 and Spring AI 1.1.7, both satisfied by our
+3.5.16 / 1.1.8 — no Spring Boot 4 migration is implied. (Spring AI 2.0 would
+require Boot 4 and is separately out of scope; see `docs/model-usage.md`.)
+
+The 0.x → 1.0 boundary carries real breaking changes — deprecated methods
+removed, model registration moved toward declarative YAML, the tool loop moved
+off Spring AI's `ToolCallback` onto Embabel's own `Tool` interface, and
+`PromptRunner` sub-runners consolidated. Most of that misses us: the agents use
+only the prompt-runner surface, and the tool loop belongs to the chat path,
+which is Spring AI rather than Embabel. Every API the code touches was checked
+against the 1.0.0 jars and survives:
+
+| API in use | Status in 1.0.0 |
+| --- | --- |
+| `Ai.withLlm(String)` | present |
+| `PromptRunner.respond(List<Message>)` → `AssistantMessage` | present |
+| `AssistantMessage.getContent()` | present, on `BaseMessage` |
+| `PromptRunner.creating(Class<T>)` → `Creating<T>` | present |
+| `Creating.fromPrompt(String)` | present |
+| `@Agent`, `@Action` annotations | present |
+| `OpenAiCompatibleModelFactory` (needed for registration) | present in `embabel-agent-openai` |
+| `embabel-agent-test`, `embabel-agent-starter-openai` | published at 1.0.0 |
+
+So the expected diff is the version bump alone, with compilation as the check
+on that expectation. Where it does not hold, the fix belongs in this phase
+rather than being folded into the digest rewrite.
+
+**Sequencing matters here.** The upgrade lands first, as its own commit, with
+the existing test suite green and no behaviour change — including the digest
+still generating its old link-roundup output. Model registration lands second.
+The digest rewrite lands third. Bundled into one commit, a broken digest and a
+broken upgrade are indistinguishable, and the upgrade touches the exact call
+sites the rewrite replaces.
+
 ## Error handling
 
 The pipeline degrades stage by stage rather than aborting:
@@ -228,6 +273,11 @@ style:
 - Scrape returns null and `fullContent` is empty — stored `summary` is used.
 - LLM call throws — the section body falls back to the stored summary and
   `fallback` is set.
+
+**Embabel upgrade**
+- The existing suite passes unchanged on 1.0.0 before any digest work starts.
+  There is no new test here — the point is that the old tests still pass,
+  which is what makes the upgrade separable from everything after it.
 
 **Model registration**
 - A Spring context test asserting the `gpt-5.6-luna` model bean is registered
