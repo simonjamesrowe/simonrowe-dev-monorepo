@@ -15,10 +15,11 @@ production OpenAI account on 2026-08-08.
 | 3 | Content aggregation classifier — article vs event, 2-3 sentence summary, event date/venue/location, published date | `gpt-4o-mini` | hardcoded, `agents/ContentAggregationAgent.java:337` | Embabel `Ai.withLlm` |
 | 4 | Weekly digest body — per-article summaries and synthesis | `gpt-5.6-luna` | `aggregation.digest.model` | Embabel `Ai.withLlm`, explicitly registered |
 | 5 | Weekly digest metadata — post title and short description | `gpt-5.6-luna` | `aggregation.digest.model` | Embabel `Ai.withLlm`, explicitly registered |
-| 6 | Embeddings for RAG retrieval (chat context) and site search | `text-embedding-3-small` | `application.yml:97` | Spring AI `openai` |
-| 7 | Featured image generation — digests, and aggregated articles with no `og:image` | `gpt-image-1` | `application.yml:100` **and** hardcoded, `media/BlogImageGenerationService.java:25` | Spring AI `openai` |
-| 8 | Langfuse LLM-as-a-judge evaluators scoring chat traces | `gpt-4o-mini` | `JUDGE_MODEL` env, default at `scripts/bootstrap-langfuse-evaluators.sh:108` | Langfuse, outside the app |
-| 9 | Automated PR code review (`software-factory` Temporal worker) | Claude `sonnet` | `CLAUDE_MODEL` env, `docker-compose.prod.yml:168` | Claude Code binary |
+| 6 | Retrospective digest metadata fix — Mongock change unit `V006FixAiBlogTitles`, regenerating titles/images for already-published generic-sounding digests | `gpt-4o-mini` | hardcoded, `migration/changeunits/V006FixAiBlogTitles.java:46` | Embabel `Ai.withLlm`, pinned model overload |
+| 7 | Embeddings for RAG retrieval (chat context) and site search | `text-embedding-3-small` | `application.yml:97` | Spring AI `openai` |
+| 8 | Featured image generation — digests, and aggregated articles with no `og:image` | `gpt-image-1` | `application.yml:100` **and** hardcoded, `media/BlogImageGenerationService.java:25` | Spring AI `openai` |
+| 9 | Langfuse LLM-as-a-judge evaluators scoring chat traces | `gpt-4o-mini` | `JUDGE_MODEL` env, default at `scripts/bootstrap-langfuse-evaluators.sh:108` | Langfuse, outside the app |
+| 10 | Automated PR code review (`software-factory` Temporal worker) | Claude `sonnet` | `CLAUDE_MODEL` env, `docker-compose.prod.yml:168` | Claude Code binary |
 
 Web search (`websearch/SearxngClient.java`) hits a self-hosted SearxNG
 instance and involves no model. Web fetch (`webfetch/UrlFetcher.java`) and the
@@ -76,7 +77,7 @@ Checked 2026-08-08.
 | --- | --- | --- | --- |
 | Spring Boot | 3.5.16 | 4.x | — |
 | Spring AI | 1.1.8 | 2.0.0 | 1.1.8 is the **last release of the Boot 3 line**; 2.0.0 requires Boot 4.0 and cannot load in a 3.x context |
-| Embabel Agent | 1.0.0 | 1.0.0 | 1.0.0 targets Boot 3.5.14 / Spring AI 1.1.7, so it is compatible with what we run. Embabel 2.0.0 exists only as a branch (Boot 4.0.6, Spring AI 2.0.0-M8) and is not published to Maven Central |
+| Embabel Agent | 1.0.0 | 1.0.0 | We run 1.0.0, which targets Boot 3.5.14 / Spring AI 1.1.7 — compatible with what we run. Embabel 2.0.0 exists only as a branch (Boot 4.0.6, Spring AI 2.0.0-M8) and is not published to Maven Central |
 
 **Spring AI 2.0 is a Boot 4 migration, not a version bump**, and it lands
 squarely on things we use:
@@ -91,13 +92,15 @@ squarely on things we use:
 - The hand-rolled provider facades (`OpenAiApi`, `AnthropicApi`) are gone in
   favour of the vendor SDKs directly.
 
-**Embabel 0.3.5 → 1.0.0** is a same-generation upgrade needing no Boot change,
-but it is a 0.x → 1.0 boundary: deprecated methods removed, model registration
-moved toward declarative YAML, the tool loop moved off Spring AI's
-`ToolCallback` onto Embabel's own `Tool` interface, and `PromptRunner`
-sub-runners consolidated. That touches every `Ai.withLlm(...)` call site
-(rows 3-5). Worth doing on its own, and note it does **not** deliver newer
-models — see the registry note above.
+**Embabel 0.3.5 → 1.0.0 already happened, on this branch.** It was a
+same-generation upgrade needing no Boot change, but crossed a 0.x → 1.0
+boundary: deprecated methods removed, model registration moved toward
+declarative YAML, the tool loop moved off Spring AI's `ToolCallback` onto
+Embabel's own `Tool` interface, and `PromptRunner` sub-runners consolidated.
+In the end none of that touched any `Ai.withLlm(...)` call site (rows 3-5) —
+the only changes needed were to build files plus the new `gpt56LunaLlm` bean
+in `agents/AgentConfig.java`. It did **not** deliver newer models — see the
+registry note above.
 
 ## When adding or changing a model
 

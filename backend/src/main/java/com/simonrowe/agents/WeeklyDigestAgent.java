@@ -79,10 +79,29 @@ public class WeeklyDigestAgent {
   /** Generates and publishes the digest, or logs why it did not. */
   @Action(description = "Generate a digest blog post")
   public void generateDigest() {
-    List<AggregatedArticle> articles = favouritedArticles();
+    Instant cutoff = Instant.now().minus(windowDays, ChronoUnit.DAYS);
+    if (digestAlreadyPublishedInWindow(cutoff)) {
+      log.info("A digest already exists within the last {} days, "
+          + "skipping this run", windowDays);
+      return;
+    }
+
+    List<Favourite> favourites = favouriteRepository
+        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
+            FavouriteType.NEWS, cutoff);
+    List<AggregatedArticle> articles = favourites.stream()
+        .map(this::resolveArticle)
+        .flatMap(Optional::stream)
+        .toList();
     if (articles.isEmpty()) {
-      log.info("No news favourited in the last {} days, "
-          + "skipping digest generation", windowDays);
+      if (favourites.isEmpty()) {
+        log.info("No news favourited in the last {} days, "
+            + "skipping digest generation", windowDays);
+      } else {
+        log.info("{} favourite(s) in the last {} days all resolved to "
+            + "missing or hidden articles, skipping digest generation",
+            favourites.size(), windowDays);
+      }
       return;
     }
 
@@ -118,15 +137,16 @@ public class WeeklyDigestAgent {
         metadata.title(), articles.size());
   }
 
-  private List<AggregatedArticle> favouritedArticles() {
-    Instant cutoff = Instant.now().minus(windowDays, ChronoUnit.DAYS);
-    List<Favourite> favourites = favouriteRepository
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            FavouriteType.NEWS, cutoff);
-    return favourites.stream()
-        .map(this::resolveArticle)
-        .flatMap(Optional::stream)
-        .toList();
+  /**
+   * True when a digest already exists whose {@code createdDate} falls inside
+   * the current window — a repeat trigger (cron plus a manual re-run, or two
+   * manual runs) must not publish a second post for the same period.
+   */
+  private boolean digestAlreadyPublishedInWindow(final Instant cutoff) {
+    return blogRepository.findByPublishedTrueOrderByCreatedDateDesc().stream()
+        .anyMatch(blog -> blog.contentType() == BlogContentType.DIGEST
+            && blog.createdDate() != null
+            && blog.createdDate().isAfter(cutoff));
   }
 
   private Optional<AggregatedArticle> resolveArticle(

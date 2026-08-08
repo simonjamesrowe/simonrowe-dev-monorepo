@@ -111,6 +111,36 @@ class DigestMetadataGeneratorTest {
   }
 
   @Test
+  void parsesBoldDecoratedLabelsFromNewerModel() {
+    when(assistantMessage.getContent()).thenReturn(
+        "**Title:** What Spring Boot 4 means for us\n"
+            + "**Description:** A look at the release and what it changes.");
+
+    DigestMetadata metadata = generator.generate(
+        List.of(article("Spring Boot 4")), "activity");
+
+    assertThat(metadata.title()).isEqualTo("What Spring Boot 4 means for us");
+    assertThat(metadata.shortDescription())
+        .isEqualTo("A look at the release and what it changes.");
+  }
+
+  @Test
+  void parsesLabelsWrappedInCodeFence() {
+    when(assistantMessage.getContent()).thenReturn(
+        "```\n"
+            + "Title: What Spring Boot 4 means for us\n"
+            + "Description: A look at the release and what it changes.\n"
+            + "```");
+
+    DigestMetadata metadata = generator.generate(
+        List.of(article("Spring Boot 4")), "activity");
+
+    assertThat(metadata.title()).isEqualTo("What Spring Boot 4 means for us");
+    assertThat(metadata.shortDescription())
+        .isEqualTo("A look at the release and what it changes.");
+  }
+
+  @Test
   void theThreeArgOverloadPassesTheGivenModelNameThroughToAi() {
     PromptRunner pinnedRunner = mock(PromptRunner.class);
     AssistantMessage pinnedMessage = mock(AssistantMessage.class);

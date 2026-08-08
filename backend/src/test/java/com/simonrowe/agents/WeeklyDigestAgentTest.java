@@ -15,6 +15,7 @@ import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogContentType;
 import com.simonrowe.blog.BlogRepository;
+import com.simonrowe.blog.Skill;
 import com.simonrowe.blog.Tag;
 import com.simonrowe.blog.TagRepository;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
@@ -65,14 +66,55 @@ class WeeklyDigestAgentTest {
         Instant.now().minus(daysAgo, ChronoUnit.DAYS));
   }
 
+  private static Blog digestBlog(final String id, final int daysAgo) {
+    Instant createdAt = Instant.now().minus(daysAgo, ChronoUnit.DAYS);
+    return new Blog(
+        id, "Existing digest", "desc", "content", true, "/uploads/x.png",
+        createdAt, createdAt, List.of(DIGEST_TAG), List.<Skill>of(),
+        BlogContentType.DIGEST);
+  }
+
   @BeforeEach
   void setUp() {
     lenient().when(tagRepository.findByName("Weekly Digest"))
         .thenReturn(Optional.of(DIGEST_TAG));
+    lenient().when(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
+        .thenReturn(List.of());
     agent = new WeeklyDigestAgent(
         blogRepository, tagRepository, articleRepository, favouriteRepository,
         sectionWriter, composer, metadataGenerator, changePublisher,
         blogImageGenerationService, WINDOW_DAYS);
+  }
+
+  @Test
+  void suppressesTheRunWhenDigestAlreadyExistsInsideTheWindow() {
+    when(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
+        .thenReturn(List.of(digestBlog("existing-1", 2)));
+
+    agent.generateDigest();
+
+    verify(favouriteRepository, never())
+        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(any(), any());
+    verify(sectionWriter, never()).write(any());
+    verify(composer, never()).compose(anyList());
+    verify(blogRepository, never()).save(any());
+    verify(changePublisher, never()).publishCreated(any(), any());
+  }
+
+  @Test
+  void doesNotSuppressTheRunWhenTheExistingDigestIsOutsideTheWindow() {
+    when(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
+        .thenReturn(List.of(digestBlog("stale-digest", WINDOW_DAYS + 3)));
+    when(favouriteRepository
+        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any()))
+        .thenReturn(List.of());
+
+    agent.generateDigest();
+
+    verify(favouriteRepository)
+        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any());
   }
 
   @Test
@@ -233,6 +275,8 @@ class WeeklyDigestAgentTest {
     Blog digest = saved.getValue();
     assertThat(digest.contentType()).isEqualTo(BlogContentType.DIGEST);
     assertThat(digest.title()).isEqualTo("What caught my eye");
+    assertThat(digest.shortDescription()).isEqualTo("A short description");
+    assertThat(digest.featuredImageUrl()).isEqualTo("/uploads/digest.png");
     assertThat(digest.content()).contains("https://infoq.com/art-1");
     assertThat(digest.tags()).containsExactly(DIGEST_TAG);
     assertThat(digest.published()).isTrue();

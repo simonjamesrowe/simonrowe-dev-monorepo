@@ -25,7 +25,18 @@ public class DigestComposer {
       LoggerFactory.getLogger(DigestComposer.class);
 
   private static final Pattern TOP_LEVEL_HEADING =
-      Pattern.compile("^#(?!#)", Pattern.MULTILINE);
+      Pattern.compile("^#\\s", Pattern.MULTILINE);
+
+  private static final Pattern FENCED_CODE_BLOCK =
+      Pattern.compile("```.*?```", Pattern.DOTALL);
+
+  /**
+   * Matches an HTML/XML-like tag (e.g. {@code <script>}, {@code <img src=x>})
+   * without flagging a bare comparison such as "a < b" or "5<10", which have
+   * no closing {@code >}.
+   */
+  private static final Pattern HTML_TAG =
+      Pattern.compile("<\\s*/?\\s*[a-zA-Z][^>]*>");
 
   private static final String SYNTHESIS_PROMPT = """
       Below is a draft digest post by Simon Rowe, assembled from one section \
@@ -64,13 +75,25 @@ public class DigestComposer {
   public String compose(final List<DigestSection> sections) {
     String assembled = assemble(sections);
     String synthesised = synthesise(assembled);
+    String winner;
     if (synthesised == null || !preservesEveryUrl(synthesised, sections)
-        || containsTopLevelHeading(synthesised)) {
+        || containsTopLevelHeading(synthesised)
+        || containsHtml(synthesised)) {
       LOG.warn("Synthesis pass rejected for {} sections; "
           + "publishing the assembled document", sections.size());
-      return assembled;
+      winner = assembled;
+    } else {
+      winner = synthesised;
     }
-    return synthesised;
+    // Belt-and-braces: strip any HTML tag that made it this far regardless of
+    // which variant won, including the assembled document — a section body
+    // is untrusted third-party text laundered through a model, so even a
+    // guarded section is one prompt-injection variant away from emitting a
+    // tag. This can also strip an HTML-looking tag from a legitimate code
+    // example, but a public, auto-published, unreviewed page is the wrong
+    // place to take that risk for a digest that is prose about articles,
+    // not a tutorial.
+    return stripHtml(winner);
   }
 
   private static String assemble(final List<DigestSection> sections) {
@@ -103,6 +126,16 @@ public class DigestComposer {
   }
 
   private static boolean containsTopLevelHeading(final String synthesised) {
-    return TOP_LEVEL_HEADING.matcher(synthesised).find();
+    String withoutCodeBlocks =
+        FENCED_CODE_BLOCK.matcher(synthesised).replaceAll("");
+    return TOP_LEVEL_HEADING.matcher(withoutCodeBlocks).find();
+  }
+
+  private static boolean containsHtml(final String text) {
+    return text != null && HTML_TAG.matcher(text).find();
+  }
+
+  private static String stripHtml(final String text) {
+    return HTML_TAG.matcher(text).replaceAll("");
   }
 }

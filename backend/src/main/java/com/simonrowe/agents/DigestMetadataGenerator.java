@@ -4,6 +4,8 @@ import com.embabel.agent.api.common.Ai;
 import com.embabel.chat.UserMessage;
 import com.simonrowe.aggregation.AggregatedArticle;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +19,18 @@ public class DigestMetadataGenerator {
 
   private static final int MAX_TITLE_LENGTH = 90;
   private static final int MAX_DESCRIPTION_LENGTH = 160;
+
+  /**
+   * Matches a "Title:" label at the start of a line, tolerating leading
+   * Markdown decoration (list markers, headings, code-fence backticks) and a
+   * bold marker wrapped around the label itself, e.g. {@code **Title:**}.
+   */
+  private static final Pattern TITLE_LABEL =
+      Pattern.compile("^[\\s*#`-]*Title:\\**\\s*");
+
+  /** Same tolerance as {@link #TITLE_LABEL}, for the "Description:" label. */
+  private static final Pattern DESCRIPTION_LABEL =
+      Pattern.compile("^[\\s*#`-]*Description:\\**\\s*");
 
   private static final String METADATA_PROMPT =
       "Generate metadata for a personal editorial digest post by Simon Rowe. "
@@ -79,11 +93,16 @@ public class DigestMetadataGenerator {
     String description = null;
     if (content != null) {
       for (String line : content.split("\\R")) {
-        if (line.startsWith("Title:")) {
-          title = truncate(line.substring("Title:".length()).trim(), MAX_TITLE_LENGTH);
-        } else if (line.startsWith("Description:")) {
+        Matcher titleMatcher = TITLE_LABEL.matcher(line);
+        if (titleMatcher.find()) {
+          title = truncate(
+              line.substring(titleMatcher.end()).trim(), MAX_TITLE_LENGTH);
+          continue;
+        }
+        Matcher descriptionMatcher = DESCRIPTION_LABEL.matcher(line);
+        if (descriptionMatcher.find()) {
           description = truncate(
-              line.substring("Description:".length()).trim(),
+              line.substring(descriptionMatcher.end()).trim(),
               MAX_DESCRIPTION_LENGTH);
         }
       }
