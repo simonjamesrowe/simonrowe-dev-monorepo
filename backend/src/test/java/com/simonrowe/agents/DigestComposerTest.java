@@ -101,4 +101,45 @@ class DigestComposerTest {
 
     assertThat(result).contains("[Postgres 19 Ships](https://pg.org/pg19)");
   }
+
+  @Test
+  void fallsBackToAssembledDocumentWhenSynthesisAddedTopLevelHeading() {
+    when(assistantMessage.getContent()).thenReturn("""
+        # This Week's Digest
+        A flowing intro.
+
+        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        Rewritten prose about Spring Boot.
+
+        ## [Postgres 19 Ships](https://pg.org/pg19)
+        Rewritten prose about Postgres.
+        """);
+
+    String result = composer.compose(List.of(SECTION_ONE, SECTION_TWO));
+
+    assertThat(result).contains("[Spring Boot 4 Released](https://infoq.com/spring-boot-4)");
+    assertThat(result).contains("Body about Spring Boot.");
+    assertThat(result).doesNotContain("# This Week's Digest");
+    assertThat(result).doesNotContain("Rewritten prose");
+  }
+
+  @Test
+  void usesSynthesisWithOnlyDoubleHashHeadings() {
+    when(assistantMessage.getContent()).thenReturn("""
+        A flowing intro.
+
+        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        Rewritten prose about Spring Boot.
+
+        ## [Postgres 19 Ships](https://pg.org/pg19)
+        Rewritten prose about Postgres.
+        """);
+
+    String result = composer.compose(List.of(SECTION_ONE, SECTION_TWO));
+
+    assertThat(result).contains("A flowing intro.");
+    assertThat(result).contains("Rewritten prose about Spring Boot.");
+    assertThat(result).contains("## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)");
+    assertThat(result).contains("## [Postgres 19 Ships](https://pg.org/pg19)");
+  }
 }

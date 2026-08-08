@@ -3,6 +3,7 @@ package com.simonrowe.agents;
 import com.embabel.agent.api.common.Ai;
 import com.embabel.chat.UserMessage;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,6 +23,9 @@ public class DigestComposer {
 
   private static final Logger LOG =
       LoggerFactory.getLogger(DigestComposer.class);
+
+  private static final Pattern TOP_LEVEL_HEADING =
+      Pattern.compile("^#(?!#)", Pattern.MULTILINE);
 
   private static final String SYNTHESIS_PROMPT = """
       Below is a draft digest post by Simon Rowe, assembled from one section \
@@ -60,7 +64,8 @@ public class DigestComposer {
   public String compose(final List<DigestSection> sections) {
     String assembled = assemble(sections);
     String synthesised = synthesise(assembled);
-    if (synthesised == null || !preservesEveryUrl(synthesised, sections)) {
+    if (synthesised == null || !preservesEveryUrl(synthesised, sections)
+        || containsTopLevelHeading(synthesised)) {
       LOG.warn("Synthesis pass rejected for {} sections; "
           + "publishing the assembled document", sections.size());
       return assembled;
@@ -95,5 +100,9 @@ public class DigestComposer {
       final String synthesised, final List<DigestSection> sections) {
     return sections.stream()
         .allMatch(section -> synthesised.contains(section.url()));
+  }
+
+  private static boolean containsTopLevelHeading(final String synthesised) {
+    return TOP_LEVEL_HEADING.matcher(synthesised).find();
   }
 }
