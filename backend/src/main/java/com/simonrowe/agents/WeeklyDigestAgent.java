@@ -90,7 +90,8 @@ public class WeeklyDigestAgent {
         .map(sectionWriter::write)
         .toList();
 
-    if (sections.stream().allMatch(DigestSection::fallback)) {
+    if (!sections.isEmpty()
+        && sections.stream().allMatch(DigestSection::fallback)) {
       log.error("Every section fell back to its stored summary — "
           + "assuming an LLM outage and publishing nothing");
       return;

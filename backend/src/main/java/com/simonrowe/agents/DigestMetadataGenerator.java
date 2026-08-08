@@ -40,8 +40,28 @@ public class DigestMetadataGenerator {
   public DigestMetadata generate(
       final List<AggregatedArticle> articles,
       final String activitySummary) {
+    return generate(articles, activitySummary, model);
+  }
+
+  /**
+   * Generates digest metadata using an explicitly named model rather than the
+   * injected {@code aggregation.digest.model}.
+   *
+   * <p>Exists for {@code V006FixAiBlogTitles}: an already-executed change
+   * unit must keep producing what it produced when it ran, so it pins its
+   * model rather than following the digest's current config.
+   *
+   * @param articles the articles to fall back on if the LLM call is unusable
+   * @param activitySummary the prompt content describing recent activity
+   * @param modelName the model to call
+   * @return the generated or fallback metadata
+   */
+  public DigestMetadata generate(
+      final List<AggregatedArticle> articles,
+      final String activitySummary,
+      final String modelName) {
     try {
-      String content = ai.withLlm(model)
+      String content = ai.withLlm(modelName)
           .respond(List.of(new UserMessage(METADATA_PROMPT + activitySummary)))
           .getContent();
       DigestMetadata parsed = parse(content);

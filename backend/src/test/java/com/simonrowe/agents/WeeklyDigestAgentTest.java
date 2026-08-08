@@ -122,18 +122,27 @@ class WeeklyDigestAgentTest {
 
   @Test
   void queriesUsingTheConfiguredWindow() {
+    // Uses a window distinct from both WINDOW_DAYS (7, shared by the other
+    // tests) and the production default (also 7), so an agent that ignored
+    // the injected value and hardcoded 7 days would fail this assertion.
+    int distinctWindowDays = 3;
+    WeeklyDigestAgent agentWithDistinctWindow = new WeeklyDigestAgent(
+        blogRepository, tagRepository, articleRepository, favouriteRepository,
+        sectionWriter, composer, metadataGenerator, changePublisher,
+        blogImageGenerationService, distinctWindowDays);
     when(favouriteRepository
         .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
             eq(FavouriteType.NEWS), any()))
         .thenReturn(List.of());
 
-    agent.generateDigest();
+    agentWithDistinctWindow.generateDigest();
 
     ArgumentCaptor<Instant> cutoff = ArgumentCaptor.forClass(Instant.class);
     verify(favouriteRepository)
         .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
             eq(FavouriteType.NEWS), cutoff.capture());
-    Instant expected = Instant.now().minus(WINDOW_DAYS, ChronoUnit.DAYS);
+    Instant expected =
+        Instant.now().minus(distinctWindowDays, ChronoUnit.DAYS);
     assertThat(cutoff.getValue())
         .isBetween(expected.minusSeconds(60), expected.plusSeconds(60));
   }
@@ -154,6 +163,45 @@ class WeeklyDigestAgentTest {
 
     verify(composer, never()).compose(anyList());
     verify(blogRepository, never()).save(any());
+  }
+
+  @Test
+  void publishesWhenOnlySomeSectionsAreFallback() {
+    AggregatedArticle fallbackArticle = article("art-1", "Spring Boot 4");
+    AggregatedArticle realArticle = article("art-2", "GraalVM 24");
+    DigestSection fallbackSection = new DigestSection(
+        "art-1", "Spring Boot 4", "https://infoq.com/art-1",
+        "Stored summary.", true);
+    DigestSection realSection = new DigestSection(
+        "art-2", "GraalVM 24", "https://infoq.com/art-2",
+        "Real prose.", false);
+
+    when(favouriteRepository
+        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any()))
+        .thenReturn(List.of(
+            favourite("art-1", 1), favourite("art-2", 2)));
+    when(articleRepository.findById("art-1"))
+        .thenReturn(Optional.of(fallbackArticle));
+    when(articleRepository.findById("art-2"))
+        .thenReturn(Optional.of(realArticle));
+    when(sectionWriter.write(fallbackArticle)).thenReturn(fallbackSection);
+    when(sectionWriter.write(realArticle)).thenReturn(realSection);
+    when(composer.compose(List.of(fallbackSection, realSection)))
+        .thenReturn("## [Spring Boot 4](https://infoq.com/art-1)\n\n"
+            + "Stored summary.\n\n"
+            + "## [GraalVM 24](https://infoq.com/art-2)\n\nReal prose.");
+    when(metadataGenerator.generate(anyList(), anyString()))
+        .thenReturn(new DigestMetadata("What caught my eye", "A description"));
+    when(blogImageGenerationService
+        .generateAndStore(anyString(), anyString(), anyString()))
+        .thenReturn("/uploads/digest.png");
+    when(blogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+    agent.generateDigest();
+
+    verify(composer).compose(List.of(fallbackSection, realSection));
+    verify(blogRepository).save(any(Blog.class));
   }
 
   @Test

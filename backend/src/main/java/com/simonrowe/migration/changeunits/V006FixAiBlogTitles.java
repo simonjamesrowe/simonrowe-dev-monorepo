@@ -37,10 +37,13 @@ public class V006FixAiBlogTitles {
             blog.id(),
             blog.title());
         
-        // Use the new logic to generate a better title
+        // Pin the model this change unit has already executed against in
+        // production: it must keep producing what it produced when it ran,
+        // not silently follow aggregation.digest.model as that config moves.
         DigestMetadata metadata = digestMetadataGenerator.generate(
             Collections.emptyList(),
-            blog.content()
+            blog.content(),
+            "gpt-4o-mini"
         );
         
         if (metadata != null && metadata.title() != null && !metadata.title().isBlank()) {
