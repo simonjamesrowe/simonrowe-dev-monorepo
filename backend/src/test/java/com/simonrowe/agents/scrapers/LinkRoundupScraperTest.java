@@ -136,6 +136,37 @@ class LinkRoundupScraperTest {
   }
 
   @Test
+  void extractLinks_keepsQueryStringsThatIdentifyTheTarget() {
+    Document doc = Jsoup.parse("""
+        <html><body><div class="news-bar"><ul>
+          <li><a href="https://www.youtube.com/watch?v=A">Talk One</a> &mdash; first talk</li>
+          <li><a href="https://www.youtube.com/watch?v=B">Talk Two</a> &mdash; second talk</li>
+        </ul></div></body></html>
+        """, "https://ai4jvm.com");
+
+    List<LinkRoundupScraper.RoundupLink> links = scraper.extractLinks(doc);
+
+    assertThat(links).hasSize(2);
+    assertThat(links.get(0).url()).isEqualTo("https://www.youtube.com/watch?v=A");
+    assertThat(links.get(1).url()).isEqualTo("https://www.youtube.com/watch?v=B");
+  }
+
+  @Test
+  void extractLinks_stillNormalisesQuerylessTargets() {
+    Document doc = Jsoup.parse("""
+        <html><body><div class="news-bar"><ul>
+          <li><a href="https://spring.io/blog/spring-ai-2-0-0/">Spring AI 2.0.0</a> \
+        &mdash; the release announcement</li>
+        </ul></div></body></html>
+        """, "https://ai4jvm.com");
+
+    List<LinkRoundupScraper.RoundupLink> links = scraper.extractLinks(doc);
+
+    assertThat(links).hasSize(1);
+    assertThat(links.get(0).url()).isEqualTo("https://spring.io/blog/spring-ai-2-0-0");
+  }
+
+  @Test
   void extractLinks_skipsNonHttpAnchors() {
     Document doc = Jsoup.parse("""
         <html><body><div class="news-bar"><ul>
@@ -182,7 +213,31 @@ class LinkRoundupScraperTest {
         "https://opengraph.githubassets.com/card.png", false);
     when(htmlScraper.scrapeArticlePagePublic(EMBABEL.url())).thenReturn(detail);
 
-    assertThat(scraper.toContent(EMBABEL)).isSameAs(detail);
+    ScrapedContent result = scraper.toContent(EMBABEL);
+
+    assertThat(result.title()).isEqualTo("Release v1.0.0 · embabel/embabel-agent");
+    assertThat(result.content()).isEqualTo("Full release notes body text");
+    assertThat(result.publishedDate()).isEqualTo(Instant.parse("2026-07-20T00:00:00Z"));
+    assertThat(result.author()).isEqualTo("embabel");
+    assertThat(result.imageUrl()).isEqualTo("https://opengraph.githubassets.com/card.png");
+    assertThat(result.isEvent()).isFalse();
+    assertThat(result.url()).isEqualTo(EMBABEL.url());
+  }
+
+  /**
+   * The detail's own URL is discarded even when it differs: scrapeArticlePage normalises
+   * again internally, so keeping it would leave the stored originalUrl out of step with
+   * the dedup key and the target would be re-fetched on every run.
+   */
+  @Test
+  void toContent_keepsTheLinkUrlWhenTheTargetPageReportsAnother() {
+    LinkRoundupScraper.RoundupLink talk = new LinkRoundupScraper.RoundupLink(
+        "A Conference Talk", "https://www.youtube.com/watch?v=A", "a talk about agents");
+    when(htmlScraper.scrapeArticlePagePublic(talk.url())).thenReturn(new ScrapedContent(
+        "A Conference Talk - YouTube", "https://www.youtube.com/watch", "transcript",
+        null, null, null, false));
+
+    assertThat(scraper.toContent(talk).url()).isEqualTo("https://www.youtube.com/watch?v=A");
   }
 
   @Test

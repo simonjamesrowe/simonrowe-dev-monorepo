@@ -1,6 +1,7 @@
 package com.simonrowe.agents.scrapers;
 
 import com.simonrowe.aggregation.AggregatedArticleRepository;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -100,11 +101,20 @@ public class LinkRoundupScraper {
    * the curator's title and summary. Those summaries run 150-250 characters, comfortably
    * over the 50-character floor below which classification is skipped, so a fallback item
    * is still summarised and indexed — it simply has no image or date of its own.
+   *
+   * <p>The detail's own URL is replaced with the link URL. That is the URL the card should
+   * point at, it is the key {@code follow} already checked, and it keeps the stored
+   * {@code originalUrl} equal to the dedup key: {@code scrapeArticlePage} normalises again
+   * internally, which strips a query and re-encodes {@code %}, so without this a
+   * query-bearing or percent-encoded target would be re-fetched on every run forever.
    */
   ScrapedContent toContent(final RoundupLink link) {
     ScrapedContent detail = htmlScraper.scrapeArticlePagePublic(link.url());
     if (detail != null) {
-      return detail;
+      return new ScrapedContent(
+          detail.title(), link.url(), detail.content(),
+          detail.publishedDate(), detail.author(), detail.imageUrl(), detail.isEvent(),
+          detail.venue(), detail.location());
     }
     log.info("Target page unavailable, using curated text for: {}", link.url());
     return new ScrapedContent(
@@ -152,9 +162,7 @@ public class LinkRoundupScraper {
       if (!rawUrl.startsWith("http")) {
         continue;
       }
-      // Normalised with the article scraper's own rules so the URL recorded here
-      // matches the one it would return, and dedup on originalUrl lines up.
-      String url = SitemapHtmlScraper.normalizeUrl(rawUrl);
+      String url = normalizeTarget(rawUrl);
       String title = anchor.text().trim();
       if (title.isEmpty() || !seenUrls.add(url)) {
         continue;
@@ -162,6 +170,38 @@ public class LinkRoundupScraper {
       links.add(new RoundupLink(title, url, extractSummary(item, title)));
     }
     return links;
+  }
+
+  /**
+   * Normalises a roundup target, keeping any query string.
+   *
+   * <p>Roundup targets are arbitrary third-party URLs where the query can <em>be</em> the
+   * resource's identity ({@code watch?v=…}, {@code ?p=123}). The shared normaliser drops
+   * the query, which is right for the same-host sitemap and listing URLs it was written
+   * for and wrong here: two talk links on one path would collapse to one item and the card
+   * would link to a generic page. It is deliberately not changed — every existing
+   * {@code SITEMAP_HTML}/{@code HTML_LISTING} source's stored {@code originalUrl} depends
+   * on its current behaviour.
+   *
+   * <p>Query-less URLs still go through the shared rules, so the common case stays
+   * byte-identical to what {@code scrapeArticlePage} returns and dedup lines up. For a
+   * query-bearing target the two would diverge, which is why {@link #toContent} stores the
+   * link URL rather than the detail's URL — without that, such items would be re-fetched
+   * on every six-hourly run forever.
+   *
+   * @param rawUrl the absolute target URL as written in the roundup
+   * @return the dedup key and stored {@code originalUrl} for that target
+   */
+  private static String normalizeTarget(final String rawUrl) {
+    try {
+      String query = URI.create(rawUrl).getRawQuery();
+      if (query != null && !query.isBlank()) {
+        return rawUrl;
+      }
+    } catch (Exception e) {
+      // Unparseable here too; let the shared normaliser apply its own lenient fallback.
+    }
+    return SitemapHtmlScraper.normalizeUrl(rawUrl);
   }
 
   /** The item's text with the anchor text and the separating em-dash removed. */
