@@ -12,7 +12,7 @@ import { fetchNews, fetchNewsSources } from '../services/newsApi'
 import { fetchEvents } from '../services/eventsApi'
 import { getFavourites } from '../services/favouritesApi'
 import { API_BASE_URL } from '../config/api'
-import type { ArticleResponse } from '../types/news'
+import type { ArticleResponse, SourceSummary } from '../types/news'
 import type { EventResponse } from '../types/events'
 
 type SourceFilter = 'all' | string
@@ -34,7 +34,7 @@ export function NewsEventsPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [refreshingNews, setRefreshingNews] = useState(true)
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
-  const [sources, setSources] = useState<string[]>([])
+  const [sources, setSources] = useState<SourceSummary[]>([])
   const [upcomingEvents, setUpcomingEvents] = useState<EventResponse[]>([])
   const [pastEvents, setPastEvents] = useState<EventResponse[]>([])
   const [newsSettled, setNewsSettled] = useState(false)
@@ -177,9 +177,16 @@ export function NewsEventsPage() {
   }
 
   // Every source the site holds (FR-039), so a source with no article on page 0 is
-  // still selectable. Falls back to the loaded articles if that request failed.
-  const sourceNames =
-    sources.length > 0 ? sources : [...new Set(articles.map(a => a.sourceName))]
+  // still selectable. Falls back to counting the loaded articles if that request failed.
+  const sourceSummaries: SourceSummary[] =
+    sources.length > 0
+      ? sources
+      : Object.entries(
+          articles.reduce<Record<string, number>>((counts, a) => {
+            counts[a.sourceName] = (counts[a.sourceName] ?? 0) + 1
+            return counts
+          }, {}),
+        ).map(([name, count]) => ({ name, count }))
 
   // Unfavouriting while in favourites-only mode removes the card immediately.
   const visibleArticles = favouritesOnly
@@ -212,14 +219,14 @@ export function NewsEventsPage() {
         >
           All
         </button>
-        {sourceNames.map(source => (
+        {sourceSummaries.map(({ name }) => (
           <button
-            className={`feed__pill${sourceFilter === source ? ' feed__pill--active' : ''}`}
-            key={source}
-            onClick={() => handleSourceSelect(source)}
+            className={`feed__pill${sourceFilter === name ? ' feed__pill--active' : ''}`}
+            key={name}
+            onClick={() => handleSourceSelect(name)}
             type="button"
           >
-            {source}
+            {name}
           </button>
         ))}
         {allEvents.length > 0 && (
