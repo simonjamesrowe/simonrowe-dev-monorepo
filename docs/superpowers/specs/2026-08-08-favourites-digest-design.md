@@ -158,13 +158,19 @@ source text; the two in the digest pipeline move to the new property, and
 cost/quality trade-off — see `docs/model-usage.md`).
 
 Setting the property is not sufficient on its own.
-`embabel-agent-openai-autoconfigure:0.3.5` ships its own model registry at
+`embabel-agent-openai-autoconfigure` ships its own model registry at
 `classpath:models/openai-models.yml`, header-dated "Model IDs verified against
 GET /v1/models on 2026-03-29", whose newest family is GPT-5.4. Embabel
 registers one Spring bean per entry and `ai.withLlm(...)` resolves against
 those beans, so `ai.withLlm("gpt-5.6-luna")` fails at runtime against the
 stock registry. `gpt-5.6-luna` itself is real and available on the account —
 verified against `GET /v1/models`, alongside `gpt-5.6-sol` and `gpt-5.6-terra`.
+
+**Upgrading Embabel does not fix this.** The bundled registry in the current
+release (1.0.0) carries the same 2026-03-29 header and still stops at GPT-5.4 —
+it adds `gpt-5.3-chat-latest` and nothing newer. Explicit registration is
+required either way, so the Embabel upgrade is independent of this work and is
+tracked separately.
 
 The chosen fix is to register the model ourselves in `AgentConfig` via
 Embabel's `OpenAiCompatibleModelFactory`, adding one bean and leaving the
@@ -174,16 +180,29 @@ alternative was vendoring a copy of `openai-models.yml` into
 whole file — including pricing for models we do not use — and lets it go
 silently stale on the next Embabel bump.
 
-**Open implementation detail:** `gpt-5.6-luna`'s pricing and its parameter
-support (notably `supports_temperature`, which the entire GPT-5.4 family sets
-to `false`) are not known at design time and must be established by a smoke
-test against the live API rather than assumed. `docs/openai-api-setup.md`
-records what guessing here cost last time: a `reasoning_effort` default merged
-into every per-call `OpenAiChatOptions` silently disabled the topic guardrail.
-If pricing cannot be established, registering with zero pricing is acceptable
-for launch — the consequence is that Langfuse reports digest runs at $0 cost
-until it is filled in, which should be noted on the model registration rather
-than left to be discovered.
+Model facts for the registration, from OpenAI's model page and pricing:
+
+| Property | Value |
+| --- | --- |
+| Model id | `gpt-5.6-luna` — **not** the `gpt-5.6` alias, which routes to Sol |
+| Context window | 1,050,000 tokens (922,000 max input) |
+| Max output | 128,000 tokens |
+| Pricing | $0.20 / 1M input, $1.20 / 1M output, $0.02 / 1M cached input |
+| `supports_temperature` | `false` — only the default value of 1 is accepted |
+
+The digest issues plain completions with no tools, so the one documented
+`gpt-5.6-luna` restriction that would bite — function tools combined with
+`reasoning_effort` are rejected on `/v1/chat/completions`, requiring
+`/v1/responses` or `reasoning_effort: none` — does not apply here. It is
+recorded because it is the same shape as the failure in
+`docs/openai-api-setup.md`, where a `reasoning_effort` default merged into
+every per-call `OpenAiChatOptions` silently disabled the topic guardrail, and
+because it constrains any future move of the tool-enabled chat path onto this
+model.
+
+These values still want confirming with one live call before the first
+scheduled run, since a wrong `supports_temperature` surfaces as a 400 rather
+than as degraded output.
 
 ## Error handling
 
