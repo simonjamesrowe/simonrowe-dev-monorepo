@@ -80,6 +80,20 @@ class SourceNameResolverTest {
     assertThat(resolver.resolve("https://shared.example/post")).isEqualTo("shared.example");
   }
 
+  /**
+   * A source with no baseUrl must not blow up and must not swallow every host: hostOf
+   * returns null for it, which matches nothing, so the article keeps its own host name.
+   */
+  @Test
+  void resolve_ignoresSourcesWithNoBaseUrl() {
+    when(sourceRepository.findAll()).thenReturn(List.of(
+        source("Rundown AI", null, ContentSource.SourceType.NEWS),
+        source("Spring Blog", "https://spring.io/blog", ContentSource.SourceType.BLOG)));
+
+    assertThat(resolver.resolve("https://beehiiv.example/p/issue-42"))
+        .isEqualTo("beehiiv.example");
+  }
+
   @Test
   void resolve_returnsManualImportForAnUnparseableUrl() {
     assertThat(resolver.resolve("not a url at all")).isEqualTo("Manual Import");

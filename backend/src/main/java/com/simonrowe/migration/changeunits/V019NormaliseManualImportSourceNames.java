@@ -18,9 +18,18 @@ import org.springframework.data.mongodb.core.MongoTemplate;
  * "Tessl Blog", and two Anthropic hosts next to "Claude Blog". Each of those is a filter
  * pill on the news page.
  *
- * <p>Only articles whose host resolves to a source we already track are rewritten;
- * genuinely separate publishers keep their host name, which is accurate attribution on
- * the card badge, and the news page hides the low-volume ones behind a "More" overflow.
+ * <p>Scope is enforced in code, not just in this javadoc: only an article whose stored
+ * {@code sourceName} is still the bare host of its own {@code originalUrl} — the exact
+ * shape the old {@code importFromUrl} minted — is considered. Everything else keeps the
+ * name its source gave it, which matters because {@link SourceNameResolver#resolve} is a
+ * <em>naming</em> function for URLs with no name yet, not a rewriting function: a source
+ * whose articles legitimately live on other hosts (AI4JVM's curated roundup) or whose
+ * host is shared/unknown would otherwise be renamed to a host name en masse.
+ *
+ * <p>Of the in-scope articles, only those whose host resolves to a source we already
+ * track are rewritten; genuinely separate publishers keep their host name, which is
+ * accurate attribution on the card badge, and the news page hides the low-volume ones
+ * behind a "More" overflow.
  *
  * <p>{@code sourceUrl} is intentionally left alone: nothing filters or displays it, and
  * rewriting it would claim the article came from a page it did not.
@@ -50,6 +59,14 @@ public class V019NormaliseManualImportSourceNames {
       final String originalUrl = article.getString(ORIGINAL_URL);
       final String currentName = article.getString(SOURCE_NAME);
       if (originalUrl == null || currentName == null) {
+        continue;
+      }
+      // Only articles still carrying the host name `importFromUrl` used to mint are in
+      // scope. Anything else — AI4JVM's curated cross-host items, every article written by
+      // the scheduled aggregation — keeps the name its source gave it. `hostOf` lowercases
+      // and strips `www.` exactly as the old `extractHostName` did, so this matches the
+      // legacy rows precisely.
+      if (!currentName.equals(SourceNameResolver.hostOf(originalUrl))) {
         continue;
       }
       final String resolved = sourceNameResolver.resolve(originalUrl);
