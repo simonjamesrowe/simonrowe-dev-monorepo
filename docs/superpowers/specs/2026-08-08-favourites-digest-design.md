@@ -141,13 +141,49 @@ Changes to existing code:
   `generate(List<AggregatedArticle>, String)` and its fallback simplifies
   accordingly.
 - Two properties join the existing `aggregation.digest` block in
-  `application.yml`: `model` (default `gpt-4o-mini`, so merging changes nothing
-  until it is raised in prod) and `window-days` (default 7). The agent
-  currently hardcodes `gpt-4o-mini`, which is thin for multi-paragraph analysis
-  over long source text; making it a property allows raising it without a code
-  change.
+  `application.yml`: `model` (default `gpt-5.6-luna`, see below) and
+  `window-days` (default 7). All three digest call sites — the two new
+  components and `DigestMetadataGenerator` — read this property instead of
+  hardcoding a model.
 - The admin trigger in `AdminAggregationController` is unchanged — it still
   calls `digestAgent::generateDigest` on a virtual thread.
+
+## Model selection and registration
+
+The digest runs on `gpt-5.6-luna`. The three agent call sites currently
+hardcode `gpt-4o-mini`, which is thin for multi-paragraph analysis over long
+source text; the two in the digest pipeline move to the new property, and
+`ContentAggregationAgent`'s classifier is deliberately left on `gpt-4o-mini`
+(it runs against every scraped item every 6 hours and is a different
+cost/quality trade-off — see `docs/model-usage.md`).
+
+Setting the property is not sufficient on its own.
+`embabel-agent-openai-autoconfigure:0.3.5` ships its own model registry at
+`classpath:models/openai-models.yml`, header-dated "Model IDs verified against
+GET /v1/models on 2026-03-29", whose newest family is GPT-5.4. Embabel
+registers one Spring bean per entry and `ai.withLlm(...)` resolves against
+those beans, so `ai.withLlm("gpt-5.6-luna")` fails at runtime against the
+stock registry. `gpt-5.6-luna` itself is real and available on the account —
+verified against `GET /v1/models`, alongside `gpt-5.6-sol` and `gpt-5.6-terra`.
+
+The chosen fix is to register the model ourselves in `AgentConfig` via
+Embabel's `OpenAiCompatibleModelFactory`, adding one bean and leaving the
+bundled registry untouched so Embabel upgrades stay clean. The rejected
+alternative was vendoring a copy of `openai-models.yml` into
+`backend/src/main/resources/models/`, which works but makes us owner of the
+whole file — including pricing for models we do not use — and lets it go
+silently stale on the next Embabel bump.
+
+**Open implementation detail:** `gpt-5.6-luna`'s pricing and its parameter
+support (notably `supports_temperature`, which the entire GPT-5.4 family sets
+to `false`) are not known at design time and must be established by a smoke
+test against the live API rather than assumed. `docs/openai-api-setup.md`
+records what guessing here cost last time: a `reasoning_effort` default merged
+into every per-call `OpenAiChatOptions` silently disabled the topic guardrail.
+If pricing cannot be established, registering with zero pricing is acceptable
+for launch — the consequence is that Langfuse reports digest runs at $0 cost
+until it is filled in, which should be noted on the model registration rather
+than left to be discovered.
 
 ## Error handling
 
@@ -173,6 +209,11 @@ style:
 - Scrape returns null and `fullContent` is empty — stored `summary` is used.
 - LLM call throws — the section body falls back to the stored summary and
   `fallback` is set.
+
+**Model registration**
+- A Spring context test asserting the `gpt-5.6-luna` model bean is registered
+  and resolvable, so a future Embabel upgrade that changes the registration API
+  fails the build rather than failing silently at 08:00 on a Monday.
 
 **`DigestComposerTest`**
 - Synthesis preserves every URL — its output ships.
