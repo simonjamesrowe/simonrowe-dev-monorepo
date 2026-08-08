@@ -48,12 +48,18 @@ public class ArticleSectionWriter {
   private static final int HARD_MIN_SOURCE_CHARS = 200;
 
   /**
-   * Matches an HTML/XML-like tag (e.g. {@code <script>}, {@code <img src=x>})
-   * without flagging a bare comparison such as "a < b" or "5<10", which have
-   * no closing {@code >}.
+   * Matches an HTML/XML-like tag (e.g. {@code <script>}, {@code <img src=x>}).
+   * A real tag never has whitespace directly after {@code <} or {@code </},
+   * so "a < b" and "5<10" don't match. {@code [^<>]*} (rather than
+   * {@code [^>]*}) stops a match from spanning a second {@code <}, which
+   * both prevents the match from swallowing unrelated later text whenever a
+   * stray {@code >} appears further on (e.g. "latency < threshold and
+   * throughput > baseline") and stops a nested construct such as
+   * {@code <<b>script>...} from having its outer {@code <} and inner {@code >}
+   * treated as one tag.
    */
   private static final Pattern HTML_TAG =
-      Pattern.compile("<\\s*/?\\s*[a-zA-Z][^>]*>");
+      Pattern.compile("</?[a-zA-Z][^<>]*>");
 
   private static final String SECTION_PROMPT = """
       You are Simon Rowe, writing one section of your weekly digest about an \

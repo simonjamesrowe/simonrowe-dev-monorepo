@@ -45,7 +45,7 @@ than erroring. Full context in `docs/openai-api-setup.md`.
 `classpath:models/openai-models.yml`, header-dated "Model IDs verified against
 GET /v1/models on 2026-03-29", whose newest family is GPT-5.4. Embabel
 registers one Spring bean per entry and `Ai.withLlm(...)` resolves against
-those beans, so rows 3-5 can only name a model that registry knows unless the
+those beans, so rows 3-6 can only name a model that registry knows unless the
 model is registered explicitly in `agents/AgentConfig.java`. A model id being
 valid at OpenAI is not sufficient. Checked against the current release (1.0.0)
 on 2026-08-08: same header date, still stops at GPT-5.4, so upgrading Embabel
@@ -97,7 +97,7 @@ same-generation upgrade needing no Boot change, but crossed a 0.x → 1.0
 boundary: deprecated methods removed, model registration moved toward
 declarative YAML, the tool loop moved off Spring AI's `ToolCallback` onto
 Embabel's own `Tool` interface, and `PromptRunner` sub-runners consolidated.
-In the end none of that touched any `Ai.withLlm(...)` call site (rows 3-5) —
+In the end none of that touched any `Ai.withLlm(...)` call site (rows 3-6) —
 the only changes needed were to build files plus the new `gpt56LunaLlm` bean
 in `agents/AgentConfig.java`. It did **not** deliver newer models — see the
 registry note above.
@@ -105,7 +105,7 @@ registry note above.
 ## When adding or changing a model
 
 1. Confirm the id exists on the account: `GET /v1/models`.
-2. If it is an Embabel call site (rows 3-5), confirm the model is registered —
+2. If it is an Embabel call site (rows 3-6), confirm the model is registered —
    bundled registry or `AgentConfig` — before assuming the name resolves.
 3. Check parameter support. The whole GPT-5.4 family sets
    `supports_temperature: false` in Embabel's registry; newer families may

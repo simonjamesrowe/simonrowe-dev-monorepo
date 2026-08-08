@@ -31,6 +31,18 @@ class DigestComposerTest {
       "art-3", "Sketchy Article", "https://sketchy.example/a",
       "Body text. <script>alert(document.cookie)</script> More body text.",
       false);
+  // A nested construct: single-pass stripping of the outer <b> tags
+  // reassembles the inner text into a live <script>alert(1)</script>.
+  private static final String NESTED_HTML_PAYLOAD =
+      "<<b>script>alert(1)<<b>/script>";
+  private static final DigestSection SECTION_WITH_NESTED_HTML_IN_BODY =
+      new DigestSection(
+          "art-4", "Sketchy Body Article", "https://sketchy.example/body",
+          "Intro text. " + NESTED_HTML_PAYLOAD + " Trailing text.", false);
+  private static final DigestSection SECTION_WITH_NESTED_HTML_IN_TITLE =
+      new DigestSection(
+          "art-5", NESTED_HTML_PAYLOAD, "https://sketchy.example/title",
+          "Ordinary body text.", false);
 
   @Mock private Ai ai;
 
@@ -265,5 +277,84 @@ class DigestComposerTest {
 
     assertThat(result).contains("Rewritten prose about Spring Boot.");
     assertThat(result).contains("# comment explaining the next line");
+  }
+
+  @Test
+  void collapsesNestedHtmlConstructInSectionBodyToInertTextWithNoLiveTag() {
+    // Forces the assembled document (built straight from section bodies) to
+    // win, so the nested payload reaches stripHtml() unmediated.
+    when(promptRunner.respond(anyList()))
+        .thenThrow(new RuntimeException("upstream 500"));
+
+    String result = composer.compose(List.of(SECTION_WITH_NESTED_HTML_IN_BODY));
+
+    assertThat(result).isEqualTo(
+        "## [Sketchy Body Article](https://sketchy.example/body)\n\n"
+            + "Intro text. alert(1) Trailing text.");
+    assertThat(result).doesNotContain("<").doesNotContain(">");
+  }
+
+  @Test
+  void collapsesNestedHtmlConstructInSectionTitleToInertTextWithNoLiveTag() {
+    when(promptRunner.respond(anyList()))
+        .thenThrow(new RuntimeException("upstream 500"));
+
+    String result = composer.compose(List.of(SECTION_WITH_NESTED_HTML_IN_TITLE));
+
+    assertThat(result).isEqualTo(
+        "## [alert(1)](https://sketchy.example/title)\n\nOrdinary body text.");
+    assertThat(result).doesNotContain("<").doesNotContain(">");
+  }
+
+  @Test
+  void doesNotStripOrdinaryProseComparingWithBothAngleBrackets() {
+    // Regression guard: the pattern must not span from an early "<" to a
+    // later, unrelated ">" and delete everything in between.
+    DigestSection prose = new DigestSection(
+        "art-6", "Benchmark Results", "https://bench.example/a",
+        "The results show that if latency < threshold and throughput > "
+            + "baseline, the service is healthy.", false);
+    when(promptRunner.respond(anyList()))
+        .thenThrow(new RuntimeException("upstream 500"));
+
+    String result = composer.compose(List.of(prose));
+
+    assertThat(result).isEqualTo(
+        "## [Benchmark Results](https://bench.example/a)\n\n"
+            + "The results show that if latency < threshold and throughput "
+            + "> baseline, the service is healthy.");
+  }
+
+  @Test
+  void fallsBackToAssembledDocumentWhenSynthesisContainsAnUppercaseScriptTag() {
+    when(assistantMessage.getContent()).thenReturn("""
+        A flowing intro. <SCRIPT>alert(document.cookie)</SCRIPT>
+
+        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        Rewritten prose about Spring Boot.
+
+        ## [Postgres 19 Ships](https://pg.org/pg19)
+        Rewritten prose about Postgres.
+        """);
+
+    String result = composer.compose(List.of(SECTION_ONE, SECTION_TWO));
+
+    assertThat(result).contains("Body about Spring Boot.");
+    assertThat(result).doesNotContain("Rewritten prose");
+    assertThat(result).doesNotContain("<SCRIPT>").doesNotContain("<script");
+  }
+
+  @Test
+  void stripsAnSvgOnloadPayloadFromSectionBody() {
+    DigestSection sectionWithSvgPayload = new DigestSection(
+        "art-7", "Svg Article", "https://sketchy.example/svg",
+        "Before text. <svg/onload=alert(1)> After text.", false);
+    when(promptRunner.respond(anyList()))
+        .thenThrow(new RuntimeException("upstream 500"));
+
+    String result = composer.compose(List.of(sectionWithSvgPayload));
+
+    assertThat(result).contains("Before text.").contains("After text.");
+    assertThat(result).doesNotContain("<svg").doesNotContain("onload");
   }
 }

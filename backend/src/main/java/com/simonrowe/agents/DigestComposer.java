@@ -31,12 +31,18 @@ public class DigestComposer {
       Pattern.compile("```.*?```", Pattern.DOTALL);
 
   /**
-   * Matches an HTML/XML-like tag (e.g. {@code <script>}, {@code <img src=x>})
-   * without flagging a bare comparison such as "a < b" or "5<10", which have
-   * no closing {@code >}.
+   * Matches an HTML/XML-like tag (e.g. {@code <script>}, {@code <img src=x>}).
+   * A real tag never has whitespace directly after {@code <} or {@code </},
+   * so "a < b" and "5<10" don't match. {@code [^<>]*} (rather than
+   * {@code [^>]*}) stops a match from spanning a second {@code <}, which
+   * both prevents the match from swallowing unrelated later text whenever a
+   * stray {@code >} appears further on (e.g. "latency < threshold and
+   * throughput > baseline") and stops a nested construct such as
+   * {@code <<b>script>...} from having its outer {@code <} and inner {@code >}
+   * treated as one tag.
    */
   private static final Pattern HTML_TAG =
-      Pattern.compile("<\\s*/?\\s*[a-zA-Z][^>]*>");
+      Pattern.compile("</?[a-zA-Z][^<>]*>");
 
   private static final String SYNTHESIS_PROMPT = """
       Below is a draft digest post by Simon Rowe, assembled from one section \
@@ -99,7 +105,13 @@ public class DigestComposer {
   private static String assemble(final List<DigestSection> sections) {
     StringBuilder sb = new StringBuilder();
     for (DigestSection section : sections) {
-      sb.append("## [").append(section.title())
+      // section.title() is never model-generated (it comes straight from
+      // AggregatedArticle.title(), itself raw third-party feed/page text —
+      // see DigestSection's Javadoc), so it never passes through
+      // ArticleSectionWriter's HTML guard the way a generated body does.
+      // Strip it here rather than relying solely on the final belt-and-braces
+      // pass below.
+      sb.append("## [").append(stripHtml(section.title()))
           .append("](").append(section.url()).append(")\n\n")
           .append(section.body()).append("\n\n");
     }
@@ -135,7 +147,20 @@ public class DigestComposer {
     return text != null && HTML_TAG.matcher(text).find();
   }
 
+  /**
+   * Strips HTML tags to a fixpoint rather than in a single pass. A single
+   * pass on a nested construct such as {@code <<b>script>alert(1)<<b>/script>}
+   * removes only the inner {@code <b>} tags and reassembles a live
+   * {@code <script>alert(1)</script>}; repeating the strip until the result
+   * stops changing collapses it down to the inert text {@code alert(1)}.
+   */
   private static String stripHtml(final String text) {
-    return HTML_TAG.matcher(text).replaceAll("");
+    String previous;
+    String stripped = text;
+    do {
+      previous = stripped;
+      stripped = HTML_TAG.matcher(previous).replaceAll("");
+    } while (!stripped.equals(previous));
+    return stripped;
   }
 }
