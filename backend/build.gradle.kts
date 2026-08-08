@@ -117,8 +117,8 @@ dependencies {
     implementation(libs.google.api.services.drive)
     implementation(libs.google.auth.library.oauth2.http)
     implementation(libs.google.http.client.apache.v5)
-    implementation("com.embabel.agent:embabel-agent-starter:0.3.5")
-    implementation("com.embabel.agent:embabel-agent-starter-openai:0.3.5")
+    implementation(libs.embabel.agent.starter)
+    implementation(libs.embabel.agent.starter.openai)
     implementation("org.jsoup:jsoup:1.18.3")
     implementation("com.rometools:rome:2.1.0")
     // Required for the <if>/<then>/<else> conditional in logback-spring.xml that picks
@@ -139,5 +139,5 @@ dependencies {
     testImplementation(libs.testcontainers.mongodb)
     testImplementation(libs.testcontainers.kafka)
     testImplementation(libs.testcontainers.elasticsearch)
-    testImplementation("com.embabel.agent:embabel-agent-test:0.3.5")
+    testImplementation(libs.embabel.agent.test)
 }
