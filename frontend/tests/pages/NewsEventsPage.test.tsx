@@ -251,4 +251,75 @@ describe('NewsEventsPage', () => {
     })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
+
+  it('orders source pills by article count, busiest first', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Dan Vega', 16),
+      source('Rundown AI', 298),
+      source('Spring Blog', 81),
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
+
+    const pills = screen.getAllByRole('button').map(b => b.textContent)
+    expect(pills.indexOf('Rundown AI')).toBeLessThan(pills.indexOf('Spring Blog'))
+    expect(pills.indexOf('Spring Blog')).toBeLessThan(pills.indexOf('Dan Vega'))
+  })
+
+  it('hides sources with fewer than three articles behind the More menu', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('blog.cloudflare.com', 2),
+      source('ssntpl.com', 1),
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
+
+    // Regex, not an exact string: a menu row's accessible name is its source name
+    // followed by its article count ("blog.cloudflare.com 2").
+    expect(screen.queryByRole('button', { name: /blog\.cloudflare\.com/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'More (2)' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'More (2)' }))
+
+    expect(screen.getByRole('button', { name: /blog\.cloudflare\.com/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ssntpl\.com/ })).toBeInTheDocument()
+  })
+
+  it('filters by a source chosen from the More menu and shows it as active', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('ssntpl.com', 1),
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'More (1)' }))
+    await userEvent.click(screen.getByRole('button', { name: /ssntpl\.com/ }))
+
+    await waitFor(() =>
+      expect(fetchNews).toHaveBeenCalledWith(0, 24, 'ssntpl.com'),
+    )
+    // The menu has closed, so this now matches the toggle itself: the active filter
+    // must stay visible even though the source is collapsed out of the main row.
+    expect(screen.getByRole('button', { name: 'ssntpl.com' })).toBeInTheDocument()
+  })
+
+  it('renders no More button when every source clears the threshold', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('Spring Blog', 81),
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
+
+    expect(screen.queryByRole('button', { name: /^More/ })).toBeNull()
+  })
 })

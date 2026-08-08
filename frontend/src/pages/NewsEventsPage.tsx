@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Calendar, ExternalLink, Heart, MapPin } from 'lucide-react'
+import { Calendar, ChevronDown, ExternalLink, Heart, MapPin } from 'lucide-react'
 
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { FavouriteButton } from '../components/common/FavouriteButton'
@@ -19,6 +19,12 @@ type SourceFilter = 'all' | string
 
 /** Articles per request. Was a single `size=100` fetch — the slowest public page. */
 const NEWS_PAGE_SIZE = 24
+
+/**
+ * Below this, a source is a long-tail one-off — usually a single manually imported
+ * article — and goes in the "More" menu instead of costing a pill in the main row.
+ */
+const MIN_ARTICLES_FOR_PILL = 3
 
 function resolveImageUrl(url: string | null): string | undefined {
   if (!url) return undefined
@@ -47,6 +53,8 @@ export function NewsEventsPage() {
   const [favouriteArticles, setFavouriteArticles] = useState<ArticleResponse[]>([])
   const [favouriteEvents, setFavouriteEvents] = useState<EventResponse[]>([])
   const [favouritesLoading, setFavouritesLoading] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
 
   const newsFavourites = useFavourites('news')
   const eventFavourites = useFavourites('events')
@@ -68,6 +76,16 @@ export function NewsEventsPage() {
 
   useEffect(() => {
     trackPageView('/news-events')
+  }, [])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   useEffect(() => {
@@ -188,6 +206,17 @@ export function NewsEventsPage() {
           }, {}),
         ).map(([name, count]) => ({ name, count }))
 
+  // Sorted here rather than trusted from the API so the order holds for the
+  // article-derived fallback too.
+  const sortedSources = [...sourceSummaries].sort(
+    (a, b) => b.count - a.count || a.name.localeCompare(b.name),
+  )
+  const pillSources = sortedSources.filter(s => s.count >= MIN_ARTICLES_FOR_PILL)
+  const menuSources = sortedSources.filter(s => s.count < MIN_ARTICLES_FOR_PILL)
+  // A collapsed source that is the active filter has to surface somewhere, or the
+  // page looks unfiltered while showing one source's articles.
+  const activeMenuSource = menuSources.find(s => s.name === sourceFilter)
+
   // Unfavouriting while in favourites-only mode removes the card immediately.
   const visibleArticles = favouritesOnly
     ? favouriteArticles.filter(a => newsFavourites.isFavourite(a.id))
@@ -210,25 +239,8 @@ export function NewsEventsPage() {
 
   return (
     <div className="feed tour-news-events">
-      {/* Source filter pills */}
-      <div className="feed__filters">
-        <button
-          className={`feed__pill${sourceFilter === 'all' ? ' feed__pill--active' : ''}`}
-          onClick={() => handleSourceSelect('all')}
-          type="button"
-        >
-          All
-        </button>
-        {sourceSummaries.map(({ name }) => (
-          <button
-            className={`feed__pill${sourceFilter === name ? ' feed__pill--active' : ''}`}
-            key={name}
-            onClick={() => handleSourceSelect(name)}
-            type="button"
-          >
-            {name}
-          </button>
-        ))}
+      {/* View modes, kept apart from sources so "Events" doesn't read as a publisher. */}
+      <div className="feed__modes">
         {allEvents.length > 0 && (
           <button
             className={`feed__pill feed__pill--events${sourceFilter === 'events' ? ' feed__pill--active' : ''}`}
@@ -247,6 +259,62 @@ export function NewsEventsPage() {
           <Heart aria-hidden="true" fill={favouritesOnly ? 'currentColor' : 'none'} size={14} />
           <span>Show favourites only</span>
         </button>
+      </div>
+
+      {/* Source filter pills, busiest first, long tail collapsed. */}
+      <div className="feed__filters">
+        <button
+          className={`feed__pill${sourceFilter === 'all' ? ' feed__pill--active' : ''}`}
+          onClick={() => handleSourceSelect('all')}
+          type="button"
+        >
+          All
+        </button>
+        {pillSources.map(({ name }) => (
+          <button
+            className={`feed__pill${sourceFilter === name ? ' feed__pill--active' : ''}`}
+            key={name}
+            onClick={() => handleSourceSelect(name)}
+            type="button"
+          >
+            {name}
+          </button>
+        ))}
+        {menuSources.length > 0 && (
+          <div className="feed__more" ref={moreMenuRef}>
+            <button
+              aria-expanded={moreOpen}
+              aria-haspopup="true"
+              className={`feed__pill feed__more-toggle${activeMenuSource ? ' feed__pill--active' : ''}`}
+              onClick={() => setMoreOpen(open => !open)}
+              type="button"
+            >
+              <span>{activeMenuSource ? activeMenuSource.name : `More (${menuSources.length})`}</span>
+              <ChevronDown aria-hidden="true" size={14} />
+            </button>
+            {moreOpen && (
+              /* Plain buttons, not role="menu"/"menuitem": an explicit menuitem role
+                 would stop these matching getByRole('button'), and the popover is a
+                 list of filters rather than an application menu. */
+              <div className="feed__more-menu">
+                {menuSources.map(({ name, count }) => (
+                  <button
+                    className={`feed__more-item${sourceFilter === name ? ' feed__more-item--active' : ''}`}
+                    key={name}
+                    onClick={() => {
+                      handleSourceSelect(name)
+                      setMoreOpen(false)
+                    }}
+                    type="button"
+                  >
+                    <span>{name}</span>
+                    <span className="feed__more-count">{count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Anchor target for /news-events#news deep links */}
