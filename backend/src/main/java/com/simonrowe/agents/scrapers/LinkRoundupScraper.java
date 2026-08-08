@@ -1,5 +1,6 @@
 package com.simonrowe.agents.scrapers;
 
+import com.simonrowe.aggregation.AggregatedArticleRepository;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,9 +51,64 @@ public class LinkRoundupScraper {
   record RoundupLink(String title, String url, String summary) {
   }
 
+  private static final long DELAY_BETWEEN_REQUESTS_MS = 1000;
+
+  private final SitemapHtmlScraper htmlScraper;
+  private final AggregatedArticleRepository articleRepository;
+
+  /**
+   * Takes a repository, unlike every other scraper. Without a pre-fetch dedup check the
+   * 40-item cap means every scheduled run would re-request all forty linked pages across
+   * a dozen third-party sites purely to discover we already hold them. The agent's own
+   * dedup remains the authority; this is an optimisation only.
+   */
+  public LinkRoundupScraper(
+      final SitemapHtmlScraper htmlScraper,
+      final AggregatedArticleRepository articleRepository) {
+    this.htmlScraper = htmlScraper;
+    this.articleRepository = articleRepository;
+  }
+
   public List<ScrapedContent> scrape(final String listingUrl) {
-    List<RoundupLink> links = fetchLinks(listingUrl);
-    return links.stream().map(LinkRoundupScraper::toCuratedContent).toList();
+    return follow(fetchLinks(listingUrl));
+  }
+
+  List<ScrapedContent> follow(final List<RoundupLink> links) {
+    List<ScrapedContent> results = new ArrayList<>();
+    boolean firstFetch = true;
+    for (RoundupLink link : links) {
+      if (articleRepository.existsByOriginalUrl(link.url())) {
+        continue;
+      }
+      if (!firstFetch) {
+        try {
+          Thread.sleep(DELAY_BETWEEN_REQUESTS_MS);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          break;
+        }
+      }
+      firstFetch = false;
+      results.add(toContent(link));
+    }
+    log.info("Followed {} of {} roundup links", results.size(), links.size());
+    return results;
+  }
+
+  /**
+   * The target page's own article where it can be scraped, otherwise an item built from
+   * the curator's title and summary. Those summaries run 150-250 characters, comfortably
+   * over the 50-character floor below which classification is skipped, so a fallback item
+   * is still summarised and indexed — it simply has no image or date of its own.
+   */
+  ScrapedContent toContent(final RoundupLink link) {
+    ScrapedContent detail = htmlScraper.scrapeArticlePagePublic(link.url());
+    if (detail != null) {
+      return detail;
+    }
+    log.info("Target page unavailable, using curated text for: {}", link.url());
+    return new ScrapedContent(
+        link.title(), link.url(), link.summary(), null, null, null, false);
   }
 
   List<RoundupLink> fetchLinks(final String listingUrl) {
@@ -115,10 +171,5 @@ public class LinkRoundupScraper {
       text = text.substring(title.length());
     }
     return text.replaceFirst("^[\\s\\u2013\\u2014-]+", "").trim();
-  }
-
-  private static ScrapedContent toCuratedContent(final RoundupLink link) {
-    return new ScrapedContent(
-        link.title(), link.url(), link.summary(), null, null, null, false);
   }
 }

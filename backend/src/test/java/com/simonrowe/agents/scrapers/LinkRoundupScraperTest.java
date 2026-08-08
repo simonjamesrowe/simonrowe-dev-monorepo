@@ -1,15 +1,28 @@
 package com.simonrowe.agents.scrapers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+import com.simonrowe.aggregation.AggregatedArticleRepository;
+import java.time.Instant;
 import java.util.List;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 class LinkRoundupScraperTest {
 
-  private final LinkRoundupScraper scraper = new LinkRoundupScraper();
+  @Mock private SitemapHtmlScraper htmlScraper;
+  @Mock private AggregatedArticleRepository articleRepository;
+  @InjectMocks private LinkRoundupScraper scraper;
 
   @Test
   void extractLinks_readsTitleUrlAndSummaryFromNewsBarItems() {
@@ -151,5 +164,63 @@ class LinkRoundupScraperTest {
         scraper.extractLinks(Jsoup.parse(html.toString(), "https://ai4jvm.com"));
 
     assertThat(links).hasSize(LinkRoundupScraper.MAX_ITEMS);
+  }
+
+  private static final LinkRoundupScraper.RoundupLink EMBABEL =
+      new LinkRoundupScraper.RoundupLink(
+          "Embabel 1.0.0 Reaches GA",
+          "https://github.com/embabel/embabel-agent/releases/tag/v1.0.0",
+          "the JVM agent framework's first stable release");
+
+  @Test
+  void toContent_usesTheTargetPageWhenItScrapesSuccessfully() {
+    ScrapedContent detail = new ScrapedContent(
+        "Release v1.0.0 · embabel/embabel-agent",
+        "https://github.com/embabel/embabel-agent/releases/tag/v1.0.0",
+        "Full release notes body text",
+        Instant.parse("2026-07-20T00:00:00Z"), "embabel",
+        "https://opengraph.githubassets.com/card.png", false);
+    when(htmlScraper.scrapeArticlePagePublic(EMBABEL.url())).thenReturn(detail);
+
+    assertThat(scraper.toContent(EMBABEL)).isSameAs(detail);
+  }
+
+  @Test
+  void toContent_fallsBackToTheCuratedTextWhenTheTargetBlocksUs() {
+    when(htmlScraper.scrapeArticlePagePublic(EMBABEL.url())).thenReturn(null);
+
+    ScrapedContent result = scraper.toContent(EMBABEL);
+
+    assertThat(result.title()).isEqualTo("Embabel 1.0.0 Reaches GA");
+    assertThat(result.url()).isEqualTo(EMBABEL.url());
+    assertThat(result.content())
+        .isEqualTo("the JVM agent framework's first stable release");
+    assertThat(result.publishedDate()).isNull();
+    assertThat(result.imageUrl()).isNull();
+    assertThat(result.isEvent()).isFalse();
+  }
+
+  @Test
+  void follow_skipsTargetsAlreadyHeldWithoutFetchingThem() {
+    LinkRoundupScraper.RoundupLink fresh = new LinkRoundupScraper.RoundupLink(
+        "Koog 1.0 Is Out", "https://blog.jetbrains.com/ai/koog-1-0", "stable core");
+    when(articleRepository.existsByOriginalUrl(EMBABEL.url())).thenReturn(true);
+    when(articleRepository.existsByOriginalUrl(fresh.url())).thenReturn(false);
+    when(htmlScraper.scrapeArticlePagePublic(fresh.url())).thenReturn(null);
+
+    List<ScrapedContent> results = scraper.follow(List.of(EMBABEL, fresh));
+
+    assertThat(results).hasSize(1);
+    assertThat(results.get(0).title()).isEqualTo("Koog 1.0 Is Out");
+    verify(htmlScraper, never()).scrapeArticlePagePublic(EMBABEL.url());
+  }
+
+  @Test
+  void follow_returnsEmptyWhenEveryTargetIsAlreadyHeld() {
+    when(articleRepository.existsByOriginalUrl(EMBABEL.url())).thenReturn(true);
+
+    assertThat(scraper.follow(List.of(EMBABEL))).isEmpty();
+
+    verifyNoInteractions(htmlScraper);
   }
 }
