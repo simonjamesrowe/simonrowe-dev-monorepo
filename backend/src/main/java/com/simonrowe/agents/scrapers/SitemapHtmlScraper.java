@@ -243,7 +243,10 @@ public class SitemapHtmlScraper {
   }
 
   // Fix 2: URL normalization helper
-  private static String normalizeUrl(String url) {
+  // Package-private so LinkRoundupScraper can normalise roundup target URLs with
+  // exactly the rules scrapeArticlePage applies to the URLs it returns. If the two
+  // differed by so much as a trailing slash, dedup on originalUrl would miss.
+  static String normalizeUrl(String url) {
     if (url == null) {
       return null;
     }

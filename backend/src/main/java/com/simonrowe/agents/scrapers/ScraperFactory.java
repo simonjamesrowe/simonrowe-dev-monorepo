@@ -10,13 +10,16 @@ public class ScraperFactory {
   private final RssScraper rssScraper;
   private final SitemapHtmlScraper sitemapHtmlScraper;
   private final LumaApiScraper lumaApiScraper;
+  private final LinkRoundupScraper linkRoundupScraper;
 
   public ScraperFactory(RssScraper rssScraper,
       SitemapHtmlScraper sitemapHtmlScraper,
-      LumaApiScraper lumaApiScraper) {
+      LumaApiScraper lumaApiScraper,
+      LinkRoundupScraper linkRoundupScraper) {
     this.rssScraper = rssScraper;
     this.sitemapHtmlScraper = sitemapHtmlScraper;
     this.lumaApiScraper = lumaApiScraper;
+    this.linkRoundupScraper = linkRoundupScraper;
   }
 
   public List<ScrapedContent> scrape(ContentSource source) {
@@ -27,6 +30,7 @@ public class ScraperFactory {
       case HTML -> sitemapHtmlScraper.scrapeEventsPage(source.baseUrl());
       case HTML_LISTING -> sitemapHtmlScraper.scrapeListingPage(source.baseUrl());
       case LUMA -> lumaApiScraper.scrape(source.feedUrl());
+      case LINK_ROUNDUP -> linkRoundupScraper.scrape(source.baseUrl());
     };
   }
 }
