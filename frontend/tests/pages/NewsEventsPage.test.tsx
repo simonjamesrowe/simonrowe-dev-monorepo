@@ -310,6 +310,24 @@ describe('NewsEventsPage', () => {
     expect(screen.getByRole('button', { name: 'ssntpl.com' })).toBeInTheDocument()
   })
 
+  it('closes the More menu on Escape and returns focus to the toggle', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('ssntpl.com', 1),
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'More (1)' }))
+    expect(screen.getByRole('button', { name: /ssntpl\.com/ })).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}')
+
+    expect(screen.queryByRole('button', { name: /ssntpl\.com/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /^More/ })).toHaveFocus()
+  })
+
   it('renders no More button when every source clears the threshold', async () => {
     vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
     vi.mocked(fetchNewsSources).mockResolvedValue([

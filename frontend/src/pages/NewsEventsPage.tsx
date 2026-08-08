@@ -55,6 +55,7 @@ export function NewsEventsPage() {
   const [favouritesLoading, setFavouritesLoading] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const moreMenuRef = useRef<HTMLDivElement>(null)
+  const moreToggleRef = useRef<HTMLButtonElement>(null)
 
   const newsFavourites = useFavourites('news')
   const eventFavourites = useFavourites('events')
@@ -87,6 +88,20 @@ export function NewsEventsPage() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // The toggle advertises aria-haspopup, so Escape has to close it and hand focus back —
+  // otherwise a keyboard user who opens it just tabs on into the page with it still open.
+  useEffect(() => {
+    if (!moreOpen) return
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMoreOpen(false)
+        moreToggleRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [moreOpen])
 
   useEffect(() => {
     const requestId = newsRequestId.current + 1
@@ -291,6 +306,7 @@ export function NewsEventsPage() {
                 aria-haspopup="true"
                 className={`feed__pill feed__more-toggle${activeMenuSource ? ' feed__pill--active' : ''}`}
                 onClick={() => setMoreOpen(open => !open)}
+                ref={moreToggleRef}
                 type="button"
               >
                 <span>{activeMenuSource ? activeMenuSource.name : `More (${menuSources.length})`}</span>
