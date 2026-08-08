@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.Status;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -26,6 +27,7 @@ import org.testcontainers.kafka.ConfluentKafkaContainer;
 @SpringBootTest
 @ActiveProfiles("test")
 @Testcontainers
+@Import(AbstractIntegrationTest.OpenAiCompatibleModelFactoryTestConfig.class)
 class ApplicationTests {
 
   @MockitoBean
