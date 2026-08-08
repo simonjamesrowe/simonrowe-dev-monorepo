@@ -20,10 +20,6 @@ production OpenAI account on 2026-08-08.
 | 8 | Langfuse LLM-as-a-judge evaluators scoring chat traces | `gpt-4o-mini` | `JUDGE_MODEL` env, default at `scripts/bootstrap-langfuse-evaluators.sh:108` | Langfuse, outside the app |
 | 9 | Automated PR code review (`software-factory` Temporal worker) | Claude `sonnet` | `CLAUDE_MODEL` env, `docker-compose.prod.yml:168` | Claude Code binary |
 
-Rows 4 and 5 describe the state after the favourites-digest change
-(`docs/superpowers/specs/2026-08-08-favourites-digest-design.md`); both call
-sites are on `gpt-4o-mini` until it ships.
-
 Web search (`websearch/SearxngClient.java`) hits a self-hosted SearxNG
 instance and involves no model. Web fetch (`webfetch/UrlFetcher.java`) and the
 content scrapers (`agents/scrapers/`) are plain HTTP plus Jsoup.
@@ -80,7 +76,7 @@ Checked 2026-08-08.
 | --- | --- | --- | --- |
 | Spring Boot | 3.5.16 | 4.x | — |
 | Spring AI | 1.1.8 | 2.0.0 | 1.1.8 is the **last release of the Boot 3 line**; 2.0.0 requires Boot 4.0 and cannot load in a 3.x context |
-| Embabel Agent | 0.3.5 | 1.0.0 | 1.0.0 targets Boot 3.5.14 / Spring AI 1.1.7, so it is compatible with what we run. Embabel 2.0.0 exists only as a branch (Boot 4.0.6, Spring AI 2.0.0-M8) and is not published to Maven Central |
+| Embabel Agent | 1.0.0 | 1.0.0 | 1.0.0 targets Boot 3.5.14 / Spring AI 1.1.7, so it is compatible with what we run. Embabel 2.0.0 exists only as a branch (Boot 4.0.6, Spring AI 2.0.0-M8) and is not published to Maven Central |
 
 **Spring AI 2.0 is a Boot 4 migration, not a version bump**, and it lands
 squarely on things we use:

@@ -1,5 +1,6 @@
 package com.simonrowe.favourites;
 
+import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,4 +15,7 @@ public interface FavouriteRepository extends MongoRepository<Favourite, String> 
   boolean existsByTypeAndContentId(FavouriteType type, String contentId);
 
   void deleteByTypeAndContentId(FavouriteType type, String contentId);
+
+  List<Favourite> findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
+      FavouriteType type, Instant createdAt);
 }

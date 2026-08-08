@@ -3,10 +3,10 @@ package com.simonrowe.agents;
 import com.embabel.agent.api.common.Ai;
 import com.embabel.chat.UserMessage;
 import com.simonrowe.aggregation.AggregatedArticle;
-import com.simonrowe.blog.Blog;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -28,17 +28,20 @@ public class DigestMetadataGenerator {
           + "of the source material.\n\n";
 
   private final Ai ai;
+  private final String model;
 
-  public DigestMetadataGenerator(final Ai ai) {
+  public DigestMetadataGenerator(
+      final Ai ai,
+      @Value("${aggregation.digest.model}") final String model) {
     this.ai = ai;
+    this.model = model;
   }
 
   public DigestMetadata generate(
-      final List<Blog> recentBlogs,
-      final List<AggregatedArticle> recentArticles,
+      final List<AggregatedArticle> articles,
       final String activitySummary) {
     try {
-      String content = ai.withLlm("gpt-4o-mini")
+      String content = ai.withLlm(model)
           .respond(List.of(new UserMessage(METADATA_PROMPT + activitySummary)))
           .getContent();
       DigestMetadata parsed = parse(content);
@@ -48,7 +51,7 @@ public class DigestMetadataGenerator {
     } catch (Exception ex) {
       LOG.warn("Failed to generate digest metadata: {}", ex.getMessage());
     }
-    return fallback(recentBlogs, recentArticles);
+    return fallback(articles);
   }
 
   private static DigestMetadata parse(final String content) {
@@ -78,12 +81,10 @@ public class DigestMetadataGenerator {
   }
 
   private static DigestMetadata fallback(
-      final List<Blog> recentBlogs,
-      final List<AggregatedArticle> recentArticles) {
-    String lead = recentArticles.stream()
+      final List<AggregatedArticle> articles) {
+    String lead = articles.stream()
         .findFirst()
         .map(AggregatedArticle::title)
-        .or(() -> recentBlogs.stream().findFirst().map(Blog::title))
         .orElse("AI and backend engineering");
     String title = truncate("What caught my eye: " + lead, MAX_TITLE_LENGTH);
     String description = truncate(

@@ -39,8 +39,7 @@ public class V006FixAiBlogTitles {
         
         // Use the new logic to generate a better title
         DigestMetadata metadata = digestMetadataGenerator.generate(
-            Collections.emptyList(), 
-            Collections.emptyList(), 
+            Collections.emptyList(),
             blog.content()
         );
         
