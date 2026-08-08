@@ -7956,11 +7956,16 @@ a:hover {
 }
 
 /* Filter pills */
+/* Transparent on desktop; becomes the horizontal scroller at <=768px so that
+   .feed__filters itself never turns into a clipping context for .feed__more-menu. */
+.feed__filters-scroll {
+  margin-bottom: 2rem;
+}
+
 .feed__filters {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 2rem;
 }
 
 .feed__modes {
@@ -8448,15 +8453,24 @@ a:hover {
     grid-template-columns: 1fr;
   }
 
-  .feed__filters {
+  /* Was on .feed__filters. Moved out to the wrapper because overflow-x: auto with
+     overflow-y: visible computes to overflow-y: auto, which clipped the absolutely
+     positioned .feed__more-menu to a sliver one pill tall. */
+  .feed__filters-scroll {
     overflow-x: auto;
-    flex-wrap: nowrap;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
 
-  .feed__filters::-webkit-scrollbar {
+  .feed__filters-scroll::-webkit-scrollbar {
     display: none;
+  }
+
+  .feed__filters {
+    flex-wrap: nowrap;
+    overflow: visible;
+    width: max-content;
+    min-width: 100%;
   }
 
   .feed__pill {

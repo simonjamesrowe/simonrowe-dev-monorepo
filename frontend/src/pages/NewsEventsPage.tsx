@@ -261,60 +261,65 @@ export function NewsEventsPage() {
         </button>
       </div>
 
-      {/* Source filter pills, busiest first, long tail collapsed. */}
-      <div className="feed__filters">
-        <button
-          className={`feed__pill${sourceFilter === 'all' ? ' feed__pill--active' : ''}`}
-          onClick={() => handleSourceSelect('all')}
-          type="button"
-        >
-          All
-        </button>
-        {pillSources.map(({ name }) => (
+      {/* Source filter pills, busiest first, long tail collapsed.
+          The mobile horizontal scroller lives on the wrapper, not on the pill row:
+          overflow-x on the row itself makes it a clipping context, which cut the
+          absolutely positioned More popover down to a sliver at phone widths. */}
+      <div className="feed__filters-scroll">
+        <div className="feed__filters">
           <button
-            className={`feed__pill${sourceFilter === name ? ' feed__pill--active' : ''}`}
-            key={name}
-            onClick={() => handleSourceSelect(name)}
+            className={`feed__pill${sourceFilter === 'all' ? ' feed__pill--active' : ''}`}
+            onClick={() => handleSourceSelect('all')}
             type="button"
           >
-            {name}
+            All
           </button>
-        ))}
-        {menuSources.length > 0 && (
-          <div className="feed__more" ref={moreMenuRef}>
+          {pillSources.map(({ name }) => (
             <button
-              aria-expanded={moreOpen}
-              aria-haspopup="true"
-              className={`feed__pill feed__more-toggle${activeMenuSource ? ' feed__pill--active' : ''}`}
-              onClick={() => setMoreOpen(open => !open)}
+              className={`feed__pill${sourceFilter === name ? ' feed__pill--active' : ''}`}
+              key={name}
+              onClick={() => handleSourceSelect(name)}
               type="button"
             >
-              <span>{activeMenuSource ? activeMenuSource.name : `More (${menuSources.length})`}</span>
-              <ChevronDown aria-hidden="true" size={14} />
+              {name}
             </button>
-            {moreOpen && (
-              /* Plain buttons, not role="menu"/"menuitem": an explicit menuitem role
-                 would stop these matching getByRole('button'), and the popover is a
-                 list of filters rather than an application menu. */
-              <div className="feed__more-menu">
-                {menuSources.map(({ name, count }) => (
-                  <button
-                    className={`feed__more-item${sourceFilter === name ? ' feed__more-item--active' : ''}`}
-                    key={name}
-                    onClick={() => {
-                      handleSourceSelect(name)
-                      setMoreOpen(false)
-                    }}
-                    type="button"
-                  >
-                    <span>{name}</span>
-                    <span className="feed__more-count">{count}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+          ))}
+          {menuSources.length > 0 && (
+            <div className="feed__more" ref={moreMenuRef}>
+              <button
+                aria-expanded={moreOpen}
+                aria-haspopup="true"
+                className={`feed__pill feed__more-toggle${activeMenuSource ? ' feed__pill--active' : ''}`}
+                onClick={() => setMoreOpen(open => !open)}
+                type="button"
+              >
+                <span>{activeMenuSource ? activeMenuSource.name : `More (${menuSources.length})`}</span>
+                <ChevronDown aria-hidden="true" size={14} />
+              </button>
+              {moreOpen && (
+                /* Plain buttons, not role="menu"/"menuitem": an explicit menuitem role
+                   would stop these matching getByRole('button'), and the popover is a
+                   list of filters rather than an application menu. */
+                <div className="feed__more-menu">
+                  {menuSources.map(({ name, count }) => (
+                    <button
+                      className={`feed__more-item${sourceFilter === name ? ' feed__more-item--active' : ''}`}
+                      key={name}
+                      onClick={() => {
+                        handleSourceSelect(name)
+                        setMoreOpen(false)
+                      }}
+                      type="button"
+                    >
+                      <span>{name}</span>
+                      <span className="feed__more-count">{count}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Anchor target for /news-events#news deep links */}
