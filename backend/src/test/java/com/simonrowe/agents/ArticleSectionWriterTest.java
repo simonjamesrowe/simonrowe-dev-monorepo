@@ -76,13 +76,14 @@ class ArticleSectionWriterTest {
   void fallsBackToStoredFullContentWhenScrapeReturnsNull() {
     when(scraper.scrapeArticlePagePublic(anyString())).thenReturn(null);
 
-    writer.write(ARTICLE);
+    DigestSection section = writer.write(ARTICLE);
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<Message>> captor = ArgumentCaptor.forClass(List.class);
     org.mockito.Mockito.verify(promptRunner).respond(captor.capture());
     assertThat(captor.getValue().get(0).getContent())
         .contains("Stored full content that is long enough to use.");
+    assertThat(section.fallback()).isFalse();
   }
 
   @Test
@@ -94,13 +95,14 @@ class ArticleSectionWriterTest {
         "Only a stored summary.", "", null,
         Instant.now(), Instant.now(), true, null);
 
-    writer.write(noContent);
+    DigestSection section = writer.write(noContent);
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<Message>> captor = ArgumentCaptor.forClass(List.class);
     org.mockito.Mockito.verify(promptRunner).respond(captor.capture());
     assertThat(captor.getValue().get(0).getContent())
         .contains("Only a stored summary.");
+    assertThat(section.fallback()).isFalse();
   }
 
   @Test
