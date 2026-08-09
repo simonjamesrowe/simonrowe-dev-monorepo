@@ -23,6 +23,7 @@ import com.simonrowe.aggregation.ContentSource;
 import com.simonrowe.aggregation.ContentSource.ScrapeStrategy;
 import com.simonrowe.aggregation.ContentSource.SourceType;
 import com.simonrowe.aggregation.ContentSourceRepository;
+import com.simonrowe.aggregation.SourceNameResolver;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
 import com.simonrowe.media.BlogImageGenerationService;
@@ -51,6 +52,7 @@ class ContentAggregationAgentTest {
   @Mock private ExternalImageDownloader imageDownloader;
   @Mock private BlogImageGenerationService blogImageGenerationService;
   @Mock private MediaVariantResolver mediaVariantResolver;
+  @Mock private SourceNameResolver sourceNameResolver;
 
   private PromptRunner promptRunner;
   @SuppressWarnings("rawtypes")
@@ -86,7 +88,7 @@ class ContentAggregationAgentTest {
         sourceRepository, articleRepository,
         eventRepository, scraperFactory, htmlScraper, ai,
         changePublisher, imageDownloader, blogImageGenerationService,
-        mediaVariantResolver);
+        mediaVariantResolver, sourceNameResolver);
   }
 
   @Test
@@ -445,5 +447,24 @@ class ContentAggregationAgentTest {
     agent.backfillSource(DAN_VEGA_SOURCE, since);
 
     verify(articleRepository).save(any());
+  }
+
+  @Test
+  void importFromUrl_attributesTheArticleToTheResolvedSourceName() {
+    String url = "https://tessl.io/podcast/116";
+    when(articleRepository.existsByOriginalUrl(url)).thenReturn(false);
+    when(eventRepository.existsByOriginalUrl(url)).thenReturn(false);
+    when(htmlScraper.scrapeArticlePagePublic(url)).thenReturn(new ScrapedContent(
+        "Inside the Dark Factory", url, "Short body.",
+        Instant.parse("2026-07-01T00:00:00Z"), null, null, false));
+    when(sourceNameResolver.resolve(url)).thenReturn("Tessl Blog");
+    when(articleRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+    agent.importFromUrl(url);
+
+    ArgumentCaptor<AggregatedArticle> captor =
+        ArgumentCaptor.forClass(AggregatedArticle.class);
+    verify(articleRepository).save(captor.capture());
+    assertThat(captor.getValue().sourceName()).isEqualTo("Tessl Blog");
   }
 }

@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '../config/api'
 import { fetchWithRetry } from './fetchWithRetry'
-import type { ArticlePage, ArticleResponse } from '../types/news'
+import type { ArticlePage, ArticleResponse, SourceSummary } from '../types/news'
 
 const NEWS_ENDPOINT = `${API_BASE_URL}/api/news`
 
@@ -21,11 +21,12 @@ export async function fetchNewsById(id: string): Promise<ArticleResponse> {
 }
 
 /**
- * Every distinct source name the site holds, sorted, so filter chips can list a
- * source even when it has no article in the first page of results.
+ * Every source the site holds with its article count, busiest first, so the filter
+ * pills can list a source even when it has no article in the first page of results
+ * and can collapse the low-volume tail.
  */
-export async function fetchNewsSources(): Promise<string[]> {
-  return fetchWithRetry<string[]>(`${NEWS_ENDPOINT}/sources`, {
+export async function fetchNewsSources(): Promise<SourceSummary[]> {
+  return fetchWithRetry<SourceSummary[]>(`${NEWS_ENDPOINT}/sources`, {
     fallbackMessage: FALLBACK_MESSAGE,
   })
 }

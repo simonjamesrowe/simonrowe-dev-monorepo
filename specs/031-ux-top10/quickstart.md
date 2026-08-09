@@ -101,7 +101,11 @@ Run through this in **both light and dark themes**, at 1440px and at 390×844.
 - Reach the last page → the button disappears.
 - Select a source chip → a fresh `GET /api/news?page=0&size=24&source=...`.
 - `curl -s localhost:8080/api/news/sources | jq` lists every source, including any
-  with no article in page 0.
+  with no article in page 0. (Superseded by
+  `2026-08-08-ai4jvm-ingest-and-source-pills`: the response is now
+  `[{ name, count }]` rather than a plain `string[]`, ordered by count descending
+  then name ascending, and a source with fewer than three articles sits behind the
+  "More" overflow instead of getting its own pill.)
 - Toggle favourites → unchanged behaviour.
 
 ### US7 — skills and assets

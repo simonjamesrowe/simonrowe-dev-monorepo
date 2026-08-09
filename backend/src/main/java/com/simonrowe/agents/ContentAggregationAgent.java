@@ -12,6 +12,7 @@ import com.simonrowe.aggregation.AggregatedEvent;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.aggregation.ContentSource;
 import com.simonrowe.aggregation.ContentSourceRepository;
+import com.simonrowe.aggregation.SourceNameResolver;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
 import com.simonrowe.media.BlogImageGenerationService;
@@ -64,6 +65,7 @@ public class ContentAggregationAgent {
   private final ExternalImageDownloader imageDownloader;
   private final BlogImageGenerationService blogImageGenerationService;
   private final MediaVariantResolver mediaVariantResolver;
+  private final SourceNameResolver sourceNameResolver;
 
   public ContentAggregationAgent(
       final ContentSourceRepository sourceRepository,
@@ -75,7 +77,8 @@ public class ContentAggregationAgent {
       final ContentChangePublisher changePublisher,
       final ExternalImageDownloader imageDownloader,
       final BlogImageGenerationService blogImageGenerationService,
-      final MediaVariantResolver mediaVariantResolver) {
+      final MediaVariantResolver mediaVariantResolver,
+      final SourceNameResolver sourceNameResolver) {
     this.sourceRepository = sourceRepository;
     this.articleRepository = articleRepository;
     this.eventRepository = eventRepository;
@@ -86,6 +89,7 @@ public class ContentAggregationAgent {
     this.imageDownloader = imageDownloader;
     this.blogImageGenerationService = blogImageGenerationService;
     this.mediaVariantResolver = mediaVariantResolver;
+    this.sourceNameResolver = sourceNameResolver;
   }
 
   @Action(description = "Import a single article or event from a URL")
@@ -110,7 +114,7 @@ public class ContentAggregationAgent {
     ContentClassification classification =
         classifyAndSummarize(content);
 
-    String sourceName = extractHostName(normalizedUrl);
+    String sourceName = sourceNameResolver.resolve(normalizedUrl);
     ContentSource manualSource = new ContentSource(
         null, sourceName, normalizedUrl, null, null,
         ContentSource.SourceType.NEWS,
@@ -140,15 +144,6 @@ public class ContentAggregationAgent {
           null, null).toString();
     } catch (Exception e) {
       return url.replaceAll("[?#].*$", "").replaceAll("/+$", "");
-    }
-  }
-
-  private String extractHostName(final String url) {
-    try {
-      return java.net.URI.create(url).getHost()
-          .replaceFirst("^www\\.", "");
-    } catch (Exception e) {
-      return "Manual Import";
     }
   }
 

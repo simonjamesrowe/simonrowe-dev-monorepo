@@ -45,11 +45,12 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
 
   @Override
   public ReviewResult review(final ReviewRequest request) {
+    PullRequestContext pullRequest = null;
     try {
       current =
           new ReviewProgress(
               ReviewPhase.LOADING_PULL_REQUEST, "Loading GitHub metadata", null, null);
-      PullRequestContext pullRequest = networkActivities.loadPullRequest(request);
+      pullRequest = networkActivities.loadPullRequest(request);
 
       current =
           new ReviewProgress(
@@ -72,13 +73,25 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
       return new ReviewResult(
           Workflow.getInfo().getWorkflowId(), pullRequest.headSha(), request.publish(), report);
     } catch (RuntimeException exception) {
-      current =
-          new ReviewProgress(
-              ReviewPhase.FAILED,
-              safeFailureMessage(exception),
-              current.headSha(),
-              current.report());
+      String reason = safeFailureMessage(exception);
+      current = new ReviewProgress(ReviewPhase.FAILED, reason, current.headSha(), current.report());
+      if (request.publish() && pullRequest != null) {
+        reportFailure(pullRequest, reason);
+      }
       throw exception;
+    }
+  }
+
+  /**
+   * Best-effort notice on the pull request. A failure to report the failure must not replace the
+   * original one, which is what actually needs diagnosing.
+   */
+  private void reportFailure(final PullRequestContext pullRequest, final String reason) {
+    try {
+      networkActivities.publishFailure(pullRequest, reason);
+    } catch (RuntimeException exception) {
+      Workflow.getLogger(CodeReviewWorkflowImpl.class)
+          .warn("Could not publish review failure notice", exception);
     }
   }
 
@@ -87,9 +100,19 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
     return current;
   }
 
+  /**
+   * Temporal wraps the cause in an {@link io.temporal.failure.ActivityFailure} whose own message is
+   * boilerplate ("Activity task failed", event ids, retry state). The message worth showing is the
+   * innermost one, so unwrap before truncating.
+   */
   private static String safeFailureMessage(final RuntimeException exception) {
-    String message = exception.getMessage();
-    if (message == null || message.isBlank()) {
+    String message = null;
+    for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+      if (cause.getMessage() != null && !cause.getMessage().isBlank()) {
+        message = cause.getMessage();
+      }
+    }
+    if (message == null) {
       return exception.getClass().getSimpleName();
     }
     return message.length() > 240 ? message.substring(0, 240) : message;

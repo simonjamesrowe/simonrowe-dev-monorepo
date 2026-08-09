@@ -44,7 +44,10 @@ factory:
       command: ${CLAUDE_COMMAND:claude}
       model: ${CLAUDE_MODEL:sonnet}
       effort: ${CLAUDE_EFFORT:medium}
-      max-turns: ${CLAUDE_MAX_TURNS:12}
+      # A 12-turn budget was exhausted by an ordinary 27-file change before the agent could
+      # emit a verdict, which surfaced as a bare non-zero exit and no comment on the pull
+      # request. Keep enough headroom that turns bound runaway loops, not real reviews.
+      max-turns: ${CLAUDE_MAX_TURNS:40}
       timeout: ${CLAUDE_TIMEOUT:15m}
       # FACTORY_* is the current name; REVIEWER_* is accepted for one release so a
       # stale deploy .env cannot break the boot. Remove the fallbacks after that.

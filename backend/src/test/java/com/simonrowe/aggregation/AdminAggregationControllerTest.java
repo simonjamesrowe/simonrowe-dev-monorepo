@@ -183,7 +183,11 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/admin/news")
             .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(2));
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.totalElements").value(2))
+        .andExpect(jsonPath("$.totalPages").value(1))
+        .andExpect(jsonPath("$.size").value(20))
+        .andExpect(jsonPath("$.number").value(0));
   }
 
   @Test
@@ -197,7 +201,9 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/admin/news")
             .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(0));
+        .andExpect(jsonPath("$.content.length()").value(0))
+        .andExpect(jsonPath("$.totalElements").value(0))
+        .andExpect(jsonPath("$.totalPages").value(0));
   }
 
   @Test
@@ -208,7 +214,75 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/admin/news")
             .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(2));
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.totalElements").value(2));
+  }
+
+  @Test
+  void listNewsHonoursPageAndSizeParams() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticle("a-1", "Oldest Article", true, Instant.parse("2026-01-01T10:00:00Z")),
+        sampleArticle("a-2", "Middle Article", true, Instant.parse("2026-02-01T10:00:00Z")),
+        sampleArticle("a-3", "Newest Article", true, Instant.parse("2026-03-01T10:00:00Z"))
+    ));
+
+    mockMvc.perform(get("/api/admin/news")
+            .param("page", "0")
+            .param("size", "2")
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.content[0].id").value("a-3"))
+        .andExpect(jsonPath("$.content[1].id").value("a-2"))
+        .andExpect(jsonPath("$.totalElements").value(3))
+        .andExpect(jsonPath("$.totalPages").value(2))
+        .andExpect(jsonPath("$.size").value(2))
+        .andExpect(jsonPath("$.number").value(0));
+
+    mockMvc.perform(get("/api/admin/news")
+            .param("page", "1")
+            .param("size", "2")
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].id").value("a-1"))
+        .andExpect(jsonPath("$.totalElements").value(3))
+        .andExpect(jsonPath("$.totalPages").value(2))
+        .andExpect(jsonPath("$.number").value(1));
+  }
+
+  @Test
+  void listNewsReturnsArticlesSortedByPublishedDateDescending() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticle("a-1", "Middle Article", true, Instant.parse("2026-02-01T10:00:00Z")),
+        sampleArticle("a-2", "Newest Article", true, Instant.parse("2026-03-01T10:00:00Z")),
+        sampleArticle("a-3", "Oldest Article", true, Instant.parse("2026-01-01T10:00:00Z"))
+    ));
+
+    mockMvc.perform(get("/api/admin/news")
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content[0].title").value("Newest Article"))
+        .andExpect(jsonPath("$.content[1].title").value("Middle Article"))
+        .andExpect(jsonPath("$.content[2].title").value("Oldest Article"));
+  }
+
+  @Test
+  void listNewsOutOfRangePageReturnsEmptyContent() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticle("a-1", "First Article", true),
+        sampleArticle("a-2", "Second Article", true)
+    ));
+
+    mockMvc.perform(get("/api/admin/news")
+            .param("page", "5")
+            .param("size", "2")
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(0))
+        .andExpect(jsonPath("$.totalElements").value(2))
+        .andExpect(jsonPath("$.totalPages").value(1))
+        .andExpect(jsonPath("$.number").value(5));
   }
 
   @Test
@@ -275,7 +349,11 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/admin/events")
             .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(2));
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.totalElements").value(2))
+        .andExpect(jsonPath("$.totalPages").value(1))
+        .andExpect(jsonPath("$.size").value(20))
+        .andExpect(jsonPath("$.number").value(0));
   }
 
   @Test
@@ -289,7 +367,9 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/admin/events")
             .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(0));
+        .andExpect(jsonPath("$.content.length()").value(0))
+        .andExpect(jsonPath("$.totalElements").value(0))
+        .andExpect(jsonPath("$.totalPages").value(0));
   }
 
   @Test
@@ -300,7 +380,75 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/admin/events")
             .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(2));
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.totalElements").value(2));
+  }
+
+  @Test
+  void listEventsHonoursPageAndSizeParams() throws Exception {
+    eventRepository.saveAll(List.of(
+        sampleEvent("e-1", "Oldest Event", true, Instant.parse("2026-04-01T09:00:00Z")),
+        sampleEvent("e-2", "Middle Event", true, Instant.parse("2026-05-01T09:00:00Z")),
+        sampleEvent("e-3", "Newest Event", true, Instant.parse("2026-06-01T09:00:00Z"))
+    ));
+
+    mockMvc.perform(get("/api/admin/events")
+            .param("page", "0")
+            .param("size", "2")
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.content[0].id").value("e-3"))
+        .andExpect(jsonPath("$.content[1].id").value("e-2"))
+        .andExpect(jsonPath("$.totalElements").value(3))
+        .andExpect(jsonPath("$.totalPages").value(2))
+        .andExpect(jsonPath("$.size").value(2))
+        .andExpect(jsonPath("$.number").value(0));
+
+    mockMvc.perform(get("/api/admin/events")
+            .param("page", "1")
+            .param("size", "2")
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].id").value("e-1"))
+        .andExpect(jsonPath("$.totalElements").value(3))
+        .andExpect(jsonPath("$.totalPages").value(2))
+        .andExpect(jsonPath("$.number").value(1));
+  }
+
+  @Test
+  void listEventsReturnsEventsSortedByEventDateDescending() throws Exception {
+    eventRepository.saveAll(List.of(
+        sampleEvent("e-1", "Middle Event", true, Instant.parse("2026-05-01T09:00:00Z")),
+        sampleEvent("e-2", "Newest Event", true, Instant.parse("2026-06-01T09:00:00Z")),
+        sampleEvent("e-3", "Oldest Event", true, Instant.parse("2026-04-01T09:00:00Z"))
+    ));
+
+    mockMvc.perform(get("/api/admin/events")
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content[0].title").value("Newest Event"))
+        .andExpect(jsonPath("$.content[1].title").value("Middle Event"))
+        .andExpect(jsonPath("$.content[2].title").value("Oldest Event"));
+  }
+
+  @Test
+  void listEventsOutOfRangePageReturnsEmptyContent() throws Exception {
+    eventRepository.saveAll(List.of(
+        sampleEvent("e-1", "First Conference", true),
+        sampleEvent("e-2", "Second Conference", true)
+    ));
+
+    mockMvc.perform(get("/api/admin/events")
+            .param("page", "5")
+            .param("size", "2")
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(0))
+        .andExpect(jsonPath("$.totalElements").value(2))
+        .andExpect(jsonPath("$.totalPages").value(1))
+        .andExpect(jsonPath("$.number").value(5));
   }
 
   @Test
@@ -403,6 +551,11 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
 
   private AggregatedArticle sampleArticle(
       final String id, final String title, final boolean visible) {
+    return sampleArticle(id, title, visible, Instant.parse("2026-01-15T10:00:00Z"));
+  }
+
+  private AggregatedArticle sampleArticle(
+      final String id, final String title, final boolean visible, final Instant publishedDate) {
     return new AggregatedArticle(
         id,
         title,
@@ -412,7 +565,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
         "A summary of the article",
         "Full article content here.",
         "Test Author",
-        Instant.parse("2026-01-15T10:00:00Z"),
+        publishedDate,
         Instant.parse("2026-01-15T11:00:00Z"),
         visible,
         null);
@@ -420,6 +573,11 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
 
   private AggregatedEvent sampleEvent(
       final String id, final String title, final boolean visible) {
+    return sampleEvent(id, title, visible, Instant.parse("2026-06-01T09:00:00Z"));
+  }
+
+  private AggregatedEvent sampleEvent(
+      final String id, final String title, final boolean visible, final Instant eventDate) {
     return new AggregatedEvent(
         id,
         title,
@@ -427,7 +585,7 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
         "https://events.example.com/events/" + id,
         "A summary of the event",
         "Full event description here.",
-        Instant.parse("2026-06-01T09:00:00Z"),
+        eventDate,
         Instant.parse("2026-06-01T17:00:00Z"),
         "Convention Centre",
         "Sydney, Australia",

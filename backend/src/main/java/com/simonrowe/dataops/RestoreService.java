@@ -15,7 +15,9 @@ import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -25,11 +27,19 @@ public class RestoreService {
 
   private static final List<String> IMPORT_ORDER_INDEPENDENT = List.of(
       "tags", "skills", "profiles", "social_medias", "tourSteps", "media_assets",
-      "content_sources", "aggregated_articles", "aggregated_events"
+      "content_sources", "aggregated_articles", "aggregated_events",
+      // favourites hold no @DBRef, but they point at aggregated_articles and
+      // aggregated_events by plain id, so they follow both.
+      "favourites"
   );
+
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
       "skill_groups", "jobs", "blogs", "code_examples"
   );
+
+  private static final String FAVOURITES = "favourites";
+  private static final String FAVOURITES_UNIQUE_INDEX = "idx_type_content";
+  private static final String FAVOURITES_LIST_INDEX = "idx_type_created";
 
   private final MongoTemplate mongoTemplate;
   private final GoogleDriveService googleDriveService;
@@ -167,8 +177,38 @@ public class RestoreService {
             docs.size(), collectionName);
       }
 
+      if (FAVOURITES.equals(collectionName)) {
+        ensureFavouriteIndexes();
+      }
+
       progress += progressPerCollection;
     }
+  }
+
+  /**
+   * Recreates the favourites indexes after a restore.
+   *
+   * <p>{@code dropCollection} takes the collection's indexes with it, and
+   * these two were created by change units ({@code V013}, {@code V014}) that
+   * Mongock has already recorded as executed — so nothing else would ever put
+   * them back. Losing the unique index silently re-admits duplicate favourites,
+   * which would then surface as an article appearing twice in one digest.
+   *
+   * <p>Definitions are kept in step with {@code V014MakeFavouritesGlobal};
+   * {@code createIndex} is idempotent for an identical specification.
+   * Package-private so the round-trip test can exercise it directly.
+   */
+  void ensureFavouriteIndexes() {
+    mongoTemplate.indexOps(FAVOURITES).createIndex(new Index()
+        .named(FAVOURITES_UNIQUE_INDEX)
+        .on("type", Sort.Direction.ASC)
+        .on("contentId", Sort.Direction.ASC)
+        .unique());
+    mongoTemplate.indexOps(FAVOURITES).createIndex(new Index()
+        .named(FAVOURITES_LIST_INDEX)
+        .on("type", Sort.Direction.ASC)
+        .on("createdAt", Sort.Direction.DESC));
+    LOG.info("Recreated favourites indexes after restore");
   }
 
   /**

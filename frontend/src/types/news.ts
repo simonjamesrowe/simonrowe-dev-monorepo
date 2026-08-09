@@ -11,6 +11,12 @@ export interface ArticleResponse {
   imageUrl: string | null
 }
 
+/** A news source and how many visible articles it holds, busiest first from the API. */
+export interface SourceSummary {
+  name: string
+  count: number
+}
+
 export interface ArticlePage {
   content: ArticleResponse[]
   totalElements: number

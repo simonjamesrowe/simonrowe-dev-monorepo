@@ -8,6 +8,9 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -52,10 +56,13 @@ public class AdminAggregationController {
   }
 
   @GetMapping("/news")
-  public List<ArticleResponse> listAllArticles() {
-    return articleRepository.findAll().stream()
-        .map(ArticleResponse::from)
-        .toList();
+  public Page<ArticleResponse> listAllArticles(
+      @RequestParam(defaultValue = "0") final int page,
+      @RequestParam(defaultValue = "20") final int size) {
+    return articleRepository
+        .findAll(PageRequest.of(page, size,
+            Sort.by(Sort.Direction.DESC, "publishedDate")))
+        .map(ArticleResponse::from);
   }
 
   @PutMapping("/news/{id}/visibility")
@@ -79,10 +86,13 @@ public class AdminAggregationController {
   }
 
   @GetMapping("/events")
-  public List<EventResponse> listAllEvents() {
-    return eventRepository.findAll().stream()
-        .map(EventResponse::from)
-        .toList();
+  public Page<EventResponse> listAllEvents(
+      @RequestParam(defaultValue = "0") final int page,
+      @RequestParam(defaultValue = "20") final int size) {
+    return eventRepository
+        .findAll(PageRequest.of(page, size,
+            Sort.by(Sort.Direction.DESC, "eventDate")))
+        .map(EventResponse::from);
   }
 
   @PutMapping("/events/{id}/visibility")

@@ -52,4 +52,23 @@ public class ReviewMarkdownRenderer {
         + finding.recommendation()
         + "\n";
   }
+
+  public String renderFailure(final String reason, final String marker) {
+    return marker
+        + "\n"
+        + "## Automated code review\n\n"
+        + "This review did not complete, so these changes have **not** been reviewed.\n\n"
+        + "```\n"
+        + fenceSafe(reason)
+        + "\n```\n"
+        + "\n_Advisory only; this reviewer does not approve or block merges._\n";
+  }
+
+  /** Keeps an arbitrary failure string from breaking out of the code fence around it. */
+  private static String fenceSafe(final String reason) {
+    if (reason == null || reason.isBlank()) {
+      return "No failure detail was reported.";
+    }
+    return reason.replace("`", "'");
+  }
 }

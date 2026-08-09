@@ -109,21 +109,38 @@ class NewsControllerTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void getSources_returnsNamesInAlphabeticalOrder() throws Exception {
+  void getSources_returnsNamesByArticleCountThenAlphabetically() throws Exception {
     articleRepository.saveAll(List.of(
-        sampleArticleWithSource("a-1", "One", "The Pragmatic Engineer", true),
-        sampleArticleWithSource("a-2", "Two", "Ars Technica", true),
+        sampleArticleWithSource("a-1", "One", "InfoQ", true),
+        sampleArticleWithSource("a-2", "Two", "InfoQ", true),
         sampleArticleWithSource("a-3", "Three", "InfoQ", true),
-        sampleArticleWithSource("a-4", "Four", "Claude Blog", true)
+        sampleArticleWithSource("a-4", "Four", "Zebra Blog", true),
+        sampleArticleWithSource("a-5", "Five", "Ars Technica", true)
     ));
 
     mockMvc.perform(get("/api/news/sources"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(4))
-        .andExpect(jsonPath("$[0]").value("Ars Technica"))
-        .andExpect(jsonPath("$[1]").value("Claude Blog"))
-        .andExpect(jsonPath("$[2]").value("InfoQ"))
-        .andExpect(jsonPath("$[3]").value("The Pragmatic Engineer"));
+        .andExpect(jsonPath("$.length()").value(3))
+        .andExpect(jsonPath("$[0].name").value("InfoQ"))
+        .andExpect(jsonPath("$[0].count").value(3))
+        // One article each, so the tie breaks alphabetically.
+        .andExpect(jsonPath("$[1].name").value("Ars Technica"))
+        .andExpect(jsonPath("$[2].name").value("Zebra Blog"));
+  }
+
+  @Test
+  void getSources_countsOnlyVisibleArticlesPerSource() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticleWithSource("a-1", "One", "Spring Blog", true),
+        sampleArticleWithSource("a-2", "Two", "Spring Blog", true),
+        sampleArticleWithSource("a-3", "Three", "Spring Blog", false)
+    ));
+
+    mockMvc.perform(get("/api/news/sources"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].name").value("Spring Blog"))
+        .andExpect(jsonPath("$[0].count").value(2));
   }
 
   @Test
@@ -136,7 +153,8 @@ class NewsControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/news/sources"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(1))
-        .andExpect(jsonPath("$[0]").value("InfoQ"));
+        .andExpect(jsonPath("$[0].name").value("InfoQ"))
+        .andExpect(jsonPath("$[0].count").value(1));
   }
 
   @Test
@@ -153,7 +171,7 @@ class NewsControllerTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/news/sources"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$").isArray())
-        .andExpect(jsonPath("$[0]").value("Tech Blog"));
+        .andExpect(jsonPath("$[0].name").value("Tech Blog"));
   }
 
   private AggregatedArticle sampleArticle(

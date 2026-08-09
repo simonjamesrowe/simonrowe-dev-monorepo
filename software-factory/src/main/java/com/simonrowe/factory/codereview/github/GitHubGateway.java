@@ -88,27 +88,9 @@ public class GitHubGateway {
 
   public void publishReview(
       final PullRequestContext pullRequest, final ReviewReport report) {
-    String accessToken = credentials.accessToken(pullRequest.installationId());
-    if (accessToken.isBlank()) {
-      throw ApplicationFailure.newNonRetryableFailure(
-          "Publishing a GitHub review requires GitHub credentials",
-          "MISSING_GITHUB_CREDENTIALS");
-    }
-    String marker =
-        "<!-- temporal-code-review:"
-            + pullRequest.headSha()
-            + ":"
-            + properties.agent().promptVersion()
-            + " -->";
-    String path =
-        "/repos/"
-            + pullRequest.owner()
-            + "/"
-            + pullRequest.repository()
-            + "/pulls/"
-            + pullRequest.pullNumber()
-            + "/reviews";
-
+    String marker = marker(pullRequest);
+    String accessToken = requireAccessToken(pullRequest);
+    String path = reviewsPath(pullRequest);
     HttpResponse<String> response =
         send("POST", path, reviewPayload(pullRequest, report, marker), accessToken);
     if (response.statusCode() == 422) {
@@ -116,10 +98,67 @@ public class GitHubGateway {
       response =
           send("POST", path, fallbackReviewPayload(pullRequest, report, marker), accessToken);
     }
+    requireSuccess(response, "POST", path);
+  }
+
+  /**
+   * Reports that no review happened. A silent failure is indistinguishable from a webhook that
+   * never arrived, so the reason belongs on the pull request. This is a fresh review like any
+   * other publish, so a later successful run for the same head SHA simply adds its own review
+   * rather than needing to replace this one.
+   */
+  public void publishFailure(final PullRequestContext pullRequest, final String reason) {
+    String marker = marker(pullRequest);
+    String accessToken = requireAccessToken(pullRequest);
+    String path = reviewsPath(pullRequest);
+    HttpResponse<String> response =
+        send("POST", path, failureReviewPayload(pullRequest, reason, marker), accessToken);
+    requireSuccess(response, "POST", path);
+  }
+
+  private String marker(final PullRequestContext pullRequest) {
+    return "<!-- temporal-code-review:"
+        + pullRequest.headSha()
+        + ":"
+        + properties.agent().promptVersion()
+        + " -->";
+  }
+
+  private String reviewsPath(final PullRequestContext pullRequest) {
+    return "/repos/"
+        + pullRequest.owner()
+        + "/"
+        + pullRequest.repository()
+        + "/pulls/"
+        + pullRequest.pullNumber()
+        + "/reviews";
+  }
+
+  private String requireAccessToken(final PullRequestContext pullRequest) {
+    String accessToken = credentials.accessToken(pullRequest.installationId());
+    if (accessToken.isBlank()) {
+      throw ApplicationFailure.newNonRetryableFailure(
+          "Publishing a GitHub review requires GitHub credentials",
+          "MISSING_GITHUB_CREDENTIALS");
+    }
+    return accessToken;
+  }
+
+  private void requireSuccess(
+      final HttpResponse<String> response, final String method, final String path) {
     if (response.statusCode() < 200 || response.statusCode() >= 300) {
       throw new IllegalStateException(
-          "GitHub API returned " + response.statusCode() + " for POST " + path);
+          "GitHub API returned " + response.statusCode() + " for " + method + " " + path);
     }
+  }
+
+  ObjectNode failureReviewPayload(
+      final PullRequestContext pullRequest, final String reason, final String marker) {
+    ObjectNode payload = objectMapper.createObjectNode();
+    payload.put("commit_id", pullRequest.headSha());
+    payload.put("event", "COMMENT");
+    payload.put("body", renderer.renderFailure(reason, marker));
+    return payload;
   }
 
   ObjectNode reviewPayload(

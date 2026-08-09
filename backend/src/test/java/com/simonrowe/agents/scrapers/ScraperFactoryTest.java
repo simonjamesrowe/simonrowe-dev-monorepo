@@ -28,6 +28,9 @@ class ScraperFactoryTest {
   @Mock
   private LumaApiScraper lumaApiScraper;
 
+  @Mock
+  private LinkRoundupScraper linkRoundupScraper;
+
   @InjectMocks
   private ScraperFactory scraperFactory;
 
@@ -44,7 +47,7 @@ class ScraperFactoryTest {
 
     assertThat(result).isSameAs(expected);
     verify(rssScraper).scrape("https://example.com/feed.xml", false);
-    verifyNoInteractions(sitemapHtmlScraper, lumaApiScraper);
+    verifyNoInteractions(sitemapHtmlScraper, lumaApiScraper, linkRoundupScraper);
   }
 
   @Test
@@ -56,7 +59,7 @@ class ScraperFactoryTest {
     scraperFactory.scrape(source);
 
     verify(rssScraper).scrape("https://example.com/events.xml", true);
-    verifyNoInteractions(sitemapHtmlScraper, lumaApiScraper);
+    verifyNoInteractions(sitemapHtmlScraper, lumaApiScraper, linkRoundupScraper);
   }
 
   @Test
@@ -72,7 +75,7 @@ class ScraperFactoryTest {
 
     assertThat(result).isSameAs(expected);
     verify(sitemapHtmlScraper).scrape("https://example.com/sitemap.xml");
-    verifyNoInteractions(rssScraper, lumaApiScraper);
+    verifyNoInteractions(rssScraper, lumaApiScraper, linkRoundupScraper);
   }
 
   @Test
@@ -88,7 +91,7 @@ class ScraperFactoryTest {
 
     assertThat(result).isSameAs(expected);
     verify(sitemapHtmlScraper).scrapeEventsPage("https://example.com/events");
-    verifyNoInteractions(rssScraper, lumaApiScraper);
+    verifyNoInteractions(rssScraper, lumaApiScraper, linkRoundupScraper);
   }
 
   @Test
@@ -104,7 +107,24 @@ class ScraperFactoryTest {
 
     assertThat(result).isSameAs(expected);
     verify(lumaApiScraper).scrape("cal-abc123");
-    verifyNoInteractions(rssScraper, sitemapHtmlScraper);
+    verifyNoInteractions(rssScraper, sitemapHtmlScraper, linkRoundupScraper);
+  }
+
+  @Test
+  void scrape_delegatesToLinkRoundupScraperForLinkRoundupStrategy() {
+    ContentSource source = contentSource(
+        null, "https://ai4jvm.com", null, SourceType.NEWS, ScrapeStrategy.LINK_ROUNDUP);
+    List<ScrapedContent> expected = List.of(
+        new ScrapedContent("Embabel 1.0.0 Reaches GA",
+            "https://github.com/embabel/embabel-agent/releases/tag/v1.0.0",
+            "First stable release", null, null, null, false));
+    when(linkRoundupScraper.scrape("https://ai4jvm.com")).thenReturn(expected);
+
+    List<ScrapedContent> result = scraperFactory.scrape(source);
+
+    assertThat(result).isSameAs(expected);
+    verify(linkRoundupScraper).scrape("https://ai4jvm.com");
+    verifyNoInteractions(rssScraper, sitemapHtmlScraper, lumaApiScraper);
   }
 
   private ContentSource contentSource(
