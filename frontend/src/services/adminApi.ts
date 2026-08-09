@@ -758,10 +758,12 @@ export async function deleteAdminCodeExample(
 
 export async function fetchAdminNews(
   getAccessToken: GetAccessToken,
-): Promise<AdminNewsArticle[]> {
+  page = 0,
+  size = 20,
+): Promise<PageResponse<AdminNewsArticle>> {
   const token = await getAccessToken()
-  const response = await authFetch(`${ADMIN_URL}/news`, token)
-  return handleResponse<AdminNewsArticle[]>(response)
+  const response = await authFetch(`${ADMIN_URL}/news?page=${page}&size=${size}`, token)
+  return handleResponse<PageResponse<AdminNewsArticle>>(response)
 }
 
 export async function toggleArticleVisibility(
@@ -789,10 +791,12 @@ export async function deleteArticle(
 
 export async function fetchAdminEvents(
   getAccessToken: GetAccessToken,
-): Promise<AdminEvent[]> {
+  page = 0,
+  size = 20,
+): Promise<PageResponse<AdminEvent>> {
   const token = await getAccessToken()
-  const response = await authFetch(`${ADMIN_URL}/events`, token)
-  return handleResponse<AdminEvent[]>(response)
+  const response = await authFetch(`${ADMIN_URL}/events?page=${page}&size=${size}`, token)
+  return handleResponse<PageResponse<AdminEvent>>(response)
 }
 
 export async function toggleEventVisibility(
