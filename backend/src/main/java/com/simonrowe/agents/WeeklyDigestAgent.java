@@ -60,7 +60,8 @@ public class WeeklyDigestAgent {
    * lands 30-120 seconds after the cron fires. A suppression window equal to the
    * weekly cadence would therefore see last week's digest as "just published"
    * every single week and skip forever. This only has to catch the real case —
-   * the cron published this morning and someone hit Trigger Digest afterwards.
+   * the cron published this morning and someone hit Generate Digest Blog Post
+   * in the admin UI afterwards.
    */
   private final int duplicateWindowHours;
 
