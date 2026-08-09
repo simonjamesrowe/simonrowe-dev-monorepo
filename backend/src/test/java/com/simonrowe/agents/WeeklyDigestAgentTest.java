@@ -3,27 +3,26 @@ package com.simonrowe.agents;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.embabel.agent.api.common.Ai;
-import com.embabel.agent.api.common.PromptRunner;
-import com.embabel.chat.AssistantMessage;
 import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogContentType;
 import com.simonrowe.blog.BlogRepository;
+import com.simonrowe.blog.Skill;
 import com.simonrowe.blog.Tag;
 import com.simonrowe.blog.TagRepository;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
+import com.simonrowe.favourites.Favourite;
+import com.simonrowe.favourites.FavouriteRepository;
+import com.simonrowe.favourites.FavouriteType;
 import com.simonrowe.media.BlogImageGenerationService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -39,394 +38,281 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class WeeklyDigestAgentTest {
 
+  private static final Tag DIGEST_TAG = new Tag("tag-1", "Weekly Digest");
+  private static final int WINDOW_DAYS = 7;
+  private static final int DUPLICATE_WINDOW_HOURS = 24;
+
   @Mock private BlogRepository blogRepository;
   @Mock private TagRepository tagRepository;
   @Mock private AggregatedArticleRepository articleRepository;
-  @Mock private Ai ai;
+  @Mock private FavouriteRepository favouriteRepository;
+  @Mock private ArticleSectionWriter sectionWriter;
+  @Mock private DigestComposer composer;
+  @Mock private DigestMetadataGenerator metadataGenerator;
   @Mock private ContentChangePublisher changePublisher;
   @Mock private BlogImageGenerationService blogImageGenerationService;
 
-  private PromptRunner promptRunner;
-  private AssistantMessage assistantMessage;
-
   private WeeklyDigestAgent agent;
-  private DigestMetadataGenerator metadataGenerator;
 
-  private static final Tag DIGEST_TAG =
-      new Tag("tag-1", "Weekly Digest");
+  private static AggregatedArticle article(final String id, final String title) {
+    return new AggregatedArticle(
+        id, title, "InfoQ", "https://infoq.com",
+        "https://infoq.com/" + id, "Stored summary.", "Full content.",
+        "Jane Doe", Instant.now(), Instant.now(), true, null);
+  }
 
-  @SuppressWarnings("unchecked")
+  private static Favourite favourite(final String contentId, final int daysAgo) {
+    return new Favourite(
+        "fav-" + contentId, FavouriteType.NEWS, contentId,
+        Instant.now().minus(daysAgo, ChronoUnit.DAYS));
+  }
+
+  private static Blog digestBlog(final String id, final int daysAgo) {
+    return digestBlogAt(id, Instant.now().minus(daysAgo, ChronoUnit.DAYS));
+  }
+
+  private static Blog digestBlogAt(final String id, final Instant createdAt) {
+    return new Blog(
+        id, "Existing digest", "desc", "content", true, "/uploads/x.png",
+        createdAt, createdAt, List.of(DIGEST_TAG), List.<Skill>of(),
+        BlogContentType.DIGEST);
+  }
+
   @BeforeEach
   void setUp() {
-    promptRunner = mock(PromptRunner.class);
-    assistantMessage = mock(AssistantMessage.class);
-
-    lenient().when(ai.withLlm("gpt-4o-mini"))
-        .thenReturn(promptRunner);
-    lenient().when(promptRunner.respond(anyList()))
-        .thenReturn(assistantMessage);
-
-    metadataGenerator = new DigestMetadataGenerator(ai);
+    lenient().when(tagRepository.findByName("Weekly Digest"))
+        .thenReturn(Optional.of(DIGEST_TAG));
+    lenient().when(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
+        .thenReturn(List.of());
     agent = new WeeklyDigestAgent(
-        blogRepository, tagRepository,
-        articleRepository, ai, changePublisher,
-        blogImageGenerationService, metadataGenerator);
+        blogRepository, tagRepository, articleRepository, favouriteRepository,
+        sectionWriter, composer, metadataGenerator, changePublisher,
+        blogImageGenerationService, WINDOW_DAYS, DUPLICATE_WINDOW_HOURS);
   }
 
   @Test
-  void generateDigest_skipsWhenNoRecentContent() {
-    when(tagRepository.findByName("Weekly Digest"))
-        .thenReturn(Optional.of(DIGEST_TAG));
-    when(blogRepository
-        .findByPublishedTrueOrderByCreatedDateDesc())
+  void suppressesTheRunWhenDigestAlreadyExistsInsideTheWindow() {
+    // The case this guard exists for: the cron published this morning and
+    // someone hit Trigger Digest a few hours later.
+    when(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
+        .thenReturn(List.of(digestBlogAt("published-this-morning",
+            Instant.now().minus(3, ChronoUnit.HOURS))));
+
+    agent.generateDigest();
+
+    verify(favouriteRepository, never())
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(any(), any(), any());
+    verify(sectionWriter, never()).write(any());
+    verify(composer, never()).compose(anyList());
+    verify(blogRepository, never()).save(any());
+    verify(changePublisher, never()).publishCreated(any(), any());
+  }
+
+  @Test
+  void doesNotSuppressTheRunWhenLastWeeksDigestSitsJustPastTheCadence() {
+    // The digest's createdDate is stamped after the LLM and image work
+    // finishes, so a cron firing at 08:00:00 produces a post dated ~08:00:40.
+    // One week later the cron fires at 08:00:00 again — if duplicate
+    // suppression used the 7-day favourites window, last week's post would
+    // still read as "inside the window" by those 40 seconds and the digest
+    // would be skipped every week, forever.
+    Instant lastWeekPlusLatency = Instant.now()
+        .minus(WINDOW_DAYS, ChronoUnit.DAYS)
+        .plusSeconds(40);
+    when(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
+        .thenReturn(List.of(digestBlogAt("last-week", lastWeekPlusLatency)));
+    when(favouriteRepository
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of());
-    when(articleRepository
-        .findByVisibleTrueOrderByPublishedDateDesc())
+
+    agent.generateDigest();
+
+    verify(favouriteRepository)
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any());
+  }
+
+  @Test
+  void doesNotSuppressTheRunWhenTheExistingDigestIsOutsideTheWindow() {
+    when(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
+        .thenReturn(List.of(digestBlog("stale-digest", WINDOW_DAYS + 3)));
+    when(favouriteRepository
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
+        .thenReturn(List.of());
+
+    agent.generateDigest();
+
+    verify(favouriteRepository)
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any());
+  }
+
+  @Test
+  void publishesNothingWhenNoFavouritesInWindow() {
+    when(favouriteRepository
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of());
 
     agent.generateDigest();
 
     verify(blogRepository, never()).save(any());
-    verify(changePublisher, never())
-        .publishCreated(any(), any());
+    verify(changePublisher, never()).publishCreated(any(), any());
   }
 
   @Test
-  void generateDigest_skipsWhenOnlyOldContent() {
-    when(tagRepository.findByName("Weekly Digest"))
-        .thenReturn(Optional.of(DIGEST_TAG));
-    Instant twoWeeksAgo =
-        Instant.now().minus(14, ChronoUnit.DAYS);
-
-    Blog oldBlog = new Blog(
-        "blog-old", "Old Post", "An old post",
-        "Content", true, null,
-        twoWeeksAgo, twoWeeksAgo, List.of(), List.of(),
-        BlogContentType.ENGINEERING);
-    AggregatedArticle oldArticle = new AggregatedArticle(
-        "art-old", "Old Article", "Source",
-        "https://src.com", "https://src.com/old",
-        "Summary", "Full content", "Author",
-        twoWeeksAgo, twoWeeksAgo, true, null);
-
-    when(blogRepository
-        .findByPublishedTrueOrderByCreatedDateDesc())
-        .thenReturn(List.of(oldBlog));
-    when(articleRepository
-        .findByVisibleTrueOrderByPublishedDateDesc())
-        .thenReturn(List.of(oldArticle));
+  void skipsFavouriteWhoseArticleNoLongerExists() {
+    when(favouriteRepository
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
+        .thenReturn(List.of(favourite("gone", 1)));
+    when(articleRepository.findById("gone")).thenReturn(Optional.empty());
 
     agent.generateDigest();
 
+    verify(sectionWriter, never()).write(any());
     verify(blogRepository, never()).save(any());
-    verify(changePublisher, never())
-        .publishCreated(any(), any());
   }
 
   @Test
-  void generateDigest_createsDigestFromRecentArticles() {
-    Instant recentFetch =
-        Instant.now().minus(2, ChronoUnit.DAYS);
-    AggregatedArticle article = new AggregatedArticle(
-        "art-1", "Spring Boot 4 Released", "InfoQ",
-        "https://infoq.com",
-        "https://infoq.com/spring-boot-4",
-        "Major new release.", "Full content body",
-        "Jane Doe", recentFetch, recentFetch, true, null);
-
-    Blog savedDigest = new Blog(
-        "blog-digest-1",
-        "Week in Review: Apr 6 - Apr 13, 2026",
-        "Latest roundup of site activity and tech news",
-        "Generated content.", true, null,
-        Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of(),
-        BlogContentType.DIGEST);
-
-    when(blogRepository
-        .findByPublishedTrueOrderByCreatedDateDesc())
-        .thenReturn(List.of());
-    when(articleRepository
-        .findByVisibleTrueOrderByPublishedDateDesc())
-        .thenReturn(List.of(article));
-    when(tagRepository.findByName("Weekly Digest"))
-        .thenReturn(Optional.of(DIGEST_TAG));
-    when(assistantMessage.getContent())
-        .thenReturn("# Week in Review\n\nGenerated.");
-    when(blogRepository.save(any()))
-        .thenReturn(savedDigest);
+  void skipsFavouriteWhoseArticleIsHidden() {
+    AggregatedArticle hidden = new AggregatedArticle(
+        "hid", "Hidden", "InfoQ", "https://infoq.com",
+        "https://infoq.com/hid", "Summary.", "Content.", null,
+        Instant.now(), Instant.now(), false, null);
+    when(favouriteRepository
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
+        .thenReturn(List.of(favourite("hid", 1)));
+    when(articleRepository.findById("hid")).thenReturn(Optional.of(hidden));
 
     agent.generateDigest();
 
-    ArgumentCaptor<Blog> captor =
-        ArgumentCaptor.forClass(Blog.class);
-    verify(blogRepository).save(captor.capture());
-    Blog created = captor.getValue();
-
-    assertThat(created.id()).isNull();
-    assertThat(created.title())
-        .doesNotStartWith("AI & Tech Roundup:");
-    assertThat(created.title())
-        .contains("Spring Boot 4 Released");
-    assertThat(created.shortDescription())
-        .contains("Spring Boot 4 Released");
-    assertThat(created.published()).isTrue();
-    assertThat(created.content())
-        .isEqualTo("# Week in Review\n\nGenerated.");
-    assertThat(created.tags())
-        .containsExactly(DIGEST_TAG);
+    verify(sectionWriter, never()).write(any());
+    verify(blogRepository, never()).save(any());
   }
 
   @Test
-  void generateDigest_passesSourceSpecificContextToImageGeneration() {
-    Instant recentFetch =
-        Instant.now().minus(1, ChronoUnit.DAYS);
-    AggregatedArticle article = new AggregatedArticle(
-        "art-image", "Agent frameworks mature", "AI Native Dev",
-        "https://ainativedev.io",
-        "https://ainativedev.io/agents",
-        "Agent frameworks are becoming more practical.",
-        "Full content", null,
-        recentFetch, recentFetch, true, "/uploads/article/original.png");
-
-    Blog savedDigest = new Blog(
-        "blog-digest-image", "Digest",
-        "Summary",
-        "Content.", true, null,
-        Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of(),
-        BlogContentType.DIGEST);
-
-    when(blogRepository
-        .findByPublishedTrueOrderByCreatedDateDesc())
+  void queriesUsingTheConfiguredWindow() {
+    // Uses a window distinct from both WINDOW_DAYS (7, shared by the other
+    // tests) and the production default (also 7), so an agent that ignored
+    // the injected value and hardcoded 7 days would fail this assertion.
+    int distinctWindowDays = 3;
+    WeeklyDigestAgent agentWithDistinctWindow = new WeeklyDigestAgent(
+        blogRepository, tagRepository, articleRepository, favouriteRepository,
+        sectionWriter, composer, metadataGenerator, changePublisher,
+        blogImageGenerationService, distinctWindowDays,
+        DUPLICATE_WINDOW_HOURS);
+    when(favouriteRepository
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of());
-    when(articleRepository
-        .findByVisibleTrueOrderByPublishedDateDesc())
-        .thenReturn(List.of(article));
-    when(tagRepository.findByName("Weekly Digest"))
-        .thenReturn(Optional.of(DIGEST_TAG));
-    when(assistantMessage.getContent())
-        .thenReturn("Content.");
-    when(blogRepository.save(any()))
-        .thenReturn(savedDigest);
 
-    agent.generateDigest();
+    agentWithDistinctWindow.generateDigest();
 
-    verify(blogImageGenerationService).generateAndStore(
-        contains("Agent frameworks mature"),
-        contains("Agent frameworks mature"),
-        contains("AI Native Dev"));
+    ArgumentCaptor<Instant> cutoff = ArgumentCaptor.forClass(Instant.class);
+    verify(favouriteRepository)
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), cutoff.capture(), any());
+    Instant expected =
+        Instant.now().minus(distinctWindowDays, ChronoUnit.DAYS);
+    assertThat(cutoff.getValue())
+        .isBetween(expected.minusSeconds(60), expected.plusSeconds(60));
   }
 
   @Test
-  void generateDigest_createsDigestFromRecentBlogPosts() {
-    Instant recentCreated =
-        Instant.now().minus(3, ChronoUnit.DAYS);
-    Blog recentBlog = new Blog(
-        "blog-1", "My New Post", "A short description",
-        "Post content", true, null,
-        recentCreated, recentCreated, List.of(), List.of(),
-        BlogContentType.ENGINEERING);
-
-    Blog savedDigest = new Blog(
-        "blog-digest-2",
-        "Week in Review: Apr 6 - Apr 13, 2026",
-        "Latest roundup of site activity and tech news",
-        "Generated content.", true, null,
-        Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of(),
-        BlogContentType.DIGEST);
-
-    when(blogRepository
-        .findByPublishedTrueOrderByCreatedDateDesc())
-        .thenReturn(List.of(recentBlog));
-    when(articleRepository
-        .findByVisibleTrueOrderByPublishedDateDesc())
-        .thenReturn(List.of());
-    when(tagRepository.findByName("Weekly Digest"))
-        .thenReturn(Optional.of(DIGEST_TAG));
-    when(assistantMessage.getContent())
-        .thenReturn("Generated content.");
-    when(blogRepository.save(any()))
-        .thenReturn(savedDigest);
+  void publishesNothingWhenEverySectionIsFallback() {
+    AggregatedArticle art = article("art-1", "Spring Boot 4");
+    when(favouriteRepository
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
+        .thenReturn(List.of(favourite("art-1", 1)));
+    when(articleRepository.findById("art-1")).thenReturn(Optional.of(art));
+    when(sectionWriter.write(art)).thenReturn(new DigestSection(
+        "art-1", "Spring Boot 4", "https://infoq.com/art-1",
+        "Stored summary.", true));
 
     agent.generateDigest();
 
+    verify(composer, never()).compose(anyList());
+    verify(blogRepository, never()).save(any());
+  }
+
+  @Test
+  void publishesWhenOnlySomeSectionsAreFallback() {
+    AggregatedArticle fallbackArticle = article("art-1", "Spring Boot 4");
+    AggregatedArticle realArticle = article("art-2", "GraalVM 24");
+    DigestSection fallbackSection = new DigestSection(
+        "art-1", "Spring Boot 4", "https://infoq.com/art-1",
+        "Stored summary.", true);
+    DigestSection realSection = new DigestSection(
+        "art-2", "GraalVM 24", "https://infoq.com/art-2",
+        "Real prose.", false);
+
+    when(favouriteRepository
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
+        .thenReturn(List.of(
+            favourite("art-1", 1), favourite("art-2", 2)));
+    when(articleRepository.findById("art-1"))
+        .thenReturn(Optional.of(fallbackArticle));
+    when(articleRepository.findById("art-2"))
+        .thenReturn(Optional.of(realArticle));
+    when(sectionWriter.write(fallbackArticle)).thenReturn(fallbackSection);
+    when(sectionWriter.write(realArticle)).thenReturn(realSection);
+    when(composer.compose(List.of(fallbackSection, realSection)))
+        .thenReturn("## [Spring Boot 4](https://infoq.com/art-1)\n\n"
+            + "Stored summary.\n\n"
+            + "## [GraalVM 24](https://infoq.com/art-2)\n\nReal prose.");
+    when(metadataGenerator.generate(anyList(), anyString()))
+        .thenReturn(new DigestMetadata("What caught my eye", "A description"));
+    when(blogImageGenerationService
+        .generateAndStore(anyString(), anyString(), anyString()))
+        .thenReturn("/uploads/digest.png");
+    when(blogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+    agent.generateDigest();
+
+    verify(composer).compose(List.of(fallbackSection, realSection));
     verify(blogRepository).save(any(Blog.class));
-    verify(changePublisher).publishCreated(
-        ContentType.BLOG, "blog-digest-2");
   }
 
   @Test
-  void generateDigest_usesEmbabelAiForContent() {
-    Instant recentFetch =
-        Instant.now().minus(1, ChronoUnit.DAYS);
-    AggregatedArticle article = new AggregatedArticle(
-        "art-2", "Embabel 1.0 Ships", "The Register",
-        "https://theregister.com",
-        "https://theregister.com/embabel",
-        "Embabel reaches 1.0 milestone.",
-        "Full article body text", null,
-        recentFetch, recentFetch, true, null);
+  void publishesDigestFromFavouritedArticles() {
+    AggregatedArticle art = article("art-1", "Spring Boot 4");
+    DigestSection section = new DigestSection(
+        "art-1", "Spring Boot 4", "https://infoq.com/art-1",
+        "Real prose.", false);
 
-    Blog savedDigest = new Blog(
-        "blog-digest-3", "Week in Review",
-        "Latest roundup of site activity and tech news",
-        "LLM generated content.", true, null,
-        Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of(),
-        BlogContentType.DIGEST);
-
-    when(blogRepository
-        .findByPublishedTrueOrderByCreatedDateDesc())
-        .thenReturn(List.of());
-    when(articleRepository
-        .findByVisibleTrueOrderByPublishedDateDesc())
-        .thenReturn(List.of(article));
-    when(tagRepository.findByName("Weekly Digest"))
-        .thenReturn(Optional.of(DIGEST_TAG));
-    when(assistantMessage.getContent())
-        .thenReturn("LLM generated content.");
-    when(blogRepository.save(any()))
-        .thenReturn(savedDigest);
+    when(favouriteRepository
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
+        .thenReturn(List.of(favourite("art-1", 2)));
+    when(articleRepository.findById("art-1")).thenReturn(Optional.of(art));
+    when(sectionWriter.write(art)).thenReturn(section);
+    when(composer.compose(List.of(section)))
+        .thenReturn("## [Spring Boot 4](https://infoq.com/art-1)\n\nReal prose.");
+    when(metadataGenerator.generate(anyList(), anyString()))
+        .thenReturn(new DigestMetadata("What caught my eye", "A short description"));
+    when(blogImageGenerationService
+        .generateAndStore(anyString(), anyString(), anyString()))
+        .thenReturn("/uploads/digest.png");
+    when(blogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
     agent.generateDigest();
 
-    verify(ai, atLeastOnce()).withLlm("gpt-4o-mini");
-    verify(promptRunner, times(2)).respond(anyList());
-
-    ArgumentCaptor<Blog> captor =
-        ArgumentCaptor.forClass(Blog.class);
-    verify(blogRepository).save(captor.capture());
-    assertThat(captor.getValue().content())
-        .isEqualTo("LLM generated content.");
-  }
-
-  @Test
-  void generateDigest_createsDigestTagWhenNotFound() {
-    Instant recentFetch =
-        Instant.now().minus(1, ChronoUnit.DAYS);
-    AggregatedArticle article = new AggregatedArticle(
-        "art-4", "Testcontainers Cloud GA", "DZone",
-        "https://dzone.com",
-        "https://dzone.com/tc-cloud",
-        "Testcontainers Cloud is now GA.",
-        "Body text", null,
-        recentFetch, recentFetch, true, null);
-
-    Tag newTag = new Tag("tag-new", "Weekly Digest");
-    Blog savedDigest = new Blog(
-        "blog-digest-5", "Week in Review",
-        "Latest roundup of site activity and tech news",
-        "Content.", true, null,
-        Instant.now(), Instant.now(),
-        List.of(newTag), List.of(),
-        BlogContentType.DIGEST);
-
-    when(blogRepository
-        .findByPublishedTrueOrderByCreatedDateDesc())
-        .thenReturn(List.of());
-    when(articleRepository
-        .findByVisibleTrueOrderByPublishedDateDesc())
-        .thenReturn(List.of(article));
-    when(tagRepository.findByName("Weekly Digest"))
-        .thenReturn(Optional.empty());
-    when(tagRepository.save(any(Tag.class)))
-        .thenReturn(newTag);
-    when(assistantMessage.getContent())
-        .thenReturn("Content.");
-    when(blogRepository.save(any()))
-        .thenReturn(savedDigest);
-
-    agent.generateDigest();
-
-    verify(tagRepository).save(any(Tag.class));
-    ArgumentCaptor<Blog> captor =
-        ArgumentCaptor.forClass(Blog.class);
-    verify(blogRepository).save(captor.capture());
-    assertThat(captor.getValue().tags())
-        .containsExactly(newTag);
-  }
-
-  @Test
-  void generateDigest_publishesCreatedEventAfterSave() {
-    Instant recentFetch =
-        Instant.now().minus(2, ChronoUnit.DAYS);
-    AggregatedArticle article = new AggregatedArticle(
-        "art-5", "OTel Reaches 1.0", "CNCF Blog",
-        "https://cncf.io", "https://cncf.io/otel-1",
-        "OTel SDK hits 1.0 stability.",
-        "Full content text", null,
-        recentFetch, recentFetch, true, null);
-
-    Blog savedDigest = new Blog(
-        "saved-blog-id", "Week in Review",
-        "Latest roundup of site activity and tech news",
-        "Content.", true, null,
-        Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of(),
-        BlogContentType.DIGEST);
-
-    when(blogRepository
-        .findByPublishedTrueOrderByCreatedDateDesc())
-        .thenReturn(List.of());
-    when(articleRepository
-        .findByVisibleTrueOrderByPublishedDateDesc())
-        .thenReturn(List.of(article));
-    when(tagRepository.findByName("Weekly Digest"))
-        .thenReturn(Optional.of(DIGEST_TAG));
-    when(assistantMessage.getContent())
-        .thenReturn("Content.");
-    when(blogRepository.save(any()))
-        .thenReturn(savedDigest);
-
-    agent.generateDigest();
-
-    verify(changePublisher).publishCreated(
-        ContentType.BLOG, "saved-blog-id");
-  }
-
-  @Test
-  void generateDigest_fallsBackToRawSummaryOnLlmFailure() {
-    Instant recentFetch =
-        Instant.now().minus(1, ChronoUnit.DAYS);
-    AggregatedArticle article = new AggregatedArticle(
-        "art-6", "GraalVM 24 Released", "Oracle Blog",
-        "https://blogs.oracle.com",
-        "https://blogs.oracle.com/graalvm-24",
-        "GraalVM 24 delivers faster startup.",
-        "Content body", null,
-        recentFetch, recentFetch, true, null);
-
-    Blog savedDigest = new Blog(
-        "blog-digest-6", "Week in Review",
-        "Latest roundup of site activity and tech news",
-        "Fallback content.", true, null,
-        Instant.now(), Instant.now(),
-        List.of(DIGEST_TAG), List.of(),
-        BlogContentType.DIGEST);
-
-    when(blogRepository
-        .findByPublishedTrueOrderByCreatedDateDesc())
-        .thenReturn(List.of());
-    when(articleRepository
-        .findByVisibleTrueOrderByPublishedDateDesc())
-        .thenReturn(List.of(article));
-    when(tagRepository.findByName("Weekly Digest"))
-        .thenReturn(Optional.of(DIGEST_TAG));
-    when(promptRunner.respond(anyList()))
-        .thenThrow(new RuntimeException("LLM timeout"));
-    when(blogRepository.save(any()))
-        .thenReturn(savedDigest);
-
-    agent.generateDigest();
-
-    ArgumentCaptor<Blog> captor =
-        ArgumentCaptor.forClass(Blog.class);
-    verify(blogRepository).save(captor.capture());
-    assertThat(captor.getValue().content())
-        .contains("GraalVM 24 Released");
-    assertThat(captor.getValue().content())
-        .contains("Oracle Blog");
+    ArgumentCaptor<Blog> saved = ArgumentCaptor.forClass(Blog.class);
+    verify(blogRepository).save(saved.capture());
+    Blog digest = saved.getValue();
+    assertThat(digest.contentType()).isEqualTo(BlogContentType.DIGEST);
+    assertThat(digest.title()).isEqualTo("What caught my eye");
+    assertThat(digest.shortDescription()).isEqualTo("A short description");
+    assertThat(digest.featuredImageUrl()).isEqualTo("/uploads/digest.png");
+    assertThat(digest.content()).contains("https://infoq.com/art-1");
+    assertThat(digest.tags()).containsExactly(DIGEST_TAG);
+    assertThat(digest.published()).isTrue();
+    verify(changePublisher).publishCreated(eq(ContentType.BLOG), any());
   }
 }

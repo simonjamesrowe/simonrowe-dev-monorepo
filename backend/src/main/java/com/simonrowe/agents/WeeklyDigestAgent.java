@@ -2,8 +2,6 @@ package com.simonrowe.agents;
 
 import com.embabel.agent.api.annotation.Action;
 import com.embabel.agent.api.annotation.Agent;
-import com.embabel.agent.api.common.Ai;
-import com.embabel.chat.UserMessage;
 import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.blog.Blog;
@@ -14,195 +12,216 @@ import com.simonrowe.blog.Tag;
 import com.simonrowe.blog.TagRepository;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
+import com.simonrowe.favourites.Favourite;
+import com.simonrowe.favourites.FavouriteRepository;
+import com.simonrowe.favourites.FavouriteType;
 import com.simonrowe.media.BlogImageGenerationService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 
+/**
+ * Builds the weekly digest from the news articles favourited in the last
+ * window, one section per article.
+ *
+ * <p>The window is fixed rather than measured from the last digest, so a
+ * skipped run loses that week's items rather than rolling them forward. That
+ * is deliberate: it keeps the job stateless.
+ */
 @Agent(
     name = "WeeklyDigest",
-    description = "Generates a weekly digest blog post summarising "
-        + "recent site activity and aggregated tech news"
+    description = "Generates a weekly digest blog post summarising the news "
+        + "articles favourited over the past week"
 )
 public class WeeklyDigestAgent {
 
   private static final Logger log =
       LoggerFactory.getLogger(WeeklyDigestAgent.class);
 
-  private static final String DIGEST_PROMPT =
-      "Write a digest blog post in Markdown format summarizing "
-          + "the following activity. Write in a friendly, "
-          + "professional tone as Simon Rowe (first person). "
-          + "For each item, include a Markdown link using the "
-          + "URL provided. Keep it concise (300-500 words). "
-          + "Do not include a title heading (it will be added "
-          + "separately). Group by sections (blog posts, tech "
-          + "news) if both are present.\n\n";
-
   private final BlogRepository blogRepository;
   private final TagRepository tagRepository;
   private final AggregatedArticleRepository articleRepository;
-  private final Ai ai;
+  private final FavouriteRepository favouriteRepository;
+  private final ArticleSectionWriter sectionWriter;
+  private final DigestComposer composer;
+  private final DigestMetadataGenerator metadataGenerator;
   private final ContentChangePublisher changePublisher;
   private final BlogImageGenerationService blogImageGenerationService;
-  private final DigestMetadataGenerator metadataGenerator;
+  private final int windowDays;
+
+  /**
+   * How far back to look for an existing digest before treating this run as a
+   * duplicate. Deliberately much shorter than {@link #windowDays}: the digest's
+   * {@code createdDate} is stamped after the LLM and image work finishes, so it
+   * lands 30-120 seconds after the cron fires. A suppression window equal to the
+   * weekly cadence would therefore see last week's digest as "just published"
+   * every single week and skip forever. This only has to catch the real case —
+   * the cron published this morning and someone hit Trigger Digest afterwards.
+   */
+  private final int duplicateWindowHours;
 
   public WeeklyDigestAgent(
       final BlogRepository blogRepository,
       final TagRepository tagRepository,
       final AggregatedArticleRepository articleRepository,
-      final Ai ai,
+      final FavouriteRepository favouriteRepository,
+      final ArticleSectionWriter sectionWriter,
+      final DigestComposer composer,
+      final DigestMetadataGenerator metadataGenerator,
       final ContentChangePublisher changePublisher,
       final BlogImageGenerationService blogImageGenerationService,
-      final DigestMetadataGenerator metadataGenerator) {
+      @Value("${aggregation.digest.window-days}") final int windowDays,
+      @Value("${aggregation.digest.duplicate-window-hours}")
+      final int duplicateWindowHours) {
     this.blogRepository = blogRepository;
     this.tagRepository = tagRepository;
     this.articleRepository = articleRepository;
-    this.ai = ai;
+    this.favouriteRepository = favouriteRepository;
+    this.sectionWriter = sectionWriter;
+    this.composer = composer;
+    this.metadataGenerator = metadataGenerator;
     this.changePublisher = changePublisher;
     this.blogImageGenerationService = blogImageGenerationService;
-    this.metadataGenerator = metadataGenerator;
+    this.windowDays = windowDays;
+    this.duplicateWindowHours = duplicateWindowHours;
   }
 
+  /** Generates and publishes the digest, or logs why it did not. */
   @Action(description = "Generate a digest blog post")
   public void generateDigest() {
-    Tag digestTag = getOrCreateDigestTag();
-    Instant sinceDate = findLastDigestDate(digestTag);
-    log.info("Generating digest for period since {}", sinceDate);
-
-    List<Blog> recentBlogs = blogRepository
-        .findByPublishedTrueOrderByCreatedDateDesc().stream()
-        .filter(b -> b.createdDate() != null
-            && b.createdDate().isAfter(sinceDate))
-        .filter(b -> !isDigestBlog(b, digestTag))
-        .toList();
-
-    List<AggregatedArticle> recentArticles = articleRepository
-        .findByVisibleTrueOrderByPublishedDateDesc().stream()
-        .filter(a -> a.fetchedAt() != null
-            && a.fetchedAt().isAfter(sinceDate))
-        .toList();
-
-    if (recentBlogs.isEmpty() && recentArticles.isEmpty()) {
-      log.info(
-          "Nothing new since last digest, "
-              + "skipping generation");
+    Instant now = Instant.now();
+    Instant duplicateCutoff =
+        now.minus(duplicateWindowHours, ChronoUnit.HOURS);
+    if (digestAlreadyPublishedInWindow(duplicateCutoff)) {
+      log.info("A digest already exists within the last {} hours, "
+          + "skipping this run", duplicateWindowHours);
       return;
     }
+    generateForWindow(now.minus(windowDays, ChronoUnit.DAYS), now, now);
+  }
 
-    String activitySummary =
-        buildActivitySummary(recentBlogs, recentArticles);
-    String digestContent =
-        generateDigestContent(activitySummary);
-    DigestMetadata metadata = metadataGenerator.generate(
-        recentBlogs, recentArticles, activitySummary);
-    String imageContext = buildImageContext(recentBlogs, recentArticles);
+  /**
+   * Builds and publishes a digest covering the news favourited between
+   * {@code from} and {@code to}, stamped {@code publishAt}.
+   *
+   * <p>This is the whole pipeline, minus the duplicate-run guard: the
+   * scheduled path applies that guard and passes a now-relative window, while
+   * the historical backfill passes one explicit week at a time and does its own
+   * collision handling. Nothing is published when the window has no usable
+   * favourites, or when every section fell back to its stored summary.
+   *
+   * @param from      window start, inclusive, on {@code Favourite.createdAt}
+   * @param to        window end, inclusive
+   * @param publishAt the created/updated date to stamp on the post
+   * @return the saved post, or empty when nothing was published
+   */
+  public Optional<Blog> generateForWindow(
+      final Instant from, final Instant to, final Instant publishAt) {
+    List<Favourite> favourites = favouriteRepository
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            FavouriteType.NEWS, from, to);
+    List<AggregatedArticle> articles = favourites.stream()
+        .map(this::resolveArticle)
+        .flatMap(Optional::stream)
+        .toList();
+    if (articles.isEmpty()) {
+      if (favourites.isEmpty()) {
+        log.info("No news favourited between {} and {}, "
+            + "skipping digest generation", from, to);
+      } else {
+        log.info("{} favourite(s) between {} and {} all resolved to "
+            + "missing or hidden articles, skipping digest generation",
+            favourites.size(), from, to);
+      }
+      return Optional.empty();
+    }
 
-    String featuredImageUrl =
-        blogImageGenerationService.generateAndStore(
-            metadata.title(), metadata.shortDescription(), imageContext);
+    List<DigestSection> sections = articles.stream()
+        .map(sectionWriter::write)
+        .toList();
 
-    Instant createdAt = Instant.now();
+    if (!sections.isEmpty()
+        && sections.stream().allMatch(DigestSection::fallback)) {
+      log.error("Every section fell back to its stored summary — "
+          + "assuming an LLM outage and publishing nothing");
+      return Optional.empty();
+    }
+
+    String content = composer.compose(sections);
+    String activitySummary = buildActivitySummary(sections);
+    DigestMetadata metadata =
+        metadataGenerator.generate(articles, activitySummary);
+    String featuredImageUrl = blogImageGenerationService.generateAndStore(
+        metadata.title(), metadata.shortDescription(),
+        buildImageContext(articles));
+
+    Tag digestTag = getOrCreateDigestTag();
     Blog digest = new Blog(
-        null, metadata.title(),
-        metadata.shortDescription(),
-        digestContent, true, featuredImageUrl,
-        createdAt, createdAt,
-        List.of(digestTag), List.<Skill>of(),
-        BlogContentType.DIGEST);
+        null, metadata.title(), metadata.shortDescription(),
+        content, true, featuredImageUrl, publishAt, publishAt,
+        List.of(digestTag), List.<Skill>of(), BlogContentType.DIGEST);
 
     Blog saved = blogRepository.save(digest);
     changePublisher.publishCreated(ContentType.BLOG, saved.id());
-    log.info("Published digest: {}", metadata.title());
+    log.info("Published digest '{}' covering {} favourited articles",
+        metadata.title(), articles.size());
+    return Optional.of(saved);
   }
 
-  private Instant findLastDigestDate(final Tag digestTag) {
-    return blogRepository
-        .findByPublishedTrueOrderByCreatedDateDesc().stream()
-        .filter(b -> isDigestBlog(b, digestTag))
-        .map(Blog::createdDate)
-        .findFirst()
-        .orElse(Instant.now().minus(7, ChronoUnit.DAYS));
+  /**
+   * True when a digest already exists whose {@code createdDate} falls inside
+   * the current window — a repeat trigger (cron plus a manual re-run, or two
+   * manual runs) must not publish a second post for the same period.
+   */
+  private boolean digestAlreadyPublishedInWindow(final Instant cutoff) {
+    return blogRepository.findByPublishedTrueOrderByCreatedDateDesc().stream()
+        .anyMatch(blog -> blog.contentType() == BlogContentType.DIGEST
+            && blog.createdDate() != null
+            && blog.createdDate().isAfter(cutoff));
   }
 
-  private boolean isDigestBlog(final Blog blog, final Tag digestTag) {
-    return blog.tags() != null && blog.tags().stream()
-        .anyMatch(t -> t.id().equals(digestTag.id()));
-  }
-
-  private String buildActivitySummary(
-      final List<Blog> recentBlogs,
-      final List<AggregatedArticle> recentArticles) {
-    StringBuilder sb = new StringBuilder();
-    if (!recentBlogs.isEmpty()) {
-      sb.append("## New Blog Posts\n");
-      for (Blog blog : recentBlogs) {
-        sb.append("- [").append(blog.title())
-            .append("](/blogs/").append(blog.id()).append(")")
-            .append(": ").append(blog.shortDescription())
-            .append("\n");
-      }
-      sb.append("\n");
+  private Optional<AggregatedArticle> resolveArticle(
+      final Favourite favourite) {
+    Optional<AggregatedArticle> article =
+        articleRepository.findById(favourite.contentId());
+    if (article.isEmpty()) {
+      log.warn("Favourite {} points at missing article {}, skipping",
+          favourite.id(), favourite.contentId());
+      return Optional.empty();
     }
-    if (!recentArticles.isEmpty()) {
-      sb.append("## Notable Tech News\n");
-      for (AggregatedArticle a : recentArticles.stream()
-          .limit(15).collect(Collectors.toList())) {
-        sb.append("- [").append(a.title())
-            .append("](").append(a.originalUrl()).append(")")
-            .append(" (").append(a.sourceName()).append(")")
-            .append(": ").append(a.summary()).append("\n");
-      }
+    if (!article.get().visible()) {
+      log.info("Skipping favourited article '{}' — it is hidden",
+          article.get().title());
+      return Optional.empty();
     }
-    return sb.toString();
+    return article;
   }
 
-  private String buildImageContext(
-      final List<Blog> recentBlogs,
-      final List<AggregatedArticle> recentArticles) {
-    StringBuilder sb = new StringBuilder();
-    if (!recentBlogs.isEmpty()) {
-      sb.append("Recent Simon posts: ");
-      recentBlogs.stream().limit(5)
-          .forEach(blog -> sb.append(blog.title())
-              .append(" - ")
-              .append(blog.shortDescription())
-              .append("; "));
-    }
-    if (!recentArticles.isEmpty()) {
-      sb.append("External sources: ");
-      recentArticles.stream().limit(8)
-          .forEach(article -> sb.append(article.title())
-              .append(" from ")
-              .append(article.sourceName())
-              .append(" - ")
-              .append(article.summary())
-              .append("; "));
+  private static String buildActivitySummary(
+      final List<DigestSection> sections) {
+    StringBuilder sb = new StringBuilder("## Favourited This Week\n");
+    for (DigestSection section : sections) {
+      sb.append("- [").append(section.title())
+          .append("](").append(section.url()).append(")\n");
     }
     return sb.toString();
   }
 
-  private String generateDigestContent(
-      final String activitySummary) {
-    try {
-      return ai.withLlm("gpt-4o-mini")
-          .respond(List.of(
-              new UserMessage(DIGEST_PROMPT + activitySummary)))
-          .getContent();
-    } catch (Exception e) {
-      log.error(
-          "Failed to generate digest via LLM, using raw summary",
-          e);
-      return activitySummary;
-    }
+  private static String buildImageContext(
+      final List<AggregatedArticle> articles) {
+    StringBuilder sb = new StringBuilder("Favourited articles: ");
+    articles.stream().limit(8).forEach(article -> sb.append(article.title())
+        .append(" from ").append(article.sourceName())
+        .append(" - ").append(article.summary()).append("; "));
+    return sb.toString();
   }
 
   private Tag getOrCreateDigestTag() {
     return tagRepository.findByName("Weekly Digest")
-        .orElseGet(() -> tagRepository.save(
-            new Tag(null, "Weekly Digest")));
+        .orElseGet(() -> tagRepository.save(new Tag(null, "Weekly Digest")));
   }
 }

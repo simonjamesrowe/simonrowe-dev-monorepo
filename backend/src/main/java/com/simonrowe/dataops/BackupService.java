@@ -41,7 +41,7 @@ public class BackupService {
       "blogs", "tags", "skills", "skill_groups", "jobs",
       "profiles", "social_medias", "tourSteps", "media_assets",
       "code_examples", "aggregated_articles", "aggregated_events",
-      "content_sources"
+      "content_sources", "favourites"
   );
 
   private final MongoClient mongoClient;

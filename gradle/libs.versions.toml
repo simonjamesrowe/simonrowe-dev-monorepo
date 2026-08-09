@@ -11,6 +11,7 @@ sonarqube = "6.0.1.5171"
 openpdf = "2.0.3"
 commonmark = "0.24.0"
 springAi = "1.1.8"
+embabel = "1.0.0"
 bucket4j = "8.16.1"
 thumbnailator = "0.4.20"
 mongock = "5.5.1"
@@ -48,6 +49,9 @@ spring-ai-starter-model-openai-sdk = { module = "org.springframework.ai:spring-a
 spring-ai-starter-mcp-server-webmvc = { module = "org.springframework.ai:spring-ai-starter-mcp-server-webmvc" }
 spring-ai-starter-vector-store-elasticsearch = { module = "org.springframework.ai:spring-ai-starter-vector-store-elasticsearch" }
 spring-ai-advisors-vector-store = { module = "org.springframework.ai:spring-ai-advisors-vector-store" }
+embabel-agent-starter = { module = "com.embabel.agent:embabel-agent-starter", version.ref = "embabel" }
+embabel-agent-starter-openai = { module = "com.embabel.agent:embabel-agent-starter-openai", version.ref = "embabel" }
+embabel-agent-test = { module = "com.embabel.agent:embabel-agent-test", version.ref = "embabel" }
 spring-boot-starter-websocket = { module = "org.springframework.boot:spring-boot-starter-websocket" }
 bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }
 spring-boot-starter-oauth2-resource-server = { module = "org.springframework.boot:spring-boot-starter-oauth2-resource-server" }
