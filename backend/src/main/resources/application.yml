@@ -373,6 +373,9 @@ aggregation:
     cron: "0 0 */6 * * *"
   digest:
     cron: "0 0 8 * * MON"
+    model: ${DIGEST_MODEL:gpt-5.6-luna}
+    window-days: 7
+    duplicate-window-hours: 24
 
 backup:
   schedule:
