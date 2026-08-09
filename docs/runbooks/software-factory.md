@@ -449,3 +449,49 @@ fails the *last* Activity on `GitHub API returned 403 for POST
 request need `pull_requests: write`, not `issues: write`. Note the dry run cannot
 catch this one — `publish:false` never reaches the publish Activity — so a
 webhook delivery remains the only test of the publish path.
+
+## Review feedback loop
+
+On PR close, `review-feedback-{owner}-{repo}-{pr}` workflow on the `review-feedback` task queue harvests the conversation (Haiku), writes `software_factory.review_learnings` in Mongo, and — when lessons exist — opens `agent-feedback`-labeled guidance PRs (Sonnet) against agent-setup and/or the source repo. PRs labeled `agent-feedback` are never harvested (loop guard). Master switch `FACTORY_FEEDBACK_ENABLED`.
+
+**One-time GitHub App changes:**
+
+```bash
+# 1. Bump Contents permission from read to read & write
+#    org settings → Developer settings → GitHub Apps → simonrowe-code-reviewer → Permissions
+# 2. Re-approve the permission request on the installation
+# 3. Install the App on simonjamesrowe/agent-setup
+```
+
+Note: permitting write access to Contents carries an accepted risk that is detailed in § 8 of the specification.
+
+**Rollout order:**
+
+1. Inline-reviews change ships with the same image — verify a new PR gets an inline review.
+2. Deploy with `FACTORY_FEEDBACK_ENABLED` unset (off).
+3. Bump App permissions (step above).
+4. Dry run: 
+   ```bash
+   curl -X POST https://<internal>/api/feedback \
+     -H 'X-Factory-Token: …' \
+     -d '{"owner":"simonjamesrowe","repository":"simonrowe-dev-monorepo","pullNumber":<a real closed PR>,"dryRun":true}'
+   ```
+   From the Pi, run this command inside the container network (`docker exec` into the container); the path is not routed by nginx. Check the Mongo record:
+   ```bash
+   docker exec simonrowe-dev-monorepo-mongodb-1 mongosh software_factory --eval 'db.review_learnings.find().pretty()'
+   ```
+5. Set `FACTORY_FEEDBACK_ENABLED=true` in `.env` and `./scripts/restart-prod.sh`.
+
+**Verification:**
+
+```bash
+temporal task-queue describe --task-queue review-feedback
+```
+
+Must show pollers (same quiet-failure warning as `code-review`).
+
+**Failure modes:**
+
+- Distillation `FAILED` keeps the lessons in Mongo — re-drive with the manual endpoint (`dryRun:false`).
+- `403` on push = Contents permission not bumped or App not installed on the target repo.
+- Allowlist violation in logs = the distiller touched files it must not (the push never happened — inspect, adjust prompt, re-drive).

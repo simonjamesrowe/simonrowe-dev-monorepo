@@ -133,8 +133,10 @@ exact request body, and publishes by default.
 
 ## Current operational boundaries
 
-- The published result is one top-level issue comment, not inline review
-  threads.
+- The published result is a GitHub Review submitted with a `COMMENT` event,
+  one inline comment per finding anchored to the diff, with a body fallback
+  when a finding cannot be anchored (422). The upsert marker lives in the
+  review body rather than an issue comment.
 - Production uses short-lived GitHub App installation tokens. `GITHUB_TOKEN`
   remains an optional local-development bridge.
 - The agent Activity has one attempt. Temporal does not blindly repeat a
