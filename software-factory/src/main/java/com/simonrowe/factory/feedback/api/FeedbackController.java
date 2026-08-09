@@ -57,7 +57,12 @@ public class FeedbackController {
                 request.pullNumber(),
                 credentials.installationId(request.owner(), request.repository()),
                 request.dryRun()));
-    return ResponseEntity.status(HttpStatus.ACCEPTED).body(accepted);
+    // started=false means the workflow id is not currently eligible to (re)start — either a
+    // prior run is still in flight, or it already completed successfully and
+    // ALLOW_DUPLICATE_FAILED_ONLY refuses to replace that. A 202 here would silently claim
+    // acceptance for a re-drive that did nothing; 409 makes that visible to the caller.
+    HttpStatus status = accepted.started() ? HttpStatus.ACCEPTED : HttpStatus.CONFLICT;
+    return ResponseEntity.status(status).body(accepted);
   }
 
   @GetMapping("/{workflowId}")

@@ -103,38 +103,57 @@ public class FeedbackActivitiesImpl implements FeedbackActivities {
     Consumer<String> heartbeat = detail -> Activity.getExecutionContext().heartbeat(detail);
     List<String> prUrls = new ArrayList<>();
     List<String> notes = new ArrayList<>();
+    boolean anyTargetFailed = false;
     for (Target target : resolveTargets(request, lessons, properties.agentSetupRepo())) {
-      Long installationId = credentials.installationId(target.owner(), target.repository());
-      try (GuidanceWorkspaceFactory.GuidanceWorkspace workspace =
-          workspaceFactory.create(target.owner(), target.repository(), installationId, heartbeat)) {
-        DistillProposal proposal =
-            distillEngine.distill(
-                new DistillTarget(
-                    target.owner(), target.repository(), workspace.repository(),
-                    target.allowedPaths(), target.description()),
-                target.lessons(), heartbeat);
-        List<String> changed = workspaceFactory.changedPaths(workspace, heartbeat);
-        if (!proposal.changed() || changed.isEmpty()) {
-          notes.add(target.slug() + ": no change (" + proposal.reason() + ")");
-          continue;
-        }
-        GuidanceWorkspaceFactory.validateAllowedPaths(changed, target.allowedPaths());
-        String branch =
-            "feedback/" + request.repository() + "-pr-" + request.pullNumber();
-        workspaceFactory.commitAndPush(
-            workspace, branch, proposal.prTitle(), installationId, heartbeat);
-        prUrls.add(
-            prGateway.openProposal(
-                target.owner(), target.repository(), branch, workspace.defaultBranch(),
-                proposal.prTitle(), proposal.prBody(), properties.skipLabel(), installationId));
+      // A single target's failure (a bad clone, a distill-engine error, an allowlist violation, a
+      // push 403) must not lose PRs already opened for earlier targets in this same call — carry
+      // on to the remaining targets and record the failure as a note instead of propagating it.
+      try {
+        distillOneTarget(request, target, heartbeat, prUrls, notes);
+      } catch (RuntimeException exception) {
+        anyTargetFailed = true;
+        notes.add(target.slug() + ": failed (" + exception.getMessage() + ")");
       }
     }
-    if (prUrls.isEmpty()) {
+    if (!prUrls.isEmpty()) {
+      // Partial success is still success for the targets that worked, even if others failed.
       return new DistillationOutcome(
-          DistillationStatus.NO_CHANGE, List.of(), String.join("; ", notes));
+          DistillationStatus.PROPOSED, prUrls, notes.isEmpty() ? null : String.join("; ", notes));
     }
-    return new DistillationOutcome(
-        DistillationStatus.PROPOSED, prUrls, notes.isEmpty() ? null : String.join("; ", notes));
+    DistillationStatus status =
+        anyTargetFailed ? DistillationStatus.FAILED : DistillationStatus.NO_CHANGE;
+    return new DistillationOutcome(status, List.of(), String.join("; ", notes));
+  }
+
+  private void distillOneTarget(
+      final FeedbackRequest request,
+      final Target target,
+      final Consumer<String> heartbeat,
+      final List<String> prUrls,
+      final List<String> notes) {
+    Long installationId = credentials.installationId(target.owner(), target.repository());
+    try (GuidanceWorkspaceFactory.GuidanceWorkspace workspace =
+        workspaceFactory.create(target.owner(), target.repository(), installationId, heartbeat)) {
+      DistillProposal proposal =
+          distillEngine.distill(
+              new DistillTarget(
+                  target.owner(), target.repository(), workspace.repository(),
+                  target.allowedPaths(), target.description()),
+              target.lessons(), heartbeat);
+      List<String> changed = workspaceFactory.changedPaths(workspace, heartbeat);
+      if (!proposal.changed() || changed.isEmpty()) {
+        notes.add(target.slug() + ": no change (" + proposal.reason() + ")");
+        return;
+      }
+      GuidanceWorkspaceFactory.validateAllowedPaths(changed, target.allowedPaths());
+      String branch = "feedback/" + request.repository() + "-pr-" + request.pullNumber();
+      workspaceFactory.commitAndPush(
+          workspace, branch, proposal.prTitle(), installationId, heartbeat);
+      prUrls.add(
+          prGateway.openProposal(
+              target.owner(), target.repository(), branch, workspace.defaultBranch(),
+              proposal.prTitle(), proposal.prBody(), properties.skipLabel(), installationId));
+    }
   }
 
   @Override

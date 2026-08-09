@@ -496,6 +496,14 @@ Expect one `workflow` and one `activity` poller. Zero pollers means the webhook 
 
 ### Failure modes
 
-- Distillation `FAILED` keeps the lessons in Mongo — re-drive with the manual endpoint (`dryRun:false`).
+- Distillation `FAILED` keeps the lessons in Mongo and sets `distillation.status = FAILED` on
+  the `review_learnings` record — re-drive with the manual endpoint (`dryRun:false`). The
+  workflow id (`review-feedback-{owner}-{repo}-{pr}`) is restartable after a genuine failure
+  (`WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE_FAILED_ONLY`), so the re-drive actually runs.
+- A `409` from `POST /api/feedback` means the workflow id is still running, or it already
+  completed successfully — `ALLOW_DUPLICATE_FAILED_ONLY` only permits restarting an id that
+  failed. If it's still running, wait and retry. If it already completed, there is nothing to
+  re-drive: a successful harvest for a given PR number is final by design (the reopen-then-reclose
+  loop guard this workflow id shape exists for).
 - `403` on push = Contents permission not bumped or App not installed on the target repo.
 - Allowlist violation in logs = the distiller touched files it must not (the push never happened — inspect, adjust prompt, re-drive).

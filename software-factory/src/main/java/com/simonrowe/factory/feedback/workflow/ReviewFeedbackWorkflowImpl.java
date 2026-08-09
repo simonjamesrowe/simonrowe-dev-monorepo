@@ -39,6 +39,10 @@ public class ReviewFeedbackWorkflowImpl implements ReviewFeedbackWorkflow {
       Workflow.newActivityStub(
           FeedbackActivities.class,
           ActivityOptions.newBuilder()
+              // Must comfortably exceed factory.feedback.distill.timeout (15m default) times the
+              // maximum number of targets distillAndPropose processes serially in one activity
+              // call (currently at most 2: agent-setup and the source repo). 20m is already tight
+              // against 2 * 15m = 30m — revisit this timeout if a third target type is ever added.
               .setStartToCloseTimeout(Duration.ofMinutes(20))
               .setHeartbeatTimeout(Duration.ofSeconds(30))
               .setRetryOptions(RetryOptions.newBuilder().setMaximumAttempts(1).build())
@@ -77,7 +81,18 @@ public class ReviewFeedbackWorkflowImpl implements ReviewFeedbackWorkflow {
       current =
           new FeedbackProgress(
               FeedbackPhase.DISTILLING, "Proposing guidance changes", lessons.size());
-      DistillationOutcome outcome = agentActivities.distillAndPropose(request, lessons);
+      DistillationOutcome outcome;
+      try {
+        outcome = agentActivities.distillAndPropose(request, lessons);
+      } catch (RuntimeException exception) {
+        // A distillation failure must still leave the Mongo review_learnings record at
+        // DistillationStatus.FAILED, not at whatever initialStatus recordLearnings first wrote
+        // (e.g. SKIPPED_NO_LESSONS) — otherwise a failed run is indistinguishable from one that
+        // never attempted distillation. Rethrow the original exception afterwards so the outer
+        // catch below still runs its own FeedbackProgress handling.
+        recordDistillationFailure(request, exception);
+        throw exception;
+      }
       networkActivities.recordDistillation(request, outcome);
 
       current = new FeedbackProgress(FeedbackPhase.COMPLETED, "Completed", lessons.size());
@@ -87,6 +102,25 @@ public class ReviewFeedbackWorkflowImpl implements ReviewFeedbackWorkflow {
           new FeedbackProgress(
               FeedbackPhase.FAILED, safeFailureMessage(exception), current.lessonCount());
       throw exception;
+    }
+  }
+
+  /**
+   * Best-effort: records the distillation failure so Mongo shows {@code FAILED} instead of the
+   * initial status. This is a network activity so it is safe to call from a catch block, but a
+   * failure to record the failure must not mask the real exception, mirroring {@code
+   * CodeReviewWorkflowImpl.reportFailure}'s pattern for its own failure notice.
+   */
+  private void recordDistillationFailure(
+      final FeedbackRequest request, final RuntimeException exception) {
+    try {
+      networkActivities.recordDistillation(
+          request,
+          new DistillationOutcome(
+              DistillationStatus.FAILED, List.of(), safeFailureMessage(exception)));
+    } catch (RuntimeException recordException) {
+      Workflow.getLogger(ReviewFeedbackWorkflowImpl.class)
+          .warn("Could not record distillation failure", recordException);
     }
   }
 

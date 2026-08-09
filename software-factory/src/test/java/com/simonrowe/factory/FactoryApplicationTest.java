@@ -15,9 +15,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 /**
  * The API and the Temporal worker share one context now, so a context-load test has to prove both
  * halves came up. An in-process test server stands in for Temporal; without it the worker connects
- * eagerly at startup and the context fails against a real address. The {@link
- * com.simonrowe.factory.feedback.persistence.LearningIndexInitializer} runs at startup too, so the
- * context now also needs a reachable Mongo.
+ * eagerly at startup and the context fails against a real address. Spring Data Mongo's
+ * auto-configuration still wires a {@code MongoTemplate}/repository beans into this context
+ * regardless of {@code factory.feedback.enabled}, so a reachable Mongo remains a prerequisite even
+ * though {@link com.simonrowe.factory.feedback.persistence.LearningIndexInitializer} itself is now
+ * gated on that property and does not run here by default.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.NONE,

@@ -28,8 +28,15 @@ public class FeedbackWorkflowService {
             WorkflowOptions.newBuilder()
                 .setTaskQueue(FeedbackTaskQueues.REVIEW_FEEDBACK)
                 .setWorkflowId(workflowId)
+                // The workflow id deliberately excludes the head SHA so a reopened-then-reclosed
+                // PR doesn't re-harvest under the same id — that guard must stay. But
+                // REJECT_DUPLICATE also rejects restarting a FAILED execution, which is exactly
+                // the runbook's documented manual re-drive path ("Distillation FAILED ... re-drive
+                // with the manual endpoint"). ALLOW_DUPLICATE_FAILED_ONLY permits restarting the
+                // same id after a genuine failure while still rejecting a start against an id that
+                // already COMPLETED successfully.
                 .setWorkflowIdReusePolicy(
-                    WorkflowIdReusePolicy.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE)
+                    WorkflowIdReusePolicy.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE_FAILED_ONLY)
                 .build());
     try {
       WorkflowClient.start(workflow::harvest, request);

@@ -87,6 +87,25 @@ class FeedbackControllerTest {
     verify(workflowService, never()).start(any());
   }
 
+  /**
+   * Regression: a workflow id ineligible to (re)start (still running, or already completed) used
+   * to return 202 with {@code started:false} and no visible signal that nothing happened.
+   */
+  @Test
+  void returnsConflictWhenTheWorkflowCouldNotBeStarted() throws Exception {
+    when(workflowService.start(any())).thenReturn(new FeedbackAccepted("workflow-1", false));
+
+    mockMvcWithToken(TOKEN)
+        .perform(
+            post("/api/feedback")
+                .header("X-Factory-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(BODY))
+        .andExpect(status().isConflict());
+
+    verify(workflowService).start(any());
+  }
+
   @Test
   void returnsProgressWhenTheTriggerTokenMatches() throws Exception {
     when(workflowService.progress(anyString())).thenReturn(FeedbackProgress.accepted());

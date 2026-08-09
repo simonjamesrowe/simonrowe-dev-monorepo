@@ -43,7 +43,9 @@ class ClaudeCliRunnerTest {
     assertThat(command).containsSequence("--json-schema", "{\"type\":\"object\"}");
     assertThat(command).containsSequence("--permission-mode", "dontAsk");
     assertThat(command).contains("--no-session-persistence");
-    assertThat(command).containsSequence("--disallowedTools", "mcp__*");
+    assertThat(command)
+        .containsSequence(
+            "--disallowedTools", "mcp__*", "Edit(./.git/**)", "Write(./.git/**)");
   }
 
   @Test

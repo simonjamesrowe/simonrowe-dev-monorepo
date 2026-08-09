@@ -235,6 +235,54 @@ class FeedbackActivitiesImplTest {
   }
 
   @Test
+  void distillAndProposeContinuesToOtherTargetsWhenOneTargetFails() {
+    ConversationGateway conversationGateway = mock(ConversationGateway.class);
+    HarvestEngine harvestEngine = mock(HarvestEngine.class);
+    DistillEngine distillEngine = mock(DistillEngine.class);
+    GuidanceWorkspaceFactory workspaceFactory = mock(GuidanceWorkspaceFactory.class);
+    FeedbackPrGateway prGateway = mock(FeedbackPrGateway.class);
+    LearningRepository repository = mock(LearningRepository.class);
+    GitHubCredentials credentials = mock(GitHubCredentials.class);
+    GuidanceWorkspaceFactory.GuidanceWorkspace agentSetupWorkspace =
+        mock(GuidanceWorkspaceFactory.GuidanceWorkspace.class);
+
+    when(agentSetupWorkspace.repository()).thenReturn(Path.of("/tmp/agent-setup"));
+    when(agentSetupWorkspace.defaultBranch()).thenReturn("main");
+    when(credentials.installationId(anyString(), anyString())).thenReturn(555L);
+    when(workspaceFactory.create(eq("simonjamesrowe"), eq("agent-setup"), anyLong(), any()))
+        .thenReturn(agentSetupWorkspace);
+    when(workspaceFactory.create(
+            eq("simonjamesrowe"), eq("simonrowe-dev-monorepo"), anyLong(), any()))
+        .thenThrow(new IllegalStateException("agent crashed"));
+    when(distillEngine.distill(
+            argThat(target -> target != null && "agent-setup".equals(target.repository())),
+            anyList(), any()))
+        .thenReturn(new DistillProposal(true, "added a lesson", "Propose guidance", "Body"));
+    when(workspaceFactory.changedPaths(eq(agentSetupWorkspace), any()))
+        .thenReturn(List.of("components/instructions/global.md"));
+    when(prGateway.openProposal(
+            eq("simonjamesrowe"), eq("agent-setup"), anyString(), eq("main"),
+            eq("Propose guidance"), eq("Body"), eq("agent-feedback"), anyLong()))
+        .thenReturn("https://github.com/simonjamesrowe/agent-setup/pull/11");
+
+    FeedbackActivitiesImpl activities =
+        new FeedbackActivitiesImpl(
+            conversationGateway, harvestEngine, distillEngine, workspaceFactory, prGateway,
+            repository, feedbackProperties("simonjamesrowe/agent-setup"), codeReviewProperties(),
+            credentials);
+
+    DistillationOutcome outcome =
+        activities.distillAndPropose(
+            REQUEST, List.of(lesson(LessonScope.ORG_WIDE), lesson(LessonScope.REPO_SPECIFIC)));
+
+    assertThat(outcome.status()).isEqualTo(DistillationStatus.PROPOSED);
+    assertThat(outcome.prUrls())
+        .containsExactly("https://github.com/simonjamesrowe/agent-setup/pull/11");
+    assertThat(outcome.detail()).contains("simonjamesrowe/simonrowe-dev-monorepo: failed");
+    assertThat(outcome.detail()).contains("agent crashed");
+  }
+
+  @Test
   void recordDistillationUpdatesTheExistingLearningRecordsDistillation() {
     ConversationGateway conversationGateway = mock(ConversationGateway.class);
     HarvestEngine harvestEngine = mock(HarvestEngine.class);

@@ -1,6 +1,7 @@
 package com.simonrowe.factory.feedback.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.simonrowe.factory.feedback.config.FeedbackTaskQueues;
 import com.simonrowe.factory.feedback.domain.ConversationComment;
@@ -15,6 +16,7 @@ import com.simonrowe.factory.feedback.domain.LessonConfidence;
 import com.simonrowe.factory.feedback.domain.LessonScope;
 import com.simonrowe.factory.feedback.domain.LessonSource;
 import com.simonrowe.factory.feedback.domain.ReviewConversation;
+import io.temporal.client.WorkflowFailedException;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
@@ -121,10 +123,25 @@ class ReviewFeedbackWorkflowTest {
     assertThat(activities.distilled).isFalse();
   }
 
+  @Test
+  void distillationFailureIsRecordedAsFailedAndTheWorkflowStillFails() {
+    RuntimeException distillFailure = new RuntimeException("distill boom");
+    FakeActivities activities =
+        new FakeActivities(conversation(true), List.of(lesson()), null, distillFailure);
+
+    assertThatThrownBy(() -> run(activities, REQUEST))
+        .isInstanceOf(WorkflowFailedException.class);
+
+    assertThat(activities.recordedOutcomes).hasSize(1);
+    assertThat(activities.recordedOutcomes.getFirst().status())
+        .isEqualTo(DistillationStatus.FAILED);
+  }
+
   private static final class FakeActivities implements FeedbackActivities {
     private final ReviewConversation conversation;
     private final List<Lesson> lessons;
     private final DistillationOutcome outcome;
+    private final RuntimeException distillFailure;
     final List<DistillationStatus> recordedStatuses = new ArrayList<>();
     final List<DistillationOutcome> recordedOutcomes = new ArrayList<>();
     boolean harvested;
@@ -133,9 +150,16 @@ class ReviewFeedbackWorkflowTest {
     FakeActivities(
         final ReviewConversation conversation, final List<Lesson> lessons,
         final DistillationOutcome outcome) {
+      this(conversation, lessons, outcome, null);
+    }
+
+    FakeActivities(
+        final ReviewConversation conversation, final List<Lesson> lessons,
+        final DistillationOutcome outcome, final RuntimeException distillFailure) {
       this.conversation = conversation;
       this.lessons = lessons;
       this.outcome = outcome;
+      this.distillFailure = distillFailure;
     }
 
     @Override
@@ -162,6 +186,9 @@ class ReviewFeedbackWorkflowTest {
     public DistillationOutcome distillAndPropose(
         final FeedbackRequest request, final List<Lesson> lessonList) {
       distilled = true;
+      if (distillFailure != null) {
+        throw distillFailure;
+      }
       return outcome;
     }
 
