@@ -53,6 +53,17 @@ public class WeeklyDigestAgent {
   private final BlogImageGenerationService blogImageGenerationService;
   private final int windowDays;
 
+  /**
+   * How far back to look for an existing digest before treating this run as a
+   * duplicate. Deliberately much shorter than {@link #windowDays}: the digest's
+   * {@code createdDate} is stamped after the LLM and image work finishes, so it
+   * lands 30-120 seconds after the cron fires. A suppression window equal to the
+   * weekly cadence would therefore see last week's digest as "just published"
+   * every single week and skip forever. This only has to catch the real case —
+   * the cron published this morning and someone hit Trigger Digest afterwards.
+   */
+  private final int duplicateWindowHours;
+
   public WeeklyDigestAgent(
       final BlogRepository blogRepository,
       final TagRepository tagRepository,
@@ -63,7 +74,9 @@ public class WeeklyDigestAgent {
       final DigestMetadataGenerator metadataGenerator,
       final ContentChangePublisher changePublisher,
       final BlogImageGenerationService blogImageGenerationService,
-      @Value("${aggregation.digest.window-days}") final int windowDays) {
+      @Value("${aggregation.digest.window-days}") final int windowDays,
+      @Value("${aggregation.digest.duplicate-window-hours}")
+      final int duplicateWindowHours) {
     this.blogRepository = blogRepository;
     this.tagRepository = tagRepository;
     this.articleRepository = articleRepository;
@@ -74,15 +87,18 @@ public class WeeklyDigestAgent {
     this.changePublisher = changePublisher;
     this.blogImageGenerationService = blogImageGenerationService;
     this.windowDays = windowDays;
+    this.duplicateWindowHours = duplicateWindowHours;
   }
 
   /** Generates and publishes the digest, or logs why it did not. */
   @Action(description = "Generate a digest blog post")
   public void generateDigest() {
     Instant cutoff = Instant.now().minus(windowDays, ChronoUnit.DAYS);
-    if (digestAlreadyPublishedInWindow(cutoff)) {
-      log.info("A digest already exists within the last {} days, "
-          + "skipping this run", windowDays);
+    Instant duplicateCutoff =
+        Instant.now().minus(duplicateWindowHours, ChronoUnit.HOURS);
+    if (digestAlreadyPublishedInWindow(duplicateCutoff)) {
+      log.info("A digest already exists within the last {} hours, "
+          + "skipping this run", duplicateWindowHours);
       return;
     }
 

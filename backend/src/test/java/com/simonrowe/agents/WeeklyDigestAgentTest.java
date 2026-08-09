@@ -40,6 +40,7 @@ class WeeklyDigestAgentTest {
 
   private static final Tag DIGEST_TAG = new Tag("tag-1", "Weekly Digest");
   private static final int WINDOW_DAYS = 7;
+  private static final int DUPLICATE_WINDOW_HOURS = 24;
 
   @Mock private BlogRepository blogRepository;
   @Mock private TagRepository tagRepository;
@@ -67,7 +68,10 @@ class WeeklyDigestAgentTest {
   }
 
   private static Blog digestBlog(final String id, final int daysAgo) {
-    Instant createdAt = Instant.now().minus(daysAgo, ChronoUnit.DAYS);
+    return digestBlogAt(id, Instant.now().minus(daysAgo, ChronoUnit.DAYS));
+  }
+
+  private static Blog digestBlogAt(final String id, final Instant createdAt) {
     return new Blog(
         id, "Existing digest", "desc", "content", true, "/uploads/x.png",
         createdAt, createdAt, List.of(DIGEST_TAG), List.<Skill>of(),
@@ -83,13 +87,16 @@ class WeeklyDigestAgentTest {
     agent = new WeeklyDigestAgent(
         blogRepository, tagRepository, articleRepository, favouriteRepository,
         sectionWriter, composer, metadataGenerator, changePublisher,
-        blogImageGenerationService, WINDOW_DAYS);
+        blogImageGenerationService, WINDOW_DAYS, DUPLICATE_WINDOW_HOURS);
   }
 
   @Test
   void suppressesTheRunWhenDigestAlreadyExistsInsideTheWindow() {
+    // The case this guard exists for: the cron published this morning and
+    // someone hit Trigger Digest a few hours later.
     when(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
-        .thenReturn(List.of(digestBlog("existing-1", 2)));
+        .thenReturn(List.of(digestBlogAt("published-this-morning",
+            Instant.now().minus(3, ChronoUnit.HOURS))));
 
     agent.generateDigest();
 
@@ -99,6 +106,31 @@ class WeeklyDigestAgentTest {
     verify(composer, never()).compose(anyList());
     verify(blogRepository, never()).save(any());
     verify(changePublisher, never()).publishCreated(any(), any());
+  }
+
+  @Test
+  void doesNotSuppressTheRunWhenLastWeeksDigestSitsJustPastTheCadence() {
+    // The digest's createdDate is stamped after the LLM and image work
+    // finishes, so a cron firing at 08:00:00 produces a post dated ~08:00:40.
+    // One week later the cron fires at 08:00:00 again — if duplicate
+    // suppression used the 7-day favourites window, last week's post would
+    // still read as "inside the window" by those 40 seconds and the digest
+    // would be skipped every week, forever.
+    Instant lastWeekPlusLatency = Instant.now()
+        .minus(WINDOW_DAYS, ChronoUnit.DAYS)
+        .plusSeconds(40);
+    when(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
+        .thenReturn(List.of(digestBlogAt("last-week", lastWeekPlusLatency)));
+    when(favouriteRepository
+        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any()))
+        .thenReturn(List.of());
+
+    agent.generateDigest();
+
+    verify(favouriteRepository)
+        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any());
   }
 
   @Test
@@ -171,7 +203,8 @@ class WeeklyDigestAgentTest {
     WeeklyDigestAgent agentWithDistinctWindow = new WeeklyDigestAgent(
         blogRepository, tagRepository, articleRepository, favouriteRepository,
         sectionWriter, composer, metadataGenerator, changePublisher,
-        blogImageGenerationService, distinctWindowDays);
+        blogImageGenerationService, distinctWindowDays,
+        DUPLICATE_WINDOW_HOURS);
     when(favouriteRepository
         .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
             eq(FavouriteType.NEWS), any()))
