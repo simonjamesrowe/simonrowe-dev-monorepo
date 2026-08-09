@@ -93,32 +93,51 @@ public class WeeklyDigestAgent {
   /** Generates and publishes the digest, or logs why it did not. */
   @Action(description = "Generate a digest blog post")
   public void generateDigest() {
-    Instant cutoff = Instant.now().minus(windowDays, ChronoUnit.DAYS);
+    Instant now = Instant.now();
     Instant duplicateCutoff =
-        Instant.now().minus(duplicateWindowHours, ChronoUnit.HOURS);
+        now.minus(duplicateWindowHours, ChronoUnit.HOURS);
     if (digestAlreadyPublishedInWindow(duplicateCutoff)) {
       log.info("A digest already exists within the last {} hours, "
           + "skipping this run", duplicateWindowHours);
       return;
     }
+    generateForWindow(now.minus(windowDays, ChronoUnit.DAYS), now, now);
+  }
 
+  /**
+   * Builds and publishes a digest covering the news favourited between
+   * {@code from} and {@code to}, stamped {@code publishAt}.
+   *
+   * <p>This is the whole pipeline, minus the duplicate-run guard: the
+   * scheduled path applies that guard and passes a now-relative window, while
+   * the historical backfill passes one explicit week at a time and does its own
+   * collision handling. Nothing is published when the window has no usable
+   * favourites, or when every section fell back to its stored summary.
+   *
+   * @param from      window start, inclusive, on {@code Favourite.createdAt}
+   * @param to        window end, inclusive
+   * @param publishAt the created/updated date to stamp on the post
+   * @return the saved post, or empty when nothing was published
+   */
+  public Optional<Blog> generateForWindow(
+      final Instant from, final Instant to, final Instant publishAt) {
     List<Favourite> favourites = favouriteRepository
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            FavouriteType.NEWS, cutoff);
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            FavouriteType.NEWS, from, to);
     List<AggregatedArticle> articles = favourites.stream()
         .map(this::resolveArticle)
         .flatMap(Optional::stream)
         .toList();
     if (articles.isEmpty()) {
       if (favourites.isEmpty()) {
-        log.info("No news favourited in the last {} days, "
-            + "skipping digest generation", windowDays);
+        log.info("No news favourited between {} and {}, "
+            + "skipping digest generation", from, to);
       } else {
-        log.info("{} favourite(s) in the last {} days all resolved to "
+        log.info("{} favourite(s) between {} and {} all resolved to "
             + "missing or hidden articles, skipping digest generation",
-            favourites.size(), windowDays);
+            favourites.size(), from, to);
       }
-      return;
+      return Optional.empty();
     }
 
     List<DigestSection> sections = articles.stream()
@@ -129,7 +148,7 @@ public class WeeklyDigestAgent {
         && sections.stream().allMatch(DigestSection::fallback)) {
       log.error("Every section fell back to its stored summary — "
           + "assuming an LLM outage and publishing nothing");
-      return;
+      return Optional.empty();
     }
 
     String content = composer.compose(sections);
@@ -141,16 +160,16 @@ public class WeeklyDigestAgent {
         buildImageContext(articles));
 
     Tag digestTag = getOrCreateDigestTag();
-    Instant createdAt = Instant.now();
     Blog digest = new Blog(
         null, metadata.title(), metadata.shortDescription(),
-        content, true, featuredImageUrl, createdAt, createdAt,
+        content, true, featuredImageUrl, publishAt, publishAt,
         List.of(digestTag), List.<Skill>of(), BlogContentType.DIGEST);
 
     Blog saved = blogRepository.save(digest);
     changePublisher.publishCreated(ContentType.BLOG, saved.id());
     log.info("Published digest '{}' covering {} favourited articles",
         metadata.title(), articles.size());
+    return Optional.of(saved);
   }
 
   /**

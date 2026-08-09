@@ -101,7 +101,7 @@ class WeeklyDigestAgentTest {
     agent.generateDigest();
 
     verify(favouriteRepository, never())
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(any(), any());
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(any(), any(), any());
     verify(sectionWriter, never()).write(any());
     verify(composer, never()).compose(anyList());
     verify(blogRepository, never()).save(any());
@@ -122,15 +122,15 @@ class WeeklyDigestAgentTest {
     when(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
         .thenReturn(List.of(digestBlogAt("last-week", lastWeekPlusLatency)));
     when(favouriteRepository
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), any()))
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of());
 
     agent.generateDigest();
 
     verify(favouriteRepository)
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), any());
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any());
   }
 
   @Test
@@ -138,22 +138,22 @@ class WeeklyDigestAgentTest {
     when(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
         .thenReturn(List.of(digestBlog("stale-digest", WINDOW_DAYS + 3)));
     when(favouriteRepository
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), any()))
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of());
 
     agent.generateDigest();
 
     verify(favouriteRepository)
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), any());
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any());
   }
 
   @Test
   void publishesNothingWhenNoFavouritesInWindow() {
     when(favouriteRepository
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), any()))
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of());
 
     agent.generateDigest();
@@ -165,8 +165,8 @@ class WeeklyDigestAgentTest {
   @Test
   void skipsFavouriteWhoseArticleNoLongerExists() {
     when(favouriteRepository
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), any()))
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of(favourite("gone", 1)));
     when(articleRepository.findById("gone")).thenReturn(Optional.empty());
 
@@ -183,8 +183,8 @@ class WeeklyDigestAgentTest {
         "https://infoq.com/hid", "Summary.", "Content.", null,
         Instant.now(), Instant.now(), false, null);
     when(favouriteRepository
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), any()))
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of(favourite("hid", 1)));
     when(articleRepository.findById("hid")).thenReturn(Optional.of(hidden));
 
@@ -206,16 +206,16 @@ class WeeklyDigestAgentTest {
         blogImageGenerationService, distinctWindowDays,
         DUPLICATE_WINDOW_HOURS);
     when(favouriteRepository
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), any()))
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of());
 
     agentWithDistinctWindow.generateDigest();
 
     ArgumentCaptor<Instant> cutoff = ArgumentCaptor.forClass(Instant.class);
     verify(favouriteRepository)
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), cutoff.capture());
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), cutoff.capture(), any());
     Instant expected =
         Instant.now().minus(distinctWindowDays, ChronoUnit.DAYS);
     assertThat(cutoff.getValue())
@@ -226,8 +226,8 @@ class WeeklyDigestAgentTest {
   void publishesNothingWhenEverySectionIsFallback() {
     AggregatedArticle art = article("art-1", "Spring Boot 4");
     when(favouriteRepository
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), any()))
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of(favourite("art-1", 1)));
     when(articleRepository.findById("art-1")).thenReturn(Optional.of(art));
     when(sectionWriter.write(art)).thenReturn(new DigestSection(
@@ -252,8 +252,8 @@ class WeeklyDigestAgentTest {
         "Real prose.", false);
 
     when(favouriteRepository
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), any()))
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of(
             favourite("art-1", 1), favourite("art-2", 2)));
     when(articleRepository.findById("art-1"))
@@ -287,8 +287,8 @@ class WeeklyDigestAgentTest {
         "Real prose.", false);
 
     when(favouriteRepository
-        .findByTypeAndCreatedAtAfterOrderByCreatedAtDesc(
-            eq(FavouriteType.NEWS), any()))
+        .findByTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            eq(FavouriteType.NEWS), any(), any()))
         .thenReturn(List.of(favourite("art-1", 2)));
     when(articleRepository.findById("art-1")).thenReturn(Optional.of(art));
     when(sectionWriter.write(art)).thenReturn(section);

@@ -54,7 +54,8 @@ public class DigestComposer {
 
       Rules you must not break:
       - Reproduce every Markdown link EXACTLY as written, including the URL.
-      - Keep every "## [Title](url)" heading exactly as given.
+      - Keep every "### [Title](url)" heading exactly as given, at that \
+      exact heading level.
       - Do not add a top-level title heading.
       - Do not invent articles, links or facts.
 
@@ -111,7 +112,10 @@ public class DigestComposer {
       // ArticleSectionWriter's HTML guard the way a generated body does.
       // Strip it here rather than relying solely on the final belt-and-braces
       // pass below.
-      sb.append("## [").append(stripHtml(section.title()))
+      // h3 rather than h2: the heading carries a link, so it inherits the
+      // full link treatment, and at h2 the result reads as a wall of large
+      // underlined blue text rather than as section headings.
+      sb.append("### [").append(stripHtml(section.title()))
           .append("](").append(section.url()).append(")\n\n")
           .append(section.body()).append("\n\n");
     }
