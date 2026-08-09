@@ -158,4 +158,30 @@ class FeedbackControllerTest {
     assertThat(started.getValue().installationId()).isEqualTo(4242L);
     assertThat(started.getValue().dryRun()).isFalse();
   }
+
+  /**
+   * Regression: a fixed {@code dryRun:false} body can't distinguish "propagated correctly"
+   * from "hardcoded to false" in {@link FeedbackController#start}, so this pins the {@code
+   * true} case too.
+   */
+  @Test
+  void propagatesDryRunTrueFromTheRequestBody() throws Exception {
+    when(workflowService.start(any())).thenReturn(new FeedbackAccepted("workflow-1", true));
+    String dryRunBody =
+        """
+        {"owner":"example","repository":"project","pullNumber":42,"dryRun":true}
+        """;
+
+    mockMvcWithToken(TOKEN)
+        .perform(
+            post("/api/feedback")
+                .header("X-Factory-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(dryRunBody))
+        .andExpect(status().isAccepted());
+
+    ArgumentCaptor<FeedbackRequest> started = ArgumentCaptor.forClass(FeedbackRequest.class);
+    verify(workflowService).start(started.capture());
+    assertThat(started.getValue().dryRun()).isTrue();
+  }
 }

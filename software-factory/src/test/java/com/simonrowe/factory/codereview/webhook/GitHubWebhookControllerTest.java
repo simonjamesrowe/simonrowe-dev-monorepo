@@ -74,8 +74,13 @@ class GitHubWebhookControllerTest {
   }
 
   private static FeedbackProperties feedbackProperties(final boolean enabled) {
+    return feedbackProperties(enabled, List.of());
+  }
+
+  private static FeedbackProperties feedbackProperties(
+      final boolean enabled, final List<String> repos) {
     return new FeedbackProperties(
-        enabled, List.of(), "agent-feedback", "simonjamesrowe/agent-setup",
+        enabled, repos, "agent-feedback", "simonjamesrowe/agent-setup",
         "simonrowe-code-reviewer[bot]", "simonrowe-code-reviewer[bot]@users.noreply.github.com",
         java.nio.file.Path.of("/tmp"),
         new FeedbackProperties.Agent("claude", "haiku", "low", 8, Duration.ofMinutes(5)),
@@ -287,6 +292,18 @@ class GitHubWebhookControllerTest {
   @Test
   void agentFeedbackLabelledPullRequestIsNeverHarvested() throws Exception {
     String payload = closedPayload("agent-feedback");
+
+    deliver(payload, sign(payload), "pull_request")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("ignored"));
+
+    verify(feedbackWorkflowService, never()).start(any());
+  }
+
+  @Test
+  void closedPullRequestIsIgnoredWhenRepoNotInAllowlist() throws Exception {
+    mockMvc = buildMockMvc(feedbackProperties(true, List.of("other/repo")));
+    String payload = closedPayload();
 
     deliver(payload, sign(payload), "pull_request")
         .andExpect(status().isAccepted())
