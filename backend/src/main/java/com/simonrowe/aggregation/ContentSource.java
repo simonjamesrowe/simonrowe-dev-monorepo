@@ -30,6 +30,7 @@ public record ContentSource(
     SITEMAP_HTML,
     HTML,
     HTML_LISTING,
-    LUMA
+    LUMA,
+    LINK_ROUNDUP
   }
 }

@@ -1,14 +1,14 @@
 package com.simonrowe.aggregation;
 
 import java.util.List;
-import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -55,27 +55,32 @@ public class NewsController {
   }
 
   /**
-   * Every distinct source name across the visible articles, alphabetically sorted.
+   * Every source across the visible articles with its article count, busiest first.
    *
-   * <p>Backs the news filter chips, which must list every source the site holds rather than
-   * only those appearing on the first page of results. Uses {@code findDistinct} because
-   * Spring Data has no derived-query projection for a distinct scalar.
+   * <p>Backs the news filter pills, which must list every source the site holds rather
+   * than only those appearing on the first page of results. The count lets the page sort
+   * by volume and collapse low-volume sources into a "More" overflow, which is what keeps
+   * one-off manual imports from crowding the row.
    *
    * <p>Declared before the {@code /{id}} mapping for readability only — Spring matches the
    * literal {@code /sources} path ahead of the {@code {id}} template regardless of order.
    *
-   * @return the distinct source names, empty when there are no visible articles
+   * @return the source summaries, empty when there are no visible articles
    */
   @GetMapping("/sources")
-  public List<String> listSources() {
-    return mongoTemplate.findDistinct(
-            new Query(Criteria.where("visible").is(true)),
-            "sourceName",
-            AggregatedArticle.class,
-            String.class)
+  public List<SourceSummary> listSources() {
+    Aggregation aggregation = Aggregation.newAggregation(
+        Aggregation.match(Criteria.where("visible").is(true)),
+        Aggregation.group("sourceName").count().as("count"),
+        Aggregation.project("count").and("_id").as("name"),
+        Aggregation.sort(Sort.by(Sort.Direction.DESC, "count")
+            .and(Sort.by(Sort.Direction.ASC, "name"))));
+
+    return mongoTemplate
+        .aggregate(aggregation, AggregatedArticle.class, SourceSummary.class)
+        .getMappedResults()
         .stream()
-        .filter(Objects::nonNull)
-        .sorted()
+        .filter(summary -> summary.name() != null)
         .toList();
   }
 

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NewsEventsPage } from '../../src/pages/NewsEventsPage'
-import type { ArticlePage, ArticleResponse } from '../../src/types/news'
+import type { ArticlePage, ArticleResponse, SourceSummary } from '../../src/types/news'
 import type { EventPage } from '../../src/types/events'
 
 vi.mock('../../src/services/newsApi', () => ({
@@ -56,6 +56,10 @@ function newsPage(content: ArticleResponse[], number = 0, last = true): ArticleP
   return { content, totalElements: 120, totalPages: 5, number, size: 24, last }
 }
 
+function source(name: string, count = 5): SourceSummary {
+  return { name, count }
+}
+
 const emptyEventPage: EventPage = {
   content: [],
   totalElements: 0,
@@ -81,7 +85,7 @@ describe('NewsEventsPage', () => {
     vi.mocked(getFavourites).mockReset()
 
     vi.mocked(fetchEvents).mockResolvedValue(emptyEventPage)
-    vi.mocked(fetchNewsSources).mockResolvedValue(['InfoQ'])
+    vi.mocked(fetchNewsSources).mockResolvedValue([source('InfoQ')])
     vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
   })
 
@@ -132,7 +136,7 @@ describe('NewsEventsPage', () => {
   })
 
   it('re-queries the backend when a source chip is selected', async () => {
-    vi.mocked(fetchNewsSources).mockResolvedValue(['Ars Technica', 'InfoQ'])
+    vi.mocked(fetchNewsSources).mockResolvedValue([source('Ars Technica'), source('InfoQ')])
     vi.mocked(fetchNews).mockImplementation((...args) =>
       Promise.resolve(
         args[2] === 'InfoQ'
@@ -155,7 +159,7 @@ describe('NewsEventsPage', () => {
   })
 
   it('renders chips for sources that have no article on the first page', async () => {
-    vi.mocked(fetchNewsSources).mockResolvedValue(['Ars Technica', 'InfoQ', 'The Pragmatic Engineer'])
+    vi.mocked(fetchNewsSources).mockResolvedValue([source('Ars Technica'), source('InfoQ'), source('The Pragmatic Engineer')])
     vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article', 'InfoQ')]))
 
     renderPage()
@@ -168,7 +172,7 @@ describe('NewsEventsPage', () => {
   })
 
   it('discards a stale page-two response that arrives after a source switch', async () => {
-    vi.mocked(fetchNewsSources).mockResolvedValue(['Ars Technica', 'InfoQ'])
+    vi.mocked(fetchNewsSources).mockResolvedValue([source('Ars Technica'), source('InfoQ')])
     let resolvePageTwo: (value: ArticlePage) => void = () => {}
     vi.mocked(fetchNews).mockImplementation((...args) => {
       const [page = 0, , source] = args
@@ -246,5 +250,94 @@ describe('NewsEventsPage', () => {
       expect(screen.getByText('First article')).toBeInTheDocument()
     })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('orders source pills by article count, busiest first', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Dan Vega', 16),
+      source('Rundown AI', 298),
+      source('Spring Blog', 81),
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
+
+    const pills = screen.getAllByRole('button').map(b => b.textContent)
+    expect(pills.indexOf('Rundown AI')).toBeLessThan(pills.indexOf('Spring Blog'))
+    expect(pills.indexOf('Spring Blog')).toBeLessThan(pills.indexOf('Dan Vega'))
+  })
+
+  it('hides sources with fewer than three articles behind the More menu', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('blog.cloudflare.com', 2),
+      source('ssntpl.com', 1),
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
+
+    // Regex, not an exact string: a menu row's accessible name is its source name
+    // followed by its article count ("blog.cloudflare.com 2").
+    expect(screen.queryByRole('button', { name: /blog\.cloudflare\.com/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'More (2)' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'More (2)' }))
+
+    expect(screen.getByRole('button', { name: /blog\.cloudflare\.com/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ssntpl\.com/ })).toBeInTheDocument()
+  })
+
+  it('filters by a source chosen from the More menu and shows it as active', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('ssntpl.com', 1),
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'More (1)' }))
+    await userEvent.click(screen.getByRole('button', { name: /ssntpl\.com/ }))
+
+    await waitFor(() =>
+      expect(fetchNews).toHaveBeenCalledWith(0, 24, 'ssntpl.com'),
+    )
+    // The menu has closed, so this now matches the toggle itself: the active filter
+    // must stay visible even though the source is collapsed out of the main row.
+    expect(screen.getByRole('button', { name: 'ssntpl.com' })).toBeInTheDocument()
+  })
+
+  it('closes the More menu on Escape and returns focus to the toggle', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('ssntpl.com', 1),
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'More (1)' }))
+    expect(screen.getByRole('button', { name: /ssntpl\.com/ })).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}')
+
+    expect(screen.queryByRole('button', { name: /ssntpl\.com/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /^More/ })).toHaveFocus()
+  })
+
+  it('renders no More button when every source clears the threshold', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('Spring Blog', 81),
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
+
+    expect(screen.queryByRole('button', { name: /^More/ })).toBeNull()
   })
 })
