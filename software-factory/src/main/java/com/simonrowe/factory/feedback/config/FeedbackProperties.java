@@ -12,6 +12,10 @@ public record FeedbackProperties(
     String gitAuthorName, String gitAuthorEmail, Path workspaceRoot,
     Agent harvest, Agent distill) {
 
+  public FeedbackProperties {
+    repos = repos == null ? List.of() : List.copyOf(repos);
+  }
+
   /** Claude CLI process and workspace configuration for agent phases. */
   public record Agent(
       String command, String model, String effort, int maxTurns, Duration timeout) {
