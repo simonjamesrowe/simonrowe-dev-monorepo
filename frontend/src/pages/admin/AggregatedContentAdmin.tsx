@@ -17,21 +17,29 @@ import {
   importArticleUrl,
   type AdminNewsArticle,
   type AdminEvent,
+  type PageResponse,
 } from '../../services/adminApi'
+import { AdminMenu } from '../../components/admin/AdminMenu'
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
 
 type ActiveTab = 'news' | 'events'
+
+const DIGEST_CONFIRM_MESSAGE =
+  'This will use AI to write a new blog post summarising recent blogs and articles, ' +
+  'and publish it live on the site immediately. Continue?'
 
 export function AggregatedContentAdmin() {
   const { getAccessToken } = useAuth()
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('news')
 
-  const [news, setNews] = useState<AdminNewsArticle[]>([])
+  const [news, setNews] = useState<PageResponse<AdminNewsArticle> | null>(null)
+  const [newsPage, setNewsPage] = useState(0)
   const [newsLoading, setNewsLoading] = useState(true)
   const [newsError, setNewsError] = useState<string | null>(null)
 
-  const [events, setEvents] = useState<AdminEvent[]>([])
+  const [events, setEvents] = useState<PageResponse<AdminEvent> | null>(null)
+  const [eventsPage, setEventsPage] = useState(0)
   const [eventsLoading, setEventsLoading] = useState(true)
   const [eventsError, setEventsError] = useState<string | null>(null)
 
@@ -39,47 +47,59 @@ export function AggregatedContentAdmin() {
   const [aggregationSuccess, setAggregationSuccess] = useState<string | null>(null)
   const [aggregationError, setAggregationError] = useState<string | null>(null)
   const [digestTriggering, setDigestTriggering] = useState(false)
+  const [digestConfirmOpen, setDigestConfirmOpen] = useState(false)
   const [importUrl, setImportUrl] = useState('')
   const [importLoading, setImportLoading] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string; type: 'news' | 'event' } | null>(null)
 
-  const loadNews = useCallback(async () => {
+  const loadNews = useCallback(async (): Promise<PageResponse<AdminNewsArticle> | null> => {
     try {
       setNewsLoading(true)
       setNewsError(null)
-      const data = await fetchAdminNews(getAccessToken)
+      const data = await fetchAdminNews(getAccessToken, newsPage)
       setNews(data)
+      return data
     } catch (err) {
       setNewsError(err instanceof Error ? err.message : 'Failed to load news')
+      return null
     } finally {
       setNewsLoading(false)
     }
-  }, [getAccessToken])
+  }, [getAccessToken, newsPage])
 
-  const loadEvents = useCallback(async () => {
+  const loadEvents = useCallback(async (): Promise<PageResponse<AdminEvent> | null> => {
     try {
       setEventsLoading(true)
       setEventsError(null)
-      const data = await fetchAdminEvents(getAccessToken)
+      const data = await fetchAdminEvents(getAccessToken, eventsPage)
       setEvents(data)
+      return data
     } catch (err) {
       setEventsError(err instanceof Error ? err.message : 'Failed to load events')
+      return null
     } finally {
       setEventsLoading(false)
     }
-  }, [getAccessToken])
+  }, [getAccessToken, eventsPage])
 
   useEffect(() => {
     loadNews()
+  }, [loadNews])
+
+  useEffect(() => {
     loadEvents()
-  }, [loadNews, loadEvents])
+  }, [loadEvents])
 
   const handleToggleArticleVisibility = async (id: string, currentVisible: boolean) => {
     try {
       setNewsError(null)
       const updated = await toggleArticleVisibility(getAccessToken, id, !currentVisible)
-      setNews((prev) => prev.map((item) => (item.id === id ? updated : item)))
+      setNews((prev) =>
+        prev
+          ? { ...prev, content: prev.content.map((item) => (item.id === id ? updated : item)) }
+          : prev,
+      )
     } catch (err) {
       setNewsError(err instanceof Error ? err.message : 'Failed to update visibility')
     }
@@ -89,7 +109,11 @@ export function AggregatedContentAdmin() {
     try {
       setEventsError(null)
       const updated = await toggleEventVisibility(getAccessToken, id, !currentVisible)
-      setEvents((prev) => prev.map((item) => (item.id === id ? updated : item)))
+      setEvents((prev) =>
+        prev
+          ? { ...prev, content: prev.content.map((item) => (item.id === id ? updated : item)) }
+          : prev,
+      )
     } catch (err) {
       setEventsError(err instanceof Error ? err.message : 'Failed to update visibility')
     }
@@ -97,25 +121,32 @@ export function AggregatedContentAdmin() {
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return
+    const target = deleteTarget
+    setDeleteTarget(null)
     try {
-      if (deleteTarget.type === 'news') {
+      if (target.type === 'news') {
         setNewsError(null)
-        await deleteArticle(getAccessToken, deleteTarget.id)
-        setNews((prev) => prev.filter((item) => item.id !== deleteTarget.id))
+        await deleteArticle(getAccessToken, target.id)
+        // Reload so the current page refills, clamping back if it is now past the end.
+        const reloaded = await loadNews()
+        if (reloaded && newsPage > 0 && newsPage > reloaded.totalPages - 1) {
+          setNewsPage((p) => p - 1)
+        }
       } else {
         setEventsError(null)
-        await deleteEvent(getAccessToken, deleteTarget.id)
-        setEvents((prev) => prev.filter((item) => item.id !== deleteTarget.id))
+        await deleteEvent(getAccessToken, target.id)
+        const reloaded = await loadEvents()
+        if (reloaded && eventsPage > 0 && eventsPage > reloaded.totalPages - 1) {
+          setEventsPage((p) => p - 1)
+        }
       }
-      setDeleteTarget(null)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete item'
-      if (deleteTarget.type === 'news') {
+      if (target.type === 'news') {
         setNewsError(message)
       } else {
         setEventsError(message)
       }
-      setDeleteTarget(null)
     }
   }
 
@@ -135,6 +166,39 @@ export function AggregatedContentAdmin() {
     }
   }
 
+  const handleGenerateDigest = async () => {
+    setDigestConfirmOpen(false)
+    try {
+      setDigestTriggering(true)
+      setAggregationSuccess(null)
+      setAggregationError(null)
+      await triggerDigest(getAccessToken)
+      setAggregationSuccess('Weekly digest generation triggered.')
+    } catch (err) {
+      setAggregationError(err instanceof Error ? err.message : 'Failed to trigger digest')
+    } finally {
+      setDigestTriggering(false)
+    }
+  }
+
+  const handleSearchSync = async () => {
+    try {
+      await triggerSearchSync(getAccessToken)
+      setAggregationSuccess('Search sync triggered.')
+    } catch (err) {
+      setAggregationError(err instanceof Error ? err.message : 'Sync failed')
+    }
+  }
+
+  const handleEmbeddingSync = async () => {
+    try {
+      await triggerEmbeddingSync(getAccessToken)
+      setAggregationSuccess('Embedding sync triggered.')
+    } catch (err) {
+      setAggregationError(err instanceof Error ? err.message : 'Sync failed')
+    }
+  }
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'
     return new Date(dateStr).toLocaleDateString()
@@ -144,6 +208,9 @@ export function AggregatedContentAdmin() {
     if (text.length <= maxLength) return text
     return `${text.slice(0, maxLength)}…`
   }
+
+  const newsItems = news?.content ?? []
+  const eventItems = events?.content ?? []
 
   return (
     <div className="admin-page">
@@ -156,61 +223,38 @@ export function AggregatedContentAdmin() {
           {aggregationError && (
             <span className="admin-error-inline">{aggregationError}</span>
           )}
-          <button
-            className="admin-btn admin-btn--secondary"
-            onClick={async () => {
-              try {
-                await triggerSearchSync(getAccessToken)
-                setAggregationSuccess('Search sync triggered.')
-              } catch (err) {
-                setAggregationError(err instanceof Error ? err.message : 'Sync failed')
-              }
-            }}
-            type="button"
-          >
-            Sync Search
-          </button>
-          <button
-            className="admin-btn admin-btn--secondary"
-            onClick={async () => {
-              try {
-                await triggerEmbeddingSync(getAccessToken)
-                setAggregationSuccess('Embedding sync triggered.')
-              } catch (err) {
-                setAggregationError(err instanceof Error ? err.message : 'Sync failed')
-              }
-            }}
-            type="button"
-          >
-            Sync Embeddings
-          </button>
+          <AdminMenu
+            label="Maintenance"
+            items={[
+              {
+                label: 'Rebuild Search Index',
+                title: 'Rebuild the site-wide Elasticsearch index.',
+                onSelect: handleSearchSync,
+              },
+              {
+                label: 'Rebuild Embeddings',
+                title: 'Rebuild the site-wide vector embeddings.',
+                onSelect: handleEmbeddingSync,
+              },
+            ]}
+          />
           <button
             className="admin-btn admin-btn--primary"
             disabled={aggregationTriggering}
             onClick={handleTriggerAggregation}
+            title="Visit every active content source and scrape new articles and events. Also runs automatically each night."
             type="button"
           >
-            {aggregationTriggering ? 'Triggering...' : 'Trigger Aggregation'}
+            {aggregationTriggering ? 'Fetching...' : 'Fetch New Articles'}
           </button>
           <button
             className="admin-btn admin-btn--primary"
             disabled={digestTriggering}
-            onClick={async () => {
-              try {
-                setDigestTriggering(true)
-                setAggregationSuccess(null)
-                setAggregationError(null)
-                await triggerDigest(getAccessToken)
-                setAggregationSuccess('Weekly digest generation triggered.')
-              } catch (err) {
-                setAggregationError(err instanceof Error ? err.message : 'Failed to trigger digest')
-              } finally {
-                setDigestTriggering(false)
-              }
-            }}
+            onClick={() => setDigestConfirmOpen(true)}
+            title="Use AI to write and publish a blog post summarising recent activity. Also runs automatically every 3 days."
             type="button"
           >
-            {digestTriggering ? 'Generating...' : 'Trigger Digest'}
+            {digestTriggering ? 'Generating...' : 'Generate Digest Blog Post'}
           </button>
         </div>
       </div>
@@ -259,14 +303,14 @@ export function AggregatedContentAdmin() {
           onClick={() => setActiveTab('news')}
           type="button"
         >
-          News ({news.length})
+          News ({news?.totalElements ?? 0})
         </button>
         <button
           className={`admin-tab${activeTab === 'events' ? ' admin-tab--active' : ''}`}
           onClick={() => setActiveTab('events')}
           type="button"
         >
-          Events ({events.length})
+          Events ({events?.totalElements ?? 0})
         </button>
       </div>
 
@@ -276,55 +320,78 @@ export function AggregatedContentAdmin() {
           {newsLoading ? (
             <div className="admin-loading">Loading news...</div>
           ) : (
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th className="admin-table__th">Title</th>
-                  <th className="admin-table__th">Source</th>
-                  <th className="admin-table__th">Published</th>
-                  <th className="admin-table__th">Visible</th>
-                  <th className="admin-table__th">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {news.length === 0 && (
+            <>
+              <table className="admin-table">
+                <thead>
                   <tr>
-                    <td className="admin-table__td admin-table__td--empty" colSpan={5}>
-                      No news articles found.
-                    </td>
+                    <th className="admin-table__th">Title</th>
+                    <th className="admin-table__th">Source</th>
+                    <th className="admin-table__th">Published</th>
+                    <th className="admin-table__th">Visible</th>
+                    <th className="admin-table__th">Actions</th>
                   </tr>
-                )}
-                {news.map((article) => (
-                  <tr key={article.id} className="admin-table__row">
-                    <td className="admin-table__td" title={article.title}>
-                      {truncate(article.title)}
-                    </td>
-                    <td className="admin-table__td">{article.sourceName}</td>
-                    <td className="admin-table__td">{formatDate(article.publishedDate)}</td>
-                    <td className="admin-table__td">
-                      <button
-                        className={`admin-btn admin-btn--icon${article.visible ? '' : ' admin-btn--muted'}`}
-                        onClick={() => handleToggleArticleVisibility(article.id, article.visible)}
-                        title={article.visible ? 'Visible - click to hide' : 'Hidden - click to show'}
-                        type="button"
-                      >
-                        {article.visible ? <Eye size={16} /> : <EyeOff size={16} />}
-                      </button>
-                    </td>
-                    <td className="admin-table__td admin-table__td--actions">
-                      <button
-                        className="admin-btn admin-btn--icon admin-btn--danger-icon"
-                        onClick={() => setDeleteTarget({ id: article.id, title: article.title, type: 'news' })}
-                        title="Delete"
-                        type="button"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {newsItems.length === 0 && (
+                    <tr>
+                      <td className="admin-table__td admin-table__td--empty" colSpan={5}>
+                        No news articles found.
+                      </td>
+                    </tr>
+                  )}
+                  {newsItems.map((article) => (
+                    <tr key={article.id} className="admin-table__row">
+                      <td className="admin-table__td" title={article.title}>
+                        {truncate(article.title)}
+                      </td>
+                      <td className="admin-table__td">{article.sourceName}</td>
+                      <td className="admin-table__td">{formatDate(article.publishedDate)}</td>
+                      <td className="admin-table__td">
+                        <button
+                          className={`admin-btn admin-btn--icon${article.visible ? '' : ' admin-btn--muted'}`}
+                          onClick={() => handleToggleArticleVisibility(article.id, article.visible)}
+                          title={article.visible ? 'Visible - click to hide' : 'Hidden - click to show'}
+                          type="button"
+                        >
+                          {article.visible ? <Eye size={16} /> : <EyeOff size={16} />}
+                        </button>
+                      </td>
+                      <td className="admin-table__td admin-table__td--actions">
+                        <button
+                          className="admin-btn admin-btn--icon admin-btn--danger-icon"
+                          onClick={() => setDeleteTarget({ id: article.id, title: article.title, type: 'news' })}
+                          title="Delete"
+                          type="button"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {news && news.totalPages > 1 && (
+                <div className="pagination">
+                  <button
+                    disabled={newsPage === 0}
+                    onClick={() => setNewsPage((p) => p - 1)}
+                    type="button"
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {newsPage + 1} of {news.totalPages}
+                  </span>
+                  <button
+                    disabled={newsPage >= news.totalPages - 1}
+                    onClick={() => setNewsPage((p) => p + 1)}
+                    type="button"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
@@ -335,55 +402,78 @@ export function AggregatedContentAdmin() {
           {eventsLoading ? (
             <div className="admin-loading">Loading events...</div>
           ) : (
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th className="admin-table__th">Title</th>
-                  <th className="admin-table__th">Source</th>
-                  <th className="admin-table__th">Event Date</th>
-                  <th className="admin-table__th">Visible</th>
-                  <th className="admin-table__th">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.length === 0 && (
+            <>
+              <table className="admin-table">
+                <thead>
                   <tr>
-                    <td className="admin-table__td admin-table__td--empty" colSpan={5}>
-                      No events found.
-                    </td>
+                    <th className="admin-table__th">Title</th>
+                    <th className="admin-table__th">Source</th>
+                    <th className="admin-table__th">Event Date</th>
+                    <th className="admin-table__th">Visible</th>
+                    <th className="admin-table__th">Actions</th>
                   </tr>
-                )}
-                {events.map((event) => (
-                  <tr key={event.id} className="admin-table__row">
-                    <td className="admin-table__td" title={event.title}>
-                      {truncate(event.title)}
-                    </td>
-                    <td className="admin-table__td">{event.sourceName}</td>
-                    <td className="admin-table__td">{formatDate(event.eventDate)}</td>
-                    <td className="admin-table__td">
-                      <button
-                        className={`admin-btn admin-btn--icon${event.visible ? '' : ' admin-btn--muted'}`}
-                        onClick={() => handleToggleEventVisibility(event.id, event.visible)}
-                        title={event.visible ? 'Visible - click to hide' : 'Hidden - click to show'}
-                        type="button"
-                      >
-                        {event.visible ? <Eye size={16} /> : <EyeOff size={16} />}
-                      </button>
-                    </td>
-                    <td className="admin-table__td admin-table__td--actions">
-                      <button
-                        className="admin-btn admin-btn--icon admin-btn--danger-icon"
-                        onClick={() => setDeleteTarget({ id: event.id, title: event.title, type: 'event' })}
-                        title="Delete"
-                        type="button"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {eventItems.length === 0 && (
+                    <tr>
+                      <td className="admin-table__td admin-table__td--empty" colSpan={5}>
+                        No events found.
+                      </td>
+                    </tr>
+                  )}
+                  {eventItems.map((event) => (
+                    <tr key={event.id} className="admin-table__row">
+                      <td className="admin-table__td" title={event.title}>
+                        {truncate(event.title)}
+                      </td>
+                      <td className="admin-table__td">{event.sourceName}</td>
+                      <td className="admin-table__td">{formatDate(event.eventDate)}</td>
+                      <td className="admin-table__td">
+                        <button
+                          className={`admin-btn admin-btn--icon${event.visible ? '' : ' admin-btn--muted'}`}
+                          onClick={() => handleToggleEventVisibility(event.id, event.visible)}
+                          title={event.visible ? 'Visible - click to hide' : 'Hidden - click to show'}
+                          type="button"
+                        >
+                          {event.visible ? <Eye size={16} /> : <EyeOff size={16} />}
+                        </button>
+                      </td>
+                      <td className="admin-table__td admin-table__td--actions">
+                        <button
+                          className="admin-btn admin-btn--icon admin-btn--danger-icon"
+                          onClick={() => setDeleteTarget({ id: event.id, title: event.title, type: 'event' })}
+                          title="Delete"
+                          type="button"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {events && events.totalPages > 1 && (
+                <div className="pagination">
+                  <button
+                    disabled={eventsPage === 0}
+                    onClick={() => setEventsPage((p) => p - 1)}
+                    type="button"
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {eventsPage + 1} of {events.totalPages}
+                  </span>
+                  <button
+                    disabled={eventsPage >= events.totalPages - 1}
+                    onClick={() => setEventsPage((p) => p + 1)}
+                    type="button"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
@@ -396,6 +486,16 @@ export function AggregatedContentAdmin() {
         cancelLabel="Cancel"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={digestConfirmOpen}
+        title="Generate Digest Blog Post"
+        message={DIGEST_CONFIRM_MESSAGE}
+        confirmLabel="Generate"
+        cancelLabel="Cancel"
+        onConfirm={handleGenerateDigest}
+        onCancel={() => setDigestConfirmOpen(false)}
       />
     </div>
   )

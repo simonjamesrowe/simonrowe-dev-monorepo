@@ -9218,3 +9218,56 @@ a:hover {
     flex-basis: 82%;
   }
 }
+
+/* --- Admin Menu --- */
+
+.admin-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.admin-menu__trigger {
+  gap: 0.35rem;
+}
+
+.admin-menu__popover {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 100;
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-panel);
+  box-shadow: var(--shadow-lg);
+}
+
+.admin-menu__item {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--color-text);
+  padding: 0.5rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.admin-menu__item:hover:not(:disabled) {
+  background: var(--color-surface-subtle);
+}
+
+.admin-menu__item:disabled {
+  color: var(--color-muted);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
