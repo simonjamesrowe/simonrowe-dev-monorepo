@@ -25,6 +25,7 @@ spring:
       enabled: true
       workflow-packages:
         - com.simonrowe.factory.codereview.workflow
+        - com.simonrowe.factory.feedback.workflow
       register-activity-beans: true
 
 factory:
@@ -50,3 +51,23 @@ factory:
       prompt-version: v1
     api:
       trigger-token: ${FACTORY_TRIGGER_TOKEN:${REVIEWER_TRIGGER_TOKEN:}}
+  feedback:
+    enabled: ${FACTORY_FEEDBACK_ENABLED:false}
+    repos: ${FACTORY_FEEDBACK_REPOS:}
+    skip-label: agent-feedback
+    agent-setup-repo: simonjamesrowe/agent-setup
+    git-author-name: simonrowe-code-reviewer[bot]
+    git-author-email: simonrowe-code-reviewer[bot]@users.noreply.github.com
+    workspace-root: ${FACTORY_WORKSPACE_ROOT:${java.io.tmpdir}/software-factory}
+    harvest:
+      command: ${CLAUDE_COMMAND:claude}
+      model: ${FACTORY_FEEDBACK_HARVEST_MODEL:haiku}
+      effort: ${FACTORY_FEEDBACK_HARVEST_EFFORT:low}
+      max-turns: ${FACTORY_FEEDBACK_HARVEST_MAX_TURNS:8}
+      timeout: ${FACTORY_FEEDBACK_HARVEST_TIMEOUT:5m}
+    distill:
+      command: ${CLAUDE_COMMAND:claude}
+      model: ${FACTORY_FEEDBACK_DISTILL_MODEL:sonnet}
+      effort: ${FACTORY_FEEDBACK_DISTILL_EFFORT:medium}
+      max-turns: ${FACTORY_FEEDBACK_DISTILL_MAX_TURNS:24}
+      timeout: ${FACTORY_FEEDBACK_DISTILL_TIMEOUT:15m}
