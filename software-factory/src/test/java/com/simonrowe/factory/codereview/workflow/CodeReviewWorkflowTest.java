@@ -1,6 +1,7 @@
 package com.simonrowe.factory.codereview.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.simonrowe.factory.codereview.config.CodeReviewTaskQueues;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
@@ -11,11 +12,14 @@ import com.simonrowe.factory.codereview.domain.ReviewRequest;
 import com.simonrowe.factory.codereview.domain.ReviewResult;
 import com.simonrowe.factory.codereview.domain.Severity;
 import com.simonrowe.factory.codereview.domain.Verdict;
+import io.temporal.client.WorkflowFailedException;
 import io.temporal.client.WorkflowOptions;
+import io.temporal.failure.ApplicationFailure;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class CodeReviewWorkflowTest {
@@ -62,6 +66,35 @@ class CodeReviewWorkflowTest {
     }
   }
 
+  @Test
+  void reportsOnThePullRequestWhenTheAgentFails() {
+    AtomicReference<String> reportedFailure = new AtomicReference<>();
+
+    try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
+      Worker worker = environment.newWorker(CodeReviewTaskQueues.REVIEWS);
+      worker.registerWorkflowImplementationTypes(CodeReviewWorkflowImpl.class);
+      worker.registerActivitiesImplementations(new FailingReviewActivities(reportedFailure));
+      environment.start();
+
+      CodeReviewWorkflow workflow =
+          environment
+              .getWorkflowClient()
+              .newWorkflowStub(
+                  CodeReviewWorkflow.class,
+                  WorkflowOptions.newBuilder()
+                      .setTaskQueue(CodeReviewTaskQueues.REVIEWS)
+                      .setWorkflowId("review-failure-test")
+                      .build());
+
+      assertThatThrownBy(
+              () -> workflow.review(new ReviewRequest("owner", "repo", 7, "head-sha", 123L, true)))
+          .isInstanceOf(WorkflowFailedException.class);
+
+      assertThat(reportedFailure.get()).contains("error_max_turns");
+      assertThat(workflow.progress().phase()).isEqualTo(ReviewPhase.FAILED);
+    }
+  }
+
   private record FakeActivities(ReviewReport report, AtomicBoolean published)
       implements ReviewActivities {
 
@@ -88,6 +121,46 @@ class CodeReviewWorkflowTest {
     public void publishReview(
         final PullRequestContext pullRequest, final ReviewReport reviewReport) {
       published.set(true);
+    }
+
+    @Override
+    public void publishFailure(final PullRequestContext pullRequest, final String reason) {
+      throw new IllegalStateException("This review succeeded, so nothing should report a failure");
+    }
+  }
+
+  private record FailingReviewActivities(AtomicReference<String> reportedFailure)
+      implements ReviewActivities {
+
+    @Override
+    public PullRequestContext loadPullRequest(final ReviewRequest request) {
+      return new PullRequestContext(
+          request.owner(),
+          request.repository(),
+          request.pullNumber(),
+          "Title",
+          "Body",
+          "https://github.com/owner/repo.git",
+          "base-sha",
+          "head-sha",
+          request.installationId());
+    }
+
+    @Override
+    public ReviewReport runReview(final PullRequestContext pullRequest) {
+      throw ApplicationFailure.newNonRetryableFailure(
+          "Claude exited with 1: subtype=error_max_turns", "AGENT_FAILED");
+    }
+
+    @Override
+    public void publishReview(
+        final PullRequestContext pullRequest, final ReviewReport reviewReport) {
+      throw new IllegalStateException("A failed review must not publish a report");
+    }
+
+    @Override
+    public void publishFailure(final PullRequestContext pullRequest, final String reason) {
+      reportedFailure.set(reason);
     }
   }
 }

@@ -86,19 +86,36 @@ public class GitHubGateway {
 
   public void publishReview(
       final PullRequestContext pullRequest, final ReviewReport report) {
+    String marker = marker(pullRequest);
+    upsertComment(pullRequest, renderer.render(report, marker), marker);
+  }
+
+  /**
+   * Reports that no review happened. A silent failure is indistinguishable from a webhook that
+   * never arrived, so the reason belongs on the pull request. This shares the review marker, so a
+   * later successful run for the same head SHA replaces the notice rather than stacking comments.
+   */
+  public void publishFailure(final PullRequestContext pullRequest, final String reason) {
+    String marker = marker(pullRequest);
+    upsertComment(pullRequest, renderer.renderFailure(reason, marker), marker);
+  }
+
+  private String marker(final PullRequestContext pullRequest) {
+    return "<!-- temporal-code-review:"
+        + pullRequest.headSha()
+        + ":"
+        + properties.agent().promptVersion()
+        + " -->";
+  }
+
+  private void upsertComment(
+      final PullRequestContext pullRequest, final String body, final String marker) {
     String accessToken = credentials.accessToken(pullRequest.installationId());
     if (accessToken.isBlank()) {
       throw ApplicationFailure.newNonRetryableFailure(
           "Publishing a GitHub review requires GitHub credentials",
           "MISSING_GITHUB_CREDENTIALS");
     }
-    String marker =
-        "<!-- temporal-code-review:"
-            + pullRequest.headSha()
-            + ":"
-            + properties.agent().promptVersion()
-            + " -->";
-    String body = renderer.render(report, marker);
     OptionalLong commentId = findExistingComment(pullRequest, marker, accessToken);
     ObjectNode payload = objectMapper.createObjectNode().put("body", body);
 

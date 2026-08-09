@@ -18,4 +18,7 @@ public interface ReviewActivities {
 
   @ActivityMethod
   void publishReview(PullRequestContext pullRequest, ReviewReport report);
+
+  @ActivityMethod
+  void publishFailure(PullRequestContext pullRequest, String reason);
 }
