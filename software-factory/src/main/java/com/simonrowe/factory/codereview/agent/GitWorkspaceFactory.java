@@ -168,7 +168,7 @@ public class GitWorkspaceFactory {
    * accepts basic credentials. Sending a bearer header there returns 401, git falls back to
    * prompting, and GIT_TERMINAL_PROMPT=0 turns that into "could not read Username".
    */
-  static String basicAuthorizationHeader(final String accessToken) {
+  public static String basicAuthorizationHeader(final String accessToken) {
     String credential = "x-access-token:" + accessToken;
     return "Authorization: Basic "
         + Base64.getEncoder()
