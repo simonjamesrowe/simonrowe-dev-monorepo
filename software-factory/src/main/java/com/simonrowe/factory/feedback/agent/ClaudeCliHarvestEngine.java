@@ -1,5 +1,6 @@
 package com.simonrowe.factory.feedback.agent;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.claude.ClaudeCliRunner;
@@ -70,7 +71,13 @@ public class ClaudeCliHarvestEngine implements HarvestEngine {
                   prompt(request),
                   workspace),
               heartbeat);
-      LessonsEnvelope envelope = objectMapper.treeToValue(structured, LessonsEnvelope.class);
+      LessonsEnvelope envelope;
+      try {
+        envelope = objectMapper.treeToValue(structured, LessonsEnvelope.class);
+      } catch (JsonProcessingException exception) {
+        throw new IllegalStateException(
+            "Harvest output did not match lessons schema", exception);
+      }
       return postProcess(envelope.lessons());
     } catch (IOException exception) {
       throw new IllegalStateException("Unable to prepare harvest workspace", exception);
