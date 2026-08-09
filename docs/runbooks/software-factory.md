@@ -407,7 +407,8 @@ are stored in Event History.
   Merging the API and the worker means these two no longer fail independently —
   losing the container now loses both ingress and processing, where previously a
   live API would still queue work for a dead worker.
-- Claude/model failure: the cost-bearing Activity is not automatically retried.
+- Claude/model failure: the cost-bearing Activity is not automatically retried,
+  but the reason is now posted to the pull request instead of being swallowed.
 - Temporal UI unavailable: review processing continues.
 - Temporal/Postgres unavailable: new triggers fail; do not delete the Postgres
   volume while recovering.
@@ -423,6 +424,24 @@ dies in the clone Activity on `could not read Username for 'https://github.com'`
 Activity failures in Temporal, not the container state. This used to be invisible
 to the `publish:false` dry run, which cloned anonymously; the dry run now
 resolves an installation id and so fails the same way.
+
+A separate quiet failure is the agent running out of turns. The Claude CLI in
+`-p --output-format json` mode reports why it stopped as JSON on **stdout** and
+leaves stderr empty, so a stderr-only error message is blank for every agent-side
+failure. This bit PR #95 (27 files, 4,194 insertions): the agent exhausted the
+then-default 12 turns after 122s, the Activity failed with a bare
+`Claude exited with 1:` and, because `RunReview` has `setMaximumAttempts(1)`,
+the Workflow failed immediately with nothing posted to the pull request.
+`CLAUDE_MAX_TURNS` now defaults to 40, the failure detail now includes the
+stdout `subtype`/`terminal_reason`/`errors` fields, and a failed review posts a
+notice on the pull request rather than going silent. To confirm a suspected
+turn exhaustion by hand:
+
+```bash
+docker exec simonrowe-dev-monorepo-software-factory-1 sh -lc \
+  'echo "<prompt>" | claude -p --output-format json --max-turns 12 > /tmp/o 2>/tmp/e; \
+   echo "EXIT=$?"; grep -o "\"terminal_reason\":\"[^\"]*\"" /tmp/o'
+```
 
 The furthest-along variant is a review that clones, reviews and parses, then
 fails the *last* Activity on `GitHub API returned 403 for POST

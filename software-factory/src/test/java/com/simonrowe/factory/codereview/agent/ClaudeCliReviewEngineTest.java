@@ -70,6 +70,35 @@ class ClaudeCliReviewEngineTest {
   }
 
   @Test
+  void reportsWhyTheAgentStoppedWhenStderrIsEmpty() {
+    String output =
+        """
+        {
+          "type": "result",
+          "is_error": true,
+          "subtype": "error_max_turns",
+          "terminal_reason": "max_turns",
+          "errors": ["Reached maximum number of turns (12)"]
+        }
+        """;
+
+    String detail = engine().failureDetail(new ProcessRunner.ProcessResult(1, output, ""));
+
+    assertThat(detail)
+        .contains("subtype=error_max_turns")
+        .contains("terminal_reason=max_turns")
+        .contains("error=Reached maximum number of turns (12)");
+  }
+
+  @Test
+  void fallsBackToRawStreamsWhenStdoutIsNotTheResultEnvelope() {
+    String detail =
+        engine().failureDetail(new ProcessRunner.ProcessResult(1, "not json", "unknown option"));
+
+    assertThat(detail).contains("not json").contains("stderr: unknown option");
+  }
+
+  @Test
   void keepsClaudeCredentialsButStripsUnrelatedSecrets() {
     var removed =
         ClaudeCliReviewEngine.sensitiveEnvironmentVariables(
@@ -117,6 +146,14 @@ class ClaudeCliReviewEngineTest {
 
     assertThat(removed)
         .containsExactlyInAnyOrder("SOME_FUTURE_PROD_SETTING", "LANGFUSE_ENVIRONMENT");
+  }
+
+  private static ClaudeCliReviewEngine engine() {
+    return new ClaudeCliReviewEngine(
+        properties(),
+        mock(GitWorkspaceFactory.class),
+        mock(ProcessRunner.class),
+        new ObjectMapper());
   }
 
   private static CodeReviewProperties properties() {

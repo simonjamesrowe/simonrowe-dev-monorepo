@@ -27,6 +27,10 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
 
   private static final int MAX_FINDINGS = 20;
 
+  /** Fields of the CLI result envelope that say why a run stopped. */
+  private static final List<String> RESULT_DETAIL_FIELDS =
+      List.of("subtype", "terminal_reason", "api_error_status");
+
   /**
    * Credentials Claude itself needs. Everything outside this set and {@link #PROCESS_ENVIRONMENT}
    * is stripped before the agent runs, because the agent reads attacker-authored pull request
@@ -105,10 +109,7 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
               heartbeat);
       if (process.exitCode() != 0) {
         throw new IllegalStateException(
-            "Claude exited with "
-                + process.exitCode()
-                + ": "
-                + abbreviate(process.standardError(), 800));
+            "Claude exited with " + process.exitCode() + ": " + failureDetail(process));
       }
       return parseReviewOutput(process.standardOutput(), workspace.changedFiles());
     }
@@ -271,6 +272,42 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
     }
     String sanitized = input.replace('\u0000', ' ').replaceAll("[\\r\\n]+", " ").trim();
     return abbreviate(sanitized, maximumLength);
+  }
+
+  /**
+   * Describes a non-zero exit. In {@code -p --output-format json} mode the CLI reports why it
+   * stopped as JSON on stdout and leaves stderr empty, so a stderr-only message is blank for every
+   * agent-side failure — exhausted turns, API errors, an unusable model. Read stdout first.
+   */
+  String failureDetail(final ProcessRunner.ProcessResult process) {
+    String stderr = sanitize(process.standardError(), 400);
+    String stdout = agentResultDetail(process.standardOutput());
+    if (stderr.isEmpty()) {
+      return stdout;
+    }
+    return stdout.isEmpty() ? "stderr: " + stderr : stdout + " | stderr: " + stderr;
+  }
+
+  private String agentResultDetail(final String standardOutput) {
+    JsonNode root;
+    try {
+      root = objectMapper.readTree(standardOutput);
+    } catch (IOException exception) {
+      return sanitize(standardOutput, 800);
+    }
+    List<String> detail = new ArrayList<>();
+    for (String field : RESULT_DETAIL_FIELDS) {
+      JsonNode value = root.path(field);
+      if (value.isValueNode() && !value.isNull() && !value.asText().isBlank()) {
+        detail.add(field + "=" + value.asText());
+      }
+    }
+    for (JsonNode error : root.path("errors")) {
+      detail.add("error=" + error.asText());
+    }
+    return detail.isEmpty()
+        ? sanitize(standardOutput, 800)
+        : sanitize(String.join(", ", detail), 800);
   }
 
   private static String abbreviate(final String value, final int maximumLength) {

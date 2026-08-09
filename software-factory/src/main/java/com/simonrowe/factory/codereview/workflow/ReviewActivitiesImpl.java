@@ -39,4 +39,9 @@ public class ReviewActivitiesImpl implements ReviewActivities {
   public void publishReview(final PullRequestContext pullRequest, final ReviewReport report) {
     gitHubGateway.publishReview(pullRequest, report);
   }
+
+  @Override
+  public void publishFailure(final PullRequestContext pullRequest, final String reason) {
+    gitHubGateway.publishFailure(pullRequest, reason);
+  }
 }
