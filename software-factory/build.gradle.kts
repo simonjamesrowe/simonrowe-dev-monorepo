@@ -17,9 +17,14 @@ dependencies {
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.spring.boot.starter.validation)
+    implementation(libs.spring.boot.starter.data.mongodb)
     implementation(libs.temporal.spring.boot.starter)
     implementation(libs.bouncycastle.pkix)
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.temporal.testing)
+
+    testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.testcontainers.mongodb)
 }

@@ -12,6 +12,9 @@ management:
 spring:
   application:
     name: software-factory
+  data:
+    mongodb:
+      uri: ${FACTORY_MONGODB_URI:mongodb://localhost:27017/software_factory}
   temporal:
     connection:
       target: ${TEMPORAL_ADDRESS:local}
