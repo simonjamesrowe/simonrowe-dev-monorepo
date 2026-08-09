@@ -2,9 +2,11 @@ package com.simonrowe.factory.codereview.github;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
+import com.simonrowe.factory.codereview.domain.ReviewFinding;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
 import io.temporal.failure.ApplicationFailure;
@@ -13,7 +15,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.OptionalLong;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**
@@ -98,63 +100,72 @@ public class GitHubGateway {
             + ":"
             + properties.agent().promptVersion()
             + " -->";
-    String body = renderer.render(report, marker);
-    OptionalLong commentId = findExistingComment(pullRequest, marker, accessToken);
-    ObjectNode payload = objectMapper.createObjectNode().put("body", body);
+    String path =
+        "/repos/"
+            + pullRequest.owner()
+            + "/"
+            + pullRequest.repository()
+            + "/pulls/"
+            + pullRequest.pullNumber()
+            + "/reviews";
 
-    if (commentId.isPresent()) {
-      sendJson(
-          "PATCH",
-          "/repos/"
-              + pullRequest.owner()
-              + "/"
-              + pullRequest.repository()
-              + "/issues/comments/"
-              + commentId.getAsLong(),
-          payload,
-          accessToken);
-    } else {
-      sendJson(
-          "POST",
-          "/repos/"
-              + pullRequest.owner()
-              + "/"
-              + pullRequest.repository()
-              + "/issues/"
-              + pullRequest.pullNumber()
-              + "/comments",
-          payload,
-          accessToken);
+    HttpResponse<String> response =
+        send("POST", path, reviewPayload(pullRequest, report, marker), accessToken);
+    if (response.statusCode() == 422) {
+      // At least one finding did not anchor to the diff; fold everything into the body.
+      response =
+          send("POST", path, fallbackReviewPayload(pullRequest, report, marker), accessToken);
+    }
+    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+      throw new IllegalStateException(
+          "GitHub API returned " + response.statusCode() + " for POST " + path);
     }
   }
 
-  private OptionalLong findExistingComment(
-      final PullRequestContext pullRequest, final String marker, final String accessToken) {
-    JsonNode comments =
-        sendJson(
-            "GET",
-            "/repos/"
-                + pullRequest.owner()
-                + "/"
-                + pullRequest.repository()
-                + "/issues/"
-                + pullRequest.pullNumber()
-                + "/comments?per_page=100",
-            null,
-            accessToken);
-    for (JsonNode comment : comments) {
-      if (comment.path("body").asText("").contains(marker)) {
-        return OptionalLong.of(comment.path("id").asLong());
-      }
+  ObjectNode reviewPayload(
+      final PullRequestContext pullRequest, final ReviewReport report, final String marker) {
+    ObjectNode payload = objectMapper.createObjectNode();
+    payload.put("commit_id", pullRequest.headSha());
+    payload.put("event", "COMMENT");
+    payload.put("body", renderer.renderReviewBody(report, marker, List.of()));
+    ArrayNode comments = payload.putArray("comments");
+    for (ReviewFinding finding : report.findings()) {
+      ObjectNode comment = comments.addObject();
+      comment.put("path", finding.file());
+      comment.put("line", finding.line());
+      comment.put("side", "RIGHT");
+      comment.put("body", renderer.renderFindingComment(finding));
     }
-    return OptionalLong.empty();
+    return payload;
+  }
+
+  ObjectNode fallbackReviewPayload(
+      final PullRequestContext pullRequest, final ReviewReport report, final String marker) {
+    ObjectNode payload = objectMapper.createObjectNode();
+    payload.put("commit_id", pullRequest.headSha());
+    payload.put("event", "COMMENT");
+    payload.put("body", renderer.renderReviewBody(report, marker, report.findings()));
+    return payload;
   }
 
   private JsonNode sendJson(
-      final String method,
-      final String path,
-      final JsonNode payload,
-      final String accessToken) {
+      final String method, final String path, final JsonNode payload, final String accessToken) {
+    HttpResponse<String> response = send(method, path, payload, accessToken);
+    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+      throw new IllegalStateException(
+          "GitHub API returned " + response.statusCode() + " for " + method + " " + path);
+    }
+    try {
+      return response.body().isBlank()
+          ? objectMapper.createObjectNode()
+          : objectMapper.readTree(response.body());
+    } catch (IOException exception) {
+      throw new IllegalStateException("GitHub response was not JSON", exception);
+    }
+  }
+
+  private HttpResponse<String> send(
+      final String method, final String path, final JsonNode payload, final String accessToken) {
     try {
       HttpRequest.Builder request =
           HttpRequest.newBuilder()
@@ -176,20 +187,7 @@ public class GitHubGateway {
                 HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)));
       }
 
-      HttpResponse<String> response =
-          httpClient.send(request.build(), HttpResponse.BodyHandlers.ofString());
-      if (response.statusCode() < 200 || response.statusCode() >= 300) {
-        throw new IllegalStateException(
-            "GitHub API returned "
-                + response.statusCode()
-                + " for "
-                + method
-                + " "
-                + path);
-      }
-      return response.body().isBlank()
-          ? objectMapper.createObjectNode()
-          : objectMapper.readTree(response.body());
+      return httpClient.send(request.build(), HttpResponse.BodyHandlers.ofString());
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub request interrupted", exception);
