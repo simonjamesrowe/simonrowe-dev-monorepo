@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "lessons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {"type": "string", "minLength": 1},
+          "guidance": {"type": "string", "minLength": 1},
+          "scope": {"type": "string", "enum": ["org-wide", "repo-specific"]},
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "source": {"type": "string", "enum": ["human", "reviewer", "both"]},
+          "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
+        },
+        "required": ["title", "guidance", "scope", "evidence", "source", "confidence"]
+      }
+    }
+  },
+  "required": ["lessons"]
+}
