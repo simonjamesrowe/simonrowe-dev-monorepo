@@ -94,7 +94,11 @@ Create a private, organization-owned GitHub App named `simonrowe-code-reviewer`:
   `software-factory`, which reads it at boot, or every delivery fails signature
   verification with `401`.
 - Repository permissions:
-  - Contents: read
+  - Contents: read & write — required by the review feedback loop, which opens guidance PRs
+    against agent-setup and/or the source repo; see [Review feedback loop](#review-feedback-loop)
+    below. `GitHubCredentials` requests `contents: write` on every installation token mint —
+    for both the code-review and feedback paths, since they share one method — so this
+    permission must be granted before any image that mints tokens is deployed, not after.
   - Issues: read and write
   - Pull requests: read and write — **write is required**, even though the
     advisory comment is posted to the issue comments endpoint. GitHub governs
@@ -466,10 +470,16 @@ The existing `simonrowe-code-reviewer` GitHub App must be updated to permit the 
 
 ### Rollout order
 
-1. Inline-reviews change ships with the same image — verify a new PR gets an inline review.
-2. Deploy with `FACTORY_FEEDBACK_ENABLED` unset (off).
-3. Perform the one-time GitHub App changes above.
-4. Dry run from the Pi:
+1. Perform the one-time GitHub App changes above — **before** deploying the new image, not after.
+   `GitHubCredentials.mintInstallationToken` requests `contents: write` on every installation
+   token it mints, for both the code-review and feedback paths (they share this one method), as
+   soon as the new image starts running. GitHub's access-tokens endpoint 422s that request until
+   the App's own Contents permission has actually been bumped to read & write, which fails token
+   minting outright — a stale App permission plus the new image means every review AND every
+   feedback run fails, a full outage of the review feature, not just the new one.
+2. Deploy the new image with `FACTORY_FEEDBACK_ENABLED` unset (off) — this ships the inline-reviews
+   change too; verify a new PR still gets an inline review.
+3. Dry run from the Pi:
    ```bash
    curl -X POST https://<internal>/api/feedback \
      -H 'X-Factory-Token: …' \
@@ -479,7 +489,7 @@ The existing `simonrowe-code-reviewer` GitHub App must be updated to permit the 
    ```bash
    docker exec simonrowe-dev-monorepo-mongodb-1 mongosh software_factory --eval 'db.review_learnings.find().pretty()'
    ```
-5. Set `FACTORY_FEEDBACK_ENABLED=true` in `.env` and `./scripts/restart-prod.sh`.
+4. Set `FACTORY_FEEDBACK_ENABLED=true` in `.env` and `./scripts/restart-prod.sh`.
 
 ### Verification
 

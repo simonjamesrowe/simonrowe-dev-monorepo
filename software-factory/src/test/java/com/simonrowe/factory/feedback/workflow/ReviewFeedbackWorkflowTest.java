@@ -137,6 +137,25 @@ class ReviewFeedbackWorkflowTest {
         .isEqualTo(DistillationStatus.FAILED);
   }
 
+  @Test
+  void totalDistillationFailureWithoutAnExceptionStillFailsTheWorkflow() {
+    // Distinct from distillationFailureIsRecordedAsFailedAndTheWorkflowStillFails above:
+    // distillAndPropose returns normally here (every target failed inside the activity, per
+    // FeedbackActivitiesImpl's own per-target catch), so the workflow must notice the FAILED
+    // outcome itself rather than relying on a propagated exception.
+    FakeActivities activities =
+        new FakeActivities(
+            conversation(true), List.of(lesson()),
+            new DistillationOutcome(DistillationStatus.FAILED, List.of(), "some detail"));
+
+    assertThatThrownBy(() -> run(activities, REQUEST))
+        .isInstanceOf(WorkflowFailedException.class);
+
+    assertThat(activities.recordedOutcomes).hasSize(1);
+    assertThat(activities.recordedOutcomes.getFirst().status())
+        .isEqualTo(DistillationStatus.FAILED);
+  }
+
   private static final class FakeActivities implements FeedbackActivities {
     private final ReviewConversation conversation;
     private final List<Lesson> lessons;

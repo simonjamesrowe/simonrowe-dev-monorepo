@@ -11,6 +11,7 @@ import com.simonrowe.factory.feedback.domain.Lesson;
 import com.simonrowe.factory.feedback.domain.ReviewConversation;
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.RetryOptions;
+import io.temporal.failure.ApplicationFailure;
 import io.temporal.spring.boot.WorkflowImpl;
 import io.temporal.workflow.Workflow;
 import java.time.Duration;
@@ -94,6 +95,25 @@ public class ReviewFeedbackWorkflowImpl implements ReviewFeedbackWorkflow {
         throw exception;
       }
       networkActivities.recordDistillation(request, outcome);
+      if (outcome.status() == DistillationStatus.FAILED) {
+        // Every target failed and nothing was proposed. Mongo already durably reflects that
+        // (recordDistillation above), but the workflow execution itself must not close as
+        // Completed: WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE_FAILED_ONLY (see
+        // FeedbackWorkflowService.start) only allows a manual re-drive of this workflow id when
+        // the prior execution ended Failed, and the progress query must report FAILED rather than
+        // a misleading COMPLETED. Throwing here is caught by the outer catch below, which sets
+        // FeedbackPhase.FAILED and rethrows — recordDistillation is not called again.
+        //
+        // Must be an ApplicationFailure (or another TemporalFailure), not a plain JDK exception
+        // (e.g. IllegalStateException): a raw exception thrown directly from workflow code here
+        // (as opposed to one propagated from a failed Activity, which the SDK already wraps in
+        // ActivityFailure before it reaches workflow code) is not recognised by this SDK version
+        // as a deliberate business failure — it manifests as an infinite workflow-task retry loop
+        // instead of a clean workflow failure, confirmed by reproducing it: the workflow never
+        // closes, Attempt keeps climbing, and WorkflowClient.getResult() blocks forever.
+        throw ApplicationFailure.newNonRetryableFailure(
+            "Distillation failed for all targets: " + outcome.detail(), "DISTILLATION_FAILED");
+      }
 
       current = new FeedbackProgress(FeedbackPhase.COMPLETED, "Completed", lessons.size());
       return new FeedbackResult(workflowId, lessons.size(), outcome.status(), outcome.prUrls());
