@@ -198,6 +198,24 @@ class CiStatusGatewayTest {
   }
 
   @Test
+  void reportsPendingWhenGithubReturnsFewerChecksThanItCounts() {
+    StringBuilder runs = new StringBuilder();
+    for (int index = 0; index < 100; index++) {
+      runs.append(index == 0 ? "" : ",")
+          .append("{\"name\":\"check-")
+          .append(index)
+          .append("\",\"status\":\"completed\",\"conclusion\":\"success\"}");
+    }
+    responses.put(CHECK_RUNS_PATH, "{\"total_count\":150,\"check_runs\":[" + runs + "]}");
+
+    CiOutcome outcome = gateway().outcomeFor(HEAD_SHA);
+
+    assertThat(outcome.state()).isEqualTo(CiState.PENDING);
+    assertThat(outcome.failedCheckNames()).isEmpty();
+    assertThat(outcome.detail()).contains("150").contains("100");
+  }
+
+  @Test
   void asksForOneHundredChecksPerPage() {
     responses.put(CHECK_RUNS_PATH, NO_CHECKS);
 

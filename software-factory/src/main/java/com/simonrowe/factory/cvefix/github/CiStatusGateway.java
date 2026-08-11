@@ -92,13 +92,36 @@ public class CiStatusGateway {
    * Reads the aggregated CI outcome for the given commit, ignoring configured advisory checks.
    *
    * @param headSha the commit sha to look up check runs for
-   * @return {@link CiState#PENDING} if no non-advisory check has registered yet or any is still
-   *     running, {@link CiState#GREEN} if every non-advisory check passed, otherwise {@link
-   *     CiState#RED} naming the non-advisory checks that failed
+   * @return {@link CiState#PENDING} if GitHub returned only part of the check runs it reports, if
+   *     no non-advisory check has registered yet, or if any is still running, {@link
+   *     CiState#GREEN} if every non-advisory check passed, otherwise {@link CiState#RED} naming the
+   *     non-advisory checks that failed
    * @throws IllegalStateException if the request fails or returns a non-2xx status
    */
   public CiOutcome outcomeFor(final String headSha) {
-    List<JsonNode> relevant = relevantCheckRuns(headSha);
+    JsonNode payload = checkRunsPayload(headSha);
+    JsonNode allRuns = payload.path("check_runs");
+    int reportedCount = payload.path("total_count").asInt(0);
+    // Fail safe on partial data. GitHub tells us how many check runs the commit has; if it handed
+    // back fewer than that, we are looking at one page of several and any GREEN or RED verdict
+    // would be drawn from an unknown subset — an all-passing first page would read GREEN while a
+    // failing check sat on a page we never fetched. PENDING costs one more poll cycle; a false
+    // GREEN marks an unverified fix as passing, so this must run before advisory filtering and
+    // before the state logic, where filtering cannot mask it. Compare against the raw array, not
+    // the filtered list: total_count is GitHub's unfiltered count, so comparing it with the
+    // post-filter list would fire on every commit that merely has an advisory check.
+    if (reportedCount > allRuns.size()) {
+      return new CiOutcome(
+          CiState.PENDING,
+          List.of(),
+          "Partial check-run data: GitHub reports "
+              + reportedCount
+              + " check runs but returned "
+              + allRuns.size()
+              + "; refusing to decide from one page");
+    }
+
+    List<JsonNode> relevant = nonAdvisory(allRuns);
     if (relevant.isEmpty()) {
       return new CiOutcome(
           CiState.PENDING, List.of(), "No non-advisory checks have registered yet");
@@ -136,7 +159,7 @@ public class CiStatusGateway {
    */
   public String failureLogs(final String headSha) {
     StringBuilder logs = new StringBuilder();
-    for (JsonNode run : relevantCheckRuns(headSha)) {
+    for (JsonNode run : nonAdvisory(checkRunsPayload(headSha).path("check_runs"))) {
       if (!isCompleted(run) || PASSING_CONCLUSIONS.contains(run.path("conclusion").asText(""))) {
         continue;
       }
@@ -149,26 +172,29 @@ public class CiStatusGateway {
         : logs.toString();
   }
 
-  private List<JsonNode> relevantCheckRuns(final String headSha) {
+  private JsonNode checkRunsPayload(final String headSha) {
     // per_page=100 is deliberate and load-bearing: GitHub pages this endpoint at 30 by default, so
-    // without it a commit carrying more than 30 checks would return only the first page and an
-    // all-passing first page would read GREEN while a later-page check failed — a false green, the
-    // one failure this gateway must never produce. 100 is the documented ceiling for this
-    // endpoint, so a commit with more than 100 check runs would reintroduce that risk; if the
-    // workflow set ever approaches that many checks, follow the Link rel="next" header rather than
-    // raising this number.
-    JsonNode payload =
-        get(
-            "/repos/"
-                + properties.owner()
-                + "/"
-                + properties.repository()
-                + "/commits/"
-                + headSha
-                + "/check-runs?per_page=100");
+    // without it a commit carrying more than 30 checks would return only the first page. 100 is the
+    // documented ceiling for this endpoint, so a commit with more than 100 check runs would still
+    // arrive paged — but the total_count shortfall guard in outcomeFor turns that into a safe
+    // PENDING rather than a silently wrong verdict, so exceeding it cannot produce a false green.
+    // Following the Link rel="next" header is still the eventual fix if the workflow set ever
+    // genuinely exceeds 100 checks per commit and PENDING starts to stall runs; until then the
+    // guard, not page-following, is what makes this correct.
+    return get(
+        "/repos/"
+            + properties.owner()
+            + "/"
+            + properties.repository()
+            + "/commits/"
+            + headSha
+            + "/check-runs?per_page=100");
+  }
+
+  private List<JsonNode> nonAdvisory(final JsonNode checkRuns) {
     List<String> advisoryChecks = properties.ci().advisoryChecks();
     List<JsonNode> relevant = new ArrayList<>();
-    for (JsonNode run : payload.path("check_runs")) {
+    for (JsonNode run : checkRuns) {
       if (!advisoryChecks.contains(run.path("name").asText(""))) {
         relevant.add(run);
       }
