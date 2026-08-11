@@ -113,8 +113,12 @@ public class RepositoryWorkspaceFactory {
   }
 
   /**
-   * Uses {@code -B}, not {@code -b}: the CVE repair loop calls {@link #commitAndPush} repeatedly
-   * against one workspace, and {@code -b} fails once the branch exists.
+   * Uses {@code -B}, not {@code -b}: {@link #create} shallow-clones the default branch, so when
+   * the target branch name is the one already checked out — or when a caller reuses a workspace —
+   * {@code -b} fails with "a branch named ... already exists" while {@code -B} resets it. Note
+   * that the CVE repair loop does <em>not</em> reuse a workspace: every {@code proposeAndPush}
+   * call clones afresh, which is why an attempt's chosen versions have to be handed back to the
+   * agent explicitly rather than read off the branch.
    */
   static List<String> checkoutCommand(final String branch) {
     return List.of("git", "checkout", "--quiet", "-B", branch);

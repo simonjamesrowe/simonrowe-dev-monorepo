@@ -75,12 +75,12 @@ class CveFixActivitiesImplTest {
     when(credentials.installationId(anyString(), anyString())).thenReturn(42L);
     when(workspaceFactory.create(anyString(), anyString(), anyLong(), any(), anyString(), any()))
         .thenReturn(workspace);
-    when(fixEngine.propose(eq(workspace), anyList(), isNull(), any()))
+    when(fixEngine.propose(eq(workspace), anyList(), isNull(), anyList(), any()))
         .thenReturn(oneBumpProposal());
     when(workspaceFactory.changedPaths(eq(workspace), any()))
         .thenReturn(List.of("backend/src/main/java/Evil.java"));
 
-    assertThatThrownBy(() -> activities.proposeAndPush(List.of(), null))
+    assertThatThrownBy(() -> activities.proposeAndPush(List.of(), null, List.of()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Evil.java");
 
@@ -97,10 +97,10 @@ class CveFixActivitiesImplTest {
     when(workspaceFactory.create(anyString(), anyString(), anyLong(), any(), anyString(), any()))
         .thenReturn(workspace);
     FixProposal emptyProposal = new FixProposal(List.of(), List.of(), "Nothing needed changing.");
-    when(fixEngine.propose(eq(workspace), anyList(), isNull(), any())).thenReturn(emptyProposal);
+    when(fixEngine.propose(eq(workspace), anyList(), isNull(), anyList(), any())).thenReturn(emptyProposal);
     when(workspaceFactory.changedPaths(eq(workspace), any())).thenReturn(List.of());
 
-    CveFixActivities.PushResult result = activities.proposeAndPush(List.of(), null);
+    CveFixActivities.PushResult result = activities.proposeAndPush(List.of(), null, List.of());
 
     assertThat(result.headSha()).isNull();
     assertThat(result.summary().agentSummary()).isEqualTo("Nothing needed changing.");
@@ -115,11 +115,11 @@ class CveFixActivitiesImplTest {
     when(workspaceFactory.create(anyString(), anyString(), anyLong(), any(), anyString(), any()))
         .thenReturn(workspace);
     FixProposal emptyProposal = new FixProposal(List.of(), List.of(), "Nothing to change.");
-    when(fixEngine.propose(eq(workspace), anyList(), isNull(), any())).thenReturn(emptyProposal);
+    when(fixEngine.propose(eq(workspace), anyList(), isNull(), anyList(), any())).thenReturn(emptyProposal);
     when(workspaceFactory.changedPaths(eq(workspace), any()))
         .thenReturn(List.of("backend/src/main/java/Evil.java"));
 
-    assertThatThrownBy(() -> activities.proposeAndPush(List.of(), null))
+    assertThatThrownBy(() -> activities.proposeAndPush(List.of(), null, List.of()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Evil.java");
 
@@ -134,10 +134,10 @@ class CveFixActivitiesImplTest {
     when(credentials.installationId(anyString(), anyString())).thenReturn(42L);
     when(workspaceFactory.create(anyString(), anyString(), anyLong(), any(), anyString(), any()))
         .thenReturn(workspace);
-    when(fixEngine.propose(eq(workspace), anyList(), isNull(), any()))
+    when(fixEngine.propose(eq(workspace), anyList(), isNull(), anyList(), any()))
         .thenThrow(new IllegalStateException("agent crashed"));
 
-    assertThatThrownBy(() -> activities.proposeAndPush(List.of(), null))
+    assertThatThrownBy(() -> activities.proposeAndPush(List.of(), null, List.of()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("agent crashed");
 
@@ -152,7 +152,7 @@ class CveFixActivitiesImplTest {
             eq("simonjamesrowe"), eq("simonrowe-dev-monorepo"), eq(42L), any(), anyString(),
             any()))
         .thenReturn(workspace);
-    when(fixEngine.propose(eq(workspace), anyList(), isNull(), any()))
+    when(fixEngine.propose(eq(workspace), anyList(), isNull(), anyList(), any()))
         .thenReturn(oneBumpProposal());
     when(workspaceFactory.changedPaths(eq(workspace), any()))
         .thenReturn(List.of("gradle/libs.versions.toml"));
@@ -160,7 +160,7 @@ class CveFixActivitiesImplTest {
             eq(workspace), anyString(), anyString(), anyString(), anyString(), eq(42L), any()))
         .thenReturn("abc123");
 
-    CveFixActivities.PushResult result = activities.proposeAndPush(List.of(), null);
+    CveFixActivities.PushResult result = activities.proposeAndPush(List.of(), null, List.of());
 
     assertThat(result.headSha()).isEqualTo("abc123");
     verify(workspaceFactory)
@@ -170,6 +170,45 @@ class CveFixActivitiesImplTest {
     verify(workspaceFactory)
         .commitAndPush(
             eq(workspace), anyString(), anyString(), anyString(), anyString(), eq(42L), any());
+  }
+
+  @Test
+  void proposeAndPushHandsTheRejectedBumpsToTheFixEngine() {
+    RepositoryWorkspace workspace = mock(RepositoryWorkspace.class);
+    List<String> rejected = List.of("a 1.0 -> 2.0 (CVE-2024-0001)");
+    when(credentials.installationId(anyString(), anyString())).thenReturn(42L);
+    when(workspaceFactory.create(anyString(), anyString(), anyLong(), any(), anyString(), any()))
+        .thenReturn(workspace);
+    when(fixEngine.propose(eq(workspace), anyList(), anyString(), anyList(), any()))
+        .thenReturn(oneBumpProposal());
+    when(workspaceFactory.changedPaths(eq(workspace), any()))
+        .thenReturn(List.of("gradle/libs.versions.toml"));
+    when(workspaceFactory.commitAndPush(
+            eq(workspace), anyString(), anyString(), anyString(), anyString(), eq(42L), any()))
+        .thenReturn("def456");
+
+    CveFixActivities.PushResult result =
+        activities.proposeAndPush(List.of(), "checkstyle: 1 violation", rejected);
+
+    assertThat(result.headSha()).isEqualTo("def456");
+    verify(fixEngine)
+        .propose(
+            eq(workspace), anyList(), eq("checkstyle: 1 violation"), eq(rejected), any());
+  }
+
+  @Test
+  void proposeAndPushTreatsAbsentRejectedBumpsAsAnEmptyList() {
+    RepositoryWorkspace workspace = mock(RepositoryWorkspace.class);
+    when(credentials.installationId(anyString(), anyString())).thenReturn(42L);
+    when(workspaceFactory.create(anyString(), anyString(), anyLong(), any(), anyString(), any()))
+        .thenReturn(workspace);
+    when(fixEngine.propose(eq(workspace), anyList(), isNull(), anyList(), any()))
+        .thenReturn(new FixProposal(List.of(), List.of(), "Nothing needed changing."));
+    when(workspaceFactory.changedPaths(eq(workspace), any())).thenReturn(List.of());
+
+    activities.proposeAndPush(List.of(), null, null);
+
+    verify(fixEngine).propose(eq(workspace), anyList(), isNull(), eq(List.of()), any());
   }
 
   @Test

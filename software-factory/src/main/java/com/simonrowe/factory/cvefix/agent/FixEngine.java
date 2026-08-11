@@ -16,6 +16,9 @@ public interface FixEngine {
    * @param components the findings to address, grouped by component
    * @param failureContext CI failure output from the previous attempt, or null on the first
    *     attempt
+   * @param rejectedBumps every bump an earlier attempt on this run already pushed and CI
+   *     rejected, empty on the first attempt. Load-bearing: each attempt edits a fresh clone of
+   *     the default branch, so the manifests never show what the last attempt chose.
    * @param heartbeat receives progress messages while the agent runs
    * @return what the agent changed and what it could not fix
    */
@@ -23,5 +26,6 @@ public interface FixEngine {
       RepositoryWorkspace workspace,
       List<ComponentFindings> components,
       String failureContext,
+      List<String> rejectedBumps,
       Consumer<String> heartbeat);
 }

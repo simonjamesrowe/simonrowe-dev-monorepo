@@ -78,7 +78,7 @@ class CveFixWorkflowTest {
     assertThat(result.status()).isEqualTo(CveFixStatus.SKIPPED_PR_OPEN);
     assertThat(result.prUrl()).isEqualTo(OPEN_PR_URL);
     verify(activities, never()).fetchActionableFindings();
-    verify(activities, never()).proposeAndPush(anyList(), any());
+    verify(activities, never()).proposeAndPush(anyList(), any(), anyList());
   }
 
   @Test
@@ -90,14 +90,14 @@ class CveFixWorkflowTest {
 
     assertThat(result.status()).isEqualTo(CveFixStatus.NO_FINDINGS);
     assertThat(result.prUrl()).isNull();
-    verify(activities, never()).proposeAndPush(anyList(), any());
+    verify(activities, never()).proposeAndPush(anyList(), any(), anyList());
     verify(activities, never()).openPullRequest(any());
   }
 
   @Test
   void returnsNothingFixableWhenTheAgentChangesNothing() {
     CveFixActivities activities = activities();
-    when(activities.proposeAndPush(anyList(), any()))
+    when(activities.proposeAndPush(anyList(), any(), anyList()))
         .thenReturn(new PushResult(null, new FixSummary(List.of(), List.of(UNFIXABLE), "stuck")));
 
     CveFixResult result = run(activities, REQUEST);
@@ -121,7 +121,7 @@ class CveFixWorkflowTest {
     assertThat(outcome.result().prUrl()).isEqualTo(NEW_PR_URL);
     assertThat(outcome.result().bumps()).isEqualTo(1);
     assertThat(outcome.progress().phase()).isEqualTo(CveFixPhase.COMPLETED);
-    verify(activities, times(1)).proposeAndPush(anyList(), any());
+    verify(activities, times(1)).proposeAndPush(anyList(), any(), anyList());
     verify(activities, never()).commentOnPullRequest(anyInt(), anyString());
   }
 
@@ -130,23 +130,57 @@ class CveFixWorkflowTest {
     CveFixActivities activities = activities();
     when(activities.checkCi(anyString()))
         .thenReturn(outcome(CiState.RED), outcome(CiState.GREEN));
-    when(activities.proposeAndPush(anyList(), any()))
+    when(activities.proposeAndPush(anyList(), any(), anyList()))
         .thenReturn(new PushResult("sha-1", SUMMARY), new PushResult("sha-2", SUMMARY));
 
     CveFixResult result = run(activities, REQUEST);
 
     assertThat(result.status()).isEqualTo(CveFixStatus.COMPLETED);
-    verify(activities, times(2)).proposeAndPush(anyList(), any());
-    verify(activities).proposeAndPush(COMPONENTS, LOGS);
+    verify(activities, times(2)).proposeAndPush(anyList(), any(), anyList());
+    verify(activities).proposeAndPush(COMPONENTS, LOGS, SUMMARY.bumpDescriptions());
     verify(activities).checkCi("sha-2");
     verify(activities, never()).commentOnPullRequest(anyInt(), anyString());
+  }
+
+  /**
+   * Each attempt clones the default branch afresh, so the only way the agent can obey "choose a
+   * different target version" is for the workflow to hand back what earlier attempts pushed.
+   * Attempt three must see attempts one <em>and</em> two, not just the immediately previous one.
+   */
+  @Test
+  void eachRepairAttemptIsToldEveryBumpAnEarlierAttemptAlreadyPushed() {
+    FixSummary second =
+        new FixSummary(
+            List.of("org.example/lib 1.0.0 -> 1.0.2 (CVE-2026-0001)"),
+            List.of(UNFIXABLE),
+            "tried a different version");
+    CveFixActivities activities = activities();
+    when(activities.checkCi(anyString())).thenReturn(outcome(CiState.RED));
+    when(activities.proposeAndPush(anyList(), any(), anyList()))
+        .thenReturn(
+            new PushResult("sha-1", SUMMARY),
+            new PushResult("sha-2", second),
+            new PushResult("sha-3", SUMMARY));
+
+    run(activities, new CveFixRequest(false, Duration.ofMinutes(3), 2, Duration.ofHours(3)));
+
+    verify(activities, times(3)).proposeAndPush(anyList(), any(), anyList());
+    verify(activities).proposeAndPush(COMPONENTS, null, List.of());
+    verify(activities).proposeAndPush(COMPONENTS, LOGS, SUMMARY.bumpDescriptions());
+    verify(activities)
+        .proposeAndPush(
+            COMPONENTS,
+            LOGS,
+            List.of(
+                "org.example/lib 1.0.0 -> 1.0.1 (CVE-2026-0001)",
+                "org.example/lib 1.0.0 -> 1.0.2 (CVE-2026-0001)"));
   }
 
   @Test
   void leavesThePullRequestOpenAndCommentsWhenTheRepairBudgetRunsOut() {
     CveFixActivities activities = activities();
     when(activities.checkCi(anyString())).thenReturn(outcome(CiState.RED));
-    when(activities.proposeAndPush(anyList(), any()))
+    when(activities.proposeAndPush(anyList(), any(), anyList()))
         .thenReturn(
             new PushResult("sha-1", SUMMARY),
             new PushResult("sha-2", SUMMARY),
@@ -158,7 +192,7 @@ class CveFixWorkflowTest {
     assertThat(result.status()).isEqualTo(CveFixStatus.CI_UNRESOLVED);
     assertThat(result.prUrl()).isEqualTo(NEW_PR_URL);
     assertThat(result.detail()).contains("repair budget of 2").doesNotContain("wall-clock");
-    verify(activities, times(3)).proposeAndPush(anyList(), any());
+    verify(activities, times(3)).proposeAndPush(anyList(), any(), anyList());
     verify(activities, times(1)).commentOnPullRequest(eq(11), anyString());
   }
 
@@ -166,7 +200,7 @@ class CveFixWorkflowTest {
   void givesUpWhenTheRepairProducesNoFurtherChange() {
     CveFixActivities activities = activities();
     when(activities.checkCi(anyString())).thenReturn(outcome(CiState.RED));
-    when(activities.proposeAndPush(anyList(), any()))
+    when(activities.proposeAndPush(anyList(), any(), anyList()))
         .thenReturn(new PushResult("sha-1", SUMMARY), new PushResult(null, SUMMARY));
 
     // The default budget of 3 is deliberately not spent and the 3h cap is nowhere near: the only
@@ -178,7 +212,7 @@ class CveFixWorkflowTest {
         .contains("no further change")
         .doesNotContain("repair budget")
         .doesNotContain("wall-clock");
-    verify(activities, times(2)).proposeAndPush(anyList(), any());
+    verify(activities, times(2)).proposeAndPush(anyList(), any(), anyList());
     verify(activities, times(1)).commentOnPullRequest(eq(11), anyString());
     verify(activities, times(1)).checkCi("sha-1");
   }
@@ -193,7 +227,7 @@ class CveFixWorkflowTest {
 
     assertThat(result.status()).isEqualTo(CveFixStatus.CI_UNRESOLVED);
     assertThat(result.detail()).contains("wall-clock cap").doesNotContain("repair budget");
-    verify(activities, times(1)).proposeAndPush(anyList(), any());
+    verify(activities, times(1)).proposeAndPush(anyList(), any(), anyList());
     verify(activities, times(1)).commentOnPullRequest(eq(11), anyString());
   }
 
@@ -207,7 +241,7 @@ class CveFixWorkflowTest {
 
     assertThat(result.status()).isEqualTo(CveFixStatus.COMPLETED);
     verify(activities, times(3)).checkCi("sha-1");
-    verify(activities, times(1)).proposeAndPush(anyList(), any());
+    verify(activities, times(1)).proposeAndPush(anyList(), any(), anyList());
   }
 
   @Test
@@ -239,14 +273,14 @@ class CveFixWorkflowTest {
 
     CveFixActivities repairing = activities();
     when(repairing.checkCi(anyString())).thenReturn(outcome(CiState.RED));
-    when(repairing.proposeAndPush(anyList(), any()))
+    when(repairing.proposeAndPush(anyList(), any(), anyList()))
         .thenReturn(new PushResult("sha-1", SUMMARY), new PushResult("sha-2", SUMMARY));
 
     CveFixResult result =
         run(repairing, new CveFixRequest(false, Duration.ofSeconds(30), 1, Duration.ofHours(3)));
 
     assertThat(result.detail()).contains("repair budget of 1");
-    verify(repairing, times(2)).proposeAndPush(anyList(), any());
+    verify(repairing, times(2)).proposeAndPush(anyList(), any(), anyList());
   }
 
   @Test
@@ -287,7 +321,7 @@ class CveFixWorkflowTest {
 
     CveFixActivities red = activities();
     when(red.checkCi(anyString())).thenReturn(outcome(CiState.RED));
-    when(red.proposeAndPush(anyList(), any()))
+    when(red.proposeAndPush(anyList(), any(), anyList()))
         .thenReturn(new PushResult("sha-1", SUMMARY), new PushResult("sha-2", SUMMARY));
     run(red, new CveFixRequest(false, Duration.ofMinutes(3), 1, Duration.ofHours(3)));
     CveFixRunRecord unresolved = recordedRun(red);
@@ -304,13 +338,13 @@ class CveFixWorkflowTest {
 
     CveFixActivities red = activities();
     when(red.checkCi(anyString())).thenReturn(outcome(CiState.RED));
-    when(red.proposeAndPush(anyList(), any()))
+    when(red.proposeAndPush(anyList(), any(), anyList()))
         .thenReturn(new PushResult("sha-1", SUMMARY), new PushResult("sha-2", SUMMARY));
     run(red, new CveFixRequest(false, Duration.ofMinutes(3), 1, Duration.ofHours(3)));
     verify(red).recordUnfixable(List.of(UNFIXABLE), COMPONENTS);
 
     CveFixActivities nothingFixable = activities();
-    when(nothingFixable.proposeAndPush(anyList(), any()))
+    when(nothingFixable.proposeAndPush(anyList(), any(), anyList()))
         .thenReturn(new PushResult(null, new FixSummary(List.of(), List.of(UNFIXABLE), "stuck")));
     run(nothingFixable, REQUEST);
     verify(nothingFixable).recordUnfixable(List.of(UNFIXABLE), COMPONENTS);
@@ -334,7 +368,8 @@ class CveFixWorkflowTest {
   private static CveFixActivities activities() {
     CveFixActivities activities = mock(CveFixActivities.class, withSettings().withoutAnnotations());
     when(activities.fetchActionableFindings()).thenReturn(COMPONENTS);
-    when(activities.proposeAndPush(anyList(), any())).thenReturn(new PushResult("sha-1", SUMMARY));
+    when(activities.proposeAndPush(anyList(), any(), anyList()))
+        .thenReturn(new PushResult("sha-1", SUMMARY));
     when(activities.openPullRequest(any()))
         .thenReturn(new CveFixPrGateway.OpenPullRequest(11, NEW_PR_URL, "sha-1"));
     when(activities.ciFailureLogs(anyString())).thenReturn(LOGS);

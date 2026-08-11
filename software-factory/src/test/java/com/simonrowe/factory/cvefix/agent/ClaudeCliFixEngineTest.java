@@ -29,7 +29,8 @@ class ClaudeCliFixEngineTest {
 
   @Test
   void promptIncludesTheFailureContextOnRepairAttempt() {
-    String prompt = ClaudeCliFixEngine.prompt(List.of(), "gradle: cannot find symbol Foo");
+    String prompt =
+        ClaudeCliFixEngine.prompt(List.of(), "gradle: cannot find symbol Foo", List.of());
 
     assertThat(prompt).contains("gradle: cannot find symbol Foo");
     assertThat(prompt).contains("previous attempt");
@@ -37,7 +38,40 @@ class ClaudeCliFixEngineTest {
 
   @Test
   void promptOmitsTheRepairSectionOnFirstAttempt() {
-    assertThat(ClaudeCliFixEngine.prompt(List.of(), null)).doesNotContain("previous attempt");
+    assertThat(ClaudeCliFixEngine.prompt(List.of(), null, List.of()))
+        .doesNotContain("previous attempt");
+  }
+
+  @Test
+  void repairPromptListsTheBumpsAnEarlierAttemptAlreadyHadRejected() {
+    String prompt =
+        ClaudeCliFixEngine.prompt(
+            List.of(),
+            "npm ci failed",
+            List.of("org.example/lib 1.0.0 -> 2.0.0 (CVE-1)", "left-pad 1.0.0 -> 1.3.0 (CVE-2)"));
+
+    assertThat(prompt).contains("org.example/lib 1.0.0 -> 2.0.0 (CVE-1)");
+    assertThat(prompt).contains("left-pad 1.0.0 -> 1.3.0 (CVE-2)");
+    // The agent must be told why the manifests disagree with what it already tried, or the
+    // instruction to choose a different target version is not actionable.
+    assertThat(prompt).contains("Do not propose any of them again");
+    assertThat(prompt).contains("fresh checkout of the default branch");
+  }
+
+  @Test
+  void firstAttemptPromptListsNoRejectedBumps() {
+    String prompt = ClaudeCliFixEngine.prompt(List.of(), null, List.of());
+
+    assertThat(prompt).doesNotContain("Do not propose any of them again");
+    assertThat(prompt).doesNotContain("CI rejected");
+  }
+
+  @Test
+  void repairPromptOmitsTheRejectedBlockWhenTheFailedAttemptPushedNoBump() {
+    String prompt = ClaudeCliFixEngine.prompt(List.of(), "npm ci failed", List.of());
+
+    assertThat(prompt).contains("npm ci failed");
+    assertThat(prompt).doesNotContain("Do not propose any of them again");
   }
 
   @Test

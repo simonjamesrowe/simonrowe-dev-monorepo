@@ -35,10 +35,15 @@ public interface CveFixActivities {
    * @param components the findings to address, grouped by component
    * @param failureContext CI failure output from the previous attempt, or null on the first
    *     attempt
+   * @param rejectedBumps {@link FixSummary#bumpDescriptions()} of every earlier attempt on this
+   *     run, empty on the first attempt. A plain {@code List<String>} so it stays trivially
+   *     JSON-serialisable across the activity boundary, and passed as an argument rather than
+   *     held in a field because an activity implementation is a shared singleton bean.
    * @return what the push produced; a {@code headSha} of null means the agent changed nothing
    */
   @ActivityMethod
-  PushResult proposeAndPush(List<ComponentFindings> components, String failureContext);
+  PushResult proposeAndPush(
+      List<ComponentFindings> components, String failureContext, List<String> rejectedBumps);
 
   /**
    * Renders the title and body from {@code summary}, then opens the pull request.

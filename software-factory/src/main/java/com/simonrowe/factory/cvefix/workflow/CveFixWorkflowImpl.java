@@ -18,7 +18,9 @@ import io.temporal.spring.boot.WorkflowImpl;
 import io.temporal.workflow.Workflow;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Deterministic CVE-fix flow: skip when a pull request is already open, read the actionable
@@ -104,7 +106,8 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       current =
           new CveFixProgress(
               CveFixPhase.PROPOSING, "Proposing dependency bumps", components.size());
-      CveFixActivities.PushResult push = agentActivities.proposeAndPush(components, null);
+      CveFixActivities.PushResult push =
+          agentActivities.proposeAndPush(components, null, List.of());
       applySummary(push.summary());
 
       if (push.headSha() == null) {
@@ -178,6 +181,12 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       final long deadline) {
     String headSha = firstPush.headSha();
     CveFixActivities.FixSummary summary = firstPush.summary();
+    // Every bump this run has already pushed and had CI reject, oldest first. Each attempt runs in
+    // a brand-new shallow clone of the default branch, so nothing on disk tells the agent what the
+    // last attempt declared; this list is the only channel. Accumulated rather than only carrying
+    // the immediately previous attempt, so attempt three cannot re-propose what attempt one tried.
+    // A LinkedHashSet keeps the order deterministic for replay while dropping repeats.
+    Set<String> rejectedBumps = new LinkedHashSet<>(summary.bumpDescriptions());
     while (true) {
       // Workflow time, not System.currentTimeMillis(), and checked before the sleep so a run that
       // has already used its whole budget of wall clock stops instead of polling once more.
@@ -218,7 +227,7 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       current = new CveFixProgress(CveFixPhase.REPAIRING, outcome.detail(), ciAttempts + 1);
       String failureLogs = networkActivities.ciFailureLogs(headSha);
       CveFixActivities.PushResult repair =
-          agentActivities.proposeAndPush(components, failureLogs);
+          agentActivities.proposeAndPush(components, failureLogs, List.copyOf(rejectedBumps));
       ciAttempts++;
       if (repair.headSha() == null) {
         // Nothing new was pushed, so CI would report the same red result for the same commit for
@@ -234,6 +243,7 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       }
       headSha = repair.headSha();
       summary = repair.summary();
+      rejectedBumps.addAll(summary.bumpDescriptions());
       applySummary(summary);
     }
   }

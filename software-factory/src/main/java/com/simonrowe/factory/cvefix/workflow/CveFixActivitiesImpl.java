@@ -92,14 +92,21 @@ public class CveFixActivitiesImpl implements CveFixActivities {
 
   @Override
   public PushResult proposeAndPush(
-      final List<ComponentFindings> components, final String failureContext) {
+      final List<ComponentFindings> components,
+      final String failureContext,
+      final List<String> rejectedBumps) {
     Consumer<String> heartbeat = detail -> Activity.getExecutionContext().heartbeat(detail);
     Long installationId = credentials.installationId(properties.owner(), properties.repository());
     try (RepositoryWorkspace workspace =
         workspaceFactory.create(
             properties.owner(), properties.repository(), installationId,
             properties.workspaceRoot(), WORKSPACE_PREFIX, heartbeat)) {
-      FixProposal proposal = fixEngine.propose(workspace, components, failureContext, heartbeat);
+      // The clone is a fresh shallow clone of the default branch every time, so rejectedBumps is
+      // the only record the agent gets of what an earlier attempt on this run already tried.
+      FixProposal proposal =
+          fixEngine.propose(
+              workspace, components, failureContext,
+              rejectedBumps == null ? List.of() : rejectedBumps, heartbeat);
       List<String> changed = workspaceFactory.changedPaths(workspace, heartbeat);
       // Validated even when nothing was proposed: an agent that reports no bumps while still
       // writing outside the allowlist must fail loudly, not return a silent, unreported success.

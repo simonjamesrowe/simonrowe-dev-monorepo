@@ -54,6 +54,7 @@ public class ClaudeCliFixEngine implements FixEngine {
       final RepositoryWorkspace workspace,
       final List<ComponentFindings> components,
       final String failureContext,
+      final List<String> rejectedBumps,
       final Consumer<String> heartbeat) {
     heartbeat.accept(
         failureContext == null
@@ -70,7 +71,7 @@ public class ClaudeCliFixEngine implements FixEngine {
                 tools(),
                 allowedTools(),
                 schema,
-                prompt(components, failureContext),
+                prompt(components, failureContext, rejectedBumps),
                 workspace.repository()),
             heartbeat);
     return parse(objectMapper, structured);
@@ -113,9 +114,12 @@ public class ClaudeCliFixEngine implements FixEngine {
 
   /**
    * Builds the fix-agent prompt: the findings to address, and — on a repair attempt — the prior
-   * CI failure output.
+   * CI failure output plus the bumps that attempt already had rejected.
    */
-  static String prompt(final List<ComponentFindings> components, final String failureContext) {
+  static String prompt(
+      final List<ComponentFindings> components,
+      final String failureContext,
+      final List<String> rejectedBumps) {
     StringBuilder findings = new StringBuilder();
     for (ComponentFindings component : components) {
       findings
@@ -152,12 +156,12 @@ public class ClaudeCliFixEngine implements FixEngine {
             you is the declared version of a dependency. Either choose a different target
             version for the affected component(s) and say so in the summary, or move the
             component to unfixable with a reason. Do not attempt any other kind of change.
-
+            %s
             ```
             %s
             ```
             """
-                .formatted(failureContext);
+                .formatted(rejected(rejectedBumps), failureContext);
 
     return """
         You are patching vulnerable dependencies in the simonrowe.dev monorepo. You are in a
@@ -197,6 +201,30 @@ public class ClaudeCliFixEngine implements FixEngine {
         Produce the requested structured result.
         """
         .formatted(String.join(", ", CveFixAllowedFiles.ALL), findings, repair);
+  }
+
+  /**
+   * The "you already tried these" block of the repair prompt. Without it the repair instruction to
+   * "choose a different target version" is impossible to obey: every attempt runs in a fresh
+   * shallow clone of the default branch, so the manifests show the original versions and carry no
+   * trace of what the failed attempt declared. The agent would re-derive the identical bump, push
+   * a functionally identical commit, and burn the whole repair budget on it.
+   */
+  private static String rejected(final List<String> rejectedBumps) {
+    if (rejectedBumps == null || rejectedBumps.isEmpty()) {
+      return "";
+    }
+    StringBuilder block =
+        new StringBuilder(
+            "\nYou are in a fresh checkout of the default branch, so the manifests show the"
+                + " original\nversions, NOT the versions the failed attempt declared. Those"
+                + " attempts made exactly the\nbumps below and CI rejected them. Do not propose"
+                + " any of them again — pick a different\ntarget version, or move the component"
+                + " to unfixable with a reason.\n");
+    for (String description : rejectedBumps) {
+      block.append("- ").append(description).append('\n');
+    }
+    return block.toString();
   }
 
   private static String loadSchema() {
