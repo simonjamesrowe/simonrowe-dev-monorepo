@@ -172,6 +172,21 @@ services:
       FACTORY_FEEDBACK_ENABLED: ${FACTORY_FEEDBACK_ENABLED:-false}
       FACTORY_FEEDBACK_HARVEST_MODEL: ${FACTORY_FEEDBACK_HARVEST_MODEL:-haiku}
       FACTORY_FEEDBACK_DISTILL_MODEL: ${FACTORY_FEEDBACK_DISTILL_MODEL:-sonnet}
+      # Off by default. Turning it on registers the cve-fix worker and declares a
+      # paused-by-default 24-hour Temporal schedule; the operator unpauses it after a dry
+      # run. See docs/runbooks/cvefix.md for the rollout order.
+      FACTORY_CVEFIX_ENABLED: ${FACTORY_CVEFIX_ENABLED:-false}
+      # Needs VIEW_PORTFOLIO *and* VIEW_VULNERABILITY. The existing `CI Upload` key is not
+      # sufficient. Read by a Java activity, never by the agent: ClaudeCliRunner strips it
+      # from the child process because it sits outside SAFE_SECRET_ENVIRONMENT, which is
+      # correct here. Defaulted rather than required (`:?`) so a missing key cannot break
+      # every `docker compose` command against this file while the feature is disabled.
+      DEPENDENCYTRACK_API_KEY: ${DEPENDENCYTRACK_API_KEY:-}
+      # The container on the shared compose network, not the public hostname — this keeps the
+      # call off the Cloudflare/pinggy path. Deliberately no `depends_on` for it: the workflow
+      # fails cleanly when Dependency-Track is down, and coupling the webhook receiver's
+      # startup to Dependency-Track would be a regression.
+      DEPENDENCYTRACK_BASE_URL: ${DEPENDENCYTRACK_BASE_URL:-http://dependencytrack-apiserver:8080}
       FACTORY_MONGODB_URI: mongodb://mongodb:27017/software_factory
     volumes:
       - ${GITHUB_APP_PRIVATE_KEY_PATH:?set GITHUB_APP_PRIVATE_KEY_PATH in .env}:/run/secrets/github-app.pem:ro
