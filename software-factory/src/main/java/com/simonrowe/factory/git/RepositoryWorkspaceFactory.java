@@ -120,8 +120,13 @@ public class RepositoryWorkspaceFactory {
     return List.of("git", "checkout", "--quiet", "-B", branch);
   }
 
-  /** Branch, add, commit and force-push. Never invoked by an agent — Java only. */
-  public void commitAndPush(
+  /**
+   * Branch, add, commit and force-push. Never invoked by an agent — Java only.
+   *
+   * @return the pushed commit's sha, so a caller (such as the CVE-fix activity) can poll CI for
+   *     this exact commit without a second round trip to GitHub
+   */
+  public String commitAndPush(
       final RepositoryWorkspace workspace,
       final String branch,
       final String message,
@@ -139,6 +144,10 @@ public class RepositoryWorkspaceFactory {
         repo,
         installationId,
         heartbeat);
+    String headSha =
+        runGit(List.of("git", "rev-parse", "HEAD"), repo, installationId, heartbeat)
+            .standardOutput()
+            .trim();
     heartbeat.accept("Pushing " + branch);
     // --force: this branch namespace belongs to the factory; a re-drive or a repair iteration
     // replaces its own earlier proposal.
@@ -147,6 +156,7 @@ public class RepositoryWorkspaceFactory {
         repo,
         installationId,
         heartbeat);
+    return headSha;
   }
 
   private ProcessRunner.ProcessResult runGit(
