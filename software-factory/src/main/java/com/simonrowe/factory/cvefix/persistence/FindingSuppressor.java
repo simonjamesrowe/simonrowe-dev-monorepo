@@ -71,7 +71,10 @@ public class FindingSuppressor {
       if (current == null) {
         // The agent named a component Dependency-Track did not report. There is no fingerprint
         // to store, and storing a guess would suppress something that was never seen.
-        LOGGER.warn("Ignoring unfixable purl not in this run's findings: {}", component.purl());
+        LOGGER.warn(
+            "Ignoring unfixable purl not in this run's findings: {} (reason: {})",
+            component.purl(),
+            component.reason());
         continue;
       }
       repository.save(

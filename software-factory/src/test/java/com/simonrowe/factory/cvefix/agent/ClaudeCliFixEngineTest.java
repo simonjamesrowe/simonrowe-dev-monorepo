@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.simonrowe.factory.claude.ClaudeCliRunner;
-import com.simonrowe.factory.codereview.agent.ProcessRunner;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 

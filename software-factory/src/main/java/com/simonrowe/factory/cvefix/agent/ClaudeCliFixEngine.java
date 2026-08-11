@@ -147,9 +147,11 @@ public class ClaudeCliFixEngine implements FixEngine {
             ? ""
             : """
 
-            The previous attempt was pushed and CI failed. Its output follows. Fix the cause:
-            either correct the call sites, or choose a different target version and say so in
-            the summary. If a bump cannot be made to build, drop it and move it to unfixable.
+            The previous attempt was pushed and CI failed. Its output follows. You may NOT edit
+            source code to fix this, on this attempt or any other: the only lever available to
+            you is the declared version of a dependency. Either choose a different target
+            version for the affected component(s) and say so in the summary, or move the
+            component to unfixable with a reason. Do not attempt any other kind of change.
 
             ```
             %s
@@ -165,8 +167,11 @@ public class ClaudeCliFixEngine implements FixEngine {
         - You may edit ONLY these files: %s. A change anywhere else fails the run.
         - You have no Bash tool and no build toolchain. Do NOT attempt to build or test. CI
           verifies your change after it is pushed.
-        - Never edit source code to work around a breaking change on a first attempt. Prefer the
-          smallest version bump that clears the advisory.
+        - Never edit source code, ever, on this attempt or any repair attempt. The only change
+          you may make is to the declared version of a dependency. If a version bump would
+          require a source change to keep building, choose a different target version instead,
+          or move the component to unfixable with a reason. Prefer the smallest version bump
+          that clears the advisory.
 
         Dependency-Track findings to address:
         %s
@@ -174,11 +179,14 @@ public class ClaudeCliFixEngine implements FixEngine {
         1. Read the manifests to find where each component's version is declared. Most backend
            versions live in gradle/libs.versions.toml, not backend/build.gradle.kts.
         2. For each component, pick the lowest version that clears every listed advisory.
-           Dependency-Track does not tell you the fixed version — infer it from the advisory
-           recommendation above and from the version strings already in the manifests.
-        3. Apply the edit. For frontend/package-lock.json, update the matching "version" and
-           "resolved"/"integrity" entries consistently, or use an overrides entry in
-           package.json if the component is transitive only.
+           Dependency-Track does not tell you the fixed version — infer it using your own
+           knowledge of released versions for the component; the manifests only show what is
+           currently declared, not what is available, and you have no tool to look it up.
+        3. Apply the edit. For npm components, prefer adding or updating an "overrides" entry
+           in frontend/package.json over editing frontend/package-lock.json directly. You have
+           no network access and cannot compute a valid integrity hash: never hand-write a
+           "resolved" or "integrity" value in package-lock.json — a fabricated one fails
+           `npm ci` in CI and burns the repair budget on an unfixable error.
         4. Anything you cannot fix goes in unfixable, with its purl, its advisory ids exactly as
            listed above, and a reason stating which case applies: no released version clears the
            advisory; the only fix needs a major upgrade of something else; or it is

@@ -74,13 +74,21 @@ class FindingSuppressorTest {
   @Test
   void recordStoresTheJavaComputedFingerprintNotTheAgentsView() {
     ComponentFindings component = component("pkg:maven/a/b@1", "CVE-1", "CVE-9");
+    // Deliberately divergent from the ComponentFindings ids: if record() were rewritten to
+    // build the stored fingerprint/ids from the agent's UnfixableComponent instead of the
+    // matching ComponentFindings, this would store "pkg:maven/a/b@1|CVE-9" / ["CVE-9"] and the
+    // assertion below would fail.
     UnfixableComponent unfixable =
-        new UnfixableComponent("pkg:maven/a/b@1", List.of("CVE-1", "CVE-9"), "no fix available");
+        new UnfixableComponent("pkg:maven/a/b@1", List.of("CVE-9"), "no fix available");
 
     suppressor.record(List.of(unfixable), List.of(component));
 
     verify(repository)
-        .save(argThat(r -> r.fingerprint().equals("pkg:maven/a/b@1|CVE-1,CVE-9")));
+        .save(
+            argThat(
+                r ->
+                    r.fingerprint().equals("pkg:maven/a/b@1|CVE-1,CVE-9")
+                        && r.vulnerabilityIds().equals(List.of("CVE-1", "CVE-9"))));
   }
 
   @Test
