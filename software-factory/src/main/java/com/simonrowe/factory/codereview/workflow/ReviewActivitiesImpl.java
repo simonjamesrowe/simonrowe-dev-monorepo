@@ -3,6 +3,7 @@ package com.simonrowe.factory.codereview.workflow;
 import com.simonrowe.factory.codereview.agent.ReviewEngine;
 import com.simonrowe.factory.codereview.config.CodeReviewTaskQueues;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
+import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
 import com.simonrowe.factory.codereview.github.GitHubGateway;
@@ -25,6 +26,11 @@ public class ReviewActivitiesImpl implements ReviewActivities {
   }
 
   @Override
+  public String publishAck(final ReviewRequest request) {
+    return gitHubGateway.publishAck(request);
+  }
+
+  @Override
   public PullRequestContext loadPullRequest(final ReviewRequest request) {
     return gitHubGateway.loadPullRequest(request);
   }
@@ -41,7 +47,13 @@ public class ReviewActivitiesImpl implements ReviewActivities {
   }
 
   @Override
-  public void publishFailure(final PullRequestContext pullRequest, final String reason) {
-    gitHubGateway.publishFailure(pullRequest, reason);
+  public void resolveAck(final ReviewRequest request, final String ackCommentId) {
+    gitHubGateway.resolveAck(request, ackCommentId);
+  }
+
+  @Override
+  public void publishFailure(
+      final ReviewRequest request, final String ackCommentId, final ReviewFailure failure) {
+    gitHubGateway.publishFailure(request, ackCommentId, failure);
   }
 }

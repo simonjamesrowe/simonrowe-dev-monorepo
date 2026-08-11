@@ -6,7 +6,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
+import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewFinding;
+import com.simonrowe.factory.codereview.domain.ReviewPhase;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
 import com.simonrowe.factory.codereview.domain.Severity;
@@ -94,6 +96,44 @@ class GitHubGatewayTest {
 
     assertThat(payload.has("comments")).isFalse();
     assertThat(payload.path("body").asText()).contains("`src/App.java:12`");
+  }
+
+  @Test
+  void ackIsPostedToTheIssueCommentsCollectionForThePullRequest() {
+    String path =
+        GitHubGateway.ackPath(new ReviewRequest("example", "project", 42, "sha", 1L, true));
+
+    assertThat(path).isEqualTo("/repos/example/project/issues/42/comments");
+  }
+
+  @Test
+  void ackIsEditedAndDeletedThroughTheRepositoryCommentResource() {
+    String path =
+        GitHubGateway.commentPath(
+            new ReviewRequest("example", "project", 42, "sha", 1L, true), "987");
+
+    assertThat(path).isEqualTo("/repos/example/project/issues/comments/987");
+  }
+
+  @Test
+  void failureEditsTheAckWhenThereIsOneAndPostsFreshWhenThereIsNot() {
+    assertThat(GitHubGateway.failureMethod("987")).isEqualTo("PATCH");
+    assertThat(GitHubGateway.failureMethod(null)).isEqualTo("POST");
+  }
+
+  @Test
+  void failureBodyCarriesThePhaseTheReasonAndTheWorkflowLink() {
+    String body =
+        new ReviewMarkdownRenderer()
+            .renderFailure(
+                new ReviewFailure(ReviewPhase.LOADING_PULL_REQUEST, "returned 422", "wf-9"),
+                "<!-- temporal-code-review:sha:v1 -->",
+                "https://temporal.example.com");
+
+    assertThat(body).startsWith("<!-- temporal-code-review:sha:v1 -->");
+    assertThat(body).contains("LOADING_PULL_REQUEST");
+    assertThat(body).contains("returned 422");
+    assertThat(body).contains("https://temporal.example.com/namespaces/default/workflows/wf-9");
   }
 
   private GitHubGateway gateway() {
