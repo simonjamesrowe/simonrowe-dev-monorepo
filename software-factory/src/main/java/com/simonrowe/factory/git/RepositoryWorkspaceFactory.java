@@ -144,8 +144,10 @@ public class RepositoryWorkspaceFactory {
         repo,
         installationId,
         heartbeat);
+    // null installationId: rev-parse is purely local and needs no credential, the same reason
+    // changedPaths passes null — minting an installation token here would be wasted work.
     String headSha =
-        runGit(List.of("git", "rev-parse", "HEAD"), repo, installationId, heartbeat)
+        runGit(List.of("git", "rev-parse", "HEAD"), repo, null, heartbeat)
             .standardOutput()
             .trim();
     heartbeat.accept("Pushing " + branch);

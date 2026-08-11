@@ -11,9 +11,9 @@ import com.simonrowe.factory.cvefix.domain.CiOutcome;
 import com.simonrowe.factory.cvefix.domain.ComponentFindings;
 import com.simonrowe.factory.cvefix.domain.FixProposal;
 import com.simonrowe.factory.cvefix.domain.UnfixableComponent;
+import com.simonrowe.factory.cvefix.github.CiStatusGateway;
 import com.simonrowe.factory.cvefix.github.CveFixPrBodyRenderer;
 import com.simonrowe.factory.cvefix.github.CveFixPrGateway;
-import com.simonrowe.factory.cvefix.github.CiStatusGateway;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRepository;
 import com.simonrowe.factory.cvefix.persistence.FindingSuppressor;
@@ -101,10 +101,12 @@ public class CveFixActivitiesImpl implements CveFixActivities {
             properties.workspaceRoot(), WORKSPACE_PREFIX, heartbeat)) {
       FixProposal proposal = fixEngine.propose(workspace, components, failureContext, heartbeat);
       List<String> changed = workspaceFactory.changedPaths(workspace, heartbeat);
+      // Validated even when nothing was proposed: an agent that reports no bumps while still
+      // writing outside the allowlist must fail loudly, not return a silent, unreported success.
+      RepositoryWorkspaceFactory.validateAllowedPaths(changed, CveFixAllowedFiles.ALL);
       if (proposal.isEmpty() || changed.isEmpty()) {
         return new PushResult(null, summaryOf(proposal));
       }
-      RepositoryWorkspaceFactory.validateAllowedPaths(changed, CveFixAllowedFiles.ALL);
       String headSha =
           workspaceFactory.commitAndPush(
               workspace, properties.branch(), commitMessage(proposal),
