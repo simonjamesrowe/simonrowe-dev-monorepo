@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -17,6 +18,7 @@ public class RedeployService {
 
   private static final Logger LOG = LoggerFactory.getLogger(RedeployService.class);
   private static final long PROCESS_TIMEOUT_MINUTES = 5;
+  private static final Set<String> ISOLATED_SERVICES = Set.of("software-factory");
 
   private final DataOperationsService operationsService;
   private final RedeployProperties properties;
@@ -61,18 +63,20 @@ public class RedeployService {
           "Failed to pull helper image");
 
       // Step 2: Restart non-backend services
-      operationsService.updateProgress("Restarting frontend and nginx...", 55);
-      final List<String> nonSelfServices = properties.services().stream()
-          .filter(s -> !"backend".equals(s))
-          .toList();
-      if (!nonSelfServices.isEmpty()) {
+      final List<String> together = servicesRestartedTogether(properties.services());
+      operationsService.updateProgress("Restarting " + String.join(" and ", together) + "...", 55);
+      if (!together.isEmpty()) {
         List<String> upArgs = new ArrayList<>();
         upArgs.add("up");
         upArgs.add("-d");
-        upArgs.addAll(nonSelfServices);
+        upArgs.addAll(together);
         runComposeCommand(upArgs, "Failed to restart services");
       }
-      operationsService.updateProgress("Frontend and nginx restarted", 75);
+      operationsService.updateProgress("Restarted " + String.join(" and ", together), 70);
+
+      // Step 2b: Restart isolated services one at a time, each with --no-deps.
+      final String isolatedNote = restartIsolatedServices();
+      operationsService.updateProgress("Restarted remaining services", 75);
 
       // Step 3: Resolve host compose directory (before persisting status so errors are caught)
       operationsService.updateProgress("Preparing backend restart...", 80);
@@ -82,7 +86,7 @@ public class RedeployService {
       // Step 4: Persist completed status before self-restart
       operationsService.updateProgress("Scheduling backend restart...", 85);
       operationsService.completeOperation(
-          "Redeploy complete. Backend restarting in "
+          "Redeploy complete." + isolatedNote + " Backend restarting in "
               + properties.selfRestartDelaySeconds() + " seconds...");
 
       // Step 5: Schedule backend self-restart via ephemeral helper container.
@@ -144,6 +148,56 @@ public class RedeployService {
       LOG.error("Redeploy failed unexpectedly", ex);
       operationsService.failOperation("Redeploy failed: " + ex.getMessage());
     }
+  }
+
+  /**
+   * Services safe to bring up in one command, letting Compose resolve their dependencies.
+   *
+   * <p>Excludes {@code backend}, which would kill the Compose process that is restarting it, and
+   * anything in {@link #ISOLATED_SERVICES}.
+   */
+  static List<String> servicesRestartedTogether(final List<String> configured) {
+    return configured.stream()
+        .filter(s -> !"backend".equals(s))
+        .filter(s -> !ISOLATED_SERVICES.contains(s))
+        .toList();
+  }
+
+  /**
+   * Services that must be brought up alone, with {@code --no-deps}.
+   *
+   * <p>{@code software-factory} declares {@code temporal} and {@code mongodb} as
+   * {@code service_healthy} dependencies. Left in the main {@code up}, an unhealthy Temporal would
+   * fail the whole command and frontend and nginx would never restart — the same shape as the
+   * incident where an unhealthy backend left frontend in {@code created} and skipped nginx. It has
+   * no relative bind mounts (only an absolute host path for the App key and a named volume), so it
+   * recreates correctly from inside this container.
+   */
+  static List<String> servicesRestartedInIsolation(final List<String> configured) {
+    return configured.stream().filter(ISOLATED_SERVICES::contains).toList();
+  }
+
+  /**
+   * Restarts isolated services best-effort, returning a note for the completion message.
+   *
+   * <p>A failure here must not abort the redeploy: the backend self-restart is scheduled after this
+   * step, and letting a software-factory problem strand the backend on its old image would be a
+   * worse outcome than a stale reviewer. It is reported rather than swallowed — silence is exactly
+   * how this service went stale in the first place.
+   */
+  private String restartIsolatedServices() {
+    List<String> failed = new ArrayList<>();
+    for (String service : servicesRestartedInIsolation(properties.services())) {
+      operationsService.updateProgress("Restarting " + service + "...", 72);
+      try {
+        runComposeCommand(
+            List.of("up", "-d", "--no-deps", service), "Failed to restart " + service);
+      } catch (RedeployException ex) {
+        LOG.error("Redeploy could not restart {}: {}", service, ex.getMessage());
+        failed.add(service);
+      }
+    }
+    return failed.isEmpty() ? "" : " WARNING: could not restart " + String.join(", ", failed) + ".";
   }
 
   private String resolveHostComposeDir() throws RedeployException {

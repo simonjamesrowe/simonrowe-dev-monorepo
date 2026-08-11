@@ -94,7 +94,8 @@ class CiStatusGatewayTest {
                 null,
                 Duration.ofSeconds(5)),
             null,
-            null);
+            null,
+            "https://temporal.test");
     CveFixProperties properties =
         new CveFixProperties(
             true,

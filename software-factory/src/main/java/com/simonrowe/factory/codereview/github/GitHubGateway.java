@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
+import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewFinding;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
@@ -88,7 +89,7 @@ public class GitHubGateway {
 
   public void publishReview(
       final PullRequestContext pullRequest, final ReviewReport report) {
-    String marker = marker(pullRequest);
+    String marker = marker(pullRequest.headSha());
     String accessToken = requireAccessToken(pullRequest);
     String path = reviewsPath(pullRequest);
     HttpResponse<String> response =
@@ -101,24 +102,81 @@ public class GitHubGateway {
     requireSuccess(response, "POST", path);
   }
 
-  /**
-   * Reports that no review happened. A silent failure is indistinguishable from a webhook that
-   * never arrived, so the reason belongs on the pull request. This is a fresh review like any
-   * other publish, so a later successful run for the same head SHA simply adds its own review
-   * rather than needing to replace this one.
-   */
-  public void publishFailure(final PullRequestContext pullRequest, final String reason) {
-    String marker = marker(pullRequest);
-    String accessToken = requireAccessToken(pullRequest);
-    String path = reviewsPath(pullRequest);
-    HttpResponse<String> response =
-        send("POST", path, failureReviewPayload(pullRequest, reason, marker), accessToken);
-    requireSuccess(response, "POST", path);
+  static String ackPath(final ReviewRequest request) {
+    return "/repos/"
+        + request.owner()
+        + "/"
+        + request.repository()
+        + "/issues/"
+        + request.pullNumber()
+        + "/comments";
   }
 
-  private String marker(final PullRequestContext pullRequest) {
+  static String commentPath(final ReviewRequest request, final String commentId) {
+    return "/repos/"
+        + request.owner()
+        + "/"
+        + request.repository()
+        + "/issues/comments/"
+        + commentId;
+  }
+
+  /** Edits the ack where there is one; a review whose ack never landed still gets reported. */
+  static String failureMethod(final String ackCommentId) {
+    return ackCommentId == null ? "POST" : "PATCH";
+  }
+
+  /**
+   * Announces that a review has started, returning the comment id so it can be resolved later.
+   *
+   * <p>Posted before anything else, from {@link ReviewRequest} alone, so it lands even when the run
+   * dies loading the pull request — the failure that produced no comment at all on 2026-08-11.
+   */
+  public String publishAck(final ReviewRequest request) {
+    String marker = marker(request.expectedHeadSha());
+    JsonNode created =
+        sendJson(
+            "POST",
+            ackPath(request),
+            objectMapper.createObjectNode().put("body", renderer.renderAck(marker)),
+            credentials.commentToken(request.installationId()));
+    String id = created.path("id").asText();
+    if (id.isBlank()) {
+      throw new IllegalStateException("GitHub response omitted the ack comment id");
+    }
+    return id;
+  }
+
+  /** Removes the ack once the review itself is on the pull request. */
+  public void resolveAck(final ReviewRequest request, final String ackCommentId) {
+    String path = commentPath(request, ackCommentId);
+    HttpResponse<String> response =
+        send("DELETE", path, null, credentials.commentToken(request.installationId()));
+    requireSuccess(response, "DELETE", path);
+  }
+
+  /**
+   * Reports that no review happened, replacing the ack in place where there is one.
+   *
+   * <p>Takes {@link ReviewRequest} rather than {@link PullRequestContext} deliberately: the most
+   * common failure happens while loading that context, so requiring it is what made the commonest
+   * failure unreportable.
+   */
+  public void publishFailure(
+      final ReviewRequest request, final String ackCommentId, final ReviewFailure failure) {
+    String marker = marker(request.expectedHeadSha());
+    String body = renderer.renderFailure(failure, marker, properties.temporalUiBaseUrl());
+    String accessToken = credentials.commentToken(request.installationId());
+    ObjectNode payload = objectMapper.createObjectNode().put("body", body);
+
+    String method = failureMethod(ackCommentId);
+    String path = ackCommentId == null ? ackPath(request) : commentPath(request, ackCommentId);
+    requireSuccess(send(method, path, payload, accessToken), method, path);
+  }
+
+  private String marker(final String headSha) {
     return "<!-- temporal-code-review:"
-        + pullRequest.headSha()
+        + headSha
         + ":"
         + properties.agent().promptVersion()
         + " -->";
@@ -150,15 +208,6 @@ public class GitHubGateway {
       throw new IllegalStateException(
           "GitHub API returned " + response.statusCode() + " for " + method + " " + path);
     }
-  }
-
-  ObjectNode failureReviewPayload(
-      final PullRequestContext pullRequest, final String reason, final String marker) {
-    ObjectNode payload = objectMapper.createObjectNode();
-    payload.put("commit_id", pullRequest.headSha());
-    payload.put("event", "COMMENT");
-    payload.put("body", renderer.renderFailure(reason, marker));
-    return payload;
   }
 
   ObjectNode reviewPayload(

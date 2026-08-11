@@ -1,11 +1,13 @@
 package com.simonrowe.factory.codereview.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.sun.net.httpserver.HttpServer;
+import io.temporal.failure.ApplicationFailure;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.StringWriter;
@@ -70,6 +72,130 @@ class GitHubCredentialsTest {
           .contains("\"issues\":\"write\"")
           .contains("\"pull_requests\":\"write\"");
       assertValidAppJwt(authorization.get().substring("Bearer ".length()), keyPair);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  /**
+   * The comment path must not ask for more than the installation was granted.
+   *
+   * <p>GitHub rejects the whole token request with {@code 422} when any requested permission
+   * exceeds the grant, which is how a permission drift took every review down on 2026-08-11 —
+   * silently, because reporting that failure needed a token too. Omitting the block yields the
+   * installation's full grant, which cannot be rejected for over-reaching.
+   */
+  @Test
+  void commentTokenRequestsNoPermissionsSoItCannotOverReach(@TempDir final Path directory)
+      throws Exception {
+    KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    Path privateKey = writePrivateKey(directory, keyPair);
+    AtomicInteger requests = new AtomicInteger();
+    AtomicReference<String> authorization = new AtomicReference<>();
+    AtomicReference<String> requestBody = new AtomicReference<>();
+    HttpServer server = tokenServer(requests, authorization, requestBody);
+
+    try {
+      GitHubCredentials credentials =
+          new GitHubCredentials(
+              properties(
+                  "http://127.0.0.1:" + server.getAddress().getPort(),
+                  "",
+                  "Iv1.test-client",
+                  privateKey.toString()),
+              objectMapper,
+              HttpClient.newHttpClient(),
+              Clock.fixed(NOW, ZoneOffset.UTC));
+
+      assertThat(credentials.commentToken(123L)).isEqualTo("installation-token");
+
+      assertThat(objectMapper.readTree(requestBody.get()).has("permissions")).isFalse();
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  /** The two tokens are cached apart, so a rejected review mint cannot poison commenting. */
+  @Test
+  void commentAndReviewTokensAreMintedAndCachedSeparately(@TempDir final Path directory)
+      throws Exception {
+    KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    Path privateKey = writePrivateKey(directory, keyPair);
+    AtomicInteger requests = new AtomicInteger();
+    AtomicReference<String> authorization = new AtomicReference<>();
+    AtomicReference<String> requestBody = new AtomicReference<>();
+    HttpServer server = tokenServer(requests, authorization, requestBody);
+
+    try {
+      GitHubCredentials credentials =
+          new GitHubCredentials(
+              properties(
+                  "http://127.0.0.1:" + server.getAddress().getPort(),
+                  "",
+                  "Iv1.test-client",
+                  privateKey.toString()),
+              objectMapper,
+              HttpClient.newHttpClient(),
+              Clock.fixed(NOW, ZoneOffset.UTC));
+
+      credentials.accessToken(123L);
+      credentials.commentToken(123L);
+      credentials.accessToken(123L);
+      credentials.commentToken(123L);
+
+      assertThat(requests).hasValue(2);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  /**
+   * A 4xx mint is a configuration fault, not a blip.
+   *
+   * <p>Retrying it three times only delays the report, and GitHub's body names the offending
+   * permission — the one piece of information that turns this into a two-minute fix.
+   */
+  @Test
+  void rejectedMintIsNotRetriedAndKeepsGithubsExplanation(@TempDir final Path directory)
+      throws Exception {
+    KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    Path privateKey = writePrivateKey(directory, keyPair);
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/app/installations/123/access_tokens",
+        exchange -> {
+          byte[] response =
+              "{\"message\":\"The permissions requested are not granted to this installation.\"}"
+                  .getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().add("Content-Type", "application/json");
+          exchange.sendResponseHeaders(422, response.length);
+          try (OutputStream output = exchange.getResponseBody()) {
+            output.write(response);
+          }
+        });
+    server.start();
+
+    try {
+      GitHubCredentials credentials =
+          new GitHubCredentials(
+              properties(
+                  "http://127.0.0.1:" + server.getAddress().getPort(),
+                  "",
+                  "Iv1.test-client",
+                  privateKey.toString()),
+              objectMapper,
+              HttpClient.newHttpClient(),
+              Clock.fixed(NOW, ZoneOffset.UTC));
+
+      ApplicationFailure failure =
+          (ApplicationFailure) catchThrowable(() -> credentials.accessToken(123L));
+
+      assertThat(failure).isNotNull();
+      assertThat(failure.isNonRetryable()).isTrue();
+      assertThat(failure.getType()).isEqualTo("GITHUB_TOKEN_REJECTED");
+      assertThat(failure.getOriginalMessage())
+          .contains("422")
+          .contains("not granted to this installation");
     } finally {
       server.stop(0);
     }
@@ -222,6 +348,6 @@ class GitHubCredentialsTest {
             2_097_152,
             80,
             "v1"),
-        new CodeReviewProperties.Api(""));
+        new CodeReviewProperties.Api(""), "https://temporal.test");
   }
 }

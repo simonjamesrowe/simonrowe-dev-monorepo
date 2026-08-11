@@ -14,6 +14,11 @@ The cost of that merge is explicit and accepted: the process that terminates
 untrusted internet traffic now also holds long-lived credentials. What keeps it
 defensible is that the attack surface is exactly one route.
 
+Steps that only a human can perform — GitHub App permissions, Grafana Cloud
+tokens — are tracked as a checklist in
+[software-factory-manual-actions.md](software-factory-manual-actions.md),
+including any that are currently outstanding.
+
 ## Migrating from the split deployment
 
 **This is the one-time cutover. Run it after merging, not before.**
@@ -80,6 +85,36 @@ string, and accepting that would let anyone sign their own payloads. Do not
 change this class without keeping `WebhookSignatureVerifierTest` and
 `GitHubWebhookControllerTest` green; between them they pin unsigned, wrongly
 signed, replayed-onto-a-different-body, non-JSON and malformed deliveries.
+
+## What appears on a pull request
+
+One comment per reviewed head SHA, which transitions:
+
+| State | Comment |
+| --- | --- |
+| Accepted | 🔄 "A review of these changes is in progress" |
+| Reviewed | the review itself; the ack is deleted |
+| Failed | the ack is edited into a failure notice with phase, reason and a Temporal link |
+
+**Silence now means exactly one thing: the workflow never started** — the webhook
+did not arrive, or nothing is polling the `code-review` task queue. Every other
+outcome is visible on the pull request. Before this, silence meant any of five
+things and was the *normal* presentation of failure: three of the seven pull
+requests opened after the reviewer first worked got no comment at all.
+
+Two caveats:
+
+- `publish: false` runs post nothing at all, including failure notices. A green
+  dry run does not prove the publish path works.
+- A credential fault severe enough to block minting any token also blocks
+  commenting, so it stays visible only in Temporal. Lifecycle comments mint their
+  token with no `permissions` override to make this as unlikely as possible — an
+  over-broad request from the review path cannot break commenting — but an
+  uninstalled App or a bad key will.
+
+The Temporal link is built from `factory.codereview.temporal-ui-base-url`
+(`TEMPORAL_UI_URL`, defaulting to `https://temporal.simonrowe.dev`). Blank drops
+the link and keeps the bare workflow id.
 
 ## One-time external setup
 

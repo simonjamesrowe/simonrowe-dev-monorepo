@@ -376,6 +376,13 @@ redeploy:
     - backend
     - frontend
     - nginx
+    # CI publishes a software-factory image on every merge, but nothing deployed it
+    # until 2026-08-11, so the automated code reviewer ran whatever image was last
+    # started by hand. It is restarted on its own with --no-deps (see RedeployService):
+    # unlike frontend and nginx, it declares temporal and mongodb as service_healthy
+    # dependencies, and a redeploy must not be able to restart the database or be
+    # blocked by Temporal's health.
+    - software-factory
   docker-binary: ${REDEPLOY_DOCKER_BINARY:docker}
   self-restart-delay-seconds: 5
   helper-image: ${REDEPLOY_HELPER_IMAGE:docker:cli}

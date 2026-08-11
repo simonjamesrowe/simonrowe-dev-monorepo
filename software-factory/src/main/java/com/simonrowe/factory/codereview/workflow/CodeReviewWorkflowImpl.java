@@ -2,6 +2,7 @@ package com.simonrowe.factory.codereview.workflow;
 
 import com.simonrowe.factory.codereview.config.CodeReviewTaskQueues;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
+import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewPhase;
 import com.simonrowe.factory.codereview.domain.ReviewProgress;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
@@ -45,12 +46,12 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
 
   @Override
   public ReviewResult review(final ReviewRequest request) {
-    PullRequestContext pullRequest = null;
+    String ackCommentId = request.publish() ? acknowledge(request) : null;
     try {
       current =
           new ReviewProgress(
               ReviewPhase.LOADING_PULL_REQUEST, "Loading GitHub metadata", null, null);
-      pullRequest = networkActivities.loadPullRequest(request);
+      PullRequestContext pullRequest = networkActivities.loadPullRequest(request);
 
       current =
           new ReviewProgress(
@@ -65,6 +66,7 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
                 pullRequest.headSha(),
                 report);
         networkActivities.publishReview(pullRequest, report);
+        resolve(request, ackCommentId);
       }
 
       current =
@@ -73,12 +75,49 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
       return new ReviewResult(
           Workflow.getInfo().getWorkflowId(), pullRequest.headSha(), request.publish(), report);
     } catch (RuntimeException exception) {
+      // Capture the phase before overwriting it — FAILED says nothing about where it died.
+      ReviewPhase failedIn = current.phase();
       String reason = safeFailureMessage(exception);
       current = new ReviewProgress(ReviewPhase.FAILED, reason, current.headSha(), current.report());
-      if (request.publish() && pullRequest != null) {
-        reportFailure(pullRequest, reason);
+      if (request.publish()) {
+        reportFailure(
+            request,
+            ackCommentId,
+            new ReviewFailure(failedIn, reason, Workflow.getInfo().getWorkflowId()));
       }
       throw exception;
+    }
+  }
+
+  /**
+   * Best-effort acknowledgement. A pull request that cannot be commented on is still worth
+   * reviewing, so a failure here yields a null id and the run continues; the failure path then
+   * posts a fresh comment rather than editing one.
+   */
+  private String acknowledge(final ReviewRequest request) {
+    try {
+      return networkActivities.publishAck(request);
+    } catch (RuntimeException exception) {
+      Workflow.getLogger(CodeReviewWorkflowImpl.class)
+          .warn("Could not acknowledge the review on the pull request", exception);
+      return null;
+    }
+  }
+
+  /**
+   * Best-effort ack removal, after the review is published. A failed delete leaves a stale "in
+   * progress" beside a real review — visible and harmless. Deleting first and then failing to
+   * publish would lose both.
+   */
+  private void resolve(final ReviewRequest request, final String ackCommentId) {
+    if (ackCommentId == null) {
+      return;
+    }
+    try {
+      networkActivities.resolveAck(request, ackCommentId);
+    } catch (RuntimeException exception) {
+      Workflow.getLogger(CodeReviewWorkflowImpl.class)
+          .warn("Could not remove the review acknowledgement", exception);
     }
   }
 
@@ -86,9 +125,10 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
    * Best-effort notice on the pull request. A failure to report the failure must not replace the
    * original one, which is what actually needs diagnosing.
    */
-  private void reportFailure(final PullRequestContext pullRequest, final String reason) {
+  private void reportFailure(
+      final ReviewRequest request, final String ackCommentId, final ReviewFailure failure) {
     try {
-      networkActivities.publishFailure(pullRequest, reason);
+      networkActivities.publishFailure(request, ackCommentId, failure);
     } catch (RuntimeException exception) {
       Workflow.getLogger(CodeReviewWorkflowImpl.class)
           .warn("Could not publish review failure notice", exception);

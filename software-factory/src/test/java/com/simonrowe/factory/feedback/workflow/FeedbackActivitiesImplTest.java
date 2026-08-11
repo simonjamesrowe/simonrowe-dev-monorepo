@@ -369,6 +369,6 @@ class FeedbackActivitiesImplTest {
         new CodeReviewProperties.Agent(
             "claude", "sonnet", "medium", 12, Duration.ofMinutes(15),
             Path.of("/tmp/reviewer-test"), 2_097_152, 80, "v1"),
-        new CodeReviewProperties.Api(""));
+        new CodeReviewProperties.Api(""), "https://temporal.test");
   }
 }
