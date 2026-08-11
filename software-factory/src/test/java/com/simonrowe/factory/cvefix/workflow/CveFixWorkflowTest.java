@@ -1,6 +1,7 @@
 package com.simonrowe.factory.cvefix.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -29,6 +30,7 @@ import com.simonrowe.factory.cvefix.github.CveFixPrGateway;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.cvefix.workflow.CveFixActivities.FixSummary;
 import com.simonrowe.factory.cvefix.workflow.CveFixActivities.PushResult;
+import io.temporal.client.WorkflowFailedException;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
@@ -161,6 +163,27 @@ class CveFixWorkflowTest {
   }
 
   @Test
+  void givesUpWhenTheRepairProducesNoFurtherChange() {
+    CveFixActivities activities = activities();
+    when(activities.checkCi(anyString())).thenReturn(outcome(CiState.RED));
+    when(activities.proposeAndPush(anyList(), any()))
+        .thenReturn(new PushResult("sha-1", SUMMARY), new PushResult(null, SUMMARY));
+
+    // The default budget of 3 is deliberately not spent and the 3h cap is nowhere near: the only
+    // reason this run can stop is the repair that changed nothing, and the detail must say so.
+    CveFixResult result = run(activities, REQUEST);
+
+    assertThat(result.status()).isEqualTo(CveFixStatus.CI_UNRESOLVED);
+    assertThat(result.detail())
+        .contains("no further change")
+        .doesNotContain("repair budget")
+        .doesNotContain("wall-clock");
+    verify(activities, times(2)).proposeAndPush(anyList(), any());
+    verify(activities, times(1)).commentOnPullRequest(eq(11), anyString());
+    verify(activities, times(1)).checkCi("sha-1");
+  }
+
+  @Test
   void endsCiUnresolvedWhenTheWallClockCapElapsesBeforeTheBudget() {
     CveFixActivities activities = activities();
     when(activities.checkCi(anyString())).thenReturn(outcome(CiState.PENDING));
@@ -222,6 +245,19 @@ class CveFixWorkflowTest {
 
     assertThat(result.detail()).contains("repair budget of 1");
     verify(repairing, times(2)).proposeAndPush(anyList(), any());
+  }
+
+  @Test
+  void failsAndRecordsTheRunWhenThePullRequestWasNotOpened() {
+    CveFixActivities activities = activities();
+    when(activities.openPullRequest(any())).thenReturn(null);
+
+    assertThatThrownBy(() -> run(activities, REQUEST)).isInstanceOf(WorkflowFailedException.class);
+
+    CveFixRunRecord runRecord = recordedRun(activities);
+    assertThat(runRecord.status()).isEqualTo(CveFixStatus.FAILED);
+    assertThat(runRecord.detail()).contains("The CVE pull request was not opened");
+    verify(activities, never()).checkCi(anyString());
   }
 
   @Test
