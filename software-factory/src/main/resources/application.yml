@@ -29,6 +29,10 @@ spring:
       workflow-packages:
         - com.simonrowe.factory.codereview.workflow
         - com.simonrowe.factory.feedback.workflow
+        # Without this entry no worker polls the cve-fix task queue and CveFixActivitiesImpl's
+        # @ActivityImpl is never registered: the container is healthy, the schedule fires, and
+        # nothing ever runs.
+        - com.simonrowe.factory.cvefix.workflow
       register-activity-beans: true
 
 factory:
