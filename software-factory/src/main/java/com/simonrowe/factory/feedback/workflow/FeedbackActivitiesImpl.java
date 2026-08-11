@@ -19,6 +19,8 @@ import com.simonrowe.factory.feedback.github.ConversationGateway;
 import com.simonrowe.factory.feedback.github.FeedbackPrGateway;
 import com.simonrowe.factory.feedback.persistence.LearningRecord;
 import com.simonrowe.factory.feedback.persistence.LearningRepository;
+import com.simonrowe.factory.git.RepositoryWorkspace;
+import com.simonrowe.factory.git.RepositoryWorkspaceFactory;
 import io.temporal.activity.Activity;
 import io.temporal.spring.boot.ActivityImpl;
 import java.time.Instant;
@@ -132,7 +134,7 @@ public class FeedbackActivitiesImpl implements FeedbackActivities {
       final List<String> prUrls,
       final List<String> notes) {
     Long installationId = credentials.installationId(target.owner(), target.repository());
-    try (GuidanceWorkspaceFactory.GuidanceWorkspace workspace =
+    try (RepositoryWorkspace workspace =
         workspaceFactory.create(target.owner(), target.repository(), installationId, heartbeat)) {
       DistillProposal proposal =
           distillEngine.distill(
@@ -145,7 +147,7 @@ public class FeedbackActivitiesImpl implements FeedbackActivities {
         notes.add(target.slug() + ": no change (" + proposal.reason() + ")");
         return;
       }
-      GuidanceWorkspaceFactory.validateAllowedPaths(changed, target.allowedPaths());
+      RepositoryWorkspaceFactory.validateAllowedPaths(changed, target.allowedPaths());
       String branch = "feedback/" + request.repository() + "-pr-" + request.pullNumber();
       workspaceFactory.commitAndPush(
           workspace, branch, proposal.prTitle(), installationId, heartbeat);
