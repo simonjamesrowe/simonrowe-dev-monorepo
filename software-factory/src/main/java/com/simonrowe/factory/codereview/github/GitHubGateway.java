@@ -16,11 +16,17 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**
  * Minimal GitHub REST adapter.
+ *
+ * <p>Every review of a pull request writes through <em>one</em> comment, found by {@link
+ * #statusMarker}, and replaces the inline findings the previous review left. Reviews used to be
+ * posted afresh on every push, keyed by head SHA, so a pull request accumulated one summary per
+ * push and one copy of each finding per push — pull request 102 collected three.
  *
  * <p>App authentication can replace its token without workflow changes.
  */
@@ -28,6 +34,8 @@ import org.springframework.stereotype.Component;
 public class GitHubGateway {
 
   private static final String API_VERSION = "2026-03-10";
+  private static final int PAGE_SIZE = 100;
+  private static final int MAX_PAGES = 10;
 
   private final CodeReviewProperties properties;
   private final GitHubCredentials credentials;
@@ -87,109 +95,224 @@ public class GitHubGateway {
         request.installationId());
   }
 
-  public void publishReview(
-      final PullRequestContext pullRequest, final ReviewReport report) {
-    String marker = marker(pullRequest.headSha());
-    String accessToken = requireAccessToken(pullRequest);
-    String path = reviewsPath(pullRequest);
-    HttpResponse<String> response =
-        send("POST", path, reviewPayload(pullRequest, report, marker), accessToken);
-    if (response.statusCode() == 422) {
-      // At least one finding did not anchor to the diff; fold everything into the body.
-      response =
-          send("POST", path, fallbackReviewPayload(pullRequest, report, marker), accessToken);
-    }
-    requireSuccess(response, "POST", path);
-  }
-
-  static String ackPath(final ReviewRequest request) {
-    return "/repos/"
-        + request.owner()
-        + "/"
-        + request.repository()
-        + "/issues/"
-        + request.pullNumber()
-        + "/comments";
-  }
-
-  static String commentPath(final ReviewRequest request, final String commentId) {
-    return "/repos/"
-        + request.owner()
-        + "/"
-        + request.repository()
-        + "/issues/comments/"
-        + commentId;
-  }
-
-  /** Edits the ack where there is one; a review whose ack never landed still gets reported. */
-  static String failureMethod(final String ackCommentId) {
-    return ackCommentId == null ? "POST" : "PATCH";
-  }
-
   /**
-   * Announces that a review has started, returning the comment id so it can be resolved later.
+   * Opens — or reclaims — the one comment this reviewer keeps on the pull request, returning its id
+   * so the outcome can be written into the same place.
    *
    * <p>Posted before anything else, from {@link ReviewRequest} alone, so it lands even when the run
    * dies loading the pull request — the failure that produced no comment at all on 2026-08-11.
    */
-  public String publishAck(final ReviewRequest request) {
-    String marker = marker(request.expectedHeadSha());
-    JsonNode created =
-        sendJson(
-            "POST",
-            ackPath(request),
-            objectMapper.createObjectNode().put("body", renderer.renderAck(marker)),
-            credentials.commentToken(request.installationId()));
-    String id = created.path("id").asText();
+  public String openStatusComment(final ReviewRequest request) {
+    String token = credentials.commentToken(request.installationId());
+    String marker = statusMarker(request.owner(), request.repository(), request.pullNumber());
+    ObjectNode payload =
+        objectMapper
+            .createObjectNode()
+            .put("body", renderer.renderAck(marker, request.expectedHeadSha()));
+
+    String existing =
+        findCommentId(
+            fetchAllPages(
+                statusCommentsPath(request.owner(), request.repository(), request.pullNumber()),
+                token),
+            marker);
+    if (existing != null) {
+      String path = statusCommentPath(request.owner(), request.repository(), existing);
+      requireSuccess(send("PATCH", path, payload, token), "PATCH", path);
+      return existing;
+    }
+
+    String path = statusCommentsPath(request.owner(), request.repository(), request.pullNumber());
+    String id = sendJson("POST", path, payload, token).path("id").asText();
     if (id.isBlank()) {
-      throw new IllegalStateException("GitHub response omitted the ack comment id");
+      throw new IllegalStateException("GitHub response omitted the status comment id");
     }
     return id;
   }
 
-  /** Removes the ack once the review itself is on the pull request. */
-  public void resolveAck(final ReviewRequest request, final String ackCommentId) {
-    String path = commentPath(request, ackCommentId);
-    HttpResponse<String> response =
-        send("DELETE", path, null, credentials.commentToken(request.installationId()));
-    requireSuccess(response, "DELETE", path);
+  /**
+   * Replaces the previous review: stale inline findings are deleted, the surviving ones re-anchored
+   * to the current diff, and the summary written into the status comment.
+   *
+   * <p>Findings are posted as individual comments rather than gathered into a submitted review. A
+   * submitted review can be neither deleted nor hidden, so one per push would accumulate on the
+   * pull request even after its comments were pruned — and GitHub rejects a {@code COMMENT} review
+   * with an empty body, so there is no bodiless review to post instead.
+   */
+  public void publishReview(
+      final PullRequestContext pullRequest,
+      final ReviewReport report,
+      final String statusCommentId) {
+    List<ReviewFinding> unanchored = new ArrayList<>();
+    String accessToken = requireAccessToken(pullRequest);
+
+    // Unconditional: a push that fixed everything is exactly the one that must clear the board.
+    deletePreviousFindings(pullRequest, accessToken);
+
+    if (!report.findings().isEmpty()) {
+      String path =
+          findingCommentsPath(
+              pullRequest.owner(), pullRequest.repository(), pullRequest.pullNumber());
+      for (ReviewFinding finding : report.findings()) {
+        HttpResponse<String> response =
+            send("POST", path, findingCommentPayload(pullRequest, finding), accessToken);
+        if (response.statusCode() == 422) {
+          // This one did not anchor to the current diff; the summary carries it instead.
+          unanchored.add(finding);
+        } else {
+          requireSuccess(response, "POST", path);
+        }
+      }
+    }
+
+    publishSummary(pullRequest, report, statusCommentId, unanchored);
   }
 
   /**
-   * Reports that no review happened, replacing the ack in place where there is one.
+   * Reports that no review happened, replacing the status comment in place where there is one.
    *
    * <p>Takes {@link ReviewRequest} rather than {@link PullRequestContext} deliberately: the most
    * common failure happens while loading that context, so requiring it is what made the commonest
    * failure unreportable.
    */
   public void publishFailure(
-      final ReviewRequest request, final String ackCommentId, final ReviewFailure failure) {
-    String marker = marker(request.expectedHeadSha());
-    String body = renderer.renderFailure(failure, marker, properties.temporalUiBaseUrl());
-    String accessToken = credentials.commentToken(request.installationId());
+      final ReviewRequest request, final String statusCommentId, final ReviewFailure failure) {
+    String marker = statusMarker(request.owner(), request.repository(), request.pullNumber());
+    String body =
+        renderer.renderFailure(
+            failure, marker, request.expectedHeadSha(), properties.temporalUiBaseUrl());
+    writeStatusComment(
+        request.owner(), request.repository(), request.pullNumber(), statusCommentId, body,
+        credentials.commentToken(request.installationId()));
+  }
+
+  private void publishSummary(
+      final PullRequestContext pullRequest,
+      final ReviewReport report,
+      final String statusCommentId,
+      final List<ReviewFinding> unanchored) {
+    String marker =
+        statusMarker(
+            pullRequest.owner(), pullRequest.repository(), pullRequest.pullNumber());
+    String body =
+        renderer.renderSummary(report, marker, pullRequest.headSha(), unanchored);
+    writeStatusComment(
+        pullRequest.owner(), pullRequest.repository(), pullRequest.pullNumber(), statusCommentId,
+        body, credentials.commentToken(pullRequest.installationId()));
+  }
+
+  /** Edits the status comment where there is one; a run whose comment never opened posts one. */
+  private void writeStatusComment(
+      final String owner,
+      final String repository,
+      final int pullNumber,
+      final String statusCommentId,
+      final String body,
+      final String token) {
     ObjectNode payload = objectMapper.createObjectNode().put("body", body);
-
-    String method = failureMethod(ackCommentId);
-    String path = ackCommentId == null ? ackPath(request) : commentPath(request, ackCommentId);
-    requireSuccess(send(method, path, payload, accessToken), method, path);
+    String method = statusCommentId == null ? "POST" : "PATCH";
+    String path =
+        statusCommentId == null
+            ? statusCommentsPath(owner, repository, pullNumber)
+            : statusCommentPath(owner, repository, statusCommentId);
+    requireSuccess(send(method, path, payload, token), method, path);
   }
 
-  private String marker(final String headSha) {
-    return "<!-- temporal-code-review:"
-        + headSha
-        + ":"
-        + properties.agent().promptVersion()
-        + " -->";
+  /**
+   * Removes the inline comments the previous review left.
+   *
+   * <p>A finding fixed since the last push would otherwise stay on the pull request forever, and
+   * one that still stands would be posted again beside its own duplicate.
+   */
+  private void deletePreviousFindings(
+      final PullRequestContext pullRequest, final String accessToken) {
+    JsonNode comments =
+        fetchAllPages(
+            findingCommentsPath(
+                pullRequest.owner(), pullRequest.repository(), pullRequest.pullNumber()),
+            accessToken);
+    for (String id : findingCommentIds(comments)) {
+      String path = findingCommentPath(pullRequest.owner(), pullRequest.repository(), id);
+      HttpResponse<String> response = send("DELETE", path, null, accessToken);
+      // A comment someone already deleted is exactly the state being aimed for.
+      if (response.statusCode() != 404 && response.statusCode() != 410) {
+        requireSuccess(response, "DELETE", path);
+      }
+    }
   }
 
-  private String reviewsPath(final PullRequestContext pullRequest) {
-    return "/repos/"
-        + pullRequest.owner()
-        + "/"
-        + pullRequest.repository()
-        + "/pulls/"
-        + pullRequest.pullNumber()
-        + "/reviews";
+  /**
+   * Identifies this reviewer's status comment on a pull request.
+   *
+   * <p>Scoped to the pull request, not the commit. The marker used to carry the head SHA, which
+   * meant a push could never match the comment its predecessor had left, so nothing was ever found
+   * to update and every push added one.
+   */
+  static String statusMarker(final String owner, final String repository, final int pullNumber) {
+    return "<!-- temporal-code-review:" + owner + "/" + repository + "#" + pullNumber + " -->";
+  }
+
+  static String statusCommentsPath(
+      final String owner, final String repository, final int pullNumber) {
+    return "/repos/" + owner + "/" + repository + "/issues/" + pullNumber + "/comments";
+  }
+
+  static String statusCommentPath(
+      final String owner, final String repository, final String commentId) {
+    return "/repos/" + owner + "/" + repository + "/issues/comments/" + commentId;
+  }
+
+  static String findingCommentsPath(
+      final String owner, final String repository, final int pullNumber) {
+    return "/repos/" + owner + "/" + repository + "/pulls/" + pullNumber + "/comments";
+  }
+
+  static String findingCommentPath(
+      final String owner, final String repository, final String commentId) {
+    return "/repos/" + owner + "/" + repository + "/pulls/comments/" + commentId;
+  }
+
+  /** The id of the first comment carrying {@code marker}, or null when none does. */
+  static String findCommentId(final JsonNode comments, final String marker) {
+    for (JsonNode comment : comments) {
+      if (comment.path("body").asText("").contains(marker)) {
+        return comment.path("id").asText();
+      }
+    }
+    return null;
+  }
+
+  /** The ids of every inline comment this reviewer posted, in listing order. */
+  static List<String> findingCommentIds(final JsonNode comments) {
+    List<String> ids = new ArrayList<>();
+    for (JsonNode comment : comments) {
+      if (comment.path("body").asText("").contains(ReviewMarkdownRenderer.FINDING_MARKER)) {
+        ids.add(comment.path("id").asText());
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Walks a paged collection into one array.
+   *
+   * <p>Bounded at {@link #MAX_PAGES}: a pull request with more than a thousand comments is not
+   * worth an unbounded loop, and the cost of missing one is a duplicate rather than a failure.
+   */
+  private JsonNode fetchAllPages(final String path, final String token) {
+    ArrayNode all = objectMapper.createArrayNode();
+    for (int page = 1; page <= MAX_PAGES; page++) {
+      JsonNode batch =
+          sendJson("GET", path + "?per_page=" + PAGE_SIZE + "&page=" + page, null, token);
+      if (!batch.isArray()) {
+        break;
+      }
+      all.addAll((ArrayNode) batch);
+      if (batch.size() < PAGE_SIZE) {
+        break;
+      }
+    }
+    return all;
   }
 
   private String requireAccessToken(final PullRequestContext pullRequest) {
@@ -210,29 +333,14 @@ public class GitHubGateway {
     }
   }
 
-  ObjectNode reviewPayload(
-      final PullRequestContext pullRequest, final ReviewReport report, final String marker) {
+  ObjectNode findingCommentPayload(
+      final PullRequestContext pullRequest, final ReviewFinding finding) {
     ObjectNode payload = objectMapper.createObjectNode();
     payload.put("commit_id", pullRequest.headSha());
-    payload.put("event", "COMMENT");
-    payload.put("body", renderer.renderReviewBody(report, marker, List.of()));
-    ArrayNode comments = payload.putArray("comments");
-    for (ReviewFinding finding : report.findings()) {
-      ObjectNode comment = comments.addObject();
-      comment.put("path", finding.file());
-      comment.put("line", finding.line());
-      comment.put("side", "RIGHT");
-      comment.put("body", renderer.renderFindingComment(finding));
-    }
-    return payload;
-  }
-
-  ObjectNode fallbackReviewPayload(
-      final PullRequestContext pullRequest, final ReviewReport report, final String marker) {
-    ObjectNode payload = objectMapper.createObjectNode();
-    payload.put("commit_id", pullRequest.headSha());
-    payload.put("event", "COMMENT");
-    payload.put("body", renderer.renderReviewBody(report, marker, report.findings()));
+    payload.put("path", finding.file());
+    payload.put("line", finding.line());
+    payload.put("side", "RIGHT");
+    payload.put("body", renderer.renderFindingComment(finding));
     return payload;
   }
 

@@ -57,43 +57,47 @@ class CodeReviewWorkflowTest {
                 .build());
   }
 
+  /**
+   * The status comment is opened before anything that can fail and then written through — there is
+   * no separate delete step to strand an "in progress" notice beside a finished review.
+   */
   @Test
-  void acknowledgesBeforeLoadingThePullRequestThenDeletesTheAckOnSuccess() {
+  void opensTheStatusCommentBeforeLoadingThenPublishesThroughTheSameComment() {
     RecordingActivities activities = new RecordingActivities();
 
     try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
-      CodeReviewWorkflow workflow = start(environment, activities, "review-ack-success");
+      CodeReviewWorkflow workflow = start(environment, activities, "review-status-success");
 
       ReviewResult result = workflow.review(request(true));
 
       assertThat(activities.calls)
           .containsExactly(
-              "publishAck", "loadPullRequest", "runReview", "publishReview", "resolveAck");
-      assertThat(activities.resolvedAckId).isEqualTo("ack-1");
+              "openStatusComment", "loadPullRequest", "runReview", "publishReview");
+      assertThat(activities.publishedStatusCommentId).isEqualTo("status-1");
       assertThat(result.report()).isEqualTo(REPORT);
       assertThat(workflow.progress().phase()).isEqualTo(ReviewPhase.COMPLETED);
     }
   }
 
   @Test
-  void editsTheAckIntoTheFailureNoticeNamingThePhaseThatDied() {
+  void editsTheStatusCommentIntoTheFailureNoticeNamingThePhaseThatDied() {
     RecordingActivities activities = new RecordingActivities();
     activities.failReviewWith =
         ApplicationFailure.newNonRetryableFailure(
             "Claude exited with 1: subtype=error_max_turns", "AGENT_FAILED");
 
     try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
-      CodeReviewWorkflow workflow = start(environment, activities, "review-ack-failure");
+      CodeReviewWorkflow workflow = start(environment, activities, "review-status-failure");
 
       assertThatThrownBy(() -> workflow.review(request(true)))
           .isInstanceOf(WorkflowFailedException.class);
 
-      assertThat(activities.calls).contains("publishAck", "publishFailure");
-      assertThat(activities.calls).doesNotContain("resolveAck", "publishReview");
-      assertThat(activities.failureAckId).isEqualTo("ack-1");
+      assertThat(activities.calls).contains("openStatusComment", "publishFailure");
+      assertThat(activities.calls).doesNotContain("publishReview");
+      assertThat(activities.failureStatusCommentId).isEqualTo("status-1");
       assertThat(activities.failure.phase()).isEqualTo(ReviewPhase.REVIEWING);
       assertThat(activities.failure.reason()).contains("error_max_turns");
-      assertThat(activities.failure.workflowId()).isEqualTo("review-ack-failure");
+      assertThat(activities.failure.workflowId()).isEqualTo("review-status-failure");
     }
   }
 
@@ -122,49 +126,35 @@ class CodeReviewWorkflowTest {
   }
 
   @Test
-  void postsFreshFailureCommentWhenTheAckNeverLanded() {
+  void postsFreshFailureCommentWhenTheStatusCommentNeverOpened() {
     RecordingActivities activities = new RecordingActivities();
-    activities.failAck = true;
+    activities.failOpen = true;
     activities.failReviewWith =
         ApplicationFailure.newNonRetryableFailure("Claude exited with 1", "AGENT_FAILED");
 
     try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
-      CodeReviewWorkflow workflow = start(environment, activities, "review-no-ack");
+      CodeReviewWorkflow workflow = start(environment, activities, "review-no-status");
 
       assertThatThrownBy(() -> workflow.review(request(true)))
           .isInstanceOf(WorkflowFailedException.class);
 
       assertThat(activities.calls).contains("publishFailure");
-      assertThat(activities.failureAckId).isNull();
+      assertThat(activities.failureStatusCommentId).isNull();
     }
   }
 
   @Test
-  void anAckThatCannotBePostedDoesNotFailTheReview() {
+  void statusCommentThatCannotBeOpenedDoesNotFailTheReview() {
     RecordingActivities activities = new RecordingActivities();
-    activities.failAck = true;
+    activities.failOpen = true;
 
     try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
-      CodeReviewWorkflow workflow = start(environment, activities, "review-ack-broken");
+      CodeReviewWorkflow workflow = start(environment, activities, "review-status-broken");
 
       ReviewResult result = workflow.review(request(true));
 
       assertThat(result.report()).isEqualTo(REPORT);
-      assertThat(workflow.progress().phase()).isEqualTo(ReviewPhase.COMPLETED);
-    }
-  }
-
-  @Test
-  void anAckThatCannotBeDeletedDoesNotFailTheReview() {
-    RecordingActivities activities = new RecordingActivities();
-    activities.failResolve = true;
-
-    try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
-      CodeReviewWorkflow workflow = start(environment, activities, "review-resolve-broken");
-
-      ReviewResult result = workflow.review(request(true));
-
-      assertThat(result.report()).isEqualTo(REPORT);
+      assertThat(activities.publishedStatusCommentId).isNull();
       assertThat(workflow.progress().phase()).isEqualTo(ReviewPhase.COMPLETED);
     }
   }
@@ -195,7 +185,7 @@ class CodeReviewWorkflowTest {
       assertThatThrownBy(() -> workflow.review(request(false)))
           .isInstanceOf(WorkflowFailedException.class);
 
-      assertThat(activities.calls).doesNotContain("publishAck", "publishFailure");
+      assertThat(activities.calls).doesNotContain("openStatusComment", "publishFailure");
     }
   }
 
@@ -203,21 +193,20 @@ class CodeReviewWorkflowTest {
   private static final class RecordingActivities implements ReviewActivities {
 
     private final List<String> calls = new CopyOnWriteArrayList<>();
-    private boolean failAck;
-    private boolean failResolve;
+    private boolean failOpen;
     private RuntimeException failLoadWith;
     private RuntimeException failReviewWith;
-    private String resolvedAckId;
-    private String failureAckId;
+    private String publishedStatusCommentId;
+    private String failureStatusCommentId;
     private ReviewFailure failure;
 
     @Override
-    public String publishAck(final ReviewRequest request) {
-      calls.add("publishAck");
-      if (failAck) {
-        throw ApplicationFailure.newNonRetryableFailure("ack failed", "ACK_FAILED");
+    public String openStatusComment(final ReviewRequest request) {
+      calls.add("openStatusComment");
+      if (failOpen) {
+        throw ApplicationFailure.newNonRetryableFailure("comment failed", "COMMENT_FAILED");
       }
-      return "ack-1";
+      return "status-1";
     }
 
     @Override
@@ -249,24 +238,18 @@ class CodeReviewWorkflowTest {
 
     @Override
     public void publishReview(
-        final PullRequestContext pullRequest, final ReviewReport reviewReport) {
+        final PullRequestContext pullRequest,
+        final ReviewReport reviewReport,
+        final String statusCommentId) {
       calls.add("publishReview");
-    }
-
-    @Override
-    public void resolveAck(final ReviewRequest request, final String ackCommentId) {
-      calls.add("resolveAck");
-      resolvedAckId = ackCommentId;
-      if (failResolve) {
-        throw ApplicationFailure.newNonRetryableFailure("delete failed", "DELETE_FAILED");
-      }
+      publishedStatusCommentId = statusCommentId;
     }
 
     @Override
     public void publishFailure(
-        final ReviewRequest request, final String ackCommentId, final ReviewFailure reported) {
+        final ReviewRequest request, final String statusCommentId, final ReviewFailure reported) {
       calls.add("publishFailure");
-      failureAckId = ackCommentId;
+      failureStatusCommentId = statusCommentId;
       failure = reported;
     }
   }

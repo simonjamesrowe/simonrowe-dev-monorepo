@@ -26,11 +26,11 @@ class ReviewMarkdownRendererTest {
   }
 
   @Test
-  void reviewBodyCarriesMarkerSummaryVerdictAndFooter() {
+  void summaryCarriesMarkerSummaryVerdictAndFooter() {
     ReviewReport report =
         new ReviewReport("One concrete problem.", Verdict.COMMENT, List.of(finding()));
 
-    String body = renderer.renderReviewBody(report, "<!-- marker -->", List.of());
+    String body = renderer.renderSummary(report, "<!-- marker -->", "head-sha", List.of());
 
     assertThat(body).startsWith("<!-- marker -->");
     assertThat(body).contains("One concrete problem.");
@@ -39,12 +39,27 @@ class ReviewMarkdownRendererTest {
     assertThat(body).doesNotContain("### Findings");
   }
 
+  /**
+   * The summary is edited in place on every push, so without the commit it describes a reader
+   * cannot tell whether it is about the code currently in front of them.
+   */
   @Test
-  void reviewBodyListsUnanchorableFindingsInline() {
+  void summaryNamesTheCommitItReviewedBecauseItIsRewrittenOnEveryPush() {
+    ReviewReport report = new ReviewReport("Fine.", Verdict.APPROVE, List.of());
+
+    String body =
+        renderer.renderSummary(report, "<!-- marker -->", "0123456789abcdef", List.of());
+
+    assertThat(body).contains("0123456");
+  }
+
+  @Test
+  void summaryListsUnanchorableFindingsInline() {
     ReviewReport report =
         new ReviewReport("One concrete problem.", Verdict.COMMENT, List.of(finding()));
 
-    String body = renderer.renderReviewBody(report, "<!-- marker -->", report.findings());
+    String body =
+        renderer.renderSummary(report, "<!-- marker -->", "head-sha", report.findings());
 
     assertThat(body).contains("### Findings");
     assertThat(body).contains("`src/App.java:12`");
@@ -61,13 +76,22 @@ class ReviewMarkdownRendererTest {
     assertThat(comment).doesNotContain("src/App.java");
   }
 
+  /** Without a marker of its own, a stale finding comment cannot be told from a human's reply. */
+  @Test
+  void findingCommentIsMarkedSoLaterPushesCanDeleteIt() {
+    String comment = renderer.renderFindingComment(finding());
+
+    assertThat(comment).startsWith(ReviewMarkdownRenderer.FINDING_MARKER);
+  }
+
   @Test
   void ackSaysTheReviewIsRunningSoSilenceIsNotAmbiguous() {
-    String body = renderer.renderAck("<!-- marker -->");
+    String body = renderer.renderAck("<!-- marker -->", "0123456789abcdef");
 
     assertThat(body).startsWith("<!-- marker -->");
     assertThat(body).contains("Automated code review");
     assertThat(body).contains("in progress");
+    assertThat(body).contains("0123456");
     assertThat(body).contains("Advisory only");
   }
 
@@ -77,7 +101,8 @@ class ReviewMarkdownRendererTest {
         new ReviewFailure(ReviewPhase.REVIEWING, "Claude exited with 1", "code-review-abc");
 
     String body =
-        renderer.renderFailure(failure, "<!-- marker -->", "https://temporal.example.com");
+        renderer.renderFailure(
+            failure, "<!-- marker -->", "head-sha", "https://temporal.example.com");
 
     assertThat(body).contains("did not complete");
     assertThat(body).contains("REVIEWING");
@@ -92,7 +117,7 @@ class ReviewMarkdownRendererTest {
     ReviewFailure failure =
         new ReviewFailure(ReviewPhase.LOADING_PULL_REQUEST, "GitHub returned 422", "wf-1");
 
-    String body = renderer.renderFailure(failure, "<!-- marker -->", "");
+    String body = renderer.renderFailure(failure, "<!-- marker -->", "head-sha", "");
 
     assertThat(body).contains("GitHub returned 422");
     assertThat(body).contains("LOADING_PULL_REQUEST");
@@ -104,7 +129,7 @@ class ReviewMarkdownRendererTest {
   void failureReasonCannotBreakOutOfItsCodeFence() {
     ReviewFailure failure = new ReviewFailure(ReviewPhase.REVIEWING, "a ``` b", "wf-1");
 
-    String body = renderer.renderFailure(failure, "<!-- marker -->", "");
+    String body = renderer.renderFailure(failure, "<!-- marker -->", "head-sha", "");
 
     assertThat(body).doesNotContain("a ``` b");
     assertThat(body).contains("a ''' b");

@@ -26,8 +26,8 @@ public class ReviewActivitiesImpl implements ReviewActivities {
   }
 
   @Override
-  public String publishAck(final ReviewRequest request) {
-    return gitHubGateway.publishAck(request);
+  public String openStatusComment(final ReviewRequest request) {
+    return gitHubGateway.openStatusComment(request);
   }
 
   @Override
@@ -42,18 +42,16 @@ public class ReviewActivitiesImpl implements ReviewActivities {
   }
 
   @Override
-  public void publishReview(final PullRequestContext pullRequest, final ReviewReport report) {
-    gitHubGateway.publishReview(pullRequest, report);
-  }
-
-  @Override
-  public void resolveAck(final ReviewRequest request, final String ackCommentId) {
-    gitHubGateway.resolveAck(request, ackCommentId);
+  public void publishReview(
+      final PullRequestContext pullRequest,
+      final ReviewReport report,
+      final String statusCommentId) {
+    gitHubGateway.publishReview(pullRequest, report, statusCommentId);
   }
 
   @Override
   public void publishFailure(
-      final ReviewRequest request, final String ackCommentId, final ReviewFailure failure) {
-    gitHubGateway.publishFailure(request, ackCommentId, failure);
+      final ReviewRequest request, final String statusCommentId, final ReviewFailure failure) {
+    gitHubGateway.publishFailure(request, statusCommentId, failure);
   }
 }

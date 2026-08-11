@@ -88,13 +88,35 @@ signed, replayed-onto-a-different-body, non-JSON and malformed deliveries.
 
 ## What appears on a pull request
 
-One comment per reviewed head SHA, which transitions:
+**One comment per pull request**, not per push. It is found by the marker
+`<!-- temporal-code-review:{owner}/{repo}#{number} -->`, edited in place through
+three states, and always names the commit it describes:
 
 | State | Comment |
 | --- | --- |
 | Accepted | 🔄 "A review of these changes is in progress" |
-| Reviewed | the review itself; the ack is deleted |
-| Failed | the ack is edited into a failure notice with phase, reason and a Temporal link |
+| Reviewed | the summary and verdict |
+| Failed | a failure notice with phase, reason and a Temporal link |
+
+Findings are posted as **individual inline comments** (`POST /pulls/{n}/comments`),
+each stamped with `<!-- temporal-code-review-finding -->`. Every push deletes the
+ones the previous run left before posting its own, so a finding that has since
+been fixed disappears instead of lingering, and one that still stands is
+re-anchored to the current diff rather than duplicated. Comments by anyone else
+are never touched.
+
+Nothing is posted to `POST /pulls/{n}/reviews` any more. A submitted review can
+be neither deleted nor hidden (`DELETE .../reviews/{id}` only accepts *pending*
+ones), so one per push would accumulate on the pull request even after its
+comments were pruned — and GitHub rejects a `COMMENT` review with an empty body,
+so there is no bodiless review to post instead. That is what the first version
+got wrong: the marker was keyed by head SHA, so a push could never match its
+predecessor's comment and each one submitted a fresh review. Pull request 102
+collected three summaries for three pushes.
+
+A finding that will not anchor to the current diff (GitHub answers `422` for that
+one comment) is folded into the summary under a `### Findings` heading; its
+siblings still post inline.
 
 **Silence now means exactly one thing: the workflow never started** — the webhook
 did not arrive, or nothing is polling the `code-review` task queue. Every other
@@ -390,7 +412,9 @@ request. Confirm:
 3. the Activities complete;
 4. one marker-based advisory comment appears on the pull request;
 5. redelivery updates/deduplicates rather than creating another Workflow or
-   comment.
+   comment;
+6. **pushing a second commit rewrites that same comment rather than adding one**,
+   and any inline findings from the first push are gone rather than doubled.
 
 ## Updating and rollback
 
