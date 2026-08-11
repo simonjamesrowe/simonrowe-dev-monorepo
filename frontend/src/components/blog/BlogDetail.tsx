@@ -1,5 +1,6 @@
 import type { BlogDetail as BlogDetailType } from '../../types/blog'
 import { formatDate } from '../../utils/dateFormat'
+import { BlogNarration } from './BlogNarration'
 import { MarkdownRenderer } from './MarkdownRenderer'
 
 const PLACEHOLDER_IMAGE = '/images/blogs/placeholder.svg'
@@ -32,6 +33,7 @@ export function BlogDetail({ blog }: BlogDetailProps) {
             {formattedDate}
           </time>
         </div>
+        <BlogNarration blogId={blog.id} blogTitle={blog.title} />
         {blog.tags.length > 0 && (
           <ul aria-label="Tags" className="blog-detail__tags">
             {blog.tags.map((tag) => (

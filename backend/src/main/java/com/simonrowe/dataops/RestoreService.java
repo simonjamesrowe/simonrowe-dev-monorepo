@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +35,7 @@ public class RestoreService {
   );
 
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
-      "skill_groups", "jobs", "blogs", "code_examples"
+      "skill_groups", "jobs", "blogs", "code_examples", "narrations"
   );
 
   private static final String FAVOURITES = "favourites";
@@ -47,6 +48,7 @@ public class RestoreService {
   private final BackupService backupService;
   private final com.simonrowe.search.IndexService indexService;
   private final com.simonrowe.embedding.ElasticsearchBackupService esBackupService;
+  private final NarrationRestoreValidator narrationRestoreValidator;
   private final String uploadsPath;
 
   public RestoreService(
@@ -56,6 +58,7 @@ public class RestoreService {
       final BackupService backupService,
       final com.simonrowe.search.IndexService indexService,
       final com.simonrowe.embedding.ElasticsearchBackupService esBackupService,
+      final NarrationRestoreValidator narrationRestoreValidator,
       @Value("${uploads.path:backend/uploads/}") final String uploadsPath
   ) {
     this.mongoTemplate = mongoTemplate;
@@ -64,6 +67,7 @@ public class RestoreService {
     this.backupService = backupService;
     this.indexService = indexService;
     this.esBackupService = esBackupService;
+    this.narrationRestoreValidator = narrationRestoreValidator;
     this.uploadsPath = uploadsPath;
   }
 
@@ -95,6 +99,9 @@ public class RestoreService {
           deleteTempFile(mediaZip);
         }
       }
+
+      operationsService.updateProgress("Validating restored narrations...", 78);
+      narrationRestoreValidator.reconcile();
 
       operationsService.updateProgress("Rebuilding search index...", 80);
       indexService.fullSyncSiteIndex();
@@ -147,7 +154,7 @@ public class RestoreService {
     }
   }
 
-  private void restoreCollections(final Path zipFile) throws IOException {
+  void restoreCollections(final Path zipFile) throws IOException {
     List<String> allCollections = new ArrayList<>();
     allCollections.addAll(IMPORT_ORDER_INDEPENDENT);
     allCollections.addAll(IMPORT_ORDER_DEPENDENT);
@@ -162,6 +169,9 @@ public class RestoreService {
       String jsonContent = readEntryFromZip(
           zipFile, "collections/" + collectionName + ".json");
       if (jsonContent == null) {
+        if ("narrations".equals(collectionName)) {
+          mongoTemplate.dropCollection(collectionName);
+        }
         LOG.warn("Collection {} not found in backup, skipping", collectionName);
         progress += progressPerCollection;
         continue;

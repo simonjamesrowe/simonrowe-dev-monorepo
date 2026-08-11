@@ -15,7 +15,9 @@ class RateLimitInterceptorTest {
   void setUp() {
     final RateLimitConfig.BucketConfig chatConfig = new RateLimitConfig.BucketConfig(5);
     final RateLimitConfig.BucketConfig mcpConfig = new RateLimitConfig.BucketConfig(3);
-    final RateLimitConfig config = new RateLimitConfig(chatConfig, mcpConfig);
+    final RateLimitConfig.BucketConfig narrationConfig = new RateLimitConfig.BucketConfig(2);
+    final RateLimitConfig config = new RateLimitConfig(
+        chatConfig, mcpConfig, narrationConfig);
     interceptor = new RateLimitInterceptor(config);
   }
 
@@ -75,6 +77,42 @@ class RateLimitInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(limitedResponse.getStatus()).isEqualTo(429);
+  }
+
+  @Test
+  void preHandleReturnsFalseWhenNarrationRequestsExceedLimit() throws Exception {
+    final String clientIp = "10.0.0.5";
+
+    for (int i = 0; i < 2; i++) {
+      final boolean allowed = interceptor.preHandle(
+          narrationRequest(clientIp), new MockHttpServletResponse(), new Object());
+      assertThat(allowed).isTrue();
+    }
+
+    final MockHttpServletResponse limitedResponse = new MockHttpServletResponse();
+    final boolean result = interceptor.preHandle(
+        narrationRequest(clientIp), limitedResponse, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(limitedResponse.getStatus()).isEqualTo(429);
+  }
+
+  @Test
+  void narrationRequestsUseIndependentBucketFromChatAndMcp() throws Exception {
+    final String clientIp = "10.0.0.6";
+
+    for (int i = 0; i < 2; i++) {
+      interceptor.preHandle(
+          narrationRequest(clientIp), new MockHttpServletResponse(), new Object());
+    }
+
+    final boolean chatAllowed = interceptor.preHandle(
+        chatRequest(clientIp), new MockHttpServletResponse(), new Object());
+    final boolean mcpAllowed = interceptor.preHandle(
+        mcpRequest(clientIp), new MockHttpServletResponse(), new Object());
+
+    assertThat(chatAllowed).isTrue();
+    assertThat(mcpAllowed).isTrue();
   }
 
   @Test
@@ -186,7 +224,9 @@ class RateLimitInterceptorTest {
   void preHandleRoutesChatPathToChatBucket() throws Exception {
     final RateLimitConfig.BucketConfig chatConfig = new RateLimitConfig.BucketConfig(2);
     final RateLimitConfig.BucketConfig mcpConfig = new RateLimitConfig.BucketConfig(100);
-    final RateLimitConfig config = new RateLimitConfig(chatConfig, mcpConfig);
+    final RateLimitConfig.BucketConfig narrationConfig = new RateLimitConfig.BucketConfig(100);
+    final RateLimitConfig config = new RateLimitConfig(
+        chatConfig, mcpConfig, narrationConfig);
     final RateLimitInterceptor separateInterceptor = new RateLimitInterceptor(config);
 
     final String clientIp = "10.2.0.1";
@@ -208,7 +248,9 @@ class RateLimitInterceptorTest {
   void preHandleRoutesMcpPathToMcpBucket() throws Exception {
     final RateLimitConfig.BucketConfig chatConfig = new RateLimitConfig.BucketConfig(100);
     final RateLimitConfig.BucketConfig mcpConfig = new RateLimitConfig.BucketConfig(2);
-    final RateLimitConfig config = new RateLimitConfig(chatConfig, mcpConfig);
+    final RateLimitConfig.BucketConfig narrationConfig = new RateLimitConfig.BucketConfig(100);
+    final RateLimitConfig config = new RateLimitConfig(
+        chatConfig, mcpConfig, narrationConfig);
     final RateLimitInterceptor separateInterceptor = new RateLimitInterceptor(config);
 
     final String clientIp = "10.2.0.2";
@@ -236,6 +278,13 @@ class RateLimitInterceptorTest {
   private static MockHttpServletRequest mcpRequest(final String remoteAddr) {
     final MockHttpServletRequest request = new MockHttpServletRequest();
     request.setRequestURI("/mcp/tools");
+    request.setRemoteAddr(remoteAddr);
+    return request;
+  }
+
+  private static MockHttpServletRequest narrationRequest(final String remoteAddr) {
+    final MockHttpServletRequest request = new MockHttpServletRequest();
+    request.setRequestURI("/api/blogs/blog-123/narration");
     request.setRemoteAddr(remoteAddr);
     return request;
   }
