@@ -57,6 +57,9 @@ factory:
       prompt-version: v1
     api:
       trigger-token: ${FACTORY_TRIGGER_TOKEN:${REVIEWER_TRIGGER_TOKEN:}}
+    # Deep-linked from failure comments on pull requests. Blank drops the link and keeps the
+    # bare workflow id, so an unconfigured URL never costs the reader the failure reason.
+    temporal-ui-base-url: ${TEMPORAL_UI_URL:https://temporal.simonrowe.dev}
   feedback:
     enabled: ${FACTORY_FEEDBACK_ENABLED:false}
     repos: ${FACTORY_FEEDBACK_REPOS:}

@@ -81,6 +81,6 @@ class ClaudeCliReviewEngineTest {
             2_097_152,
             80,
             "v1"),
-        new CodeReviewProperties.Api(""));
+        new CodeReviewProperties.Api(""), "https://temporal.test");
   }
 }

@@ -157,7 +157,13 @@ public class GitHubGateway {
     ObjectNode payload = objectMapper.createObjectNode();
     payload.put("commit_id", pullRequest.headSha());
     payload.put("event", "COMMENT");
-    payload.put("body", renderer.renderFailure(reason, marker));
+    payload.put(
+        "body",
+        renderer.renderFailure(
+            new com.simonrowe.factory.codereview.domain.ReviewFailure(
+                com.simonrowe.factory.codereview.domain.ReviewPhase.FAILED, reason, null),
+            marker,
+            ""));
     return payload;
   }
 

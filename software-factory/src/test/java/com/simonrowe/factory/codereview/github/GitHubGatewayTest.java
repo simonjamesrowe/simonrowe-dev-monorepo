@@ -104,7 +104,7 @@ class GitHubGatewayTest {
             new CodeReviewProperties.Agent(
                 "claude", "sonnet", "medium", 12, java.time.Duration.ofMinutes(15),
                 java.nio.file.Path.of("/tmp"), 2097152, 80, "v1"),
-            new CodeReviewProperties.Api("token"));
+            new CodeReviewProperties.Api("token"), "https://temporal.test");
     return new GitHubGateway(
         properties,
         new GitHubCredentials(properties, objectMapper),

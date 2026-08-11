@@ -6,7 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** Runtime configuration for GitHub ingress and the replaceable agent runner. */
 @ConfigurationProperties("factory.codereview")
-public record CodeReviewProperties(Github github, Agent agent, Api api) {
+public record CodeReviewProperties(
+    Github github, Agent agent, Api api, String temporalUiBaseUrl) {
 
   /** GitHub API and webhook credentials. */
   public record Github(

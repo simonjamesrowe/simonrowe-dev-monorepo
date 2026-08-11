@@ -44,7 +44,7 @@ class FeedbackControllerTest {
             new CodeReviewProperties.Github(
                 "https://api.github.com", "", "", "", "", Duration.ofSeconds(30)),
             null,
-            new CodeReviewProperties.Api(configuredToken));
+            new CodeReviewProperties.Api(configuredToken), "https://temporal.test");
     return MockMvcBuilders.standaloneSetup(
             new FeedbackController(properties, workflowService, credentials))
         .build();
