@@ -10,15 +10,22 @@ on:
     #
     # Known false negatives, accepted deliberately: chat also reads from blog, events,
     # aggregation, favourites, media and observability, so a retrieval-affecting change
-    # there will not trigger these evals. The job is continue-on-error advisory, so a miss
-    # costs a signal and never correctness. If that gap ever needs closing, add a scheduled
-    # nightly eval run against main — do not grow this list until it matches everything.
+    # there will not trigger these evals. The harness itself depends on the chat WebSocket
+    # endpoint and the dataops reembed endpoint, so a change to either can break this job
+    # without triggering it. The job is continue-on-error advisory, so a miss costs a signal
+    # and never correctness. If that gap ever needs closing, add a scheduled nightly eval
+    # run against main — do not grow this list until it matches everything.
     paths:
       - 'backend/src/main/java/com/simonrowe/chat/**'
       - 'backend/src/main/java/com/simonrowe/agents/**'
       - 'backend/src/main/java/com/simonrowe/websearch/**'
       - 'backend/src/main/java/com/simonrowe/webfetch/**'
       - 'backend/src/main/java/com/simonrowe/mcp/**'
+      # Direct retrieval inputs, not transitive readers: EmbeddingConfig sets the
+      # TokenTextSplitter chunking that produces the retrieved corpus, and SearchService
+      # backs a chat tool via mcp/ProfileMcpTools.java.
+      - 'backend/src/main/java/com/simonrowe/embedding/**'
+      - 'backend/src/main/java/com/simonrowe/search/**'
       - 'backend/src/main/resources/application.yml'
       # Dependency manifests are in scope on purpose: a Spring AI or OpenAI SDK bump is the
       # change most likely to move chat behaviour, and paths: cannot read the diff to
