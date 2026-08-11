@@ -41,7 +41,7 @@ public class BackupService {
       "blogs", "tags", "skills", "skill_groups", "jobs",
       "profiles", "social_medias", "tourSteps", "media_assets",
       "code_examples", "aggregated_articles", "aggregated_events",
-      "content_sources", "favourites"
+      "content_sources", "favourites", "narrations"
   );
 
   private final MongoClient mongoClient;
@@ -83,6 +83,7 @@ public class BackupService {
 
       Map<String, Integer> collectionCounts = new LinkedHashMap<>();
       int mediaFileCount = 0;
+      int narrationAudioFileCount = 0;
 
       String folderId = googleDriveService.findOrCreateFolder();
 
@@ -125,6 +126,9 @@ public class BackupService {
               .filter(Files::isRegularFile)
               .toList();
           mediaFileCount = mediaFiles.size();
+          narrationAudioFileCount = (int) mediaFiles.stream()
+              .filter(path -> uploadsDir.relativize(path).startsWith("narrations"))
+              .count();
           for (Path mediaFile : mediaFiles) {
             String entryPath = "uploads/" + uploadsDir.relativize(mediaFile);
             zos.putNextEntry(new ZipEntry(entryPath));
@@ -144,7 +148,8 @@ public class BackupService {
         }
 
         operationsService.updateProgress("Writing manifest...", 75);
-        String manifest = buildManifest(timestamp, collectionCounts, mediaFileCount);
+        String manifest = buildManifest(timestamp, collectionCounts, mediaFileCount,
+            narrationAudioFileCount);
         zos.putNextEntry(new ZipEntry("manifest.json"));
         zos.write(manifest.getBytes(StandardCharsets.UTF_8));
         zos.closeEntry();
@@ -171,8 +176,10 @@ public class BackupService {
       int totalDocs = collectionCounts.values().stream()
           .mapToInt(Integer::intValue).sum();
       String summary = String.format(
-          "%d collections, %d documents, %d media files backed up (%s)",
+          "%d collections, %d documents, %d media files backed up; "
+              + "%d narrations and %d narration audio files (%s)",
           collectionCounts.size(), totalDocs, mediaFileCount,
+          collectionCounts.getOrDefault("narrations", 0), narrationAudioFileCount,
           BackupMetadata.formatFileSize(fileSize));
       operationsService.completeOperation(summary);
       return true;
@@ -232,7 +239,8 @@ public class BackupService {
 
   private String buildManifest(final String timestamp,
       final Map<String, Integer> collectionCounts,
-      final int mediaFileCount) {
+      final int mediaFileCount,
+      final int narrationAudioFileCount) {
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
     sb.append("  \"version\": \"1.1\",\n");
@@ -240,6 +248,10 @@ public class BackupService {
     sb.append("  \"databaseName\": \"simonrowe\",\n");
     sb.append("  \"collectionCount\": ").append(collectionCounts.size()).append(",\n");
     sb.append("  \"mediaFileCount\": ").append(mediaFileCount).append(",\n");
+    sb.append("  \"narrationCount\": ")
+        .append(collectionCounts.getOrDefault("narrations", 0)).append(",\n");
+    sb.append("  \"narrationAudioFileCount\": ")
+        .append(narrationAudioFileCount).append(",\n");
     sb.append("  \"collections\": {\n");
     int i = 0;
     for (Map.Entry<String, Integer> entry : collectionCounts.entrySet()) {

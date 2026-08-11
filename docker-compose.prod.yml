@@ -172,6 +172,21 @@ services:
       FACTORY_FEEDBACK_ENABLED: ${FACTORY_FEEDBACK_ENABLED:-false}
       FACTORY_FEEDBACK_HARVEST_MODEL: ${FACTORY_FEEDBACK_HARVEST_MODEL:-haiku}
       FACTORY_FEEDBACK_DISTILL_MODEL: ${FACTORY_FEEDBACK_DISTILL_MODEL:-sonnet}
+      # Off by default. Turning it on registers the cve-fix worker and declares a
+      # paused-by-default 24-hour Temporal schedule; the operator unpauses it after a dry
+      # run. See docs/runbooks/cvefix.md for the rollout order.
+      FACTORY_CVEFIX_ENABLED: ${FACTORY_CVEFIX_ENABLED:-false}
+      # Needs VIEW_PORTFOLIO *and* VIEW_VULNERABILITY. The existing `CI Upload` key is not
+      # sufficient. Read by a Java activity, never by the agent: ClaudeCliRunner strips it
+      # from the child process because it sits outside SAFE_SECRET_ENVIRONMENT, which is
+      # correct here. Defaulted rather than required (`:?`) so a missing key cannot break
+      # every `docker compose` command against this file while the feature is disabled.
+      DEPENDENCYTRACK_API_KEY: ${DEPENDENCYTRACK_API_KEY:-}
+      # The container on the shared compose network, not the public hostname — this keeps the
+      # call off the Cloudflare/pinggy path. Deliberately no `depends_on` for it: the workflow
+      # fails cleanly when Dependency-Track is down, and coupling the webhook receiver's
+      # startup to Dependency-Track would be a regression.
+      DEPENDENCYTRACK_BASE_URL: ${DEPENDENCYTRACK_BASE_URL:-http://dependencytrack-apiserver:8080}
       FACTORY_MONGODB_URI: mongodb://mongodb:27017/software_factory
     volumes:
       - ${GITHUB_APP_PRIVATE_KEY_PATH:?set GITHUB_APP_PRIVATE_KEY_PATH in .env}:/run/secrets/github-app.pem:ro
@@ -229,6 +244,23 @@ services:
       # ingest and query structured fields (trace.id/span.id included for correlation).
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
       UPLOADS_PATH: uploads/
+      # The host credential file is mounted read-only below. The in-container path is
+      # fixed so Application Default Credentials never depends on a host path.
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-cloud-tts.json
+      NARRATION_ENABLED: ${NARRATION_ENABLED:-false}
+      NARRATION_MAX_BLOG_CHARACTERS: ${NARRATION_MAX_BLOG_CHARACTERS:-50000}
+      NARRATION_MONTHLY_CHARACTER_LIMIT: ${NARRATION_MONTHLY_CHARACTER_LIMIT:-1000000}
+      NARRATION_POLL_INTERVAL: ${NARRATION_POLL_INTERVAL:-5s}
+      NARRATION_OPERATION_TIMEOUT: ${NARRATION_OPERATION_TIMEOUT:-5m}
+      NARRATION_LEASE_DURATION: ${NARRATION_LEASE_DURATION:-2m}
+      NARRATION_RECOVERY_DELAY: ${NARRATION_RECOVERY_DELAY:-30s}
+      NARRATION_RATE_LIMIT_REQUESTS_PER_MINUTE: ${NARRATION_RATE_LIMIT_REQUESTS_PER_MINUTE:-10}
+      GOOGLE_CLOUD_TTS_PROJECT_ID: ${GOOGLE_CLOUD_TTS_PROJECT_ID:-}
+      GOOGLE_CLOUD_TTS_PROJECT_NUMBER: ${GOOGLE_CLOUD_TTS_PROJECT_NUMBER:-}
+      GOOGLE_CLOUD_TTS_OUTPUT_BUCKET: ${GOOGLE_CLOUD_TTS_OUTPUT_BUCKET:-}
+      GOOGLE_CLOUD_TTS_LOCATION: ${GOOGLE_CLOUD_TTS_LOCATION:-global}
+      GOOGLE_CLOUD_TTS_LANGUAGE_CODE: ${GOOGLE_CLOUD_TTS_LANGUAGE_CODE:-en-GB}
+      GOOGLE_CLOUD_TTS_VOICE_NAME: ${GOOGLE_CLOUD_TTS_VOICE_NAME:-en-GB-Chirp3-HD-Charon}
       # Self-hosted SearXNG web search (no API key). Points at the internal searxng container;
       # if searxng is down the tool degrades gracefully (returns "unavailable", never errors).
       SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}
@@ -239,6 +271,9 @@ services:
       - ${DOCKER_PLUGINS_PATH:-/usr/libexec/docker/cli-plugins}:/usr/local/lib/docker/cli-plugins:ro
       - ./docker-compose.prod.yml:/workspace/docker-compose.prod.yml:ro
       - ./.env:/workspace/.env:ro
+      # /dev/null keeps a disabled deployment bootable before credentials are configured.
+      # Once enabled, GOOGLE_CLOUD_TTS_CREDENTIALS_PATH must name the real host JSON file.
+      - ${GOOGLE_CLOUD_TTS_CREDENTIALS_PATH:-/dev/null}:/run/secrets/google-cloud-tts.json:ro
     depends_on:
       uploads-init:
         condition: service_completed_successfully

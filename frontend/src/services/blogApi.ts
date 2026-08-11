@@ -1,11 +1,24 @@
 import { API_BASE_URL } from '../config/api'
 import { fetchWithRetry } from './fetchWithRetry'
-import type { BlogContentType, BlogDetail, BlogSearchResult, BlogSummary } from '../types/blog'
+import type {
+  BlogContentType,
+  BlogDetail,
+  BlogNarrationResponse,
+  BlogSearchResult,
+  BlogSummary,
+} from '../types/blog'
 
 const BLOGS_ENDPOINT = `${API_BASE_URL}/api/blogs`
 const SEARCH_ENDPOINT = `${API_BASE_URL}/api/search/blogs`
 
 const FALLBACK_MESSAGE = 'Unable to load blog data.'
+const NARRATION_FALLBACK_MESSAGE = 'Unable to load narration.'
+
+interface NarrationStatusOptions {
+  afterVersion?: number
+  waitSeconds?: number
+  signal?: AbortSignal
+}
 
 export async function fetchBlogs(): Promise<BlogSummary[]> {
   return fetchWithRetry<BlogSummary[]>(BLOGS_ENDPOINT, { fallbackMessage: FALLBACK_MESSAGE })
@@ -15,6 +28,93 @@ export async function fetchBlogById(id: string): Promise<BlogDetail> {
   return fetchWithRetry<BlogDetail>(`${BLOGS_ENDPOINT}/${id}`, {
     fallbackMessage: FALLBACK_MESSAGE,
   })
+}
+
+export async function fetchBlogNarrationStatus(
+  blogId: string,
+  options: NarrationStatusOptions = {},
+): Promise<BlogNarrationResponse> {
+  const params = new URLSearchParams()
+  if (options.afterVersion !== undefined) {
+    params.set('afterVersion', String(options.afterVersion))
+  }
+  if (options.waitSeconds !== undefined) {
+    params.set('waitSeconds', String(options.waitSeconds))
+  }
+
+  const query = params.toString()
+  const url = `${BLOGS_ENDPOINT}/${encodeURIComponent(blogId)}/narration${query ? `?${query}` : ''}`
+  let response: Response
+  try {
+    response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: options.signal,
+    })
+  } catch (error) {
+    if (options.signal?.aborted) {
+      throw error
+    }
+    throw new Error(NARRATION_FALLBACK_MESSAGE)
+  }
+
+  let payload: Partial<BlogNarrationResponse> | null = null
+  try {
+    payload = (await response.json()) as Partial<BlogNarrationResponse>
+  } catch {
+    // The public fallback below is deliberately independent of response details.
+  }
+
+  if (response.ok && payload?.state) {
+    return payload as BlogNarrationResponse
+  }
+
+  throw new Error(
+    typeof payload?.message === 'string' && payload.message.trim() !== ''
+      ? payload.message
+      : NARRATION_FALLBACK_MESSAGE,
+  )
+}
+
+/**
+ * Requests generation without automatic retries. The backend operation is
+ * idempotent, but avoiding a client retry also keeps ambiguous network outcomes
+ * visible. A 503 is part of the narration contract and carries an UNAVAILABLE
+ * response, so it must not be reduced to a generic thrown error.
+ */
+export async function requestBlogNarration(
+  blogId: string,
+  signal?: AbortSignal,
+): Promise<BlogNarrationResponse> {
+  let response: Response
+  try {
+    response = await fetch(`${BLOGS_ENDPOINT}/${encodeURIComponent(blogId)}/narration`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+      signal,
+    })
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error
+    }
+    throw new Error(NARRATION_FALLBACK_MESSAGE)
+  }
+
+  let payload: Partial<BlogNarrationResponse> | null = null
+  try {
+    payload = (await response.json()) as Partial<BlogNarrationResponse>
+  } catch {
+    // The public fallback below is deliberately independent of response details.
+  }
+
+  if ((response.ok || response.status === 503) && payload?.state) {
+    return payload as BlogNarrationResponse
+  }
+
+  throw new Error(
+    typeof payload?.message === 'string' && payload.message.trim() !== ''
+      ? payload.message
+      : NARRATION_FALLBACK_MESSAGE,
+  )
 }
 
 /**

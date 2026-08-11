@@ -29,6 +29,10 @@ spring:
       workflow-packages:
         - com.simonrowe.factory.codereview.workflow
         - com.simonrowe.factory.feedback.workflow
+        # Without this entry no worker polls the cve-fix task queue and CveFixActivitiesImpl's
+        # @ActivityImpl is never registered: the container is healthy, the schedule fires, and
+        # nothing ever runs.
+        - com.simonrowe.factory.cvefix.workflow
       register-activity-beans: true
 
 factory:
@@ -80,3 +84,44 @@ factory:
       effort: ${FACTORY_FEEDBACK_DISTILL_EFFORT:medium}
       max-turns: ${FACTORY_FEEDBACK_DISTILL_MAX_TURNS:24}
       timeout: ${FACTORY_FEEDBACK_DISTILL_TIMEOUT:15m}
+  cvefix:
+    enabled: ${FACTORY_CVEFIX_ENABLED:false}
+    owner: simonjamesrowe
+    repository: simonrowe-dev-monorepo
+    branch: chore/dependency-cve-fixes
+    base-branch: main
+    # No installation-id key: the activity resolves it from
+    # GitHubCredentials.installationId(owner, repository) at run time. A configured-but-empty
+    # value would make accessToken(null) fall back to the static GITHUB_TOKEN, which this
+    # service does not set — anonymous clone, 403 on push.
+    git-author-name: simonrowe-code-reviewer[bot]
+    git-author-email: simonrowe-code-reviewer[bot]@users.noreply.github.com
+    workspace-root: ${FACTORY_WORKSPACE_ROOT:${java.io.tmpdir}/software-factory}
+    dependency-track:
+      # The container on the shared compose network, not the public hostname: this keeps the
+      # call off the Cloudflare/pinggy path entirely.
+      base-url: ${DEPENDENCYTRACK_BASE_URL:http://dependencytrack-apiserver:8080}
+      api-key: ${DEPENDENCYTRACK_API_KEY:}
+      projects:
+        - simonrowe-dev/backend
+        - simonrowe-dev/frontend
+      request-timeout: 30s
+    agent:
+      command: ${CLAUDE_COMMAND:claude}
+      model: ${FACTORY_CVEFIX_MODEL:sonnet}
+      effort: ${FACTORY_CVEFIX_EFFORT:medium}
+      max-turns: ${FACTORY_CVEFIX_MAX_TURNS:40}
+      timeout: ${FACTORY_CVEFIX_TIMEOUT:15m}
+    ci:
+      # 3m keeps unauthenticated GitHub API use near 20 req/hour, inside the 60/hour per-IP
+      # limit. Do not lower without moving CiStatusGateway to the installation token.
+      poll-interval: ${FACTORY_CVEFIX_POLL_INTERVAL:3m}
+      repair-budget: ${FACTORY_CVEFIX_REPAIR_BUDGET:3}
+      # 3h, not 45m: repair-budget + 1 iterations, each up to agent.timeout plus a full CI
+      # cycle, do not fit in 45 minutes. A shorter cap silently truncates the budget.
+      max-wait: ${FACTORY_CVEFIX_MAX_WAIT:3h}
+      # Check runs that may never make the build RED. The promptfoo evals job is
+      # continue-on-error advisory: if it ever reports conclusion: failure, every run would
+      # burn the whole repair budget on it and end CI_UNRESOLVED, blocking all later runs.
+      advisory-checks:
+        - evaluate

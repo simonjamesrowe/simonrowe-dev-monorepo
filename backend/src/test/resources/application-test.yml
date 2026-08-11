@@ -41,5 +41,20 @@ management:
         enabled: false
 uploads:
   path: target/test-uploads
+narration:
+  # Automated tests must never discover developer ADC and call a chargeable API.
+  enabled: false
+  project-id: narration-test-project
+  project-number: "123456789012"
+  location: global
+  voice-name: en-GB-Chirp3-HD-Charon
+  language-code: en-GB
+  bucket: narration-test-output
+  max-blog-characters: 50000
+  monthly-character-limit: 1000000
+  poll-interval: 10ms
+  operation-timeout: 1s
+  lease-duration: 1s
+  recovery-delay: 10ms
 mongock:
   enabled: false

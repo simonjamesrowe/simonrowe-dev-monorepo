@@ -161,6 +161,24 @@ google:
     refresh-token: ${GOOGLE_DRIVE_REFRESH_TOKEN:}
     folder-id: ${GOOGLE_DRIVE_FOLDER_ID:}
 
+# On-demand narration is deliberately disabled unless the operator completes
+# docs/setup/google-cloud-tts.md and explicitly enables it. Google Drive's OAuth
+# credentials are unrelated; Text-to-Speech uses Application Default Credentials.
+narration:
+  enabled: ${NARRATION_ENABLED:false}
+  project-id: ${GOOGLE_CLOUD_TTS_PROJECT_ID:}
+  project-number: ${GOOGLE_CLOUD_TTS_PROJECT_NUMBER:}
+  location: ${GOOGLE_CLOUD_TTS_LOCATION:global}
+  voice-name: ${GOOGLE_CLOUD_TTS_VOICE_NAME:en-GB-Chirp3-HD-Charon}
+  language-code: ${GOOGLE_CLOUD_TTS_LANGUAGE_CODE:en-GB}
+  bucket: ${GOOGLE_CLOUD_TTS_OUTPUT_BUCKET:}
+  max-blog-characters: ${NARRATION_MAX_BLOG_CHARACTERS:50000}
+  monthly-character-limit: ${NARRATION_MONTHLY_CHARACTER_LIMIT:1000000}
+  poll-interval: ${NARRATION_POLL_INTERVAL:5s}
+  operation-timeout: ${NARRATION_OPERATION_TIMEOUT:5m}
+  lease-duration: ${NARRATION_LEASE_DURATION:2m}
+  recovery-delay: ${NARRATION_RECOVERY_DELAY:30s}
+
 search:
   sync:
     cron: "0 0 */4 * * *"
@@ -374,6 +392,8 @@ rate-limit:
     requests-per-minute: 20
   mcp:
     requests-per-minute: 60
+  narration:
+    requests-per-minute: ${NARRATION_RATE_LIMIT_REQUESTS_PER_MINUTE:10}
 
 aggregation:
   schedule:

@@ -32,6 +32,7 @@ import com.simonrowe.factory.feedback.github.ConversationGateway;
 import com.simonrowe.factory.feedback.github.FeedbackPrGateway;
 import com.simonrowe.factory.feedback.persistence.LearningRecord;
 import com.simonrowe.factory.feedback.persistence.LearningRepository;
+import com.simonrowe.factory.git.RepositoryWorkspace;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -95,8 +96,7 @@ class FeedbackActivitiesImplTest {
     FeedbackPrGateway prGateway = mock(FeedbackPrGateway.class);
     LearningRepository repository = mock(LearningRepository.class);
     GitHubCredentials credentials = mock(GitHubCredentials.class);
-    GuidanceWorkspaceFactory.GuidanceWorkspace workspace =
-        mock(GuidanceWorkspaceFactory.GuidanceWorkspace.class);
+    RepositoryWorkspace workspace = mock(RepositoryWorkspace.class);
 
     when(workspace.repository()).thenReturn(Path.of("/tmp/agent-setup"));
     when(workspace.defaultBranch()).thenReturn("main");
@@ -143,8 +143,7 @@ class FeedbackActivitiesImplTest {
     FeedbackPrGateway prGateway = mock(FeedbackPrGateway.class);
     LearningRepository repository = mock(LearningRepository.class);
     GitHubCredentials credentials = mock(GitHubCredentials.class);
-    GuidanceWorkspaceFactory.GuidanceWorkspace workspace =
-        mock(GuidanceWorkspaceFactory.GuidanceWorkspace.class);
+    RepositoryWorkspace workspace = mock(RepositoryWorkspace.class);
 
     when(credentials.installationId(anyString(), anyString())).thenReturn(555L);
     when(workspaceFactory.create(eq("simonjamesrowe"), eq("agent-setup"), anyLong(), any()))
@@ -179,10 +178,8 @@ class FeedbackActivitiesImplTest {
     FeedbackPrGateway prGateway = mock(FeedbackPrGateway.class);
     LearningRepository repository = mock(LearningRepository.class);
     GitHubCredentials credentials = mock(GitHubCredentials.class);
-    GuidanceWorkspaceFactory.GuidanceWorkspace agentSetupWorkspace =
-        mock(GuidanceWorkspaceFactory.GuidanceWorkspace.class);
-    GuidanceWorkspaceFactory.GuidanceWorkspace sourceRepoWorkspace =
-        mock(GuidanceWorkspaceFactory.GuidanceWorkspace.class);
+    RepositoryWorkspace agentSetupWorkspace = mock(RepositoryWorkspace.class);
+    RepositoryWorkspace sourceRepoWorkspace = mock(RepositoryWorkspace.class);
 
     when(agentSetupWorkspace.repository()).thenReturn(Path.of("/tmp/agent-setup"));
     when(agentSetupWorkspace.defaultBranch()).thenReturn("main");
@@ -243,8 +240,7 @@ class FeedbackActivitiesImplTest {
     FeedbackPrGateway prGateway = mock(FeedbackPrGateway.class);
     LearningRepository repository = mock(LearningRepository.class);
     GitHubCredentials credentials = mock(GitHubCredentials.class);
-    GuidanceWorkspaceFactory.GuidanceWorkspace agentSetupWorkspace =
-        mock(GuidanceWorkspaceFactory.GuidanceWorkspace.class);
+    RepositoryWorkspace agentSetupWorkspace = mock(RepositoryWorkspace.class);
 
     when(agentSetupWorkspace.repository()).thenReturn(Path.of("/tmp/agent-setup"));
     when(agentSetupWorkspace.defaultBranch()).thenReturn("main");

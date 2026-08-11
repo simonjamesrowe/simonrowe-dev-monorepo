@@ -1,0 +1,138 @@
+openapi: 3.1.0
+info:
+  title: Blog Narration API
+  version: 1.0.0
+  description: Public, idempotent on-demand narration for published blogs.
+paths:
+  /api/blogs/{blogId}/narration:
+    parameters:
+      - $ref: '#/components/parameters/BlogId'
+    get:
+      summary: Read narration status, optionally waiting for a state change
+      operationId: getBlogNarration
+      parameters:
+        - name: afterVersion
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+          description: Wait only while the current response version equals this value.
+        - name: waitSeconds
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 25
+            default: 0
+      responses:
+        '200':
+          description: Current status; a timed-out wait returns the unchanged status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      summary: Request or safely retry narration
+      operationId: requestBlogNarration
+      responses:
+        '200':
+          description: Existing ready or already-active narration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+        '202':
+          description: A new or retryable narration was queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          description: Blog prose exceeds the configured narration size.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Narration is disabled, unconfigured, or the generation budget is exhausted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+components:
+  parameters:
+    BlogId:
+      name: blogId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+  schemas:
+    NarrationState:
+      type: string
+      enum: [NOT_REQUESTED, QUEUED, PROCESSING, READY, FAILED, UNAVAILABLE, INELIGIBLE]
+    NarrationResponse:
+      type: object
+      required: [state, version, retryable, message]
+      properties:
+        state:
+          $ref: '#/components/schemas/NarrationState'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        audioUrl:
+          type: string
+          pattern: '^/uploads/narrations/'
+        durationSeconds:
+          type: integer
+          format: int64
+          minimum: 0
+        retryable:
+          type: boolean
+        message:
+          type: string
+          maxLength: 160
+      allOf:
+        - if:
+            properties:
+              state:
+                const: READY
+          then:
+            required: [audioUrl, durationSeconds]
+    PublicError:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+  responses:
+    NotFound:
+      description: Blog is missing or unpublished.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+    RateLimited:
+      description: Client request limit exceeded.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'

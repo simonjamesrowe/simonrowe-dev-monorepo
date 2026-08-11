@@ -17,6 +17,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
   private final RateLimitConfig config;
   private final ConcurrentHashMap<String, Bucket> chatBuckets = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, Bucket> mcpBuckets = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Bucket> narrationBuckets = new ConcurrentHashMap<>();
 
   public RateLimitInterceptor(final RateLimitConfig config) {
     this.config = config;
@@ -31,7 +32,10 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     ConcurrentHashMap<String, Bucket> bucketMap;
     int requestsPerMinute;
 
-    if (path.startsWith("/mcp")) {
+    if (isNarrationPath(path)) {
+      bucketMap = narrationBuckets;
+      requestsPerMinute = config.narration().requestsPerMinute();
+    } else if (path.startsWith("/mcp")) {
       bucketMap = mcpBuckets;
       requestsPerMinute = config.mcp().requestsPerMinute();
     } else {
@@ -69,6 +73,15 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     return Bucket.builder()
         .addLimit(limit)
         .build();
+  }
+
+  private boolean isNarrationPath(final String path) {
+    if (!path.startsWith("/api/blogs/") || !path.endsWith("/narration")) {
+      return false;
+    }
+    String blogId = path.substring("/api/blogs/".length(),
+        path.length() - "/narration".length());
+    return !blogId.isBlank() && !blogId.contains("/");
   }
 
   private String getClientIp(final HttpServletRequest request) {

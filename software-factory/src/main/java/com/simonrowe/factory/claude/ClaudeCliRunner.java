@@ -117,7 +117,7 @@ public class ClaudeCliRunner {
     command.add("mcp__*");
     // Every invocation grants Read/Edit/Write against "./**", which technically includes
     // .git/ (git status never reports changes inside its own metadata directory, so
-    // GuidanceWorkspaceFactory's allowlist check can't see a write there). Deny it here, once,
+    // RepositoryWorkspaceFactory's allowlist check can't see a write there). Deny it here, once,
     // for every caller rather than per-engine, mirroring the --allowedTools "Tool(glob)" syntax.
     command.add("Edit(./.git/**)");
     command.add("Write(./.git/**)");
