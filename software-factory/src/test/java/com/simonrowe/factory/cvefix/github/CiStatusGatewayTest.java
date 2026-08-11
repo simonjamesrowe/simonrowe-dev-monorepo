@@ -28,20 +28,29 @@ class CiStatusGatewayTest {
   private static final String NO_CHECKS = "{\"total_count\":0,\"check_runs\":[]}";
 
   /**
-   * The shape GitHub Actions actually returns, verified live against this repository: {@code
-   * output.summary} and {@code output.text} are both null and the only usable signal is
-   * {@code annotations_count} plus the annotations endpoint. Fixtures that populate the output
-   * fields describe a check run this repository never produces.
+   * The shape GitHub Actions actually returns, transcribed from a live response for this
+   * repository: {@code output.summary} and {@code output.text} are both null, and the only usable
+   * signal is {@code output.annotations_count} plus the annotations endpoint.
+   *
+   * <p><strong>{@code annotations_count} appears only inside {@code output}, never at top level,
+   * and no fixture in this class may put it at top level.</strong> A check run's top-level keys are
+   * exactly {@code app}, {@code check_suite}, {@code completed_at}, {@code conclusion},
+   * {@code details_url}, {@code external_id}, {@code head_sha}, {@code html_url}, {@code id},
+   * {@code name}, {@code node_id}, {@code output}, {@code pull_requests}, {@code started_at},
+   * {@code status} and {@code url}. An earlier version of these fixtures supplied the count in
+   * both places, which let {@link CiStatusGateway} read the top-level key and still pass every
+   * test while fetching no annotations at all in production. Fixtures that populate the output
+   * fields, or that invent a top-level count, describe a check run this repository never produces.
    */
   private static final String REAL_ACTIONS_SHAPE =
       """
       {"total_count":2,"check_runs":[
         {"id":77,"name":"Backend Build & Test","status":"completed","conclusion":"failure",
-         "output":{"title":null,"summary":null,"text":null,"annotations_count":2},
-         "annotations_count":2},
+         "output":{"title":null,"summary":null,"text":null,"annotations_count":2,
+                   "annotations_url":"https://api.github.com/x/check-runs/77/annotations"}},
         {"id":78,"name":"Publish Frontend Image","status":"completed","conclusion":"success",
-         "output":{"title":null,"summary":null,"text":null,"annotations_count":0},
-         "annotations_count":0}]}
+         "output":{"title":null,"summary":null,"text":null,"annotations_count":0,
+                   "annotations_url":"https://api.github.com/x/check-runs/78/annotations"}}]}
       """;
 
   private HttpServer server;
@@ -287,7 +296,7 @@ class CiStatusGatewayTest {
         """
         {"total_count":1,"check_runs":[
           {"id":77,"name":"Backend Build & Test","status":"completed","conclusion":"success",
-           "output":{"summary":null,"text":null},"annotations_count":2}]}
+           "output":{"summary":null,"text":null,"annotations_count":2}}]}
         """);
 
     assertThat(gateway().failureLogs(HEAD_SHA)).isEmpty();
@@ -301,9 +310,9 @@ class CiStatusGatewayTest {
         """
         {"total_count":2,"check_runs":[
           {"id":77,"name":"evaluate","status":"completed","conclusion":"failure",
-           "output":{"summary":null,"text":null},"annotations_count":2},
+           "output":{"summary":null,"text":null,"annotations_count":2}},
           {"id":78,"name":"build","status":"completed","conclusion":"success",
-           "output":{"summary":null,"text":null},"annotations_count":0}]}
+           "output":{"summary":null,"text":null,"annotations_count":0}}]}
         """);
 
     assertThat(gateway(List.of("evaluate")).failureLogs(HEAD_SHA)).isEmpty();
@@ -333,7 +342,8 @@ class CiStatusGatewayTest {
           .append(",\"name\":\"check-")
           .append(index)
           .append("\",\"status\":\"completed\",\"conclusion\":\"failure\",")
-          .append("\"output\":{\"summary\":null,\"text\":null},\"annotations_count\":1}");
+          .append("\"output\":{\"summary\":null,\"text\":null,")
+          .append("\"annotations_count\":1}}");
       responses.put(
           "/repos/acme/widgets/check-runs/" + index + "/annotations",
           "[{\"annotation_level\":\"failure\",\"message\":\"boom " + index + "\"}]");

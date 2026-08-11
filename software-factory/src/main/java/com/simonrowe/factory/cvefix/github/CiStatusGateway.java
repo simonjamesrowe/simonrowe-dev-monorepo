@@ -167,10 +167,19 @@ public class CiStatusGateway {
    *
    * <p><strong>Annotations are the substance here, not a garnish.</strong> Verified live against
    * this repository: GitHub Actions check runs return {@code output.summary} and {@code
-   * output.text} both null, with {@code annotations_count} between 1 and 3. Reading only those two
-   * fields — which this method originally did — produced a heading and two blank lines, so the
-   * repair agent received no failure context at all and the repair half of the loop was inert.
-   * Both fields are still read for the case where something ever does populate them.
+   * output.text} both null, with {@code output.annotations_count} between 1 and 3. Reading only
+   * those two fields — which this method originally did — produced a heading and two blank lines,
+   * so the repair agent received no failure context at all and the repair half of the loop was
+   * inert. Both fields are still read for the case where something ever does populate them.
+   *
+   * <p><strong>Every annotation field sits under {@code output}, not at top level</strong> —
+   * {@code output.annotations_count} and {@code output.annotations_url} both. Only {@code id},
+   * {@code name}, {@code status} and {@code conclusion}, which this class also reads, are
+   * top-level. {@code output.annotations_url} is deliberately not used: it is an absolute
+   * {@code api.github.com} URL, so following it would bypass
+   * {@link com.simonrowe.factory.codereview.config.CodeReviewProperties.Github#apiBaseUrl()} and
+   * make this gateway untestable against a local stub. The path is built from the configured base
+   * instead.
    *
    * <p>Full job logs are not an option: {@code GET /actions/jobs/{id}/logs} needs {@code actions:
    * read} on the installation token, and that token is minted from a single shared permission
@@ -198,7 +207,14 @@ public class CiStatusGateway {
       // Only failed non-advisory runs get an annotations request, and only when GitHub says there
       // is something to fetch: a request per passing check would triple the unauthenticated call
       // count for no signal, and an advisory check's failure is one the agent must not chase.
-      if (run.path("annotations_count").asInt(0) > 0
+      // "output"."annotations_count", NOT top-level: verified live against this repository, a check
+      // run's top-level keys are app, check_suite, completed_at, conclusion, details_url,
+      // external_id, head_sha, html_url, id, name, node_id, output, pull_requests, started_at,
+      // status, url — no annotations_count among them. Reading it at top level makes this gate
+      // permanently 0 > 0, which silently disables every annotation fetch below and leaves the
+      // repair agent with nothing but headings. That was a real bug here, hidden by a fixture that
+      // invented the top-level key; do not "simplify" this path expression.
+      if (run.path("output").path("annotations_count").asInt(0) > 0
           && annotationRequests < MAX_ANNOTATION_REQUESTS
           && logs.length() < MAX_FAILURE_LOG_CHARACTERS) {
         annotationRequests++;
