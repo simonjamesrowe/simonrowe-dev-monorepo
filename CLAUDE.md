@@ -100,6 +100,13 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   A container can be `healthy` while having registered no Temporal poller, in which case webhooks
   return `202` and nothing ever reviews — check pollers on the `code-review` task queue, not just
   the healthcheck. See `docs/runbooks/software-factory.md`.
+  The same container also hosts the `cve-fix` task queue and, behind `FACTORY_CVEFIX_ENABLED`
+  (default `false`), a **paused-by-default** 24-hour Temporal schedule (`cve-fix-daily`) declared in
+  code so a deploy reconciles it; enabling the flag deliberately does not start opening pull
+  requests until an operator unpauses it after a dry run. That flow builds nothing locally — the
+  agent has no `Bash` tool and the image carries no Gradle/Node/Docker, so CI is the only build
+  environment and the repair loop is a CI poll. It adds no HTTP route. See
+  `docs/runbooks/cvefix.md`.
 - **Recover a downed/partial stack** from the deploy directory: `docker compose -f docker-compose.prod.yml up -d`
   (reconciles containers stuck in `created`, respecting `depends_on` ordering). Minimal alternative:
   `docker start simonrowe-dev-monorepo-langfuse-1 && docker start simonrowe-dev-monorepo-nginx-1`.
