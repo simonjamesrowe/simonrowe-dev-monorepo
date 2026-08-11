@@ -31,10 +31,13 @@ import org.springframework.stereotype.Component;
  * rate limit of 60 requests/hour per IP; {@link CveFixProperties.Ci#pollInterval()} defaults to 3
  * minutes, which keeps usage near 20/hour typical, and near 40/hour worst case while polling a red
  * pull request, because {@link #outcomeFor(String)} and {@link #failureLogs(String)} each issue
- * their own check-runs request. Both figures sit under the 60/hour ceiling. Do not lower that
- * interval and do not add auth to this gateway to raise the ceiling — if more headroom is ever
- * needed, that is a call to widen the shared token's permissions deliberately, not a side effect
- * of this class.
+ * their own check-runs request. {@link #failureLogs(String)} then adds one annotations request per
+ * failed non-advisory check run, capped at {@value #MAX_ANNOTATION_REQUESTS} per call; since the
+ * repair budget defaults to 3, it is called at most 3 times per run, so the worst case rises to
+ * roughly 20 + 3 × 6 = 38/hour. All three figures sit under the 60/hour ceiling. Do not lower that
+ * interval, do not raise {@value #MAX_ANNOTATION_REQUESTS} without redoing that arithmetic, and do
+ * not add auth to this gateway to raise the ceiling — if more headroom is ever needed, that is a
+ * call to widen the shared token's permissions deliberately, not a side effect of this class.
  *
  * <p><strong>Advisory checks are excluded from the RED decision, and excluded first</strong>,
  * before any GREEN/RED/PENDING determination. {@link CveFixProperties.Ci#advisoryChecks()}
@@ -61,6 +64,16 @@ public class CiStatusGateway {
 
   private static final String API_VERSION = "2026-03-10";
   private static final int MAX_FAILURE_LOG_CHARACTERS = 8_000;
+
+  /**
+   * Annotation requests one {@link #failureLogs(String)} call will make, at most. One request per
+   * failed non-advisory check run, and this repository's workflow set produces at most a handful,
+   * so the cap is a backstop against a pathological commit rather than a routine limit.
+   */
+  private static final int MAX_ANNOTATION_REQUESTS = 5;
+
+  /** Annotations read from any one check run. GitHub's observed counts here are 1 to 3. */
+  private static final int MAX_ANNOTATIONS_PER_RUN = 20;
 
   private final CodeReviewProperties codeReviewProperties;
   private final CveFixProperties properties;
@@ -152,24 +165,104 @@ public class CiStatusGateway {
   /**
    * Builds a compact log excerpt for every failed, non-advisory check run on the given commit.
    *
+   * <p><strong>Annotations are the substance here, not a garnish.</strong> Verified live against
+   * this repository: GitHub Actions check runs return {@code output.summary} and {@code
+   * output.text} both null, with {@code annotations_count} between 1 and 3. Reading only those two
+   * fields — which this method originally did — produced a heading and two blank lines, so the
+   * repair agent received no failure context at all and the repair half of the loop was inert.
+   * Both fields are still read for the case where something ever does populate them.
+   *
+   * <p>Full job logs are not an option: {@code GET /actions/jobs/{id}/logs} needs {@code actions:
+   * read} on the installation token, and that token is minted from a single shared permission
+   * payload the code-review and feedback flows also depend on — precisely the change this module
+   * declines to make (see the class Javadoc). So this channel is intentionally thin, and
+   * annotations are the best signal available unauthenticated.
+   *
    * @param headSha the commit sha to look up check runs for
-   * @return the concatenated {@code output.summary} and {@code output.text} of each failed
-   *     non-advisory check run, truncated to about {@value #MAX_FAILURE_LOG_CHARACTERS} characters
-   * @throws IllegalStateException if the request fails or returns a non-2xx status
+   * @return per failed non-advisory check run, its name, any {@code output.summary} and {@code
+   *     output.text}, and its annotation messages with level and location; the whole thing
+   *     truncated to about {@value #MAX_FAILURE_LOG_CHARACTERS} characters
+   * @throws IllegalStateException if the check-runs request fails or returns a non-2xx status. A
+   *     failing annotations request does not throw — see {@link #appendAnnotations}.
    */
   public String failureLogs(final String headSha) {
     StringBuilder logs = new StringBuilder();
+    int annotationRequests = 0;
     for (JsonNode run : nonAdvisory(checkRunsPayload(headSha).path("check_runs"))) {
       if (!isCompleted(run) || PASSING_CONCLUSIONS.contains(run.path("conclusion").asText(""))) {
         continue;
       }
       logs.append("### ").append(run.path("name").asText("")).append('\n');
-      logs.append(run.path("output").path("summary").asText("")).append('\n');
-      logs.append(run.path("output").path("text").asText("")).append("\n\n");
+      appendIfPresent(logs, run.path("output").path("summary"));
+      appendIfPresent(logs, run.path("output").path("text"));
+      // Only failed non-advisory runs get an annotations request, and only when GitHub says there
+      // is something to fetch: a request per passing check would triple the unauthenticated call
+      // count for no signal, and an advisory check's failure is one the agent must not chase.
+      if (run.path("annotations_count").asInt(0) > 0
+          && annotationRequests < MAX_ANNOTATION_REQUESTS
+          && logs.length() < MAX_FAILURE_LOG_CHARACTERS) {
+        annotationRequests++;
+        appendAnnotations(logs, run.path("id").asLong(0));
+      }
+      logs.append('\n');
     }
     return logs.length() > MAX_FAILURE_LOG_CHARACTERS
         ? logs.substring(0, MAX_FAILURE_LOG_CHARACTERS)
         : logs.toString();
+  }
+
+  private static void appendIfPresent(final StringBuilder logs, final JsonNode node) {
+    if (node.isTextual() && !node.asText().isBlank()) {
+      logs.append(node.asText()).append('\n');
+    }
+  }
+
+  /**
+   * Appends one check run's annotation messages. Best-effort by design: failure context makes a
+   * repair attempt better informed, it is not what makes the run correct, so a 404 or a rate-limit
+   * rejection here degrades the prompt rather than failing the activity and burning the attempt.
+   */
+  private void appendAnnotations(final StringBuilder logs, final long checkRunId) {
+    if (checkRunId <= 0) {
+      return;
+    }
+    JsonNode annotations;
+    try {
+      annotations =
+          get(
+              "/repos/"
+                  + properties.owner()
+                  + "/"
+                  + properties.repository()
+                  + "/check-runs/"
+                  + checkRunId
+                  + "/annotations?per_page="
+                  + MAX_ANNOTATIONS_PER_RUN);
+    } catch (RuntimeException exception) {
+      return;
+    }
+    int appended = 0;
+    for (JsonNode annotation : annotations) {
+      if (appended >= MAX_ANNOTATIONS_PER_RUN || logs.length() >= MAX_FAILURE_LOG_CHARACTERS) {
+        return;
+      }
+      String message = annotation.path("message").asText("");
+      if (message.isBlank()) {
+        continue;
+      }
+      logs.append('[').append(annotation.path("annotation_level").asText("unknown")).append("] ");
+      String path = annotation.path("path").asText("");
+      if (!path.isBlank()) {
+        logs.append(path);
+        int line = annotation.path("start_line").asInt(0);
+        if (line > 0) {
+          logs.append(':').append(line);
+        }
+        logs.append(" - ");
+      }
+      logs.append(message).append('\n');
+      appended++;
+    }
   }
 
   private JsonNode checkRunsPayload(final String headSha) {

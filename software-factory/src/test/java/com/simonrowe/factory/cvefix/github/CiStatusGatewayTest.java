@@ -24,13 +24,32 @@ class CiStatusGatewayTest {
 
   private static final String HEAD_SHA = "abc123";
   private static final String CHECK_RUNS_PATH = "/repos/acme/widgets/commits/abc123/check-runs";
+  private static final String ANNOTATIONS_PATH = "/repos/acme/widgets/check-runs/77/annotations";
   private static final String NO_CHECKS = "{\"total_count\":0,\"check_runs\":[]}";
+
+  /**
+   * The shape GitHub Actions actually returns, verified live against this repository: {@code
+   * output.summary} and {@code output.text} are both null and the only usable signal is
+   * {@code annotations_count} plus the annotations endpoint. Fixtures that populate the output
+   * fields describe a check run this repository never produces.
+   */
+  private static final String REAL_ACTIONS_SHAPE =
+      """
+      {"total_count":2,"check_runs":[
+        {"id":77,"name":"Backend Build & Test","status":"completed","conclusion":"failure",
+         "output":{"title":null,"summary":null,"text":null,"annotations_count":2},
+         "annotations_count":2},
+        {"id":78,"name":"Publish Frontend Image","status":"completed","conclusion":"success",
+         "output":{"title":null,"summary":null,"text":null,"annotations_count":0},
+         "annotations_count":0}]}
+      """;
 
   private HttpServer server;
   private final Map<String, String> responses = new ConcurrentHashMap<>();
   private final Map<String, Integer> statuses = new ConcurrentHashMap<>();
   private final List<String> seenHeaderNames = new CopyOnWriteArrayList<>();
   private final List<String> seenQueries = new CopyOnWriteArrayList<>();
+  private final List<String> seenPaths = new CopyOnWriteArrayList<>();
 
   @BeforeEach
   void startServer() throws IOException {
@@ -39,6 +58,7 @@ class CiStatusGatewayTest {
         "/repos/",
         exchange -> {
           String key = exchange.getRequestURI().getPath();
+          seenPaths.add(key);
           seenHeaderNames.addAll(exchange.getRequestHeaders().keySet());
           seenQueries.add(String.valueOf(exchange.getRequestURI().getQuery()));
           byte[] body = responses.getOrDefault(key, NO_CHECKS).getBytes(StandardCharsets.UTF_8);
@@ -234,6 +254,99 @@ class CiStatusGatewayTest {
     assertThat(seenHeaderNames).anyMatch(name -> name.equalsIgnoreCase("accept"));
     assertThat(seenHeaderNames).noneMatch(name -> name.equalsIgnoreCase("authorization"));
     assertThat(seenHeaderNames).noneMatch(name -> name.equalsIgnoreCase("proxy-authorization"));
+  }
+
+  @Test
+  void collectsAnnotationsWhenActionsLeavesTheOutputFieldsNull() {
+    responses.put(CHECK_RUNS_PATH, REAL_ACTIONS_SHAPE);
+    responses.put(
+        ANNOTATIONS_PATH,
+        """
+        [{"path":"backend/build.gradle.kts","start_line":42,"end_line":42,
+          "annotation_level":"failure","title":"Build failed","raw_details":null,
+          "message":"Could not resolve org.example:lib:2.0.0"},
+         {"path":".github","start_line":1,"end_line":1,"annotation_level":"warning",
+          "title":null,"message":"Process completed with exit code 1."}]
+        """);
+
+    String logs = gateway().failureLogs(HEAD_SHA);
+
+    // The regression this covers: with only output.summary/text read, this returned a heading and
+    // blank lines, so the repair agent was handed no failure context whatsoever.
+    assertThat(logs).contains("### Backend Build & Test");
+    assertThat(logs).contains("[failure] backend/build.gradle.kts:42 - Could not resolve");
+    assertThat(logs).contains("[warning] .github:1 - Process completed with exit code 1.");
+    assertThat(logs).doesNotContain("Publish Frontend Image");
+    assertThat(seenPaths).contains(ANNOTATIONS_PATH);
+  }
+
+  @Test
+  void requestsNoAnnotationsForChecksThatPassed() {
+    responses.put(
+        CHECK_RUNS_PATH,
+        """
+        {"total_count":1,"check_runs":[
+          {"id":77,"name":"Backend Build & Test","status":"completed","conclusion":"success",
+           "output":{"summary":null,"text":null},"annotations_count":2}]}
+        """);
+
+    assertThat(gateway().failureLogs(HEAD_SHA)).isEmpty();
+    assertThat(seenPaths).doesNotContain(ANNOTATIONS_PATH);
+  }
+
+  @Test
+  void requestsNoAnnotationsWhenTheOnlyFailedCheckIsAdvisory() {
+    responses.put(
+        CHECK_RUNS_PATH,
+        """
+        {"total_count":2,"check_runs":[
+          {"id":77,"name":"evaluate","status":"completed","conclusion":"failure",
+           "output":{"summary":null,"text":null},"annotations_count":2},
+          {"id":78,"name":"build","status":"completed","conclusion":"success",
+           "output":{"summary":null,"text":null},"annotations_count":0}]}
+        """);
+
+    assertThat(gateway(List.of("evaluate")).failureLogs(HEAD_SHA)).isEmpty();
+    assertThat(seenPaths).doesNotContain(ANNOTATIONS_PATH);
+  }
+
+  @Test
+  void keepsTheFailureHeadingWhenTheAnnotationRequestFails() {
+    responses.put(CHECK_RUNS_PATH, REAL_ACTIONS_SHAPE);
+    statuses.put(ANNOTATIONS_PATH, 404);
+
+    // A thin prompt beats a failed activity: the repair attempt has already been paid for by the
+    // time the failure logs are read.
+    String logs = gateway().failureLogs(HEAD_SHA);
+
+    assertThat(logs).contains("### Backend Build & Test");
+    assertThat(seenPaths).contains(ANNOTATIONS_PATH);
+  }
+
+  @Test
+  void stopsRequestingAnnotationsAtTheRequestCap() {
+    StringBuilder runs = new StringBuilder();
+    for (int index = 1; index <= 8; index++) {
+      runs.append(index == 1 ? "" : ",")
+          .append("{\"id\":")
+          .append(index)
+          .append(",\"name\":\"check-")
+          .append(index)
+          .append("\",\"status\":\"completed\",\"conclusion\":\"failure\",")
+          .append("\"output\":{\"summary\":null,\"text\":null},\"annotations_count\":1}");
+      responses.put(
+          "/repos/acme/widgets/check-runs/" + index + "/annotations",
+          "[{\"annotation_level\":\"failure\",\"message\":\"boom " + index + "\"}]");
+    }
+    responses.put(CHECK_RUNS_PATH, "{\"total_count\":8,\"check_runs\":[" + runs + "]}");
+
+    String logs = gateway().failureLogs(HEAD_SHA);
+
+    assertThat(seenPaths.stream().filter(path -> path.endsWith("/annotations")).count())
+        .isEqualTo(5);
+    assertThat(logs).contains("boom 1").contains("boom 5").doesNotContain("boom 6");
+    // Every failed check is still named, even the ones past the annotation cap.
+    assertThat(logs).contains("### check-8");
   }
 
   @Test
