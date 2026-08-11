@@ -97,7 +97,8 @@ class CveFixActivitiesImplTest {
     when(workspaceFactory.create(anyString(), anyString(), anyLong(), any(), anyString(), any()))
         .thenReturn(workspace);
     FixProposal emptyProposal = new FixProposal(List.of(), List.of(), "Nothing needed changing.");
-    when(fixEngine.propose(eq(workspace), anyList(), isNull(), anyList(), any())).thenReturn(emptyProposal);
+    when(fixEngine.propose(eq(workspace), anyList(), isNull(), anyList(), any()))
+        .thenReturn(emptyProposal);
     when(workspaceFactory.changedPaths(eq(workspace), any())).thenReturn(List.of());
 
     CveFixActivities.PushResult result = activities.proposeAndPush(List.of(), null, List.of());
@@ -115,7 +116,8 @@ class CveFixActivitiesImplTest {
     when(workspaceFactory.create(anyString(), anyString(), anyLong(), any(), anyString(), any()))
         .thenReturn(workspace);
     FixProposal emptyProposal = new FixProposal(List.of(), List.of(), "Nothing to change.");
-    when(fixEngine.propose(eq(workspace), anyList(), isNull(), anyList(), any())).thenReturn(emptyProposal);
+    when(fixEngine.propose(eq(workspace), anyList(), isNull(), anyList(), any()))
+        .thenReturn(emptyProposal);
     when(workspaceFactory.changedPaths(eq(workspace), any()))
         .thenReturn(List.of("backend/src/main/java/Evil.java"));
 
@@ -217,7 +219,7 @@ class CveFixActivitiesImplTest {
         new CveFixActivities.FixSummary(
             List.of("a 1.0 -> 2.0 (CVE-2024-0001)"), List.of(), "Bumped one component.");
     CveFixPrGateway.OpenPullRequest expected =
-        new CveFixPrGateway.OpenPullRequest(9, "https://github.com/example/pull/9", "abc123");
+        new CveFixPrGateway.OpenPullRequest(9, "https://github.com/example/pull/9");
     when(prGateway.open(anyString(), anyString())).thenReturn(expected);
 
     CveFixPrGateway.OpenPullRequest result = activities.openPullRequest(summary);
@@ -258,8 +260,7 @@ class CveFixActivitiesImplTest {
     when(prGateway.findOpen())
         .thenReturn(
             Optional.of(
-                new CveFixPrGateway.OpenPullRequest(
-                    3, "https://github.com/example/pull/3", "sha")));
+                new CveFixPrGateway.OpenPullRequest(3, "https://github.com/example/pull/3")));
 
     assertThat(activities.findOpenPrUrl()).isEqualTo("https://github.com/example/pull/3");
   }

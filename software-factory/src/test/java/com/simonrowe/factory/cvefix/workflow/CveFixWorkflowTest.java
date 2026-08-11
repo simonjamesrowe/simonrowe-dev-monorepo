@@ -371,7 +371,7 @@ class CveFixWorkflowTest {
     when(activities.proposeAndPush(anyList(), any(), anyList()))
         .thenReturn(new PushResult("sha-1", SUMMARY));
     when(activities.openPullRequest(any()))
-        .thenReturn(new CveFixPrGateway.OpenPullRequest(11, NEW_PR_URL, "sha-1"));
+        .thenReturn(new CveFixPrGateway.OpenPullRequest(11, NEW_PR_URL));
     when(activities.ciFailureLogs(anyString())).thenReturn(LOGS);
     return activities;
   }

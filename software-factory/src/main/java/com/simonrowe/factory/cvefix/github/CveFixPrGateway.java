@@ -159,10 +159,7 @@ public class CveFixPrGateway {
   }
 
   private static OpenPullRequest toOpenPullRequest(final JsonNode json) {
-    return new OpenPullRequest(
-        json.path("number").asInt(),
-        json.path("html_url").asText(),
-        json.path("head").path("sha").asText());
+    return new OpenPullRequest(json.path("number").asInt(), json.path("html_url").asText());
   }
 
   private JsonNode parseJson(final HttpResponse<String> response) {
@@ -215,7 +212,12 @@ public class CveFixPrGateway {
     }
   }
 
-  /** An open CVE pull request: the number, its URL, and the head commit CI runs against. */
-  public record OpenPullRequest(int number, String htmlUrl, String headSha) {
+  /**
+   * An open CVE pull request: just the number and the URL. Deliberately no head sha — the commit
+   * CI is polled for comes from {@code RepositoryWorkspaceFactory.commitAndPush}, which knows the
+   * exact sha it pushed, so a sha read back from GitHub here would be a second source of truth
+   * with nothing reading it.
+   */
+  public record OpenPullRequest(int number, String htmlUrl) {
   }
 }

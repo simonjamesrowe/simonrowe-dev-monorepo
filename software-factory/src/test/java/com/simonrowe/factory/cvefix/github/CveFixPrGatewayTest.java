@@ -107,7 +107,7 @@ class CveFixPrGatewayTest {
   }
 
   @Test
-  void findOpenReturnsTheNumberUrlAndHeadSha() {
+  void findOpenReturnsTheNumberAndUrl() {
     responses.put(
         "GET " + PULLS_PATH,
         """
@@ -117,7 +117,7 @@ class CveFixPrGatewayTest {
     Optional<CveFixPrGateway.OpenPullRequest> found = gateway().findOpen();
 
     assertThat(found)
-        .contains(new CveFixPrGateway.OpenPullRequest(7, "https://github.com/o/r/pull/7", "abc"));
+        .contains(new CveFixPrGateway.OpenPullRequest(7, "https://github.com/o/r/pull/7"));
   }
 
   @Test
@@ -164,7 +164,7 @@ class CveFixPrGatewayTest {
     CveFixPrGateway.OpenPullRequest result = gateway().open("title", "body");
 
     assertThat(result)
-        .isEqualTo(new CveFixPrGateway.OpenPullRequest(9, "https://github.com/o/r/pull/9", "ghi"));
+        .isEqualTo(new CveFixPrGateway.OpenPullRequest(9, "https://github.com/o/r/pull/9"));
   }
 
   @Test
