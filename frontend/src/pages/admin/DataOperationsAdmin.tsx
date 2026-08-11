@@ -296,7 +296,8 @@ export function DataOperationsAdmin() {
           <div className="data-ops__card-icon"><CloudUpload size={24} /></div>
           <h3 className="data-ops__card-title">Backup to Google Drive</h3>
           <p className="data-ops__card-desc">
-            Create a backup to Google Drive. Includes the database and uploaded media files.
+            Create a full backup to Google Drive. Includes the database, uploaded media files,
+            and generated blog narration audio.
           </p>
           <div className="data-ops__card-actions">
             <button

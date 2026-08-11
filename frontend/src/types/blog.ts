@@ -40,6 +40,33 @@ export interface BlogDetail {
   contentType: BlogContentType
 }
 
+export type BlogNarrationState =
+  | 'NOT_REQUESTED'
+  | 'QUEUED'
+  | 'PROCESSING'
+  | 'READY'
+  | 'FAILED'
+  | 'UNAVAILABLE'
+  | 'INELIGIBLE'
+
+interface BlogNarrationResponseBase {
+  version: number
+  retryable: boolean
+  message: string
+}
+
+export type BlogNarrationResponse =
+  | (BlogNarrationResponseBase & {
+      state: 'READY'
+      audioUrl: string
+      durationSeconds: number
+    })
+  | (BlogNarrationResponseBase & {
+      state: Exclude<BlogNarrationState, 'READY'>
+      audioUrl?: never
+      durationSeconds?: never
+    })
+
 export interface BlogSearchResult {
   id: string
   title: string

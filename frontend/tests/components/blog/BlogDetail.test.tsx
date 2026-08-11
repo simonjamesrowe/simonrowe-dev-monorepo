@@ -1,9 +1,13 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { BlogDetail } from '../../../src/components/blog/BlogDetail'
 import type { BlogDetail as BlogDetailType } from '../../../src/types/blog'
+
+vi.mock('../../../src/components/blog/BlogNarration', () => ({
+  BlogNarration: () => null,
+}))
 
 const blog: BlogDetailType = {
   id: 'b-1',

@@ -17,7 +17,7 @@ public class ClearService {
   private static final Logger LOG = LoggerFactory.getLogger(ClearService.class);
   private static final Set<String> COLLECTIONS = Set.of(
       "blogs", "tags", "skills", "skill_groups", "jobs",
-      "profiles", "social_medias", "tourSteps", "media_assets"
+      "profiles", "social_medias", "tourSteps", "media_assets", "narrations"
   );
 
   private final MongoTemplate mongoTemplate;
