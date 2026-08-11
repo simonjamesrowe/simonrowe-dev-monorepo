@@ -42,6 +42,7 @@ public class GitHubCredentials {
   private final HttpClient httpClient;
   private final Clock clock;
   private final Map<Long, CachedToken> installationTokens = new ConcurrentHashMap<>();
+  private final Map<Long, CachedToken> commentTokens = new ConcurrentHashMap<>();
   private volatile PrivateKey privateKey;
 
   @Autowired
@@ -69,6 +70,27 @@ public class GitHubCredentials {
   }
 
   public synchronized String accessToken(final Long installationId) {
+    return token(installationId, installationTokens, true);
+  }
+
+  /**
+   * A token for pull-request lifecycle comments only, minted with no {@code permissions} override.
+   *
+   * <p>Omitting the block yields the installation's full grant, which cannot be rejected for
+   * over-reaching. {@link #accessToken} asks for more than the App may have been granted, and
+   * GitHub rejects that whole request with {@code 422} — which is how a permission drift took every
+   * review down on 2026-08-11, silently, because reporting the failure needed a token too. Keeping
+   * the comment path on its own narrower mint means the next such drift is visible on the pull
+   * request instead of only in Temporal.
+   */
+  public synchronized String commentToken(final Long installationId) {
+    return token(installationId, commentTokens, false);
+  }
+
+  private String token(
+      final Long installationId,
+      final Map<Long, CachedToken> cache,
+      final boolean requestWritePermissions) {
     if (installationId == null) {
       return staticToken();
     }
@@ -83,12 +105,12 @@ public class GitHubCredentials {
     }
 
     Instant now = clock.instant();
-    CachedToken cached = installationTokens.get(installationId);
+    CachedToken cached = cache.get(installationId);
     if (cached != null && cached.expiresAt().isAfter(now.plus(EXPIRY_MARGIN))) {
       return cached.value();
     }
-    CachedToken minted = mintInstallationToken(installationId, now);
-    installationTokens.put(installationId, minted);
+    CachedToken minted = mintInstallationToken(installationId, now, requestWritePermissions);
+    cache.put(installationId, minted);
     return minted.value();
   }
 
@@ -150,7 +172,8 @@ public class GitHubCredentials {
     }
   }
 
-  private CachedToken mintInstallationToken(final long installationId, final Instant now) {
+  private CachedToken mintInstallationToken(
+      final long installationId, final Instant now, final boolean requestWritePermissions) {
     try {
       // `pull_requests` must be write, not read: the code-review path publishes a single
       // top-level review via the Reviews API, and the feedback loop opens guidance PRs — both
@@ -167,13 +190,16 @@ public class GitHubCredentials {
       // paths share this one method, the App's Contents permission must be bumped to read & write
       // *before* deploying an image that requests it (see docs/runbooks/software-factory.md's
       // rollout order) — otherwise every token mint 422s and both code-review and feedback fail.
-      ObjectNode permissions =
-          objectMapper
-              .createObjectNode()
-              .put("contents", "write")
-              .put("issues", "write")
-              .put("pull_requests", "write");
-      ObjectNode payload = objectMapper.createObjectNode().set("permissions", permissions);
+      ObjectNode payload = objectMapper.createObjectNode();
+      if (requestWritePermissions) {
+        ObjectNode permissions =
+            objectMapper
+                .createObjectNode()
+                .put("contents", "write")
+                .put("issues", "write")
+                .put("pull_requests", "write");
+        payload.set("permissions", permissions);
+      }
       HttpRequest request =
           HttpRequest.newBuilder()
               .uri(
@@ -194,6 +220,17 @@ public class GitHubCredentials {
               .build();
       HttpResponse<String> response =
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() >= 400 && response.statusCode() < 500) {
+        // A 4xx here is a configuration fault, not a blip: the commonest is a 422 because the
+        // requested permissions exceed the installation's grant. Retrying it three times only
+        // delays the report, and GitHub's body names the offending permission, so keep it.
+        throw ApplicationFailure.newNonRetryableFailure(
+            "GitHub App token endpoint returned "
+                + response.statusCode()
+                + ": "
+                + truncate(response.body()),
+            "GITHUB_TOKEN_REJECTED");
+      }
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         throw new IllegalStateException(
             "GitHub App token endpoint returned " + response.statusCode());
@@ -211,6 +248,15 @@ public class GitHubCredentials {
     } catch (IOException exception) {
       throw new IllegalStateException("GitHub App token request failed", exception);
     }
+  }
+
+  /** Keeps GitHub's explanation without letting a large error body into a comment or a log line. */
+  private static String truncate(final String body) {
+    if (body == null || body.isBlank()) {
+      return "(no response body)";
+    }
+    String collapsed = body.replaceAll("\\s+", " ").trim();
+    return collapsed.length() > 200 ? collapsed.substring(0, 200) : collapsed;
   }
 
   private String createAppJwt(final Instant now) {
