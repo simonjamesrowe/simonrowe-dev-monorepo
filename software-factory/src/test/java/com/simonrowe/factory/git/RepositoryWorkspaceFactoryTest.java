@@ -2,9 +2,22 @@ package com.simonrowe.factory.git;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import com.simonrowe.factory.codereview.agent.ProcessRunner;
+import com.simonrowe.factory.codereview.github.GitHubCredentials;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 class RepositoryWorkspaceFactoryTest {
 
@@ -81,5 +94,74 @@ class RepositoryWorkspaceFactoryTest {
         RepositoryWorkspaceFactory.parsePorcelain("R  old.md -> components/skills/x/SKILL.md\n");
 
     assertThat(changed).containsExactly("components/skills/x/SKILL.md");
+  }
+
+  @Test
+  void commitAndPushReturnsTheTrimmedRevParseShaIssuedBeforeThePush() {
+    ProcessRunner processRunner = mock(ProcessRunner.class);
+    GitHubCredentials credentials = mock(GitHubCredentials.class);
+    when(credentials.accessToken(any())).thenReturn("");
+    RepositoryWorkspaceFactory factory = new RepositoryWorkspaceFactory(credentials, processRunner);
+    Path repo = Path.of("/tmp/repository");
+    RepositoryWorkspace workspace = new RepositoryWorkspace(Path.of("/tmp/root"), repo, "main");
+    Consumer<String> heartbeat = detail -> { };
+    when(processRunner.run(any(), eq(repo), any(), anyMap(), anySet(), any(), eq(heartbeat)))
+        .thenAnswer(
+            invocation -> {
+              List<String> command = invocation.getArgument(0);
+              return command.contains("rev-parse")
+                  ? new ProcessRunner.ProcessResult(0, "abc123\n", "")
+                  : new ProcessRunner.ProcessResult(0, "", "");
+            });
+
+    String sha =
+        factory.commitAndPush(
+            workspace, "chore/dependency-cve-fixes", "message", "bot", "bot@example.com", 42L,
+            heartbeat);
+
+    assertThat(sha).isEqualTo("abc123");
+    assertThat(sha).doesNotContain("\n");
+    InOrder order = inOrder(processRunner);
+    order
+        .verify(processRunner)
+        .run(
+            argThat(command -> command.containsAll(List.of("git", "rev-parse", "HEAD"))),
+            eq(repo), any(), anyMap(), anySet(), any(), eq(heartbeat));
+    order
+        .verify(processRunner)
+        .run(
+            argThat(command -> command.contains("push")), eq(repo), any(), anyMap(), anySet(),
+            any(), eq(heartbeat));
+  }
+
+  @Test
+  void commitAndPushDoesNotReturnHeadShaWhenThePushFails() {
+    ProcessRunner processRunner = mock(ProcessRunner.class);
+    GitHubCredentials credentials = mock(GitHubCredentials.class);
+    when(credentials.accessToken(any())).thenReturn("");
+    RepositoryWorkspaceFactory factory = new RepositoryWorkspaceFactory(credentials, processRunner);
+    Path repo = Path.of("/tmp/repository");
+    RepositoryWorkspace workspace = new RepositoryWorkspace(Path.of("/tmp/root"), repo, "main");
+    Consumer<String> heartbeat = detail -> { };
+    when(processRunner.run(any(), eq(repo), any(), anyMap(), anySet(), any(), eq(heartbeat)))
+        .thenAnswer(
+            invocation -> {
+              List<String> command = invocation.getArgument(0);
+              if (command.contains("rev-parse")) {
+                return new ProcessRunner.ProcessResult(0, "abc123\n", "");
+              }
+              if (command.contains("push")) {
+                return new ProcessRunner.ProcessResult(1, "", "remote rejected the push");
+              }
+              return new ProcessRunner.ProcessResult(0, "", "");
+            });
+
+    assertThatThrownBy(
+            () ->
+                factory.commitAndPush(
+                    workspace, "chore/dependency-cve-fixes", "message", "bot",
+                    "bot@example.com", 42L, heartbeat))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("push failed");
   }
 }

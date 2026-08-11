@@ -109,6 +109,26 @@ class CveFixActivitiesImplTest {
   }
 
   @Test
+  void proposeAndPushValidatesChangedPathsEvenWhenTheProposalIsEmpty() {
+    RepositoryWorkspace workspace = mock(RepositoryWorkspace.class);
+    when(credentials.installationId(anyString(), anyString())).thenReturn(42L);
+    when(workspaceFactory.create(anyString(), anyString(), anyLong(), any(), anyString(), any()))
+        .thenReturn(workspace);
+    FixProposal emptyProposal = new FixProposal(List.of(), List.of(), "Nothing to change.");
+    when(fixEngine.propose(eq(workspace), anyList(), isNull(), any())).thenReturn(emptyProposal);
+    when(workspaceFactory.changedPaths(eq(workspace), any()))
+        .thenReturn(List.of("backend/src/main/java/Evil.java"));
+
+    assertThatThrownBy(() -> activities.proposeAndPush(List.of(), null))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Evil.java");
+
+    verify(workspaceFactory, never())
+        .commitAndPush(any(), any(), any(), any(), any(), any(), any());
+    verify(workspace).close();
+  }
+
+  @Test
   void proposeAndPushClosesTheWorkspaceEvenWhenTheAgentThrows() {
     RepositoryWorkspace workspace = mock(RepositoryWorkspace.class);
     when(credentials.installationId(anyString(), anyString())).thenReturn(42L);
