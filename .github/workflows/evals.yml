@@ -3,6 +3,30 @@ name: Promptfoo Evals
 on:
   pull_request:
     branches: [ main ]
+    # Advisory job with real cost: it boots the backend against Mongo/ES/Kafka, seeds data,
+    # re-embeds, and calls OpenAI. Only run it when the change can plausibly move chat
+    # behaviour. Safe as a filter because nothing on main is a required status check, so a
+    # skipped run cannot block a PR.
+    #
+    # Known false negatives, accepted deliberately: chat also reads from blog, events,
+    # aggregation, favourites, media and observability, so a retrieval-affecting change
+    # there will not trigger these evals. The job is continue-on-error advisory, so a miss
+    # costs a signal and never correctness. If that gap ever needs closing, add a scheduled
+    # nightly eval run against main — do not grow this list until it matches everything.
+    paths:
+      - 'backend/src/main/java/com/simonrowe/chat/**'
+      - 'backend/src/main/java/com/simonrowe/agents/**'
+      - 'backend/src/main/java/com/simonrowe/websearch/**'
+      - 'backend/src/main/java/com/simonrowe/webfetch/**'
+      - 'backend/src/main/java/com/simonrowe/mcp/**'
+      - 'backend/src/main/resources/application.yml'
+      # Dependency manifests are in scope on purpose: a Spring AI or OpenAI SDK bump is the
+      # change most likely to move chat behaviour, and paths: cannot read the diff to
+      # distinguish that from a Jackson bump.
+      - 'backend/build.gradle.kts'
+      - 'gradle/libs.versions.toml'
+      - 'evals/**'
+      - '.github/workflows/evals.yml'
 
 jobs:
   evaluate:
