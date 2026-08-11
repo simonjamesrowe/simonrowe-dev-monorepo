@@ -14,9 +14,16 @@ import com.simonrowe.factory.codereview.api.ReviewAccepted;
 import com.simonrowe.factory.codereview.api.ReviewWorkflowService;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
+import com.simonrowe.factory.feedback.api.FeedbackAccepted;
+import com.simonrowe.factory.feedback.api.FeedbackWorkflowService;
+import com.simonrowe.factory.feedback.config.FeedbackProperties;
+import com.simonrowe.factory.feedback.domain.FeedbackRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.stream.Collectors;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,10 +45,17 @@ class GitHubWebhookControllerTest {
   private static final String SECRET = "webhook-secret";
 
   private final ReviewWorkflowService workflowService = Mockito.mock(ReviewWorkflowService.class);
+  private final FeedbackWorkflowService feedbackWorkflowService =
+      Mockito.mock(FeedbackWorkflowService.class);
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
+    mockMvc = buildMockMvc(feedbackProperties(true));
+    when(workflowService.start(any())).thenReturn(new ReviewAccepted("workflow-1", true));
+  }
+
+  private MockMvc buildMockMvc(final FeedbackProperties feedbackProperties) {
     CodeReviewProperties properties =
         new CodeReviewProperties(
             new CodeReviewProperties.Github(
@@ -50,9 +64,27 @@ class GitHubWebhookControllerTest {
             new CodeReviewProperties.Api("trigger-token"));
     GitHubWebhookController controller =
         new GitHubWebhookController(
-            properties, new WebhookSignatureVerifier(), workflowService, new ObjectMapper());
-    mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
-    when(workflowService.start(any())).thenReturn(new ReviewAccepted("workflow-1", true));
+            properties,
+            new WebhookSignatureVerifier(),
+            workflowService,
+            new ObjectMapper(),
+            feedbackWorkflowService,
+            feedbackProperties);
+    return MockMvcBuilders.standaloneSetup(controller).build();
+  }
+
+  private static FeedbackProperties feedbackProperties(final boolean enabled) {
+    return feedbackProperties(enabled, List.of());
+  }
+
+  private static FeedbackProperties feedbackProperties(
+      final boolean enabled, final List<String> repos) {
+    return new FeedbackProperties(
+        enabled, repos, "agent-feedback", "simonjamesrowe/agent-setup",
+        "simonrowe-code-reviewer[bot]", "simonrowe-code-reviewer[bot]@users.noreply.github.com",
+        java.nio.file.Path.of("/tmp"),
+        new FeedbackProperties.Agent("claude", "haiku", "low", 8, Duration.ofMinutes(5)),
+        new FeedbackProperties.Agent("claude", "sonnet", "medium", 24, Duration.ofMinutes(15)));
   }
 
   private static String sign(final String body) throws Exception {
@@ -76,6 +108,28 @@ class GitHubWebhookControllerTest {
         }
         """
         .formatted(action, draft);
+  }
+
+  private static String closedPayload(final String... labels) {
+    String labelJson =
+        Arrays.stream(labels)
+            .map("{\"name\": \"%s\"}"::formatted)
+            .collect(Collectors.joining(","));
+    return """
+        {
+          "action": "closed",
+          "pull_request": {
+            "number": 42,
+            "draft": false,
+            "merged": true,
+            "labels": [%s],
+            "head": {"sha": "0123456789abcdef0123456789abcdef01234567"}
+          },
+          "repository": {"name": "project", "owner": {"login": "example"}},
+          "installation": {"id": 999}
+        }
+        """
+        .formatted(labelJson);
   }
 
   private ResultActions deliver(
@@ -155,7 +209,7 @@ class GitHubWebhookControllerTest {
 
   @Test
   void ignoresPullRequestActionsThatDoNotChangeTheHead() throws Exception {
-    String payload = pullRequestPayload("closed", false);
+    String payload = pullRequestPayload("labeled", false);
 
     deliver(payload, sign(payload), "pull_request")
         .andExpect(status().isAccepted())
@@ -205,5 +259,56 @@ class GitHubWebhookControllerTest {
         .andExpect(jsonPath("$.status").value("malformed"));
 
     verify(workflowService, never()).start(any());
+  }
+
+  @Test
+  void closedPullRequestStartsFeedbackWorkflowWhenEnabled() throws Exception {
+    when(feedbackWorkflowService.start(any()))
+        .thenReturn(new FeedbackAccepted("review-feedback-example-project-42", true));
+    String payload = closedPayload();
+
+    deliver(payload, sign(payload), "pull_request").andExpect(status().isAccepted());
+
+    ArgumentCaptor<FeedbackRequest> captor = ArgumentCaptor.forClass(FeedbackRequest.class);
+    verify(feedbackWorkflowService).start(captor.capture());
+    assertThat(captor.getValue().owner()).isEqualTo("example");
+    assertThat(captor.getValue().pullNumber()).isEqualTo(42);
+    assertThat(captor.getValue().dryRun()).isFalse();
+    verify(workflowService, never()).start(any());
+  }
+
+  @Test
+  void closedPullRequestIsIgnoredWhenFeedbackDisabled() throws Exception {
+    mockMvc = buildMockMvc(feedbackProperties(false));
+    String payload = closedPayload();
+
+    deliver(payload, sign(payload), "pull_request")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("ignored"));
+
+    verify(feedbackWorkflowService, never()).start(any());
+  }
+
+  @Test
+  void agentFeedbackLabelledPullRequestIsNeverHarvested() throws Exception {
+    String payload = closedPayload("agent-feedback");
+
+    deliver(payload, sign(payload), "pull_request")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("ignored"));
+
+    verify(feedbackWorkflowService, never()).start(any());
+  }
+
+  @Test
+  void closedPullRequestIsIgnoredWhenRepoNotInAllowlist() throws Exception {
+    mockMvc = buildMockMvc(feedbackProperties(true, List.of("other/repo")));
+    String payload = closedPayload();
+
+    deliver(payload, sign(payload), "pull_request")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("ignored"));
+
+    verify(feedbackWorkflowService, never()).start(any());
   }
 }

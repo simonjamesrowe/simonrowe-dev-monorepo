@@ -1,7 +1,9 @@
 package com.simonrowe.factory.codereview.agent;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.simonrowe.factory.claude.ClaudeCliRunner;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFinding;
@@ -27,67 +29,20 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
 
   private static final int MAX_FINDINGS = 20;
 
-  /** Fields of the CLI result envelope that say why a run stopped. */
-  private static final List<String> RESULT_DETAIL_FIELDS =
-      List.of("subtype", "terminal_reason", "api_error_status");
-
-  /**
-   * Credentials Claude itself needs. Everything outside this set and {@link #PROCESS_ENVIRONMENT}
-   * is stripped before the agent runs, because the agent reads attacker-authored pull request
-   * branches.
-   */
-  private static final Set<String> SAFE_SECRET_ENVIRONMENT =
-      Set.of(
-          "ANTHROPIC_API_KEY",
-          "CLAUDE_CODE_OAUTH_TOKEN",
-          "ANTHROPIC_BASE_URL",
-          "AWS_ACCESS_KEY_ID",
-          "AWS_SECRET_ACCESS_KEY",
-          "AWS_SESSION_TOKEN",
-          "AWS_REGION",
-          "AWS_DEFAULT_REGION",
-          "GOOGLE_APPLICATION_CREDENTIALS");
-
-  /** Non-secret variables a child process needs to run at all. */
-  private static final Set<String> PROCESS_ENVIRONMENT =
-      Set.of(
-          "PATH",
-          "HOME",
-          "USER",
-          "LOGNAME",
-          "SHELL",
-          "PWD",
-          "TMPDIR",
-          "TZ",
-          "TERM",
-          "LANG",
-          "LC_ALL",
-          "LC_CTYPE",
-          "XDG_CONFIG_HOME",
-          "XDG_CACHE_HOME",
-          "XDG_DATA_HOME",
-          "XDG_RUNTIME_DIR",
-          "HTTP_PROXY",
-          "HTTPS_PROXY",
-          "NO_PROXY",
-          "http_proxy",
-          "https_proxy",
-          "no_proxy");
-
   private final CodeReviewProperties properties;
   private final GitWorkspaceFactory workspaceFactory;
-  private final ProcessRunner processRunner;
+  private final ClaudeCliRunner runner;
   private final ObjectMapper objectMapper;
   private final String schema;
 
   public ClaudeCliReviewEngine(
       final CodeReviewProperties properties,
       final GitWorkspaceFactory workspaceFactory,
-      final ProcessRunner processRunner,
+      final ClaudeCliRunner runner,
       final ObjectMapper objectMapper) {
     this.properties = properties;
     this.workspaceFactory = workspaceFactory;
-    this.processRunner = processRunner;
+    this.runner = runner;
     this.objectMapper = objectMapper;
     this.schema = loadSchema();
   }
@@ -98,82 +53,51 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
     try (GitWorkspaceFactory.Workspace workspace =
         workspaceFactory.create(pullRequest, heartbeat)) {
       heartbeat.accept("Starting Claude review");
-      ProcessRunner.ProcessResult process =
-          processRunner.run(
-              command(),
-              workspace.repository(),
-              prompt(pullRequest, workspace),
-              Map.of("CLAUDE_CODE_SKIP_PROMPT_HISTORY", "1"),
-              sensitiveEnvironmentVariables(),
-              properties.agent().timeout(),
+      JsonNode structured =
+          runner.runStructured(
+              new ClaudeCliRunner.Invocation(
+                  properties.agent().command(),
+                  properties.agent().model(),
+                  properties.agent().effort(),
+                  properties.agent().maxTurns(),
+                  properties.agent().timeout(),
+                  List.of("Read", "Glob", "Grep"),
+                  List.of("Read(./**)", "Glob", "Grep"),
+                  schema,
+                  prompt(pullRequest, workspace),
+                  workspace.repository()),
               heartbeat);
-      if (process.exitCode() != 0) {
+      ReviewReport raw;
+      try {
+        raw = objectMapper.treeToValue(structured, ReviewReport.class);
+      } catch (JsonProcessingException exception) {
         throw new IllegalStateException(
-            "Claude exited with " + process.exitCode() + ": " + failureDetail(process));
+            "Claude structured output did not match schema", exception);
       }
-      return parseReviewOutput(process.standardOutput(), workspace.changedFiles());
+      return postProcess(raw, workspace.changedFiles());
     }
   }
 
-  ReviewReport parseReviewOutput(final String output, final List<String> changedFiles) {
-    try {
-      JsonNode root = objectMapper.readTree(output);
-      JsonNode structured = root.path("structured_output");
-      if (structured.isMissingNode() || structured.isNull()) {
-        throw new IllegalStateException("Claude returned no structured_output");
+  ReviewReport postProcess(final ReviewReport raw, final List<String> changedFiles) {
+    Set<String> changed = new HashSet<>(changedFiles);
+    Map<String, ReviewFinding> unique = new LinkedHashMap<>();
+    for (ReviewFinding finding : raw.findings()) {
+      if (!isSafeChangedPath(finding.file(), changed) || finding.line() < 1) {
+        continue;
       }
-      ReviewReport raw = objectMapper.treeToValue(structured, ReviewReport.class);
-      Set<String> changed = new HashSet<>(changedFiles);
-      Map<String, ReviewFinding> unique = new LinkedHashMap<>();
-      for (ReviewFinding finding : raw.findings()) {
-        if (!isSafeChangedPath(finding.file(), changed) || finding.line() < 1) {
-          continue;
-        }
-        String key =
-            finding.file()
-                + ":"
-                + finding.line()
-                + ":"
-                + finding.title().toLowerCase(Locale.ROOT);
-        unique.putIfAbsent(key, finding);
-        if (unique.size() == MAX_FINDINGS) {
-          break;
-        }
+      String key =
+          finding.file()
+              + ":"
+              + finding.line()
+              + ":"
+              + finding.title().toLowerCase(Locale.ROOT);
+      unique.putIfAbsent(key, finding);
+      if (unique.size() == MAX_FINDINGS) {
+        break;
       }
-      List<ReviewFinding> findings = new ArrayList<>(unique.values());
-      return new ReviewReport(raw.summary(), normalizedVerdict(findings), findings);
-    } catch (IOException exception) {
-      throw new IllegalStateException("Unable to parse Claude structured output", exception);
     }
-  }
-
-  private List<String> command() {
-    return List.of(
-        properties.agent().command(),
-        "-p",
-        "--safe-mode",
-        "--strict-mcp-config",
-        "--tools",
-        "Read,Glob,Grep",
-        "--allowedTools",
-        "Read(./**)",
-        "Glob",
-        "Grep",
-        "--disallowedTools",
-        "mcp__*",
-        "--permission-mode",
-        "dontAsk",
-        "--no-session-persistence",
-        "--output-format",
-        "json",
-        "--json-schema",
-        schema,
-        "--model",
-        properties.agent().model(),
-        "--effort",
-        properties.agent().effort(),
-        "--max-turns",
-        Integer.toString(properties.agent().maxTurns()));
+    List<ReviewFinding> findings = new ArrayList<>(unique.values());
+    return new ReviewReport(raw.summary(), normalizedVerdict(findings), findings);
   }
 
   private String prompt(
@@ -223,28 +147,6 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
             changedFiles);
   }
 
-  private Set<String> sensitiveEnvironmentVariables() {
-    return sensitiveEnvironmentVariables(System.getenv().keySet());
-  }
-
-  /**
-   * Returns the variables to strip: everything the agent has no reason to see. This is an
-   * allowlist rather than a blocklist of suspicious names, because patterns miss real secrets —
-   * {@code DEPENDENCYTRACK_KEK}, {@code REDIS_AUTH} and {@code SALT} all match none of
-   * TOKEN/SECRET/PASSWORD/_KEY. Anything genuinely needed must be added to {@link
-   * #SAFE_SECRET_ENVIRONMENT} or {@link #PROCESS_ENVIRONMENT}, never to the worker environment
-   * alone.
-   */
-  static Set<String> sensitiveEnvironmentVariables(final Set<String> names) {
-    Set<String> removed = new HashSet<>();
-    for (String name : names) {
-      if (!SAFE_SECRET_ENVIRONMENT.contains(name) && !PROCESS_ENVIRONMENT.contains(name)) {
-        removed.add(name);
-      }
-    }
-    return removed;
-  }
-
   private static Verdict normalizedVerdict(final List<ReviewFinding> findings) {
     if (findings.stream().anyMatch(finding -> finding.severity() == Severity.CRITICAL)) {
       return Verdict.REQUEST_CHANGES;
@@ -272,42 +174,6 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
     }
     String sanitized = input.replace('\u0000', ' ').replaceAll("[\\r\\n]+", " ").trim();
     return abbreviate(sanitized, maximumLength);
-  }
-
-  /**
-   * Describes a non-zero exit. In {@code -p --output-format json} mode the CLI reports why it
-   * stopped as JSON on stdout and leaves stderr empty, so a stderr-only message is blank for every
-   * agent-side failure — exhausted turns, API errors, an unusable model. Read stdout first.
-   */
-  String failureDetail(final ProcessRunner.ProcessResult process) {
-    String stderr = sanitize(process.standardError(), 400);
-    String stdout = agentResultDetail(process.standardOutput());
-    if (stderr.isEmpty()) {
-      return stdout;
-    }
-    return stdout.isEmpty() ? "stderr: " + stderr : stdout + " | stderr: " + stderr;
-  }
-
-  private String agentResultDetail(final String standardOutput) {
-    JsonNode root;
-    try {
-      root = objectMapper.readTree(standardOutput);
-    } catch (IOException exception) {
-      return sanitize(standardOutput, 800);
-    }
-    List<String> detail = new ArrayList<>();
-    for (String field : RESULT_DETAIL_FIELDS) {
-      JsonNode value = root.path(field);
-      if (value.isValueNode() && !value.isNull() && !value.asText().isBlank()) {
-        detail.add(field + "=" + value.asText());
-      }
-    }
-    for (JsonNode error : root.path("errors")) {
-      detail.add("error=" + error.asText());
-    }
-    return detail.isEmpty()
-        ? sanitize(standardOutput, 800)
-        : sanitize(String.join(", ", detail), 800);
   }
 
   private static String abbreviate(final String value, final int maximumLength) {

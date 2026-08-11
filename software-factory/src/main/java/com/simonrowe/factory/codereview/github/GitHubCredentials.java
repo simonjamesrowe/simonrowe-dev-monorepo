@@ -152,14 +152,25 @@ public class GitHubCredentials {
 
   private CachedToken mintInstallationToken(final long installationId, final Instant now) {
     try {
-      // `pull_requests` must be write, not read. The advisory comment goes to the issue
-      // comments endpoint, but GitHub governs comments on a pull request by the pull request
-      // permission, not the issue one — a token holding issues:write and pull_requests:read
-      // clones and reviews fine and then fails the publish with 403.
+      // `pull_requests` must be write, not read: the code-review path publishes a single
+      // top-level review via the Reviews API, and the feedback loop opens guidance PRs — both
+      // are governed by the pull request permission, not the issue one. `contents` must be
+      // write, not read: the feedback loop's `GuidanceWorkspaceFactory.commitAndPush` pushes
+      // guidance branches, and a token minted with `contents:read` gets a 403 on every push.
+      // Requesting `contents: write` here does NOT get silently capped/narrowed to whatever the
+      // App's own settings allow — GitHub's access-tokens endpoint 422s the whole request if the
+      // requested permissions exceed what the installation was actually granted, and this method
+      // turns any non-2xx response into an IllegalStateException, so an un-bumped App permission
+      // fails token minting outright. This same token also serves the code-review path, which
+      // only reads content — that widening is deliberate, see the design spec's accepted-risk
+      // note on the internet-facing process holding a write-capable credential. Because both
+      // paths share this one method, the App's Contents permission must be bumped to read & write
+      // *before* deploying an image that requests it (see docs/runbooks/software-factory.md's
+      // rollout order) — otherwise every token mint 422s and both code-review and feedback fail.
       ObjectNode permissions =
           objectMapper
               .createObjectNode()
-              .put("contents", "read")
+              .put("contents", "write")
               .put("issues", "write")
               .put("pull_requests", "write");
       ObjectNode payload = objectMapper.createObjectNode().set("permissions", permissions);

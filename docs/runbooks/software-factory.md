@@ -94,7 +94,11 @@ Create a private, organization-owned GitHub App named `simonrowe-code-reviewer`:
   `software-factory`, which reads it at boot, or every delivery fails signature
   verification with `401`.
 - Repository permissions:
-  - Contents: read
+  - Contents: read & write — required by the review feedback loop, which opens guidance PRs
+    against agent-setup and/or the source repo; see [Review feedback loop](#review-feedback-loop)
+    below. `GitHubCredentials` requests `contents: write` on every installation token mint —
+    for both the code-review and feedback paths, since they share one method — so this
+    permission must be granted before any image that mints tokens is deployed, not after.
   - Issues: read and write
   - Pull requests: read and write — **write is required**, even though the
     advisory comment is posted to the issue comments endpoint. GitHub governs
@@ -449,3 +453,67 @@ fails the *last* Activity on `GitHub API returned 403 for POST
 request need `pull_requests: write`, not `issues: write`. Note the dry run cannot
 catch this one — `publish:false` never reaches the publish Activity — so a
 webhook delivery remains the only test of the publish path.
+
+## Review feedback loop
+
+On PR close, `review-feedback-{owner}-{repo}-{pr}` workflow on the `review-feedback` task queue harvests the conversation (Haiku), writes `software_factory.review_learnings` in Mongo, and — when lessons exist — opens `agent-feedback`-labeled guidance PRs (Sonnet) against agent-setup and/or the source repo. PRs labeled `agent-feedback` are never harvested (loop guard). Master switch `FACTORY_FEEDBACK_ENABLED`.
+
+### One-time GitHub App changes
+
+The existing `simonrowe-code-reviewer` GitHub App must be updated to permit the feedback loop to open guidance PRs:
+
+- Bump the **Contents** permission from **read** to **read and write** in the App settings: org settings → Developer settings → GitHub Apps → simonrowe-code-reviewer → Permissions.
+- Re-approve the permission request when GitHub prompts you on the next deployment or workflow run.
+- Install the App on the `simonjamesrowe/agent-setup` repository, if not already installed. The App must be installed on both the source repository being reviewed and the agent-setup target to write guidance PRs.
+
+**Accepted risk:** Permitting write access to Contents allows the distillation Workflow to create guidance PRs. All mutations are submitted as PRs (never pushed directly), gated by the allowlist of files the distiller may touch, and guarded by the loop-prevention label.
+
+### Rollout order
+
+1. Perform the one-time GitHub App changes above — **before** deploying the new image, not after.
+   `GitHubCredentials.mintInstallationToken` requests `contents: write` on every installation
+   token it mints, for both the code-review and feedback paths (they share this one method), as
+   soon as the new image starts running. GitHub's access-tokens endpoint 422s that request until
+   the App's own Contents permission has actually been bumped to read & write, which fails token
+   minting outright — a stale App permission plus the new image means every review AND every
+   feedback run fails, a full outage of the review feature, not just the new one.
+2. Deploy the new image with `FACTORY_FEEDBACK_ENABLED` unset (off) — this ships the inline-reviews
+   change too; verify a new PR still gets an inline review.
+3. Dry run from the Pi:
+   ```bash
+   curl -X POST https://<internal>/api/feedback \
+     -H 'X-Factory-Token: …' \
+     -d '{"owner":"simonjamesrowe","repository":"simonrowe-dev-monorepo","pullNumber":<a real closed PR>,"dryRun":true}'
+   ```
+   This command must be run from inside the container network (`docker exec` into the container); the path is not routed by nginx. Check the Mongo record:
+   ```bash
+   docker exec simonrowe-dev-monorepo-mongodb-1 mongosh software_factory --eval 'db.review_learnings.find().pretty()'
+   ```
+4. Set `FACTORY_FEEDBACK_ENABLED=true` in `.env` and `./scripts/restart-prod.sh`.
+
+### Verification
+
+The worker half must join the `review-feedback` task queue and register a poller:
+
+```bash
+docker run --rm --network simonrowe-dev-monorepo_default \
+  temporalio/admin-tools:1.31.2 \
+  temporal task-queue describe --address temporal:7233 \
+  --namespace default --task-queue review-feedback
+```
+
+Expect one `workflow` and one `activity` poller. Zero pollers means the webhook is live but feedback workflows will never run (same quiet-failure warning as `code-review`).
+
+### Failure modes
+
+- Distillation `FAILED` keeps the lessons in Mongo and sets `distillation.status = FAILED` on
+  the `review_learnings` record — re-drive with the manual endpoint (`dryRun:false`). The
+  workflow id (`review-feedback-{owner}-{repo}-{pr}`) is restartable after a genuine failure
+  (`WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE_FAILED_ONLY`), so the re-drive actually runs.
+- A `409` from `POST /api/feedback` means the workflow id is still running, or it already
+  completed successfully — `ALLOW_DUPLICATE_FAILED_ONLY` only permits restarting an id that
+  failed. If it's still running, wait and retry. If it already completed, there is nothing to
+  re-drive: a successful harvest for a given PR number is final by design (the reopen-then-reclose
+  loop guard this workflow id shape exists for).
+- `403` on push = Contents permission not bumped or App not installed on the target repo.
+- Allowlist violation in logs = the distiller touched files it must not (the push never happened — inspect, adjust prompt, re-drive).

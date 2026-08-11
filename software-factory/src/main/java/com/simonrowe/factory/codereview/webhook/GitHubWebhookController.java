@@ -6,6 +6,10 @@ import com.simonrowe.factory.codereview.api.ReviewAccepted;
 import com.simonrowe.factory.codereview.api.ReviewWorkflowService;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
+import com.simonrowe.factory.feedback.api.FeedbackAccepted;
+import com.simonrowe.factory.feedback.api.FeedbackWorkflowService;
+import com.simonrowe.factory.feedback.config.FeedbackProperties;
+import com.simonrowe.factory.feedback.domain.FeedbackRequest;
 import java.io.IOException;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
@@ -28,16 +32,22 @@ public class GitHubWebhookController {
   private final WebhookSignatureVerifier signatureVerifier;
   private final ReviewWorkflowService workflowService;
   private final ObjectMapper objectMapper;
+  private final FeedbackWorkflowService feedbackWorkflowService;
+  private final FeedbackProperties feedbackProperties;
 
   public GitHubWebhookController(
       final CodeReviewProperties properties,
       final WebhookSignatureVerifier signatureVerifier,
       final ReviewWorkflowService workflowService,
-      final ObjectMapper objectMapper) {
+      final ObjectMapper objectMapper,
+      final FeedbackWorkflowService feedbackWorkflowService,
+      final FeedbackProperties feedbackProperties) {
     this.properties = properties;
     this.signatureVerifier = signatureVerifier;
     this.workflowService = workflowService;
     this.objectMapper = objectMapper;
+    this.feedbackWorkflowService = feedbackWorkflowService;
+    this.feedbackProperties = feedbackProperties;
   }
 
   @PostMapping
@@ -60,6 +70,9 @@ public class GitHubWebhookController {
       return ResponseEntity.badRequest().body(new WebhookResponse("malformed"));
     }
     String action = payload.path("action").asText();
+    if ("closed".equals(action)) {
+      return handleClosed(payload);
+    }
     JsonNode pullRequest = payload.path("pull_request");
     if (!ACTIONS.contains(action)
         || (pullRequest.path("draft").asBoolean(false) && !"ready_for_review".equals(action))) {
@@ -85,6 +98,41 @@ public class GitHubWebhookController {
                 installationId > 0 ? installationId : null,
                 true));
     return ResponseEntity.accepted().body(accepted);
+  }
+
+  private ResponseEntity<?> handleClosed(final JsonNode payload) {
+    JsonNode pullRequest = payload.path("pull_request");
+    String owner = payload.path("repository").path("owner").path("login").asText();
+    String repository = payload.path("repository").path("name").asText();
+    int pullNumber = pullRequest.path("number").asInt();
+    long installationId = payload.path("installation").path("id").asLong();
+    if (owner.isBlank() || repository.isBlank() || pullNumber < 1) {
+      return ResponseEntity.badRequest().body(new WebhookResponse("malformed"));
+    }
+    if (!feedbackProperties.enabled()
+        || hasSkipLabel(pullRequest)
+        || !repoAllowed(owner + "/" + repository)) {
+      return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
+    }
+    FeedbackAccepted accepted =
+        feedbackWorkflowService.start(
+            new FeedbackRequest(
+                owner, repository, pullNumber,
+                installationId > 0 ? installationId : null, false));
+    return ResponseEntity.accepted().body(accepted);
+  }
+
+  private boolean hasSkipLabel(final JsonNode pullRequest) {
+    for (JsonNode label : pullRequest.path("labels")) {
+      if (feedbackProperties.skipLabel().equals(label.path("name").asText())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean repoAllowed(final String slug) {
+    return feedbackProperties.repos().isEmpty() || feedbackProperties.repos().contains(slug);
   }
 
   private JsonNode readPayload(final byte[] body) {
