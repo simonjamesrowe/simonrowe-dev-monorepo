@@ -153,10 +153,18 @@ joined the queue, not that the feature is enabled. The schedule log line in step
 **(e) Start one dry run — directly, not through the schedule.**
 
 A dry run does everything except open the pull request: it reads findings, runs
-the agent, validates the changed paths, and force-pushes the branch. (It stops
-after the push rather than before it because `ci.yml` triggers on `pull_request`
-only, so the branch alone builds nothing, and the diff is then sitting on the
-branch for you to read.)
+the agent, validates the changed paths, force-pushes the branch, and — this is
+the part that surprises people — **records this run's unfixable components in
+`unfixable_findings`**, exactly as a real run would. (It stops after the push
+rather than before it because `ci.yml` triggers on `pull_request` only, so the
+branch alone builds nothing, and the diff is then sitting on the branch for you
+to read.)
+
+So "dry" means "opens no pull request", not "writes nothing". Those suppression
+rows make later *real* runs skip those components until their finding set
+changes, which can make your first real run look like it did less than expected.
+If a dry run suppressed something you would rather it retried, clear the row —
+see [Unfixable findings](#unfixable-findings) below.
 
 The Temporal UI's **Trigger** action cannot do this. `ScheduleHandle.trigger()`
 takes no workflow arguments, so Trigger re-runs the schedule's *configured*
@@ -354,6 +362,10 @@ iteration is agent spend plus an hour of a blocked queue.
   and Compose restarts the container. With the feature disabled it makes no
   Temporal call at all, which is why the flag gates the initializer rather than
   the initializer swallowing errors.
-- **A dry run leaves the branch pushed.** That is harmless — the next real run
-  force-pushes over it — but if you want it gone, delete
-  `chore/dependency-cve-fixes` on the remote.
+- **A dry run leaves two things behind, not none.** The pushed branch is
+  harmless — the next real run force-pushes over it — but if you want it gone,
+  delete `chore/dependency-cve-fixes` on the remote. The `unfixable_findings`
+  rows it wrote are the ones that matter: they make later real runs skip those
+  components until their finding set changes. Clear a row (see
+  [Unfixable findings](#unfixable-findings)) if you want the next run to try it
+  again.
