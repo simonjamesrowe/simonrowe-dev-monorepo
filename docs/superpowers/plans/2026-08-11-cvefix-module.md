@@ -19,7 +19,7 @@
 - Dependency-Track projects in scope: `simonrowe-dev/backend`, `simonrowe-dev/frontend`. Container-image projects are out of scope.
 - Branch is the fixed `chore/dependency-cve-fixes`, force-pushed. Never generate a dated branch name.
 - Pull requests are **not** drafts (the code-review bot ignores drafts) and are never auto-merged.
-- Changed-path allowlist, exactly: `backend/build.gradle.kts`, `gradle/libs.versions.toml`, `frontend/package.json`, `frontend/package-lock.json`.
+- Changed-path allowlist, exactly: `backend/build.gradle.kts`, `gradle/libs.versions.toml`, `frontend/package.json`, `frontend/package-lock.json`. **Expressed once in code** as `CveFixAllowedFiles.ALL` (Task 2); the agent's tool grant (Task 6) and the activity's path validation (Task 9) both read that constant rather than re-listing it. The `file` enum in `cve-fix-schema.json` is the one intentional duplicate — JSON Schema cannot reference a Java constant — and must be kept in sync by hand.
 - Conventional commits, no Jira references, no Claude attribution.
 
 ## File Structure
@@ -33,6 +33,8 @@ software-factory/src/main/java/com/simonrowe/factory/
     config/
       CveFixProperties.java               # Task 2
       CveFixTaskQueues.java               # Task 2
+      CveFixAllowedFiles.java             # Task 2 — the changed-path allowlist, once
+      CveFixBeans.java                    # Task 3 — exposes the nested DependencyTrack record
     domain/
       Finding.java                        # Task 3
       ComponentFindings.java              # Task 3
@@ -43,6 +45,7 @@ software-factory/src/main/java/com/simonrowe/factory/
       CveFixPhase.java                    # Task 2
       CveFixProgress.java                 # Task 2
       CveFixResult.java                   # Task 2
+      CveFixRequest.java                  # Task 10 — workflow input, carries the CI settings
       CiOutcome.java                      # Task 8
     dependencytrack/
       DependencyTrackClient.java          # Task 3
@@ -58,9 +61,10 @@ software-factory/src/main/java/com/simonrowe/factory/
       ClaudeCliFixEngine.java             # Task 6
     github/
       CveFixPrGateway.java                # Task 7
+      CveFixPrBodyRenderer.java           # Task 9 — FixSummary -> PR title and body
       CiStatusGateway.java                # Task 8
     workflow/
-      CveFixWorkflow.java                 # Task 9
+      CveFixWorkflow.java                 # Task 10
       CveFixWorkflowImpl.java             # Task 10
       CveFixActivities.java               # Task 9
       CveFixActivitiesImpl.java           # Task 9
@@ -80,13 +84,13 @@ Each task below ends with a green `:software-factory:check` and a commit.
 - Create: `software-factory/src/main/java/com/simonrowe/factory/git/RepositoryWorkspace.java`
 - Create: `software-factory/src/main/java/com/simonrowe/factory/git/RepositoryWorkspaceFactory.java`
 - Modify: `software-factory/src/main/java/com/simonrowe/factory/feedback/agent/GuidanceWorkspaceFactory.java` (delete the extracted parts, delegate)
-- Modify: `software-factory/src/test/java/com/simonrowe/factory/feedback/agent/GuidanceWorkspaceFactoryTest.java`
+- Delete: `software-factory/src/test/java/com/simonrowe/factory/feedback/agent/GuidanceWorkspaceFactoryTest.java` — all four of its tests cover methods that move in this task, so once they are moved the class is empty. Move the tests into `RepositoryWorkspaceFactoryTest`, then delete the file; an empty test class is worse than none.
 - Create: `software-factory/src/test/java/com/simonrowe/factory/git/RepositoryWorkspaceFactoryTest.java`
 
 **Interfaces:**
 - Consumes: `ProcessRunner.run(List<String>, Path, String, Map<String,String>, Set<String>, Duration, Consumer<String>)`, `GitHubCredentials.accessToken(Long)`, `GitWorkspaceFactory.basicAuthorizationHeader(String)`.
 - Produces, used by Tasks 9 and 10:
-  - `RepositoryWorkspace` — nested `public static final class` implementing `AutoCloseable`, with `Path repository()`, `String defaultBranch()`, `void close()`.
+  - `RepositoryWorkspace` — a top-level `public final class` in its own file (Step 3), implementing `AutoCloseable`, with `Path repository()`, `String defaultBranch()`, `void close()`. Not nested: Checkstyle's `OneTopLevelClass` and every later import assume its own file.
   - `RepositoryWorkspaceFactory.create(String owner, String repository, Long installationId, Path workspaceRoot, String prefix, Consumer<String> heartbeat) -> RepositoryWorkspace`
   - `RepositoryWorkspaceFactory.changedPaths(RepositoryWorkspace, Consumer<String>) -> List<String>`
   - `RepositoryWorkspaceFactory.validateAllowedPaths(List<String> changedPaths, List<String> allowedGlobs) -> void` (static, throws `IllegalStateException`)
@@ -139,7 +143,10 @@ class RepositoryWorkspaceFactoryTest {
   void acceptsChangedPathsInsideTheAllowlist() {
     RepositoryWorkspaceFactory.validateAllowedPaths(
         List.of("gradle/libs.versions.toml", "frontend/package-lock.json"),
-        List.of("gradle/libs.versions.toml", "frontend/package.json", "frontend/package-lock.json"));
+        List.of(
+            "gradle/libs.versions.toml",
+            "frontend/package.json",
+            "frontend/package-lock.json"));
   }
 
   @Test
@@ -466,7 +473,15 @@ Delete the now-duplicated `parsePorcelain`, `validateAllowedPaths`, `runGit`, `d
 
 Run: `grep -rn "GuidanceWorkspace\b\|validateAllowedPaths\|parsePorcelain" software-factory/src/`
 
-Update each hit. Expect callers in `ClaudeCliDistillEngine`, `FeedbackActivitiesImpl` and `GuidanceWorkspaceFactoryTest`. Move the tests for the moved methods out of `GuidanceWorkspaceFactoryTest` into `RepositoryWorkspaceFactoryTest` rather than deleting them.
+Update each hit. The callers are, verified against the current tree:
+
+- `FeedbackActivitiesImpl` (two references, at the `GuidanceWorkspace` type in the workspace lifecycle and at the `validateAllowedPaths` call).
+- `GuidanceWorkspaceFactoryTest` (four references — every test in the file).
+- **`FeedbackActivitiesImplTest`** — the largest set, around ten references, including several `mock(GuidanceWorkspaceFactory.GuidanceWorkspace.class)` sites. Each of those becomes `mock(RepositoryWorkspace.class)`. Do not overlook this file: it does not import `GuidanceWorkspaceFactory` by that name everywhere, so a naive search-and-replace on the outer class misses the mocks.
+
+`ClaudeCliDistillEngine` is **not** a caller — it takes `target.workspace()` as a `Path` and references none of the moved symbols. Do not go looking for changes there.
+
+Move the tests for the moved methods out of `GuidanceWorkspaceFactoryTest` into `RepositoryWorkspaceFactoryTest` rather than deleting them, then delete the now-empty `GuidanceWorkspaceFactoryTest`.
 
 - [ ] **Step 8: Run the whole module's checks**
 
@@ -497,6 +512,7 @@ branch exists."
 **Files:**
 - Create: `.../cvefix/config/CveFixProperties.java`
 - Create: `.../cvefix/config/CveFixTaskQueues.java`
+- Create: `.../cvefix/config/CveFixAllowedFiles.java`
 - Create: `.../cvefix/domain/CveFixStatus.java`, `CveFixPhase.java`, `CveFixProgress.java`, `CveFixResult.java`
 - Modify: `software-factory/src/main/resources/application.yml`
 - Modify: `software-factory/src/main/java/com/simonrowe/factory/FactoryApplication.java` (only if `@ConfigurationPropertiesScan` needs the new package — check first)
@@ -506,10 +522,22 @@ branch exists."
 - Consumes: nothing.
 - Produces:
   - `CveFixTaskQueues.CVE_FIX` = `"cve-fix"`
-  - `CveFixProperties` record with accessors `enabled()`, `owner()`, `repository()`, `branch()`, `baseBranch()`, `installationId()`, `gitAuthorName()`, `gitAuthorEmail()`, `workspaceRoot()`, `dependencyTrack()`, `agent()`, `ci()`
+  - `CveFixAllowedFiles.ALL` — the four-entry changed-path allowlist, the single source for Tasks 6 and 9
+  - `CveFixProperties` record with accessors `enabled()`, `owner()`, `repository()`, `branch()`, `baseBranch()`, `gitAuthorName()`, `gitAuthorEmail()`, `workspaceRoot()`, `dependencyTrack()`, `agent()`, `ci()`
   - `CveFixProperties.DependencyTrack` with `baseUrl()`, `apiKey()`, `projects()`, `requestTimeout()`
   - `CveFixProperties.Agent` with `command()`, `model()`, `effort()`, `maxTurns()`, `timeout()`
-  - `CveFixProperties.Ci` with `pollInterval()`, `repairBudget()`, `maxWait()`
+  - `CveFixProperties.Ci` with `pollInterval()`, `repairBudget()`, `maxWait()`, `advisoryChecks()`
+
+**There is deliberately no `installationId` property.** The GitHub installation id is resolved at
+run time by the activity, from `GitHubCredentials.installationId(owner, repository)` (Task 9). A
+configured id would be a second source of truth that nothing populates, and a null one silently
+degrades `GitHubCredentials.accessToken(null)` to the static `GITHUB_TOKEN` — which the
+`software-factory` compose service does not set, giving an anonymous clone and a `403` on push.
+
+**The three `ci` values are also carried on `CveFixRequest`** (Task 10). Workflow code cannot read
+them from this bean: `@WorkflowImpl` classes are instantiated by the Temporal SDK, not Spring, so
+they have no injected dependencies at all. `CveFixScheduleInitializer` (Task 11) holds this bean
+and copies `pollInterval`, `repairBudget` and `maxWait` into the request it schedules.
   - `CveFixStatus` enum: `COMPLETED`, `NO_FINDINGS`, `SKIPPED_PR_OPEN`, `NOTHING_FIXABLE`, `CI_UNRESOLVED`, `FAILED`
   - `CveFixPhase` enum: `ACCEPTED`, `CHECKING_PR`, `FETCHING`, `PREPARING`, `PROPOSING`, `PUSHING`, `AWAITING_CI`, `REPAIRING`, `COMPLETED`, `SKIPPED`, `FAILED`
   - `CveFixProgress(CveFixPhase phase, String detail, Integer count)` with a static `accepted()`
@@ -546,6 +574,12 @@ class CveFixPropertiesTest {
           assertThat(properties.baseBranch()).isEqualTo("main");
           assertThat(properties.ci().repairBudget()).isEqualTo(3);
           assertThat(properties.ci().pollInterval()).isEqualTo(Duration.ofMinutes(3));
+          // 3h, not 45m: one repair iteration costs up to agent.timeout (15m) plus a full
+          // CI cycle, so a 45m cap would truncate the documented budget of 3 repairs.
+          assertThat(properties.ci().maxWait()).isEqualTo(Duration.ofHours(3));
+          // The promptfoo evals job is continue-on-error advisory; it must never be able to
+          // decide the build is RED.
+          assertThat(properties.ci().advisoryChecks()).containsExactly("evaluate");
           assertThat(properties.dependencyTrack().projects())
               .containsExactly("simonrowe-dev/backend", "simonrowe-dev/frontend");
         });
@@ -592,7 +626,7 @@ Run: `cd software-factory && ../gradlew :software-factory:test --tests '*CveFixP
 
 Expected: compilation failure — `package com.simonrowe.factory.cvefix.config does not exist`.
 
-- [ ] **Step 3: Create the task queue constant**
+- [ ] **Step 3: Create the task queue constant and the allowlist constant**
 
 ```java
 package com.simonrowe.factory.cvefix.config;
@@ -602,6 +636,34 @@ public final class CveFixTaskQueues {
   public static final String CVE_FIX = "cve-fix";
 
   private CveFixTaskQueues() {
+  }
+}
+```
+
+```java
+package com.simonrowe.factory.cvefix.config;
+
+import java.util.List;
+
+/**
+ * The only files a CVE-fix run may change, in one place.
+ *
+ * <p>Read by the agent's tool grant (Task 6) and by the activity's changed-path validation
+ * (Task 9), so the two cannot drift. The {@code file} enum in {@code cve-fix-schema.json} is the
+ * one intentional duplicate — JSON Schema cannot reference a Java constant — and must be kept in
+ * sync by hand.
+ */
+public final class CveFixAllowedFiles {
+
+  /** Repository-relative paths, exactly as {@code git status --porcelain} reports them. */
+  public static final List<String> ALL =
+      List.of(
+          "gradle/libs.versions.toml",
+          "backend/build.gradle.kts",
+          "frontend/package.json",
+          "frontend/package-lock.json");
+
+  private CveFixAllowedFiles() {
   }
 }
 ```
@@ -616,7 +678,13 @@ import java.time.Duration;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** Runtime configuration for the scheduled CVE-fix flow. */
+/**
+ * Runtime configuration for the scheduled CVE-fix flow.
+ *
+ * <p>There is deliberately no installation id here: the activity resolves it from
+ * {@code GitHubCredentials.installationId(owner, repository)} at run time, so there is no
+ * configured value that can be left null and silently degrade every git operation to anonymous.
+ */
 @ConfigurationProperties("factory.cvefix")
 public record CveFixProperties(
     boolean enabled,
@@ -624,7 +692,6 @@ public record CveFixProperties(
     String repository,
     String branch,
     String baseBranch,
-    Long installationId,
     String gitAuthorName,
     String gitAuthorEmail,
     Path workspaceRoot,
@@ -687,20 +754,33 @@ public record CveFixProperties(
 
   /**
    * CI polling. {@code repairBudget} bounds how many times the agent may react to a red build
-   * before the run gives up and leaves the pull request open for a human.
+   * before the run gives up and leaves the pull request open for a human. {@code advisoryChecks}
+   * names check runs whose conclusion must never make the build RED.
    */
-  public record Ci(Duration pollInterval, int repairBudget, Duration maxWait) {
+  public record Ci(
+      Duration pollInterval, int repairBudget, Duration maxWait, List<String> advisoryChecks) {
 
     public Ci {
       // 3 minutes keeps unauthenticated GitHub API use at ~20 requests/hour, inside the
       // 60/hour per-IP limit that route is subject to. See CiStatusGateway.
       pollInterval = pollInterval == null ? Duration.ofMinutes(3) : pollInterval;
       repairBudget = repairBudget == 0 ? 3 : repairBudget;
-      maxWait = maxWait == null ? Duration.ofMinutes(45) : maxWait;
+      // 3h, not 45m: one repair iteration costs up to agent.timeout (15m) plus a whole CI
+      // cycle, so repairBudget + 1 iterations do not fit in 45 minutes and the wall-clock cap
+      // would silently truncate the documented budget.
+      maxWait = maxWait == null ? Duration.ofHours(3) : maxWait;
+      // The promptfoo evals job is continue-on-error advisory. Job-level continue-on-error
+      // keeps the *run* from failing; it is not documented to rewrite the check-run
+      // conclusion, so this list — not that setting — is what guarantees an advisory job
+      // cannot burn the repair budget. See CiStatusGateway and Task 8 Step 4.
+      advisoryChecks =
+          advisoryChecks == null || advisoryChecks.isEmpty()
+              ? List.of("evaluate")
+              : List.copyOf(advisoryChecks);
     }
 
     static Ci defaults() {
-      return new Ci(null, 0, null);
+      return new Ci(null, 0, null, null);
     }
   }
 }
@@ -723,7 +803,11 @@ public enum CveFixStatus {
   SKIPPED_PR_OPEN,
   /** Findings existed but the agent could not produce a single bump. */
   NOTHING_FIXABLE,
-  /** The repair budget ran out with CI still red. The pull request is left open. */
+  /**
+   * CI never went green. Either the repair budget ran out, or {@code ci.maxWait} elapsed first;
+   * the two cases are distinguished by {@link CveFixResult#detail()}, not by the status. The pull
+   * request is left open either way, which makes every later run hit {@link #SKIPPED_PR_OPEN}.
+   */
   CI_UNRESOLVED,
   /** The run failed for an operational reason: Dependency-Track down, git error, agent error. */
   FAILED
@@ -784,7 +868,10 @@ Append under the existing `factory:` key, after the `feedback:` block:
     repository: simonrowe-dev-monorepo
     branch: chore/dependency-cve-fixes
     base-branch: main
-    installation-id: ${FACTORY_CVEFIX_INSTALLATION_ID:}
+    # No installation-id key: the activity resolves it from
+    # GitHubCredentials.installationId(owner, repository) at run time. A configured-but-empty
+    # value would make accessToken(null) fall back to the static GITHUB_TOKEN, which this
+    # service does not set — anonymous clone, 403 on push.
     git-author-name: simonrowe-code-reviewer[bot]
     git-author-email: simonrowe-code-reviewer[bot]@users.noreply.github.com
     workspace-root: ${FACTORY_WORKSPACE_ROOT:${java.io.tmpdir}/software-factory}
@@ -808,10 +895,17 @@ Append under the existing `factory:` key, after the `feedback:` block:
       # limit. Do not lower without moving CiStatusGateway to the installation token.
       poll-interval: ${FACTORY_CVEFIX_POLL_INTERVAL:3m}
       repair-budget: ${FACTORY_CVEFIX_REPAIR_BUDGET:3}
-      max-wait: ${FACTORY_CVEFIX_MAX_WAIT:45m}
+      # 3h, not 45m: repair-budget + 1 iterations, each up to agent.timeout plus a full CI
+      # cycle, do not fit in 45 minutes. A shorter cap silently truncates the budget.
+      max-wait: ${FACTORY_CVEFIX_MAX_WAIT:3h}
+      # Check runs that may never make the build RED. The promptfoo evals job is
+      # continue-on-error advisory: if it ever reports conclusion: failure, every run would
+      # burn the whole repair budget on it and end CI_UNRESOLVED, blocking all later runs.
+      advisory-checks:
+        - evaluate
 ```
 
-Also add `com.simonrowe.factory.cvefix.workflow` to the existing `spring.temporal.workers-auto-discovery.workflow-packages` list.
+Do **not** add `com.simonrowe.factory.cvefix.workflow` to `spring.temporal.workers-auto-discovery.workflow-packages` yet — that package does not exist until Task 9, and no `@WorkflowImpl` lives in it until Task 10, which is where the list is edited.
 
 - [ ] **Step 7: Confirm properties are picked up by the application**
 
@@ -844,6 +938,7 @@ inside the 60/hour per-IP limit."
 **Files:**
 - Create: `.../cvefix/domain/Finding.java`, `ComponentFindings.java`
 - Create: `.../cvefix/dependencytrack/DependencyTrackClient.java`
+- Create: `.../cvefix/config/CveFixBeans.java` (Step 4 — without it `DependencyTrackClient` cannot autowire)
 - Create: `software-factory/src/test/java/com/simonrowe/factory/cvefix/dependencytrack/DependencyTrackClientTest.java`
 
 **Interfaces:**
@@ -868,6 +963,8 @@ Three rules that matter:
 3. **Fail loudly, never partially.** If any in-scope project errors or is missing, throw. Dependency-Track shares `langfuse-db` with Langfuse, so it can be down independently; opening a pull request from half a finding set would silently under-report.
 
 `fingerprint()` is the suppression key used in Task 5: the component PURL plus its sorted vulnerability ids. Sorting matters — Dependency-Track's array order is not stable, and an unsorted fingerprint would make every run look like new information.
+
+**This method is the only producer of a fingerprint.** The agent is never asked to emit one, and `cve-fix-schema.json` has no `fingerprint` field: a model-emitted string compared against a Java-computed one would differ on any deviation, and every component would look like new information forever — exactly the failure the sorting note above warns about. Task 5's `record(...)` looks the value up from the matching `ComponentFindings`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -963,7 +1060,11 @@ class DependencyTrackClientTest {
 
   @Test
   void toleratesAMissingRecommendation() {
-    responses.put("/api/v1/project", """[{"name":"simonrowe-dev/backend","uuid":"u1"}]""");
+    responses.put(
+        "/api/v1/project",
+        """
+        [{"name":"simonrowe-dev/backend","uuid":"u1"}]
+        """);
     responses.put(
         "/api/v1/finding/project/u1",
         """
@@ -977,7 +1078,11 @@ class DependencyTrackClientTest {
 
   @Test
   void throwsWhenAnInScopeProjectIsMissing() {
-    responses.put("/api/v1/project", """[{"name":"simonrowe-dev/frontend","uuid":"u9"}]""");
+    responses.put(
+        "/api/v1/project",
+        """
+        [{"name":"simonrowe-dev/frontend","uuid":"u9"}]
+        """);
 
     assertThatThrownBy(() -> client().findings())
         .isInstanceOf(IllegalStateException.class)
@@ -986,7 +1091,11 @@ class DependencyTrackClientTest {
 
   @Test
   void throwsWhenDependencyTrackReturnsAnError() {
-    responses.put("/api/v1/project", """[{"name":"simonrowe-dev/backend","uuid":"u1"}]""");
+    responses.put(
+        "/api/v1/project",
+        """
+        [{"name":"simonrowe-dev/backend","uuid":"u1"}]
+        """);
     statuses.put("/api/v1/finding/project/u1", 503);
 
     assertThatThrownBy(() -> client().findings())
@@ -1049,6 +1158,7 @@ public record Finding(
 package com.simonrowe.factory.cvefix.domain;
 
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -1066,9 +1176,14 @@ public record ComponentFindings(
     findings = findings == null ? List.of() : List.copyOf(findings);
   }
 
-  /** Groups findings by component PURL, preserving a stable component order. */
+  /**
+   * Groups findings by component PURL, returned sorted by PURL.
+   *
+   * <p>The order is the sort, not the input order: Dependency-Track's array order is not stable,
+   * so a run-to-run-stable prompt and a stable set of grouped components need an explicit sort.
+   * {@code LinkedHashMap} only keeps the intermediate grouping deterministic while it is built.
+   */
   public static List<ComponentFindings> group(final List<Finding> findings) {
-    // Requires: import java.util.LinkedHashMap;
     Map<String, List<Finding>> byPurl =
         findings.stream()
             .collect(
@@ -1255,7 +1370,7 @@ the suppression key is stable across runs."
 **Interfaces:**
 - Consumes: `CveFixStatus`, `ComponentFindings.fingerprint()`.
 - Produces:
-  - `CveFixRunRecord(String id, String workflowId, Instant startedAt, CveFixStatus status, int findingsSeen, List<String> bumps, String prUrl, int ciAttempts, String detail)`
+  - `CveFixRunRecord(String id, String workflowId, Instant startedAt, CveFixStatus status, int findingsSeen, List<String> bumps, String prUrl, int ciAttempts, String detail)` with `static String idFor(String workflowId)`
   - `CveFixRunRepository extends MongoRepository<CveFixRunRecord, String>`
   - `UnfixableFindingRecord(String id, String purl, String fingerprint, List<String> vulnerabilityIds, String reason, Instant recordedAt)` with `static String idFor(String purl)`
   - `UnfixableFindingRepository extends MongoRepository<UnfixableFindingRecord, String>` with `Optional<UnfixableFindingRecord> findByPurl(String purl)`
@@ -1264,7 +1379,9 @@ the suppression key is stable across runs."
 
 `software_factory` is the factory's own database and does **not** use Mongock — index creation is an `ApplicationRunner`, following `LearningIndexInitializer`. Read that class before writing yours; in particular copy its `@ConditionalOnProperty` gate. Without the gate, an unreachable Mongo fails the whole application context and takes the GitHub webhook receiver and the `code-review` worker down with it, neither of which touches Mongo.
 
-`UnfixableFindingRecord` is keyed by PURL (one row per component), and stores the `fingerprint` of the finding set that was given up on. Task 5 compares the *current* fingerprint against the stored one.
+`UnfixableFindingRecord` is keyed by PURL (one row per component), and stores the `fingerprint` of the finding set that was given up on. Task 5 compares the *current* fingerprint against the stored one, and computes the stored value itself from `ComponentFindings.fingerprint()` — the agent never supplies it.
+
+**Who populates `CveFixRunRecord.id` and `startedAt`:** the *workflow* does, and it must use Temporal's deterministic clock and id. `id` is `CveFixRunRecord.idFor(Workflow.getInfo().getWorkflowId())` — one record per run, so the workflow id is the natural key and a re-drive upserts rather than duplicating. `startedAt` is `Instant.ofEpochMilli(Workflow.currentTimeMillis())`. **Never `Instant.now()`**: workflow code is replayed, so a wall-clock read there is non-deterministic. `recordRun` (Task 9) is a plain save and invents nothing.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1313,11 +1430,12 @@ class CveFixRepositoriesTest {
     CveFixRunRecord saved =
         runs.save(
             new CveFixRunRecord(
-                "cve-fix-2026-08-11", "wf-1", Instant.parse("2026-08-11T00:00:00Z"),
+                CveFixRunRecord.idFor("cve-fix-wf-1"), "cve-fix-wf-1",
+                Instant.parse("2026-08-11T00:00:00Z"),
                 CveFixStatus.COMPLETED, 7, List.of("bar 1.0 -> 1.1"),
                 "https://github.com/o/r/pull/1", 2, null));
 
-    assertThat(runs.findById("cve-fix-2026-08-11")).contains(saved);
+    assertThat(runs.findById("cve-fix-wf-1")).contains(saved);
   }
 
   @Test
@@ -1391,6 +1509,14 @@ public record CveFixRunRecord(
 
   public CveFixRunRecord {
     bumps = bumps == null ? List.of() : List.copyOf(bumps);
+  }
+
+  /**
+   * Deterministic id for upserts: one record per run, keyed by the Temporal workflow id, so a
+   * re-drive of the same run overwrites its own row instead of adding a second one.
+   */
+  public static String idFor(final String workflowId) {
+    return workflowId;
   }
 }
 ```
@@ -1508,7 +1634,7 @@ public class CveFixIndexInitializer implements ApplicationRunner {
 
 Run: `cd software-factory && ../gradlew :software-factory:test --tests '*CveFixRepositoriesTest*'`
 
-Expected: 3 tests PASS. This test boots the full Spring context against Testcontainers Mongo, so a missing bean or a bad property binding surfaces here.
+Expected: 3 tests PASS. This is a `@DataMongoTest` slice against Testcontainers Mongo — deliberately *not* the full context, for the reasons in Step 1 — so it proves the mapping and the repositories, nothing else. Property-binding and bean-wiring coverage comes from `FactoryApplicationTest`.
 
 - [ ] **Step 5: Run checks and commit**
 
@@ -1534,7 +1660,7 @@ webhook receiver down."
 
 **Interfaces:**
 - Consumes: `UnfixableFindingRepository`, `ComponentFindings`.
-- Produces: `FindingSuppressor.retainActionable(List<ComponentFindings>) -> List<ComponentFindings>` and `FindingSuppressor.record(List<UnfixableComponent>) -> void` (the latter is added in Task 6 once `UnfixableComponent` exists; for now implement `retainActionable` only).
+- Produces: `FindingSuppressor.retainActionable(List<ComponentFindings>) -> List<ComponentFindings>` and `FindingSuppressor.record(List<UnfixableComponent> unfixable, List<ComponentFindings> components) -> void` (the latter is added in Task 6 once `UnfixableComponent` exists; for now implement `retainActionable` only).
 
 **Context the implementer needs:**
 
@@ -1542,6 +1668,8 @@ This is the mechanism that stops a CVE with no available fix burning tokens ever
 
 - A component is **skipped** when a stored record exists for its PURL *and* the stored fingerprint equals the current fingerprint.
 - A component is **retained** when there is no record, or when the fingerprint differs — a new advisory against the same component is new information.
+
+Both sides of that comparison must come from `ComponentFindings.fingerprint()`. `record(...)` therefore takes the current `List<ComponentFindings>` alongside the agent's `List<UnfixableComponent>` and looks each PURL up, storing the Java-computed fingerprint and the Dependency-Track vulnerability ids — never anything the model typed. Storing a model-emitted fingerprint here would make the comparison in `retainActionable` fail on any deviation, so every component would look like new information forever and the whole mechanism would be silently dead. An `UnfixableComponent` whose PURL is not in the current set is dropped with a warning: the agent invented it, and there is no fingerprint to store.
 
 This is plain logic over a repository, deliberately not an agent decision, so it is cheap to test exhaustively.
 
@@ -1690,10 +1818,10 @@ Expected: 4 tests PASS, then BUILD SUCCESSFUL.
 - Consumes: `ClaudeCliRunner.runStructured(Invocation, Consumer<String>)`, `CveFixProperties.Agent`, `ComponentFindings`, `RepositoryWorkspace`.
 - Produces:
   - `Bump(String purl, String file, String fromVersion, String toVersion, List<String> clears)`
-  - `UnfixableComponent(String purl, String fingerprint, List<String> vulnerabilityIds, String reason)`
+  - `UnfixableComponent(String purl, List<String> vulnerabilityIds, String reason)` — **no `fingerprint` field.** The agent does not compute suppression keys; `FindingSuppressor.record` derives the fingerprint from the matching `ComponentFindings` (see Task 5).
   - `FixProposal(List<Bump> bumps, List<UnfixableComponent> unfixable, String summary)`
   - `FixEngine.propose(RepositoryWorkspace workspace, List<ComponentFindings> components, String failureContext, Consumer<String> heartbeat) -> FixProposal`
-  - `FindingSuppressor.record(List<UnfixableComponent> unfixable) -> void`
+  - `FindingSuppressor.record(List<UnfixableComponent> unfixable, List<ComponentFindings> components) -> void`
 
 **Context the implementer needs:**
 
@@ -1702,7 +1830,8 @@ Read `ClaudeCliHarvestEngine` first — it is the pattern for this class: load a
 Differences for this engine:
 
 - The working directory is the **repository checkout** (`workspace.repository()`), not a scratch temp dir, because the agent must edit real manifests.
-- Tools must include `Edit` and `Write`, scoped to the four allowlisted files. `ClaudeCliRunner` already appends `Edit(./.git/**)` and `Write(./.git/**)` to `--disallowedTools`, so `.git` is covered for you.
+- Tools must include `Edit` and `Write`, scoped to the four allowlisted files — read from `CveFixAllowedFiles.ALL` (Task 2), never re-listed here. `ClaudeCliRunner` already appends `Edit(./.git/**)` and `Write(./.git/**)` to `--disallowedTools`, so `.git` is covered for you.
+- The agent is **not** asked for a fingerprint. It reports `purl`, `vulnerabilityIds` and `reason`; the suppression key is Java's to compute (Task 5).
 - `failureContext` is null on the first attempt and carries CI failure logs on a repair attempt. The prompt branches on it.
 - The agent must **not** run builds — there is no toolchain in the container. Do not grant `Bash`.
 
@@ -1826,9 +1955,12 @@ import java.util.List;
 /**
  * A component the agent declined to bump, with the reason. Recorded so the same advisories do
  * not cost an agent run every night.
+ *
+ * <p>Carries no fingerprint on purpose: the suppression key is computed in Java from the matching
+ * {@code ComponentFindings}. A model-emitted key would be compared against a Java-computed one and
+ * would silently disable suppression on any deviation.
  */
-public record UnfixableComponent(
-    String purl, String fingerprint, List<String> vulnerabilityIds, String reason) {
+public record UnfixableComponent(String purl, List<String> vulnerabilityIds, String reason) {
 
   public UnfixableComponent {
     vulnerabilityIds = vulnerabilityIds == null ? List.of() : List.copyOf(vulnerabilityIds);
@@ -1880,6 +2012,7 @@ Create `software-factory/src/main/resources/cve-fix-schema.json`:
           "purl": { "type": "string" },
           "file": {
             "type": "string",
+            "description": "Must stay in sync with CveFixAllowedFiles.ALL — JSON Schema cannot reference a Java constant, so this enum is the one intentional duplicate of the allowlist.",
             "enum": [
               "gradle/libs.versions.toml",
               "backend/build.gradle.kts",
@@ -1898,10 +2031,9 @@ Create `software-factory/src/main/resources/cve-fix-schema.json`:
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["purl", "fingerprint", "vulnerabilityIds", "reason"],
+        "required": ["purl", "vulnerabilityIds", "reason"],
         "properties": {
           "purl": { "type": "string" },
-          "fingerprint": { "type": "string" },
           "vulnerabilityIds": { "type": "array", "items": { "type": "string" } },
           "reason": {
             "type": "string",
@@ -1949,6 +2081,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.claude.ClaudeCliRunner;
+import com.simonrowe.factory.cvefix.config.CveFixAllowedFiles;
 import com.simonrowe.factory.cvefix.config.CveFixProperties;
 import com.simonrowe.factory.cvefix.domain.ComponentFindings;
 import com.simonrowe.factory.cvefix.domain.FixProposal;
@@ -1956,6 +2089,7 @@ import com.simonrowe.factory.git.RepositoryWorkspace;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
@@ -1969,13 +2103,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class ClaudeCliFixEngine implements FixEngine {
-
-  private static final List<String> ALLOWED_FILES =
-      List.of(
-          "gradle/libs.versions.toml",
-          "backend/build.gradle.kts",
-          "frontend/package.json",
-          "frontend/package-lock.json");
 
   private final CveFixProperties properties;
   private final ClaudeCliRunner runner;
@@ -2024,9 +2151,8 @@ public class ClaudeCliFixEngine implements FixEngine {
   }
 
   static List<String> allowedTools() {
-    // Requires: import java.util.ArrayList;
     List<String> allowed = new ArrayList<>(List.of("Read(./**)", "Glob", "Grep"));
-    for (String file : ALLOWED_FILES) {
+    for (String file : CveFixAllowedFiles.ALL) {
       allowed.add("Edit(./" + file + ")");
       allowed.add("Write(./" + file + ")");
     }
@@ -2092,8 +2218,7 @@ public class ClaudeCliFixEngine implements FixEngine {
         clean checkout of the default branch.
 
         Hard constraints:
-        - You may edit ONLY these files: gradle/libs.versions.toml, backend/build.gradle.kts,
-          frontend/package.json, frontend/package-lock.json. A change anywhere else fails the run.
+        - You may edit ONLY these files: %s. A change anywhere else fails the run.
         - You have no Bash tool and no build toolchain. Do NOT attempt to build or test. CI
           verifies your change after it is pushed.
         - Never edit source code to work around a breaking change on a first attempt. Prefer the
@@ -2110,17 +2235,16 @@ public class ClaudeCliFixEngine implements FixEngine {
         3. Apply the edit. For frontend/package-lock.json, update the matching "version" and
            "resolved"/"integrity" entries consistently, or use an overrides entry in
            package.json if the component is transitive only.
-        4. Anything you cannot fix goes in unfixable, with reason stating which case applies:
-           no released version clears the advisory; the only fix needs a major upgrade of
-           something else; or it is transitive-only with no newer direct release. Set
-           fingerprint to the component's purl followed by "|" and its advisory ids sorted
-           ascending and comma-separated.
+        4. Anything you cannot fix goes in unfixable, with its purl, its advisory ids exactly as
+           listed above, and a reason stating which case applies: no released version clears the
+           advisory; the only fix needs a major upgrade of something else; or it is
+           transitive-only with no newer direct release.
         5. A partial result is good. Bumping four of six components beats attempting all six
            and breaking the build.
         %s
         Produce the requested structured result.
         """
-        .formatted(findings, repair);
+        .formatted(String.join(", ", CveFixAllowedFiles.ALL), findings, repair);
   }
 
   private static String loadSchema() {
@@ -2139,25 +2263,51 @@ public class ClaudeCliFixEngine implements FixEngine {
 
 - [ ] **Step 6: Add `record(...)` to `FindingSuppressor`**
 
-Append to `FindingSuppressor`, adding `import com.simonrowe.factory.cvefix.domain.UnfixableComponent;` and `import java.time.Instant;`:
+Append to `FindingSuppressor`, adding `import com.simonrowe.factory.cvefix.domain.UnfixableComponent;`, `import java.time.Instant;`, `import java.util.Map;`, `import java.util.function.Function;`, `import java.util.stream.Collectors;` and a logger:
 
 ```java
-  /** Upserts the give-up records so later runs skip these components until something changes. */
-  public void record(final List<UnfixableComponent> unfixable) {
+  /**
+   * Upserts the give-up records so later runs skip these components until something changes.
+   *
+   * <p>The stored fingerprint and ids come from {@code components} — the Dependency-Track data
+   * that {@link #retainActionable} will compare against — never from the agent's output. A
+   * model-emitted key would be compared against a Java-computed one and would disable suppression
+   * entirely on any deviation.
+   */
+  public void record(
+      final List<UnfixableComponent> unfixable, final List<ComponentFindings> components) {
+    Map<String, ComponentFindings> byPurl =
+        components.stream()
+            .collect(Collectors.toMap(ComponentFindings::purl, Function.identity(), (a, b) -> a));
     for (UnfixableComponent component : unfixable) {
+      ComponentFindings current = byPurl.get(component.purl());
+      if (current == null) {
+        // The agent named a component Dependency-Track did not report. There is no fingerprint
+        // to store, and storing a guess would suppress something that was never seen.
+        LOGGER.warn("Ignoring unfixable purl not in this run's findings: {}", component.purl());
+        continue;
+      }
       repository.save(
           new UnfixableFindingRecord(
-              UnfixableFindingRecord.idFor(component.purl()),
-              component.purl(),
-              component.fingerprint(),
-              component.vulnerabilityIds(),
+              UnfixableFindingRecord.idFor(current.purl()),
+              current.purl(),
+              current.fingerprint(),
+              current.vulnerabilityIds(),
               component.reason(),
               Instant.now()));
     }
   }
 ```
 
-Add a test to `FindingSuppressorTest` asserting `repository.save` is called once per component with the fingerprint preserved, using `verify(repository).save(argThat(...))`.
+`Instant.now()` is correct here: this runs inside an activity, not in workflow code.
+
+Add three tests to `FindingSuppressorTest`:
+
+- `recordStoresTheJavaComputedFingerprintNotTheAgentsView` — one `UnfixableComponent`, one matching `ComponentFindings`; `verify(repository).save(argThat(r -> r.fingerprint().equals("pkg:maven/a/b@1|CVE-1,CVE-9")))`.
+- `recordStoresOneRowPerComponent` — two components, `verify(repository, times(2)).save(any())`.
+- `recordIgnoresAPurlThatIsNotInTheCurrentFindings` — `verifyNoInteractions(repository)`.
+
+The first of those is the regression test for the whole mechanism: it is what fails if anyone reintroduces a `fingerprint` field on `UnfixableComponent`.
 
 - [ ] **Step 7: Run the tests, check, and commit**
 
@@ -2166,9 +2316,12 @@ cd software-factory && ../gradlew :software-factory:test --tests '*ClaudeCliFixE
 git add software-factory/src/main/java/com/simonrowe/factory/cvefix software-factory/src/main/resources/cve-fix-schema.json software-factory/src/test/java/com/simonrowe/factory/cvefix
 git commit -m "feat: add the cvefix agent
 
-Edits only the four allowlisted manifests, gets no Bash tool because the
-container carries no build toolchain, and reports what it could not fix with a
-reason and a stable fingerprint. The repair prompt branches on CI failure output."
+Edits only the four allowlisted manifests (from CveFixAllowedFiles.ALL, the single
+source), gets no Bash tool because the container carries no build toolchain, and
+reports what it could not fix with a reason. Suppression fingerprints are computed
+in Java from the Dependency-Track data, never emitted by the model, so the
+comparison in retainActionable cannot drift. The repair prompt branches on CI
+failure output."
 ```
 
 Expected: all tests PASS, BUILD SUCCESSFUL.
@@ -2184,18 +2337,19 @@ Expected: all tests PASS, BUILD SUCCESSFUL.
 **Interfaces:**
 - Consumes: `CveFixProperties`, `GitHubCredentials.accessToken(Long)`, `CodeReviewProperties.github().apiBaseUrl()`.
 - Produces:
-  - `CveFixPrGateway.findOpen() -> Optional<OpenPullRequest>` where `OpenPullRequest(int number, String htmlUrl, String headSha)`
+  - `CveFixPrGateway.findOpen() -> Optional<OpenPullRequest>` where `OpenPullRequest(int number, String htmlUrl, String headSha)` — **the only record for this concept.** Task 9's activity interface reuses `CveFixPrGateway.OpenPullRequest`; there is no separate `PullRequestRef`.
   - `CveFixPrGateway.open(String title, String body) -> OpenPullRequest`
   - `CveFixPrGateway.comment(int number, String body) -> void`
-  - `CveFixPrGateway.headSha(int number) -> String`
 
 **Context the implementer needs:**
 
 Model this on `FeedbackPrGateway` — same JDK `HttpClient`, same `X-GitHub-Api-Version` header, same installation-token auth. Read it first.
 
+The title and body passed to `open(...)` are rendered from `CveFixActivities.FixSummary` by `CveFixPrBodyRenderer`, created in Task 9 where `FixSummary` exists. This gateway does no formatting.
+
 - `findOpen()` queries `GET /repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=open`. An empty array means no open CVE pull request. This is the step-1 skip check, so it must be exact: a 404 or a network error must throw, not be read as "none open", or the workflow would open a second pull request.
 - `open(...)` posts to `/pulls` with `draft: false` — explicitly, not by omission, so the intent is visible in the code. On `422` (already exists), fall back to `findOpen()` and return that, as `FeedbackPrGateway` does.
-- `headSha(number)` reads `head.sha`, needed by the CI poller after each push.
+- There is deliberately **no** `headSha(int)` method. Nothing needs it: `PushResult.headSha` carries the SHA the workflow just pushed, and `OpenPullRequest.headSha` carries it for a pull request that was discovered rather than created.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2217,8 +2371,13 @@ Follow the `DependencyTrackClientTest` pattern: a `com.sun.net.httpserver.HttpSe
   }
 
   @Test
-  void findOpenQueriesTheConfiguredBranchAsTheHeadFilter() {
-    // assert the request URI contains head=simonjamesrowe:chore/dependency-cve-fixes&state=open
+  void findOpenQueriesTheConfiguredBranchAsTheHeadFilterUrlEncoded() {
+    // FeedbackPrGateway builds this as "?head=" + owner + ":" + URLEncoder.encode(branch, UTF_8)
+    // + "&state=open" — the owner and the colon are raw, only the branch is encoded, so the
+    // slash arrives as %2F. Assert that exact form; asserting the raw branch name would fail
+    // against the implementation this task specifies.
+    // assert the request URI contains
+    //   head=simonjamesrowe:chore%2Fdependency-cve-fixes&state=open
   }
 
   @Test
@@ -2284,7 +2443,7 @@ with draft:false explicitly, since the code-review bot ignores drafts."
 - Create: `software-factory/src/test/java/com/simonrowe/factory/cvefix/github/CiStatusGatewayTest.java`
 
 **Interfaces:**
-- Consumes: `CveFixProperties`, `CodeReviewProperties.github().apiBaseUrl()`.
+- Consumes: `CveFixProperties` (including `ci().advisoryChecks()`), `CodeReviewProperties.github().apiBaseUrl()`.
 - Produces:
   - `CiOutcome(CiState state, List<String> failedCheckNames, String detail)` with `enum CiState { PENDING, GREEN, RED }`
   - `CiStatusGateway.outcomeFor(String headSha) -> CiOutcome`
@@ -2296,14 +2455,16 @@ with draft:false explicitly, since the code-review bot ignores drafts."
 
 The cost is the unauthenticated rate limit: 60 requests/hour per IP. The 3-minute default poll interval keeps this near 20/hour. Do not lower it without moving to the installation token.
 
-Interpreting the payload:
+Interpreting the payload — **first drop every check run whose `name` is in `ci.advisoryChecks()`**, then apply:
 
-- Any check run with `status != "completed"` → `PENDING`.
-- All completed and every `conclusion` in `success`, `neutral`, `skipped` → `GREEN`.
-- Any completed run with `conclusion` in `failure`, `timed_out`, `cancelled`, `action_required` → `RED`.
-- `total_count == 0` → `PENDING`. CI has not registered yet; treating an empty list as green would merge-signal a pull request no job has touched.
+- Any remaining check run with `status != "completed"` → `PENDING`.
+- All remaining completed and every `conclusion` in `success`, `neutral`, `skipped` → `GREEN`.
+- Any remaining completed run with `conclusion` in `failure`, `timed_out`, `cancelled`, `action_required` → `RED`.
+- No remaining runs (either `total_count == 0` or every run was advisory) → `PENDING`. CI has not registered yet; treating an empty list as green would merge-signal a pull request no job has touched.
 
-Note `continue-on-error: true` jobs (the promptfoo evals) report `conclusion: success` even when their steps fail, so they cannot make this `RED`. That is the intended behaviour — those evals are advisory.
+**Why the advisory ignore-list exists, and why it is not optional.** The promptfoo evals job sets job-level `continue-on-error: true`. That is documented to stop the *workflow run* from failing; it is **not** documented to rewrite the check-run `conclusion` GitHub reports for the job. If the `evaluate` check ever surfaces as `conclusion: failure`, this gateway would read RED on every poll of a pull request whose real CI is green: the run would burn the entire repair budget asking the agent to fix an OpenAI-spend problem it cannot see, end `CI_UNRESOLVED`, leave the pull request open, and thereby block every later run through `SKIPPED_PR_OPEN`. That is the worst failure mode in this design, and it must not rest on an undocumented property of `continue-on-error`. The ignore-list makes the exclusion explicit and testable, and it is configuration, so a new advisory job needs no code change.
+
+The gateway must **not** special-case `continue-on-error` in any other way, and must not infer advisory status from the check name's shape — only from the configured list.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2342,6 +2503,18 @@ class CiStatusGatewayTest {
 
   @Test
   void treatsTimedOutAndCancelledAsRed() { }
+
+  @Test
+  void ignoresAnAdvisoryCheckThatReportsFailure() {
+    // "Backend Build & Test" success + "evaluate" failure -> GREEN, failedCheckNames empty.
+    // This is the regression test for the whole advisory ignore-list: without it a red
+    // promptfoo run burns the repair budget and blocks every later run via SKIPPED_PR_OPEN.
+  }
+
+  @Test
+  void reportsPendingWhenTheOnlyRegisteredCheckIsAdvisory() {
+    // "evaluate" success on its own -> PENDING, not GREEN: real CI has not registered yet.
+  }
 
   @Test
   void sendsNoAuthorizationHeaderBecauseTheRepositoryIsPublic() {
@@ -2400,6 +2573,19 @@ curl -s https://api.github.com/rate_limit | jq '.resources.core | {limit, remain
 
 Expected: `check-runs=200`, and a `limit` of 60. If this returns `401` or `404`, the repository's visibility has changed and this design decision must be revisited — in that case stop and escalate rather than adding `checks: read` to the shared token mint.
 
+- [ ] **Step 4b: Observe what a failed advisory job actually reports, and record it**
+
+The advisory ignore-list is correct either way, but the plan should not carry an unverified claim about `continue-on-error`. Find a head SHA whose `evaluate` job failed and look at the conclusion GitHub reports for it:
+
+```bash
+gh run list --workflow "Promptfoo Evals" --json headSha,conclusion,status --limit 20
+SHA=<a headSha whose evals run did not succeed>
+curl -s "https://api.github.com/repos/simonjamesrowe/simonrowe-dev-monorepo/commits/$SHA/check-runs" \
+  | jq -r '.check_runs[] | "\(.name)\t\(.status)\t\(.conclusion)"'
+```
+
+Record the observed `name`/`conclusion` pair for the evals job in a comment on `CiStatusGateway`, stating the SHA it was observed at. If the conclusion is `failure`, the ignore-list is load-bearing and the comment must say so. If it is `success`, the ignore-list is defence in depth — keep it either way; it costs one filter and removes the dependency on an undocumented behaviour. If no failed evals run exists yet, say so in the comment rather than asserting either outcome.
+
 - [ ] **Step 5: Run the tests, check, and commit**
 
 ```bash
@@ -2410,7 +2596,13 @@ git commit -m "feat: read CI status unauthenticated for the public repo
 Avoids adding checks:read to GitHubCredentials.mintInstallationToken, whose
 single shared payload is also used by code-review and feedback — GitHub 422s the
 whole request if the App lacks a requested permission, so that change would break
-both. An empty check-run list is PENDING, never GREEN."
+both. An empty check-run list is PENDING, never GREEN.
+
+Advisory checks named in factory.cvefix.ci.advisory-checks (default: the promptfoo
+evaluate job) are excluded from the RED decision. Job-level continue-on-error
+stops the run from failing but is not documented to rewrite the check-run
+conclusion, and a red advisory job would otherwise burn the whole repair budget
+and block every later run."
 ```
 
 ---
@@ -2419,16 +2611,35 @@ both. An empty check-run list is PENDING, never GREEN."
 
 **Files:**
 - Create: `.../cvefix/workflow/CveFixActivities.java`, `CveFixActivitiesImpl.java`
+- Create: `.../cvefix/github/CveFixPrBodyRenderer.java`
 - Create: `software-factory/src/test/java/com/simonrowe/factory/cvefix/workflow/CveFixActivitiesImplTest.java`
+- Create: `software-factory/src/test/java/com/simonrowe/factory/cvefix/github/CveFixPrBodyRendererTest.java`
 
 **Interfaces:**
 - Consumes: everything from Tasks 1–8.
-- Produces the activity interface the workflow calls:
+- Produces the activity interface the workflow calls. **The Temporal annotations are part of the contract** — `Workflow.newActivityStub` fails without `@ActivityInterface`, and `FeedbackActivities` carries both annotations for the same reason:
 
 ```java
+package com.simonrowe.factory.cvefix.workflow;
+
+import com.simonrowe.factory.cvefix.domain.CiOutcome;
+import com.simonrowe.factory.cvefix.domain.ComponentFindings;
+import com.simonrowe.factory.cvefix.domain.UnfixableComponent;
+import com.simonrowe.factory.cvefix.github.CveFixPrGateway;
+import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
+import io.temporal.activity.ActivityInterface;
+import io.temporal.activity.ActivityMethod;
+import java.util.List;
+
+/** Everything the CVE-fix workflow is not allowed to do itself. */
+@ActivityInterface
+public interface CveFixActivities {
+
   /** The URL of an already-open CVE pull request, or null when there is none. */
+  @ActivityMethod
   String findOpenPrUrl();
 
+  @ActivityMethod
   List<ComponentFindings> fetchActionableFindings();
 
   /**
@@ -2436,22 +2647,33 @@ both. An empty check-run list is PENDING, never GREEN."
    * {@code failureContext} is null on the first attempt. A returned {@code headSha} of null means
    * the agent changed nothing.
    */
+  @ActivityMethod
   PushResult proposeAndPush(List<ComponentFindings> components, String failureContext);
 
-  PullRequestRef openPullRequest(FixSummary summary);
+  /** Renders the title and body from {@code summary}, then opens the pull request. */
+  @ActivityMethod
+  CveFixPrGateway.OpenPullRequest openPullRequest(FixSummary summary);
 
+  @ActivityMethod
   CiOutcome checkCi(String headSha);
 
+  @ActivityMethod
   String ciFailureLogs(String headSha);
 
+  @ActivityMethod
   void commentOnPullRequest(int number, String body);
 
+  /**
+   * Persists the components the agent gave up on, so later runs skip them until their finding
+   * set changes. {@code components} is this run's Dependency-Track data, from which the stored
+   * fingerprint is computed — the agent never supplies one.
+   */
+  @ActivityMethod
+  void recordUnfixable(List<UnfixableComponent> unfixable, List<ComponentFindings> components);
+
+  @ActivityMethod
   void recordRun(CveFixRunRecord record);
-```
 
-with three records defined alongside the interface:
-
-```java
   /** What one push produced: the commit CI will run against, and what to put in the PR body. */
   record PushResult(String headSha, FixSummary summary) {
   }
@@ -2460,13 +2682,16 @@ with three records defined alongside the interface:
   record FixSummary(
       List<String> bumpDescriptions, List<UnfixableComponent> unfixable, String agentSummary) {
   }
-
-  /** An opened or discovered pull request. */
-  record PullRequestRef(int number, String htmlUrl, String headSha) {
-  }
+}
 ```
 
-`findOpenPrUrl` returns a nullable `String` rather than `Optional<String>` on purpose: Temporal serialises activity results with Jackson, and `Optional` requires `Jdk8Module` to be registered on the data converter's mapper — which is not guaranteed here. A nullable return needs no such assumption.
+Both records are nested in the interface, so they are referred to elsewhere as `CveFixActivities.PushResult` and `CveFixActivities.FixSummary`.
+
+There is **no** `PullRequestRef`: it was the same shape as `CveFixPrGateway.OpenPullRequest` with no conversion specified, so the gateway's record is reused here. One concept, one record.
+
+`recordUnfixable` is what implements the spec's workflow step 8. Without it `FindingSuppressor.record` is never called, no component is ever recorded as unfixable, and step 3's suppression can never fire — the mechanism that stops an unfixable advisory costing an agent run every night would be dead code.
+
+`findOpenPrUrl` returns a nullable `String` rather than `Optional<String>` on purpose. Temporal's default data converter (`JacksonJsonPayloadConverter`, verified in `temporal-sdk-1.36.0`) does register `Jdk8Module` and `JavaTimeModule`, so `Optional` and `Duration` would in fact round-trip — but a nullable String needs no assumption about a converter this module never configures, and it reads the same at the call site. `Duration` **is** used on `CveFixRequest` (Task 10) and relies on `JavaTimeModule` being registered, which the same verification covers.
 
 **Context the implementer needs:**
 
@@ -2474,9 +2699,17 @@ Temporal activity arguments and return values must be JSON-serialisable — neve
 
 The workspace cannot live across activity boundaries: it is a local temp directory, and an activity may be retried on a different worker. So `proposeAndPush` is a single activity doing clone → agent → validate → commit → push, keeping the entire filesystem lifecycle inside one call with try-with-resources on `RepositoryWorkspace`. It returns `PushResult` because the workflow needs both the head SHA to poll and the summary for the pull request body.
 
+**The activity resolves the GitHub installation id itself.** `RepositoryWorkspaceFactory.create` and `commitAndPush` both take an `installationId`, and nothing configures one (Task 2 deliberately has no such property). Call `credentials.installationId(properties.owner(), properties.repository())` once at the top of `proposeAndPush` and pass the result to both. **Do not pass null.** `GitHubCredentials.accessToken(null)` falls back to the static `GITHUB_TOKEN`, which the `software-factory` compose service does not define — the result is a blank token, an anonymous clone of the public repository that appears to succeed, and then a `403` on push that looks like a permissions bug rather than a missing id.
+
+**Changed-path validation reads `CveFixAllowedFiles.ALL`** — `RepositoryWorkspaceFactory.validateAllowedPaths(changedPaths, CveFixAllowedFiles.ALL)`. Do not re-list the four paths here; that is the copy this constant exists to prevent.
+
+**`openPullRequest` renders, the gateway sends.** `CveFixPrGateway.open` takes a title and a body, and nothing in Task 7 said where they come from: they come from here. Create `CveFixPrBodyRenderer` as a final class of static, pure methods — `String title(FixSummary)`, `String body(FixSummary)` and `String giveUpComment(FixSummary, int ciAttempts)`. The title is fixed prose (`chore: bump dependencies with Dependency-Track findings`); the body lists the `bumpDescriptions`, then the unfixable components with their reasons, then the agent's own summary. `openPullRequest` calls the first two and passes the strings to `CveFixPrGateway.open(title, body)`.
+
+`giveUpComment` lives here so the budget-exhaustion comment and the pull request body cannot describe the same run differently. It is static and side-effect-free, so the workflow may call it directly to build the `commentOnPullRequest` body without breaking determinism. Test all three directly on a `FixSummary` fixture — pure string building, no mocks.
+
 - [ ] **Step 1: Write the failing test**
 
-Test `CveFixActivitiesImpl` with Mockito mocks for `DependencyTrackClient`, `FindingSuppressor`, `RepositoryWorkspaceFactory`, `FixEngine`, `CveFixPrGateway`, `CiStatusGateway` and `CveFixRunRepository`. Cover:
+Test `CveFixActivitiesImpl` with Mockito mocks for `DependencyTrackClient`, `FindingSuppressor`, `RepositoryWorkspaceFactory`, `GitHubCredentials`, `FixEngine`, `CveFixPrGateway`, `CiStatusGateway` and `CveFixRunRepository`. Cover:
 
 ```java
   @Test
@@ -2498,6 +2731,24 @@ Test `CveFixActivitiesImpl` with Mockito mocks for `DependencyTrackClient`, `Fin
   }
 
   @Test
+  void proposeAndPushResolvesTheInstallationIdAndPassesItToCloneAndPush() {
+    // credentials.installationId("simonjamesrowe", "simonrowe-dev-monorepo") -> 42L;
+    // verify create(..., 42L, ...) and commitAndPush(..., 42L, ...). Never null: accessToken(null)
+    // falls back to a GITHUB_TOKEN this service does not set, giving an anonymous clone and a 403.
+  }
+
+  @Test
+  void openPullRequestRendersTheTitleAndBodyFromTheSummary() {
+    // verify gateway.open(title, body) with the renderer's output, not an empty or null body
+  }
+
+  @Test
+  void recordUnfixableDelegatesToTheSuppressorWithThisRunsFindings() {
+    // verify(suppressor).record(unfixable, components) — the fingerprint source must be the
+    // Dependency-Track data, not the agent's output
+  }
+
+  @Test
   void findOpenPrUrlPropagatesGatewayFailures() { }
 ```
 
@@ -2511,12 +2762,20 @@ Annotate the implementation `@Component` and `@ActivityImpl(taskQueues = CveFixT
 
 ```bash
 cd software-factory && ../gradlew :software-factory:check && cd ..
-git add software-factory/src/main/java/com/simonrowe/factory/cvefix/workflow software-factory/src/test/java/com/simonrowe/factory/cvefix/workflow
+git add software-factory/src/main/java/com/simonrowe/factory/cvefix software-factory/src/test/java/com/simonrowe/factory/cvefix
 git commit -m "feat: add cvefix activities
 
 The whole workspace lifecycle stays inside proposeAndPush, because a temp
 checkout cannot survive an activity boundary and an activity may be retried on
-another worker. Changed paths are validated before anything is committed."
+another worker. Changed paths are validated before anything is committed, against
+the single CveFixAllowedFiles.ALL constant.
+
+The GitHub installation id is resolved from GitHubCredentials at run time rather
+than configured: a null id makes accessToken fall back to a GITHUB_TOKEN this
+service does not set, which clones anonymously and then 403s on push.
+
+recordUnfixable implements the spec's step 8 — without it nothing is ever recorded
+as unfixable and the suppression in step 3 can never fire."
 ```
 
 ---
@@ -2524,12 +2783,46 @@ another worker. Changed paths are validated before anything is committed."
 ### Task 10: Workflow
 
 **Files:**
+- Create: `.../cvefix/domain/CveFixRequest.java`
 - Create: `.../cvefix/workflow/CveFixWorkflow.java`, `CveFixWorkflowImpl.java`
+- Modify: `software-factory/src/main/resources/application.yml` (add this package to `workflow-packages` — Step 5)
 - Create: `software-factory/src/test/java/com/simonrowe/factory/cvefix/workflow/CveFixWorkflowTest.java`
 
 **Interfaces:**
 - Consumes: `CveFixActivities`.
-- Produces: `CveFixWorkflow.run(CveFixRequest request) -> CveFixResult` (`@WorkflowMethod`) and `CveFixWorkflow.progress() -> CveFixProgress` (`@QueryMethod`). `CveFixRequest(boolean dryRun)` — `dryRun` stops before opening the pull request, for a safe first manual trigger.
+- Produces: `CveFixWorkflow.run(CveFixRequest request) -> CveFixResult` (`@WorkflowMethod`) and `CveFixWorkflow.progress() -> CveFixProgress` (`@QueryMethod`), plus the request record:
+
+```java
+package com.simonrowe.factory.cvefix.domain;
+
+import java.time.Duration;
+
+/**
+ * Input to one CVE-fix run.
+ *
+ * <p>{@code dryRun} stops before the pull request is opened, so the first manual trigger cannot
+ * create one.
+ *
+ * <p>The three CI settings are carried here rather than read from {@code CveFixProperties},
+ * because workflow code cannot reach the properties bean: {@code @WorkflowImpl} classes are
+ * instantiated by the Temporal SDK, not by Spring, so they have no injected dependencies at all —
+ * which is why both existing implementations hold only constants. {@code CveFixScheduleInitializer}
+ * holds the bean and copies the values into the request it schedules; the compact constructor
+ * below supplies the same defaults so a hand-started workflow with a sparse JSON input still
+ * behaves sensibly.
+ */
+public record CveFixRequest(
+    boolean dryRun, Duration pollInterval, int repairBudget, Duration maxWait) {
+
+  public CveFixRequest {
+    pollInterval = pollInterval == null ? Duration.ofMinutes(3) : pollInterval;
+    repairBudget = repairBudget == 0 ? 3 : repairBudget;
+    maxWait = maxWait == null ? Duration.ofHours(3) : maxWait;
+  }
+}
+```
+
+`Duration` round-trips through Temporal's default data converter: `JacksonJsonPayloadConverter.newDefaultObjectMapper` registers `JavaTimeModule` (verified in `temporal-sdk-1.36.0`), and this module configures no custom `DataConverter`.
 
 **Context the implementer needs:**
 
@@ -2539,9 +2832,17 @@ Read `ReviewFeedbackWorkflowImpl` first. Three of its hard-won lessons apply dir
 2. **Throw `ApplicationFailure.newNonRetryableFailure(...)`, never a plain `IllegalStateException`, from workflow code.** A raw JDK exception thrown directly in workflow code causes an infinite workflow-task retry loop in this SDK version rather than a clean failure.
 3. Set the `current` progress field before each phase so the query method is useful mid-run.
 
-The CI loop must use `Workflow.sleep(properties.ci().pollInterval())` — never `Thread.sleep`, which is non-deterministic and forbidden in workflow code. Bound the loop by both `repairBudget` and a total elapsed wall-clock check against `maxWait`.
+The CI loop must use `Workflow.sleep(request.pollInterval())` — never `Thread.sleep`, which is non-deterministic and forbidden in workflow code, and never `properties.ci().pollInterval()`, because this class has no properties to read. Every configured value the workflow needs arrives on `CveFixRequest`.
+
+Bound the loop by both `request.repairBudget()` and a total elapsed check against `request.maxWait()`, measured with `Workflow.currentTimeMillis()` — not `System.currentTimeMillis()`.
+
+**`maxWait` exhaustion ends in `CI_UNRESOLVED`, the same status as budget exhaustion**, and takes the same actions: comment on the pull request, leave it open, record the run. The two are distinguished only by `CveFixResult.detail()` — `"CI never went green within the 3h wall-clock cap after N repair attempts"` versus `"the repair budget of N was exhausted with CI still red"`. Anything else would need a fifth terminal status for a case an operator treats identically.
 
 The `SKIPPED_PR_OPEN` path must return that status distinctly rather than `COMPLETED`. A stuck pull request halts all CVE automation by design, and a month of silence must read as a stall, not an all-clear.
+
+`recordUnfixable(pushResult.summary().unfixable(), components)` must be called on **every** path that got as far as an agent proposal — `COMPLETED`, `CI_UNRESOLVED` and `NOTHING_FIXABLE` — before `recordRun`. That is the spec's step 8, and it is what makes step 3's suppression work at all. It is deliberately *not* called on `SKIPPED_PR_OPEN` or `NO_FINDINGS`, where no agent ran and there is nothing to record.
+
+`CveFixRunRecord` is built here: `CveFixRunRecord.idFor(Workflow.getInfo().getWorkflowId())` for the id and `Instant.ofEpochMilli(Workflow.currentTimeMillis())` for `startedAt`. Never `Instant.now()` in workflow code.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2572,8 +2873,16 @@ Use `TestWorkflowEnvironment` with a mocked `CveFixActivities`, following `CodeR
 
   @Test
   void leavesThePullRequestOpenAndCommentsWhenTheRepairBudgetRunsOut() {
-    // checkCi always RED; assert CI_UNRESOLVED, commentOnPullRequest called once,
-    // and proposeAndPush called exactly repairBudget + 1 times
+    // checkCi always RED; request.repairBudget() == 2 so the test is quick;
+    // assert CI_UNRESOLVED, commentOnPullRequest called once, proposeAndPush called exactly
+    // repairBudget + 1 times, and detail() mentioning the budget rather than the wall clock
+  }
+
+  @Test
+  void endsCiUnresolvedWhenTheWallClockCapElapsesBeforeTheBudget() {
+    // checkCi always PENDING, request = new CveFixRequest(false, ofMinutes(3), 3, ofMinutes(10));
+    // assert CI_UNRESOLVED, detail() naming the wall-clock cap, and proposeAndPush called once —
+    // maxWait must not silently look like budget exhaustion, and must not be reported COMPLETED
   }
 
   @Test
@@ -2582,33 +2891,59 @@ Use `TestWorkflowEnvironment` with a mocked `CveFixActivities`, following `CodeR
   }
 
   @Test
-  void dryRunStopsBeforeOpeningThePullRequest() { }
+  void dryRunStopsBeforeOpeningThePullRequest() {
+    // new CveFixRequest(true, ofMinutes(3), 3, ofHours(3)); verifyNoInteractions on
+    // openPullRequest, and no checkCi — there is no head SHA to poll
+  }
+
+  @Test
+  void readsThePollIntervalAndBudgetFromTheRequestNotFromProperties() {
+    // The workflow is instantiated by the Temporal SDK, so it has no CveFixProperties. Pass a
+    // 30s pollInterval and a budget of 1 and assert both are honoured.
+  }
 
   @Test
   void recordsTheRunOnEveryTerminalPath() {
     // parameterised across SKIPPED_PR_OPEN, NO_FINDINGS, COMPLETED, CI_UNRESOLVED
   }
+
+  @Test
+  void recordsUnfixableComponentsOnlyWhenAnAgentActuallyRan() {
+    // COMPLETED / CI_UNRESOLVED / NOTHING_FIXABLE -> recordUnfixable called with this run's
+    // components; SKIPPED_PR_OPEN and NO_FINDINGS -> never called
+  }
 ```
 
-Use `TestWorkflowEnvironment`'s time-skipping so the `Workflow.sleep` calls do not make the test slow.
+Use `TestWorkflowEnvironment`'s time-skipping so the `Workflow.sleep` calls do not make the test slow. Every test constructs its own `CveFixRequest`, which is also how the CI settings get into the workflow at all.
 
 - [ ] **Step 2: Run it to confirm it fails; Step 3: implement the workflow; Step 4: run to green**
 
 Run: `cd software-factory && ../gradlew :software-factory:test --tests '*CveFixWorkflowTest*'`
 
-Annotate `@WorkflowImpl(taskQueues = CveFixTaskQueues.CVE_FIX)`.
+Annotate `@WorkflowImpl(taskQueues = CveFixTaskQueues.CVE_FIX)`. Note that the implementation takes **no constructor arguments**: the SDK instantiates it, and the test registers the *type*, not an instance, exactly as `CodeReviewWorkflowTest` and `ReviewFeedbackWorkflowTest` do.
 
-- [ ] **Step 5: Run checks and commit**
+- [ ] **Step 5: Register the workflow package**
+
+Add `com.simonrowe.factory.cvefix.workflow` to the existing `spring.temporal.workers-auto-discovery.workflow-packages` list in `software-factory/src/main/resources/application.yml`. This is the step that creates a worker on the `cve-fix` task queue; it is deliberately here rather than in Task 2, because until this task there is no `@WorkflowImpl` in that package to discover.
+
+Confirm `FactoryApplicationTest` is still green afterwards — it boots the whole context with the Temporal test server, so a mis-typed package name surfaces there.
+
+- [ ] **Step 6: Run checks and commit**
 
 ```bash
 cd software-factory && ../gradlew :software-factory:check && cd ..
-git add software-factory/src/main/java/com/simonrowe/factory/cvefix/workflow software-factory/src/test/java/com/simonrowe/factory/cvefix/workflow
+git add software-factory/src/main/java/com/simonrowe/factory/cvefix software-factory/src/main/resources/application.yml software-factory/src/test/java/com/simonrowe/factory/cvefix
 git commit -m "feat: add the cvefix workflow
 
 Skips distinctly when a CVE pull request is already open, so a stalled PR is
 visible rather than looking like a clean run. The CI repair loop is bounded by
 both the repair budget and a wall-clock cap, and leaves the pull request open
-with a comment when it gives up."
+with a comment when it gives up either way.
+
+The poll interval, repair budget and wall-clock cap travel on CveFixRequest
+because a @WorkflowImpl is instantiated by the Temporal SDK, not Spring, and so
+cannot inject CveFixProperties. The schedule initializer, which does hold the
+bean, populates them."
 ```
 
 ---
@@ -2630,19 +2965,67 @@ with a comment when it gives up."
 
 The schedule is created in code so a deploy reconciles it, the way compose reconciles containers. Use the Temporal `ScheduleClient`: `createSchedule` on first boot, `getHandle(id).update(...)` when it already exists — the initializer must be idempotent, because it runs on every restart.
 
-Set `ScheduleOptions` with `setOverlap(ScheduleOverlapPolicy.SCHEDULE_OVERLAP_POLICY_SKIP)`. Combined with the workflow's own open-PR skip, that guarantees only one run is ever in flight.
+**Get the API right — this is easy to guess wrong.** Verified against `temporal-sdk-1.36.0`:
+
+- `ScheduleOptions.Builder` has only `setTriggerImmediately`, `setBackfills`, `setMemo`, `setSearchAttributes` and `setTypedSearchAttributes`. It has **no** `setOverlap`.
+- Overlap lives on `SchedulePolicy.Builder.setOverlap(ScheduleOverlapPolicy)`, attached with `Schedule.newBuilder().setPolicy(...)`.
+- Paused state lives on `ScheduleState.newBuilder().setPaused(true)`, attached with `Schedule.newBuilder().setState(...)`.
+- The workflow arguments go on `ScheduleActionStartWorkflow.newBuilder().setArguments(Object...)`.
+
+So the schedule is assembled roughly like this:
+
+```java
+    Schedule schedule =
+        Schedule.newBuilder()
+            .setAction(
+                ScheduleActionStartWorkflow.newBuilder()
+                    .setWorkflowType(CveFixWorkflow.class)
+                    .setOptions(
+                        WorkflowOptions.newBuilder()
+                            .setWorkflowId("cve-fix")
+                            .setTaskQueue(CveFixTaskQueues.CVE_FIX)
+                            .build())
+                    // The workflow cannot read CveFixProperties — the Temporal SDK, not Spring,
+                    // instantiates @WorkflowImpl classes. This initializer holds the bean, so the
+                    // CI settings travel with the request.
+                    .setArguments(
+                        new CveFixRequest(
+                            false,
+                            properties.ci().pollInterval(),
+                            properties.ci().repairBudget(),
+                            properties.ci().maxWait()))
+                    .build())
+            .setSpec(
+                ScheduleSpec.newBuilder()
+                    .setIntervals(List.of(new ScheduleIntervalSpec(Duration.ofHours(24))))
+                    .build())
+            .setPolicy(
+                SchedulePolicy.newBuilder()
+                    .setOverlap(ScheduleOverlapPolicy.SCHEDULE_OVERLAP_POLICY_SKIP)
+                    .build())
+            // Created paused: enabling the feature flag must not start opening pull requests.
+            .setState(ScheduleState.newBuilder().setPaused(true).build())
+            .build();
+```
+
+Combined with the workflow's own open-PR skip, `SCHEDULE_OVERLAP_POLICY_SKIP` guarantees only one run is ever in flight.
+
+The scheduled request has `dryRun = false`: the dry run is a one-off manual start, not the schedule's steady state (see Step 7's rollout order).
 
 Gate the initializer on `factory.cvefix.enabled` exactly as `CveFixIndexInitializer` is — an unreachable Temporal must not fail the whole context.
 
-Manual triggering is the schedule's own *Trigger* action in the Temporal UI. **Add no HTTP endpoint**: `software-factory`'s internet-facing surface must stay exactly `POST /webhooks/github`.
+Manual triggering of a *normal* run is the schedule's own *Trigger* action in the Temporal UI. **Add no HTTP endpoint**: `software-factory`'s internet-facing surface must stay exactly `POST /webhooks/github`.
+
+A **`dryRun` trigger is not possible through that action.** `ScheduleHandle.trigger()` takes no workflow arguments, so the UI's Trigger re-runs the schedule's *configured* arguments — which have `dryRun = false`. A dry run is therefore started directly with the Temporal CLI, one workflow, no schedule involved; the command is in the runbook (Step 7) and in the rollout order below. That keeps the no-HTTP-endpoint constraint intact.
 
 - [ ] **Step 1: Write the failing test**
 
 ```java
   @Test
   void createsTheScheduleWhenItDoesNotExist() {
-    // mock ScheduleClient; verify createSchedule with a 24h interval, cve-fix task queue,
-    // and SCHEDULE_OVERLAP_POLICY_SKIP
+    // mock ScheduleClient; capture the Schedule and assert a 24h interval, the cve-fix task
+    // queue, and getPolicy().getOverlap() == SCHEDULE_OVERLAP_POLICY_SKIP. Overlap is on
+    // SchedulePolicy, not ScheduleOptions — ScheduleOptions has no setOverlap at all.
   }
 
   @Test
@@ -2652,11 +3035,19 @@ Manual triggering is the schedule's own *Trigger* action in the Temporal UI. **A
 
   @Test
   void isPausedOnCreationSoTheFirstRunIsAManualTrigger() {
-    // verify the schedule state is created paused: the first run must be watched by a human
+    // assert the captured Schedule's getState().isPaused() — ScheduleState.newBuilder()
+    // .setPaused(true), not a ScheduleOptions flag
+  }
+
+  @Test
+  void passesTheConfiguredCiSettingsAsTheWorkflowArgument() {
+    // The workflow cannot inject CveFixProperties, so assert the captured
+    // ScheduleActionStartWorkflow's arguments contain a CveFixRequest carrying
+    // properties.ci().pollInterval(), repairBudget() and maxWait(), with dryRun false.
   }
 ```
 
-That third test encodes a deliberate safety choice: the schedule is created **paused**, so enabling the feature flag does not immediately start opening pull requests. You unpause it in the Temporal UI after a successful manual `dryRun` trigger.
+That third test encodes a deliberate safety choice: the schedule is created **paused**, so enabling the feature flag does not immediately start opening pull requests. You unpause it in the Temporal UI after a successful manual dry run (Step 7's rollout order gives the command).
 
 - [ ] **Step 2: Run it to confirm it fails; Step 3: implement; Step 4: run to green**
 
@@ -2678,6 +3069,10 @@ In `docker-compose.prod.yml`, inside the `software-factory` service's `environme
 
 Note the service deliberately has no `env_file`, so each variable must be named individually. Use `:-` defaults, **not** `:?` required syntax: a missing `DEPENDENCYTRACK_API_KEY` must not break every `docker compose` command against this file while the feature is disabled.
 
+**Exactly three variables, and no `FACTORY_CVEFIX_INSTALLATION_ID`.** The GitHub installation id is resolved at run time by the activity (Task 9), so there is no fourth variable and no configured value that can be left empty. If you find yourself adding one, re-read Task 9's note about `accessToken(null)`.
+
+`DEPENDENCYTRACK_API_KEY` must hold a key with `VIEW_PORTFOLIO` + `VIEW_VULNERABILITY`; the `CI Upload` key cannot read findings. That is a prerequisite of enabling the flag, not of deploying this change — hence the `:-` default.
+
 Do **not** add a `depends_on` for `dependencytrack-apiserver`. The workflow already fails cleanly when Dependency-Track is unreachable, and coupling the webhook receiver's startup to Dependency-Track would be a regression.
 
 - [ ] **Step 6: Verify the compose file still parses and nothing else changed**
@@ -2694,11 +3089,34 @@ Expected: `compose OK`, and a diff touching only the `software-factory` environm
 Create `docs/runbooks/cvefix.md` covering, in this order:
 
 1. **What it does and what it deliberately does not**: opens one pull request per run on a fixed branch; never auto-merges; never builds anything locally (CI is the only build environment).
-2. **Rollout order**, which matters: (a) put `DEPENDENCYTRACK_API_KEY` in the deploy `.env`; (b) deploy with `FACTORY_CVEFIX_ENABLED=false` and confirm the stack is healthy; (c) set it to `true` and restart `software-factory`; (d) confirm a live poller on the `cve-fix` task queue — a healthy container can have registered no poller, in which case the schedule fires and nothing runs; (e) manually trigger with `dryRun` and read the workflow history; (f) unpause the schedule.
+2. **Rollout order**, which matters:
+   - (a) put a Dependency-Track API key whose team has `VIEW_PORTFOLIO` **and** `VIEW_VULNERABILITY` into the deploy `.env` as `DEPENDENCYTRACK_API_KEY`. The `CI Upload` key does **not** work: its team lacks `VIEW_VULNERABILITY`, so `/api/v1/finding/project/{uuid}` is refused, and it exists only as a GitHub Actions secret which cannot be read back. See the spec's Accepted risks.
+   - (b) deploy with `FACTORY_CVEFIX_ENABLED=false` and confirm the stack is healthy.
+   - (c) set it to `true` and restart `software-factory`.
+   - (d) confirm a live poller on the `cve-fix` task queue — a healthy container can have registered no poller, in which case the schedule fires and nothing runs:
+
+     ```bash
+     temporal task-queue describe --task-queue cve-fix --task-queue-type workflow
+     ```
+
+   - (e) start **one** dry run directly, not through the schedule. `ScheduleHandle.trigger()` (the Temporal UI's *Trigger* action) takes no arguments, so it re-runs the schedule's configured `dryRun = false` request — it cannot be used for this:
+
+     ```bash
+     temporal workflow start \
+       --type CveFixWorkflow \
+       --task-queue cve-fix \
+       --workflow-id cve-fix-dryrun-$(date +%Y%m%d%H%M) \
+       --input '{"dryRun":true,"pollInterval":"PT3M","repairBudget":3,"maxWait":"PT3H"}'
+     temporal workflow show --workflow-id <the id above>
+     ```
+
+     Read the history: it must reach `proposeAndPush` and stop before `openPullRequest`.
+   - (f) unpause the schedule in the Temporal UI.
 3. **The stall is by design.** A pull request left open at `CI_UNRESOLVED` halts every later run via `SKIPPED_PR_OPEN`. To resume, merge or close it. Include the query to check: `temporal workflow list --query 'WorkflowType="CveFixWorkflow"'`.
 4. **Why CI status is read unauthenticated**, and the escalation path if the repository ever goes private: revisit the design, do not add `checks: read` to the shared token mint, which would 422 code-review and feedback too.
 5. **Why the agent has no Bash tool** and what to do instead if local verification is ever wanted (that is a separate, deliberately rejected design — see the spec).
-6. **Unfixable records**: where they live (`unfixable_findings` in the `software_factory` database), how to clear one to force a retry, and why the fingerprint must stay sorted.
+6. **Unfixable records**: where they live (`unfixable_findings` in the `software_factory` database), how to clear one to force a retry, why the fingerprint must stay sorted, and that it is computed in Java from Dependency-Track's data — never emitted by the agent, because a model-supplied key compared against a Java-computed one would disable suppression silently.
+7. **Advisory checks**: `factory.cvefix.ci.advisory-checks` names check runs that can never make CI read RED, defaulting to the promptfoo `evaluate` job. Add a new advisory job's check name here, and understand why: a red advisory check would burn the whole repair budget and then block every later run through `SKIPPED_PR_OPEN`.
 
 - [ ] **Step 8: Update `CLAUDE.md`**
 
@@ -2747,10 +3165,15 @@ Checked against the spec. Coverage:
 | Shared-code extraction | 1 |
 | Configuration and feature flag | 2, 11 |
 | Persistence | 4 |
-| Error handling | 3 (fail-loud), 8 (empty ≠ green), 10 (`ApplicationFailure`) |
+| Error handling | 3 (fail-loud), 8 (empty ≠ green, advisory ignore-list), 10 (`ApplicationFailure`, `maxWait`) |
 | Testing patterns | Every task |
 | Promptfoo eval filtering | Other plan, Task 1 |
 
-Two deliberate additions beyond the spec, both safety rails rather than scope creep: `CveFixRequest.dryRun` (so the first manual trigger cannot open a pull request) and creating the schedule **paused** (so flipping the feature flag does not immediately start work). Both are noted in the runbook.
+Three deliberate additions beyond the spec, all safety rails rather than scope creep: `CveFixRequest.dryRun` (so the first manual run cannot open a pull request), creating the schedule **paused** (so flipping the feature flag does not immediately start work), and `ci.advisoryChecks` (so the advisory promptfoo job can never burn the repair budget and stall every later run). All three are noted in the runbook.
+
+Two structural consequences worth keeping in mind while implementing, because they are easy to undo by accident:
+
+- `CveFixRequest` carries `pollInterval`, `repairBudget` and `maxWait` because a `@WorkflowImpl` is instantiated by the Temporal SDK and cannot inject `CveFixProperties`. Any change that has workflow code read the properties bean is a compile-time-plausible, run-time-broken regression.
+- The suppression fingerprint has exactly one producer, `ComponentFindings.fingerprint()`. Neither the schema nor `UnfixableComponent` has a `fingerprint` field, and reintroducing one silently disables suppression.
 
 One item the spec leaves to this plan: the repair budget default of `3`. It is a guess until the Part A skill has been run for real — see that plan's Task 2 Step 7.
