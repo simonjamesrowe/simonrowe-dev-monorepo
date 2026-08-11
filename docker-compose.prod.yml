@@ -177,7 +177,7 @@ services:
       # run. See docs/runbooks/cvefix.md for the rollout order.
       FACTORY_CVEFIX_ENABLED: ${FACTORY_CVEFIX_ENABLED:-false}
       # Needs VIEW_PORTFOLIO *and* VIEW_VULNERABILITY. The existing `CI Upload` key is not
-      # sufficient. Read by a Java activity, never by the agent: ClaudeCliFixEngine strips it
+      # sufficient. Read by a Java activity, never by the agent: ClaudeCliRunner strips it
       # from the child process because it sits outside SAFE_SECRET_ENVIRONMENT, which is
       # correct here. Defaulted rather than required (`:?`) so a missing key cannot break
       # every `docker compose` command against this file while the feature is disabled.

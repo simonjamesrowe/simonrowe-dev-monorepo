@@ -37,7 +37,7 @@ What it does not do, all on purpose:
 - **The agent never touches git and never sees a credential.** Cloning,
   changed-path validation, committing and pushing are all Java
   (`RepositoryWorkspaceFactory`); the Dependency-Track key is read by an
-  activity, and `ClaudeCliFixEngine` strips it from the agent's environment
+  activity, and `ClaudeCliRunner` strips it from the agent's environment
   because it sits outside `SAFE_SECRET_ENVIRONMENT`.
 
 The schedule itself is declared in code (`CveFixScheduleInitializer`) so a deploy
@@ -228,17 +228,21 @@ dependency bumps. The feature stays stalled until a human acts.
 **To resume: merge the pull request, or close it.** Nothing else clears the
 condition, and no timeout does it for you.
 
-To see where things stand:
+To see where things stand, read the run records — **not** `temporal workflow
+list`, which shows the Temporal execution *status* (`Completed`, `Failed`) and
+never the `CveFixStatus` the workflow returned. A skipped run is a perfectly
+`Completed` execution, so the stall is invisible there:
 
 ```bash
-docker run --rm --network simonrowe-dev-monorepo_default \
-  temporalio/admin-tools:1.31.2 \
-  temporal workflow list --address temporal:7233 --namespace default \
-    --query 'WorkflowType="CveFixWorkflow"'
+docker exec simonrowe-dev-monorepo-mongodb-1 mongosh software_factory --eval \
+  'db.cve_fix_runs.find({}, {startedAt: 1, status: 1, prUrl: 1, detail: 1})
+     .sort({startedAt: -1}).limit(14).pretty()'
 ```
 
-A column of `SKIPPED_PR_OPEN` completions is the signature. Check the open pull
-request on `chore/dependency-cve-fixes` and decide.
+A run of consecutive `SKIPPED_PR_OPEN` documents is the signature. For a single
+run, `temporal workflow show --workflow-id <id>` also carries the returned
+`CveFixResult` in its completion event. Either way, check the open pull request
+on `chore/dependency-cve-fixes` and decide.
 
 ## Why CI status is read unauthenticated
 
