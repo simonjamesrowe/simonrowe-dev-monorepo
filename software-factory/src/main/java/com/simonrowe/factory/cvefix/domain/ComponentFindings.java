@@ -6,7 +6,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/** Every finding against one component, so a single bump can clear several advisories. */
+/**
+ * Every finding against one component, so a single bump can clear several advisories.
+ *
+ * <p>{@code vulnerabilityIds} is always sorted ascending and deduplicated by the compact
+ * constructor, regardless of how the record is built — {@link #fingerprint()} depends on that
+ * ordering, and any construction path is a fingerprint producer.
+ */
 public record ComponentFindings(
     String purl,
     String componentName,
@@ -15,7 +21,15 @@ public record ComponentFindings(
     List<Finding> findings) {
 
   public ComponentFindings {
-    vulnerabilityIds = vulnerabilityIds == null ? List.of() : List.copyOf(vulnerabilityIds);
+    // Sorted here, not just by callers such as group(): fingerprint() and its Javadoc both
+    // claim "sorted vulnerability ids" as a property of the type. Task 5 constructs this record
+    // directly, so leaving the sort to a single caller would let an out-of-order construction
+    // produce a fingerprint that never matches the stored one — silently and permanently
+    // defeating the "don't re-attempt an unfixable CVE every night" suppression check.
+    vulnerabilityIds =
+        vulnerabilityIds == null
+            ? List.of()
+            : vulnerabilityIds.stream().sorted().distinct().toList();
     findings = findings == null ? List.of() : List.copyOf(findings);
   }
 
@@ -35,12 +49,11 @@ public record ComponentFindings(
         .map(
             entry -> {
               Finding first = entry.getValue().get(0);
+              // Not sorted here: the compact constructor now sorts and dedupes
+              // vulnerabilityIds itself, so every ComponentFindings is sorted regardless of
+              // caller — sorting again here would be redundant.
               List<String> ids =
-                  entry.getValue().stream()
-                      .map(Finding::vulnerabilityId)
-                      .distinct()
-                      .sorted()
-                      .toList();
+                  entry.getValue().stream().map(Finding::vulnerabilityId).toList();
               return new ComponentFindings(
                   entry.getKey(), first.componentName(), first.componentVersion(), ids,
                   entry.getValue());
