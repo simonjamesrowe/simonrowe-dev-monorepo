@@ -14,6 +14,11 @@ The cost of that merge is explicit and accepted: the process that terminates
 untrusted internet traffic now also holds long-lived credentials. What keeps it
 defensible is that the attack surface is exactly one route.
 
+Steps that only a human can perform — GitHub App permissions, Grafana Cloud
+tokens — are tracked as a checklist in
+[software-factory-manual-actions.md](software-factory-manual-actions.md),
+including any that are currently outstanding.
+
 ## Migrating from the split deployment
 
 **This is the one-time cutover. Run it after merging, not before.**
