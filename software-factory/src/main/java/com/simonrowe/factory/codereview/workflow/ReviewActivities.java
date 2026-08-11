@@ -12,7 +12,7 @@ import io.temporal.activity.ActivityMethod;
 public interface ReviewActivities {
 
   @ActivityMethod
-  String publishAck(ReviewRequest request);
+  String openStatusComment(ReviewRequest request);
 
   @ActivityMethod
   PullRequestContext loadPullRequest(ReviewRequest request);
@@ -21,11 +21,8 @@ public interface ReviewActivities {
   ReviewReport runReview(PullRequestContext pullRequest);
 
   @ActivityMethod
-  void publishReview(PullRequestContext pullRequest, ReviewReport report);
+  void publishReview(PullRequestContext pullRequest, ReviewReport report, String statusCommentId);
 
   @ActivityMethod
-  void resolveAck(ReviewRequest request, String ackCommentId);
-
-  @ActivityMethod
-  void publishFailure(ReviewRequest request, String ackCommentId, ReviewFailure failure);
+  void publishFailure(ReviewRequest request, String statusCommentId, ReviewFailure failure);
 }

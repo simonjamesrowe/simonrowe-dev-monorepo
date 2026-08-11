@@ -46,7 +46,7 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
 
   @Override
   public ReviewResult review(final ReviewRequest request) {
-    String ackCommentId = request.publish() ? acknowledge(request) : null;
+    String statusCommentId = request.publish() ? openStatusComment(request) : null;
     try {
       current =
           new ReviewProgress(
@@ -65,8 +65,7 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
                 "Publishing advisory comment",
                 pullRequest.headSha(),
                 report);
-        networkActivities.publishReview(pullRequest, report);
-        resolve(request, ackCommentId);
+        networkActivities.publishReview(pullRequest, report, statusCommentId);
       }
 
       current =
@@ -82,7 +81,7 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
       if (request.publish()) {
         reportFailure(
             request,
-            ackCommentId,
+            statusCommentId,
             new ReviewFailure(failedIn, reason, Workflow.getInfo().getWorkflowId()));
       }
       throw exception;
@@ -90,34 +89,20 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
   }
 
   /**
-   * Best-effort acknowledgement. A pull request that cannot be commented on is still worth
-   * reviewing, so a failure here yields a null id and the run continues; the failure path then
-   * posts a fresh comment rather than editing one.
+   * Best-effort claim on the pull request's one review comment, reusing the comment an earlier push
+   * left so the outcome replaces it rather than stacking beside it.
+   *
+   * <p>A pull request that cannot be commented on is still worth reviewing, so a failure here
+   * yields a null id and the run continues; publishing then posts a fresh comment rather than
+   * editing one.
    */
-  private String acknowledge(final ReviewRequest request) {
+  private String openStatusComment(final ReviewRequest request) {
     try {
-      return networkActivities.publishAck(request);
+      return networkActivities.openStatusComment(request);
     } catch (RuntimeException exception) {
       Workflow.getLogger(CodeReviewWorkflowImpl.class)
-          .warn("Could not acknowledge the review on the pull request", exception);
+          .warn("Could not open the review comment on the pull request", exception);
       return null;
-    }
-  }
-
-  /**
-   * Best-effort ack removal, after the review is published. A failed delete leaves a stale "in
-   * progress" beside a real review — visible and harmless. Deleting first and then failing to
-   * publish would lose both.
-   */
-  private void resolve(final ReviewRequest request, final String ackCommentId) {
-    if (ackCommentId == null) {
-      return;
-    }
-    try {
-      networkActivities.resolveAck(request, ackCommentId);
-    } catch (RuntimeException exception) {
-      Workflow.getLogger(CodeReviewWorkflowImpl.class)
-          .warn("Could not remove the review acknowledgement", exception);
     }
   }
 
@@ -126,9 +111,9 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
    * original one, which is what actually needs diagnosing.
    */
   private void reportFailure(
-      final ReviewRequest request, final String ackCommentId, final ReviewFailure failure) {
+      final ReviewRequest request, final String statusCommentId, final ReviewFailure failure) {
     try {
-      networkActivities.publishFailure(request, ackCommentId, failure);
+      networkActivities.publishFailure(request, statusCommentId, failure);
     } catch (RuntimeException exception) {
       Workflow.getLogger(CodeReviewWorkflowImpl.class)
           .warn("Could not publish review failure notice", exception);
