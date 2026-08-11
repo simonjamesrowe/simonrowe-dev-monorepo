@@ -13,10 +13,13 @@ import static org.mockito.Mockito.when;
 
 import com.simonrowe.factory.codereview.agent.ProcessRunner;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InOrder;
 
 class RepositoryWorkspaceFactoryTest {
@@ -163,5 +166,24 @@ class RepositoryWorkspaceFactoryTest {
                     "bot@example.com", 42L, heartbeat))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("push failed");
+  }
+
+  @Test
+  void closeDeletesTheWholeWorkspaceTreeIncludingNestedDirectories(@TempDir final Path tempDir)
+      throws IOException {
+    Path root = tempDir.resolve("workspace-root");
+    Path repository = root.resolve("repository");
+    Path nestedDirectory = repository.resolve("nested/dir");
+    Files.createDirectories(nestedDirectory);
+    Files.writeString(repository.resolve("top-level.txt"), "top level");
+    Files.writeString(nestedDirectory.resolve("nested.txt"), "nested");
+    RepositoryWorkspace workspace = new RepositoryWorkspace(root, repository, "main");
+
+    workspace.close();
+
+    // deleteTree walks in reverse order specifically to delete children before parents; a
+    // flat-directory fixture would pass even if that ordering were wrong, so this asserts on a
+    // tree with a nested subdirectory and a file inside it.
+    assertThat(Files.exists(root)).isFalse();
   }
 }
