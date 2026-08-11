@@ -29,9 +29,12 @@ import org.springframework.stereotype.Component;
  * /repos/{owner}/{repo}/commits/{sha}/check-runs} returns 200 with full check data unauthenticated
  * — verified live against {@code main} at commit {@code 576eeb2}. The cost is the unauthenticated
  * rate limit of 60 requests/hour per IP; {@link CveFixProperties.Ci#pollInterval()} defaults to 3
- * minutes, which keeps usage near 20/hour. Do not lower that interval and do not add auth to this
- * gateway to raise the ceiling — if more headroom is ever needed, that is a call to widen the
- * shared token's permissions deliberately, not a side effect of this class.
+ * minutes, which keeps usage near 20/hour typical, and near 40/hour worst case while polling a red
+ * pull request, because {@link #outcomeFor(String)} and {@link #failureLogs(String)} each issue
+ * their own check-runs request. Both figures sit under the 60/hour ceiling. Do not lower that
+ * interval and do not add auth to this gateway to raise the ceiling — if more headroom is ever
+ * needed, that is a call to widen the shared token's permissions deliberately, not a side effect
+ * of this class.
  *
  * <p><strong>Advisory checks are excluded from the RED decision, and excluded first</strong>,
  * before any GREEN/RED/PENDING determination. {@link CveFixProperties.Ci#advisoryChecks()}
@@ -147,6 +150,13 @@ public class CiStatusGateway {
   }
 
   private List<JsonNode> relevantCheckRuns(final String headSha) {
+    // per_page=100 is deliberate and load-bearing: GitHub pages this endpoint at 30 by default, so
+    // without it a commit carrying more than 30 checks would return only the first page and an
+    // all-passing first page would read GREEN while a later-page check failed — a false green, the
+    // one failure this gateway must never produce. 100 is the documented ceiling for this
+    // endpoint, so a commit with more than 100 check runs would reintroduce that risk; if the
+    // workflow set ever approaches that many checks, follow the Link rel="next" header rather than
+    // raising this number.
     JsonNode payload =
         get(
             "/repos/"
@@ -155,7 +165,7 @@ public class CiStatusGateway {
                 + properties.repository()
                 + "/commits/"
                 + headSha
-                + "/check-runs");
+                + "/check-runs?per_page=100");
     List<String> advisoryChecks = properties.ci().advisoryChecks();
     List<JsonNode> relevant = new ArrayList<>();
     for (JsonNode run : payload.path("check_runs")) {

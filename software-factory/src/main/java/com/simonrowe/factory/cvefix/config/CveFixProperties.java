@@ -88,8 +88,10 @@ public record CveFixProperties(
       Duration pollInterval, int repairBudget, Duration maxWait, List<String> advisoryChecks) {
 
     public Ci {
-      // 3 minutes keeps unauthenticated GitHub API use at ~20 requests/hour, inside the
-      // 60/hour per-IP limit that route is subject to. See CiStatusGateway.
+      // 3 minutes keeps unauthenticated GitHub API use at ~20 requests/hour typical, and
+      // ~40/hour worst case while polling a red pull request (reading the outcome and then its
+      // failure logs are two separate requests) — both inside the 60/hour per-IP limit that
+      // route is subject to. See CiStatusGateway.
       pollInterval = pollInterval == null ? Duration.ofMinutes(3) : pollInterval;
       repairBudget = repairBudget == 0 ? 3 : repairBudget;
       // 3h, not 45m: one repair iteration costs up to agent.timeout (15m) plus a whole CI

@@ -30,6 +30,7 @@ class CiStatusGatewayTest {
   private final Map<String, String> responses = new ConcurrentHashMap<>();
   private final Map<String, Integer> statuses = new ConcurrentHashMap<>();
   private final List<String> seenHeaderNames = new CopyOnWriteArrayList<>();
+  private final List<String> seenQueries = new CopyOnWriteArrayList<>();
 
   @BeforeEach
   void startServer() throws IOException {
@@ -39,6 +40,7 @@ class CiStatusGatewayTest {
         exchange -> {
           String key = exchange.getRequestURI().getPath();
           seenHeaderNames.addAll(exchange.getRequestHeaders().keySet());
+          seenQueries.add(String.valueOf(exchange.getRequestURI().getQuery()));
           byte[] body = responses.getOrDefault(key, NO_CHECKS).getBytes(StandardCharsets.UTF_8);
           exchange.sendResponseHeaders(statuses.getOrDefault(key, 200), body.length);
           exchange.getResponseBody().write(body);
@@ -178,6 +180,30 @@ class CiStatusGatewayTest {
     assertThat(outcome.state()).isEqualTo(CiState.GREEN);
     assertThat(outcome.failedCheckNames()).doesNotContain("evaluate");
     assertThat(outcome.failedCheckNames()).isEmpty();
+  }
+
+  @Test
+  void reportsPendingWhenTheOnlyRegisteredCheckIsAdvisory() {
+    responses.put(
+        CHECK_RUNS_PATH,
+        """
+        {"total_count":1,"check_runs":[
+          {"name":"evaluate","status":"completed","conclusion":"success"}]}
+        """);
+
+    CiOutcome outcome = gateway(List.of("evaluate")).outcomeFor(HEAD_SHA);
+
+    assertThat(outcome.state()).isEqualTo(CiState.PENDING);
+    assertThat(outcome.failedCheckNames()).isEmpty();
+  }
+
+  @Test
+  void asksForOneHundredChecksPerPage() {
+    responses.put(CHECK_RUNS_PATH, NO_CHECKS);
+
+    gateway().outcomeFor(HEAD_SHA);
+
+    assertThat(seenQueries).containsExactly("per_page=100");
   }
 
   @Test
