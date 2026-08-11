@@ -120,10 +120,12 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       if (request.dryRun()) {
         // Stops here rather than before the push: ci.yml triggers on pull_request only, so the
         // branch alone runs nothing, and the diff is left on the branch for a human to look at.
+        // DRY_RUN, not COMPLETED: the branch push and this recordUnfixable are both real side
+        // effects, so the distinction has to be legible at a glance rather than only in detail().
         networkActivities.recordUnfixable(push.summary().unfixable(), components);
         current = new CveFixProgress(CveFixPhase.COMPLETED, "Dry run", bumpDescriptions.size());
         return finish(
-            CveFixStatus.COMPLETED,
+            CveFixStatus.DRY_RUN,
             "dry run: pushed " + bumpDescriptions.size() + " bump(s), no pull request opened");
       }
 

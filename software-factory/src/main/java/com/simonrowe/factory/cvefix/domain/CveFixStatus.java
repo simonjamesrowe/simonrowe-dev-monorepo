@@ -4,6 +4,14 @@ package com.simonrowe.factory.cvefix.domain;
 public enum CveFixStatus {
   /** CI went green; the pull request is waiting for a human to merge. */
   COMPLETED,
+  /**
+   * A dry run stopped before opening the pull request. Distinct from {@link #COMPLETED} because a
+   * dry run is <em>not</em> side-effect-free: it pushed the CVE-fix branch and recorded this run's
+   * unfixable components as suppressions, so an operator who reads {@code COMPLETED} and moves on
+   * has mutated suppression state without ever seeing a pull request. Mirrors
+   * {@code DistillationStatus.DRY_RUN} in the feedback module.
+   */
+  DRY_RUN,
   /** Dependency-Track reported nothing actionable. */
   NO_FINDINGS,
   /** A CVE pull request is already open, so this run did nothing. */

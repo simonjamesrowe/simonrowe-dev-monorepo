@@ -217,7 +217,9 @@ class CveFixWorkflowTest {
     CveFixResult result =
         run(activities, new CveFixRequest(true, Duration.ofMinutes(3), 3, Duration.ofHours(3)));
 
-    assertThat(result.status()).isEqualTo(CveFixStatus.COMPLETED);
+    // DRY_RUN rather than COMPLETED: the run pushed a branch and recorded suppressions, so the
+    // status has to say so on its own without an operator reading detail().
+    assertThat(result.status()).isEqualTo(CveFixStatus.DRY_RUN);
     assertThat(result.detail()).contains("dry run");
     assertThat(result.prUrl()).isNull();
     verify(activities, never()).openPullRequest(any());

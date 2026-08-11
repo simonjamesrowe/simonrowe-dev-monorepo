@@ -192,7 +192,10 @@ docker run --rm --network simonrowe-dev-monorepo_default \
 ```
 
 It must reach `proposeAndPush` and stop before `openPullRequest`, finishing
-`COMPLETED` with a detail of `dry run: pushed N bump(s), no pull request opened`.
+`DRY_RUN` with a detail of `dry run: pushed N bump(s), no pull request opened`.
+`DRY_RUN` is its own terminal status rather than `COMPLETED` because a dry run
+still pushes the branch and still records this run's unfixable components as
+suppressions.
 A dry run that reports `NO_FINDINGS` proves the Dependency-Track credential works
 but exercises nothing else — read the activity result to check it actually saw
 projects, rather than treating an empty answer as a pass.
