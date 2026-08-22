@@ -50,12 +50,6 @@ jobs:
           name: cyclonedx-bom
           path: build/reports/
 
-      - name: SonarCloud analysis
-        if: env.SONAR_TOKEN != ''
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./gradlew sonar
-
   frontend:
     name: Frontend Build & Test
     runs-on: ubuntu-latest
@@ -86,11 +80,26 @@ jobs:
           done
           exit 1
 
-      - name: Run tests
-        run: npm test
+      # Blocking, and deliberately without --max-warnings. The existing code exits 0
+      # with 5 react-refresh/only-export-components warnings; --max-warnings 0 would
+      # turn those into a red build, which is an ESLint cleanup, not this change.
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
 
       - name: Build
         run: npm run build
+
+      # Consumed by the `sonar` job via sonar.javascript.lcov.reportPaths. Paths in
+      # upload-artifact are workspace-relative, so this is frontend/coverage/ despite
+      # the job-level working-directory.
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
 
   software-factory:
     name: Software Factory Build & Test
@@ -110,5 +119,120 @@ jobs:
       - name: Run software factory checks
         run: ./gradlew :software-factory:check
 
+      # Report only — this module has no coverage floor, deliberately. See
+      # software-factory/build.gradle.kts and docs/runbooks/static-analysis.md.
+      - name: Generate JaCoCo report
+        run: ./gradlew :software-factory:jacocoTestReport
+
+      - name: Upload software factory coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: software-factory-jacoco-report
+          path: software-factory/build/reports/jacoco/
+
       - name: Build software factory container
         run: docker build -f Dockerfile.software-factory -t software-factory:test .
+
+  # Static analysis for all three modules in one project. See
+  # docs/runbooks/static-analysis.md.
+  #
+  # It is a separate job for two reasons: frontend coverage is only reachable from a
+  # Gradle-driven analysis via a cross-job artifact, and this job must not re-run any
+  # test suite — coverage arrives as artifacts from the three jobs above.
+  #
+  # It cannot fail CI, by two independent mechanisms. The step guard skips the
+  # analysis while no secret exists, and continue-on-error absorbs any failure once
+  # one does. Both matter: a tokenless `./gradlew sonar` was measured at ~10 minutes
+  # followed by a hard failure, so a guard that fails open is expensive, not harmless.
+  sonar:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    # All three, not just backend and frontend: this job consumes software-factory's
+    # coverage artifact too, and without the dependency it races the producing job.
+    needs: [backend, frontend, software-factory]
+    continue-on-error: true
+    # Job level, NOT step level. A step's `if:` is evaluated before that step's own
+    # `env:` block is applied, so the previous step-level form could never evaluate
+    # true — which is why this analysis had never run once.
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Sonar attributes new code by SCM blame. The default fetch-depth of 1 has no
+          # blame data, which yields silently wrong new-code attribution rather than an
+          # error.
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # download-artifact restores an artifact's contents, not the path it was
+      # uploaded from, so each `path:` reconstructs the location the sonar properties
+      # in build.gradle.kts expect.
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: jacoco-report
+          path: backend/build/reports/jacoco
+
+      - name: Download software factory coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: software-factory-jacoco-report
+          path: software-factory/build/reports/jacoco
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+
+      # Runs unconditionally, including when the analysis below is skipped, so a
+      # broken artifact hand-off is visible in the log. A missing coverage report is
+      # NOT an analysis error — Sonar reports 0% and carries on — so this is the only
+      # thing standing between a silent hand-off breakage and a coverage number that
+      # looks real and measures nothing.
+      - name: Verify analysis inputs
+        run: |
+          fail=0
+          for p in \
+            backend/build/reports/jacoco/test/jacocoTestReport.xml \
+            software-factory/build/reports/jacoco/test/jacocoTestReport.xml \
+            frontend/coverage/lcov.info \
+            frontend/tsconfig.app.json \
+            frontend/src \
+            frontend/tests
+          do
+            if [ -s "$p" ] || [ -d "$p" ]; then
+              echo "  ok   $p"
+            else
+              echo "  MISS $p"
+              fail=1
+            fi
+          done
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            echo "  MISS full git history - new-code attribution will be wrong"
+            fail=1
+          else
+            echo "  ok   full git history"
+          fi
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::A Sonar analysis input is missing. Coverage would silently report 0%."
+            exit 1
+          fi
+          echo "All analysis inputs present."
+
+      # `classes testClasses` is required and explicit: sonar-java analyses bytecode,
+      # and the `sonar` task pulls in no compile tasks of its own (verified with
+      # --dry-run). Never `./gradlew build sonar` — that re-runs the Testcontainers
+      # suite, duplicating the slowest work in CI.
+      - name: SonarCloud analysis
+        if: env.SONAR_TOKEN != ''
+        run: ./gradlew classes testClasses sonar

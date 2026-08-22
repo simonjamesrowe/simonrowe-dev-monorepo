@@ -40,5 +40,14 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
     // Playwright e2e specs live in e2e/ and must not be collected by Vitest.
     exclude: [...configDefaults.exclude, 'e2e/**'],
+    coverage: {
+      // v8 rather than istanbul: no instrumentation transform, so adding coverage
+      // does not perturb the existing suite.
+      provider: 'v8',
+      // lcov is what Sonar reads (sonar.javascript.lcov.reportPaths in the root
+      // build.gradle.kts); text keeps the number visible in the CI log.
+      reporter: ['text', 'lcov'],
+      reportsDirectory: 'coverage',
+    },
   },
 })
