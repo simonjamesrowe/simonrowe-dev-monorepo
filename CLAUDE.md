@@ -122,6 +122,21 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 033-sonarqube-static-analysis: SonarCloud analysis moved out of the `backend` job into its
+  own `sonar` job (`needs` all three build jobs, `fetch-depth: 0`, `continue-on-error: true`,
+  runs `./gradlew classes testClasses sonar` — no test re-run). `SONAR_TOKEN` moved to
+  job-level `env:` so the `if: env.SONAR_TOKEN != ''` guard can actually evaluate true; it
+  never could before, so the analysis had never run once. **A tokenless `sonar` invocation
+  takes ~10 minutes and then fails hard**, so that guard is load-bearing. Frontend gains
+  `@vitest/coverage-v8` + `test:coverage` + a blocking `npm run lint` step (exits 0 today:
+  5 `react-refresh` warnings, 0 errors); `software-factory` gains JaCoCo **report only, no
+  floor**. `sonar.coverage.exclusions` hand-mirrors `backend`'s nine `jacocoExcludes` entries,
+  translated from JaCoCo's class-file dialect to Sonar's source-file dialect — keep the two
+  lists in step or the coverage percentages disagree. Frontend has 58 tests in
+  `frontend/tests` and **9 co-located under `frontend/src`**, so `sonar.sources`/`sonar.tests`
+  deliberately overlap and are disambiguated by `sonar.exclusions` +
+  `sonar.test.inclusions`. Gate is advisory (`sonar.qualitygate.wait` unset). See
+  `docs/runbooks/static-analysis.md`.
 - 030-langfuse-sessions-content-evals: `chat-turn` Micrometer observation carries `session.id` +
   `langfuse.trace.input`/`.output` (fixes empty Sessions and shallow traces);
   `LangfuseContentObservationFilter` writes prompt/completion span attributes (Spring AI's
@@ -156,6 +171,7 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 ## Active Technologies
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.9 (web, security OAuth2 resource server, data-mongodb), `@auth0/auth0-react` (adds `loginWithPopup` usage), Lucide React `Heart` icon. No new dependencies. (029-favourite-news-events)
 - MongoDB — new `favourites` collection (record + `@Document`, unique compound index on `userId,type,contentId`). Existing `aggregated_articles` / `aggregated_events` unchanged. (029-favourite-news-events)
+- Static analysis: SonarQube Cloud (`org.sonarqube` 6.0.1.5171, project key `simonjamesrowe_simonrowe-dev-monorepo`), JaCoCo 0.8.12 on `backend` (0.78 floor) and `software-factory` (report only), `@vitest/coverage-v8` ^3.0.0 for frontend LCOV, ESLint 9 in CI. No persistence. (033-sonarqube-static-analysis)
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
