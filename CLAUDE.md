@@ -107,11 +107,55 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   agent has no `Bash` tool and the image carries no Gradle/Node/Docker, so CI is the only build
   environment and the repair loop is a CI poll. It adds no HTTP route. See
   `docs/runbooks/cvefix.md`.
+- **Self-healing watchdog:** `scripts/monitor-prod.sh` runs from cron every minute
+  (installed by `scripts/install-prod-monitoring.sh`, logs to `/var/log/prod-health/monitor.log`).
+  It checks the site, then every container's Docker health, then each public hostname, and
+  remediates at the narrowest level that fits. **Test changes to it with `DRY_RUN=1` and a
+  throwaway `STATE_DIR`** — every remediation path shells out to `docker compose`, so merely
+  running it performs real restarts and can recreate containers if the compose file has been
+  edited since the last deploy. Key fact it exists to work around: **Docker never restarts an
+  `unhealthy` container** — `restart: unless-stopped` only fires on process *exit*, so a
+  container that is up but failing its healthcheck stays broken forever unless something
+  external restarts it. See `docs/runbooks/prod-monitoring.md`.
+- **A `healthy` container is not proof a service is serving.** On 2026-08-14 a host reboot
+  cold-started all 21 containers at once and two came back broken *and invisible* for 10 days:
+  `dependencytrack-apiserver` reported `healthy` while its API port was dead (its healthcheck
+  probed only the management port on 9000; the JVM survived a `NoClassDefFoundError` that
+  killed the Jetty listener, so it never exited and was never restarted), and `langfuse` had
+  **no healthcheck at all** while every page 500'd on a broken `next-auth` module — its API
+  routes stayed 200, so a health-endpoint probe would have missed it. Both were fixed by a
+  plain `docker restart`; neither was an image problem. `langfuse`, `langfuse-worker`,
+  `temporal-ui` and `dependencytrack-frontend` now have healthchecks, and the apiserver probes
+  its API port too. **After any reboot, curl the public hostnames — do not trust a green
+  `docker compose ps`.**
+- **The kernel memory cgroup is disabled, so every `mem_limit` is unenforced.** `docker info`
+  warns `No memory limit support` and `docker stats` reports `0B / 0B`. The Raspberry Pi
+  *firmware* prepends `cgroup_disable=memory`; it is in `/proc/cmdline` but in **no file under
+  `/boot`**, so trying to delete it from `cmdline.txt` (as older docs advised) cannot work —
+  you *append* `cgroup_enable=memory cgroup_memory=1` instead, which is what
+  `scripts/enable-memory-cgroup.sh --apply` does. Needs a planned reboot. Second-order effect
+  while it is off: JVMs size their heap from the host's 15.84GiB rather than their container
+  limit (Dependency-Track's `-XX:MaxRAMPercentage=80.0` implies a ~12.7GiB heap against a
+  declared `mem_limit: 2g`). The compose file now declares limits/reservations for 17 services,
+  sized with ~2x headroom over measured PSS; they are inert until that reboot, and applying
+  them recreates ~17 containers — so do it in the same maintenance window.
+- **The backend healthcheck budget is tight for a reason.** `/actuator/health` aggregates
+  Elasticsearch, Kafka, Mongo, mail and SSL, and the Kafka indicator builds a fresh AdminClient
+  per call: measured ~9s on the Pi while returning `{"status":"UP"}`. It previously allowed only
+  4-5s, so it marked a healthy backend unhealthy, which made `up -d` abort with
+  "backend is unhealthy" and strand `frontend` in `created` (502 on www). That is the real cause
+  of the "just re-run restart-prod.sh" folklore. Now `interval: 30s`/`timeout: 25s`. To rescue a
+  stranded frontend without waiting on the dependency gate:
+  `docker compose -f docker-compose.prod.yml up -d --no-deps frontend`.
 - **Recover a downed/partial stack** from the deploy directory: `docker compose -f docker-compose.prod.yml up -d`
   (reconciles containers stuck in `created`, respecting `depends_on` ordering). Minimal alternative:
   `docker start simonrowe-dev-monorepo-langfuse-1 && docker start simonrowe-dev-monorepo-nginx-1`.
-- Containers left in Docker `created` state (built but never started) after an interrupted `docker compose up`
-  are a common failure mode: nginx keeps serving with a stale cached upstream IP → `502`.
+- Containers left in Docker `created` state (built but never started) after an interrupted
+  `docker compose up` are a common failure mode — a stranded `frontend` means `502` on www.
+  (The old explanation, "nginx keeps serving with a stale cached upstream IP", no longer
+  applies: since `62d26cc` nginx resolves upstreams per request, so a `502` here means the
+  upstream really is not running. `monitor-prod.sh` now detects `created`/`exited` containers
+  and reconciles the stack, and no longer bounces nginx for DNS reasons.)
 - **Pinggy tunnel:** one `PINGGY_TOKEN` = one active tunnel. If another host still holds it you get
   `A tunnel with the same token is already active`; reclaim it by setting `PINGGY_TOKEN=<token>+force`
   (the `+force` suffix terminates the stale session). The token maps to the `*.simonrowe.dev` custom domain.

@@ -293,8 +293,9 @@ docker logs simonrowe-dev-monorepo-dependencytrack-apiserver-1 2>&1 | grep -i "k
 
 ## Memory limit is currently NOT enforced — read before trusting `docker stats`
 
-`docker-compose.prod.yml` sets `mem_limit: 2g` on `dependencytrack-apiserver`. On this Pi, that
-limit is **decorative today**. The kernel boots with the memory cgroup controller disabled:
+`docker-compose.prod.yml` sets `mem_limit: 2g` on `dependencytrack-apiserver` (and limits on 16
+other services). On this Pi, every one of those limits is **decorative until the memory cgroup
+is enabled** — there is now a script for that, see the end of this section. The kernel boots with the memory cgroup controller disabled:
 
 Run on the Pi:
 
@@ -319,15 +320,35 @@ Consequences:
   accounts for reclaimable page cache), load average 0.5–0.8, no OOM history in `dmesg` or
   `journalctl -k`. A 2 GB apiserver fits comfortably inside that.
 
-To make the limit real: edit `/boot/firmware/cmdline.txt` on the Pi to remove
-`cgroup_disable=memory`, then **reboot the Pi**. This is a deliberate, disruptive, human-gated
-change — do not do it opportunistically; schedule it like any other host reboot, and confirm
-after reboot on the Pi with:
+To make the limit real, use `scripts/enable-memory-cgroup.sh` (see
+`docs/runbooks/prod-monitoring.md` for the full write-up):
 
 ```bash
-cat /proc/cmdline | grep -o cgroup_disable=memory
-cat /sys/fs/cgroup/memory.max 2>/dev/null || echo "still disabled"
+./scripts/enable-memory-cgroup.sh --verify   # report current state
+./scripts/enable-memory-cgroup.sh --apply    # backs cmdline.txt up first
+# ... reboot at a planned time ...
+./scripts/enable-memory-cgroup.sh --verify   # docker stats must not read 0B / 0B
 ```
+
+⚠️ **Earlier revisions of this runbook said to "remove `cgroup_disable=memory` from
+`/boot/firmware/cmdline.txt`". That instruction cannot work, and is probably why this was
+never fixed.** The parameter is **not in `cmdline.txt`, `config.txt`, or any other file
+under `/boot`** — the Raspberry Pi *firmware* prepends it to the kernel command line, so it
+appears in `/proc/cmdline` while `grep -r cgroup /boot/firmware/` returns nothing. There is
+nothing to delete. The working approach is to *append* an explicit re-enable
+(`cgroup_enable=memory cgroup_memory=1`); the kernel parses its command line left to right,
+and the later parameter wins over the firmware's earlier disable.
+
+Two things to know before scheduling that reboot:
+
+- A reboot is the **riskiest event on this host**. The 2026-08-14 reboot is what left both
+  Dependency-Track and Langfuse broken for 10 days (see "The false-healthy trap" below).
+  Verify the stack afterwards rather than assuming a green `docker compose ps`.
+- The reboot is also the natural moment for the `mem_limit`/`mem_reservation` values added
+  across `docker-compose.prod.yml` to take effect, since applying them requires recreating
+  ~17 containers and they do nothing until the controller is on. Note that recreating
+  `langfuse-db` briefly takes down **both** Langfuse and Dependency-Track, which share that
+  Postgres instance.
 
 Until that reboot happens, monitor memory pressure at the host level instead of
 per-container. Run on the Pi:
@@ -341,6 +362,67 @@ journalctl -k | grep -i "out of memory" | tail -20
 Any OOM-kill hit in the last two commands means the apiserver (or something else) is pushing the
 host over budget and `mem_limit` on `dependencytrack-apiserver` needs to come down, or something
 else needs to move off this host.
+
+## The false-healthy trap — `healthy` does not mean the API is serving
+
+**Symptom:** the UI loads at `https://dependency-track.simonrowe.dev/` but you cannot log in
+with Auth0, and every `/api/` request returns **502**. `docker compose ps` shows
+`dependencytrack-apiserver` as **`healthy`**, and it has been "healthy" for days.
+
+This happened for real: on 2026-08-14 the Pi rebooted, and the apiserver came back with
+
+```
+Exception in thread "main" java.lang.NoClassDefFoundError: dev/cel/runtime/CelFunctionBinding
+    at dev.cel.extensions.CelStringExtensions$Function.<clinit>(CelStringExtensions.java:51)
+    ...
+    at org.dependencytrack.policy.cel.CelPolicyEngine.<init>(CelPolicyEngine.java:109)
+    at org.dependencytrack.dex.DexEngineInitializer.contextInitialized(...)
+```
+
+The Jetty API listener on **8080 never started**, so nginx had nothing to proxy to. But the
+JVM did **not exit** — the management/health listener on 9000 and the Hikari connection pool
+run on non-daemon threads, so the process stayed alive. Therefore:
+
+- `restart: unless-stopped` never fired (the policy only acts on process *exit*).
+- The old healthcheck probed **only** `curl -fsS http://localhost:9000/health/ready`, which
+  reports datasource reachability and knows nothing about the API port. It returned
+  `{"status":"UP","checks":[{"name":"dataSources","status":"UP"}]}` throughout.
+- Docker therefore reported `healthy`, and **Docker never restarts an unhealthy container
+  anyway** — so even a correct healthcheck would not have self-healed it.
+
+It stayed broken for 10 days.
+
+**This is not a bad image.** `dev.cel.runtime.CelFunctionBinding` *is* present, in
+`/opt/owasp/dependency-track/lib/runtime-0.13.1.jar`, and the classpath is
+`dependency-track-apiserver.jar:lib/*` which includes it. (Note `cel-0.13.1.jar` contains only
+the *lite* runtime classes, so grepping just that jar is misleading.) The same image had been
+running fine for two weeks. A plain restart fixed it with no image change — treat it as a
+transient failure during a contended cold start.
+
+**Fix / diagnosis:**
+
+```bash
+# Is the API actually serving? This is the real question.
+curl -s -o /dev/null -w '%{http_code}\n' https://dependency-track.simonrowe.dev/api/version
+curl -s https://dependency-track.simonrowe.dev/api/v1/oidc/available    # must be: true
+
+# Confirm from inside: only :9000 listening and not :8080 means this exact failure.
+docker exec simonrowe-dev-monorepo-dependencytrack-apiserver-1 sh -c \
+  'curl -fsS -o /dev/null http://localhost:8080/api/version; echo "8080 exit=$?"'
+docker logs simonrowe-dev-monorepo-dependencytrack-apiserver-1 2>&1 | grep -E 'ServerConnector|NoClassDefFound'
+
+# Remedy: a plain restart, then confirm Jetty bound 8080.
+docker restart simonrowe-dev-monorepo-dependencytrack-apiserver-1
+docker logs --since 5m simonrowe-dev-monorepo-dependencytrack-apiserver-1 2>&1 | grep ServerConnector
+# want: Started oejs.ServerConnector{HTTP/1.1, (http/1.1)}{0.0.0.0:8080}
+```
+
+**What now prevents a repeat:** the healthcheck probes both ports —
+`curl -fsS localhost:9000/health/ready && curl -fsS localhost:8080/api/version` — so this
+failure now shows as `unhealthy`; and `scripts/monitor-prod.sh` both restarts unhealthy
+containers (Docker will not) and independently probes
+`https://dependency-track.simonrowe.dev/api/version` every minute. See
+`docs/runbooks/prod-monitoring.md`.
 
 ## Disk and database size — check this periodically, not just on day one
 
