@@ -1,6 +1,13 @@
 services:
   mongodb:
     image: mongo:8
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~139MB (WiredTiger sizes its cache from the limit)
+    mem_limit: 1g
+    mem_reservation: 256m
     restart: unless-stopped
     volumes:
       - mongodb-data:/data/db
@@ -14,6 +21,13 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.8.0
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~915MB
+    mem_limit: 2g
+    mem_reservation: 512m
     restart: unless-stopped
     environment:
       KAFKA_NODE_ID: 1
@@ -35,6 +49,13 @@ services:
 
   elasticsearch:
     image: elasticsearch:8.17.0
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~727MB; heap is pinned at 512m via ES_JAVA_OPTS
+    mem_limit: 1500m
+    mem_reservation: 512m
     restart: unless-stopped
     stop_grace_period: 90s
     environment:
@@ -85,6 +106,13 @@ services:
 
   temporal:
     image: temporalio/server:1.31.2
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~159MB
+    mem_limit: 768m
+    mem_reservation: 256m
     restart: unless-stopped
     depends_on:
       temporal-schema-init:
@@ -125,6 +153,13 @@ services:
 
   temporal-ui:
     image: temporalio/ui:2.52.1
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~15MB
+    mem_limit: 256m
+    mem_reservation: 64m
     restart: unless-stopped
     depends_on:
       temporal:
@@ -144,9 +179,22 @@ services:
       TEMPORAL_AUTH_REDIRECT_TO_PROVIDER: "true"
       TEMPORAL_CORS_ORIGINS: https://temporal.simonrowe.dev
       TEMPORAL_DISABLE_WRITE_ACTIONS: "true"
+    healthcheck:
+      # The image has no curl; wget is present and exits non-zero on any HTTP error.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   software-factory:
     image: ${FACTORY_IMAGE:-ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory:latest}
+    # Memory cap. Measured steady-state PSS on the Pi is noted below; the limit
+    # carries roughly 2x headroom. NOTE: INERT until the kernel memory cgroup is
+    # enabled - see scripts/enable-memory-cgroup.sh.
+    # Measured: ~264MB; also forks Claude Code and git, so leave real headroom
+    mem_limit: 1500m
+    mem_reservation: 384m
     pull_policy: always
     restart: unless-stopped
     # Deliberately no `env_file: .env`. This container terminates untrusted internet
@@ -220,6 +268,12 @@ services:
 
   backend:
     image: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:latest
+    # Memory cap. Measured steady-state PSS on the Pi is noted below; the limit
+    # carries roughly 2x headroom. NOTE: INERT until the kernel memory cgroup is
+    # enabled - see scripts/enable-memory-cgroup.sh.
+    # Measured: ~842MB; the buildpack JVM has no explicit -Xmx and sizes from this limit
+    mem_limit: 2g
+    mem_reservation: 512m
     pull_policy: always
     user: "0:0"
     restart: unless-stopped
@@ -294,10 +348,21 @@ services:
           "CMD",
           "bash",
           "-c",
-          "exec 3<>/dev/tcp/localhost/8081 && printf 'GET /actuator/health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 4 cat <&3 | grep -q '\"status\":\"UP\"'",
+          "exec 3<>/dev/tcp/localhost/8081 && printf 'GET /actuator/health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 20 cat <&3 | grep -q '\"status\":\"UP\"'",
         ]
-      interval: 10s
-      timeout: 5s
+      # /actuator/health aggregates Elasticsearch, Kafka, Mongo, mail and SSL, and the
+      # Kafka indicator builds a fresh AdminClient on every call. On this Pi the whole
+      # response measures ~9s while reporting {"status":"UP"} - so the old `timeout 4`
+      # + `timeout: 5s` budget marked a perfectly healthy backend unhealthy, which is
+      # what made `up -d` abort with "backend is unhealthy" and strand `frontend` in
+      # `created` (a 502 on www until someone re-ran the deploy). The budget now has
+      # real headroom over the measured cost.
+      #
+      # `interval` is 30s, not 10s: at 10s a 9s probe leaves almost no idle time and
+      # each probe opens a Kafka AdminClient, so frequent probing made the thing it
+      # was measuring slower.
+      interval: 30s
+      timeout: 25s
       retries: 5
       # The Pi needs ~90s to boot the backend, well past the old 10s+5x10s budget.
       # Compose then aborted `up -d` with "backend is unhealthy" — leaving frontend
@@ -306,6 +371,12 @@ services:
 
   frontend:
     image: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-frontend:latest
+    # Memory cap. Measured steady-state PSS on the Pi is noted below; the limit
+    # carries roughly 2x headroom. NOTE: INERT until the kernel memory cgroup is
+    # enabled - see scripts/enable-memory-cgroup.sh.
+    # Measured: ~4MB (static nginx)
+    mem_limit: 256m
+    mem_reservation: 64m
     pull_policy: always
     restart: unless-stopped
     volumes:
@@ -363,6 +434,13 @@ services:
 
   alloy:
     image: grafana/alloy:latest
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~263MB
+    mem_limit: 512m
+    mem_reservation: 128m
     restart: unless-stopped
     volumes:
       - ./config/alloy/config.alloy:/etc/alloy/config.alloy:ro
@@ -415,6 +493,12 @@ services:
 
   langfuse-db:
     image: postgres:15
+    # Memory cap. Measured steady-state PSS on the Pi is noted below; the limit
+    # carries roughly 2x headroom. NOTE: INERT until the kernel memory cgroup is
+    # enabled - see scripts/enable-memory-cgroup.sh.
+    # Measured: ~275MB; shared by the langfuse AND dtrack databases
+    mem_limit: 1g
+    mem_reservation: 256m
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${LANGFUSE_DB_USER:-postgres}
@@ -435,6 +519,13 @@ services:
     # CLICKHOUSE_DISABLE_LAZY_MATERIALIZATION env var below, not by the ClickHouse version.
     # Only move this pin forward deliberately, verifying scores.all still works afterward.
     image: clickhouse/clickhouse-server:26.7.1.1315
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~906MB
+    mem_limit: 2g
+    mem_reservation: 512m
     restart: unless-stopped
     user: "101:101"
     environment:
@@ -453,6 +544,13 @@ services:
 
   langfuse-redis:
     image: redis:7
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~16MB
+    mem_limit: 256m
+    mem_reservation: 64m
     restart: unless-stopped
     command: >
       --requirepass ${REDIS_AUTH}
@@ -467,6 +565,13 @@ services:
 
   langfuse-minio:
     image: cgr.dev/chainguard/minio
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~254MB
+    mem_limit: 512m
+    mem_reservation: 128m
     restart: unless-stopped
     entrypoint: sh
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
@@ -484,6 +589,13 @@ services:
 
   langfuse-worker:
     image: langfuse/langfuse-worker:3.212.0
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~510MB
+    mem_limit: 1500m
+    mem_reservation: 512m
     restart: unless-stopped
     depends_on: &langfuse-depends-on
       langfuse-db:
@@ -524,9 +636,25 @@ services:
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+    # Belongs to langfuse-worker (the block above); the env map it closes is the
+    # &langfuse-env anchor that the langfuse web service merges in.
+    healthcheck:
+      # Same $$HOSTNAME bind caveat as the langfuse web service - localhost:3030 is refused.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://$$HOSTNAME:3030/api/health || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 180s
 
   langfuse:
     image: langfuse/langfuse:3.212.0
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~950MB
+    mem_limit: 2g
+    mem_reservation: 512m
     restart: unless-stopped
     depends_on: *langfuse-depends-on
     env_file:
@@ -548,6 +676,28 @@ services:
       LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-admin@simonrowe.dev}
       LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-Simon Rowe}
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
+    healthcheck:
+      # Two probes, deliberately. `/api/public/ready` covers the backing services
+      # (Postgres/ClickHouse/Redis), but it is a plain API route that does NOT exercise the
+      # React server-render path. On 2026-08-14 Langfuse came up with a broken next-auth
+      # module ("Failed to load external module .../react: SyntaxError"), so every *page*
+      # 500'd - including the Auth0 sign-in - while the API routes stayed 200. Only a probe
+      # of `/` catches that, and with no healthcheck at all the container simply read as
+      # "Up" for 10 days.
+      #
+      # MUST target $$HOSTNAME, not localhost: Next.js standalone binds to the address in
+      # HOSTNAME (the container id), so the port is open on the container IP only and
+      # localhost:3000 is refused. `$$` escapes compose interpolation so the container's
+      # own shell expands it. The image has no curl; wget exits non-zero on HTTP errors.
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://$$HOSTNAME:3000/api/public/ready && wget -q -O /dev/null http://$$HOSTNAME:3000/ || exit 1",
+        ]
+      interval: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 180s
 
   # One-shot: create the Dependency-Track database and role inside the existing
   # langfuse Postgres. The langfuse-db-data volume predates this service, so
@@ -601,12 +751,19 @@ services:
     # gate was removed in 4.14.0; v5 documents 2GB as the starting point with a
     # 1GB floor, and the project's own quickstart runs at 1Gi.
     #
-    # ⚠️ This limit is NOT currently enforced on the production Pi: its kernel boots
-    # with `cgroup_disable=memory`, so Docker accepts the value but nothing applies it
-    # (and `docker stats` reports 0B/0B). Do not treat it as a real cap until that is
-    # fixed - see "Memory limit is currently NOT enforced" in
-    # docs/runbooks/dependency-track.md.
+    # ⚠️ This limit is NOT enforced until the kernel memory cgroup is enabled: the Pi
+    # boots with `cgroup_disable=memory` (prepended by the Raspberry Pi firmware, which
+    # is why it appears in /proc/cmdline but in no file under /boot), so Docker accepts
+    # the value and applies nothing - `docker stats` reports 0B/0B. Every other
+    # mem_limit in this file has the same caveat.
+    #
+    # Fix it with `scripts/enable-memory-cgroup.sh --apply` plus a planned reboot; see
+    # docs/runbooks/prod-monitoring.md. Until then, note the second-order effect: the
+    # image sets -XX:MaxRAMPercentage=80.0, so with no enforced limit this JVM sizes its
+    # heap against the *host* 15.84GiB (~12.7GiB) rather than the 2g declared here.
+    # Measured steady-state PSS is ~595MB, so 2g remains the right cap once live.
     mem_limit: 2g
+    mem_reservation: 512m
     volumes:
       # The image sets HOME=/data/, and /data holds the Lucene search indexes plus
       # analyzer working state. Without a volume every container recreation (image
@@ -644,7 +801,20 @@ services:
       DT_OIDC_USER_PROVISIONING: "true"
       DT_OIDC_TEAM_SYNCHRONIZATION: "true"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health/ready || exit 1"]
+      # MUST probe the API port (8080), not just the management port (9000).
+      # /health/ready on 9000 only reports that the datasource is reachable, and it is
+      # served by a different, earlier-started listener than the Jetty API server. On
+      # 2026-08-14 the API server failed to start (NoClassDefFoundError while loading the
+      # CEL policy engine) yet the JVM stayed alive, because the health listener and the
+      # Hikari pool are non-daemon threads. The container therefore reported `healthy`
+      # for 10 days while every /api/ request 502'd and Auth0 login was impossible -
+      # `restart: unless-stopped` never fired, because the process never exited.
+      # Probing /api/version proves the thing clients actually use is serving.
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:9000/health/ready >/dev/null && curl -fsS http://localhost:8080/api/version >/dev/null || exit 1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 10
@@ -652,6 +822,13 @@ services:
 
   dependencytrack-frontend:
     image: dependencytrack/frontend:5.0.3
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
+    # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
+    # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
+    # accepts them and enforces nothing (`docker stats` shows 0B / 0B).
+    # Measured: ~2MB (static nginx)
+    mem_limit: 256m
+    mem_reservation: 64m
     restart: unless-stopped
     depends_on:
       dependencytrack-apiserver:
@@ -666,6 +843,12 @@ services:
       OIDC_SCOPE: "openid profile email"
       OIDC_FLOW: "code"
       OIDC_LOGIN_BUTTON_TEXT: "Login with Auth0"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
 volumes:
   mongodb-data:

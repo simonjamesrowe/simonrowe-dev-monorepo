@@ -90,6 +90,63 @@ fixed project keys**, so Alloy's OTLP basic auth keeps matching with no key copy
 **Do not restart nginx** as part of this. It resolves all four upstreams at startup and aborts
 if any is down, which would also take Portainer offline.
 
+## Every page 500s but the API is fine (2026-08-14)
+
+**Symptom:** `https://langfuse.simonrowe.dev/` returns **500** — including the Auth0 sign-in
+page, so you cannot log in — while the container reads as `Up` in `docker compose ps`.
+
+Container logs show, repeatedly:
+
+```
+⨯ Error: Failed to load external module next-auth-<hash>/react: SyntaxError: Invalid or unexpected token
+    at Context.externalRequire [as x] (.next/server/chunks/ssr/[turbopack]_runtime.js:624:15)
+```
+
+The broken module is `next-auth` itself, which is why this presents as an Auth0 problem. It is
+not: the Auth0 configuration was correct throughout, and the failure is in Langfuse's own
+server-side render.
+
+Two things made this invisible for 10 days:
+
+- **`langfuse` had no healthcheck at all**, so Docker reported `Up` regardless of what it
+  served. (`langfuse-worker` had none either.)
+- **The failure is confined to the React render path.** API routes kept returning 200 —
+  `/api/public/ready` was healthy the whole time. A health-endpoint-only probe would *not*
+  have caught this, which is why the healthcheck now probes `/` as well:
+
+  ```
+  wget -q -O /dev/null http://$HOSTNAME:3000/api/public/ready &&
+  wget -q -O /dev/null http://$HOSTNAME:3000/
+  ```
+
+  Note `$HOSTNAME`, not `localhost`: Next.js standalone binds to the address in `HOSTNAME`
+  (the container id), so port 3000 is open on the container IP only and `localhost:3000` is
+  refused. A `localhost` healthcheck here fails permanently and would get the container
+  restart-looped by the watchdog. In the compose file it is written `$$HOSTNAME` so compose
+  passes the literal `$HOSTNAME` through for the container's own shell to expand.
+
+**Remedy: a plain restart.** No image change was needed and the error has not recurred.
+
+```bash
+docker restart simonrowe-dev-monorepo-langfuse-1
+# then confirm both the page and the Auth0 provider list
+curl -s -o /dev/null -w 'page=%{http_code}\n' https://langfuse.simonrowe.dev/
+curl -s https://langfuse.simonrowe.dev/api/auth/providers | head -c 200   # must include "auth0"
+docker logs --since 5m simonrowe-dev-monorepo-langfuse-1 2>&1 | grep -c 'Failed to load external module'  # want 0
+```
+
+The trigger was a host reboot cold-starting 21 containers at once; see
+`docs/runbooks/prod-monitoring.md`. `scripts/monitor-prod.sh` now probes
+`https://langfuse.simonrowe.dev/` every minute and restarts the service if it stops serving.
+
+### Aside: `langfuse` loads the whole `.env`
+
+The `langfuse` service uses `env_file: .env`, so its process environment contains every
+production secret in that file — including `CLAUDE_CODE_OAUTH_TOKEN` and the Dependency-Track
+credentials — not just the `LANGFUSE_*`/`AUTH_*` values it needs. That is the opposite of the
+approach taken for `software-factory`, which deliberately declares each variable for exactly
+this reason. Worth narrowing; noted here rather than changed as part of an incident fix.
+
 ## Notes
 
 - **Content capture is ON** (decision 2026-07-26, reversing 2026-07-17). Visitor chat text —
