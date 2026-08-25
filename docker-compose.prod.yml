@@ -325,6 +325,12 @@ services:
       - ${DOCKER_PLUGINS_PATH:-/usr/libexec/docker/cli-plugins}:/usr/local/lib/docker/cli-plugins:ro
       - ./docker-compose.prod.yml:/workspace/docker-compose.prod.yml:ro
       - ./.env:/workspace/.env:ro
+      # Handoff for the nightly platform backup: langfuse-clickhouse writes its
+      # `BACKUP DATABASE default` output into this volume at /backups, and the
+      # backend reads it from here to fold into the archive. Read-write, because
+      # the backend also sweeps orphaned files left by crashed prior runs —
+      # without that sweep a few failed nights silently fill the SD card.
+      - langfuse-clickhouse-backups:/clickhouse-backups
       # /dev/null keeps a disabled deployment bootable before credentials are configured.
       # Once enabled, GOOGLE_CLOUD_TTS_CREDENTIALS_PATH must name the real host JSON file.
       - ${GOOGLE_CLOUD_TTS_CREDENTIALS_PATH:-/dev/null}:/run/secrets/google-cloud-tts.json:ro
@@ -512,6 +518,25 @@ services:
       timeout: 5s
       retries: 5
 
+  # Chowns the langfuse-clickhouse-backups volume so ClickHouse can write its
+  # BACKUP output there. NOT optional: /backups does not exist in the ClickHouse
+  # image, so Docker creates the named volume empty and root-owned, while the
+  # server below runs as 101:101 — every `BACKUP DATABASE default TO File(...)`
+  # would fail on permissions. (langfuse-clickhouse-data does not need this
+  # because /var/lib/clickhouse *does* exist in the image, so Docker seeds the
+  # volume with the image's content and ownership.) Same pattern as uploads-init.
+  #
+  # One-shot: it exits 0 and stays `exited` for the life of the stack. That is
+  # success, so it is registered in ONESHOT_SERVICES in scripts/monitor-prod.sh —
+  # a one-shot missing from that list reads as a broken container on every cron
+  # tick and makes the watchdog reconcile the whole stack once a minute forever.
+  clickhouse-backups-init:
+    image: busybox
+    volumes:
+      - langfuse-clickhouse-backups:/backups
+    command: ["sh", "-c", "chown -R 101:101 /backups"]
+    restart: "no"
+
   langfuse-clickhouse:
     # Pinned to the exact build the data directory was created with. The upstream Langfuse
     # compose file itself uses an unpinned tag; do NOT change this to a bare `latest` — 26.7
@@ -528,6 +553,9 @@ services:
     mem_reservation: 512m
     restart: unless-stopped
     user: "101:101"
+    depends_on:
+      clickhouse-backups-init:
+        condition: service_completed_successfully
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
@@ -535,6 +563,13 @@ services:
     volumes:
       - langfuse-clickhouse-data:/var/lib/clickhouse
       - langfuse-clickhouse-logs:/var/log/clickhouse-server
+      # Where `BACKUP DATABASE default TO File('...')` writes, and where the
+      # backend reads the result from. Shared read-write with the backend
+      # container, which mounts the same volume at /clickhouse-backups.
+      - langfuse-clickhouse-backups:/backups
+      # Declares /backups as an allowed backup path. Without it, BACKUP is
+      # refused outright and no ClickHouse data is ever captured.
+      - ./config/clickhouse/backup-disk.xml:/etc/clickhouse-server/config.d/backup-disk.xml:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
       interval: 5s
@@ -860,6 +895,13 @@ volumes:
   langfuse-db-data:
   langfuse-clickhouse-data:
   langfuse-clickhouse-logs:
+  # Handoff volume for the nightly platform backup: langfuse-clickhouse writes
+  # its own BACKUP output here (/backups) and the backend reads it back out
+  # (/clickhouse-backups) to fold into the archive. It is transient by design —
+  # the backend deletes the file after upload and sweeps orphans on the next run
+  # — but it must be a named volume, not a tmpfs or bind, so the two containers
+  # genuinely share it. Created root-owned; chowned by clickhouse-backups-init.
+  langfuse-clickhouse-backups:
   langfuse-redis-data:
   langfuse-minio-data:
   # Dependency-Track's /data (HOME): Lucene indexes and analyzer working state.

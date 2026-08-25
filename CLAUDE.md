@@ -166,6 +166,46 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 034-platform-datastore-backup: nightly (02:00) + on-demand capture of the four
+  `langfuse-db` Postgres databases (`langfuse`, `dtrack`, `temporal`,
+  `temporal_visibility`) and the ClickHouse `default` database, in
+  `PlatformBackupService`/`PlatformBackupScheduler`. **Uploads to a separate Drive
+  folder (`simonrowe-platform-backups`), and that separation is load-bearing:**
+  retention deletes everything past the newest 7 `.zip` in a folder, so sharing one
+  would make the two backup types evict each other and silently halve both recovery
+  windows. `GoogleDriveService.findOrCreateFolder()` short-circuits on
+  `GOOGLE_DRIVE_FOLDER_ID` (set via `env_file: .env`), so the platform path uses
+  `findOrCreatePlatformFolder()`, which resolves by name and deliberately does *not*
+  fall back to that id — `GoogleDriveFolderResolutionTest` guards it.
+  New `langfuse-clickhouse-backups` volume + `config/clickhouse/backup-disk.xml`
+  (`<backups><allowed_path>`) + a `clickhouse-backups-init` busybox one-shot that
+  `chown`s the volume to `101:101`. **The chown is required, not defensive:**
+  `/backups` does not exist in the ClickHouse image, so the volume is created
+  root-owned while the server process drops to uid 101 even when the container
+  starts as root — verified, `BACKUP` fails `CANNOT_OPEN_FILE errno 13` without it.
+  `clickhouse-backups-init` is registered in `ONESHOT_SERVICES` in
+  `scripts/monitor-prod.sh`; a one-shot missing from that list reads as a broken
+  container every cron tick and makes the watchdog reconcile the whole stack once a
+  minute forever. Restore is **`scripts/restore-platform.sh`** on the host, not an
+  in-app operation — there is no restore endpoint and no restore button, because the
+  scenario that motivates restore is a rebuilt host where the backend is the thing
+  being rebuilt. It is per-target (`langfuse`/`dtrack`/`temporal`/`all`), never stops
+  `langfuse-db` itself (dropping databases inside a running server is what keeps the
+  targets independent), restarts stopped consumers from an `EXIT` trap so a failed
+  restore leaves them running rather than down, and **refuses to run when the
+  archive's SHA-256 secret fingerprints don't match `.env`** — Langfuse/DT rows
+  restored under different secrets load fine and then fail to decrypt, a failure
+  that presents as success. Verified against the pinned
+  `clickhouse-server:26.7.1.1315`: `DROP DATABASE ... SYNC` then `RESTORE DATABASE`
+  works (also into an existing-but-empty `default`, which the entrypoint recreates on
+  restart); `allow_non_empty_tables` is deliberately **unused** because it appends and
+  would duplicate every trace row; and `docker cp` alone is not enough — it preserves
+  host ownership, so the file must be chowned to 101:101 or the restore fails
+  `CANNOT_OPEN_FILE` with no hint that ownership is the cause. Deploying recreates
+  `langfuse-clickhouse` and `backend` (both gain mounts) — combine with the pending
+  memory-cgroup reboot. ClickHouse archive size is **unbounded and still unmeasured**
+  (no TTL on trace tables); measure before trusting the Drive quota. See
+  `docs/runbooks/platform-backup-restore.md`.
 - 033-sonarqube-static-analysis: SonarCloud analysis moved out of the `backend` job into its
   own `sonar` job (`needs` all three build jobs, `fetch-depth: 0`, `continue-on-error: true`,
   runs `./gradlew classes testClasses sonar` — no test re-run). `SONAR_TOKEN` moved to
@@ -216,6 +256,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.9 (web, security OAuth2 resource server, data-mongodb), `@auth0/auth0-react` (adds `loginWithPopup` usage), Lucide React `Heart` icon. No new dependencies. (029-favourite-news-events)
 - MongoDB — new `favourites` collection (record + `@Document`, unique compound index on `userId,type,contentId`). Existing `aggregated_articles` / `aggregated_events` unchanged. (029-favourite-news-events)
 - Static analysis: SonarQube Cloud (`org.sonarqube` 6.0.1.5171, project key `simonjamesrowe_simonrowe-dev-monorepo`), JaCoCo 0.8.12 on `backend` (0.78 floor) and `software-factory` (report only), `@vitest/coverage-v8` ^3.0.0 for frontend LCOV, ESLint 9 in CI. No persistence. (033-sonarqube-static-analysis)
+- Java 21 (backend), TypeScript 5.x / React 19 (frontend), bash (restore script) + Spring Boot 3.5.x `@Scheduled`/`@RestController`, the existing Google Drive API client, `java.util.zip`, `java.lang.ProcessBuilder`. **No new dependencies in any module.** (034-platform-datastore-backup)
+- No application persistence: reads Postgres 15 (`langfuse-db`) and ClickHouse (`langfuse-clickhouse`) via `docker exec`, writes a zip to Google Drive. One new Docker named volume (`langfuse-clickhouse-backups`) as the ClickHouse→backend handoff. (034-platform-datastore-backup)
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,

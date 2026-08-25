@@ -57,6 +57,7 @@ COMPOSE_PROJECT=${COMPOSE_PROJECT:-simonrowe-dev-monorepo}
 # would fire a stack reconcile on every single cron tick.
 ONESHOT_SERVICES=(
   "uploads-init"
+  "clickhouse-backups-init"
   "temporal-db-init"
   "temporal-schema-init"
   "temporal-create-namespace"

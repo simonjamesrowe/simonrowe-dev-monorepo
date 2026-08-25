@@ -26,6 +26,7 @@ public class DataOperationsController {
   private final DataOperationsService operationsService;
   private final GoogleDriveService googleDriveService;
   private final BackupService backupService;
+  private final PlatformBackupService platformBackupService;
   private final RestoreService restoreService;
   private final ClearService clearService;
   private final RedeployService redeployService;
@@ -36,6 +37,7 @@ public class DataOperationsController {
       final DataOperationsService operationsService,
       final GoogleDriveService googleDriveService,
       final BackupService backupService,
+      final PlatformBackupService platformBackupService,
       final RestoreService restoreService,
       final ClearService clearService,
       final RedeployService redeployService,
@@ -45,6 +47,7 @@ public class DataOperationsController {
     this.operationsService = operationsService;
     this.googleDriveService = googleDriveService;
     this.backupService = backupService;
+    this.platformBackupService = platformBackupService;
     this.restoreService = restoreService;
     this.clearService = clearService;
     this.redeployService = redeployService;
@@ -82,6 +85,52 @@ public class DataOperationsController {
           "Failed to list backups: " + ex.getMessage());
     }
   }
+
+  /**
+   * Captures the platform datastores now, rather than waiting for tonight's
+   * scheduled run — the operation an operator wants immediately before upgrading
+   * or maintaining one of the platform tools.
+   *
+   * <p>Progress arrives on the existing {@code /progress} SSE stream; this adds no
+   * new stream.
+   *
+   * @return {@code 202} with the started operation
+   */
+  @PostMapping("/platform-backup")
+  public ResponseEntity<DataOperation> startPlatformBackup() {
+    requireDriveConnected();
+    DataOperation operation =
+        requireNoOperationInProgress(OperationType.PLATFORM_BACKUP);
+    CompletableFuture.runAsync(() -> platformBackupService.performBackup());
+    return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
+  }
+
+  /**
+   * Lists the retained platform archives, newest first.
+   *
+   * <p>Reads the <em>platform</em> Drive folder, which is deliberately a different
+   * folder from the one {@link #listBackups()} reads. The two retention windows
+   * are independent so that neither backup type can evict the other.
+   *
+   * @return the retained platform archives
+   */
+  @GetMapping("/platform-backups")
+  public List<BackupMetadata> listPlatformBackups() {
+    requireDriveConnected();
+    try {
+      String folderId = googleDriveService.findOrCreatePlatformFolder();
+      return googleDriveService.listBackups(folderId);
+    } catch (IOException ex) {
+      LOG.error("Failed to list platform backups", ex);
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+          "Failed to list platform backups: " + ex.getMessage());
+    }
+  }
+
+  // There is deliberately no platform restore endpoint. Restore is
+  // scripts/restore-platform.sh: the scenario that motivates it is a rebuilt
+  // host, where this application is the thing being rebuilt, so a button inside
+  // it is the wrong tool.
 
   @PostMapping("/restore")
   public ResponseEntity<DataOperation> startRestore(

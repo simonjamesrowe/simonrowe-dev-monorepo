@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CloudUpload,
   CloudDownload,
+  Database,
   Rocket,
   RefreshCw,
   Trash2,
@@ -16,6 +17,8 @@ import {
   fetchDataOpsStatus,
   startBackup,
   fetchBackups,
+  startPlatformBackup,
+  fetchPlatformBackups,
   startRestore,
   startClear,
   startRebuildIndex,
@@ -42,6 +45,12 @@ export function DataOperationsAdmin() {
   const [loadingBackups, setLoadingBackups] = useState(false)
   const [selectedBackup, setSelectedBackup] = useState<BackupMetadata | null>(null)
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
+
+  // Platform backup state. The archive list is loaded on mount rather than
+  // behind a button: its whole purpose is to make a stalled nightly job obvious
+  // at a glance, which a list you have to click to see does not do.
+  const [platformBackups, setPlatformBackups] = useState<BackupMetadata[]>([])
+  const [platformBackupsError, setPlatformBackupsError] = useState<string | null>(null)
 
   // Clear-specific state
   const [showClearConfirm, setShowClearConfirm] = useState(false)
@@ -74,9 +83,27 @@ export function DataOperationsAdmin() {
     }
   }, [getAccessToken])
 
+  const loadPlatformBackups = useCallback(async () => {
+    try {
+      setPlatformBackupsError(null)
+      setPlatformBackups(await fetchPlatformBackups(getAccessToken))
+    } catch (err) {
+      // Reported inside the card rather than in the page-level banner: failing to
+      // list archives is not the same as failing to back up, and conflating them
+      // is how an operator concludes the nightly job is broken when it is not.
+      setPlatformBackupsError(
+        err instanceof Error ? err.message : 'Failed to load platform backups',
+      )
+    }
+  }, [getAccessToken])
+
   useEffect(() => {
     loadStatus()
   }, [loadStatus])
+
+  useEffect(() => {
+    loadPlatformBackups()
+  }, [loadPlatformBackups])
 
   const pollForReconnection = useCallback(async () => {
     setReconnecting(true)
@@ -113,6 +140,11 @@ export function DataOperationsAdmin() {
           setSuccess(op.resultSummary || 'Operation completed successfully')
           setError(null)
           loadStatus()
+          if (op.type === 'PLATFORM_BACKUP') {
+            // The new archive only appears in the list once Drive has it, so the
+            // refresh has to wait for completion rather than fire on the trigger.
+            loadPlatformBackups()
+          }
           es.close()
           eventSourceRef.current = null
         } else if (op.status === 'FAILED') {
@@ -131,7 +163,7 @@ export function DataOperationsAdmin() {
       },
     )
     eventSourceRef.current = es
-  }, [getAccessToken, loadStatus, pollForReconnection])
+  }, [getAccessToken, loadStatus, loadPlatformBackups, pollForReconnection])
 
   useEffect(() => {
     return () => {
@@ -151,6 +183,18 @@ export function DataOperationsAdmin() {
       await startBackup(getAccessToken)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start backup')
+    }
+  }
+
+  // --- Platform backup ---
+  const handlePlatformBackup = async () => {
+    try {
+      setError(null)
+      setSuccess(null)
+      await connectSse()
+      await startPlatformBackup(getAccessToken)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start platform backup')
     }
   }
 
@@ -309,6 +353,52 @@ export function DataOperationsAdmin() {
               Backup Now (full)
             </button>
           </div>
+        </div>
+
+        {/*
+          Platform Data. Read-only beyond the trigger: the archive list is here so
+          a stalled nightly job is obvious at a glance, without shell access. There
+          is deliberately no restore button — platform restore is
+          scripts/restore-platform.sh on the host, because the scenario that
+          motivates it is a rebuilt host where this application is being rebuilt.
+        */}
+        <div className="data-ops__card">
+          <div className="data-ops__card-icon"><Database size={24} /></div>
+          <h3 className="data-ops__card-title">Platform Data</h3>
+          <p className="data-ops__card-desc">
+            Back up Langfuse, Dependency-Track and Temporal (Postgres) plus the LLM
+            trace store (ClickHouse). Runs nightly at 02:00; kept separately from the
+            site backups above. Restore is <code>scripts/restore-platform.sh</code> on
+            the host.
+          </p>
+          <div className="data-ops__card-actions">
+            <button
+              className="admin-btn admin-btn--secondary"
+              disabled={operationInProgress || !driveConnected}
+              onClick={handlePlatformBackup}
+              type="button"
+            >
+              Back Up Now
+            </button>
+          </div>
+          {platformBackupsError ? (
+            <p className="data-ops__card-note data-ops__result--error">
+              {platformBackupsError}
+            </p>
+          ) : platformBackups.length === 0 ? (
+            <p className="data-ops__card-note">No platform backups yet.</p>
+          ) : (
+            <ul className="data-ops__backup-list">
+              {platformBackups.map((backup) => (
+                <li key={backup.fileId} className="data-ops__backup-list-item">
+                  <span>{new Date(backup.createdAt).toLocaleString()}</span>
+                  <span className="data-ops__backup-list-size">
+                    {backup.fileSizeFormatted}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="data-ops__card">

@@ -160,6 +160,16 @@ google:
     client-secret: ${GOOGLE_DRIVE_CLIENT_SECRET:}
     refresh-token: ${GOOGLE_DRIVE_REFRESH_TOKEN:}
     folder-id: ${GOOGLE_DRIVE_FOLDER_ID:}
+    # Platform backups MUST NOT share a folder with the application backups
+    # above. Retention keeps the newest N *.zip in a folder, so a shared folder
+    # would make the two backup types evict each other and silently degrade
+    # today's "last 7 days" guarantee to roughly "last 3 days" of each.
+    #
+    # Leave this blank in normal operation: the platform folder is then resolved
+    # by name (`simonrowe-platform-backups`), created on first use. Set it only
+    # to pin a specific folder — note that unlike folder-id above, leaving it
+    # blank does NOT fall back to the application folder.
+    platform-folder-id: ${GOOGLE_DRIVE_PLATFORM_FOLDER_ID:}
 
 # On-demand narration is deliberately disabled unless the operator completes
 # docs/setup/google-cloud-tts.md and explicitly enables it. Google Drive's OAuth
@@ -405,11 +415,55 @@ aggregation:
     duplicate-window-hours: 24
 
 backup:
+  # Application data: MongoDB, uploaded media, Elasticsearch embeddings.
+  # Uploads all media over a residential uplink, so it can run for hours — which
+  # is why the platform backup below sits four hours clear of it.
   schedule:
     cron: "0 0 22 * * *"
     zone: "Europe/London"
   retention:
     max-backups: 7
+  # Platform datastores: the four Postgres databases in langfuse-db plus the
+  # ClickHouse `default` database. Separate schedule, separate Drive folder and
+  # separate retention window from the application backup above — see
+  # docs/runbooks/platform-backup-restore.md.
+  platform:
+    schedule:
+      # 02:00 is deliberately four hours clear of the 22:00 application backup.
+      # DataOperationsService holds a single global mutex, so an overlap does not
+      # queue — it skips the whole night. The gap makes that rare; when it does
+      # happen it logs, skips, and self-corrects the next night.
+      cron: "0 0 2 * * *"
+      zone: "Europe/London"
+    retention:
+      max-backups: 7
+    # Same binary the redeploy path uses; the docker CLI is bind-mounted into
+    # this container by docker-compose.prod.yml.
+    docker-binary: ${REDEPLOY_DOCKER_BINARY:docker}
+    # Generous: a pg_dump of temporal_visibility on four ARM cores is slow, and a
+    # premature kill is indistinguishable from a real failure.
+    command-timeout-minutes: 120
+    postgres-container: ${PLATFORM_BACKUP_POSTGRES_CONTAINER:langfuse-db}
+    clickhouse-container: ${PLATFORM_BACKUP_CLICKHOUSE_CONTAINER:langfuse-clickhouse}
+    clickhouse-database: default
+    # Order matters only for readability; each is dumped independently so a
+    # restore can target one tool without touching the others.
+    databases:
+      - langfuse
+      - dtrack
+      - temporal
+      - temporal_visibility
+    # The langfuse-clickhouse-backups volume as mounted into *this* container.
+    # ClickHouse sees the same volume at /backups.
+    clickhouse-backup-path: ${PLATFORM_BACKUP_CLICKHOUSE_PATH:/clickhouse-backups}
+    clickhouse-container-backup-path: /backups
+    # Images recorded in the manifest, so a restore knows which tool version
+    # produced the dump: a dtrack dump taken under 5.0.3 restored into a later
+    # major may need that version's own schema migration afterwards.
+    image-containers:
+      - langfuse
+      - dependencytrack-apiserver
+      - langfuse-clickhouse
 
 langfuse:
   host: ${LANGFUSE_HOST:https://langfuse.simonrowe.dev}
