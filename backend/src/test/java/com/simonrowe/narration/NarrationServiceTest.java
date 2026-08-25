@@ -170,7 +170,7 @@ class NarrationServiceTest {
   }
 
   private static NarrationProperties properties(final int maxCharacters) {
-    return new NarrationProperties(true, "project", "123456789012", "global",
+    return new NarrationProperties(true, "project", "123456789012", null, "global",
         "voice", "en-GB",
         "bucket", maxCharacters, 1_000_000, Duration.ofMillis(1),
         Duration.ofSeconds(1), Duration.ofSeconds(1), Duration.ofSeconds(1));

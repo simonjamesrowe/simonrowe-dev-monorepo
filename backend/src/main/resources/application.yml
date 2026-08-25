@@ -168,6 +168,11 @@ narration:
   enabled: ${NARRATION_ENABLED:false}
   project-id: ${GOOGLE_CLOUD_TTS_PROJECT_ID:}
   project-number: ${GOOGLE_CLOUD_TTS_PROJECT_NUMBER:}
+  # Preferred where no credential file can be installed (the production Pi). When set it
+  # replaces Application Default Credentials entirely, and project-number/bucket become
+  # unnecessary because the Long Audio route they serve is never taken. Local development
+  # leaves this blank and uses gcloud user ADC.
+  api-key: ${GOOGLE_CLOUD_TTS_API_KEY:}
   location: ${GOOGLE_CLOUD_TTS_LOCATION:global}
   voice-name: ${GOOGLE_CLOUD_TTS_VOICE_NAME:en-GB-Chirp3-HD-Charon}
   language-code: ${GOOGLE_CLOUD_TTS_LANGUAGE_CODE:en-GB}

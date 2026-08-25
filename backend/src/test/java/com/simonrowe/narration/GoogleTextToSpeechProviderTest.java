@@ -3,6 +3,7 @@ package com.simonrowe.narration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -188,5 +189,53 @@ class GoogleTextToSpeechProviderTest {
         .isInstanceOf(NarrationProviderException.class)
         .extracting(ex -> ((NarrationProviderException) ex).kind())
         .isEqualTo(FailureKind.SAFE_TO_RETRY);
+  }
+
+  /**
+   * The production Pi cannot host a credential file, so narration authenticates with an
+   * API key there. These cover the branch that swaps bearer-token auth for it.
+   */
+  private GoogleTextToSpeechProvider apiKeyProvider(final RestClient.Builder builder) {
+    NarrationProperties base = NarrationBudgetServiceTest.properties(1_000_000);
+    NarrationProperties withKey = new NarrationProperties(
+        base.enabled(), base.projectId(), base.projectNumber(), "test-api-key",
+        base.location(), base.voiceName(), base.languageCode(), base.bucket(),
+        base.maxBlogCharacters(), base.monthlyCharacterLimit(), base.pollInterval(),
+        base.operationTimeout(), base.leaseDuration(), base.recoveryDelay());
+    // Null credentials: an API-key deployment loads no ADC at all.
+    return new GoogleTextToSpeechProvider(withKey, builder.build(), null);
+  }
+
+  @Test
+  void synthesizesWithApiKeyHeaderInsteadOfBearerToken() {
+    RestClient.Builder builder = RestClient.builder();
+    MockRestServiceServer apiKeyServer = MockRestServiceServer.bindTo(builder).build();
+    GoogleTextToSpeechProvider apiKeyProvider = apiKeyProvider(builder);
+
+    apiKeyServer.expect(requestTo(
+            "https://texttospeech.googleapis.com/v1/text:synthesize"))
+        .andExpect(method(HttpMethod.POST))
+        .andExpect(header("x-goog-api-key", "test-api-key"))
+        .andExpect(headerDoesNotExist("Authorization"))
+        // The key identifies its own project, so no quota project is delegated.
+        .andExpect(headerDoesNotExist("x-goog-user-project"))
+        .andRespond(withSuccess("{\"audioContent\":\"//uQZA==\"}",
+            MediaType.APPLICATION_JSON));
+
+    assertThat(apiKeyProvider.synthesizeImmediately("Read me")).isNotEmpty();
+    apiKeyServer.verify();
+  }
+
+  @Test
+  void isConfiguredWithApiKeyAndNoCredentials() {
+    assertThat(apiKeyProvider(RestClient.builder()).isConfigured()).isTrue();
+  }
+
+  @Test
+  void isNotConfiguredWithNeitherApiKeyNorCredentials() {
+    GoogleTextToSpeechProvider bare = new GoogleTextToSpeechProvider(
+        NarrationBudgetServiceTest.properties(1_000_000),
+        RestClient.builder().build(), null);
+    assertThat(bare.isConfigured()).isFalse();
   }
 }

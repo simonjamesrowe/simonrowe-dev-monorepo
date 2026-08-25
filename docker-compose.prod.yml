@@ -311,6 +311,10 @@ services:
       NARRATION_RATE_LIMIT_REQUESTS_PER_MINUTE: ${NARRATION_RATE_LIMIT_REQUESTS_PER_MINUTE:-10}
       GOOGLE_CLOUD_TTS_PROJECT_ID: ${GOOGLE_CLOUD_TTS_PROJECT_ID:-}
       GOOGLE_CLOUD_TTS_PROJECT_NUMBER: ${GOOGLE_CLOUD_TTS_PROJECT_NUMBER:-}
+      # Preferred on this host: the Pi has no credential file, so narration
+      # authenticates with a restricted API key instead of ADC. When set, the
+      # credentials mount below is unused and may stay at its /dev/null default.
+      GOOGLE_CLOUD_TTS_API_KEY: ${GOOGLE_CLOUD_TTS_API_KEY:-}
       GOOGLE_CLOUD_TTS_OUTPUT_BUCKET: ${GOOGLE_CLOUD_TTS_OUTPUT_BUCKET:-}
       GOOGLE_CLOUD_TTS_LOCATION: ${GOOGLE_CLOUD_TTS_LOCATION:-global}
       GOOGLE_CLOUD_TTS_LANGUAGE_CODE: ${GOOGLE_CLOUD_TTS_LANGUAGE_CODE:-en-GB}

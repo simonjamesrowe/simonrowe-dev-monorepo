@@ -45,7 +45,8 @@ public class GoogleTextToSpeechProvider implements NarrationProvider {
 
   @Override
   public boolean isConfigured() {
-    return properties.isProviderConfigured() && credentials != null;
+    return properties.isProviderConfigured()
+        && (properties.usesApiKey() || credentials != null);
   }
 
   @Override
@@ -183,6 +184,14 @@ public class GoogleTextToSpeechProvider implements NarrationProvider {
    * attributed to the configured project.
    */
   private void authHeaders(final org.springframework.http.HttpHeaders headers) {
+    if (properties.usesApiKey()) {
+      // An API key already identifies its own project, so quota and billing attribute
+      // correctly without x-goog-user-project. That header exists to name a quota project
+      // for an identity that has none of its own — user ADC — so it is omitted here rather
+      // than sent alongside a credential that cannot be delegated in that way.
+      headers.set("x-goog-api-key", properties.apiKey());
+      return;
+    }
     headers.setBearerAuth(accessToken());
     headers.set("x-goog-user-project", properties.projectId());
   }

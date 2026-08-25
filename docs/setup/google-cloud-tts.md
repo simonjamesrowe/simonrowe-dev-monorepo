@@ -219,9 +219,57 @@ restart the backend.
 
 ## 6. Raspberry Pi production credentials
 
-The Pi runs outside Google Cloud. Workload Identity Federation is preferred when a
-suitable external identity provider is available. The current Pi deployment does
-not have one, so use a dedicated service-account key as the documented fallback.
+The Pi runs outside Google Cloud, so it has no metadata server to draw credentials
+from. There are two supported routes. **Prefer the API key** — it needs nothing
+installed on the production host.
+
+### 6a. API key (recommended)
+
+Set `GOOGLE_CLOUD_TTS_API_KEY` and the application sends it as `x-goog-api-key`
+instead of exchanging a service-account key for a bearer token. No file, no mount,
+no `GOOGLE_APPLICATION_CREDENTIALS`.
+
+This authenticates `v1/text:synthesize`, which is the only endpoint on the live
+synthesis path: `NarrationRequestConsumer` routes every script through chunked
+synchronous synthesis because `maxImmediateBytes()` is always positive for this
+provider. The Long Audio route is therefore never taken, which is why an API-key
+deployment needs **neither `GOOGLE_CLOUD_TTS_PROJECT_NUMBER` nor
+`GOOGLE_CLOUD_TTS_OUTPUT_BUCKET`** — `NarrationProperties.isProviderConfigured()`
+stops requiring them once a key is present. If you ever re-enable Long Audio, note
+that its Cloud Storage download will *not* accept an API key and you must move to
+6b.
+
+Create the key in the Console under **APIs & Services > Credentials > Create
+credentials > API key**, then open **Edit key > API restrictions** and restrict it
+to **Cloud Text-to-Speech API**. An unrestricted key is valid against every enabled
+API in the project; the restriction is what keeps it a narrow capability rather
+than a general-purpose project credential.
+
+```dotenv
+NARRATION_ENABLED=true
+GOOGLE_CLOUD_TTS_API_KEY=YOUR_RESTRICTED_API_KEY
+GOOGLE_CLOUD_TTS_PROJECT_ID=YOUR_PROJECT_ID
+GOOGLE_CLOUD_TTS_LOCATION=global
+GOOGLE_CLOUD_TTS_LANGUAGE_CODE=en-GB
+GOOGLE_CLOUD_TTS_VOICE_NAME=en-GB-Chirp3-HD-Charon
+```
+
+Restart only the backend, then request narration for one published blog:
+
+```bash
+cd ~/workspace/simonjamesrowe/simonrowe-dev-monorepo
+docker compose -f docker-compose.prod.yml config --quiet
+docker compose -f docker-compose.prod.yml up -d --no-deps backend
+```
+
+Rotating a key is a Console operation plus a backend restart; there is nothing to
+copy to the Pi and nothing to delete from it.
+
+### 6b. Service-account key file (alternative)
+
+Use this only if the Long Audio route is needed. Workload Identity Federation is
+preferable when a suitable external identity provider is available; the current Pi
+deployment does not have one, so a dedicated service-account key is the fallback.
 Treat the JSON as a production secret: never commit it, paste it into `.env`, or
 place it inside the repository.
 
