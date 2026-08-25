@@ -26,7 +26,14 @@ public class GoogleTextToSpeechConfig {
       final NarrationProperties properties
   ) {
     if (!properties.isProviderConfigured()) {
-      LOG.info("Blog narration is disabled or incompletely configured");
+      LOG.info("Narration is disabled or incompletely configured");
+      return null;
+    }
+    if (properties.usesApiKey()) {
+      // An API key needs no token exchange, so there is nothing to load. Returning null
+      // here is a configured state, not a failure — the provider checks usesApiKey()
+      // before it checks for credentials.
+      LOG.info("Narration is using API key authentication");
       return null;
     }
     try {
