@@ -409,6 +409,10 @@ aggregation:
     duplicate-window-hours: 24
   summary:
     model: ${ARTICLE_SUMMARY_MODEL:gpt-5.6-luna}
+    # Favouriting a news article requests an in-depth summary in the background. Audio is
+    # deliberately not generated automatically — that is the expensive half and stays on
+    # demand from the drawer.
+    auto-on-favourite: ${SUMMARY_AUTO_ON_FAVOURITE:true}
     # How long a GENERATING summary may sit untouched before another caller is allowed
     # to conclude the generating process died and reclaim it.
     generation-timeout: 3m
