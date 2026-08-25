@@ -240,10 +240,22 @@ that its Cloud Storage download will *not* accept an API key and you must move t
 6b.
 
 Create the key in the Console under **APIs & Services > Credentials > Create
-credentials > API key**, then open **Edit key > API restrictions** and restrict it
-to **Cloud Text-to-Speech API**. An unrestricted key is valid against every enabled
-API in the project; the restriction is what keeps it a narrow capability rather
-than a general-purpose project credential.
+credentials > API key**, then open **Edit key > API restrictions**, choose
+*Restrict key*, and tick **Cloud Text-to-Speech API**. An unrestricted key is valid
+against every enabled API in the project; the restriction is what keeps it a narrow
+capability rather than a general-purpose project credential.
+
+Substitute the value of `GOOGLE_CLOUD_TTS_PROJECT_ID` for `YOUR_PROJECT_ID`:
+
+- Credentials: <https://console.cloud.google.com/apis/credentials?project=YOUR_PROJECT_ID>
+- API enabled: <https://console.cloud.google.com/apis/library/texttospeech.googleapis.com?project=YOUR_PROJECT_ID>
+- Quotas: <https://console.cloud.google.com/apis/api/texttospeech.googleapis.com/quotas?project=YOUR_PROJECT_ID>
+
+Leave **Application restrictions** set to *None*. Restricting by IP is the obvious
+instinct, but the Pi calls Google outbound from a residential connection whose
+address generally rotates; when it changes, narration fails with a permission error
+that does not read as an IP problem. The API restriction is what narrows the blast
+radius, and it does so wherever the key is used from.
 
 ```dotenv
 NARRATION_ENABLED=true
