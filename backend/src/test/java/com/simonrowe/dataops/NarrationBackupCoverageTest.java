@@ -8,6 +8,7 @@ import com.mongodb.client.MongoClient;
 import com.simonrowe.AbstractIntegrationTest;
 import com.simonrowe.embedding.ElasticsearchBackupService;
 import com.simonrowe.narration.Narration;
+import com.simonrowe.narration.NarrationContentType;
 import com.simonrowe.narration.NarrationRepository;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import com.simonrowe.narration.NarrationStorage;
@@ -82,7 +83,7 @@ class NarrationBackupCoverageTest extends AbstractIntegrationTest {
   @Test
   void localArchiveContainsNarrationRecordAndAudio() throws IOException {
     Narration narration = new Narration(
-        "narration-1", "blog-1", 100, "voice", "en-GB", "MP3",
+        "narration-1", NarrationContentType.BLOG, "blog-1", 100, "voice", "en-GB", "MP3",
         "narrations/narration-1.mp3", Instant.now());
     narration.markReady(narrationStorage.store("narration-1", MP3), Instant.now());
     narrationRepository.save(narration);

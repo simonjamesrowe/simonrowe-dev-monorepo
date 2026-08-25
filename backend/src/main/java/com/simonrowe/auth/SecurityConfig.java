@@ -27,6 +27,17 @@ public class SecurityConfig {
             // Favourites are globally shared: reads are public, only writes need a session.
             .requestMatchers(HttpMethod.PUT, "/api/favourites/**").authenticated()
             .requestMatchers(HttpMethod.DELETE, "/api/favourites/**").authenticated()
+            // Article summaries are globally shared too: reads are public, and only the
+            // two writes need a session because only they cost money — an LLM call and,
+            // more expensively, a text-to-speech render against a monthly character
+            // budget. Any valid JWT suffices; these are not admin-role gated.
+            //
+            // Note the asymmetry with /api/blogs/*/narration, whose POST is public. That
+            // endpoint's contract predates the budget concern and is deliberately left
+            // alone; the new surface does not inherit it.
+            .requestMatchers(HttpMethod.POST, "/api/news/*/summary").authenticated()
+            .requestMatchers(HttpMethod.POST, "/api/news/*/summary/narration")
+            .authenticated()
             .anyRequest().permitAll()
         )
         .headers(headers -> headers.cacheControl(cache -> cache.disable()))

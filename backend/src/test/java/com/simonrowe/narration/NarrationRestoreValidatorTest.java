@@ -91,12 +91,12 @@ class NarrationRestoreValidatorTest extends AbstractIntegrationTest {
 
     assertThat(mongoTemplate.indexOps(Narration.class).getIndexInfo())
         .extracting(index -> index.getName())
-        .contains("fingerprint", "blogId", "idx_narration_blog_updated",
+        .contains("fingerprint", "contentId", "idx_narration_content_updated",
             "idx_narration_status_lease");
   }
 
   private static Narration narration(final String id) {
-    return new Narration(id, "blog-1", 100, "voice", "en-GB", "MP3",
+    return new Narration(id, NarrationContentType.BLOG, "blog-1", 100, "voice", "en-GB", "MP3",
         "narrations/" + id + ".mp3", Instant.now());
   }
 }

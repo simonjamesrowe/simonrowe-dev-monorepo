@@ -25,7 +25,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
-class BlogNarrationServiceTest {
+class NarrationServiceTest {
 
   @Mock private BlogRepository blogRepository;
   @Mock private NarrationRepository narrationRepository;
@@ -35,7 +35,7 @@ class BlogNarrationServiceTest {
   @Mock private MongoTemplate mongoTemplate;
 
   private SimpleMeterRegistry metrics;
-  private BlogNarrationService service;
+  private NarrationService service;
 
   @BeforeEach
   void setUp() {
@@ -50,7 +50,7 @@ class BlogNarrationServiceTest {
     when(blogRepository.findByIdAndPublishedTrue("blog-1")).thenReturn(Optional.of(blog));
     when(narrationRepository.findById(any())).thenReturn(Optional.empty());
 
-    assertThat(service.getStatus("blog-1", null, 0).state())
+    assertThat(service.getStatus(NarrationContentType.BLOG, "blog-1", null, 0).state())
         .isEqualTo(NarrationResponse.PublicState.NOT_REQUESTED);
     verify(publisher, never()).publish(any());
   }
@@ -59,7 +59,7 @@ class BlogNarrationServiceTest {
   void missingOrUnpublishedBlogIsNotDisclosed() {
     when(blogRepository.findByIdAndPublishedTrue("blog-1")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.getStatus("blog-1", null, 0))
+    assertThatThrownBy(() -> service.getStatus(NarrationContentType.BLOG, "blog-1", null, 0))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("404");
   }
@@ -72,7 +72,7 @@ class BlogNarrationServiceTest {
     when(narrationRepository.insert(any(Narration.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
-    BlogNarrationService.RequestResult first = service.request("blog-1");
+    NarrationService.RequestResult first = service.request(NarrationContentType.BLOG, "blog-1");
 
     assertThat(first.accepted()).isTrue();
     assertThat(first.response().state()).isEqualTo(NarrationResponse.PublicState.QUEUED);
@@ -89,7 +89,7 @@ class BlogNarrationServiceTest {
     when(narrationRepository.findById(narration.id())).thenReturn(Optional.of(narration));
     when(storage.isValid(narration)).thenReturn(true);
 
-    BlogNarrationService.RequestResult result = service.request("blog-1");
+    NarrationService.RequestResult result = service.request(NarrationContentType.BLOG, "blog-1");
 
     assertThat(result.accepted()).isFalse();
     assertThat(result.response().state()).isEqualTo(NarrationResponse.PublicState.READY);
@@ -107,7 +107,7 @@ class BlogNarrationServiceTest {
     when(blogRepository.findByIdAndPublishedTrue("blog-1")).thenReturn(Optional.of(blog));
     when(narrationRepository.findById(narration.id())).thenReturn(Optional.of(narration));
 
-    BlogNarrationService.RequestResult result = service.request("blog-1");
+    NarrationService.RequestResult result = service.request(NarrationContentType.BLOG, "blog-1");
 
     assertThat(result.accepted()).isTrue();
     assertThat(narration.status()).isEqualTo(NarrationStatus.QUEUED);
@@ -120,12 +120,12 @@ class BlogNarrationServiceTest {
     when(blogRepository.findByIdAndPublishedTrue("blog-1")).thenReturn(Optional.of(blog));
     when(provider.isConfigured()).thenReturn(false);
 
-    assertThat(service.request("blog-1").response().state())
+    assertThat(service.request(NarrationContentType.BLOG, "blog-1").response().state())
         .isEqualTo(NarrationResponse.PublicState.UNAVAILABLE);
     verify(narrationRepository, never()).insert(any(Narration.class));
 
-    BlogNarrationService tiny = service(properties(5));
-    assertThatThrownBy(() -> tiny.descriptor(blog))
+    NarrationService tiny = service(properties(5));
+    assertThatThrownBy(() -> tiny.descriptor(NarrationContentType.BLOG, blog.id()))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("413");
   }
@@ -140,22 +140,31 @@ class BlogNarrationServiceTest {
     when(narrationRepository.findById(narration.id())).thenReturn(Optional.of(narration));
     when(storage.isValid(narration)).thenReturn(false);
 
-    NarrationResponse response = service.getStatus("blog-1", null, 0);
+    NarrationResponse response = service.getStatus(NarrationContentType.BLOG, "blog-1", null, 0);
 
     assertThat(response.state()).isEqualTo(NarrationResponse.PublicState.FAILED);
     assertThat(response.retryable()).isTrue();
     assertThat(response.message()).doesNotContain("AUDIO_MISSING_OR_INVALID");
   }
 
-  private BlogNarrationService service(final NarrationProperties props) {
-    return new BlogNarrationService(blogRepository, narrationRepository,
-        new BlogNarrationScriptBuilder(), props, provider, publisher, storage,
-        mongoTemplate, metrics);
+  private NarrationService service(final NarrationProperties props) {
+    return new NarrationService(narrationRepository, props, provider, publisher, storage,
+        mongoTemplate, metrics,
+        List.of(new BlogNarrationSource(
+            blogRepository, new NarrationScriptBuilder(), props)));
   }
 
+  /**
+   * Builds the narration a blog's current content would produce, without going through the
+   * service — the service now resolves the blog through the repository, and these tests
+   * build the expected narration before stubbing that lookup.
+   */
   private Narration matchingNarration(final Blog blog) {
-    BlogNarrationService.NarrationDescriptor descriptor = service.descriptor(blog);
-    return new Narration(descriptor.id(), blog.id(), descriptor.script().length(),
+    NarrationSource.NarrationDescriptor descriptor = new BlogNarrationSource(
+        blogRepository, new NarrationScriptBuilder(), properties(50_000))
+        .scriptForBlog(blog);
+    return new Narration(descriptor.id(), NarrationContentType.BLOG, blog.id(),
+        descriptor.script().length(),
         "voice", "en-GB", "MP3", "narrations/" + descriptor.id() + ".mp3",
         Instant.now());
   }

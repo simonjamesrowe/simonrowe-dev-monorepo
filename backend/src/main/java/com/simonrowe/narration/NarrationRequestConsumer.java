@@ -1,7 +1,5 @@
 package com.simonrowe.narration;
 
-import com.simonrowe.blog.Blog;
-import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.events.NarrationRequestEvent;
 import com.simonrowe.narration.NarrationProvider.FailureKind;
 import com.simonrowe.narration.NarrationProvider.NarrationProviderException;
@@ -19,8 +17,7 @@ public class NarrationRequestConsumer {
   private static final Logger LOG =
       LoggerFactory.getLogger(NarrationRequestConsumer.class);
 
-  private final BlogNarrationService narrationService;
-  private final BlogRepository blogRepository;
+  private final NarrationService narrationService;
   private final NarrationRepository narrationRepository;
   private final NarrationProvider provider;
   private final NarrationStorage storage;
@@ -30,8 +27,7 @@ public class NarrationRequestConsumer {
   private final MeterRegistry meterRegistry;
 
   public NarrationRequestConsumer(
-      final BlogNarrationService narrationService,
-      final BlogRepository blogRepository,
+      final NarrationService narrationService,
       final NarrationRepository narrationRepository,
       final NarrationProvider provider,
       final NarrationStorage storage,
@@ -41,7 +37,6 @@ public class NarrationRequestConsumer {
       final MeterRegistry meterRegistry
   ) {
     this.narrationService = narrationService;
-    this.blogRepository = blogRepository;
     this.narrationRepository = narrationRepository;
     this.provider = provider;
     this.storage = storage;
@@ -64,13 +59,16 @@ public class NarrationRequestConsumer {
     }
     Narration narration = claimed.get();
     try {
-      Optional<Blog> blog = blogRepository.findByIdAndPublishedTrue(narration.blogId());
-      if (blog.isEmpty()) {
+      NarrationSource.NarrationDescriptor descriptor;
+      try {
+        descriptor = narrationService.descriptor(
+            narration.contentType(), narration.contentId());
+      } catch (RuntimeException ex) {
+        // The content is gone, unpublished, or no longer narratable — either way there is
+        // nothing left to synthesise.
         markStale(narration);
         return;
       }
-      BlogNarrationService.NarrationDescriptor descriptor =
-          narrationService.descriptor(blog.get());
       if (!descriptor.id().equals(narration.id())) {
         markStale(narration);
         return;

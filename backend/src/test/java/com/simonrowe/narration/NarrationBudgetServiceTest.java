@@ -40,7 +40,7 @@ class NarrationBudgetServiceTest {
   }
 
   private static Narration narration(final String id, final int characters) {
-    return new Narration(id, "blog", characters, "voice", "en-GB", "MP3",
+    return new Narration(id, NarrationContentType.BLOG, "blog", characters, "voice", "en-GB", "MP3",
         "narrations/" + id + ".mp3", Instant.now());
   }
 

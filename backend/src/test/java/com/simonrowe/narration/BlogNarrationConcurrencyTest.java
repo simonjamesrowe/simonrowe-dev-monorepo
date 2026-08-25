@@ -28,7 +28,7 @@ class BlogNarrationConcurrencyTest extends AbstractIntegrationTest {
 
   @Autowired private BlogRepository blogRepository;
   @Autowired private NarrationRepository narrationRepository;
-  @Autowired private BlogNarrationService narrationService;
+  @Autowired private NarrationService narrationService;
   @Autowired private NarrationRestoreValidator restoreValidator;
 
   @MockitoBean private NarrationProvider provider;
@@ -51,14 +51,14 @@ class BlogNarrationConcurrencyTest extends AbstractIntegrationTest {
   @Test
   void oneHundredSimultaneousRequestsCreateAndPublishOnlyOnce() throws Exception {
     blogRepository.save(blog());
-    List<Callable<BlogNarrationService.RequestResult>> requests =
+    List<Callable<NarrationService.RequestResult>> requests =
         java.util.stream.IntStream.range(0, 100)
-            .mapToObj(ignored -> (Callable<BlogNarrationService.RequestResult>)
-                () -> narrationService.request("blog-1"))
+            .mapToObj(ignored -> (Callable<NarrationService.RequestResult>)
+                () -> narrationService.request(NarrationContentType.BLOG, "blog-1"))
             .toList();
 
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-      List<BlogNarrationService.RequestResult> results = executor.invokeAll(requests)
+      List<NarrationService.RequestResult> results = executor.invokeAll(requests)
           .stream()
           .map(future -> {
             try {
@@ -69,7 +69,7 @@ class BlogNarrationConcurrencyTest extends AbstractIntegrationTest {
           })
           .toList();
 
-      assertThat(results).filteredOn(BlogNarrationService.RequestResult::accepted)
+      assertThat(results).filteredOn(NarrationService.RequestResult::accepted)
           .hasSize(1);
     }
     assertThat(narrationRepository.count()).isEqualTo(1);
@@ -80,7 +80,7 @@ class BlogNarrationConcurrencyTest extends AbstractIntegrationTest {
   @Test
   void concurrentKafkaRedeliveriesAcquireOnlyOneAtomicClaim() throws Exception {
     Narration narration = new Narration(
-        "narration-1", "blog-1", 100, "voice", "en-GB", "MP3",
+        "narration-1", NarrationContentType.BLOG, "blog-1", 100, "voice", "en-GB", "MP3",
         "narrations/narration-1.mp3", Instant.now());
     narrationRepository.insert(narration);
     List<Callable<Boolean>> claims = java.util.stream.IntStream.range(0, 100)

@@ -1,6 +1,8 @@
 package com.simonrowe.aggregation;
 
+import com.simonrowe.summary.ArticleSummaryService;
 import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -25,13 +27,16 @@ public class NewsController {
 
   private final AggregatedArticleRepository articleRepository;
   private final MongoTemplate mongoTemplate;
+  private final ArticleSummaryService summaryService;
 
   public NewsController(
       final AggregatedArticleRepository articleRepository,
-      final MongoTemplate mongoTemplate
+      final MongoTemplate mongoTemplate,
+      final ArticleSummaryService summaryService
   ) {
     this.articleRepository = articleRepository;
     this.mongoTemplate = mongoTemplate;
+    this.summaryService = summaryService;
   }
 
   @GetMapping
@@ -82,6 +87,25 @@ public class NewsController {
         .stream()
         .filter(summary -> summary.name() != null)
         .toList();
+  }
+
+  /**
+   * Every article that already has a completed in-depth summary.
+   *
+   * <p>Public, because summaries are globally shared. This is what lets a logged-out
+   * visitor's card read "Read summary" and open instantly, versus "Summarise" which
+   * triggers the login popup — the same way hearts render filled for everyone but only
+   * toggle with a session. It mirrors {@code GET /api/favourites/{type}/ids}.
+   *
+   * <p>Declared before the {@code /{id}} mapping for readability only, for the same reason
+   * recorded on {@link #listSources()}: Spring matches the literal {@code /summaries}
+   * segment ahead of the {@code {id}} template regardless of declaration order.
+   *
+   * @return the article ids, empty when nothing has been summarised
+   */
+  @GetMapping("/summaries/ids")
+  public Set<String> listSummarisedArticleIds() {
+    return summaryService.summarisedArticleIds();
   }
 
   @GetMapping("/{id}")

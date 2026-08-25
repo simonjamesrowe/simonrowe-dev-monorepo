@@ -394,6 +394,10 @@ rate-limit:
     requests-per-minute: 60
   narration:
     requests-per-minute: ${NARRATION_RATE_LIMIT_REQUESTS_PER_MINUTE:10}
+  # Lower than narration's: a summary request holds a thread for 15-30 seconds and
+  # spends on the model, so the cap is about cost and thread pressure, not abuse alone.
+  summary:
+    requests-per-minute: ${SUMMARY_RATE_LIMIT_REQUESTS_PER_MINUTE:5}
 
 aggregation:
   schedule:
@@ -403,6 +407,12 @@ aggregation:
     model: ${DIGEST_MODEL:gpt-5.6-luna}
     window-days: 7
     duplicate-window-hours: 24
+  summary:
+    model: ${ARTICLE_SUMMARY_MODEL:gpt-5.6-luna}
+    # How long a GENERATING summary may sit untouched before another caller is allowed
+    # to conclude the generating process died and reclaim it.
+    generation-timeout: 3m
+    max-source-chars: 12000
 
 backup:
   schedule:

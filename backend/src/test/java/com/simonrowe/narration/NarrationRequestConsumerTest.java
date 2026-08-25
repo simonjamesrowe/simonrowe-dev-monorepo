@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogContentType;
-import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.events.NarrationRequestEvent;
 import com.simonrowe.narration.NarrationProvider.FailureKind;
 import com.simonrowe.narration.NarrationProvider.NarrationProviderException;
@@ -27,8 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class NarrationRequestConsumerTest {
 
-  @Mock private BlogNarrationService service;
-  @Mock private BlogRepository blogRepository;
+  @Mock private NarrationService service;
   @Mock private NarrationRepository repository;
   @Mock private NarrationProvider provider;
   @Mock private NarrationStorage storage;
@@ -41,7 +39,7 @@ class NarrationRequestConsumerTest {
   @BeforeEach
   void setUp() {
     metrics = new SimpleMeterRegistry();
-    consumer = new NarrationRequestConsumer(service, blogRepository, repository,
+    consumer = new NarrationRequestConsumer(service, repository,
         provider, storage, budget, NarrationBudgetServiceTest.properties(1_000_000),
         publisher, metrics);
   }
@@ -51,9 +49,8 @@ class NarrationRequestConsumerTest {
     Narration narration = processing("narration-1");
     Blog blog = blog();
     when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
-    when(blogRepository.findByIdAndPublishedTrue("blog-1")).thenReturn(Optional.of(blog));
-    when(service.descriptor(blog)).thenReturn(
-        new BlogNarrationService.NarrationDescriptor("narration-1", "Speech"));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", "Speech"));
     when(provider.isConfigured()).thenReturn(true);
     when(budget.allows(any(), any())).thenReturn(true);
     when(provider.start("Speech", "narrations/narration-1.mp3"))
@@ -94,9 +91,8 @@ class NarrationRequestConsumerTest {
     Narration narration = processing("narration-1");
     Blog blog = blog();
     when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
-    when(blogRepository.findByIdAndPublishedTrue("blog-1")).thenReturn(Optional.of(blog));
-    when(service.descriptor(blog)).thenReturn(
-        new BlogNarrationService.NarrationDescriptor("narration-1", "Speech"));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", "Speech"));
     when(provider.isConfigured()).thenReturn(true);
     when(budget.allows(any(), any())).thenReturn(true);
     when(provider.start(any(), any())).thenThrow(new NarrationProviderException(
@@ -122,9 +118,8 @@ class NarrationRequestConsumerTest {
   private void stubReadyPath(final Narration narration) {
     Blog blog = blog();
     when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
-    when(blogRepository.findByIdAndPublishedTrue("blog-1")).thenReturn(Optional.of(blog));
-    when(service.descriptor(blog)).thenReturn(
-        new BlogNarrationService.NarrationDescriptor("narration-1", "Speech"));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", "Speech"));
     when(provider.download("narrations/narration-1.mp3"))
         .thenReturn(new byte[]{'I', 'D', '3', 1});
     when(service.isCurrentAndPublished(narration)).thenReturn(true);
@@ -133,7 +128,8 @@ class NarrationRequestConsumerTest {
   }
 
   private static Narration processing(final String id) {
-    Narration narration = new Narration(id, "blog-1", 100, "voice", "en-GB", "MP3",
+    Narration narration = new Narration(
+        id, NarrationContentType.BLOG, "blog-1", 100, "voice", "en-GB", "MP3",
         "narrations/" + id + ".mp3", Instant.now());
     narration.claimed(Instant.now().plusSeconds(60), Instant.now());
     return narration;
