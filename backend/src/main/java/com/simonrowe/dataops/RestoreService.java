@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -31,7 +32,10 @@ public class RestoreService {
       "content_sources", "aggregated_articles", "aggregated_events",
       // favourites hold no @DBRef, but they point at aggregated_articles and
       // aggregated_events by plain id, so they follow both.
-      "favourites"
+      "favourites",
+      // Article summaries are the same shape: no @DBRef, one plain articleId pointing at
+      // aggregated_articles, so they follow it here rather than in the ordered list.
+      "article_summaries"
   );
 
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
@@ -39,6 +43,7 @@ public class RestoreService {
   );
 
   private static final String FAVOURITES = "favourites";
+  private static final String ARTICLE_SUMMARIES = "article_summaries";
   private static final String FAVOURITES_UNIQUE_INDEX = "idx_type_content";
   private static final String FAVOURITES_LIST_INDEX = "idx_type_created";
 
@@ -190,6 +195,9 @@ public class RestoreService {
       if (FAVOURITES.equals(collectionName)) {
         ensureFavouriteIndexes();
       }
+      if (ARTICLE_SUMMARIES.equals(collectionName)) {
+        ensureArticleSummaryIndexes();
+      }
 
       progress += progressPerCollection;
     }
@@ -219,6 +227,21 @@ public class RestoreService {
         .on("type", Sort.Direction.ASC)
         .on("createdAt", Sort.Direction.DESC));
     LOG.info("Recreated favourites indexes after restore");
+  }
+
+  /**
+   * Recreates the article-summary indexes after a restore, for the same reason
+   * {@link #ensureFavouriteIndexes()} exists: {@code dropCollection} takes the
+   * collection's indexes with it, and {@code V020} has already been recorded as
+   * executed, so Mongock will never put them back.
+   *
+   * <p>Definitions live in {@code V020CreateArticleSummaryIndexes} and are called from
+   * there rather than restated, so the two cannot drift.
+   * Package-private so the round-trip test can exercise it directly.
+   */
+  void ensureArticleSummaryIndexes() {
+    V020CreateArticleSummaryIndexes.createIndexes(mongoTemplate);
+    LOG.info("Recreated article summary indexes after restore");
   }
 
   /**

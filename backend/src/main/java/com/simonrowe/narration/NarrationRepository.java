@@ -6,7 +6,8 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface NarrationRepository extends MongoRepository<Narration, String> {
 
-  List<Narration> findByBlogId(String blogId);
+  List<Narration> findByContentTypeAndContentId(
+      NarrationContentType contentType, String contentId);
 
   List<Narration> findByStatusAndUpdatedAtBefore(
       NarrationStatus status, Instant updatedBefore);

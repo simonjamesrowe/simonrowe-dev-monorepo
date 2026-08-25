@@ -33,6 +33,28 @@ vi.mock('../../src/hooks/useFavourites', () => ({
   }),
 }))
 
+// The summary hook itself is covered by tests/hooks/useArticleSummaries.test.ts; here we
+// only need the id set it exposes, to assert which label each card gets.
+const summarisedIds = new Set<string>()
+
+vi.mock('../../src/services/articleSummaryApi', () => ({
+  fetchArticleSummary: vi.fn().mockResolvedValue({
+    state: 'NOT_REQUESTED', version: 0, retryable: false, message: '',
+  }),
+  fetchSummarisedArticleIds: vi.fn(() => Promise.resolve([...summarisedIds])),
+  requestArticleSummary: vi.fn().mockResolvedValue({
+    state: 'READY', version: 2, body: 'Prose.', retryable: false, message: '',
+  }),
+}))
+
+vi.mock('../../src/auth/useAuth', () => ({
+  useAuth: () => ({
+    isAuthenticated: true,
+    getAccessToken: vi.fn().mockResolvedValue('token'),
+    loginWithPopup: vi.fn(),
+  }),
+}))
+
 import { fetchNews, fetchNewsSources } from '../../src/services/newsApi'
 import { fetchEvents } from '../../src/services/eventsApi'
 import { getFavourites } from '../../src/services/favouritesApi'
@@ -79,6 +101,7 @@ function renderPage() {
 describe('NewsEventsPage', () => {
   beforeEach(() => {
     favouriteIds.clear()
+    summarisedIds.clear()
     vi.mocked(fetchNews).mockReset()
     vi.mocked(fetchNewsSources).mockReset()
     vi.mocked(fetchEvents).mockReset()
@@ -339,5 +362,74 @@ describe('NewsEventsPage', () => {
     await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
 
     expect(screen.queryByRole('button', { name: /^More/ })).toBeNull()
+  })
+
+  it('offers "Summarise" on a card with no summary and "Read summary" on one with', async () => {
+    summarisedIds.add('a-2')
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([
+      article('a-1', 'Unsummarised article'),
+      article('a-2', 'Summarised article'),
+    ]))
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', {
+        name: /Generate an AI summary of Unsummarised article/,
+      })).toHaveTextContent('Summarise')
+    })
+    expect(screen.getByRole('button', {
+      name: /Read the AI-generated summary of Summarised article/,
+    })).toHaveTextContent('Read summary')
+  })
+
+  it('opens the summary drawer over the list without losing the page behind it', async () => {
+    summarisedIds.add('a-1')
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
+
+    renderPage()
+    await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', {
+      name: /Read the AI-generated summary of First article/,
+    }))
+
+    await waitFor(() =>
+      expect(screen.getByText('AI-generated summary')).toBeInTheDocument())
+    // The list is still mounted underneath, filters and all.
+    expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+    await waitFor(() =>
+      expect(screen.queryByText('AI-generated summary')).not.toBeInTheDocument())
+    expect(screen.getByText('First article')).toBeInTheDocument()
+  })
+
+  it('shows no summary control on event timeline items', async () => {
+    vi.mocked(fetchEvents).mockResolvedValue({
+      ...emptyEventPage,
+      content: [{
+        id: 'e-1',
+        title: 'A conference',
+        sourceName: 'Meetup',
+        originalUrl: 'https://example.com/e-1',
+        summary: 'Event summary',
+        eventDate: '2026-09-01T18:00:00Z',
+        venue: 'Somewhere',
+        location: 'London',
+        imageUrl: null,
+      }] as never,
+      totalElements: 1,
+      totalPages: 1,
+    })
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([]))
+
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('A conference')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /AI summary of A conference/ }))
+      .not.toBeInTheDocument()
+    expect(screen.queryByText('Summarise')).not.toBeInTheDocument()
   })
 })

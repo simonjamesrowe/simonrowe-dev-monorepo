@@ -15,18 +15,19 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class BlogNarrationControllerTest {
 
-  private BlogNarrationService service;
+  private NarrationService service;
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    service = org.mockito.Mockito.mock(BlogNarrationService.class);
+    service = org.mockito.Mockito.mock(NarrationService.class);
     mockMvc = MockMvcBuilders.standaloneSetup(new BlogNarrationController(service)).build();
   }
 
   @Test
   void anonymousGetReturnsReadyAudioWithoutInternalFields() throws Exception {
-    when(service.getStatus("blog-1", null, 0)).thenReturn(new NarrationResponse(
+    when(service.getStatus(NarrationContentType.BLOG, "blog-1", null, 0))
+        .thenReturn(new NarrationResponse(
         NarrationResponse.PublicState.READY, 4,
         "/uploads/narrations/id/narration.mp3", 90L, false, "Ready"));
 
@@ -43,7 +44,7 @@ class BlogNarrationControllerTest {
 
   @Test
   void longPollParametersAreForwardedAndNullFieldsAreOmitted() throws Exception {
-    when(service.getStatus("blog-1", 7L, 25)).thenReturn(
+    when(service.getStatus(NarrationContentType.BLOG, "blog-1", 7L, 25)).thenReturn(
         NarrationResponse.notRequested());
 
     mockMvc.perform(get("/api/blogs/blog-1/narration")
@@ -60,10 +61,10 @@ class BlogNarrationControllerTest {
     NarrationResponse queued = new NarrationResponse(
         NarrationResponse.PublicState.QUEUED, 1, null, null,
         false, "Preparing audio");
-    when(service.request("new-blog"))
-        .thenReturn(new BlogNarrationService.RequestResult(queued, true));
-    when(service.request("existing-blog"))
-        .thenReturn(new BlogNarrationService.RequestResult(queued, false));
+    when(service.request(NarrationContentType.BLOG, "new-blog"))
+        .thenReturn(new NarrationService.RequestResult(queued, true));
+    when(service.request(NarrationContentType.BLOG, "existing-blog"))
+        .thenReturn(new NarrationService.RequestResult(queued, false));
 
     mockMvc.perform(post("/api/blogs/new-blog/narration")
             .contentType(MediaType.APPLICATION_JSON))
@@ -76,8 +77,8 @@ class BlogNarrationControllerTest {
 
   @Test
   void disabledProviderReturnsServiceUnavailableWithoutRetryDetails() throws Exception {
-    when(service.request("blog-1")).thenReturn(
-        new BlogNarrationService.RequestResult(NarrationResponse.unavailable(), false));
+    when(service.request(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationService.RequestResult(NarrationResponse.unavailable(), false));
 
     mockMvc.perform(post("/api/blogs/blog-1/narration"))
         .andExpect(status().isServiceUnavailable())

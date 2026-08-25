@@ -58,3 +58,17 @@ narration:
   recovery-delay: 10ms
 mongock:
   enabled: false
+rate-limit:
+  # Buckets are keyed by client IP and live for the lifetime of the application context,
+  # which tests share. With production values, one test class making a handful of requests
+  # would exhaust the allowance and turn every later test in the context into a 429. The
+  # limiter's own behaviour is covered by RateLimitInterceptorTest, which builds its own
+  # config, so raising these here removes an incidental coupling rather than a real check.
+  chat:
+    requests-per-minute: 10000
+  mcp:
+    requests-per-minute: 10000
+  narration:
+    requests-per-minute: 10000
+  summary:
+    requests-per-minute: 10000

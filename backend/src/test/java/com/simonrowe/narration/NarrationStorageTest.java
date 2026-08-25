@@ -60,7 +60,7 @@ class NarrationStorageTest {
   }
 
   private static Narration narration(final String id) {
-    return new Narration(id, "blog-1", 10, "voice", "en-GB", "MP3",
+    return new Narration(id, NarrationContentType.BLOG, "blog-1", 10, "voice", "en-GB", "MP3",
         "narrations/" + id + ".mp3", Instant.now());
   }
 }

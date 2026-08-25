@@ -41,7 +41,10 @@ public class BackupService {
       "blogs", "tags", "skills", "skill_groups", "jobs",
       "profiles", "social_medias", "tourSteps", "media_assets",
       "code_examples", "aggregated_articles", "aggregated_events",
-      "content_sources", "favourites", "narrations"
+      "content_sources", "favourites", "narrations",
+      // Generated article summaries cost an LLM call each, so a backup that skipped them
+      // would silently discard paid-for content on the next restore.
+      "article_summaries"
   );
 
   private final MongoClient mongoClient;
@@ -177,9 +180,10 @@ public class BackupService {
           .mapToInt(Integer::intValue).sum();
       String summary = String.format(
           "%d collections, %d documents, %d media files backed up; "
-              + "%d narrations and %d narration audio files (%s)",
+              + "%d narrations, %d narration audio files and %d article summaries (%s)",
           collectionCounts.size(), totalDocs, mediaFileCount,
           collectionCounts.getOrDefault("narrations", 0), narrationAudioFileCount,
+          collectionCounts.getOrDefault("article_summaries", 0),
           BackupMetadata.formatFileSize(fileSize));
       operationsService.completeOperation(summary);
       return true;
@@ -252,6 +256,8 @@ public class BackupService {
         .append(collectionCounts.getOrDefault("narrations", 0)).append(",\n");
     sb.append("  \"narrationAudioFileCount\": ")
         .append(narrationAudioFileCount).append(",\n");
+    sb.append("  \"articleSummaryCount\": ")
+        .append(collectionCounts.getOrDefault("article_summaries", 0)).append(",\n");
     sb.append("  \"collections\": {\n");
     int i = 0;
     for (Map.Entry<String, Integer> entry : collectionCounts.entrySet()) {

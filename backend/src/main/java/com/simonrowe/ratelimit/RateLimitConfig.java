@@ -6,7 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record RateLimitConfig(
     BucketConfig chat,
     BucketConfig mcp,
-    BucketConfig narration
+    BucketConfig narration,
+    BucketConfig summary
 ) {
 
   public record BucketConfig(int requestsPerMinute) {
