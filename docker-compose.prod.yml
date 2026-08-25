@@ -18,6 +18,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      # Without a start_period the whole cold-start budget is retries x interval
+      # (50s here), because failing probes during boot count against `retries`.
+      # `backend` gates on `mongodb: service_healthy`, so if that budget expires
+      # first, `up -d` aborts with "dependency failed to start" and leaves
+      # backend - and therefore frontend - in `created`, i.e. a 502 on www.
+      # Measured cold start on the Pi: ~20s to "waiting for connections". This is
+      # the roomiest of the three gating stores, but it shares a 4-core Pi with
+      # Kafka and Elasticsearch booting at the same time, so give it real headroom.
+      # A start_period costs nothing when boot is fast: the first successful probe
+      # ends it immediately and marks the container healthy.
+      start_period: 60s
 
   kafka:
     image: confluentinc/cp-kafka:7.8.0
@@ -46,6 +57,13 @@ services:
       interval: 15s
       timeout: 10s
       retries: 5
+      # Measured cold start on the Pi: ~75s from container start until the broker's
+      # SocketServer acceptors are up. The old budget (retries x interval) was
+      # *exactly* 75s, so this sat right on the cliff edge and only passed by luck -
+      # any extra CPU contention tipped it into `unhealthy` and aborted the
+      # `backend` dependency gate. See the mongodb note above for why that strands
+      # frontend in `created` and 502s the site.
+      start_period: 180s
 
   elasticsearch:
     image: elasticsearch:8.17.0
@@ -71,6 +89,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      # This is the one that actually broke a deploy on 2026-08-25. Elasticsearch
+      # 8.17 with a 512m heap needs ~130s on this Pi before it binds 9200 (cluster
+      # GREEN at ~132s), but with no start_period its entire budget was
+      # retries x interval = 50s. Docker therefore marked it `unhealthy` roughly 80s
+      # before it could possibly answer, `up -d` aborted the `backend` gate with
+      # "dependency failed to start: container ... elasticsearch-1 is unhealthy",
+      # and backend + frontend were left in `created` - a 502 on www and api until
+      # someone re-ran the deploy once ES had finished booting. That is the real
+      # cause of the "just run restart-prod.sh again and it works" folklore.
+      #
+      # The probe itself costs ~60ms once ES is up, so the timeout was never the
+      # problem - the missing cold-start grace was. 300s is ~2x the measured boot
+      # and is free when boot is fast.
+      start_period: 300s
 
   temporal-db-init:
     image: postgres:15

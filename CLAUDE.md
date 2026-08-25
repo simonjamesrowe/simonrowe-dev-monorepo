@@ -147,6 +147,21 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   of the "just re-run restart-prod.sh" folklore. Now `interval: 30s`/`timeout: 25s`. To rescue a
   stranded frontend without waiting on the dependency gate:
   `docker compose -f docker-compose.prod.yml up -d --no-deps frontend`.
+- **A healthcheck with no `start_period` has a total cold-start budget of
+  `retries x interval` — that is the whole grace period, not a per-probe timeout.**
+  Failing probes during boot count against `retries`, so a slow-booting service is
+  declared `unhealthy` before it can answer even once. On 2026-08-25 this broke a
+  `restart-prod.sh` run: `elasticsearch` needs **~130s** on the Pi to bind 9200 but had
+  no `start_period`, so its budget was `5 x 10s = 50s`. Compose aborted with
+  `dependency failed to start: container ... elasticsearch-1 is unhealthy` and left
+  **both `backend` and `frontend` in `created`** — 502 on www *and* api. The probe itself
+  costs ~60ms once ES is up, so `timeout` was never the problem. `mongodb`, `kafka` and
+  `elasticsearch` all gate `backend` on `service_healthy` and now carry
+  `start_period` (60s / 180s / 300s) sized at ~2x measured boot (20s / 75s / 130s) —
+  note `kafka`'s old budget was *exactly* its 75s boot time, so it was passing by luck.
+  A `start_period` is free when boot is fast: the first successful probe ends it early.
+  Recovery needs no special action — once ES is healthy, a plain `up -d` starts both
+  stranded containers (`monitor-prod.sh` does this within a minute).
 - **Recover a downed/partial stack** from the deploy directory: `docker compose -f docker-compose.prod.yml up -d`
   (reconciles containers stuck in `created`, respecting `depends_on` ordering). Minimal alternative:
   `docker start simonrowe-dev-monorepo-langfuse-1 && docker start simonrowe-dev-monorepo-nginx-1`.
