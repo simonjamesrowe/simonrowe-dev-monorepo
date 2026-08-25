@@ -1,10 +1,25 @@
 # Google Cloud Text-to-Speech setup
 
-This runbook configures on-demand narration for published blogs. The backend uses
-Google Cloud Text-to-Speech `v1beta1` Long Audio with a single British English Chirp 3 HD
-voice. Google writes each generated MP3 to a private, short-lived Cloud Storage
-object; the backend then validates and copies it into the existing uploads volume.
-The bucket is not a public media origin and is not part of backup or restore.
+This runbook configures on-demand narration for published blogs and for generated
+article summaries, using a single British English Chirp 3 HD voice.
+
+> **Updated 2026-08-25.** Synthesis now goes through the ordinary
+> `v1/text:synthesize` endpoint, which returns MP3 directly, rather than `v1beta1`
+> Long Audio. Long Audio rejects MP3 outright — "only LINEAR16 audio encodings are
+> supported for Long Audio Synthesis" — and LINEAR16 would multiply stored audio
+> roughly tenfold. The ordinary endpoint caps input at 5,000 UTF-8 bytes per
+> request, so `NarrationScriptChunker` splits longer scripts at sentence
+> boundaries and the resulting MP3 frames are concatenated. A 14,000-character
+> blog is about three requests.
+>
+> Two consequences for this runbook:
+> - **The Cloud Storage bucket is no longer on the synthesis path.** Sections 2 and
+>   3 below still apply if you want the Long Audio route available, but narration
+>   works without a bucket. `GOOGLE_CLOUD_TTS_OUTPUT_BUCKET` must still be set to a
+>   non-blank value because `NarrationProperties.isProviderConfigured()` requires it.
+> - **`x-goog-user-project` is now sent on every call.** Without it, user
+>   Application Default Credentials are rejected with "the API requires a quota
+>   project", and Google attributes the request to gcloud's own client project.
 
 Narration is disabled by default. The rest of the site starts normally without a
 Google project, bucket, or credential file.
