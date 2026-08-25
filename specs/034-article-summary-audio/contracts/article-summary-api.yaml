@@ -1,0 +1,376 @@
+openapi: 3.1.0
+info:
+  title: Article summary and summary narration API
+  version: 1.0.0
+  description: >-
+    On-demand, globally shared in-depth summaries of aggregated news articles, plus
+    spoken narration of those summaries.
+
+    Reads are public because the artefact is globally shared. Writes cost money, so they
+    require any valid JWT (not admin-role gated) — exactly how favourites writes work.
+
+    The narration endpoints reuse the existing NarrationResponse contract verbatim, so
+    the frontend long-poll logic is shared with /api/blogs/{blogId}/narration rather than
+    reimplemented. Unlike the blog narration POST, the summary narration POST is
+    authenticated: a TTS render is the more expensive operation and the monthly budget is
+    1,000,000 characters.
+
+servers:
+  - url: https://api.simonrowe.dev
+  - url: http://localhost:8080
+
+paths:
+  /api/news/summaries/ids:
+    get:
+      summary: Article ids that have a READY summary
+      description: >-
+        Mirrors GET /api/favourites/{type}/ids. This is what lets a logged-out visitor's
+        card read "Read summary" and open instantly, versus "Summarise" which triggers the
+        login popup — the same way hearts render filled for everyone but only toggle with
+        a session.
+
+        Declared before /api/news/{id} for readability only; Spring matches the literal
+        /summaries segment ahead of the {id} template regardless of declaration order (see
+        the existing javadoc on NewsController.listSources).
+      operationId: getSummarisedArticleIds
+      security: []
+      responses:
+        '200':
+          description: The article ids, possibly empty
+          content:
+            application/json:
+              schema:
+                type: array
+                uniqueItems: true
+                items:
+                  type: string
+              example: ["68f1a2b3c4d5e6f708192a3b", "68f1a2b3c4d5e6f708192a3c"]
+
+  /api/news/{articleId}/summary:
+    get:
+      summary: Current summary state, with optional long-poll
+      description: >-
+        Long-poll contract identical to BlogNarrationController.getStatus. Returns
+        immediately when afterVersion is absent, when the version has moved on, when the
+        state is terminal, or when waitSeconds is 0.
+      operationId: getArticleSummary
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ArticleId'
+        - name: afterVersion
+          in: query
+          required: false
+          description: >-
+            Return as soon as the summary's version differs from this. Omit for an
+            immediate read.
+          schema:
+            type: integer
+            format: int64
+        - name: waitSeconds
+          in: query
+          required: false
+          description: Seconds to hold the request open waiting for a version change.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 25
+            default: 0
+      responses:
+        '200':
+          description: >-
+            The current state. NOT_REQUESTED when no summary document exists — this is a
+            200, not a 404; the article exists, the summary does not.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleSummaryResponse'
+              examples:
+                notRequested:
+                  value:
+                    state: NOT_REQUESTED
+                    version: 0
+                    retryable: false
+                    message: Summarise this article
+                generating:
+                  value:
+                    state: GENERATING
+                    version: 1
+                    retryable: false
+                    message: Writing the summary. This usually takes under a minute
+                ready:
+                  value:
+                    state: READY
+                    version: 2
+                    body: |
+                      The piece opens by tracing how...
+                    model: gpt-5.6-luna
+                    completedAt: '2026-08-24T10:31:07Z'
+                    retryable: false
+                    message: Summary ready
+                insufficientSource:
+                  value:
+                    state: FAILED
+                    version: 2
+                    failureCode: INSUFFICIENT_SOURCE_TEXT
+                    retryable: false
+                    message: >-
+                      There is not enough of this article available to summarise. Read the
+                      original instead.
+        '404':
+          description: The article does not exist, or is not visible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    post:
+      summary: Request generation of the summary
+      description: |
+        Insert-first dedup, then synchronous generation.
+
+        1. Compute `id = sha256(SUMMARY_FORMAT_VERSION + articleId)` and attempt an insert
+           with status GENERATING.
+        2. Insert succeeds → resolve source text, call the model, store the prose, return
+           `200 READY` with the body.
+        3. DuplicateKeyException → another caller is generating. Return `202 GENERATING`;
+           the client polls the GET until it flips.
+        4. Existing READY document → return `200 READY` immediately, no spend.
+        5. Existing GENERATING document whose `updatedAt` is older than
+           `aggregation.summary.generation-timeout` → the generating process died. Reclaim
+           it with a conditional findAndModify guarded on **both** status and updatedAt, so
+           two reclaimers cannot both win; bump version and generate.
+        6. Existing FAILED document → regenerate only when `retryable`; otherwise return
+           the stored failure unchanged so a repeat request never re-spends.
+
+        Generation blocks the request for roughly 15-30 seconds. This is deliberate: an LLM
+        call returns no long-running-operation handle to poll, every other LLM call in this
+        codebase is inline, and virtual threads make holding one cheap.
+      operationId: requestArticleSummary
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ArticleId'
+      responses:
+        '200':
+          description: >-
+            Terminal outcome reached during this request — READY with the prose, or FAILED
+            with a stored failure code (including a non-retryable one returned without
+            re-spending).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleSummaryResponse'
+        '202':
+          description: >-
+            Another caller holds the generation. Poll GET with afterVersion until it
+            settles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleSummaryResponse'
+        '401':
+          description: No or invalid JWT. Writes cost money, so they need a session.
+        '404':
+          description: The article does not exist, or is not visible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: >-
+            Rate limited per client IP by `rate-limit.summary.requests-per-minute`. Applies
+            to the writes only — the status GETs are exempt because they are long-polled and
+            would otherwise exhaust the same small allowance mid-generation.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              schema:
+                type: integer
+
+  /api/news/{articleId}/summary/narration:
+    get:
+      summary: Summary narration state, with optional long-poll
+      description: >-
+        Identical contract to GET /api/blogs/{blogId}/narration — same afterVersion /
+        waitSeconds semantics, same NarrationResponse body — so the frontend polling hook
+        is shared rather than reimplemented.
+      operationId: getSummaryNarration
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ArticleId'
+        - name: afterVersion
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: waitSeconds
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 25
+            default: 0
+      responses:
+        '200':
+          description: The current narration state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+        '404':
+          description: The article does not exist, is not visible, or has no READY summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    post:
+      summary: Queue text-to-speech for the summary
+      description: >-
+        Queues the async narration pipeline for contentType ARTICLE_SUMMARY and
+        contentId = the article id. The narration script is the article title plus the
+        summary body, through the same NarrationScriptBuilder used for blogs.
+
+        Authenticated, unlike the blog equivalent: a TTS render is the more expensive
+        operation and leaving it open would let an anonymous caller drain the
+        1,000,000 characters/month budget.
+      operationId: requestSummaryNarration
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ArticleId'
+      responses:
+        '200':
+          description: Already READY (reused), or in a state that needs no new work
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+        '202':
+          description: Queued for generation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+        '401':
+          description: No or invalid JWT
+        '404':
+          description: The article does not exist, is not visible, or has no READY summary
+        '429':
+          description: Rate limited per client IP
+        '503':
+          description: >-
+            Text-to-speech is disabled or unconfigured. Carries an UNAVAILABLE
+            NarrationResponse, matching the existing blog contract — a 503 here is part of
+            the contract and must not be reduced to a generic error by the client.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Any valid Auth0 JWT. Not admin-role gated — exactly how favourites writes work.
+
+  parameters:
+    ArticleId:
+      name: articleId
+      in: path
+      required: true
+      description: The `aggregated_articles` document id
+      schema:
+        type: string
+
+  schemas:
+    ArticleSummaryResponse:
+      type: object
+      description: >-
+        Fields absent rather than null when not applicable (@JsonInclude NON_NULL), as with
+        NarrationResponse.
+      required: [state, version, retryable, message]
+      properties:
+        state:
+          type: string
+          enum: [NOT_REQUESTED, GENERATING, READY, FAILED]
+          description: >-
+            NOT_REQUESTED is a wire-only state, never persisted — it means no document
+            exists for this article. There is deliberately no UNAVAILABLE: narration has
+            one because the TTS provider can be unconfigured, whereas the chat model is a
+            hard dependency of the running application.
+        version:
+          type: integer
+          format: int64
+          description: 0 when NOT_REQUESTED. Otherwise the document's version; feed back as afterVersion.
+        body:
+          type: string
+          description: >-
+            Markdown prose, present only when READY. 4-6 paragraphs, neutral third person,
+            no heading (the drawer supplies it). Rendered client-side through the
+            allowlisted link/image policy in chat/linkPolicy.ts, without rehype-raw.
+        model:
+          type: string
+          description: Present only when READY.
+        completedAt:
+          type: string
+          format: date-time
+          description: Present only when READY.
+        failureCode:
+          type: string
+          enum: [INSUFFICIENT_SOURCE_TEXT, MODEL_ERROR, ARTICLE_NOT_FOUND]
+          description: Present only when FAILED.
+        retryable:
+          type: boolean
+          description: >-
+            Whether a repeat POST should try again. False for INSUFFICIENT_SOURCE_TEXT and
+            ARTICLE_NOT_FOUND, so the client can offer "Try again" only when it would help.
+        message:
+          type: string
+          description: Human-readable, safe to render verbatim.
+
+    NarrationResponse:
+      type: object
+      description: >-
+        The existing contract, unchanged. Reproduced here because the summary narration
+        endpoints serve it; the authoritative definition is
+        specs/032-on-demand-narration/contracts/narration-api.yaml.
+      required: [state, version, retryable, message]
+      properties:
+        state:
+          type: string
+          enum: [NOT_REQUESTED, QUEUED, PROCESSING, READY, FAILED, UNAVAILABLE, INELIGIBLE]
+        version:
+          type: integer
+          format: int64
+        audioUrl:
+          type: string
+          description: Present only when READY. `/uploads/narrations/{id}/narration.mp3`.
+        durationSeconds:
+          type: integer
+          format: int64
+          description: Present only when READY.
+        retryable:
+          type: boolean
+        message:
+          type: string
+
+    Problem:
+      type: object
+      properties:
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string

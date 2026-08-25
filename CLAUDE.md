@@ -122,6 +122,23 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 034-article-summary-audio: On-demand, globally shared AI summaries of aggregated news
+  articles (`article_summaries`, id = `sha256(SUMMARY_FORMAT_VERSION + articleId)`) with
+  optional audio. Generation is **synchronous** with an insert-first dedup guard — an LLM
+  call has no long-running-operation handle to poll, so the Kafka/lease/recovery machinery
+  narration needs has no justification here; crash recovery is a conditional
+  `findAndModify` guarded on **both** `status` and `updatedAt`. The narration package is
+  generalised from `blogId` to `contentType` (`BLOG` | `ARTICLE_SUMMARY`) + `contentId`
+  behind a `NarrationSource` strategy; `BlogNarrationService` → `NarrationService`,
+  `BlogNarrationScriptBuilder` → `NarrationScriptBuilder`, but **`FORMAT_VERSION` stays the
+  literal `blog-narration-v1`** because it feeds the fingerprint that *is* the narration
+  `_id` — changing it orphans every stored blog MP3. `/api/blogs/{blogId}/narration` keeps
+  its path and its public `POST`; the summary narration `POST` is authenticated because it
+  can drain the 1,000,000 chars/month TTS budget. `ArticleSectionWriter`'s source-text
+  cascade is extracted to `ArticleSourceTextProvider`. `article_summaries` must be added to
+  `BackupService.BACKUP_COLLECTIONS` and `RestoreService.IMPORT_ORDER_INDEPENDENT` (a
+  restore drops collections, so `NarrationRestoreValidator.ensureIndexes()` — not Mongock —
+  is what puts narration indexes back). See `specs/034-article-summary-audio/`.
 - 033-sonarqube-static-analysis: SonarCloud analysis moved out of the `backend` job into its
   own `sonar` job (`needs` all three build jobs, `fetch-depth: 0`, `continue-on-error: true`,
   runs `./gradlew classes testClasses sonar` — no test re-run). `SONAR_TOKEN` moved to
@@ -172,6 +189,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.9 (web, security OAuth2 resource server, data-mongodb), `@auth0/auth0-react` (adds `loginWithPopup` usage), Lucide React `Heart` icon. No new dependencies. (029-favourite-news-events)
 - MongoDB — new `favourites` collection (record + `@Document`, unique compound index on `userId,type,contentId`). Existing `aggregated_articles` / `aggregated_events` unchanged. (029-favourite-news-events)
 - Static analysis: SonarQube Cloud (`org.sonarqube` 6.0.1.5171, project key `simonjamesrowe_simonrowe-dev-monorepo`), JaCoCo 0.8.12 on `backend` (0.78 floor) and `software-factory` (report only), `@vitest/coverage-v8` ^3.0.0 for frontend LCOV, ESLint 9 in CI. No persistence. (033-sonarqube-static-analysis)
+- Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16, Embabel `Ai` (`com.embabel.agent.api.common.Ai`, the established inline-LLM injection point alongside `ArticleSectionWriter`/`DigestComposer`), Mongock, Bucket4j via the existing `RateLimitInterceptor`, `react-markdown`, Lucide React `Sparkles`. **No new dependencies in either module.** (034-article-summary-audio)
+- MongoDB — new `article_summaries` collection (mutable `@Document` class, not a record, because the generation flow transitions it in place); `narrations` changed from `blogId` to `contentType` + `contentId`. Indexes via Mongock change units `V020`/`V021` — `auto-index-creation` is off, so `@Indexed`/`@CompoundIndex` alone are decorative. (034-article-summary-audio)
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
