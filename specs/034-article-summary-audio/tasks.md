@@ -257,7 +257,14 @@ written without it. This phase adds the stale reclaim and the proof.
   - **Done against a live local stack** (Docker infra + backend on :8080, real MongoDB): Mongock applied `V020` and `V021` at boot; both index sets present and correctly shaped; unauthenticated `POST` → 401 and public `GET` → `200 NOT_REQUESTED`; long-poll returns immediately on a terminal state; `waitSeconds=26` → 400; summary narration `POST` → 401 and `GET` → 404 with no `READY` summary; `POST /api/blogs/{id}/narration` → 404 not 401, so the blog contract is provably still public.
   - **This step found a real defect**: public status `GET`s shared the 5/min write bucket, so a drawer session (1 read + 4 long-polls) 429'd the reader mid-generation. Fixed by exempting non-`POST` summary requests from the bucket; re-verified live (12 consecutive reads, all 200). FR-014, the contract and the runbook updated to match.
   - **Browser walkthrough completed 2026-08-25** against the local stack with the 2026-08-24 production backup restored (624 articles, 52 blogs, 1.2 GB media): signed in as the admin identity and generated a real summary of "The AI-Native SDLC playbook" — **5 paragraphs**, neutral third person, no heading, no title restatement, 12,000 source characters (full scrape, truncated at the cap), 4,398 body characters, `status: READY`, `model: gpt-5.6-luna`. Disclosure label, source, date, title link, "Read the original" and the heart all render in the documented order. Closing the drawer preserved the list. The card label flipped to **Read summary** on that one card only, and a **logged-out** visitor opened it instantly with no login prompt and no second model call (one generation, one document — verified in the log and in Mongo). The audio panel correctly reported "Narration is temporarily unavailable" with TTS unconfigured.
-  - **Still not exercised**: summary audio actually rendering. That needs `NARRATION_ENABLED=true` and the `GOOGLE_CLOUD_TTS_*` values, which are unset locally and in production.
+  - **Summary audio verified 2026-08-25** against a real Google Cloud project, after two
+    pre-existing provider defects were fixed (see the narration commit): 4,423-character
+    script → 1,108,416 bytes in ~30s, served as `audio/mpeg`, decoded by the browser as a
+    single 277-second stream, player controls and playback-speed selector present, and the
+    "About 5 min" label matching the real duration. Closing the drawer unmounted the
+    `<audio>` element — so playback stops — while the list and its source filters stayed
+    intact. Chunked synthesis also verified on a 20,574-character blog: 3 chunks,
+    3,961,536 bytes, decoded as one clean 990-second stream.
 
 ---
 

@@ -197,9 +197,14 @@ export function NarrationPanel({
       </div>
     )
   } else {
-    const message = (narration as BlogNarrationResponse).state === 'INELIGIBLE'
+    // Prefer the response's own message. These states carry a reason worth showing — a
+    // caller that declined sign-in sends "Sign in to generate audio", and reporting
+    // "temporarily unavailable" instead would blame the service for the reader's own
+    // choice. Fall back to the generic wording when no message is supplied.
+    const fallback = (narration as BlogNarrationResponse).state === 'INELIGIBLE'
       ? 'Narration is not available for this post.'
       : 'Narration is temporarily unavailable.'
+    const message = narration.message?.trim() ? narration.message : fallback
     content = <p className={`${className}__message`} role="status">{message}</p>
   }
 
