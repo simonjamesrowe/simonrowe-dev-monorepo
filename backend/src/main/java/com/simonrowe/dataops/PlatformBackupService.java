@@ -54,6 +54,9 @@ public class PlatformBackupService {
   private static final DateTimeFormatter TIMESTAMP_FORMAT =
       DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
   private static final String ROLES_ENTRY = "postgres/roles.sql";
+  /** Names both the uploaded archive and the local staging file. */
+  private static final String ARCHIVE_PREFIX = "platform-backup-";
+  private static final String ARCHIVE_SUFFIX = ".zip";
   private static final String CLICKHOUSE_ENTRY_PREFIX = "clickhouse/";
   /** Prefix for the intermediate file in the shared ClickHouse volume. */
   private static final String CLICKHOUSE_STAGING_PREFIX = "platform-clickhouse-";
@@ -126,8 +129,8 @@ public class PlatformBackupService {
       sweepClickHouseOrphans();
 
       String timestamp = TIMESTAMP_FORMAT.format(Instant.now());
-      String fileName = "platform-backup-" + timestamp + ".zip";
-      clickhouseStagingFile = CLICKHOUSE_STAGING_PREFIX + timestamp + ".zip";
+      String fileName = ARCHIVE_PREFIX + timestamp + ARCHIVE_SUFFIX;
+      clickhouseStagingFile = CLICKHOUSE_STAGING_PREFIX + timestamp + ARCHIVE_SUFFIX;
       archive = createOwnerOnlyTempFile();
       lastLocalArchive = archive;
 
@@ -476,13 +479,13 @@ public class PlatformBackupService {
    */
   private static Path createOwnerOnlyTempFile() throws IOException {
     if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
-      return Files.createTempFile("platform-backup-", ".zip",
+      return Files.createTempFile(ARCHIVE_PREFIX, ARCHIVE_SUFFIX,
           PosixFilePermissions.asFileAttribute(
               PosixFilePermissions.fromString("rw-------")));
     }
     LOG.warn("Filesystem has no POSIX permission support; the staging archive "
         + "will use default permissions");
-    return Files.createTempFile("platform-backup-", ".zip");
+    return Files.createTempFile(ARCHIVE_PREFIX, ARCHIVE_SUFFIX);
   }
 
   private static void deleteQuietly(@Nullable final Path path) {
