@@ -141,7 +141,12 @@ public class ProcessCommandRunner implements CommandRunner {
     private final Thread thread;
 
     private StderrCollector(final InputStream stream) {
-      this.thread = Thread.startVirtualThread(() -> {
+      // A platform thread, deliberately, not a virtual one. The drain loop holds
+      // a monitor (`synchronized (text)`) on every read, and a virtual thread that
+      // blocks inside a synchronized block can pin its carrier thread — the
+      // opposite of what virtual threads are for. The cost is negligible: one
+      // short-lived thread per external command, so six per nightly backup.
+      this.thread = new Thread(() -> {
         try (InputStream in = stream) {
           byte[] buffer = new byte[4096];
           int read;
@@ -157,7 +162,11 @@ public class ProcessCommandRunner implements CommandRunner {
         } catch (IOException ex) {
           LOG.debug("Failed reading stderr: {}", ex.getMessage());
         }
-      });
+      }, "stderr-drainer");
+      // Daemon: a drainer blocked on a wedged child process must never hold up
+      // JVM shutdown.
+      this.thread.setDaemon(true);
+      this.thread.start();
     }
 
     static StderrCollector draining(final InputStream stream) {

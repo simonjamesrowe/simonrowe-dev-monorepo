@@ -5,8 +5,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -126,7 +128,7 @@ public class PlatformBackupService {
       String timestamp = TIMESTAMP_FORMAT.format(Instant.now());
       String fileName = "platform-backup-" + timestamp + ".zip";
       clickhouseStagingFile = CLICKHOUSE_STAGING_PREFIX + timestamp + ".zip";
-      archive = Files.createTempFile("platform-backup-", ".zip");
+      archive = createOwnerOnlyTempFile();
       lastLocalArchive = archive;
 
       // Resolved before any capture work: a Drive problem should fail fast rather
@@ -456,6 +458,31 @@ public class PlatformBackupService {
         databases.size(), BackupMetadata.formatFileSize(postgresBytes),
         BackupMetadata.formatFileSize(clickhouse.bytes()), clickhouse.tables().size(),
         clickhouseRows, BackupMetadata.formatFileSize(archiveSize));
+  }
+
+  /**
+   * Creates the staging archive in the temp directory with owner-only permissions.
+   *
+   * <p>The shared temp directory is world-writable, and this archive is not
+   * ordinary scratch data: it contains complete database dumps plus
+   * {@code pg_dumpall --roles-only} output, which carries role password hashes.
+   * Creating it with the permissions applied <em>at creation</em> — rather than
+   * setting them afterwards — leaves no window in which the file exists readable.
+   *
+   * <p>Falls back to a plain temp file on filesystems without POSIX permissions.
+   * That is not a silent downgrade in practice: this runs in a Linux container,
+   * and the fallback exists so a developer on a non-POSIX filesystem is not
+   * blocked outright.
+   */
+  private static Path createOwnerOnlyTempFile() throws IOException {
+    if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+      return Files.createTempFile("platform-backup-", ".zip",
+          PosixFilePermissions.asFileAttribute(
+              PosixFilePermissions.fromString("rw-------")));
+    }
+    LOG.warn("Filesystem has no POSIX permission support; the staging archive "
+        + "will use default permissions");
+    return Files.createTempFile("platform-backup-", ".zip");
   }
 
   private static void deleteQuietly(@Nullable final Path path) {

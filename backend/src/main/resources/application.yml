@@ -454,9 +454,10 @@ backup:
       - temporal
       - temporal_visibility
     # The langfuse-clickhouse-backups volume as mounted into *this* container.
-    # ClickHouse sees the same volume at /backups.
+    # ClickHouse's own view of it (/backups) needs no entry here: BACKUP ... TO
+    # File('<name>') resolves a bare relative name against the server's configured
+    # allowed_path, so the statement never names a directory.
     clickhouse-backup-path: ${PLATFORM_BACKUP_CLICKHOUSE_PATH:/clickhouse-backups}
-    clickhouse-container-backup-path: /backups
     # Images recorded in the manifest, so a restore knows which tool version
     # produced the dump: a dtrack dump taken under 5.0.3 restored into a later
     # major may need that version's own schema migration afterwards.

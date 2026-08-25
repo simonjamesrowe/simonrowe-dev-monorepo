@@ -21,10 +21,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param clickhouseDatabase the ClickHouse database to back up
  * @param databases the Postgres databases to dump, each independently restorable
  * @param clickhouseBackupPath the shared backup volume as mounted into <em>this</em>
- *     container
- * @param clickhouseContainerBackupPath the same volume as mounted into the
- *     ClickHouse container. The two differ, and the {@code BACKUP} statement must
- *     use ClickHouse's view of it while the file is read back through ours.
+ *     container. ClickHouse's own view of it needs no configuration here: {@code
+ *     BACKUP ... TO File('<name>')} resolves a bare relative name against the
+ *     server's configured {@code allowed_path}, so the statement never spells out
+ *     a directory.
  * @param imageContainers containers whose image tags are recorded in the manifest,
  *     so a restore knows which tool version produced the dump
  */
@@ -36,7 +36,6 @@ public record PlatformBackupProperties(
     String clickhouseDatabase,
     List<String> databases,
     String clickhouseBackupPath,
-    String clickhouseContainerBackupPath,
     List<String> imageContainers
 ) {
 }

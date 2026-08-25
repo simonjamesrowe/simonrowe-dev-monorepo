@@ -74,7 +74,6 @@ class PlatformBackupServiceTest {
         "default",
         List.of("langfuse", "dtrack", "temporal", "temporal_visibility"),
         clickhouseBackupDir.toString(),
-        "/backups",
         List.of("langfuse", "dependencytrack-apiserver", "langfuse-clickhouse"));
   }
 
