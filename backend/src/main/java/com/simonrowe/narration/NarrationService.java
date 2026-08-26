@@ -1,11 +1,11 @@
 package com.simonrowe.narration;
 
-import com.simonrowe.blog.Blog;
-import com.simonrowe.blog.BlogRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.FindAndModifyOptions;
@@ -13,70 +13,101 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * The content-agnostic half of the narration pipeline: queueing, claiming, reuse,
+ * invalidation and the long-poll status read.
+ *
+ * <p>Everything that knows what is being narrated lives behind {@link NarrationSource},
+ * resolved here from a registry keyed by {@link NarrationContentType}. Renamed from
+ * {@code BlogNarrationService} when article summaries became the second kind of content;
+ * the blog contract at {@code /api/blogs/{blogId}/narration} is unchanged.
+ */
 @Service
-public class BlogNarrationService {
+public class NarrationService {
 
   private static final String AUDIO_ENCODING = "MP3";
   private static final Duration STATUS_POLL_INTERVAL = Duration.ofMillis(500);
 
-  private final BlogRepository blogRepository;
   private final NarrationRepository narrationRepository;
-  private final BlogNarrationScriptBuilder scriptBuilder;
   private final NarrationProperties properties;
   private final NarrationProvider provider;
   private final NarrationRequestPublisher publisher;
   private final NarrationStorage storage;
   private final MongoTemplate mongoTemplate;
   private final MeterRegistry meterRegistry;
+  private final Map<NarrationContentType, NarrationSource> sources =
+      new EnumMap<>(NarrationContentType.class);
 
-  public BlogNarrationService(
-      final BlogRepository blogRepository,
+  public NarrationService(
       final NarrationRepository narrationRepository,
-      final BlogNarrationScriptBuilder scriptBuilder,
       final NarrationProperties properties,
       final NarrationProvider provider,
       final NarrationRequestPublisher publisher,
       final NarrationStorage storage,
       final MongoTemplate mongoTemplate,
-      final MeterRegistry meterRegistry
+      final MeterRegistry meterRegistry,
+      final List<NarrationSource> narrationSources
   ) {
-    this.blogRepository = blogRepository;
     this.narrationRepository = narrationRepository;
-    this.scriptBuilder = scriptBuilder;
     this.properties = properties;
     this.provider = provider;
     this.publisher = publisher;
     this.storage = storage;
     this.mongoTemplate = mongoTemplate;
     this.meterRegistry = meterRegistry;
+    for (NarrationSource source : narrationSources) {
+      NarrationSource previous = sources.put(source.contentType(), source);
+      if (previous != null) {
+        throw new IllegalStateException(
+            "Two NarrationSource beans claim " + source.contentType());
+      }
+    }
   }
 
+  /**
+   * Current narration state, optionally waiting for it to change.
+   *
+   * @param contentType what kind of content this is
+   * @param contentId the content id
+   * @param afterVersion the version the client already has, or null for an immediate read
+   * @param waitSeconds how long to hold the request open
+   * @return the current state
+   */
   public NarrationResponse getStatus(
-      final String blogId,
+      final NarrationContentType contentType,
+      final String contentId,
       final Long afterVersion,
       final int waitSeconds
   ) {
-    Blog blog = publishedBlog(blogId);
+    NarrationSource source = sourceFor(contentType);
     Instant deadline = Instant.now().plusSeconds(waitSeconds);
     NarrationResponse response;
     do {
-      response = currentResponse(blog);
+      response = currentResponse(source, contentId);
       if (afterVersion == null || response.version() != afterVersion
           || response.isTerminal() || waitSeconds == 0) {
         return response;
       }
       sleepUntilNextPoll(deadline);
     } while (Instant.now().isBefore(deadline));
-    return currentResponse(blog);
+    return currentResponse(source, contentId);
   }
 
-  public RequestResult request(final String blogId) {
-    Blog blog = publishedBlog(blogId);
-    NarrationDescriptor descriptor = descriptor(blog);
+  /**
+   * Queues generation, or reuses an existing narration.
+   *
+   * @param contentType what kind of content this is
+   * @param contentId the content id
+   * @return the outcome, with {@code accepted} set when new work was queued
+   */
+  public RequestResult request(
+      final NarrationContentType contentType,
+      final String contentId
+  ) {
+    NarrationSource source = sourceFor(contentType);
+    NarrationSource.NarrationDescriptor descriptor = source.scriptFor(contentId);
     Optional<Narration> existing = narrationRepository.findById(descriptor.id());
     if (existing.isPresent()) {
       Narration narration = existing.get();
@@ -99,7 +130,8 @@ public class BlogNarrationService {
     }
     Narration narration = new Narration(
         descriptor.id(),
-        blog.id(),
+        contentType,
+        contentId,
         descriptor.script().length(),
         properties.voiceName(),
         properties.languageCode(),
@@ -120,6 +152,13 @@ public class BlogNarrationService {
     return new RequestResult(NarrationResponse.from(narration), created);
   }
 
+  /**
+   * Takes exclusive ownership of a queued narration for the duration of a lease.
+   *
+   * @param narrationId the narration to claim
+   * @param now the current instant
+   * @return the claimed narration, or empty when another worker got there first
+   */
   public Optional<Narration> claim(final String narrationId, final Instant now) {
     Query query = Query.query(Criteria.where("_id").is(narrationId)
         .and("status").is(NarrationStatus.QUEUED));
@@ -139,37 +178,45 @@ public class BlogNarrationService {
     return Optional.ofNullable(claimed);
   }
 
-  public NarrationDescriptor descriptor(final Blog blog) {
-    String script = scriptBuilder.build(blog.title(), blog.content());
-    if (script.isBlank()) {
-      throw new ResponseStatusException(
-          HttpStatus.UNPROCESSABLE_ENTITY, "Blog has no narratable prose");
-    }
-    if (script.length() > properties.maxBlogCharacters()) {
-      throw new ResponseStatusException(
-          HttpStatus.PAYLOAD_TOO_LARGE, "Blog is too long to narrate");
-    }
-    String id = scriptBuilder.fingerprint(
-        script,
-        properties.voiceName(),
-        properties.languageCode(),
-        AUDIO_ENCODING);
-    return new NarrationDescriptor(id, script);
+  /**
+   * The script and fingerprint for a piece of content, via its source.
+   *
+   * @param contentType what kind of content this is
+   * @param contentId the content id
+   * @return the descriptor
+   */
+  public NarrationSource.NarrationDescriptor descriptor(
+      final NarrationContentType contentType,
+      final String contentId
+  ) {
+    return sourceFor(contentType).scriptFor(contentId);
   }
 
+  /**
+   * Whether a narration is still audio of its content's current text.
+   *
+   * @param narration the narration to check
+   * @return true when it is still current
+   */
   public boolean isCurrentAndPublished(final Narration narration) {
-    return blogRepository.findByIdAndPublishedTrue(narration.blogId())
-        .map(this::descriptor)
-        .map(current -> current.id().equals(narration.id()))
-        .orElse(false);
+    NarrationSource source = sources.get(narration.contentType());
+    return source != null && source.isCurrent(narration);
   }
 
-  public void invalidateBlog(final String blogId) {
-    String currentId = blogRepository.findByIdAndPublishedTrue(blogId)
-        .map(this::descriptor)
-        .map(NarrationDescriptor::id)
-        .orElse(null);
-    for (Narration narration : narrationRepository.findByBlogId(blogId)) {
+  /**
+   * Marks every narration for a piece of content stale except the one matching its current
+   * text, deleting their audio.
+   *
+   * @param contentType what kind of content this is
+   * @param contentId the content id
+   */
+  public void invalidate(
+      final NarrationContentType contentType,
+      final String contentId
+  ) {
+    String currentId = currentDescriptorId(contentType, contentId);
+    for (Narration narration
+        : narrationRepository.findByContentTypeAndContentId(contentType, contentId)) {
       if (!narration.id().equals(currentId)) {
         storage.delete(narration);
         narration.markStale(Instant.now());
@@ -178,8 +225,28 @@ public class BlogNarrationService {
     }
   }
 
-  private NarrationResponse currentResponse(final Blog blog) {
-    NarrationDescriptor descriptor = descriptor(blog);
+  private String currentDescriptorId(
+      final NarrationContentType contentType,
+      final String contentId
+  ) {
+    NarrationSource source = sources.get(contentType);
+    if (source == null) {
+      return null;
+    }
+    try {
+      return source.scriptFor(contentId).id();
+    } catch (RuntimeException ex) {
+      // The content is gone, unpublished or no longer narratable — so nothing is current
+      // and every existing narration for it is stale.
+      return null;
+    }
+  }
+
+  private NarrationResponse currentResponse(
+      final NarrationSource source,
+      final String contentId
+  ) {
+    NarrationSource.NarrationDescriptor descriptor = source.scriptFor(contentId);
     Optional<Narration> narration = narrationRepository.findById(descriptor.id());
     if (narration.isEmpty()) {
       return properties.isProviderConfigured() && provider.isConfigured()
@@ -193,10 +260,12 @@ public class BlogNarrationService {
     return NarrationResponse.from(current);
   }
 
-  private Blog publishedBlog(final String blogId) {
-    return blogRepository.findByIdAndPublishedTrue(blogId)
-        .orElseThrow(() -> new ResponseStatusException(
-            HttpStatus.NOT_FOUND, "Blog post not found"));
+  private NarrationSource sourceFor(final NarrationContentType contentType) {
+    NarrationSource source = sources.get(contentType);
+    if (source == null) {
+      throw new IllegalStateException("No NarrationSource for " + contentType);
+    }
+    return source;
   }
 
   private static void sleepUntilNextPoll(final Instant deadline) {
@@ -211,9 +280,12 @@ public class BlogNarrationService {
     }
   }
 
+  /**
+   * The outcome of a narration request.
+   *
+   * @param response the current state
+   * @param accepted true when new work was queued, surfaced as a 202
+   */
   public record RequestResult(NarrationResponse response, boolean accepted) {
-  }
-
-  public record NarrationDescriptor(String id, String script) {
   }
 }

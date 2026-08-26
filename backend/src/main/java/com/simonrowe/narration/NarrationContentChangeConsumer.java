@@ -7,18 +7,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class NarrationContentChangeConsumer {
 
-  private final BlogNarrationService narrationService;
+  private final NarrationService narrationService;
 
   public NarrationContentChangeConsumer(
-      final BlogNarrationService narrationService
+      final NarrationService narrationService
   ) {
     this.narrationService = narrationService;
   }
 
   @KafkaListener(topics = "content-changes", groupId = "narration-lifecycle")
   public void handle(final ContentChangeEvent event) {
+    // Blogs only. Aggregated articles are immutable snapshots, and an article summary's
+    // narration is already content-addressed over the summary text, so regenerating a
+    // summary produces a new narration id and marks the old audio stale for free.
     if (event.contentType() == ContentChangeEvent.ContentType.BLOG) {
-      narrationService.invalidateBlog(event.contentId());
+      narrationService.invalidate(NarrationContentType.BLOG, event.contentId());
     }
   }
 }

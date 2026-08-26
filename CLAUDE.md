@@ -147,6 +147,21 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   of the "just re-run restart-prod.sh" folklore. Now `interval: 30s`/`timeout: 25s`. To rescue a
   stranded frontend without waiting on the dependency gate:
   `docker compose -f docker-compose.prod.yml up -d --no-deps frontend`.
+- **A healthcheck with no `start_period` has a total cold-start budget of
+  `retries x interval` — that is the whole grace period, not a per-probe timeout.**
+  Failing probes during boot count against `retries`, so a slow-booting service is
+  declared `unhealthy` before it can answer even once. On 2026-08-25 this broke a
+  `restart-prod.sh` run: `elasticsearch` needs **~130s** on the Pi to bind 9200 but had
+  no `start_period`, so its budget was `5 x 10s = 50s`. Compose aborted with
+  `dependency failed to start: container ... elasticsearch-1 is unhealthy` and left
+  **both `backend` and `frontend` in `created`** — 502 on www *and* api. The probe itself
+  costs ~60ms once ES is up, so `timeout` was never the problem. `mongodb`, `kafka` and
+  `elasticsearch` all gate `backend` on `service_healthy` and now carry
+  `start_period` (60s / 180s / 300s) sized at ~2x measured boot (20s / 75s / 130s) —
+  note `kafka`'s old budget was *exactly* its 75s boot time, so it was passing by luck.
+  A `start_period` is free when boot is fast: the first successful probe ends it early.
+  Recovery needs no special action — once ES is healthy, a plain `up -d` starts both
+  stranded containers (`monitor-prod.sh` does this within a minute).
 - **Recover a downed/partial stack** from the deploy directory: `docker compose -f docker-compose.prod.yml up -d`
   (reconciles containers stuck in `created`, respecting `depends_on` ordering). Minimal alternative:
   `docker start simonrowe-dev-monorepo-langfuse-1 && docker start simonrowe-dev-monorepo-nginx-1`.
@@ -206,6 +221,23 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   memory-cgroup reboot. ClickHouse archive size is **unbounded and still unmeasured**
   (no TTL on trace tables); measure before trusting the Drive quota. See
   `docs/runbooks/platform-backup-restore.md`.
+- 034-article-summary-audio: On-demand, globally shared AI summaries of aggregated news
+  articles (`article_summaries`, id = `sha256(SUMMARY_FORMAT_VERSION + articleId)`) with
+  optional audio. Generation is **synchronous** with an insert-first dedup guard — an LLM
+  call has no long-running-operation handle to poll, so the Kafka/lease/recovery machinery
+  narration needs has no justification here; crash recovery is a conditional
+  `findAndModify` guarded on **both** `status` and `updatedAt`. The narration package is
+  generalised from `blogId` to `contentType` (`BLOG` | `ARTICLE_SUMMARY`) + `contentId`
+  behind a `NarrationSource` strategy; `BlogNarrationService` → `NarrationService`,
+  `BlogNarrationScriptBuilder` → `NarrationScriptBuilder`, but **`FORMAT_VERSION` stays the
+  literal `blog-narration-v1`** because it feeds the fingerprint that *is* the narration
+  `_id` — changing it orphans every stored blog MP3. `/api/blogs/{blogId}/narration` keeps
+  its path and its public `POST`; the summary narration `POST` is authenticated because it
+  can drain the 1,000,000 chars/month TTS budget. `ArticleSectionWriter`'s source-text
+  cascade is extracted to `ArticleSourceTextProvider`. `article_summaries` must be added to
+  `BackupService.BACKUP_COLLECTIONS` and `RestoreService.IMPORT_ORDER_INDEPENDENT` (a
+  restore drops collections, so `NarrationRestoreValidator.ensureIndexes()` — not Mongock —
+  is what puts narration indexes back). See `specs/034-article-summary-audio/`.
 - 033-sonarqube-static-analysis: SonarCloud analysis moved out of the `backend` job into its
   own `sonar` job (`needs` all three build jobs, `fetch-depth: 0`, `continue-on-error: true`,
   runs `./gradlew classes testClasses sonar` — no test re-run). `SONAR_TOKEN` moved to
@@ -258,6 +290,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - Static analysis: SonarQube Cloud (`org.sonarqube` 6.0.1.5171, project key `simonjamesrowe_simonrowe-dev-monorepo`), JaCoCo 0.8.12 on `backend` (0.78 floor) and `software-factory` (report only), `@vitest/coverage-v8` ^3.0.0 for frontend LCOV, ESLint 9 in CI. No persistence. (033-sonarqube-static-analysis)
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend), bash (restore script) + Spring Boot 3.5.x `@Scheduled`/`@RestController`, the existing Google Drive API client, `java.util.zip`, `java.lang.ProcessBuilder`. **No new dependencies in any module.** (034-platform-datastore-backup)
 - No application persistence: reads Postgres 15 (`langfuse-db`) and ClickHouse (`langfuse-clickhouse`) via `docker exec`, writes a zip to Google Drive. One new Docker named volume (`langfuse-clickhouse-backups`) as the ClickHouse→backend handoff. (034-platform-datastore-backup)
+- Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16, Embabel `Ai` (`com.embabel.agent.api.common.Ai`, the established inline-LLM injection point alongside `ArticleSectionWriter`/`DigestComposer`), Mongock, Bucket4j via the existing `RateLimitInterceptor`, `react-markdown`, Lucide React `Sparkles`. **No new dependencies in either module.** (034-article-summary-audio)
+- MongoDB — new `article_summaries` collection (mutable `@Document` class, not a record, because the generation flow transitions it in place); `narrations` changed from `blogId` to `contentType` + `contentId`. Indexes via Mongock change units `V020`/`V021` — `auto-index-creation` is off, so `@Indexed`/`@CompoundIndex` alone are decorative. (034-article-summary-audio)
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,

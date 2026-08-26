@@ -9,9 +9,24 @@ import org.commonmark.parser.Parser;
 import org.commonmark.renderer.text.TextContentRenderer;
 import org.springframework.stereotype.Component;
 
+/**
+ * Turns Markdown into plain narratable prose, and fingerprints the result.
+ *
+ * <p>Renamed from {@code BlogNarrationScriptBuilder} when narration was generalised beyond
+ * blogs; the logic was never blog-specific, only the name was.
+ */
 @Component
-public class BlogNarrationScriptBuilder {
+public class NarrationScriptBuilder {
 
+  /**
+   * Feeds {@link #fingerprint}, which <em>is</em> the narration document id and the
+   * directory its MP3 lives in.
+   *
+   * <p><b>Do not "tidy" this to match the class name.</b> The literal
+   * {@code blog-narration-v1} is deliberate: changing it would change the fingerprint of
+   * every existing blog narration, orphaning every stored audio file. It is a data
+   * migration disguised as a string constant.
+   */
   static final String FORMAT_VERSION = "blog-narration-v1";
   private static final Pattern FENCED_CODE = Pattern.compile(
       "(?s)(```.*?```|~~~.*?~~~)");

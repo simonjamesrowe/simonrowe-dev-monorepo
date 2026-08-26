@@ -1,10 +1,25 @@
 # Google Cloud Text-to-Speech setup
 
-This runbook configures on-demand narration for published blogs. The backend uses
-Google Cloud Text-to-Speech `v1beta1` Long Audio with a single British English Chirp 3 HD
-voice. Google writes each generated MP3 to a private, short-lived Cloud Storage
-object; the backend then validates and copies it into the existing uploads volume.
-The bucket is not a public media origin and is not part of backup or restore.
+This runbook configures on-demand narration for published blogs and for generated
+article summaries, using a single British English Chirp 3 HD voice.
+
+> **Updated 2026-08-25.** Synthesis now goes through the ordinary
+> `v1/text:synthesize` endpoint, which returns MP3 directly, rather than `v1beta1`
+> Long Audio. Long Audio rejects MP3 outright — "only LINEAR16 audio encodings are
+> supported for Long Audio Synthesis" — and LINEAR16 would multiply stored audio
+> roughly tenfold. The ordinary endpoint caps input at 5,000 UTF-8 bytes per
+> request, so `NarrationScriptChunker` splits longer scripts at sentence
+> boundaries and the resulting MP3 frames are concatenated. A 14,000-character
+> blog is about three requests.
+>
+> Two consequences for this runbook:
+> - **The Cloud Storage bucket is no longer on the synthesis path.** Sections 2 and
+>   3 below still apply if you want the Long Audio route available, but narration
+>   works without a bucket. `GOOGLE_CLOUD_TTS_OUTPUT_BUCKET` must still be set to a
+>   non-blank value because `NarrationProperties.isProviderConfigured()` requires it.
+> - **`x-goog-user-project` is now sent on every call.** Without it, user
+>   Application Default Credentials are rejected with "the API requires a quota
+>   project", and Google attributes the request to gcloud's own client project.
 
 Narration is disabled by default. The rest of the site starts normally without a
 Google project, bucket, or credential file.
@@ -204,9 +219,69 @@ restart the backend.
 
 ## 6. Raspberry Pi production credentials
 
-The Pi runs outside Google Cloud. Workload Identity Federation is preferred when a
-suitable external identity provider is available. The current Pi deployment does
-not have one, so use a dedicated service-account key as the documented fallback.
+The Pi runs outside Google Cloud, so it has no metadata server to draw credentials
+from. There are two supported routes. **Prefer the API key** — it needs nothing
+installed on the production host.
+
+### 6a. API key (recommended)
+
+Set `GOOGLE_CLOUD_TTS_API_KEY` and the application sends it as `x-goog-api-key`
+instead of exchanging a service-account key for a bearer token. No file, no mount,
+no `GOOGLE_APPLICATION_CREDENTIALS`.
+
+This authenticates `v1/text:synthesize`, which is the only endpoint on the live
+synthesis path: `NarrationRequestConsumer` routes every script through chunked
+synchronous synthesis because `maxImmediateBytes()` is always positive for this
+provider. The Long Audio route is therefore never taken, which is why an API-key
+deployment needs **neither `GOOGLE_CLOUD_TTS_PROJECT_NUMBER` nor
+`GOOGLE_CLOUD_TTS_OUTPUT_BUCKET`** — `NarrationProperties.isProviderConfigured()`
+stops requiring them once a key is present. If you ever re-enable Long Audio, note
+that its Cloud Storage download will *not* accept an API key and you must move to
+6b.
+
+Create the key in the Console under **APIs & Services > Credentials > Create
+credentials > API key**, then open **Edit key > API restrictions**, choose
+*Restrict key*, and tick **Cloud Text-to-Speech API**. An unrestricted key is valid
+against every enabled API in the project; the restriction is what keeps it a narrow
+capability rather than a general-purpose project credential.
+
+Substitute the value of `GOOGLE_CLOUD_TTS_PROJECT_ID` for `YOUR_PROJECT_ID`:
+
+- Credentials: <https://console.cloud.google.com/apis/credentials?project=YOUR_PROJECT_ID>
+- API enabled: <https://console.cloud.google.com/apis/library/texttospeech.googleapis.com?project=YOUR_PROJECT_ID>
+- Quotas: <https://console.cloud.google.com/apis/api/texttospeech.googleapis.com/quotas?project=YOUR_PROJECT_ID>
+
+Leave **Application restrictions** set to *None*. Restricting by IP is the obvious
+instinct, but the Pi calls Google outbound from a residential connection whose
+address generally rotates; when it changes, narration fails with a permission error
+that does not read as an IP problem. The API restriction is what narrows the blast
+radius, and it does so wherever the key is used from.
+
+```dotenv
+NARRATION_ENABLED=true
+GOOGLE_CLOUD_TTS_API_KEY=YOUR_RESTRICTED_API_KEY
+GOOGLE_CLOUD_TTS_PROJECT_ID=YOUR_PROJECT_ID
+GOOGLE_CLOUD_TTS_LOCATION=global
+GOOGLE_CLOUD_TTS_LANGUAGE_CODE=en-GB
+GOOGLE_CLOUD_TTS_VOICE_NAME=en-GB-Chirp3-HD-Charon
+```
+
+Restart only the backend, then request narration for one published blog:
+
+```bash
+cd ~/workspace/simonjamesrowe/simonrowe-dev-monorepo
+docker compose -f docker-compose.prod.yml config --quiet
+docker compose -f docker-compose.prod.yml up -d --no-deps backend
+```
+
+Rotating a key is a Console operation plus a backend restart; there is nothing to
+copy to the Pi and nothing to delete from it.
+
+### 6b. Service-account key file (alternative)
+
+Use this only if the Long Audio route is needed. Workload Identity Federation is
+preferable when a suitable external identity provider is available; the current Pi
+deployment does not have one, so a dedicated service-account key is the fallback.
 Treat the JSON as a production secret: never commit it, paste it into `.env`, or
 place it inside the repository.
 

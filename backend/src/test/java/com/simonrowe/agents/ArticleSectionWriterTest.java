@@ -16,6 +16,7 @@ import com.embabel.chat.Message;
 import com.simonrowe.agents.scrapers.ScrapedContent;
 import com.simonrowe.agents.scrapers.SitemapHtmlScraper;
 import com.simonrowe.aggregation.AggregatedArticle;
+import com.simonrowe.aggregation.ArticleSourceTextProvider;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,7 +58,10 @@ class ArticleSectionWriterTest {
     lenient().when(ai.withLlm(MODEL)).thenReturn(promptRunner);
     lenient().when(promptRunner.respond(anyList())).thenReturn(assistantMessage);
     lenient().when(assistantMessage.getContent()).thenReturn("Generated prose.");
-    writer = new ArticleSectionWriter(scraper, ai, MODEL);
+    // A real ArticleSourceTextProvider over the mocked scraper: the source-text
+    // cascade is exercised for real, so every assertion below still covers it.
+    writer = new ArticleSectionWriter(
+        new ArticleSourceTextProvider(scraper), ai, MODEL);
   }
 
   private static ArgumentCaptor<List<Message>> promptCaptor() {

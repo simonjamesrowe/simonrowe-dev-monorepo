@@ -4,6 +4,10 @@ import { Calendar, ChevronDown, ExternalLink, Heart, MapPin } from 'lucide-react
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { FavouriteButton } from '../components/common/FavouriteButton'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
+import { NewsSummaryDrawer } from '../components/news/NewsSummaryDrawer'
+import { SummaryNarration } from '../components/news/SummaryNarration'
+import { SummaryButton } from '../components/news/SummaryButton'
+import { useArticleSummaries } from '../hooks/useArticleSummaries'
 import { useFavourites } from '../hooks/useFavourites'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useScrollToHash } from '../hooks/useScrollToHash'
@@ -59,6 +63,11 @@ export function NewsEventsPage() {
 
   const newsFavourites = useFavourites('news')
   const eventFavourites = useFavourites('events')
+
+  const summaries = useArticleSummaries()
+  // The article whose summary drawer is open, or null. Held as an id rather than the
+  // article object so a reload of the list cannot leave a stale copy on screen.
+  const [summaryArticleId, setSummaryArticleId] = useState<string | null>(null)
 
   // 'all' and 'events' are local-only view modes; only a real source name is a query
   // parameter, so the backend does the filtering and paging continues within a source.
@@ -204,6 +213,27 @@ export function NewsEventsPage() {
     setFavouritesOnly(prev => !prev)
   }
 
+  /**
+   * Opens the summary drawer. An article that already has a summary just reads it — no
+   * session, no prompt, because the artefact is globally shared. One that does not runs
+   * the sign-in popup first, inside `requestSummary`.
+   */
+  const handleSummaryOpen = (article: ArticleResponse) => {
+    setSummaryArticleId(article.id)
+    if (summaries.hasSummary(article.id)) {
+      void summaries.loadSummary(article.id)
+    } else {
+      void summaries.requestSummary(article.id)
+    }
+  }
+
+  // Closing aborts any in-flight poll and unmounts the drawer — which unmounts the audio
+  // element with it, so playback stops without any extra handling.
+  const handleSummaryClose = () => {
+    if (summaryArticleId) summaries.cancel(summaryArticleId)
+    setSummaryArticleId(null)
+  }
+
   if (loading) return <LoadingIndicator message="Loading news and events..." />
   if (error) {
     return <ErrorMessage message={error} onRetry={retry} title="Unable to load News & Events" />
@@ -243,6 +273,12 @@ export function NewsEventsPage() {
     : sourceFilter === 'events'
     ? [] // show events timeline instead
     : visibleArticles.filter(a => a.sourceName === sourceFilter)
+
+  // Looked up across both the loaded list and the favourites list, so the drawer survives
+  // a switch into favourites-only mode while it is open.
+  const summaryArticle = summaryArticleId
+    ? [...articles, ...favouriteArticles].find(a => a.id === summaryArticleId) ?? null
+    : null
 
   const showEvents = sourceFilter === 'all' || sourceFilter === 'events'
   const featured = filtered.slice(0, 2)
@@ -373,12 +409,18 @@ export function NewsEventsPage() {
                       </div>
                     </div>
                   )}
-                  <FavouriteButton
-                    active={newsFavourites.isFavourite(article.id)}
-                    className="feed__favourite"
-                    label={article.title}
-                    onClick={() => void newsFavourites.toggleFavourite(article.id)}
-                  />
+                  <div className="feed__card-actions">
+                    <SummaryButton
+                      articleTitle={article.title}
+                      hasSummary={summaries.hasSummary(article.id)}
+                      onClick={() => handleSummaryOpen(article)}
+                    />
+                    <FavouriteButton
+                      active={newsFavourites.isFavourite(article.id)}
+                      label={article.title}
+                      onClick={() => void newsFavourites.toggleFavourite(article.id)}
+                    />
+                  </div>
                   <div className="feed__hero-overlay">
                     <span className="feed__source-badge">{article.sourceName}</span>
                     <h2 className="feed__hero-title">{article.title}</h2>
@@ -421,12 +463,18 @@ export function NewsEventsPage() {
                       </div>
                     )}
                   </div>
-                  <FavouriteButton
-                    active={newsFavourites.isFavourite(article.id)}
-                    className="feed__favourite"
-                    label={article.title}
-                    onClick={() => void newsFavourites.toggleFavourite(article.id)}
-                  />
+                  <div className="feed__card-actions">
+                    <SummaryButton
+                      articleTitle={article.title}
+                      hasSummary={summaries.hasSummary(article.id)}
+                      onClick={() => handleSummaryOpen(article)}
+                    />
+                    <FavouriteButton
+                      active={newsFavourites.isFavourite(article.id)}
+                      label={article.title}
+                      onClick={() => void newsFavourites.toggleFavourite(article.id)}
+                    />
+                  </div>
                   <div className="feed__card-body">
                     <span className="feed__source-badge">{article.sourceName}</span>
                     <h3 className="feed__card-title">{article.title}</h3>
@@ -534,6 +582,30 @@ export function NewsEventsPage() {
             </div>
           )}
         </>
+      )}
+
+      {summaryArticle && (
+        <NewsSummaryDrawer
+          article={summaryArticle}
+          /* Only offered once there is a summary to narrate — the backend has nothing to
+             synthesise before that, and the panel would just report a 404. */
+          audioPanel={
+            summaries.summaryFor(summaryArticle.id)?.state === 'READY' ? (
+              <SummaryNarration
+                articleId={summaryArticle.id}
+                articleTitle={summaryArticle.title}
+              />
+            ) : undefined
+          }
+          delayed={summaries.isDelayed(summaryArticle.id)}
+          error={summaries.errorFor(summaryArticle.id)}
+          isFavourite={newsFavourites.isFavourite(summaryArticle.id)}
+          loading={summaries.isLoading(summaryArticle.id)}
+          onClose={handleSummaryClose}
+          onRetry={() => void summaries.requestSummary(summaryArticle.id)}
+          onToggleFavourite={() => void newsFavourites.toggleFavourite(summaryArticle.id)}
+          summary={summaries.summaryFor(summaryArticle.id)}
+        />
       )}
     </div>
   )

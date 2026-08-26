@@ -8,16 +8,22 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 @Component
 public class RateLimitInterceptor implements HandlerInterceptor {
 
+  private static final String NEWS_PREFIX = "/api/news/";
+  private static final String SUMMARY_SUFFIX = "/summary";
+  private static final String SUMMARY_NARRATION_SUFFIX = "/summary/narration";
+
   private final RateLimitConfig config;
   private final ConcurrentHashMap<String, Bucket> chatBuckets = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, Bucket> mcpBuckets = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, Bucket> narrationBuckets = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Bucket> summaryBuckets = new ConcurrentHashMap<>();
 
   public RateLimitInterceptor(final RateLimitConfig config) {
     this.config = config;
@@ -32,7 +38,18 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     ConcurrentHashMap<String, Bucket> bucketMap;
     int requestsPerMinute;
 
-    if (isNarrationPath(path)) {
+    if (isSummaryPath(path)) {
+      // Only the writes are limited. The summary status endpoint is long-polled — one
+      // drawer session is an initial read plus up to four polls — so metering reads out of
+      // the same small allowance would 429 a reader in the middle of the generation they
+      // just paid for. Reads are public, cheap and idempotent; the POSTs are what spend on
+      // the model and the text-to-speech budget.
+      if (!HttpMethod.POST.matches(request.getMethod())) {
+        return true;
+      }
+      bucketMap = summaryBuckets;
+      requestsPerMinute = config.summary().requestsPerMinute();
+    } else if (isNarrationPath(path)) {
       bucketMap = narrationBuckets;
       requestsPerMinute = config.narration().requestsPerMinute();
     } else if (path.startsWith("/mcp")) {
@@ -73,6 +90,35 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     return Bucket.builder()
         .addLimit(limit)
         .build();
+  }
+
+  /**
+   * Whether the path is a summary request — either {@code /api/news/{id}/summary} or
+   * {@code /api/news/{id}/summary/narration}. Both share one bucket: they are the two
+   * halves of the same paid-for artefact and a caller should not get a fresh allowance by
+   * switching between them.
+   *
+   * <p>The two suffixes are prefix-overlapping, so the longer one is tested first. Testing
+   * {@code /summary} first would strip only {@code "/summary"} from
+   * {@code /api/news/{id}/summary/narration}, leaving {@code "{id}/narration"}, which
+   * contains a slash and so fails the id check — the narration path would silently fall
+   * through to the chat bucket.
+   */
+  private boolean isSummaryPath(final String path) {
+    if (!path.startsWith(NEWS_PREFIX)) {
+      return false;
+    }
+    if (path.endsWith(SUMMARY_NARRATION_SUFFIX)) {
+      return isSingleSegment(path, SUMMARY_NARRATION_SUFFIX);
+    }
+    return path.endsWith(SUMMARY_SUFFIX) && isSingleSegment(path, SUMMARY_SUFFIX);
+  }
+
+  /** Whether what sits between {@code /api/news/} and {@code suffix} is one path segment. */
+  private boolean isSingleSegment(final String path, final String suffix) {
+    String articleId = path.substring(
+        NEWS_PREFIX.length(), path.length() - suffix.length());
+    return !articleId.isBlank() && !articleId.contains("/");
   }
 
   private boolean isNarrationPath(final String path) {

@@ -3,6 +3,7 @@ package com.simonrowe.narration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -113,5 +114,128 @@ class GoogleTextToSpeechProviderTest {
     assertThatThrownBy(() -> disabled.download("object"))
         .isInstanceOfSatisfying(NarrationProviderException.class,
             exception -> assertThat(exception.kind()).isEqualTo(FailureKind.UNAVAILABLE));
+  }
+
+  @Test
+  void synthesisesShortScriptsThroughTheOrdinaryEndpointAsMp3() {
+    // Long Audio rejects MP3 outright, so this is the only path that yields the format
+    // the application stores. Note v1, not v1beta1.
+    server.expect(requestTo("https://texttospeech.googleapis.com/v1/text:synthesize"))
+        .andExpect(method(HttpMethod.POST))
+        .andExpect(header("Authorization", "Bearer token-value"))
+        .andExpect(jsonPath("$.input.text").value("Read me"))
+        .andExpect(jsonPath("$.audioConfig.audioEncoding").value("MP3"))
+        .andExpect(jsonPath("$.voice.languageCode").value("en-GB"))
+        .andExpect(jsonPath("$.voice.name").value("voice"))
+        // No GCS involvement at all on this path.
+        .andExpect(jsonPath("$.outputGcsUri").doesNotExist())
+        .andRespond(withSuccess("{\"audioContent\":\"SUQzBA==\"}",
+            MediaType.APPLICATION_JSON));
+
+    assertThat(provider.synthesizeImmediately("Read me"))
+        .isEqualTo(java.util.Base64.getDecoder().decode("SUQzBA=="));
+    server.verify();
+  }
+
+  /**
+   * Without this header, user Application Default Credentials — the documented
+   * local-development path — get a 403 telling us the API "requires a quota project", and
+   * Google attributes the call to gcloud's own client project instead of ours.
+   */
+  @Test
+  void sendsTheQuotaProjectHeaderSoUserAdcIsAccepted() {
+    server.expect(requestTo("https://texttospeech.googleapis.com/v1/text:synthesize"))
+        .andExpect(header("x-goog-user-project", "project"))
+        .andRespond(withSuccess("{\"audioContent\":\"SUQzBA==\"}",
+            MediaType.APPLICATION_JSON));
+
+    provider.synthesizeImmediately("Read me");
+    server.verify();
+  }
+
+  @Test
+  void longAudioStartAlsoSendsTheQuotaProjectHeader() {
+    server.expect(requestTo(
+            "https://texttospeech.googleapis.com/v1beta1/projects/123456789012/locations/"
+                + "global:synthesizeLongAudio"))
+        .andExpect(header("x-goog-user-project", "project"))
+        .andRespond(withSuccess("{\"name\":\"23456\"}", MediaType.APPLICATION_JSON));
+
+    provider.start("Read me", "narrations/id.mp3");
+    server.verify();
+  }
+
+  @Test
+  void reportsGooglesDocumentedFiveThousandByteCeiling() {
+    assertThat(provider.maxImmediateBytes()).isEqualTo(5000);
+  }
+
+  @Test
+  void treatsEmptyAudioContentAsRetryable() {
+    server.expect(requestTo("https://texttospeech.googleapis.com/v1/text:synthesize"))
+        .andRespond(withSuccess("{\"audioContent\":\"\"}", MediaType.APPLICATION_JSON));
+
+    assertThatThrownBy(() -> provider.synthesizeImmediately("Read me"))
+        .isInstanceOf(NarrationProviderException.class)
+        .hasMessageContaining("no narration audio");
+  }
+
+  @Test
+  void treatsRejectedSynthesisAsRetryable() {
+    server.expect(requestTo("https://texttospeech.googleapis.com/v1/text:synthesize"))
+        .andRespond(withBadRequest());
+
+    assertThatThrownBy(() -> provider.synthesizeImmediately("Read me"))
+        .isInstanceOf(NarrationProviderException.class)
+        .extracting(ex -> ((NarrationProviderException) ex).kind())
+        .isEqualTo(FailureKind.SAFE_TO_RETRY);
+  }
+
+  /**
+   * The production Pi cannot host a credential file, so narration authenticates with an
+   * API key there. These cover the branch that swaps bearer-token auth for it.
+   */
+  private GoogleTextToSpeechProvider apiKeyProvider(final RestClient.Builder builder) {
+    NarrationProperties base = NarrationBudgetServiceTest.properties(1_000_000);
+    NarrationProperties withKey = new NarrationProperties(
+        base.enabled(), base.projectId(), base.projectNumber(), "test-api-key",
+        base.location(), base.voiceName(), base.languageCode(), base.bucket(),
+        base.maxBlogCharacters(), base.monthlyCharacterLimit(), base.pollInterval(),
+        base.operationTimeout(), base.leaseDuration(), base.recoveryDelay());
+    // Null credentials: an API-key deployment loads no ADC at all.
+    return new GoogleTextToSpeechProvider(withKey, builder.build(), null);
+  }
+
+  @Test
+  void synthesizesWithApiKeyHeaderInsteadOfBearerToken() {
+    RestClient.Builder builder = RestClient.builder();
+    MockRestServiceServer apiKeyServer = MockRestServiceServer.bindTo(builder).build();
+    GoogleTextToSpeechProvider apiKeyProvider = apiKeyProvider(builder);
+
+    apiKeyServer.expect(requestTo(
+            "https://texttospeech.googleapis.com/v1/text:synthesize"))
+        .andExpect(method(HttpMethod.POST))
+        .andExpect(header("x-goog-api-key", "test-api-key"))
+        .andExpect(headerDoesNotExist("Authorization"))
+        // The key identifies its own project, so no quota project is delegated.
+        .andExpect(headerDoesNotExist("x-goog-user-project"))
+        .andRespond(withSuccess("{\"audioContent\":\"//uQZA==\"}",
+            MediaType.APPLICATION_JSON));
+
+    assertThat(apiKeyProvider.synthesizeImmediately("Read me")).isNotEmpty();
+    apiKeyServer.verify();
+  }
+
+  @Test
+  void isConfiguredWithApiKeyAndNoCredentials() {
+    assertThat(apiKeyProvider(RestClient.builder()).isConfigured()).isTrue();
+  }
+
+  @Test
+  void isNotConfiguredWithNeitherApiKeyNorCredentials() {
+    GoogleTextToSpeechProvider bare = new GoogleTextToSpeechProvider(
+        NarrationBudgetServiceTest.properties(1_000_000),
+        RestClient.builder().build(), null);
+    assertThat(bare.isConfigured()).isFalse();
   }
 }

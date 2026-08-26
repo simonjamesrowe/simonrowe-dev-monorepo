@@ -56,14 +56,24 @@ public class NarrationRestoreValidator {
     return new ReconciliationResult(ready, retryable, unchanged);
   }
 
+  /**
+   * Recreates the narration indexes after a restore.
+   *
+   * <p>A restore drops each collection and reinserts it, which takes the indexes with it,
+   * and the change units that created them are already recorded as executed — so this
+   * method, not Mongock, is what puts them back. It must stay in step with
+   * {@code V021GeneraliseNarrationContentType}: leaving it on the old {@code blogId} names
+   * would silently cost a restored production database its content index.
+   */
   void ensureIndexes() {
     var indexes = mongoTemplate.indexOps(Narration.class);
     indexes.createIndex(new Index().named("fingerprint")
         .on("fingerprint", Sort.Direction.ASC).unique());
-    indexes.createIndex(new Index().named("blogId")
-        .on("blogId", Sort.Direction.ASC));
-    indexes.createIndex(new Index().named("idx_narration_blog_updated")
-        .on("blogId", Sort.Direction.ASC)
+    indexes.createIndex(new Index().named("contentId")
+        .on("contentId", Sort.Direction.ASC));
+    indexes.createIndex(new Index().named("idx_narration_content_updated")
+        .on("contentType", Sort.Direction.ASC)
+        .on("contentId", Sort.Direction.ASC)
         .on("updatedAt", Sort.Direction.DESC));
     indexes.createIndex(new Index().named("idx_narration_status_lease")
         .on("status", Sort.Direction.ASC)

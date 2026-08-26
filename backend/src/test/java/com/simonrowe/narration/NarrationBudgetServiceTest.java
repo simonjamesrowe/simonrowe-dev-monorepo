@@ -40,12 +40,12 @@ class NarrationBudgetServiceTest {
   }
 
   private static Narration narration(final String id, final int characters) {
-    return new Narration(id, "blog", characters, "voice", "en-GB", "MP3",
+    return new Narration(id, NarrationContentType.BLOG, "blog", characters, "voice", "en-GB", "MP3",
         "narrations/" + id + ".mp3", Instant.now());
   }
 
   static NarrationProperties properties(final long limit) {
-    return new NarrationProperties(true, "project", "123456789012", "global",
+    return new NarrationProperties(true, "project", "123456789012", null, "global",
         "voice", "en-GB",
         "bucket", 50_000, limit, Duration.ofMillis(1), Duration.ofSeconds(1),
         Duration.ofSeconds(1), Duration.ofSeconds(1));

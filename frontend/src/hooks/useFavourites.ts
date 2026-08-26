@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../auth/useAuth'
 import { addFavourite, getFavouriteIds, removeFavourite } from '../services/favouritesApi'
 import type { FavouriteContentType } from '../types/favourites'
+import { useEnsureAuthenticated } from './useEnsureAuthenticated'
 
 /**
  * Owns the favourite-id set for one content type ('news' or 'events').
@@ -14,7 +15,7 @@ import type { FavouriteContentType } from '../types/favourites'
  * revert if the API call fails.
  */
 export function useFavourites(type: FavouriteContentType) {
-  const { isAuthenticated, getAccessToken, loginWithPopup } = useAuth()
+  const { getAccessToken } = useAuth()
   const [favouriteIds, setFavouriteIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
 
@@ -34,22 +35,10 @@ export function useFavourites(type: FavouriteContentType) {
     void loadIds()
   }, [loadIds])
 
-  /**
-   * Ensures a session exists, running the login popup when needed.
-   * Resolves true when authenticated; false when the popup was dismissed or failed.
-   * auth0-react swallows popup errors (it resolves even on cancel), so a session is
-   * confirmed by actually obtaining a token afterwards.
-   */
-  const ensureAuthenticated = useCallback(async (): Promise<boolean> => {
-    if (isAuthenticated) return true
-    try {
-      await loginWithPopup()
-      await getAccessToken()
-      return true
-    } catch {
-      return false
-    }
-  }, [getAccessToken, isAuthenticated, loginWithPopup])
+  // Shared with the article summary button, which needs the identical
+  // popup-then-confirm-with-a-token sequence. Still re-exported below so every existing
+  // caller of this hook is unchanged.
+  const ensureAuthenticated = useEnsureAuthenticated()
 
   const isFavourite = useCallback((id: string) => favouriteIds.has(id), [favouriteIds])
 

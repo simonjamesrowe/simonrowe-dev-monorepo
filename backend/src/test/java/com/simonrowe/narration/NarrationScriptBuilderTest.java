@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
-class BlogNarrationScriptBuilderTest {
+class NarrationScriptBuilderTest {
 
-  private final BlogNarrationScriptBuilder builder = new BlogNarrationScriptBuilder();
+  private final NarrationScriptBuilder builder = new NarrationScriptBuilder();
 
   @Test
   void convertsMarkdownToSafeDeterministicSpeech() {
@@ -47,5 +47,32 @@ class BlogNarrationScriptBuilderTest {
         .isNotEqualTo(first);
     assertThat(builder.fingerprint("Hello", "voice-b", "en-GB", "MP3"))
         .isNotEqualTo(first);
+  }
+
+  /**
+   * The format version feeds the fingerprint, which is the narration {@code _id} and the
+   * directory its MP3 lives in. It stays the literal {@code blog-narration-v1} even though
+   * the class is no longer blog-specific: renaming it would change every existing blog
+   * narration's id and orphan every stored audio file.
+   */
+  @Test
+  void formatVersionStaysPinnedSoExistingAudioIsNotOrphaned() {
+    assertThat(NarrationScriptBuilder.FORMAT_VERSION).isEqualTo("blog-narration-v1");
+  }
+
+  @Test
+  void fingerprintIsStableForTheSameScriptAndVoiceSettings() {
+    NarrationScriptBuilder builder = new NarrationScriptBuilder();
+
+    assertThat(builder.fingerprint("Script.", "voice", "en-GB", "MP3"))
+        .isEqualTo(builder.fingerprint("Script.", "voice", "en-GB", "MP3"));
+  }
+
+  @Test
+  void fingerprintChangesWhenTheScriptChangesSoOldAudioGoesStale() {
+    NarrationScriptBuilder builder = new NarrationScriptBuilder();
+
+    assertThat(builder.fingerprint("Script one.", "voice", "en-GB", "MP3"))
+        .isNotEqualTo(builder.fingerprint("Script two.", "voice", "en-GB", "MP3"));
   }
 }

@@ -48,6 +48,16 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Single-node broker, so every internal topic must be replication-factor 1.
+      # Without these the defaults are 3, and __consumer_offsets can never be created
+      # ("The target replication factor of 3 cannot be reached because only 1 broker(s)
+      # are registered"). No offsets topic means no group coordinator, which means
+      # FIND_COORDINATOR times out and *no consumer group can ever join* — producers keep
+      # working, so the symptom is messages published and silently never consumed. That
+      # broke narration and content-changes locally while looking healthy.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
     volumes:
       - kafka-data:/var/lib/kafka/data

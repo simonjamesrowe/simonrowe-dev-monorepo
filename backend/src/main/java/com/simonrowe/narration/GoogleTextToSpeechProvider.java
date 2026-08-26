@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
@@ -18,7 +19,14 @@ public class GoogleTextToSpeechProvider implements NarrationProvider {
 
   private static final String TTS_BASE = "https://texttospeech.googleapis.com";
   private static final String TTS_API_VERSION = "v1beta1";
+  private static final String TTS_SYNC_API_VERSION = "v1";
   private static final String STORAGE_BASE = "https://storage.googleapis.com";
+
+  /**
+   * Google's documented input ceiling for the ordinary {@code text:synthesize} endpoint,
+   * in UTF-8 bytes.
+   */
+  private static final int MAX_IMMEDIATE_BYTES = 5000;
 
   private final NarrationProperties properties;
   private final RestClient restClient;
@@ -37,7 +45,45 @@ public class GoogleTextToSpeechProvider implements NarrationProvider {
 
   @Override
   public boolean isConfigured() {
-    return properties.isProviderConfigured() && credentials != null;
+    return properties.isProviderConfigured()
+        && (properties.usesApiKey() || credentials != null);
+  }
+
+  @Override
+  public int maxImmediateBytes() {
+    return MAX_IMMEDIATE_BYTES;
+  }
+
+  @Override
+  public byte[] synthesizeImmediately(final String script) {
+    requireConfigured();
+    String url = TTS_BASE + "/" + TTS_SYNC_API_VERSION + "/text:synthesize";
+    Map<String, Object> body = Map.of(
+        "input", Map.of("text", script),
+        "audioConfig", Map.of("audioEncoding", "MP3"),
+        "voice", Map.of(
+            "languageCode", properties.languageCode(),
+            "name", properties.voiceName()));
+    try {
+      Map<?, ?> response = restClient.post()
+          .uri(URI.create(url))
+          .headers(this::authHeaders)
+          .body(body)
+          .retrieve()
+          .body(Map.class);
+      Object audioContent = response == null ? null : response.get("audioContent");
+      if (!(audioContent instanceof String encoded) || encoded.isBlank()) {
+        throw providerException("Google returned no narration audio",
+            FailureKind.SAFE_TO_RETRY, null);
+      }
+      return Base64.getDecoder().decode(encoded);
+    } catch (IllegalArgumentException ex) {
+      throw providerException("Google returned undecodable narration audio",
+          FailureKind.SAFE_TO_RETRY, ex);
+    } catch (ResourceAccessException | RestClientResponseException ex) {
+      throw providerException("Unable to synthesise narration audio",
+          FailureKind.SAFE_TO_RETRY, ex);
+    }
   }
 
   @Override
@@ -58,7 +104,7 @@ public class GoogleTextToSpeechProvider implements NarrationProvider {
     try {
       Map<?, ?> response = restClient.post()
           .uri(URI.create(url))
-          .headers(headers -> headers.setBearerAuth(accessToken()))
+          .headers(this::authHeaders)
           .body(body)
           .retrieve()
           .body(Map.class);
@@ -88,7 +134,7 @@ public class GoogleTextToSpeechProvider implements NarrationProvider {
     try {
       Map<?, ?> response = restClient.get()
           .uri(URI.create(operationUrl(operationName)))
-          .headers(headers -> headers.setBearerAuth(accessToken()))
+          .headers(this::authHeaders)
           .retrieve()
           .body(Map.class);
       if (response == null || !Boolean.TRUE.equals(response.get("done"))) {
@@ -113,7 +159,7 @@ public class GoogleTextToSpeechProvider implements NarrationProvider {
     try {
       byte[] body = restClient.get()
           .uri(URI.create(url))
-          .headers(headers -> headers.setBearerAuth(accessToken()))
+          .headers(this::authHeaders)
           .retrieve()
           .body(byte[].class);
       if (body == null) {
@@ -125,6 +171,29 @@ public class GoogleTextToSpeechProvider implements NarrationProvider {
       throw providerException("Unable to download Google narration audio",
           FailureKind.SAFE_TO_RETRY, ex);
     }
+  }
+
+  /**
+   * Applies the credentials and, crucially, the quota project.
+   *
+   * <p>{@code x-goog-user-project} is not optional here. With user Application Default
+   * Credentials — the documented local-development path — Google rejects the call outright:
+   * "The texttospeech.googleapis.com API requires a quota project, which is not set by
+   * default", and attributes the request to gcloud's own client project rather than ours.
+   * With a service account the header is harmless and simply keeps quota and billing
+   * attributed to the configured project.
+   */
+  private void authHeaders(final org.springframework.http.HttpHeaders headers) {
+    if (properties.usesApiKey()) {
+      // An API key already identifies its own project, so quota and billing attribute
+      // correctly without x-goog-user-project. That header exists to name a quota project
+      // for an identity that has none of its own — user ADC — so it is omitted here rather
+      // than sent alongside a credential that cannot be delegated in that way.
+      headers.set("x-goog-api-key", properties.apiKey());
+      return;
+    }
+    headers.setBearerAuth(accessToken());
+    headers.set("x-goog-user-project", properties.projectId());
   }
 
   private synchronized String accessToken() {

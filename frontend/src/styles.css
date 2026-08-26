@@ -8599,6 +8599,19 @@ a:hover {
   color: var(--color-primary);
 }
 
+/* Summary + favourite share one overlay cluster on each card, so the heart's own
+   absolute positioning moves up to the container. .feed__favourite is kept for the events
+   timeline, which has no summary control. */
+.feed__card-actions {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .feed__favourite {
   position: absolute;
   top: 0.75rem;
@@ -9552,4 +9565,177 @@ a:hover {
   color: var(--color-muted);
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+
+/* ==========================================================================
+   Article summaries — the card control and the drawer that opens from it
+   ========================================================================== */
+
+.summary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.summary-button:hover {
+  transform: scale(1.05);
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.summary-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.news-summary__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.news-summary__source {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.news-summary__title {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  margin: 0 0 0.9rem;
+}
+
+.news-summary__title-link {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.news-summary__title-link:hover {
+  text-decoration: underline;
+}
+
+/* A requirement, not decoration: the reader must be able to tell at a glance that this
+   prose was written by a model rather than by Simon or the original author. */
+.news-summary__disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 1.25rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.news-summary__prose {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--color-text);
+}
+
+.news-summary__prose p {
+  margin: 0 0 1.1rem;
+}
+
+.news-summary__prose p:last-child {
+  margin-bottom: 0;
+}
+
+.news-summary__link {
+  color: var(--color-primary);
+}
+
+.news-summary__image {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.news-summary__status,
+.news-summary__message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.news-summary__message--error {
+  color: var(--color-error, #c0392b);
+}
+
+.news-summary__feedback {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.news-summary__spinner {
+  animation: spin 1s linear infinite;
+}
+
+.news-summary__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.news-summary__original {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.news-summary__original:hover {
+  text-decoration: underline;
+}
+
+/* The footer heart sits on a panel background rather than over a card image, so the dark
+   translucent pill the card version uses would read as a stray blob here. */
+.news-summary__footer .favourite-button {
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.news-summary__footer .favourite-button:hover {
+  background: var(--color-surface-subtle);
+}
+
+.news-summary__footer .favourite-button--active {
+  color: var(--color-primary);
+}
+
+.news-summary__audio {
+  margin-top: 1.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
 }

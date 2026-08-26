@@ -6,6 +6,7 @@ import com.simonrowe.aggregation.AggregatedEvent;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.aggregation.ArticleResponse;
 import com.simonrowe.aggregation.EventResponse;
+import com.simonrowe.summary.SummaryRequestPublisher;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -37,15 +39,22 @@ public class FavouritesService {
   private final FavouriteRepository favouriteRepository;
   private final AggregatedArticleRepository articleRepository;
   private final AggregatedEventRepository eventRepository;
+  private final SummaryRequestPublisher summaryRequestPublisher;
+  private final boolean autoSummariseFavourites;
 
   public FavouritesService(
       final FavouriteRepository favouriteRepository,
       final AggregatedArticleRepository articleRepository,
-      final AggregatedEventRepository eventRepository
+      final AggregatedEventRepository eventRepository,
+      final SummaryRequestPublisher summaryRequestPublisher,
+      @Value("${aggregation.summary.auto-on-favourite:true}")
+      final boolean autoSummariseFavourites
   ) {
     this.favouriteRepository = favouriteRepository;
     this.articleRepository = articleRepository;
     this.eventRepository = eventRepository;
+    this.summaryRequestPublisher = summaryRequestPublisher;
+    this.autoSummariseFavourites = autoSummariseFavourites;
   }
 
   /**
@@ -63,8 +72,33 @@ public class FavouritesService {
     try {
       favouriteRepository.insert(new Favourite(null, type, contentId, Instant.now()));
       LOG.debug("Added favourite: type={}, contentId={}", type, contentId);
+      requestSummary(type, contentId);
     } catch (final DuplicateKeyException e) {
       // Concurrent save of the same item — the favourite already exists, which is fine.
+    }
+  }
+
+  /**
+   * Asks for an in-depth summary of a newly favourited article.
+   *
+   * <p>Published rather than generated inline: a summary is a 15-30 second model call and
+   * the reader is waiting on a heart animation. News only — events are not summarised.
+   *
+   * <p>Only fires for a favourite that was actually inserted, so re-favouriting something
+   * costs nothing. Unfavouriting deliberately leaves the summary in place: it is paid for
+   * and globally shared, and the next reader benefits whether or not this one still likes
+   * the article.
+   */
+  private void requestSummary(final FavouriteType type, final String contentId) {
+    if (!autoSummariseFavourites || type != FavouriteType.NEWS) {
+      return;
+    }
+    try {
+      summaryRequestPublisher.publish(contentId);
+    } catch (final RuntimeException e) {
+      // Favouriting must succeed even when the broker does not. The reader can still
+      // generate the summary by hand from the drawer.
+      LOG.warn("Could not request an automatic summary: contentId={}", contentId, e);
     }
   }
 

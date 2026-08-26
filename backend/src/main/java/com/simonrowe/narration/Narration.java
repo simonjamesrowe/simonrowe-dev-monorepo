@@ -7,17 +7,32 @@ import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+/**
+ * One generated audio narration.
+ *
+ * <p>Identified by {@link #fingerprint}, which is content-addressed over the script text
+ * and voice settings and is also the {@code _id} and the directory the MP3 is stored in.
+ * That is what makes staleness free: change the content, get a different fingerprint, and
+ * the old narration is marked {@code STALE}.
+ *
+ * <p>Generalised from a single blog reference to {@code contentType} + {@code contentId} so
+ * the one pipeline serves blogs and article summaries alike. Migrated by
+ * {@code V021GeneraliseNarrationContentType}.
+ */
 @Document(collection = "narrations")
 @CompoundIndexes({
-    @CompoundIndex(name = "idx_narration_blog_updated", def = "{'blogId': 1, 'updatedAt': -1}"),
+    @CompoundIndex(
+        name = "idx_narration_content_updated",
+        def = "{'contentType': 1, 'contentId': 1, 'updatedAt': -1}"),
     @CompoundIndex(name = "idx_narration_status_lease", def = "{'status': 1, 'leaseUntil': 1}")
 })
 public class Narration {
 
   @Id
   private String id;
+  private NarrationContentType contentType;
   @Indexed
-  private String blogId;
+  private String contentId;
   @Indexed(unique = true)
   private String fingerprint;
   private NarrationStatus status;
@@ -49,7 +64,8 @@ public class Narration {
 
   public Narration(
       final String id,
-      final String blogId,
+      final NarrationContentType contentType,
+      final String contentId,
       final int scriptCharacterCount,
       final String voiceName,
       final String languageCode,
@@ -58,7 +74,8 @@ public class Narration {
       final Instant now
   ) {
     this.id = id;
-    this.blogId = blogId;
+    this.contentType = contentType;
+    this.contentId = contentId;
     this.fingerprint = id;
     this.status = NarrationStatus.QUEUED;
     this.version = 1;
@@ -76,8 +93,12 @@ public class Narration {
     return id;
   }
 
-  public String blogId() {
-    return blogId;
+  public NarrationContentType contentType() {
+    return contentType;
+  }
+
+  public String contentId() {
+    return contentId;
   }
 
   public String fingerprint() {

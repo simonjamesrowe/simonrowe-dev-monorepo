@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogContentType;
-import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.events.NarrationRequestEvent;
 import com.simonrowe.narration.NarrationProvider.FailureKind;
 import com.simonrowe.narration.NarrationProvider.NarrationProviderException;
@@ -27,8 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class NarrationRequestConsumerTest {
 
-  @Mock private BlogNarrationService service;
-  @Mock private BlogRepository blogRepository;
+  @Mock private NarrationService service;
   @Mock private NarrationRepository repository;
   @Mock private NarrationProvider provider;
   @Mock private NarrationStorage storage;
@@ -41,9 +39,9 @@ class NarrationRequestConsumerTest {
   @BeforeEach
   void setUp() {
     metrics = new SimpleMeterRegistry();
-    consumer = new NarrationRequestConsumer(service, blogRepository, repository,
+    consumer = new NarrationRequestConsumer(service, repository,
         provider, storage, budget, NarrationBudgetServiceTest.properties(1_000_000),
-        publisher, metrics);
+        publisher, new NarrationScriptChunker(), metrics);
   }
 
   @Test
@@ -51,9 +49,8 @@ class NarrationRequestConsumerTest {
     Narration narration = processing("narration-1");
     Blog blog = blog();
     when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
-    when(blogRepository.findByIdAndPublishedTrue("blog-1")).thenReturn(Optional.of(blog));
-    when(service.descriptor(blog)).thenReturn(
-        new BlogNarrationService.NarrationDescriptor("narration-1", "Speech"));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", "Speech"));
     when(provider.isConfigured()).thenReturn(true);
     when(budget.allows(any(), any())).thenReturn(true);
     when(provider.start("Speech", "narrations/narration-1.mp3"))
@@ -94,9 +91,8 @@ class NarrationRequestConsumerTest {
     Narration narration = processing("narration-1");
     Blog blog = blog();
     when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
-    when(blogRepository.findByIdAndPublishedTrue("blog-1")).thenReturn(Optional.of(blog));
-    when(service.descriptor(blog)).thenReturn(
-        new BlogNarrationService.NarrationDescriptor("narration-1", "Speech"));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", "Speech"));
     when(provider.isConfigured()).thenReturn(true);
     when(budget.allows(any(), any())).thenReturn(true);
     when(provider.start(any(), any())).thenThrow(new NarrationProviderException(
@@ -119,12 +115,176 @@ class NarrationRequestConsumerTest {
     verify(repository, never()).save(any(Narration.class));
   }
 
+  @Test
+  void shortScriptIsSynthesisedImmediatelyWithNoOperationPollOrGcsDownload() {
+    Narration narration = processing("narration-1");
+    when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", "Speech"));
+    when(provider.isConfigured()).thenReturn(true);
+    when(budget.allows(any(), any())).thenReturn(true);
+    when(provider.maxImmediateBytes()).thenReturn(5000);
+    when(provider.synthesizeImmediately("Speech"))
+        .thenReturn(new byte[]{'I', 'D', '3', 1});
+    when(service.isCurrentAndPublished(narration)).thenReturn(true);
+    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+        "/uploads/narrations/narration-1/narration.mp3", 4, "checksum", 1));
+
+    consumer.handle(event("narration-1"));
+
+    assertThat(narration.status()).isEqualTo(NarrationStatus.READY);
+    verify(provider, never()).start(any(), any());
+    verify(provider, never()).poll(any());
+    verify(provider, never()).download(any());
+  }
+
+  /**
+   * The budget is accounted from {@code providerRequestStarted}, so the synchronous path
+   * has to set it too — otherwise short narrations would be invisible to the monthly
+   * character ceiling and generate for free.
+   */
+  @Test
+  void immediateSynthesisStillCountsAgainstTheMonthlyBudget() {
+    Narration narration = processing("narration-1");
+    when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", "Speech"));
+    when(provider.isConfigured()).thenReturn(true);
+    when(budget.allows(any(), any())).thenReturn(true);
+    when(provider.maxImmediateBytes()).thenReturn(5000);
+    when(provider.synthesizeImmediately("Speech"))
+        .thenReturn(new byte[]{'I', 'D', '3', 1});
+    when(service.isCurrentAndPublished(narration)).thenReturn(true);
+    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+        "/uploads/narrations/narration-1/narration.mp3", 4, "checksum", 1));
+
+    consumer.handle(event("narration-1"));
+
+    assertThat(narration.providerRequestStarted()).isTrue();
+  }
+
+  @Test
+  void immediateSynthesisIsSkippedWhenTheBudgetIsExhausted() {
+    Narration narration = processing("narration-1");
+    when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", "Speech"));
+    when(provider.isConfigured()).thenReturn(true);
+    when(budget.allows(any(), any())).thenReturn(false);
+
+    consumer.handle(event("narration-1"));
+
+    assertThat(narration.status()).isEqualTo(NarrationStatus.FAILED);
+    assertThat(narration.failureCode()).isEqualTo("BUDGET_EXHAUSTED");
+    verify(provider, never()).synthesizeImmediately(any());
+  }
+
+  /**
+   * A script over the per-request ceiling is split and synthesised in pieces, then joined,
+   * rather than falling back to long audio — which cannot emit MP3 at all.
+   */
+  @Test
+  void scriptOverTheByteCeilingIsSynthesisedInChunksAndJoined() {
+    Narration narration = processing("narration-1");
+    String script = "Alpha beta gamma. Delta epsilon zeta. Eta theta iota. Kappa lambda mu.";
+    when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", script));
+    when(provider.isConfigured()).thenReturn(true);
+    when(budget.allows(any(), any())).thenReturn(true);
+    when(provider.maxImmediateBytes()).thenReturn(25);
+    when(provider.synthesizeImmediately(anyString()))
+        .thenReturn(new byte[]{(byte) 0xff, (byte) 0xf3, 1, 2});
+    when(service.isCurrentAndPublished(narration)).thenReturn(true);
+    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+        "/uploads/narrations/narration-1/narration.mp3", 16, "checksum", 1));
+
+    consumer.handle(event("narration-1"));
+
+    // Several requests, one per chunk, and never the long-audio path.
+    verify(provider, org.mockito.Mockito.atLeast(3)).synthesizeImmediately(anyString());
+    verify(provider, never()).start(any(), any());
+    assertThat(narration.status()).isEqualTo(NarrationStatus.READY);
+
+    // The stored bytes are every chunk's audio concatenated in order.
+    org.mockito.ArgumentCaptor<byte[]> audio =
+        org.mockito.ArgumentCaptor.forClass(byte[].class);
+    verify(storage).store(any(), audio.capture());
+    assertThat(audio.getValue().length % 4).isZero();
+    assertThat(audio.getValue()[0]).isEqualTo((byte) 0xff);
+  }
+
+  /**
+   * A dozen sequential requests can outlast the claim. Without extending the lease the
+   * recovery scheduler would republish the job and we would pay to synthesise twice.
+   */
+  @Test
+  void extendsTheLeaseBetweenChunksSoTheJobIsNotRepublished() {
+    Narration narration = processing("narration-1");
+    String script = "Alpha beta gamma. Delta epsilon zeta. Eta theta iota. Kappa lambda mu.";
+    when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", script));
+    when(provider.isConfigured()).thenReturn(true);
+    when(budget.allows(any(), any())).thenReturn(true);
+    when(provider.maxImmediateBytes()).thenReturn(25);
+    when(provider.synthesizeImmediately(anyString()))
+        .thenReturn(new byte[]{(byte) 0xff, (byte) 0xf3, 1, 2});
+    when(service.isCurrentAndPublished(narration)).thenReturn(true);
+    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+        "/uploads/narrations/narration-1/narration.mp3", 16, "checksum", 1));
+
+    // markReady() clears the lease at the end, so the extension has to be observed while
+    // the job is still in flight — captured at each save.
+    java.util.List<Instant> leasesAtSave = new java.util.ArrayList<>();
+    when(repository.save(narration)).thenAnswer(invocation -> {
+      leasesAtSave.add(narration.leaseUntil());
+      return narration;
+    });
+    Instant before = narration.leaseUntil();
+
+    consumer.handle(event("narration-1"));
+
+    // Each inter-chunk save writes a freshly computed lease. Asserting "later than
+    // before" would only measure the test fixture, which claims a 60s lease by hand while
+    // the test profile configures a 1s lease-duration — so compare identity, not ordering.
+    long freshLeaseWrites = leasesAtSave.stream()
+        .filter(java.util.Objects::nonNull)
+        .filter(lease -> !lease.equals(before))
+        .count();
+    assertThat(freshLeaseWrites)
+        .as("lease re-written once per chunk boundary")
+        .isGreaterThanOrEqualTo(2);
+    verify(publisher, never()).publish(anyString());
+  }
+
+  @Test
+  void scriptExactlyOnTheByteCeilingStillUsesImmediateSynthesis() {
+    Narration narration = processing("narration-1");
+    String script = "a".repeat(100);
+    when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", script));
+    when(provider.isConfigured()).thenReturn(true);
+    when(budget.allows(any(), any())).thenReturn(true);
+    when(provider.maxImmediateBytes()).thenReturn(100);
+    when(provider.synthesizeImmediately(script))
+        .thenReturn(new byte[]{'I', 'D', '3', 1});
+    when(service.isCurrentAndPublished(narration)).thenReturn(true);
+    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+        "/uploads/narrations/narration-1/narration.mp3", 4, "checksum", 1));
+
+    consumer.handle(event("narration-1"));
+
+    assertThat(narration.status()).isEqualTo(NarrationStatus.READY);
+    verify(provider, never()).start(any(), any());
+  }
+
   private void stubReadyPath(final Narration narration) {
     Blog blog = blog();
     when(service.claim(eq("narration-1"), any())).thenReturn(Optional.of(narration));
-    when(blogRepository.findByIdAndPublishedTrue("blog-1")).thenReturn(Optional.of(blog));
-    when(service.descriptor(blog)).thenReturn(
-        new BlogNarrationService.NarrationDescriptor("narration-1", "Speech"));
+    when(service.descriptor(NarrationContentType.BLOG, "blog-1")).thenReturn(
+        new NarrationSource.NarrationDescriptor("narration-1", "Speech"));
     when(provider.download("narrations/narration-1.mp3"))
         .thenReturn(new byte[]{'I', 'D', '3', 1});
     when(service.isCurrentAndPublished(narration)).thenReturn(true);
@@ -133,7 +293,8 @@ class NarrationRequestConsumerTest {
   }
 
   private static Narration processing(final String id) {
-    Narration narration = new Narration(id, "blog-1", 100, "voice", "en-GB", "MP3",
+    Narration narration = new Narration(
+        id, NarrationContentType.BLOG, "blog-1", 100, "voice", "en-GB", "MP3",
         "narrations/" + id + ".mp3", Instant.now());
     narration.claimed(Instant.now().plusSeconds(60), Instant.now());
     return narration;
