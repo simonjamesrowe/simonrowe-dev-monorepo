@@ -593,6 +593,36 @@ describe('NarrationAudioProvider', () => {
       })
     })
 
+    /**
+     * Found by hand against restored production data. Starting a chain used to leave the
+     * previous track audible while the bar relabelled itself to the new item.
+     */
+    describe('switching from a playing track to one that needs generating', () => {
+      it('stops the previous audio and clears it from the element', async () => {
+        vi.mocked(fetchReadyNarrations).mockImplementation((contentType) =>
+          Promise.resolve(contentType === 'BLOG' ? [readyBlog] : []))
+        vi.mocked(postBlogNarration).mockImplementation(() => new Promise(() => {}))
+
+        renderProvider()
+        await waitFor(() => expect(screen.getByTestId('ready')).toHaveTextContent('734'))
+
+        // Play the ready one...
+        await userEvent.click(screen.getByRole('button', { name: 'listen' }))
+        expect(screen.getByTestId('playing')).toHaveTextContent('true')
+        expect(audioElements[0].src).toContain('narration.mp3')
+
+        // ...then press Listen on a cold one.
+        await userEvent.click(screen.getByRole('button', { name: 'listen other' }))
+
+        expect(audioElements[0].pause).toHaveBeenCalled()
+        expect(screen.getByTestId('playing')).toHaveTextContent('false')
+        // The element must not still hold the old track, or the transport would drive it.
+        expect(audioElements[0].getAttribute('src')).toBeNull()
+        // The bar has relabelled to the new item, so the two agree.
+        expect(screen.getByTestId('track')).toHaveTextContent('other')
+      })
+    })
+
     describe('failures', () => {
       /**
        * The backend maps `failureCode: BUDGET_EXHAUSTED` onto `UNAVAILABLE`. Retrying cannot

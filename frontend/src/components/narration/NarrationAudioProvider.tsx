@@ -490,6 +490,17 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
       return
     }
 
+    // Switching to an item that has to be generated: stop whatever is playing first.
+    // Otherwise the previous track stays audible under a bar now labelled with a different
+    // item, and the transport controls a track the reader is no longer being shown — press
+    // Pause and you pause a post the bar is not naming. `removeAttribute` rather than
+    // `src = ''`, which some browsers resolve to the document URL and then fail to load.
+    audioRef.current?.pause()
+    audioRef.current?.removeAttribute('src')
+    setPlaying(false)
+    setPosition(0)
+    setDuration(0)
+
     void runChain(request, controller)
   }, [loadAndPlay, readyMap, runChain])
 

@@ -65,6 +65,10 @@ export function NarrationPlayerBar() {
   if (!track && !error) return null
 
   const generating = stage === 'summarising' || stage === 'narrating'
+  // Only offer the transport when the *current* track actually has audio. A track mid-chain
+  // has none yet, and a track whose chain failed never will — in both cases a play button
+  // would either do nothing or, worse, drive whatever was playing before.
+  const playable = Boolean(track?.audioUrl)
   const total = duration || track?.durationSeconds || 0
 
   // A news track links out to the original article, a blog track links internally. Written as
@@ -100,7 +104,7 @@ export function NarrationPlayerBar() {
 
         {generating ? (
           <Loader2 aria-hidden="true" className="narration-bar__spinner" size={18} />
-        ) : !track ? null : (
+        ) : !playable ? null : (
           <div className="narration-bar__transport">
             <button
               aria-label={playing ? 'Pause' : 'Play'}

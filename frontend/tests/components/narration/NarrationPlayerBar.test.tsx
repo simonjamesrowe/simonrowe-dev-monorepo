@@ -150,6 +150,29 @@ describe('NarrationPlayerBar', () => {
       expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
     })
 
+    /**
+     * Found by hand against restored production data: pressing Listen on a cold card while
+     * another track played left the previous audio running under a bar labelled with the new
+     * item, transport and all — so Pause would have paused a post the bar was not naming.
+     */
+    it('offers no transport for a track whose chain failed, even with a stale position', () => {
+      renderBar(narrationAudioStub({
+        // No audioUrl: the chain never produced one.
+        track: { contentType: 'BLOG', contentId: 'blog-2', title: 'A cold post', href: '/blogs/blog-2' },
+        stage: 'idle',
+        position: 84,
+        duration: 622,
+        error: { message: 'Audio is unavailable this month.', retryable: false },
+      }))
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Audio is unavailable this month.')
+      expect(screen.getByRole('link', { name: 'A cold post' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('slider', { name: 'Seek' })).not.toBeInTheDocument()
+      expect(screen.queryByText('1:24 / 10:22')).not.toBeInTheDocument()
+    })
+
     /** Audio that 404s at playback time clears the track, but the message still has to land. */
     it('stays on screen for an error that outlived its track', () => {
       renderBar(narrationAudioStub({
