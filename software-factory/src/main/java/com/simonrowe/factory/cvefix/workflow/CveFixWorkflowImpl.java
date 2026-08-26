@@ -57,9 +57,12 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
               // (15m default), a changed-path validation and a push, all in one activity call.
               // 30m leaves room for a slow clone and push on the Pi around that 15m.
               .setStartToCloseTimeout(Duration.ofMinutes(30))
-              // ProcessRunner heartbeats every 10s for the whole life of each child process, so
-              // 30s detects a wedged agent without tripping on the gaps between git commands.
-              .setHeartbeatTimeout(Duration.ofSeconds(30))
+              // Not 30s, and the claim that used to justify it was wrong: ProcessRunner
+              // heartbeats every 10s only *while a child process runs*, and emits nothing for a
+              // git command that finishes faster than that — so the gap between git commands is
+              // exactly what 30s tripped on. It killed a one-file code review on the Pi
+              // (PR #111) during clone. See CodeReviewWorkflowImpl for why 2m and not 1m.
+              .setHeartbeatTimeout(Duration.ofMinutes(2))
               // No retry: a second agent run costs the same tokens and would repeat any
               // half-applied edit. A failed attempt fails the run instead.
               .setRetryOptions(RetryOptions.newBuilder().setMaximumAttempts(1).build())

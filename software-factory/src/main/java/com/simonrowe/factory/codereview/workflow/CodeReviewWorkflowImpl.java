@@ -37,8 +37,28 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
       Workflow.newActivityStub(
           ReviewActivities.class,
           ActivityOptions.newBuilder()
-              .setStartToCloseTimeout(Duration.ofMinutes(20))
-              .setHeartbeatTimeout(Duration.ofSeconds(30))
+              // runReview is a clone, an agent run bounded by factory.codereview.agent.timeout
+              // (25m default) and the report post-processing, all in one activity call. 35m
+              // leaves room for a slow clone and checkout on the Pi around that 25m.
+              .setStartToCloseTimeout(Duration.ofMinutes(35))
+              // Not 30s. ProcessRunner only heartbeats while a child process is running, and
+              // only every 10s, so it emits nothing at all for a git command that finishes
+              // faster than that — the un-heartbeated gap is the sum of the workspace-prep
+              // steps between two `heartbeat.accept` calls, not the duration of one process.
+              // On the Pi a monorepo clone + partial-clone checkout + full-tree secret sweep
+              // ran past 30s and killed a one-file review (PR #111) with
+              // lastHeartbeatDetails still on "Cloning pull request repository".
+              // GitWorkspaceFactory now heartbeats per step; this raises the ceiling too so
+              // one slow step cannot end a review that is making progress.
+              //
+              // 2m, not 1m, because the timeout also sets its own flush cadence: the SDK
+              // throttles delivery to min(0.8 * heartbeatTimeout, maxHeartbeatThrottleInterval),
+              // the latter defaulting to 60s (HeartbeatContextImpl). At 30s that was a 24s
+              // flush against a 30s deadline — 6s of slack, so even a beat every 10s tipped
+              // over under load. 2m flushes every 60s against a 120s deadline, a clean 2x,
+              // where 1m would be 48s against 60s. A wedged agent is still caught in 2m
+              // rather than at the 35m ceiling.
+              .setHeartbeatTimeout(Duration.ofMinutes(2))
               .setRetryOptions(RetryOptions.newBuilder().setMaximumAttempts(1).build())
               .build());
 
