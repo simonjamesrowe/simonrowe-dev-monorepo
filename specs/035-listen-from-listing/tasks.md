@@ -186,9 +186,13 @@ the stated retryability, that the card is at rest, and that the listing still re
 - [X] T059 Endpoint table rows — already covered by T036, which added `POST`/`GET /api/blogs/{id}/narration` and `GET /api/narrations/ready` plus the two explanatory notes. Nothing further needed.
 - [X] T060 Run the full gates: `cd backend && ../gradlew test checkstyleMain checkstyleTest` (JaCoCo ≥0.78 must hold) and `cd frontend && npm test && npm run lint` (lint must exit 0 — it is a blocking CI step)
 - [X] T061 Open the PR and drive all three signals — **done**, [#114](https://github.com/simonjamesrowe/simonrowe-dev-monorepo/pull/114) via the `pr-review-loop` skill. CI green on all four blocking checks; reviewer bot verdict `approve` on two successive heads; SonarQube published its first analysis of this project **with coverage actually measured** (`new_coverage` 81.9% vs an 80% threshold). Six new-code findings fixed in `56bea0b`, one pre-existing CSS bug fixed and disclosed, three declined with reasons recorded in the PR (never in the Sonar UI): `java:S4502` (CSRF line not in the diff and correct for a stateless bearer-JWT resource server), `tssecurity:S8476` (false positive — `contentId` is already `encodeURIComponent`d and is not user input), and `typescript:S3776` on `NewsEventsPage` (pre-existing complexity; this change adds 28 lines to a ~610-line component).
-- [ ] T062 **Still outstanding:** walk the manual checklist in [quickstart.md](./quickstart.md#manual-verification-checklist) against a running local stack with prod-like data (`prod-data-restore` skill). Everything above is automated verification; nobody has yet watched the bar keep playing across a real navigation in a browser. On a clean local database the bulk endpoint returns `[]` and every card is cold, so the restore has to come first.
+- [X] T062 Manual checklist walked in a browser against restored production data (`backup-20260825-210001.zip`: 52 blogs, one ready blog narration at 622s and one ready article-summary narration at 259s — a genuinely useful mix of ready and cold). Verified: durations on cards (`10 min` / `4 min`), playback starting with **zero** network requests, surviving a tab-filter change and an in-app route change (0:04 → 0:25 → 0:42) with **no** `/api/narrations/ready` refetch, pause/seek/speed/dismiss against real audio, exactly three actions on a news card, **zero** listen controls on the 17 event timeline items, the bar absent from `/admin`, one bulk call per content type, and twelve bulk reads followed by a narration `GET` still returning 200 rather than 429. **One real defect found and fixed (`559f2f4`)** — see below. Two known consequences recorded rather than fixed: the provider fetches the bulk map on `/admin` too (two wasted public GETs, since it sits above `<Routes>`), and audio started from a listing keeps playing on `/admin` with no visible control (the bar lives in `PublicLayout`). Both fixes would couple the provider to routing, which its placement exists to avoid.
 
 ---
+
+## Phase 8: Defect found by manual verification
+
+- [X] T063 Fix the track-switch defect that only real data could expose: pressing Listen on a cold card while another track played left the previous audio running under a bar relabelled to the new item — transport reading post A's duration while the title named post B — and, once the new chain failed, kept offering that transport for a track with no audio. `listen()` now pauses and clears the element before starting a chain, and the bar renders its transport only when the current track has an `audioUrl`. Both regression tests were confirmed to fail against the previous code before being kept.
 
 ## Dependencies & Execution Order
 
@@ -279,7 +283,8 @@ accessibility and gate work that closes the feature out.
 | 5 | US2 (P2) | T038–T048 | 11 |
 | 6 | US3 (P3) | T049–T054 | 6 |
 | 7 Polish | — | T055–T062 | 8 |
-| **Total** | | | **62** |
+| 8 Manual verification fix | — | T063 | 1 |
+| **Total** | | | **63** |
 
 Of these, 9 are new test files and 7 are extensions to existing test files — matching the spec's
 Testing section item for item.
