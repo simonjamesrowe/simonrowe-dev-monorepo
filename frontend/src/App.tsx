@@ -6,6 +6,8 @@ import { ThemeProvider } from './contexts/ThemeContext'
 import { ChatPanel } from './components/chat/ChatPanel'
 import { RecaptchaGate } from './components/chat/RecaptchaGate'
 import { LoadingIndicator } from './components/common/LoadingIndicator'
+import { NarrationAudioProvider } from './components/narration/NarrationAudioProvider'
+import { NarrationPlayerBar } from './components/narration/NarrationPlayerBar'
 import { JobDetailDrawer } from './components/experience/JobDetailDrawer'
 import { Footer } from './components/layout/Footer'
 import { MobileMenu } from './components/layout/MobileMenu'
@@ -139,6 +141,11 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
             <TourOverlay />
             <GlobalDrawers />
             <ChatOverlay />
+            {/* Holds no state — the track and the audio element live in
+                NarrationAudioProvider above <Routes> — so it can remount with this
+                layout on every navigation while playback carries on. Being here is
+                also what keeps it out of /admin, with no path sniffing. */}
+            <NarrationPlayerBar />
           </div>
         </TourProvider>
       </DrawerProvider>
@@ -153,6 +160,12 @@ function App() {
       {/* Auth context is global: public pages need it for favourites (hearts render
           logged-out state and the heart click runs loginWithPopup). */}
       <AuthProvider>
+      {/* Above <Routes> deliberately, and inside AuthProvider deliberately. PublicLayout
+          wraps each route individually, so it — and anything inside it — remounts on
+          navigation; a provider there would lose the track on the first route change,
+          which is the exact thing the docked player exists to prevent. It needs to be
+          inside AuthProvider because generating audio requires a session. */}
+      <NarrationAudioProvider>
       <Suspense fallback={<LoadingIndicator />}>
       <Routes>
         <Route element={<PublicLayout><HomePage /></PublicLayout>} path="/" />
@@ -188,6 +201,7 @@ function App() {
         <Route element={<PublicLayout><NotFoundPage /></PublicLayout>} path="*" />
       </Routes>
       </Suspense>
+      </NarrationAudioProvider>
       </AuthProvider>
     </BrowserRouter>
     </ThemeProvider>

@@ -231,4 +231,40 @@ describe('useArticleSummaries', () => {
 
     expect(capturedSignal?.aborted).toBe(true)
   })
+
+  /**
+   * The docked audio player's Listen chain can generate a summary as an intermediate step, and
+   * it sits above this hook in the tree so it cannot write here itself. Without `noteSummarised`
+   * such a card would keep reading "Summarise" until the next full page load.
+   */
+  describe('noteSummarised', () => {
+    it('flips the card without refetching the ids set', async () => {
+      setAuth(true)
+      mockFetchIds.mockResolvedValue([])
+
+      const { result } = renderHook(() => useArticleSummaries())
+      await waitFor(() => expect(mockFetchIds).toHaveBeenCalledTimes(1))
+      expect(result.current.hasSummary('art-1')).toBe(false)
+
+      act(() => { result.current.noteSummarised('art-1') })
+
+      expect(result.current.hasSummary('art-1')).toBe(true)
+      expect(mockFetchIds).toHaveBeenCalledTimes(1)
+    })
+
+    it('is idempotent and leaves other articles alone', async () => {
+      setAuth(true)
+      mockFetchIds.mockResolvedValue(['art-9'])
+
+      const { result } = renderHook(() => useArticleSummaries())
+      await waitFor(() => expect(result.current.hasSummary('art-9')).toBe(true))
+
+      act(() => { result.current.noteSummarised('art-1') })
+      act(() => { result.current.noteSummarised('art-1') })
+
+      expect(result.current.hasSummary('art-1')).toBe(true)
+      expect(result.current.hasSummary('art-9')).toBe(true)
+      expect(result.current.hasSummary('art-2')).toBe(false)
+    })
+  })
 })

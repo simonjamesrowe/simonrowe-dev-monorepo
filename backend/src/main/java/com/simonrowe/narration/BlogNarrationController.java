@@ -13,10 +13,19 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Blog narration. Deliberately frozen: same path, same public (unauthenticated)
- * {@code POST}, same response body as before narration was generalised. The summary
- * narration endpoint next door is authenticated, and that asymmetry is intentional — see
- * {@code SecurityConfig}.
+ * Blog narration. Same path and same response body as before narration was generalised.
+ *
+ * <p><strong>The {@code POST} is authenticated.</strong> It was public for most of this
+ * endpoint's life — its contract predated the text-to-speech budget concern, and that
+ * asymmetry with the summary narration {@code POST} next door was recorded here as
+ * deliberate. It stopped being defensible when the blog and news listings gained a Listen
+ * control on every card: a render draws on the same 1,000,000 chars/month budget as summary
+ * narration, so gating only the listing would have left the identical post anonymously
+ * narratable from its detail page. Both writes are now gated alike — see
+ * {@code SecurityConfig}. Any valid JWT suffices; there is no admin-role requirement.
+ *
+ * <p>{@code GET} stays public. The audio is globally shared content rather than per-reader
+ * state, and a signed-out reader has to be able to play what already exists.
  */
 @RestController
 @RequestMapping("/api/blogs/{blogId}/narration")

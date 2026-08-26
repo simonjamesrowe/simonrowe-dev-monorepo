@@ -98,15 +98,50 @@ class SecurityConfigTest extends AbstractIntegrationTest {
   }
 
   /**
-   * The blog narration contract is deliberately frozen: its {@code POST} stays public even
-   * though the new summary narration {@code POST} is authenticated. This asserts the
-   * asymmetry on purpose, so nobody "harmonises" the two by accident.
+   * The bulk ready-narration lookup is public for the same reason
+   * {@code GET /api/news/summaries/ids} is: the audio is globally shared, so which items have it
+   * is not per-reader information — and a signed-out reader has to be able to see the duration on
+   * a card and press play.
    */
   @Test
-  void blogNarrationPostRemainsPublic() throws Exception {
-    // A missing blog is a 404 from the controller — crucially not the 401 the filter
-    // chain would return if this path had been made authenticated.
+  void readyNarrationsLookupIsPublicBecauseTheAudioIsGloballyShared() throws Exception {
+    mockMvc.perform(get("/api/narrations/ready").param("contentType", "BLOG"))
+        .andExpect(status().isOk());
+  }
+
+  /**
+   * The blog narration {@code POST} was public until the listing pages gained a Listen
+   * control on every card. It spends from the same monthly text-to-speech budget as summary
+   * narration, so gating only the new surface would have left the identical post anonymously
+   * narratable from its detail page. The two are now gated alike, and this asserts it —
+   * anyone tempted to restore the old asymmetry has to change this test to do it.
+   */
+  @Test
+  void blogNarrationPostRejectsAnonymousBecauseItSpendsOnTheTtsBudget() throws Exception {
     mockMvc.perform(post("/api/blogs/missing-blog/narration"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  /**
+   * Any valid JWT is enough — no admin role, exactly as summary narration works. The blog
+   * does not exist, so a 404 proves the request reached the controller rather than being
+   * turned away by the filter chain.
+   */
+  @Test
+  void blogNarrationPostAllowsAnyAuthenticatedCallerWithoutAnAdminRole() throws Exception {
+    mockMvc.perform(post("/api/blogs/missing-blog/narration")
+            .with(jwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isNotFound());
+  }
+
+  /**
+   * Reads stay public on both narration endpoints: the audio is globally shared content, and
+   * a signed-out reader has to be able to play what already exists.
+   */
+  @Test
+  void blogNarrationStatusReadStaysPublic() throws Exception {
+    // 404 for a missing blog, but crucially not 401.
+    mockMvc.perform(get("/api/blogs/missing-blog/narration"))
         .andExpect(status().isNotFound());
   }
 }

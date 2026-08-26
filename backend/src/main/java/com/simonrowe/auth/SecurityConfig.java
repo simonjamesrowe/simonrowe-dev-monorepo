@@ -27,17 +27,23 @@ public class SecurityConfig {
             // Favourites are globally shared: reads are public, only writes need a session.
             .requestMatchers(HttpMethod.PUT, "/api/favourites/**").authenticated()
             .requestMatchers(HttpMethod.DELETE, "/api/favourites/**").authenticated()
-            // Article summaries are globally shared too: reads are public, and only the
-            // two writes need a session because only they cost money — an LLM call and,
-            // more expensively, a text-to-speech render against a monthly character
-            // budget. Any valid JWT suffices; these are not admin-role gated.
+            // Article summaries and narrations are globally shared too: reads are public,
+            // and only the writes need a session because only they cost money — an LLM
+            // call and, more expensively, a text-to-speech render against a monthly
+            // character budget. Any valid JWT suffices; these are not admin-role gated.
             //
-            // Note the asymmetry with /api/blogs/*/narration, whose POST is public. That
-            // endpoint's contract predates the budget concern and is deliberately left
-            // alone; the new surface does not inherit it.
+            // The blog narration POST was public until the listing pages gained a Listen
+            // control on every card (035-listen-from-listing). It draws on the same
+            // monthly TTS budget as summary narration, so gating only the new surface
+            // would have left the identical post anonymously narratable from its detail
+            // page — the budget still drainable, just from a different URL. All three
+            // writes are now gated alike. GET stays public on all of them: the audio is
+            // shared content, not per-reader state, and a signed-out reader has to be able
+            // to see a duration on a card and press play.
             .requestMatchers(HttpMethod.POST, "/api/news/*/summary").authenticated()
             .requestMatchers(HttpMethod.POST, "/api/news/*/summary/narration")
             .authenticated()
+            .requestMatchers(HttpMethod.POST, "/api/blogs/*/narration").authenticated()
             .anyRequest().permitAll()
         )
         .headers(headers -> headers.cacheControl(cache -> cache.disable()))

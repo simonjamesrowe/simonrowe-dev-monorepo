@@ -43,6 +43,16 @@ export interface ArticleSummariesApi {
   requestSummary: (articleId: string) => Promise<void>
   /** Drops all in-flight work for an article, e.g. when the drawer closes. */
   cancel: (articleId: string) => void
+  /**
+   * Records that an article now has a `READY` summary, without refetching the ids set.
+   *
+   * Exists because the docked audio player's Listen chain can generate a summary as an
+   * intermediate step, and it lives *above* this hook in the tree so it cannot write here
+   * itself. Without this, a card whose summary came from that chain would keep reading
+   * "Summarise" until the next full page load. Same local flip `store()` already performs when a
+   * drawer generation completes, and idempotent.
+   */
+  noteSummarised: (articleId: string) => void
 }
 
 /**
@@ -197,6 +207,10 @@ export function useArticleSummaries(): ArticleSummariesApi {
     }
   }, [ensureAuthenticated, getAccessToken, pollUntilSettled, replaceController, store])
 
+  const noteSummarised = useCallback((articleId: string) => {
+    setSummarisedIds(prev => (prev.has(articleId) ? prev : new Set(prev).add(articleId)))
+  }, [])
+
   const cancel = useCallback((articleId: string) => {
     controllers.current.get(articleId)?.abort()
     controllers.current.delete(articleId)
@@ -218,5 +232,6 @@ export function useArticleSummaries(): ArticleSummariesApi {
     loadSummary,
     requestSummary,
     cancel,
+    noteSummarised,
   }
 }

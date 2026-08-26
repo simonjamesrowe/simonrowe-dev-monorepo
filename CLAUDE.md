@@ -181,6 +181,36 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 035-listen-from-listing: Narration audio is playable straight from `/blogs` and `/news-events`.
+  New public `GET /api/narrations/ready?contentType=BLOG|ARTICLE_SUMMARY` returns
+  `[{contentId, audioUrl, durationSeconds}]`, one row per content id (newest `READY`, via a
+  `match`/`sort`/`group first` aggregation). **This bulk read is a necessity, not an
+  optimisation**: `RateLimitInterceptor`'s POST-only exemption exists only in the summary
+  branch, so `/api/blogs/*/narration` is capped at 10/min per IP on `GET` too and per-card
+  polling would 429 on first render — the new path deliberately does not match that pattern.
+  For `ARTICLE_SUMMARY` the `contentId` **is the aggregated article id**, so the news page
+  needs no join. **`POST /api/blogs/{blogId}/narration` is now authenticated** (it spends the
+  same monthly TTS budget as summary narration) — the previously deliberate asymmetry is
+  gone, `SecurityConfigTest` asserts the new posture, and `BlogNarration` gained the
+  `useEnsureAuthenticated()` gate `SummaryNarration` already had; `GET` stays public on both.
+  Frontend: `NarrationAudioProvider` mounted **above `<Routes>` and inside `AuthProvider`**
+  holding a `new Audio()` **appended to `<body>`** — `PublicLayout` wraps each route
+  individually, so anything inside it remounts on navigation and a JSX `<audio>` there stops
+  playing; `<body>` rather than fully detached because `document.querySelectorAll('audio')`
+  only walks the document, so a detached element is invisible to `NarrationPanel`'s
+  "pause every other audio" and the two players talk over each other;
+  `ListenButton` (a keyed view over provider state, no local state) and `NarrationPlayerBar`
+  (inside `PublicLayout`, so never under `/admin`). The chain imports `useNarration`'s
+  `LONG_POLL_SECONDS`/`MAX_LONG_POLLS` rather than adding a second polling policy.
+  `useArticleSummaries` gained `noteSummarised(articleId)` so a summary produced by the
+  Listen chain flips the card without refetching the ids set.
+  Starting a chain **pauses and clears the audio element first**, and the bar renders its
+  transport only when the current track has an `audioUrl` — without both, pressing Listen on
+  a cold card while another track played left the previous audio running under a bar
+  relabelled to the new item, with a Pause button that paused a post the bar was not naming.
+  Only reproducible with one ready and one cold item at once, so it took a manual pass
+  against restored prod data to find.
+  `NarrationScriptBuilder.FORMAT_VERSION` is untouched. See `specs/035-listen-from-listing/`.
 - ci-build-speedup: `:backend:test` had grown to 13m28s in CI, and **421s of it was seven
   `KafkaTemplate.send()` calls in one test class** (`FavouritesControllerTest`) each
   blocking for the 60-second `max.block.ms` default, because the test profile points at
@@ -219,8 +249,9 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   `BlogNarrationScriptBuilder` → `NarrationScriptBuilder`, but **`FORMAT_VERSION` stays the
   literal `blog-narration-v1`** because it feeds the fingerprint that *is* the narration
   `_id` — changing it orphans every stored blog MP3. `/api/blogs/{blogId}/narration` keeps
-  its path and its public `POST`; the summary narration `POST` is authenticated because it
-  can drain the 1,000,000 chars/month TTS budget. `ArticleSectionWriter`'s source-text
+  its path, but its `POST` is **no longer public** — 035-listen-from-listing made it
+  authenticated to match the summary narration `POST`, because both drain the same
+  1,000,000 chars/month TTS budget. `ArticleSectionWriter`'s source-text
   cascade is extracted to `ArticleSourceTextProvider`. `article_summaries` must be added to
   `BackupService.BACKUP_COLLECTIONS` and `RestoreService.IMPORT_ORDER_INDEPENDENT` (a
   restore drops collections, so `NarrationRestoreValidator.ensureIndexes()` — not Mongock —
@@ -277,6 +308,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - Static analysis: SonarQube Cloud (`org.sonarqube` 6.0.1.5171, project key `simonjamesrowe_simonrowe-dev-monorepo`), JaCoCo 0.8.12 on `backend` (0.78 floor) and `software-factory` (report only), `@vitest/coverage-v8` ^3.0.0 for frontend LCOV, ESLint 9 in CI. No persistence. (033-sonarqube-static-analysis)
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16, Embabel `Ai` (`com.embabel.agent.api.common.Ai`, the established inline-LLM injection point alongside `ArticleSectionWriter`/`DigestComposer`), Mongock, Bucket4j via the existing `RateLimitInterceptor`, `react-markdown`, Lucide React `Sparkles`. **No new dependencies in either module.** (034-article-summary-audio)
 - MongoDB — new `article_summaries` collection (mutable `@Document` class, not a record, because the generation flow transitions it in place); `narrations` changed from `blogId` to `contentType` + `contentId`. Indexes via Mongock change units `V020`/`V021` — `auto-index-creation` is off, so `@Indexed`/`@CompoundIndex` alone are decorative. (034-article-summary-audio)
+- Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16 (web, security OAuth2 resource server, data-mongodb), `MongoTemplate` aggregation, existing `useAuth`/`useEnsureAuthenticated` (Auth0), Lucide React. **No new dependencies in either module.** (035-listen-from-listing)
+- MongoDB — read-only. **No new collection, field, index or Mongock change unit**: the bulk ready-narration aggregation is already ordered by the existing `idx_narration_content_updated` (`{contentType: 1, contentId: 1, updatedAt: -1}`) on `narrations`. (035-listen-from-listing)
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,

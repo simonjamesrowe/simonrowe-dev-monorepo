@@ -13,6 +13,21 @@ vi.mock('../../services/blogApi', () => ({
   requestBlogNarration: vi.fn(),
 }))
 
+// The POST is authenticated since the listing pages gained a Listen control, so the panel runs
+// the sign-in gate first. `useEnsureAuthenticated` has its own tests; here it is a switch, so a
+// case can assert both the signed-in path and the dismissed-popup path.
+const ensureAuthenticated = vi.fn<() => Promise<boolean>>()
+
+vi.mock('../../hooks/useEnsureAuthenticated', () => ({
+  useEnsureAuthenticated: () => ensureAuthenticated,
+}))
+
+const getAccessToken = vi.fn<() => Promise<string>>()
+
+vi.mock('../../auth/useAuth', () => ({
+  useAuth: () => ({ isAuthenticated: true, getAccessToken, loginWithPopup: vi.fn() }),
+}))
+
 const notRequested: BlogNarrationResponse = {
   state: 'NOT_REQUESTED',
   version: 0,
@@ -44,6 +59,10 @@ describe('BlogNarration', () => {
   beforeEach(() => {
     vi.mocked(fetchBlogNarrationStatus).mockReset()
     vi.mocked(requestBlogNarration).mockReset()
+    ensureAuthenticated.mockReset()
+    ensureAuthenticated.mockResolvedValue(true)
+    getAccessToken.mockReset()
+    getAccessToken.mockResolvedValue('test-token')
   })
 
   it('offers signed-out visitors an explicitly labelled Listen action', async () => {
@@ -102,7 +121,8 @@ describe('BlogNarration', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Listen to this post' }))
 
     expect(await screen.findByLabelText('Generated narration for Kafka Without Surprises')).toBeInTheDocument()
-    expect(requestBlogNarration).toHaveBeenCalledWith('blog-1', expect.any(AbortSignal))
+    expect(requestBlogNarration).toHaveBeenCalledWith(
+      getAccessToken, 'blog-1', expect.any(AbortSignal))
     expect(fetchBlogNarrationStatus).toHaveBeenNthCalledWith(2, 'blog-1', {
       afterVersion: 1,
       waitSeconds: 25,
@@ -172,6 +192,22 @@ describe('BlogNarration', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Listen to this post' }))
 
     expect(await screen.findByText('Narration is temporarily unavailable.')).toBeInTheDocument()
+  })
+
+  /**
+   * A dismissed sign-in popup must cost nothing: no request is issued, and the panel invites
+   * signing in rather than blaming the service for the reader's own choice.
+   */
+  it('invites signing in and sends nothing when the popup is dismissed', async () => {
+    ensureAuthenticated.mockResolvedValue(false)
+    vi.mocked(fetchBlogNarrationStatus).mockResolvedValue(notRequested)
+
+    renderNarration()
+    fireEvent.click(await screen.findByRole('button', { name: 'Listen to this post' }))
+
+    expect(await screen.findByText('Sign in to generate audio for this post.'))
+      .toBeInTheDocument()
+    expect(requestBlogNarration).not.toHaveBeenCalled()
   })
 
   it('aborts an outstanding long poll when it unmounts', async () => {

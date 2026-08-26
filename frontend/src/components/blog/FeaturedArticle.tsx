@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 
+import { ListenButton } from '../narration/ListenButton'
 import type { BlogSummary } from '../../types/blog'
 
 interface FeaturedArticleProps {
@@ -29,9 +30,17 @@ export function FeaturedArticle({ blog }: FeaturedArticleProps) {
         </div>
         <h2 className="headline-lg featured-article__title">{blog.title}</h2>
         <p className="featured-article__excerpt">{blog.shortDescription}</p>
-        <Link className="featured-article__link" to={`/blogs/${blog.id}`}>
-          Read post
-        </Link>
+        <div className="featured-article__actions">
+          <Link className="featured-article__link" to={`/blogs/${blog.id}`}>
+            Read post
+          </Link>
+          <ListenButton
+            contentId={blog.id}
+            contentType="BLOG"
+            href={`/blogs/${blog.id}`}
+            title={blog.title}
+          />
+        </div>
       </div>
     </article>
   )
