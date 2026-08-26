@@ -20,11 +20,15 @@ import com.simonrowe.factory.deploy.github.DeployReportGateway;
 import com.simonrowe.factory.deploy.github.DeployReportRenderer;
 import com.simonrowe.factory.deploy.persistence.DeployRunRepository;
 import com.simonrowe.factory.deploy.shell.PhaseRunner;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 class DeployActivitiesImplTest {
@@ -34,19 +38,22 @@ class DeployActivitiesImplTest {
   private final TriageEngine triageEngine = mock(TriageEngine.class);
   private final DeployReportGateway reportGateway = mock(DeployReportGateway.class);
 
-  private final DeployProperties properties =
-      new DeployProperties(
-          true, false, null, null, null, null, null, null, null, null, null, null, null, null,
-          "/tmp/deploy-state-test", Duration.ofMinutes(30), null);
+  @TempDir private Path stateDir;
 
-  private final DeployActivitiesImpl activities =
-      new DeployActivitiesImpl(
-          properties,
-          phaseRunner,
-          runs,
-          triageEngine,
-          reportGateway,
-          new DeployReportRenderer());
+  private DeployProperties properties;
+  private DeployActivitiesImpl activities;
+
+  @BeforeEach
+  void setUp() {
+    properties =
+        new DeployProperties(
+            true, false, null, null, null, null, null, null, null, null, null, null, null, null,
+            stateDir.toString(), Duration.ofMinutes(30), null);
+    activities =
+        new DeployActivitiesImpl(
+            properties, phaseRunner, runs, triageEngine, reportGateway,
+            new DeployReportRenderer());
+  }
 
   private static PhaseRunner.PhaseExecution execution(
       final int exitCode, final String output, final Map<String, String> values) {
@@ -251,13 +258,100 @@ class DeployActivitiesImplTest {
     verify(runs).save(any());
   }
 
+  // ---------------------------------------------------------------------------
+  // captureEvidence / discardEvidence
+  //
+  // The failure path is the only reason this feature is acceptable, and a triage with nothing to
+  // read is no triage at all - so these exercise the real filesystem, in a temp state dir.
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void capturesTheFourEvidenceFilesTheAgentIsPromisedItsPromptNames() {
+    when(phaseRunner.capture(anyString(), any(), any(String[].class)))
+        .thenReturn(execution(0, "captured output", Map.of()));
+
+    String directory =
+        activities.captureEvidence(DeployPhase.VERIFY, "verify failed", "old-sha", "new-sha");
+
+    Path evidence = Path.of(directory);
+    assertThat(evidence).isDirectory();
+    assertThat(evidence.resolve("phase-output.txt")).exists();
+    assertThat(evidence.resolve("compose-ps.txt")).exists();
+    assertThat(evidence.resolve("container-logs.txt")).exists();
+    assertThat(evidence.resolve("commit-range.txt")).exists();
+  }
+
+  @Test
+  void namesTheFailingPhaseInTheCapturedOutput() throws Exception {
+    when(phaseRunner.capture(anyString(), any(), any(String[].class)))
+        .thenReturn(execution(0, "", Map.of()));
+
+    String directory =
+        activities.captureEvidence(DeployPhase.VERIFY, "backend unhealthy", "old", "new");
+
+    assertThat(Files.readString(Path.of(directory).resolve("phase-output.txt")))
+        .contains("Failed phase: verify")
+        .contains("backend unhealthy");
+  }
+
+  @Test
+  void saysSoRatherThanFailingWhenThereIsNoPreviousCommit() throws Exception {
+    when(phaseRunner.capture(anyString(), any(), any(String[].class)))
+        .thenReturn(execution(0, "", Map.of()));
+
+    String directory = activities.captureEvidence(DeployPhase.PULL, "pull failed", null, "new");
+
+    assertThat(Files.readString(Path.of(directory).resolve("commit-range.txt")))
+        .contains("not known");
+  }
+
+  @Test
+  void keepsCapturingWhenOneEvidenceCommandFails() throws Exception {
+    // Best-effort by definition: this runs because something is already broken, so a command
+    // that fails here must not take the whole diagnosis down with it.
+    when(phaseRunner.capture(anyString(), any(), any(String[].class)))
+        .thenThrow(new IllegalStateException("docker is unreachable"));
+
+    String directory = activities.captureEvidence(DeployPhase.VERIFY, "failed", "old", "new");
+
+    assertThat(Files.readString(Path.of(directory).resolve("compose-ps.txt")))
+        .contains("Could not capture")
+        .contains("docker is unreachable");
+    assertThat(Path.of(directory).resolve("container-logs.txt")).exists();
+  }
+
+  @Test
+  void boundsEachEvidenceFileSoCrashLoopingContainerCannotFillVolume() throws Exception {
+    when(phaseRunner.capture(anyString(), any(), any(String[].class)))
+        .thenReturn(execution(0, "y".repeat(2_000_000), Map.of()));
+
+
+    String directory = activities.captureEvidence(DeployPhase.VERIFY, "failed", "old", "new");
+
+    String logs = Files.readString(Path.of(directory).resolve("container-logs.txt"));
+    assertThat(logs.length()).isLessThan(1_000_000);
+    // The tail is kept, and the truncation is stated rather than silent.
+    assertThat(logs).startsWith("[truncated to the last");
+  }
+
+  @Test
+  void discardsTheEvidenceDirectory() {
+    when(phaseRunner.capture(anyString(), any(), any(String[].class)))
+        .thenReturn(execution(0, "", Map.of()));
+    String directory = activities.captureEvidence(DeployPhase.VERIFY, "failed", "old", "new");
+
+    activities.discardEvidence(directory);
+
+    assertThat(Path.of(directory)).doesNotExist();
+  }
+
   @Test
   void refusesToDeleteAnythingOutsideTheStateDirectory() {
-    // This method takes a string across an activity boundary and deletes a tree. The only caller
-    // passes a path this class created, but the guard costs three lines.
+    // The only caller passes a path this class created, but this method takes a string across an
+    // activity boundary and deletes a tree, so the guard is worth the three lines.
     activities.discardEvidence("/etc");
 
-    assertThat(java.nio.file.Files.exists(java.nio.file.Path.of("/etc"))).isTrue();
+    assertThat(Files.exists(Path.of("/etc"))).isTrue();
   }
 
   @Test

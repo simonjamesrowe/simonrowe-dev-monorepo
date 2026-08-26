@@ -19,8 +19,13 @@ public record PhaseOutcome(
   /** Characters of phase output kept in the run record. */
   public static final int MAX_DETAIL = 4000;
 
-  /** Exit code the script uses for "declined, with no side effects". */
-  public static final int DECLINED = 2;
+  /**
+   * Exit code the script uses for "declined, with no side effects".
+   *
+   * <p>Named for the exit code rather than the state, so it cannot be confused with
+   * {@link #declined()} — the state that reading it produces.
+   */
+  public static final int DECLINED_EXIT_CODE = 2;
 
   public PhaseOutcome {
     detail = trim(detail);
@@ -28,7 +33,7 @@ public record PhaseOutcome(
 
   /** Whether the phase declined rather than failing. */
   public boolean declined() {
-    return exitCode == DECLINED;
+    return exitCode == DECLINED_EXIT_CODE;
   }
 
   private static String trim(final String detail) {

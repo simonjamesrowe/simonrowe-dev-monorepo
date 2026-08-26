@@ -78,38 +78,39 @@ public record DeployProperties(
       List.of("backend", "frontend", "software-factory");
 
   public DeployProperties {
-    owner = owner == null || owner.isBlank() ? "simonjamesrowe" : owner;
-    repository =
-        repository == null || repository.isBlank() ? "simonrowe-dev-monorepo" : repository;
-    workflowName = workflowName == null || workflowName.isBlank() ? "Publish" : workflowName;
-    branch = branch == null || branch.isBlank() ? "main" : branch;
-    composeFile =
-        composeFile == null || composeFile.isBlank()
-            ? "/workspace/repo/docker-compose.prod.yml"
-            : composeFile;
-    script =
-        script == null || script.isBlank() ? "/workspace/repo/scripts/restart-prod.sh" : script;
-    repoDir = repoDir == null || repoDir.isBlank() ? "/workspace/repo" : repoDir;
+    owner = orDefault(owner, "simonjamesrowe");
+    repository = orDefault(repository, "simonrowe-dev-monorepo");
+    workflowName = orDefault(workflowName, "Publish");
+    branch = orDefault(branch, "main");
+    composeFile = orDefault(composeFile, "/workspace/repo/docker-compose.prod.yml");
+    script = orDefault(script, "/workspace/repo/scripts/restart-prod.sh");
+    repoDir = orDefault(repoDir, "/workspace/repo");
     // Pinned in configuration rather than read from the checkout's own remote, so a tampered
     // remote on the host cannot redirect the fetch that sync-config validates against.
     repoUrl =
-        repoUrl == null || repoUrl.isBlank()
-            ? "https://github.com/simonjamesrowe/simonrowe-dev-monorepo.git"
-            : repoUrl;
-    services = services == null || services.isEmpty() ? DEFAULT_SERVICES : List.copyOf(services);
-    recreatable =
-        recreatable == null || recreatable.isEmpty()
-            ? DEFAULT_RECREATABLE
-            : List.copyOf(recreatable);
+        orDefault(repoUrl, "https://github.com/simonjamesrowe/simonrowe-dev-monorepo.git");
+    stateDir = orDefault(stateDir, "/var/run/deploy-state");
+    services = orDefault(services, DEFAULT_SERVICES);
+    recreatable = orDefault(recreatable, DEFAULT_RECREATABLE);
+    // Default ON, which is why these two are boxed: a primitive boolean's zero value is false,
+    // so an unconfigured deployment would silently lose rollback and config sync.
     rollbackEnabled = rollbackEnabled == null ? Boolean.TRUE : rollbackEnabled;
     syncConfig = syncConfig == null ? Boolean.TRUE : syncConfig;
-    stateDir =
-        stateDir == null || stateDir.isBlank() ? "/var/run/deploy-state" : stateDir;
     // 30m covers the slowest single phase by a wide margin: `pull` fetches three ARM images to a
     // Raspberry Pi and `verify` allows the script's own 420s settle budget. The activity's
     // start-to-close timeout in DeployWorkflowImpl must stay above this.
     phaseTimeout = phaseTimeout == null ? Duration.ofMinutes(30) : phaseTimeout;
     agent = agent == null ? Agent.defaults() : agent;
+  }
+
+  /** Treats a blank value as absent — an empty environment variable is not a configured one. */
+  private static String orDefault(final String value, final String fallback) {
+    return value == null || value.isBlank() ? fallback : value;
+  }
+
+  /** Treats an empty list as absent, and copies a supplied one so the record stays immutable. */
+  private static List<String> orDefault(final List<String> value, final List<String> fallback) {
+    return value == null || value.isEmpty() ? fallback : List.copyOf(value);
   }
 
   /** Whether {@code service} is one the automation may recreate. */

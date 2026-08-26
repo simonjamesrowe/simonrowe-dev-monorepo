@@ -30,6 +30,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/webhooks/github")
 public class GitHubWebhookController {
 
+  /** Field of the delivery envelope read by every branch. */
+  private static final String REPOSITORY = "repository";
+
   private static final Set<String> ACTIONS =
       Set.of("opened", "reopened", "synchronize", "ready_for_review");
 
@@ -104,11 +107,10 @@ public class GitHubWebhookController {
       return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
     }
 
-    String owner = payload.path("repository").path("owner").path("login").asText();
-    String repository = payload.path("repository").path("name").asText();
+    String owner = ownerOf(payload);
+    String repository = repositoryOf(payload);
     int pullNumber = pullRequest.path("number").asInt();
     String headSha = pullRequest.path("head").path("sha").asText();
-    long installationId = payload.path("installation").path("id").asLong();
     if (owner.isBlank() || repository.isBlank() || pullNumber < 1 || headSha.isBlank()) {
       return ResponseEntity.badRequest().body(new WebhookResponse("malformed"));
     }
@@ -116,12 +118,7 @@ public class GitHubWebhookController {
     ReviewAccepted accepted =
         workflowService.start(
             new ReviewRequest(
-                owner,
-                repository,
-                pullNumber,
-                headSha,
-                installationId > 0 ? installationId : null,
-                true));
+                owner, repository, pullNumber, headSha, installationIdOf(payload), true));
     return ResponseEntity.accepted().body(accepted);
   }
 
@@ -147,8 +144,8 @@ public class GitHubWebhookController {
     }
 
     JsonNode workflowRun = payload.path("workflow_run");
-    String owner = payload.path("repository").path("owner").path("login").asText();
-    String repository = payload.path("repository").path("name").asText();
+    String owner = ownerOf(payload);
+    String repository = repositoryOf(payload);
     String headSha = workflowRun.path("head_sha").asText();
 
     if (!deployProperties.workflowName().equals(workflowRun.path("name").asText())
@@ -159,21 +156,16 @@ public class GitHubWebhookController {
       return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
     }
 
-    long installationId = payload.path("installation").path("id").asLong();
     DeployAccepted accepted =
-        service.start(
-            headSha,
-            DeployRequest.TRIGGER_WEBHOOK,
-            installationId > 0 ? installationId : null);
+        service.start(headSha, DeployRequest.TRIGGER_WEBHOOK, installationIdOf(payload));
     return ResponseEntity.accepted().body(accepted);
   }
 
   private ResponseEntity<?> handleClosed(final JsonNode payload) {
     JsonNode pullRequest = payload.path("pull_request");
-    String owner = payload.path("repository").path("owner").path("login").asText();
-    String repository = payload.path("repository").path("name").asText();
+    String owner = ownerOf(payload);
+    String repository = repositoryOf(payload);
     int pullNumber = pullRequest.path("number").asInt();
-    long installationId = payload.path("installation").path("id").asLong();
     if (owner.isBlank() || repository.isBlank() || pullNumber < 1) {
       return ResponseEntity.badRequest().body(new WebhookResponse("malformed"));
     }
@@ -185,9 +177,35 @@ public class GitHubWebhookController {
     FeedbackAccepted accepted =
         feedbackWorkflowService.start(
             new FeedbackRequest(
-                owner, repository, pullNumber,
-                installationId > 0 ? installationId : null, false));
+                owner, repository, pullNumber, installationIdOf(payload), false));
     return ResponseEntity.accepted().body(accepted);
+  }
+
+  /**
+   * The three fields every delivery carries in the same place, read in one place.
+   *
+   * <p>All three webhook branches need them, and reading them inline meant the same
+   * {@code repository/owner/login} navigation appeared three times — which is both a
+   * duplicated-literal finding and a real drift risk if GitHub ever changes the envelope.
+   */
+  private static String ownerOf(final JsonNode payload) {
+    return payload.path(REPOSITORY).path("owner").path("login").asText();
+  }
+
+  private static String repositoryOf(final JsonNode payload) {
+    return payload.path(REPOSITORY).path("name").asText();
+  }
+
+  /**
+   * The installation the delivery came from, or null when absent.
+   *
+   * <p>Null rather than zero deliberately: downstream, a configured-but-empty installation id
+   * makes the token lookup fall back to a static {@code GITHUB_TOKEN} this service does not set,
+   * which gives an anonymous call and a 403 that looks like a permissions problem.
+   */
+  private static Long installationIdOf(final JsonNode payload) {
+    long installationId = payload.path("installation").path("id").asLong();
+    return installationId > 0 ? installationId : null;
   }
 
   private boolean hasSkipLabel(final JsonNode pullRequest) {
