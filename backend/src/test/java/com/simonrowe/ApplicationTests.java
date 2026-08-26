@@ -22,7 +22,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.kafka.ConfluentKafkaContainer;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -40,10 +39,6 @@ class ApplicationTests {
   private Ai ai;
 
   @Container
-  static ConfluentKafkaContainer kafka =
-      new ConfluentKafkaContainer("confluentinc/cp-kafka:7.8.0");
-
-  @Container
   static ElasticsearchContainer elasticsearch =
       new ElasticsearchContainer("elasticsearch:8.17.0")
           .withEnv("xpack.security.enabled", "false");
@@ -51,7 +46,7 @@ class ApplicationTests {
   @DynamicPropertySource
   static void configureProperties(DynamicPropertyRegistry registry) {
     SharedMongoContainer.configureProperties(registry);
-    registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+    SharedKafkaContainer.configureProperties(registry);
     registry.add("spring.elasticsearch.uris", elasticsearch::getHttpHostAddress);
   }
 
