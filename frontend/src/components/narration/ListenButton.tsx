@@ -48,26 +48,33 @@ export function ListenButton({
   const stage = stageFor(contentType, contentId)
   const busy = stage === 'summarising' || stage === 'narrating'
 
+  // One branch per state, resolving everything the button needs at once. Deliberately not
+  // nested ternaries in the JSX: three of them reading off two flags is the sort of thing you
+  // have to decode rather than read.
   let label: string
   let modifier: 'ready' | 'cold' | 'busy'
+  let accessibleName: string
+  let icon: React.ReactNode
   if (busy) {
     label = stage === 'summarising' ? 'Summarising…' : 'Preparing audio…'
     modifier = 'busy'
+    accessibleName = `${label} for ${title}`
+    icon = <Loader2 aria-hidden="true" className="listen-button__spinner" size={14} />
   } else if (ready) {
     label = formatCompactDuration(ready.durationSeconds)
     modifier = 'ready'
+    accessibleName = `Listen to the ${label} audio version of ${title}`
+    icon = <Play aria-hidden="true" size={14} />
   } else {
     label = 'Listen'
     modifier = 'cold'
+    accessibleName = `Generate an audio version of ${title}`
+    icon = <Headphones aria-hidden="true" size={14} />
   }
 
   return (
     <button
-      aria-label={busy
-        ? `${label} for ${title}`
-        : ready
-          ? `Listen to the ${label} audio version of ${title}`
-          : `Generate an audio version of ${title}`}
+      aria-label={accessibleName}
       className={`listen-button listen-button--${modifier}${className ? ` ${className}` : ''}`}
       disabled={busy}
       onClick={(event) => {
@@ -78,11 +85,7 @@ export function ListenButton({
       }}
       type="button"
     >
-      {busy
-        ? <Loader2 aria-hidden="true" className="listen-button__spinner" size={14} />
-        : ready
-          ? <Play aria-hidden="true" size={14} />
-          : <Headphones aria-hidden="true" size={14} />}
+      {icon}
       <span>{label}</span>
     </button>
   )

@@ -80,7 +80,7 @@ const DEFAULT_RETRY_AFTER_SECONDS = 60
 
 function retryAfterFrom(response: Response): number {
   const header = response.headers?.get?.('Retry-After')
-  const parsed = header ? Number(header) : NaN
+  const parsed = header ? Number(header) : Number.NaN
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_RETRY_AFTER_SECONDS
 }
 

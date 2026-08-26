@@ -56,8 +56,8 @@ export function NarrationPlayerBar() {
   const visible = Boolean(track) || Boolean(error)
   useEffect(() => {
     if (!visible) return
-    document.body.setAttribute('data-narration-bar', '')
-    return () => document.body.removeAttribute('data-narration-bar')
+    document.body.dataset.narrationBar = 'true'
+    return () => { delete document.body.dataset.narrationBar }
   }, [visible])
 
   // An error can outlive its track — audio that 404s at playback time clears the track but must
@@ -67,24 +67,30 @@ export function NarrationPlayerBar() {
   const generating = stage === 'summarising' || stage === 'narrating'
   const total = duration || track?.durationSeconds || 0
 
-  const title = !track ? null : track.external ? (
-    <a
-      className="narration-bar__title"
-      href={track.href}
-      rel="noopener noreferrer"
-      target="_blank"
-    >
-      {track.title}
-    </a>
-  ) : (
-    <Link className="narration-bar__title" to={track.href}>{track.title}</Link>
-  )
+  // A news track links out to the original article, a blog track links internally. Written as
+  // a function rather than a nested ternary in the JSX so both branches stay legible.
+  function renderTitle() {
+    if (!track) return null
+    if (track.external) {
+      return (
+        <a
+          className="narration-bar__title"
+          href={track.href}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          {track.title}
+        </a>
+      )
+    }
+    return <Link className="narration-bar__title" to={track.href}>{track.title}</Link>
+  }
 
   return (
     <section aria-label="Narration player" className="narration-bar" role="region">
       <div className="narration-bar__inner">
         <div className="narration-bar__meta">
-          {title}
+          {renderTitle()}
           {/* Stage changes happen without any reader action, so they are announced rather than
               only shown. */}
           <p aria-atomic="true" aria-live="polite" className="narration-bar__status" role="status">

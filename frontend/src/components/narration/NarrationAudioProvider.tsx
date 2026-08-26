@@ -34,6 +34,19 @@ function keyFor(contentType: NarrationAudioContentType, contentId: string): stri
   return `${contentType}:${contentId}`
 }
 
+/** Merges a batch of ready rows into the map, keyed so the two content types cannot collide. */
+function withRows(
+  previous: Map<string, ReadyNarration>,
+  contentType: NarrationAudioContentType,
+  rows: ReadyNarration[],
+): Map<string, ReadyNarration> {
+  const next = new Map(previous)
+  for (const row of rows) {
+    next.set(keyFor(contentType, row.contentId), row)
+  }
+  return next
+}
+
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
 }
@@ -76,6 +89,18 @@ function summaryError(response: ArticleSummaryResponse): NarrationAudioError {
     message: response.message?.trim() ? response.message : 'The summary could not be generated.',
     retryable: response.state === 'FAILED' ? response.retryable : false,
   }
+}
+
+/**
+ * How a refused chain step reads. A 429 is retryable and carries the server's own wait; anything
+ * else is reported with whatever the server said, and is worth one more try.
+ */
+function postFailureError(
+  outcome: { rateLimited: true; retryAfterSeconds: number } | { rateLimited: false; message: string },
+): NarrationAudioError {
+  return outcome.rateLimited
+    ? rateLimitError(outcome.retryAfterSeconds)
+    : { message: outcome.message, retryable: true }
 }
 
 function rateLimitError(retryAfterSeconds: number): NarrationAudioError {
@@ -164,20 +189,20 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
   // sits above <Routes>, means once per full page load rather than once per navigation.
   useEffect(() => {
     const controller = new AbortController()
-    CONTENT_TYPES.forEach((contentType) => {
-      fetchReadyNarrations(contentType, controller.signal)
-        .then((rows) => {
-          setReadyMap((previous) => {
-            const next = new Map(previous)
-            rows.forEach((row) => next.set(keyFor(contentType, row.contentId), row))
-            return next
-          })
-        })
-        .catch(() => {
-          // Leave the map empty for this content type — every card just reads "Listen". A failed
-          // availability check must never stop a listing rendering or surface an error.
-        })
-    })
+
+    const load = async (contentType: NarrationAudioContentType) => {
+      try {
+        const rows = await fetchReadyNarrations(contentType, controller.signal)
+        setReadyMap((previous) => withRows(previous, contentType, rows))
+      } catch {
+        // Leave the map empty for this content type — every card just reads "Listen". A failed
+        // availability check must never stop a listing rendering or surface an error.
+      }
+    }
+
+    for (const contentType of CONTENT_TYPES) {
+      void load(contentType)
+    }
     return () => controller.abort()
   }, [])
 
@@ -350,6 +375,68 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
    * `useArticleSummaries` behaves today — a reader who changes their mind never triggers a paid
    * call and is never told off for it.
    */
+  /** Reports a failure and returns the bar to rest. */
+  const failWith = useCallback((problem: NarrationAudioError) => {
+    setStage('idle')
+    setError(problem)
+  }, [])
+
+  /**
+   * The news-only first stage: make sure there is a summary to narrate.
+   *
+   * A public read decides which of the two news chains this is — the narration endpoint would
+   * just 404 without a summary. Returns whether the chain may continue, and whether it had to
+   * generate the summary itself (which the news page needs to know about).
+   */
+  const ensureSummary = useCallback(async (
+    request: ListenRequest,
+    controller: AbortController,
+  ): Promise<{ proceed: boolean; generated: boolean }> => {
+    const existing = await fetchArticleSummary(request.contentId, { signal: controller.signal })
+    if (controller.signal.aborted) return { proceed: false, generated: false }
+    if (existing.state === 'READY') return { proceed: true, generated: false }
+
+    setStage('summarising')
+    const outcome = await postArticleSummary(
+      getAccessToken, request.contentId, controller.signal)
+    if (controller.signal.aborted) return { proceed: false, generated: false }
+
+    if (!outcome.ok) {
+      failWith(postFailureError(outcome))
+      return { proceed: false, generated: false }
+    }
+    if (outcome.value.state !== 'READY') {
+      failWith(summaryError(outcome.value))
+      return { proceed: false, generated: false }
+    }
+    return { proceed: true, generated: true }
+  }, [failWith, getAccessToken])
+
+  /** The second stage: queue the render and wait for it. */
+  const narrate = useCallback(async (
+    request: ListenRequest,
+    controller: AbortController,
+    summaryWasGenerated: boolean,
+  ): Promise<void> => {
+    setStage('narrating')
+    const queued = request.contentType === 'BLOG'
+      ? await postBlogNarration(getAccessToken, request.contentId, controller.signal)
+      : await postSummaryNarration(getAccessToken, request.contentId, controller.signal)
+    if (controller.signal.aborted) return
+
+    if (!queued.ok) {
+      failWith(postFailureError(queued))
+      return
+    }
+    if (!isPending(queued.value)) {
+      settleNarration(request, queued.value, summaryWasGenerated)
+      return
+    }
+
+    const settled = await pollUntilSettled(request, queued.value, controller)
+    if (settled) settleNarration(request, settled, summaryWasGenerated)
+  }, [failWith, getAccessToken, pollUntilSettled, settleNarration])
+
   const runChain = useCallback(async (
     request: ListenRequest,
     controller: AbortController,
@@ -358,71 +445,25 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
     if (controller.signal.aborted) return
 
     setTrack({ ...request })
-    let summaryWasGenerated = false
 
     try {
+      let summaryWasGenerated = false
       if (request.contentType === 'ARTICLE_SUMMARY') {
-        // Is there a summary to narrate? A public read decides which of the two news chains
-        // this is; the narration endpoint would just 404 without one.
-        const existing = await fetchArticleSummary(request.contentId, {
-          signal: controller.signal,
-        })
-        if (controller.signal.aborted) return
-
-        if (existing.state !== 'READY') {
-          setStage('summarising')
-          const generated = await postArticleSummary(
-            getAccessToken, request.contentId, controller.signal)
-          if (controller.signal.aborted) return
-
-          if (!generated.ok) {
-            setStage('idle')
-            setError(generated.rateLimited
-              ? rateLimitError(generated.retryAfterSeconds)
-              : { message: generated.message, retryable: true })
-            return
-          }
-          if (generated.value.state !== 'READY') {
-            setStage('idle')
-            setError(summaryError(generated.value))
-            return
-          }
-          summaryWasGenerated = true
-        }
+        const summary = await ensureSummary(request, controller)
+        if (!summary.proceed) return
+        summaryWasGenerated = summary.generated
       }
-
-      setStage('narrating')
-      const queued = request.contentType === 'BLOG'
-        ? await postBlogNarration(getAccessToken, request.contentId, controller.signal)
-        : await postSummaryNarration(getAccessToken, request.contentId, controller.signal)
-      if (controller.signal.aborted) return
-
-      if (!queued.ok) {
-        setStage('idle')
-        setError(queued.rateLimited
-          ? rateLimitError(queued.retryAfterSeconds)
-          : { message: queued.message, retryable: true })
-        return
-      }
-
-      if (!isPending(queued.value)) {
-        settleNarration(request, queued.value, summaryWasGenerated)
-        return
-      }
-
-      const settled = await pollUntilSettled(request, queued.value, controller)
-      if (settled) settleNarration(request, settled, summaryWasGenerated)
+      await narrate(request, controller, summaryWasGenerated)
     } catch (error) {
       if (controller.signal.aborted || isAbortError(error)) return
-      setStage('idle')
-      setError({
+      failWith({
         message: error instanceof Error && error.message
           ? error.message
           : 'Audio could not be prepared. Please try again.',
         retryable: true,
       })
     }
-  }, [ensureAuthenticated, getAccessToken, pollUntilSettled, settleNarration])
+  }, [ensureAuthenticated, ensureSummary, failWith, narrate])
 
   const listen = useCallback((request: ListenRequest) => {
     // A new track abandons whatever was in flight — the reader's latest intent wins.

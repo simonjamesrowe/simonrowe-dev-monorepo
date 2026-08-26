@@ -499,7 +499,6 @@ a:hover {
   color: var(--on-surface-variant);
   text-decoration: none;
   font-size: 0.95rem;
-  transition: color var(--transition-fast);
   padding-bottom: 0.35rem;
   border-bottom: 2px solid transparent;
   transition: color var(--transition-fast), border-color var(--transition-fast);

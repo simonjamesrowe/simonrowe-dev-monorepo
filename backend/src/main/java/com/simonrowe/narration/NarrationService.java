@@ -32,6 +32,10 @@ public class NarrationService {
   private static final String AUDIO_ENCODING = "MP3";
   private static final Duration STATUS_POLL_INTERVAL = Duration.ofMillis(500);
 
+  /** Mongo field names used from more than one query in this class. */
+  private static final String STATUS_FIELD = "status";
+  private static final String DURATION_FIELD = "durationSeconds";
+
   private final NarrationRepository narrationRepository;
   private final NarrationProperties properties;
   private final NarrationProvider provider;
@@ -182,12 +186,12 @@ public class NarrationService {
   public List<ReadyNarration> readyNarrations(final NarrationContentType contentType) {
     Aggregation aggregation = Aggregation.newAggregation(
         Aggregation.match(Criteria.where("contentType").is(contentType)
-            .and("status").is(NarrationStatus.READY)),
+            .and(STATUS_FIELD).is(NarrationStatus.READY)),
         Aggregation.sort(Sort.by(Sort.Direction.DESC, "updatedAt")),
         Aggregation.group("contentId")
             .first("audioPath").as("audioUrl")
-            .first("durationSeconds").as("durationSeconds"),
-        Aggregation.project("audioUrl", "durationSeconds").and("_id").as("contentId"));
+            .first(DURATION_FIELD).as(DURATION_FIELD),
+        Aggregation.project("audioUrl", DURATION_FIELD).and("_id").as("contentId"));
 
     return mongoTemplate
         .aggregate(aggregation, Narration.class, ReadyNarration.class)
@@ -206,9 +210,9 @@ public class NarrationService {
    */
   public Optional<Narration> claim(final String narrationId, final Instant now) {
     Query query = Query.query(Criteria.where("_id").is(narrationId)
-        .and("status").is(NarrationStatus.QUEUED));
+        .and(STATUS_FIELD).is(NarrationStatus.QUEUED));
     Update update = new Update()
-        .set("status", NarrationStatus.PROCESSING)
+        .set(STATUS_FIELD, NarrationStatus.PROCESSING)
         .set("leaseUntil", now.plus(properties.leaseDuration()))
         .set("startedAt", now)
         .set("updatedAt", now)
