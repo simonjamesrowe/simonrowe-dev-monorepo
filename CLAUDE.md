@@ -128,6 +128,22 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   `temporal-ui` and `dependencytrack-frontend` now have healthchecks, and the apiserver probes
   its API port too. **After any reboot, curl the public hostnames — do not trust a green
   `docker compose ps`.**
+- **The single-node Kafka broker needs every internal topic at replication-factor 1.**
+  `docker-compose.prod.yml` set no `KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR`, so the broker
+  used Kafka's default of **3**. With one broker registered, `__consumer_offsets` can never
+  be created, so there is **no group coordinator**: `FIND_COORDINATOR` times out and *no
+  consumer group can ever join*. Producers are unaffected, so the symptom is messages
+  published and silently never consumed — on 2026-08-25 all 13 `@KafkaListener` consumers in
+  prod were inert (13 subscribed, **zero** broker rebalances), which surfaced as narration
+  stuck on "Preparing audio" forever for both blogs and article summaries.
+  `docker-compose.yml` already carried the three settings and the comment explaining them;
+  they had never been ported to prod. Two things this cost time on: the
+  `kafka-broker-api-versions` healthcheck **stays green throughout** (it never exercises
+  group coordination), and **fixing the broker is not enough** — existing consumers do not
+  recover from a long `FIND_COORDINATOR` backoff, so `restart backend` after the broker is
+  healthy. Diagnose with `kafka-topics --list` (is `__consumer_offsets` there?) and
+  `kafka-consumer-groups --list` (empty = nothing has ever joined); use `kafka:29092`, not
+  `localhost:29092`, or the CLI's own FIND_COORDINATOR masks the answer.
 - **The kernel memory cgroup is disabled, so every `mem_limit` is unenforced.** `docker info`
   warns `No memory limit support` and `docker stats` reports `0B / 0B`. The Raspberry Pi
   *firmware* prepends `cgroup_disable=memory`; it is in `/proc/cmdline` but in **no file under
