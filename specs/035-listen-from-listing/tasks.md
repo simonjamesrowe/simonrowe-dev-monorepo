@@ -185,7 +185,8 @@ the stated retryability, that the card is at rest, and that the listing still re
 - [X] T058 Confirm `NarrationScriptBuilder.FORMAT_VERSION` is still the literal `blog-narration-v1` and that no Mongock change unit, `BackupService.BACKUP_COLLECTIONS` entry or `RestoreService.IMPORT_ORDER_INDEPENDENT` entry was added — this feature adds no persistence
 - [X] T059 Endpoint table rows — already covered by T036, which added `POST`/`GET /api/blogs/{id}/narration` and `GET /api/narrations/ready` plus the two explanatory notes. Nothing further needed.
 - [X] T060 Run the full gates: `cd backend && ../gradlew test checkstyleMain checkstyleTest` (JaCoCo ≥0.78 must hold) and `cd frontend && npm test && npm run lint` (lint must exit 0 — it is a blocking CI step)
-- [ ] T061 Walk the whole of [quickstart.md](./quickstart.md#manual-verification-checklist) against a running local stack with prod-like data (`prod-data-restore` skill), then use the `pr-review-loop` skill to open the PR and drive all three signals green
+- [X] T061 Open the PR and drive all three signals — **done**, [#114](https://github.com/simonjamesrowe/simonrowe-dev-monorepo/pull/114) via the `pr-review-loop` skill. CI green on all four blocking checks; reviewer bot verdict `approve` on two successive heads; SonarQube published its first analysis of this project **with coverage actually measured** (`new_coverage` 81.9% vs an 80% threshold). Six new-code findings fixed in `56bea0b`, one pre-existing CSS bug fixed and disclosed, three declined with reasons recorded in the PR (never in the Sonar UI): `java:S4502` (CSRF line not in the diff and correct for a stateless bearer-JWT resource server), `tssecurity:S8476` (false positive — `contentId` is already `encodeURIComponent`d and is not user input), and `typescript:S3776` on `NewsEventsPage` (pre-existing complexity; this change adds 28 lines to a ~610-line component).
+- [ ] T062 **Still outstanding:** walk the manual checklist in [quickstart.md](./quickstart.md#manual-verification-checklist) against a running local stack with prod-like data (`prod-data-restore` skill). Everything above is automated verification; nobody has yet watched the bar keep playing across a real navigation in a browser. On a clean local database the bulk endpoint returns `[]` and every card is cold, so the restore has to come first.
 
 ---
 
@@ -277,8 +278,8 @@ accessibility and gate work that closes the feature out.
 | 4 | US4 (P2) | T030–T037 | 8 |
 | 5 | US2 (P2) | T038–T048 | 11 |
 | 6 | US3 (P3) | T049–T054 | 6 |
-| 7 Polish | — | T055–T061 | 7 |
-| **Total** | | | **61** |
+| 7 Polish | — | T055–T062 | 8 |
+| **Total** | | | **62** |
 
 Of these, 9 are new test files and 7 are extensions to existing test files — matching the spec's
 Testing section item for item.
