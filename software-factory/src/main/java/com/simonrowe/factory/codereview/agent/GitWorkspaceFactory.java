@@ -23,6 +23,9 @@ public class GitWorkspaceFactory {
 
   private static final Duration GIT_TIMEOUT = Duration.ofMinutes(3);
 
+  /** Progress cadence for the credential sweep, in paths inspected. */
+  private static final int SWEEP_HEARTBEAT_EVERY = 2000;
+
   private final CodeReviewProperties properties;
   private final GitHubCredentials credentials;
   private final ProcessRunner processRunner;
@@ -58,6 +61,7 @@ public class GitWorkspaceFactory {
           workspace,
           pullRequest,
           heartbeat);
+      heartbeat.accept("Fetching pull request head");
       runGit(
           List.of(
               "git",
@@ -70,12 +74,14 @@ public class GitWorkspaceFactory {
           repository,
           pullRequest,
           heartbeat);
+      heartbeat.accept("Checking out " + pullRequest.headSha());
       runGit(
           List.of("git", "checkout", "--quiet", "--detach", pullRequest.headSha()),
           repository,
           pullRequest,
           heartbeat);
 
+      heartbeat.accept("Listing changed files");
       ProcessRunner.ProcessResult changedFilesResult =
           runGit(
               List.of(
@@ -101,6 +107,7 @@ public class GitWorkspaceFactory {
 
       byte[] diff = new byte[0];
       if (!changedFiles.isEmpty()) {
+        heartbeat.accept("Building diff for " + changedFiles.size() + " changed files");
         List<String> diffCommand =
             new ArrayList<>(
                 List.of(
@@ -122,7 +129,8 @@ public class GitWorkspaceFactory {
             "Review exceeds diff limit of " + properties.agent().maxDiffBytes() + " bytes");
       }
 
-      removeUnsafeFiles(repository);
+      heartbeat.accept("Removing credential files from the checkout");
+      removeUnsafeFiles(repository, heartbeat);
       Path reviewerDirectory = Files.createTempDirectory(repository, ".temporal-review-");
       Path diffPath = reviewerDirectory.resolve("changes.diff");
       Files.write(diffPath, diff);
@@ -175,9 +183,19 @@ public class GitWorkspaceFactory {
             .encodeToString(credential.getBytes(java.nio.charset.StandardCharsets.UTF_8));
   }
 
-  private static void removeUnsafeFiles(final Path repository) throws IOException {
+  /**
+   * Walks the whole checkout, {@code .git} included, so this is the slowest un-heartbeated step in
+   * workspace preparation on the Pi — it emits progress every {@link #SWEEP_HEARTBEAT_EVERY} paths
+   * so a large repository cannot starve the activity's heartbeat and time it out mid-sweep.
+   */
+  private static void removeUnsafeFiles(final Path repository, final Consumer<String> heartbeat)
+      throws IOException {
     try (Stream<Path> paths = Files.walk(repository)) {
+      int inspected = 0;
       for (Path path : paths.toList()) {
+        if (++inspected % SWEEP_HEARTBEAT_EVERY == 0) {
+          heartbeat.accept("Swept " + inspected + " paths for credential files");
+        }
         if (Files.isSymbolicLink(path)
             || (Files.isRegularFile(path)
                 && isSensitiveFileName(path.getFileName().toString()))) {
