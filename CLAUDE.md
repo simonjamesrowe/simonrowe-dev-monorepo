@@ -181,6 +181,33 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- ci-build-speedup: `:backend:test` had grown to 13m28s in CI, and **421s of it was seven
+  `KafkaTemplate.send()` calls in one test class** (`FavouritesControllerTest`) each
+  blocking for the 60-second `max.block.ms` default, because the test profile points at
+  `localhost:9092` and CI has no broker there. `send()` is only asynchronous *once the
+  producer holds topic metadata*; before that it blocks the calling thread inside
+  `waitOnMetadata`. Dated precisely to commit `0cc86413` (PR #106, auto-summary on
+  favourite), which took CI from 418s to 795s in one step. Fixed in two places:
+  - Production `spring.kafka.producer.properties.max.block.ms: 5000`. The 60s default was
+    a live prod bug, not just a slow test — `FavouritesService.requestSummary` catches and
+    swallows publish failures so "the heart still fills", but the catch only runs *after*
+    the block, so a down broker hung a request thread for a full minute.
+  - A `SharedKafkaContainer` singleton (same static-initializer pattern as
+    `SharedMongoContainer`, deliberately not the per-class `@Container` lifecycle) wired
+    into `AbstractIntegrationTest`, so integration tests publish to a real broker rather
+    than a dead port. Mocking the publisher would have hidden the client behaviour that
+    caused this. `ApplicationTests` now reuses it instead of starting its own Kafka.
+    Note this changes an old invariant: Kafka is no longer confined to `ApplicationTests`.
+  Result: 870 tests, 10m02s → 2m21s locally.
+  **Separately, CI's Gradle build cache had never worked once.** `setup-gradle` writes its
+  cache only on the default branch (`cache-read-only: true` everywhere else) and keys it
+  per job id, and `ci.yml` triggered on `pull_request` only — so no run ever wrote a cache
+  that CI's own jobs could restore, and the backend job fell through its restore keys to
+  the 1.1MB `sbom` entry and recompiled cold every time. `ci.yml` now also runs on
+  `push: [main]`. With a warm cache an untouched module reports `:backend:test`
+  FROM-CACHE (verified locally: 1s after a full `clean`). The `concurrency` group cancels
+  superseded PR runs but deliberately never main — a cancelled main run is a lost cache
+  write that every subsequent PR would pay for.
 - 034-article-summary-audio: On-demand, globally shared AI summaries of aggregated news
   articles (`article_summaries`, id = `sha256(SUMMARY_FORMAT_VERSION + articleId)`) with
   optional audio. Generation is **synchronous** with an insert-first dedup guard — an LLM

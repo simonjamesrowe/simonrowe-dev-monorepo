@@ -73,6 +73,16 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # KafkaTemplate.send() is only asynchronous once the producer holds metadata for
+        # the topic. Before that it blocks the calling thread inside waitOnMetadata for up
+        # to max.block.ms, and the default is 60 SECONDS. Every publisher here is called
+        # on a request thread behind a swallow-and-carry-on catch, so the default turns
+        # "the broker is down" into a minute-long hang followed by success — favouriting
+        # an article was doing exactly that. Five seconds is comfortably longer than a
+        # healthy broker needs to answer a metadata request and short enough that a dead
+        # one degrades visibly rather than silently.
+        max.block.ms: 5000
   mail:
     host: smtp-relay.brevo.com
     port: 587
