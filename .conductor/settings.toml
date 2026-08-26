@@ -1,0 +1,41 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+# Migrated verbatim from the legacy top-level conductor.json, which the Mac client
+# ignores once this file exists on the default branch. run_mode is deliberately left
+# unset so the built-in default is preserved — ./scripts/start.sh binds fixed ports
+# (8080, 5173) rather than $CONDUCTOR_PORT, so whether this should be
+# "nonconcurrent" is a real question, but not one to answer silently inside a
+# migration.
+[scripts]
+setup = "cp ~/workspace/simonjamesrowe/env .env && cp ~/workspace/simonjamesrowe/env backend/.env && cp ~/workspace/simonjamesrowe/env frontend/.env && echo 'Environment files copied to .env, backend/.env, and frontend/.env'"
+archive = "./scripts/stop.sh"
+
+[scripts.run.stack]
+command = "./scripts/start.sh"
+default = true
+
+# Conductor's Create PR action runs this instead of improvising. A pull request here
+# is judged by three independent signals, each with its own way of being misread,
+# and the pr-review-loop skill is what records them.
+[prompts]
+create_pr = """
+Invoke the `pr-review-loop` skill first, before doing anything else, and follow it.
+It owns this whole sequence — pre-flight locally, open the pull request, wait on all
+three signals, triage, fix, push, re-wait, bounded — and it records the trap specific
+to reading each signal.
+
+Restated here because each of these fails silently if you get it wrong:
+
+- Open against `main`, and **never as a draft**. The reviewer bot ignores drafts, so
+  a draft is silently never reviewed and you will wait for a comment that is never
+  coming. Drafts also save no CI.
+- Conventional commit prefix in the title, imperative mood, under 72 characters. No
+  Jira ticket reference — this org does not use them. No attribution to Claude in the
+  commit message or anywhere in the pull request.
+- **Do not stop at CI being green.** Wait on all three signals: CI checks, the
+  `simonrowe-code-reviewer[bot]` comment, and SonarQube Cloud. Reviewer silence means
+  failure, not approval. A red `Static Analysis` check is a broken scanner, not a
+  cosmetic advisory failure — diagnose it.
+- Triage new code only. Fix a finding, or decline it with a stated reason in the pull
+  request itself; never silence one in the SonarQube UI.
+"""

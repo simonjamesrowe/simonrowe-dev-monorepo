@@ -462,6 +462,35 @@ docker exec simonrowe-dev-monorepo-langfuse-db-1 \
 Treat those dumps as sensitive because Workflow inputs and review summaries
 are stored in Event History.
 
+## Review size and time limits
+
+Five limits bound one review, and they are coupled — raising one without the
+others just moves where a large pull request gets truncated.
+
+| Limit | Where | Default | Bounds |
+| --- | --- | --- | --- |
+| `FACTORY_MAX_CHANGED_FILES` | `application.yml`, compose | 250 | Files in the diff. Over it, the Activity fails with `Review exceeds changed-file limit`. |
+| `FACTORY_MAX_DIFF_BYTES` | `application.yml` | 2 MiB | Diff size. In practice the tighter of the two — 2 MiB already exceeds what the agent can hold, so raise it only with a plan for chunking. |
+| `CLAUDE_MAX_TURNS` | `application.yml`, compose | 60 | Agent turns. Exhaustion is a *silent* failure mode — see the turn-exhaustion note below. |
+| `CLAUDE_TIMEOUT` | `application.yml`, compose | 25m | The agent process only. |
+| `RunReview` start-to-close | `CodeReviewWorkflowImpl` (code) | 35m | Clone + checkout + diff + agent + parse. Must stay comfortably above `CLAUDE_TIMEOUT`. |
+| `RunReview` heartbeat | `CodeReviewWorkflowImpl` (code) | 2m | Liveness. See the heartbeat-timeout note below. |
+
+The two Temporal timeouts are deliberately hardcoded rather than configured:
+Workflow code must be deterministic across replay, so it cannot read mutable
+configuration. Changing them needs a rebuild, not just an `.env` edit.
+
+`CLAUDE_MAX_TURNS`, `CLAUDE_TIMEOUT` and `FACTORY_MAX_CHANGED_FILES` are named in
+`docker-compose.prod.yml`'s `environment:` block with defaults that mirror
+`application.yml`. The compose value **shadows** the image's, so bumping only
+`application.yml` leaves prod on the old limit. Keep the two in step.
+
+History: at 80 files, `FACTORY_MAX_CHANGED_FILES` refused PR #106 (98 files)
+outright. That size is normal here once a spec, backend, frontend and docs move
+in one change, so the guard was only catching real work. It still exists to
+refuse a pull request that is pointless to review — a regenerated lockfile, a
+vendored directory, a mass rename — and 250 leaves that intact.
+
 ## Failure boundaries
 
 - GitHub webhook unavailable: GitHub records a failed delivery for redelivery.
@@ -495,7 +524,7 @@ failure. This bit PR #95 (27 files, 4,194 insertions): the agent exhausted the
 then-default 12 turns after 122s, the Activity failed with a bare
 `Claude exited with 1:` and, because `RunReview` has `setMaximumAttempts(1)`,
 the Workflow failed immediately with nothing posted to the pull request.
-`CLAUDE_MAX_TURNS` now defaults to 40, the failure detail now includes the
+`CLAUDE_MAX_TURNS` now defaults to 60, the failure detail now includes the
 stdout `subtype`/`terminal_reason`/`errors` fields, and a failed review posts a
 notice on the pull request rather than going silent. To confirm a suspected
 turn exhaustion by hand:
@@ -505,6 +534,27 @@ docker exec simonrowe-dev-monorepo-software-factory-1 sh -lc \
   'echo "<prompt>" | claude -p --output-format json --max-turns 12 > /tmp/o 2>/tmp/e; \
    echo "EXIT=$?"; grep -o "\"terminal_reason\":\"[^\"]*\"" /tmp/o'
 ```
+
+A third quiet failure is the heartbeat timeout, which reads as an outage but is
+a configuration fault. `RunReview` heartbeats through `ProcessRunner`, which
+emits a beat every 10s **only while a child process is running** — a git command
+that finishes faster than that emits nothing at all, so the un-heartbeated gap is
+the whole run of steps between two explicit `heartbeat.accept` calls, not the
+duration of any one process. With the old 30s heartbeat timeout that gap was
+routinely wider than the timeout on the Pi: PR #111, a **one-file** docs change,
+died after 31s with `activity Heartbeat timeout` and `lastHeartbeatDetails` still
+reading `Cloning pull request repository` — the clone, the partial-clone
+checkout, the two diffs and the full-tree credential sweep had all run without a
+single beat reaching the server. Because `RunReview` is `setMaximumAttempts(1)`,
+that ended the review. The old value was doubly wrong: the heartbeat timeout also
+sets its own delivery cadence, throttled to
+`min(0.8 * heartbeatTimeout, 60s)`, so 30s meant flushing every 24s against a 30s
+deadline — 6s of slack, thin enough that a Pi under load tipped over even when
+beats *were* being emitted. Two changes fix it: `GitWorkspaceFactory` now beats before
+every step and every 2,000 paths of the credential sweep, and the heartbeat
+timeout is 2m. Diagnose it from the Timeline tab in Temporal — a
+`TIMEOUT_TYPE_HEARTBEAT` whose activity duration is far below the start-to-close
+timeout is this, not a slow agent.
 
 The furthest-along variant is a review that clones, reviews and parses, then
 fails the *last* Activity on `GitHub API returned 403 for POST
@@ -576,3 +626,12 @@ Expect one `workflow` and one `activity` poller. Zero pollers means the webhook 
   loop guard this workflow id shape exists for).
 - `403` on push = Contents permission not bumped or App not installed on the target repo.
 - Allowlist violation in logs = the distiller touched files it must not (the push never happened — inspect, adjust prompt, re-drive).
+- `distillAndPropose` timing out mid-target. `resolveTargets` yields at most two targets
+  (agent-setup, plus the source repo when any lesson is `REPO_SPECIFIC`) and walks them
+  **serially** in one Activity call, so the Activity's start-to-close budget is
+  `2 * distill.timeout` plus the clone/push/PR-open work around each. That budget was 20m
+  against a 30m worst case — a second target using its full 15m would have been cut off, and
+  because the Activity is `setMaximumAttempts(1)` the first target's already-pushed PR would
+  have been lost from the outcome. Now 40m. Recompute it in
+  `ReviewFeedbackWorkflowImpl` whenever `FACTORY_FEEDBACK_DISTILL_TIMEOUT` or the target count
+  changes: it is workflow code, so it cannot read the configured value at runtime.

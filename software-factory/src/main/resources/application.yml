@@ -51,13 +51,26 @@ factory:
       # A 12-turn budget was exhausted by an ordinary 27-file change before the agent could
       # emit a verdict, which surfaced as a bare non-zero exit and no comment on the pull
       # request. Keep enough headroom that turns bound runaway loops, not real reviews.
-      max-turns: ${CLAUDE_MAX_TURNS:40}
-      timeout: ${CLAUDE_TIMEOUT:15m}
+      # Raised 40 -> 60 alongside max-changed-files 80 -> 250: turns, not wall clock, are what
+      # actually bound review cost, so lifting the file ceiling without lifting this one just
+      # moves the truncation from "exceeds changed-file limit" to a silent turn exhaustion.
+      max-turns: ${CLAUDE_MAX_TURNS:60}
+      # 25m, not 15m: a 250-file review reads far more than an 80-file one, on a Pi. The
+      # activity's start-to-close timeout in CodeReviewWorkflowImpl must stay comfortably
+      # above this — it also has to cover the clone, checkout and diff around the agent run.
+      timeout: ${CLAUDE_TIMEOUT:25m}
       # FACTORY_* is the current name; REVIEWER_* is accepted for one release so a
       # stale deploy .env cannot break the boot. Remove the fallbacks after that.
       workspace-root: ${FACTORY_WORKSPACE_ROOT:${REVIEWER_WORKSPACE_ROOT:${java.io.tmpdir}/software-factory}}
       max-diff-bytes: ${FACTORY_MAX_DIFF_BYTES:${REVIEWER_MAX_DIFF_BYTES:2097152}}
-      max-changed-files: ${FACTORY_MAX_CHANGED_FILES:${REVIEWER_MAX_CHANGED_FILES:80}}
+      # 250, not 80. 80 refused PR #106 outright (98 files) with "Review exceeds changed-file
+      # limit", which is what this repo's spec-driven changes routinely look like once specs,
+      # backend, frontend and docs move together. This guard exists to refuse a PR that is
+      # pointless to review — a regenerated lockfile, a vendored directory, a mass rename —
+      # and 250 still catches those while passing every real change seen so far.
+      # max-diff-bytes above is the tighter guard in practice: 2 MiB of diff already exceeds
+      # what the agent can hold, so raise that one only with a plan for chunking the diff.
+      max-changed-files: ${FACTORY_MAX_CHANGED_FILES:${REVIEWER_MAX_CHANGED_FILES:250}}
       prompt-version: v1
     api:
       trigger-token: ${FACTORY_TRIGGER_TOKEN:${REVIEWER_TRIGGER_TOKEN:}}

@@ -258,8 +258,13 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set CLAUDE_CODE_OAUTH_TOKEN in .env}
       CLAUDE_MODEL: ${CLAUDE_MODEL:-sonnet}
       CLAUDE_EFFORT: ${CLAUDE_EFFORT:-medium}
-      CLAUDE_MAX_TURNS: ${CLAUDE_MAX_TURNS:-40}
-      CLAUDE_TIMEOUT: ${CLAUDE_TIMEOUT:-15m}
+      # These three shadow the application.yml defaults, so they have to be bumped here too or
+      # prod keeps the old, tighter limits no matter what the image ships.
+      CLAUDE_MAX_TURNS: ${CLAUDE_MAX_TURNS:-60}
+      CLAUDE_TIMEOUT: ${CLAUDE_TIMEOUT:-25m}
+      # The ceiling that refused PR #106 (98 files) at its old value of 80. Declared here so it
+      # is tunable from .env without a rebuild, since it is the limit most likely to need it.
+      FACTORY_MAX_CHANGED_FILES: ${FACTORY_MAX_CHANGED_FILES:-250}
       FACTORY_FEEDBACK_ENABLED: ${FACTORY_FEEDBACK_ENABLED:-false}
       FACTORY_FEEDBACK_HARVEST_MODEL: ${FACTORY_FEEDBACK_HARVEST_MODEL:-haiku}
       FACTORY_FEEDBACK_DISTILL_MODEL: ${FACTORY_FEEDBACK_DISTILL_MODEL:-sonnet}

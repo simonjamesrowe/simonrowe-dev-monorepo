@@ -40,12 +40,27 @@ public class ReviewFeedbackWorkflowImpl implements ReviewFeedbackWorkflow {
       Workflow.newActivityStub(
           FeedbackActivities.class,
           ActivityOptions.newBuilder()
-              // Must comfortably exceed factory.feedback.distill.timeout (15m default) times the
-              // maximum number of targets distillAndPropose processes serially in one activity
-              // call (currently at most 2: agent-setup and the source repo). 20m is already tight
-              // against 2 * 15m = 30m — revisit this timeout if a third target type is ever added.
-              .setStartToCloseTimeout(Duration.ofMinutes(20))
-              .setHeartbeatTimeout(Duration.ofSeconds(30))
+              // Budget: factory.feedback.distill.timeout (15m default) * the maximum number of
+              // targets distillAndPropose walks serially in one activity call, plus the git and
+              // GitHub work around each one. resolveTargets yields at most 2 (agent-setup, and
+              // the source repo when any lesson is REPO_SPECIFIC), and distillOneTarget does a
+              // clone, a status, a commit-and-push and a PR open per target, so:
+              // 2 * 15m = 30m of agent time + ~10m for six git round trips and two PR opens on
+              // the Pi = 40m.
+              //
+              // This was 20m, which could not cover its own worst case — the previous comment
+              // said as much ("already tight against 2 * 15m = 30m") and shipped anyway. A
+              // second target that used its full 15m would have been cut off mid-distill with
+              // setMaximumAttempts(1), losing the first target's already-pushed PR from the
+              // outcome. Recompute this whenever distill.timeout or the target count changes;
+              // it cannot be derived at runtime because workflow code must stay deterministic
+              // across replay and so cannot read configuration.
+              .setStartToCloseTimeout(Duration.ofMinutes(40))
+              // Not 30s: ProcessRunner heartbeats only while a child process runs, and only
+              // every 10s, so the un-heartbeated gap is the run of git commands between two
+              // heartbeat calls — which is what timed out a code review on the Pi (PR #111).
+              // See CodeReviewWorkflowImpl for why 2m and not 1m.
+              .setHeartbeatTimeout(Duration.ofMinutes(2))
               .setRetryOptions(RetryOptions.newBuilder().setMaximumAttempts(1).build())
               .build());
 
