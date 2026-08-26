@@ -58,6 +58,7 @@ public abstract class AbstractIntegrationTest {
   @DynamicPropertySource
   static void configureProperties(final DynamicPropertyRegistry registry) {
     SharedMongoContainer.configureProperties(registry);
+    SharedKafkaContainer.configureProperties(registry);
   }
 
   /**
