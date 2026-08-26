@@ -69,17 +69,20 @@ already establishes for turning parts of this JVM on and off.
 - /var/run/docker.sock:/var/run/docker.sock
 - ${DOCKER_BINARY_PATH:-/usr/bin/docker}:/usr/local/bin/docker:ro
 - ${DOCKER_PLUGINS_PATH:-/usr/libexec/docker/cli-plugins}:/usr/local/lib/docker/cli-plugins:ro
-- ./docker-compose.prod.yml:/workspace/docker-compose.prod.yml:ro
-- ./.env:/workspace/.env:ro
-- ./scripts:/workspace/scripts:ro
-- ./config:/workspace/config:ro
+- .:/workspace/repo
 - ${GITHUB_APP_PRIVATE_KEY_PATH:?…}:/run/secrets/github-app.pem:ro
 - deploy-state:/var/run/deploy-state
 ```
 
-Every one of these except `deploy-state` is a mount the `backend` service holds
-today and is losing. The set is not growing; it is moving to a container with no
-ingress.
+The whole deploy directory, read-write, rather than the individual read-only file
+mounts the backend uses today — the deployer runs `git` in it, and the compose
+file, the nginx conf, the maintenance pages and the script all live there. That
+write access is the one genuinely new capability in this design; see
+[Configuration sync](#configuration-sync) for what fences it.
+
+Note it also picks up `.env` as part of the directory, which the deployer needs
+because `docker compose` interpolates it. That is not new access — it is the same
+file the backend mounts today and is losing.
 
 ### Why Temporal is the queue
 
@@ -148,7 +151,8 @@ retryable units and a rollback entry point:
 
 | Phase | Does |
 | --- | --- |
-| *(none)* | The full sequence, as today |
+| *(none)* | The full sequence, as today — **excluding `sync-config`** |
+| `sync-config` | Fast-forward the deploy directory to the target SHA, if the change is safe to apply |
 | `maintenance-on` / `maintenance-off` | Create/remove the flag file |
 | `pull` | Record the current image ID of each target service, then pull `IMAGE_TAG` and re-tag it to `:latest` |
 | `recreate` | `up -d --no-deps --pull never` each target, `restart nginx`, then a full `up -d` reconcile |
@@ -171,7 +175,8 @@ still set would fail every single deploy.
 
 So the flag-sensitive part is separated. The workflow runs:
 
-`maintenance-on` → `pull` → `recreate` → `verify` → `maintenance-off` → `verify-public`
+`sync-config` → `maintenance-on` → `pull` → `recreate` → `verify` →
+`maintenance-off` → `verify-public`
 
 `verify` covers what can be checked while the page is up: the container settle
 loop (which is where nearly all the waiting happens anyway, and which relies on
@@ -182,6 +187,11 @@ path, which re-asserts `maintenance-on` first.
 
 Bare `./scripts/restart-prod.sh` runs both, with no flag file present, which is
 exactly today's behaviour.
+
+**Bare invocation never runs `sync-config`.** A human typing `restart-prod.sh`
+after their own `git pull` must not have the script decide to move `HEAD` for
+them; today the script touches git not at all, and that stays true. It is
+opt-in — `restart-prod.sh sync-config <sha>` — and the deployer opts in.
 
 ### Pulling by SHA without touching the compose file
 
@@ -233,38 +243,112 @@ deploy rather than only in a runbook nobody re-reads. Deferring an automatic
 self-update is a deliberate choice to keep the first version's failure modes
 small; revisit it once the deployer has proven itself.
 
-## What an auto-deploy does not update
+## Configuration sync
 
-**The deployer ships images, not host-side configuration.** It never runs
-`git pull`. `docker-compose.prod.yml`, `config/nginx/*`, `frontend/nginx.conf`
-and `scripts/*` are read from the deploy directory on the Pi, and that directory
-only changes when a human pulls.
+`docker-compose.prod.yml`, `config/nginx/*`, `frontend/nginx.conf` and `scripts/*`
+are read from the deploy directory on the Pi, not from any image. A deploy that
+only ships images would therefore deploy a merge touching those files *half* way —
+silently, while reporting success. So the deployer fast-forwards the deploy
+directory as part of the deploy, and the feature is end-to-end.
 
-So a merge that touches only Java, TypeScript or a Dockerfile deploys itself
-completely. A merge that touches compose, nginx or a script deploys *half* of
-itself — silently, and reporting success. This very feature is an example: the
-maintenance-page nginx conf and the `deployer` service definition have to be on
-the Pi via `git pull` before any of this works at all.
+This is the one part of the design that mutates the host, so it is fenced.
 
-Two consequences worth being explicit about:
+### The `sync-config` phase
 
-- **Divergence is silent.** Nothing detects that the running compose file is
-  behind `main`. The mitigation is a check in `verify`: compare the deployed SHA
-  against the SHA of the last commit that touched the host-side paths, and if the
-  host is behind, say so in the run record and on the commit comment. It does not
-  fail the deploy — it just stops the divergence being invisible.
-- **A pending `git pull` gets applied by surprise.** The `recreate` phase's full
-  `up -d` reconcile evaluates the compose file as it is on disk. If someone pulled
-  a compose change and did not deploy it, the next auto-deploy applies it along
-  with the images — potentially recreating containers nobody expected. That is
-  already true of `monitor-prod.sh` and of any manual `up -d`; automating the
-  trigger makes it more likely to be hit.
+Runs **first**, before `pull`, so every later phase uses the newly-synced compose
+file and script:
 
-Having the deployer `git pull --ff-only` would close this, and is deliberately
-left out of the first version: it turns the deployer into something that mutates
-the deploy directory, and a compose change arriving unreviewed-on-the-box can
-recreate the whole stack — including Mongo and Elasticsearch — in one step. That
-deserves its own decision rather than being smuggled in here.
+1. Record `git rev-parse HEAD` — the rollback target.
+2. Refuse if any *tracked* file is modified (`git status --porcelain`, ignoring
+   untracked and ignored paths, so a hand-edited `.env` is fine). A dirty tree
+   means someone is working on the box; the deploy continues with images only and
+   says so.
+3. `git fetch https://github.com/simonjamesrowe/simonrowe-dev-monorepo.git main`.
+   The repository is public, so this needs **no credential and no push access** —
+   an anonymous read-only fetch. The URL is pinned in configuration rather than
+   taken from the checkout's remote, so a tampered remote cannot redirect it.
+4. Assert the target SHA is an ancestor of `FETCH_HEAD`. This is what makes the
+   operation safe: the working tree can only ever move to a commit that is
+   genuinely on `origin/main`.
+5. Decide whether the change is safe to apply (below).
+6. `git merge --ff-only <sha>`.
+
+**It fast-forwards to the deployed SHA, not to the tip of `main`.** `git pull`
+would take whatever `main` points at now, which may be a newer commit whose images
+do not exist yet — config and images have to come from the same commit or the
+deploy is a mix of two.
+
+### The recreate allowlist
+
+A compose change can recreate any service, and some of them must never be
+recreated by a robot. Recreating `dependencytrack-apiserver` crash-loops
+Dependency-Track unless its KEK comes from env; `langfuse-clickhouse` carries a
+pinned image and a `CLICKHOUSE_DISABLE_LAZY_MATERIALIZATION` workaround;
+recreating `pinggy` can collide with its own still-live tunnel, since one
+`PINGGY_TOKEN` allows exactly one; and `mongodb`, `elasticsearch` and `kafka` are
+the data.
+
+So the deployer works from an **allowlist of services it may recreate**, not a
+denylist of ones it may not:
+
+```
+backend, frontend, software-factory, nginx, alloy, searxng,
+temporal-ui, dependencytrack-frontend
+```
+
+An allowlist is the fail-safe direction: a service added to compose next year is
+held for a human by default rather than silently recreated by the first deploy
+that touches it. Widening it is a one-line env change once a service has earned
+it. `deployer` is deliberately absent — it excludes itself.
+
+This is also what keeps the `recreate` phase's full `up -d` reconcile safe. The
+reconcile evaluates the compose file as it is on disk and can therefore recreate
+anything — but `sync-config` only moves `HEAD` when every affected service is
+allowlisted, so by the time the reconcile runs there is nothing outside the
+allowlist for it to change.
+
+### Deciding before committing
+
+The affected services are computed **without moving `HEAD`**:
+
+```bash
+git show <sha>:docker-compose.prod.yml > /tmp/next.yml
+docker compose -f /tmp/next.yml config --hash='*'   # vs. the same on the current file
+```
+
+`docker compose config --hash='*'` prints a per-service configuration hash, so
+diffing the two lists gives exactly the set of services the change affects, plus
+any service that does not exist yet.
+
+If that set contains anything outside the allowlist, **the fast-forward does not
+happen at all.** The deploy proceeds with images only, and the run record and
+commit comment name the held-back services and the command to apply them by hand.
+
+Deciding first and moving `HEAD` second is the whole point. If it fast-forwarded
+and then declined to recreate, the deploy directory would be left ahead of what is
+running — and `monitor-prod.sh`'s next bare `up -d` would apply the held-back
+change within the minute, which is precisely the surprise this is meant to
+prevent.
+
+### Consequences worth knowing
+
+- **The deploy directory is mounted `rw`.** Not a privilege escalation — the
+  deployer already holds the Docker socket, which is root on the host — but it is
+  a wider blast radius for a bug. `--ff-only` plus the ancestor assertion plus the
+  clean-tree check bound it to "some commit on `origin/main`".
+- **`.env` is never synced.** It is not in the repository; it comes from
+  `~/workspace/simonjamesrowe/env`. A change needing a new variable still needs a
+  human, and `sync-config` reports when the new compose file references a variable
+  the current `.env` does not define — which would otherwise fail every subsequent
+  `docker compose` command on the box.
+- **A phase can rewrite the script running the next phase.** Each phase is a
+  separate `bash scripts/restart-prod.sh <phase>` process, so phases after
+  `sync-config` pick up the new script automatically, and the process already
+  running is unaffected because git replaces files by rename rather than in place.
+  This is a property to preserve deliberately, not an accident: it is why
+  `sync-config` is its own phase rather than a step inside another one.
+
+### The nginx restart gap
 
 ### The nginx restart gap
 
@@ -279,13 +363,21 @@ proxy container to fix.
 On a failure in `verify` or `verify-public`:
 
 0. `maintenance-on` — re-asserted, since `verify-public` runs with the page down
-1. `rollback` — re-tag `:latest` back to the image IDs recorded before the pull,
+1. `sync-config --to <previous-sha>` — `git reset --hard` back to the SHA recorded
+   at the start, so the compose file and the script return to the known-good
+   commit. Skipped if `sync-config` declined to move `HEAD` in the first place.
+2. `rollback` — re-tag `:latest` back to the image IDs recorded before the pull,
    recreate with `--pull never`
-2. `triage` — a Claude call with the failing container logs, `docker compose ps`
+3. `verify` — the rollback is verified the same way the deploy was
+4. `triage` — a Claude call with the failing container logs, `docker compose ps`
    output and the commit range, producing a written diagnosis
-3. `report` — a GitHub issue plus a commit comment on the deployed SHA
-4. Maintenance page comes down if the rollback verified clean; **it stays up if
+5. `report` — a GitHub issue plus a commit comment on the deployed SHA
+6. Maintenance page comes down if the rollback verified clean; **it stays up if
    the rollback also failed**, which is the correct outcome
+
+Because step 1 restores the previous commit, the rollback runs the *previous*
+version of `restart-prod.sh` — which matters when the thing that broke the deploy
+was a change to the script itself.
 
 The agent gets no `Bash` tool. It is handed captured output and asked to explain
 it, exactly as `cvefix` hands over Dependency-Track findings. It never touches
@@ -416,8 +508,12 @@ New on the `deployer` compose service, and nothing else:
 | `FACTORY_DEPLOY_ENABLED` | `false` | Registers the `deploy` worker. Off by default so merging this change deploys nothing until an operator opts in. |
 | `FACTORY_DEPLOY_COMPOSE_FILE` | `/workspace/docker-compose.prod.yml` | |
 | `FACTORY_DEPLOY_SCRIPT` | `/workspace/scripts/restart-prod.sh` | |
-| `FACTORY_DEPLOY_SERVICES` | `backend,frontend,software-factory` | Tunable without a rebuild, like `FACTORY_MAX_CHANGED_FILES`. |
+| `FACTORY_DEPLOY_SERVICES` | `backend,frontend,software-factory` | The images to pull. Tunable without a rebuild, like `FACTORY_MAX_CHANGED_FILES`. |
 | `FACTORY_DEPLOY_ROLLBACK_ENABLED` | `true` | An escape hatch for the case where rollback itself is the problem. |
+| `FACTORY_DEPLOY_SYNC_CONFIG` | `true` | Turns the git fast-forward off without disabling the whole deployer, leaving images-only deploys. |
+| `FACTORY_DEPLOY_REPO_DIR` | `/workspace/repo` | |
+| `FACTORY_DEPLOY_REPO_URL` | `https://github.com/simonjamesrowe/simonrowe-dev-monorepo.git` | Pinned rather than read from the checkout's remote. |
+| `FACTORY_DEPLOY_RECREATABLE` | the eight allowlisted services | Widening it is a config change, not a code change. |
 
 `software-factory` gains only `FACTORY_DEPLOY_TRIGGER_ENABLED` (default `false`),
 gating whether it starts workflows from `workflow_run`. Deliberately separate: the
@@ -447,9 +543,13 @@ Rollout, in order, because the order matters:
    the `deploy` task queue — a container can be `healthy` with no poller
    registered, in which case nothing ever deploys. That failure mode is already
    documented for the `code-review` queue and applies identically here.
-6. Trigger a deploy manually from the Temporal UI, on a SHA already in production,
-   so the run is a no-op that still exercises every phase.
+6. Trigger a deploy manually from the Temporal UI, on the SHA already in
+   production, so `sync-config` is a no-op fast-forward and the run exercises
+   every phase without changing anything.
 7. Only then `FACTORY_DEPLOY_TRIGGER_ENABLED=true` on `software-factory`.
+
+Step 2 is a one-off: from here on the deployer does its own fast-forwarding. It is
+needed this once because the `deployer` service definition cannot deploy itself.
 
 ## Testing
 
@@ -459,7 +559,13 @@ Rollout, in order, because the order matters:
 - `DeployWorkflowTest` — Temporal test environment, activities mocked: happy
   path; verify-fails-then-rollback-succeeds; verify-fails-and-rollback-fails
   (asserting the maintenance flag is **not** cleared); activity retry
-  idempotency; coalescing two signals into one deploy.
+  idempotency; coalescing two signals into one deploy; a config sync declined for
+  a non-allowlisted service still deploying images and reporting.
+- `sync-config` against a scratch clone, which is where the real risk is: refuses
+  a dirty tree; refuses a SHA not on `origin/main`; fast-forwards to the target
+  SHA rather than the branch tip when the tip is newer; leaves `HEAD` untouched
+  when the compose diff hits a non-allowlisted service; restores the recorded SHA
+  on rollback. `git` is already in the image, so this needs no new dependency.
 - Phase-level shell coverage of `restart-prod.sh` under `DRY_RUN=1` with a
   throwaway state dir. This is not optional: every remediation path shells out to
   `docker compose`, so merely running it performs real restarts. The same warning
@@ -482,9 +588,13 @@ Rollout, in order, because the order matters:
   automatic rollback and a maintenance page when verification fails anyway.
 - **A fast follow-up merge gets no deploy run of its own**, absorbed by
   coalescing.
-- **Host-side config still needs a human `git pull`**, so a merge touching
-  compose, nginx or a script half-deploys. Surfaced rather than prevented, per
-  above.
+- **The deployer writes to the deploy directory.** Bounded to commits on
+  `origin/main` by `--ff-only` plus an ancestor assertion plus a clean-tree check,
+  and it is not a privilege escalation over the socket it already holds.
+- **A compose change touching a non-allowlisted service is not deployed at all**
+  — reported, with the manual command, rather than half-applied.
+- **`.env` is never synced**, so a change needing a new variable still needs a
+  human.
 - **A couple of seconds with nothing serving** while nginx restarts.
 - **`FACTORY_DEPLOY_ENABLED` defaults off**, so merging this changes nothing in
   production until someone turns it on. That is intentional and mirrors
