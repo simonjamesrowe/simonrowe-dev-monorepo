@@ -14,6 +14,9 @@ const SEARCH_ENDPOINT = `${API_BASE_URL}/api/search/blogs`
 const FALLBACK_MESSAGE = 'Unable to load blog data.'
 const NARRATION_FALLBACK_MESSAGE = 'Unable to load narration.'
 
+/** Same shape as the summary API's; a callback so the caller supplies the Auth0 hook. */
+export type GetAccessToken = () => Promise<string>
+
 interface NarrationStatusOptions {
   afterVersion?: number
   waitSeconds?: number
@@ -80,16 +83,24 @@ export async function fetchBlogNarrationStatus(
  * idempotent, but avoiding a client retry also keeps ambiguous network outcomes
  * visible. A 503 is part of the narration contract and carries an UNAVAILABLE
  * response, so it must not be reduced to a generic thrown error.
+ *
+ * Authenticated. This POST was public until the listing pages gained a Listen control on
+ * every card: a text-to-speech render draws on the same monthly character budget as summary
+ * narration, so it needs a session from every surface. Mirrors `requestSummaryNarration`.
+ * The read next door stays public.
  */
 export async function requestBlogNarration(
+  getAccessToken: GetAccessToken,
   blogId: string,
   signal?: AbortSignal,
 ): Promise<BlogNarrationResponse> {
+  const token = await getAccessToken()
+
   let response: Response
   try {
     response = await fetch(`${BLOGS_ENDPOINT}/${encodeURIComponent(blogId)}/narration`, {
       method: 'POST',
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
       signal,
     })
   } catch (error) {

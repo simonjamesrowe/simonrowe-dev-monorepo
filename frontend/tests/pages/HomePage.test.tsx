@@ -55,6 +55,8 @@ vi.mock('../../src/hooks/useTour', () => ({
 import { DrawerProvider } from '../../src/hooks/useDrawer'
 import { fetchLatestBlogs } from '../../src/services/blogApi'
 import { fetchJobs } from '../../src/services/jobsApi'
+import { NarrationAudioStub } from '../testUtils/NarrationAudioStub'
+import { narrationAudioStub } from '../testUtils/narrationAudioValue'
 
 const profile: Profile = {
   name: 'Simon Rowe',
@@ -134,9 +136,11 @@ function setMatchMedia(matches: boolean) {
 function renderHomePage() {
   return render(
     <MemoryRouter>
-      <DrawerProvider>
-        <HomePage />
-      </DrawerProvider>
+      <NarrationAudioStub value={narrationAudioStub()}>
+        <DrawerProvider>
+          <HomePage />
+        </DrawerProvider>
+      </NarrationAudioStub>
     </MemoryRouter>,
   )
 }
@@ -144,12 +148,14 @@ function renderHomePage() {
 function renderLandingShell() {
   return render(
     <MemoryRouter>
-      <ThemeProvider>
-        <DrawerProvider>
-          <TopNav />
-          <HomePage />
-        </DrawerProvider>
-      </ThemeProvider>
+      <NarrationAudioStub value={narrationAudioStub()}>
+        <ThemeProvider>
+          <DrawerProvider>
+            <TopNav />
+            <HomePage />
+          </DrawerProvider>
+        </ThemeProvider>
+      </NarrationAudioStub>
     </MemoryRouter>,
   )
 }

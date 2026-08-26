@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 
+import { ListenButton } from '../narration/ListenButton'
 import type { BlogSummary } from '../../types/blog'
 
 interface ArticleCardProps {
@@ -31,9 +32,20 @@ export function ArticleCard({ blog }: ArticleCardProps) {
         </div>
         <h3 className="title-lg article-card__title">{blog.title}</h3>
         <p className="article-card__excerpt">{blog.shortDescription}</p>
-        <Link className="article-card__link" to={`/blogs/${blog.id}`}>
-          Read post
-        </Link>
+        {/* Shared with the home page's Featured Writing, which inherits the listen control
+            deliberately: the most prominent posts there should not be the ones you cannot
+            play. */}
+        <div className="article-card__actions">
+          <Link className="article-card__link" to={`/blogs/${blog.id}`}>
+            Read post
+          </Link>
+          <ListenButton
+            contentId={blog.id}
+            contentType="BLOG"
+            href={`/blogs/${blog.id}`}
+            title={blog.title}
+          />
+        </div>
       </div>
     </article>
   )

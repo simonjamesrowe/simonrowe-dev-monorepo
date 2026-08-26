@@ -4,6 +4,8 @@ import { Calendar, ChevronDown, ExternalLink, Heart, MapPin } from 'lucide-react
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { FavouriteButton } from '../components/common/FavouriteButton'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
+import { ListenButton } from '../components/narration/ListenButton'
+import { useNarrationAudio } from '../components/narration/useNarrationAudio'
 import { NewsSummaryDrawer } from '../components/news/NewsSummaryDrawer'
 import { SummaryNarration } from '../components/news/SummaryNarration'
 import { SummaryButton } from '../components/news/SummaryButton'
@@ -68,6 +70,18 @@ export function NewsEventsPage() {
   // The article whose summary drawer is open, or null. Held as an id rather than the
   // article object so a reload of the list cannot leave a stale copy on screen.
   const [summaryArticleId, setSummaryArticleId] = useState<string | null>(null)
+
+  const { lastCompleted } = useNarrationAudio()
+
+  // The docked player's Listen chain can generate a summary as an intermediate step, and it
+  // sits above this page in the tree so it cannot write to `useArticleSummaries` itself. It
+  // publishes what finished; this relays it, so the card flips from "Summarise" to "Read
+  // summary" without refetching the whole ids set.
+  useEffect(() => {
+    if (lastCompleted?.contentType === 'ARTICLE_SUMMARY' && lastCompleted.summaryWasGenerated) {
+      summaries.noteSummarised(lastCompleted.contentId)
+    }
+  }, [lastCompleted, summaries])
 
   // 'all' and 'events' are local-only view modes; only a real source name is a query
   // parameter, so the backend does the filtering and paging continues within a source.
@@ -410,6 +424,13 @@ export function NewsEventsPage() {
                     </div>
                   )}
                   <div className="feed__card-actions">
+                    <ListenButton
+                      contentId={article.id}
+                      contentType="ARTICLE_SUMMARY"
+                      external
+                      href={article.originalUrl}
+                      title={article.title}
+                    />
                     <SummaryButton
                       articleTitle={article.title}
                       hasSummary={summaries.hasSummary(article.id)}
@@ -464,6 +485,13 @@ export function NewsEventsPage() {
                     )}
                   </div>
                   <div className="feed__card-actions">
+                    <ListenButton
+                      contentId={article.id}
+                      contentType="ARTICLE_SUMMARY"
+                      external
+                      href={article.originalUrl}
+                      title={article.title}
+                    />
                     <SummaryButton
                       articleTitle={article.title}
                       hasSummary={summaries.hasSummary(article.id)}

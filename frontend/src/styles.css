@@ -9707,3 +9707,288 @@ a:hover {
   padding-top: 1.5rem;
   border-top: 1px solid var(--color-border);
 }
+
+/* --- Listen from the listing: per-card control --- */
+
+/*
+ * Two resting states rather than two components. Cold cards keep a visible affordance on
+ * purpose: while narrations are sparse, a control that appears on an unpredictable subset of
+ * cards reads as broken.
+ */
+.listen-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.listen-button:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.listen-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.listen-button:disabled {
+  cursor: progress;
+  opacity: 0.75;
+  transform: none;
+}
+
+/* Audio exists: the duration is the reason to press it, so it gets primary weight. */
+.listen-button--ready {
+  background: var(--color-primary);
+  color: var(--surface-container-lowest);
+}
+
+/* Generation in flight for this item. */
+.listen-button--busy {
+  background: transparent;
+  border-color: var(--border-medium);
+  color: var(--color-text-muted);
+}
+
+/* No audio yet: an offer, not the card's primary action. */
+.listen-button--cold {
+  background: transparent;
+  border-color: var(--border-medium);
+  color: var(--color-text-muted);
+}
+
+.listen-button--cold:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.listen-button__spinner {
+  animation: spin 1s linear infinite;
+}
+
+/*
+ * News cards overlay their actions on the image, so both states need to read against a photo.
+ * `.feed__card-actions` already flexes with a 0.4rem gap — a third child needs no layout change.
+ */
+.feed__card-actions .listen-button--cold,
+.feed__card-actions .listen-button--busy {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: transparent;
+  color: #fff;
+}
+
+.feed__card-actions .listen-button--cold:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+}
+
+/* Blog cards had no actions row at all before this; both now get one. */
+.article-card__actions,
+.featured-article__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* --- Listen from the listing: the docked player bar --- */
+
+/*
+ * Reserve the bar's own height at the bottom of the page while it is on screen, so it never
+ * covers the footer or the last row of cards. Set by NarrationPlayerBar on <body>, because the
+ * bar renders inside the layout but has to reserve space in a container it does not own.
+ */
+body[data-narration-bar] .app-layout__main {
+  padding-bottom: 5.5rem;
+}
+
+@media (max-width: 640px) {
+  body[data-narration-bar] .app-layout__main {
+    padding-bottom: 4.5rem;
+  }
+}
+
+.narration-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  background: var(--color-panel);
+  border-top: 1px solid var(--color-border);
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.narration-bar__inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.65rem 1.25rem;
+}
+
+.narration-bar__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+
+.narration-bar__title {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.narration-bar__title:hover {
+  color: var(--color-primary);
+}
+
+/*
+ * Always in the DOM, even when empty: an aria-live region has to exist before the text it
+ * announces arrives, or the first stage change is silent.
+ */
+.narration-bar__status {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  min-height: 1rem;
+}
+
+.narration-bar__transport {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 2 1 20rem;
+}
+
+.narration-bar__play,
+.narration-bar__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--border-medium);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.narration-bar__play:hover,
+.narration-bar__dismiss:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.narration-bar__play:focus-visible,
+.narration-bar__dismiss:focus-visible,
+.narration-bar__seek:focus-visible,
+.narration-bar__speed:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.narration-bar__seek {
+  flex: 1 1 auto;
+  min-width: 4rem;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.narration-bar__time {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.narration-bar__speed-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.narration-bar__speed {
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid var(--border-medium);
+  border-radius: 0.35rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.narration-bar__spinner {
+  animation: spin 1s linear infinite;
+  color: var(--color-text-muted);
+}
+
+.narration-bar__feedback {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.25rem 0.65rem;
+}
+
+.narration-bar__error,
+.narration-bar__message {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.narration-bar__error {
+  color: var(--color-error, #ff8a80);
+}
+
+.narration-bar__message {
+  color: var(--color-text-muted);
+}
+
+.narration-bar__action {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.65rem;
+}
+
+/*
+ * Phone widths keep the title, play/pause and the progress line. The speed control is dropped
+ * in the component, not hidden here, so it leaves the tab order too.
+ */
+@media (max-width: 640px) {
+  .narration-bar__inner {
+    gap: 0.6rem;
+    padding: 0.5rem 0.9rem;
+  }
+
+  .narration-bar__time {
+    display: none;
+  }
+
+  .narration-bar__transport {
+    flex: 1 1 auto;
+    gap: 0.5rem;
+  }
+}

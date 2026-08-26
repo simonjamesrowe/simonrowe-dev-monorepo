@@ -21,10 +21,27 @@ narration. See `specs/034-article-summary-audio/` for the spec, plan and contrac
 | `GET /api/news/summaries/ids` | public | Article ids with a `READY` summary |
 | `POST /api/news/{id}/summary/narration` | any valid JWT | Queues TTS |
 | `GET /api/news/{id}/summary/narration` | public | Same long-poll contract as blog narration |
+| `POST /api/blogs/{id}/narration` | any valid JWT | Queues TTS. **Authenticated since 035-listen-from-listing** — it was public before that |
+| `GET /api/blogs/{id}/narration` | public | Rate-limited 10/min per IP on `GET` as well as `POST` |
+| `GET /api/narrations/ready?contentType=BLOG\|ARTICLE_SUMMARY` | public | Bulk `[{contentId, audioUrl, durationSeconds}]`, newest `READY` per content id. For `ARTICLE_SUMMARY` the `contentId` is the **article** id |
 
 Reads are public because the artefact is globally shared; writes need a session because
-they cost money. **`POST /api/blogs/{id}/narration` is still public** — that asymmetry is
-deliberate and `SecurityConfigTest` asserts it, so do not "harmonise" the two.
+they cost money.
+
+**The blog/summary narration asymmetry is gone.** `POST /api/blogs/{id}/narration` was public
+for most of its life, and this runbook used to record that as deliberate. It stopped being
+defensible when the listing pages gained a Listen control on every card: a render draws on the
+same 1,000,000 chars/month budget as summary narration, so gating only the listing would have
+left the identical post anonymously narratable from its detail page. Both writes now require any
+valid JWT (no admin role), and `SecurityConfigTest` asserts the new posture — restoring the old
+behaviour means changing that test on purpose.
+
+**`GET /api/narrations/ready` is a necessity, not an optimisation.** `RateLimitInterceptor`'s
+POST-only exemption lives in the summary branch only, so `/api/blogs/*/narration` is metered at
+10/min per IP for `GET` too. A listing page whose cards each polled their own narration status
+would exhaust that bucket on first render and then 429 the reader's actual click. The bulk path
+deliberately does not match `/api/blogs/*/narration`, so a page load spends nothing from it —
+do not move it under `/api/blogs/…`.
 
 ## Failure codes
 

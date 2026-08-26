@@ -1,11 +1,11 @@
 import { Headphones, Loader2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 
-import { API_BASE_URL } from '../../config/api'
+import { formatApproximateDuration } from './formatDuration'
+import { narrationMediaUrl } from './narrationMedia'
+import { PLAYBACK_SPEEDS } from './playbackSpeeds'
 import { isPending, type NarrationState } from './useNarration'
 import type { BlogNarrationResponse } from '../../types/blog'
-
-const PLAYBACK_SPEEDS = [0.75, 1, 1.25, 1.5, 2]
 
 interface NarrationPanelProps {
   state: NarrationState
@@ -22,17 +22,6 @@ interface NarrationPanelProps {
   /** Copy for the pending state. */
   pendingText?: string
   className?: string
-}
-
-function mediaUrl(path: string): string {
-  return path.startsWith('http://') || path.startsWith('https://')
-    ? path
-    : `${API_BASE_URL}${path}`
-}
-
-function formatApproximateDuration(durationSeconds: number): string {
-  const minutes = Math.max(1, Math.round(durationSeconds / 60))
-  return `About ${minutes} min`
 }
 
 /**
@@ -132,7 +121,7 @@ export function NarrationPanel({
           onPlay={handleAudioPlay}
           preload="metadata"
           ref={audioRef}
-          src={mediaUrl(narration.audioUrl)}
+          src={narrationMediaUrl(narration.audioUrl)}
         >
           Your browser does not support audio playback.
         </audio>

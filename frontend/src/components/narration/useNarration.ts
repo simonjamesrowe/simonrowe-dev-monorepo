@@ -2,14 +2,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { BlogNarrationResponse } from '../../types/blog'
 
-/** Matches the server-side @Max(25) bound on waitSeconds. */
-const LONG_POLL_SECONDS = 25
+/**
+ * Matches the server-side @Max(25) bound on waitSeconds.
+ *
+ * Exported so `NarrationAudioProvider`'s generation chain reuses this policy rather than
+ * inventing a second one. It needs its own loop — a per-track controller, a two-step
+ * summary-then-narration chain and a dismissed-track check between iterations — but it must not
+ * disagree with this file about how long a poll waits or when to give up.
+ */
+export const LONG_POLL_SECONDS = 25
 
 /**
  * Enough long-polls to cover a render that has badly overrun. Past this the panel offers a
  * manual re-check rather than holding a request open forever.
  */
-const MAX_LONG_POLLS = 4
+export const MAX_LONG_POLLS = 4
 
 export interface NarrationTransport {
   /** Reads the current state, optionally long-polling for a change. */

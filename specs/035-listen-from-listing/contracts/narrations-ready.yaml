@@ -1,0 +1,226 @@
+openapi: 3.0.3
+info:
+  title: Listen from the listing — narration contracts
+  version: "035"
+  description: >
+    One new endpoint (GET /api/narrations/ready) and one changed security requirement
+    (POST /api/blogs/{blogId}/narration becomes authenticated). Every other narration and
+    summary endpoint is unchanged and is included below only where its security posture is
+    part of this feature's contract.
+
+servers:
+  - url: https://api.simonrowe.dev
+    description: Production
+  - url: http://localhost:8080
+    description: Local
+
+paths:
+  /api/narrations/ready:
+    get:
+      operationId: listReadyNarrations
+      summary: Every item of a content type that currently has ready audio.
+      description: >
+        Public, no authentication — generated audio is globally shared, the same reasoning as
+        GET /api/news/summaries/ids and GET /api/favourites/{type}/ids.
+
+        Returns at most one entry per contentId: the newest READY narration. Narrations are
+        fingerprint-addressed, so one content id can own several rows over its lifetime; STALE,
+        FAILED, UNCERTAIN, QUEUED and PROCESSING rows are never returned.
+
+        This path deliberately does not match the RateLimitInterceptor's
+        /api/blogs/{id}/narration pattern, so loading a listing page does not spend from the
+        10/min-per-IP narration bucket. Per-card status polling would 429 on first render, which
+        is why this bulk read exists at all.
+
+        For contentType=ARTICLE_SUMMARY the contentId is the AGGREGATED ARTICLE id, not the
+        summary id — so a news listing keys straight off the ids it already holds.
+      parameters:
+        - name: contentType
+          in: query
+          required: true
+          description: What kind of content to list ready audio for.
+          schema:
+            $ref: '#/components/schemas/NarrationContentType'
+      responses:
+        '200':
+          description: >
+            The ready narrations, newest per content id. An empty array when nothing of this
+            content type has audio yet — not a 404.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReadyNarration'
+              examples:
+                blogs:
+                  summary: Two blog posts have audio
+                  value:
+                    - contentId: "68f1c0a2e4b0a91f2c3d4e5f"
+                      audioUrl: "/uploads/narrations/9a3f.../narration.mp3"
+                      durationSeconds: 734
+                    - contentId: "68f1c0a2e4b0a91f2c3d4e60"
+                      audioUrl: "/uploads/narrations/71bc.../narration.mp3"
+                      durationSeconds: 412
+                empty:
+                  summary: Nothing narrated yet
+                  value: []
+        '400':
+          description: contentType missing, or not a recognised NarrationContentType value.
+        '429':
+          description: >
+            Rate limited. This path falls into the general (chat) bucket, not the narration
+            bucket — reaching this from a normal page load would be a bug.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds to wait.
+
+  /api/blogs/{blogId}/narration:
+    parameters:
+      - name: blogId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getBlogNarrationStatus
+      summary: Current blog narration state. UNCHANGED — still public.
+      description: >
+        Public. Reads are free and the artefact is globally shared. Rate limited at 10/min per
+        IP (the RateLimitInterceptor's POST-only exemption applies to the summary branch only,
+        not to this one) — which is why listing pages use /api/narrations/ready instead.
+      parameters:
+        - name: afterVersion
+          in: query
+          required: false
+          schema: { type: integer, format: int64 }
+        - name: waitSeconds
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, maximum: 25, default: 0 }
+      responses:
+        '200':
+          description: Current state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+        '404':
+          description: No such blog.
+    post:
+      operationId: requestBlogNarration
+      summary: Queue text-to-speech for a blog post. CHANGED — now requires a JWT.
+      description: >
+        **Behaviour change in this feature.** Previously public; now requires any valid JWT (no
+        admin role), matching POST /api/news/{id}/summary/narration.
+
+        Rationale: a text-to-speech render draws on the same monthly character budget as summary
+        narration, which has been authenticated since it shipped. Now that the blog listing
+        exposes generation on every card, gating only the new surface would leave the identical
+        post anonymously narratable from its detail page — the budget would still be drainable,
+        just from a different URL.
+
+        Consequences carried out as part of this change, not deferred:
+        BlogNarrationController's javadoc, SecurityConfigTest.blogNarrationPostRemainsPublic
+        (inverted), docs/runbooks/article-summaries.md, and the CLAUDE.md note — all four
+        currently record the public POST as deliberate and frozen.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: An existing ready narration was reused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+        '202':
+          description: Generation queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+        '401':
+          description: >
+            No or invalid JWT. **New in this feature** — this was previously a valid anonymous
+            request.
+        '404':
+          description: No such blog.
+        '429':
+          description: Rate limited (10/min per IP).
+          headers:
+            Retry-After:
+              schema: { type: integer }
+        '503':
+          description: >
+            UNAVAILABLE — part of the contract, not an error to collapse. Carries a
+            NarrationResponse, e.g. BUDGET_EXHAUSTED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Auth0 access token. Any valid JWT — no admin role required.
+
+  schemas:
+    NarrationContentType:
+      type: string
+      enum: [BLOG, ARTICLE_SUMMARY]
+      description: >
+        ARTICLE_FULL (narrating a third party's article body rather than our summary of it) is
+        documented on the backend enum as deliberately deferred. When it arrives, this endpoint
+        accepts it with no change.
+
+    ReadyNarration:
+      type: object
+      required: [contentId, audioUrl, durationSeconds]
+      properties:
+        contentId:
+          type: string
+          description: >
+            The blog id for BLOG; the AGGREGATED ARTICLE id for ARTICLE_SUMMARY (not the
+            summary id).
+          example: "68f1c0a2e4b0a91f2c3d4e5f"
+        audioUrl:
+          type: string
+          description: >
+            Site-relative path under /uploads/, served by the backend's ResourceHandlerRegistry.
+            Clients prefix API_BASE_URL.
+          example: "/uploads/narrations/9a3f8c.../narration.mp3"
+        durationSeconds:
+          type: integer
+          format: int64
+          description: Audio length in seconds. Rendered on the card as an approximate minute count.
+          example: 734
+
+    NarrationResponse:
+      type: object
+      description: >
+        The existing narration contract, unchanged. Included so the changed security posture
+        above can reference the body it returns.
+      required: [state, version, retryable, message]
+      properties:
+        state:
+          type: string
+          enum: [NOT_REQUESTED, QUEUED, PROCESSING, READY, FAILED, UNAVAILABLE, INELIGIBLE]
+        version:
+          type: integer
+          format: int64
+        audioUrl:
+          type: string
+          nullable: true
+          description: Present only when state is READY.
+        durationSeconds:
+          type: integer
+          format: int64
+          nullable: true
+          description: Present only when state is READY.
+        retryable:
+          type: boolean
+        message:
+          type: string
