@@ -6,12 +6,17 @@ import com.simonrowe.factory.codereview.api.ReviewAccepted;
 import com.simonrowe.factory.codereview.api.ReviewWorkflowService;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
+import com.simonrowe.factory.deploy.api.DeployAccepted;
+import com.simonrowe.factory.deploy.api.DeployWorkflowService;
+import com.simonrowe.factory.deploy.config.DeployProperties;
+import com.simonrowe.factory.deploy.domain.DeployRequest;
 import com.simonrowe.factory.feedback.api.FeedbackAccepted;
 import com.simonrowe.factory.feedback.api.FeedbackWorkflowService;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.feedback.domain.FeedbackRequest;
 import java.io.IOException;
 import java.util.Set;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,6 +39,15 @@ public class GitHubWebhookController {
   private final ObjectMapper objectMapper;
   private final FeedbackWorkflowService feedbackWorkflowService;
   private final FeedbackProperties feedbackProperties;
+  private final DeployProperties deployProperties;
+
+  /**
+   * An {@link ObjectProvider} because {@code DeployWorkflowService} is gated on {@code
+   * factory.deploy.trigger-enabled} and is therefore absent by default. A hard dependency would
+   * make this controller — and with it the code-review webhook — fail to start whenever deploy
+   * triggering is off, which is the opposite of the independence the two flags exist to give.
+   */
+  private final ObjectProvider<DeployWorkflowService> deployWorkflowService;
 
   public GitHubWebhookController(
       final CodeReviewProperties properties,
@@ -41,13 +55,17 @@ public class GitHubWebhookController {
       final ReviewWorkflowService workflowService,
       final ObjectMapper objectMapper,
       final FeedbackWorkflowService feedbackWorkflowService,
-      final FeedbackProperties feedbackProperties) {
+      final FeedbackProperties feedbackProperties,
+      final DeployProperties deployProperties,
+      final ObjectProvider<DeployWorkflowService> deployWorkflowService) {
     this.properties = properties;
     this.signatureVerifier = signatureVerifier;
     this.workflowService = workflowService;
     this.objectMapper = objectMapper;
     this.feedbackWorkflowService = feedbackWorkflowService;
     this.feedbackProperties = feedbackProperties;
+    this.deployProperties = deployProperties;
+    this.deployWorkflowService = deployWorkflowService;
   }
 
   @PostMapping
@@ -58,6 +76,13 @@ public class GitHubWebhookController {
       @RequestBody final byte[] body) {
     if (!signatureVerifier.isValid(body, signature, properties.github().webhookSecret())) {
       return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new WebhookResponse("invalid"));
+    }
+    if ("workflow_run".equals(event)) {
+      try {
+        return handleWorkflowRun(readPayload(body));
+      } catch (IllegalArgumentException exception) {
+        return ResponseEntity.badRequest().body(new WebhookResponse("malformed"));
+      }
     }
     if (!"pull_request".equals(event)) {
       return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
@@ -97,6 +122,49 @@ public class GitHubWebhookController {
                 headSha,
                 installationId > 0 ? installationId : null,
                 true));
+    return ResponseEntity.accepted().body(accepted);
+  }
+
+  /**
+   * Turns a completed {@code Publish} build on {@code main} into a production deploy.
+   *
+   * <p><b>Why {@code workflow_run} and not {@code pull_request closed}.</b> Merge fires
+   * {@code pull_request closed} immediately, while {@code Publish} then spends minutes building
+   * three ARM images. Deploying on merge would pull the <em>previous</em> {@code :latest} and
+   * report success — the worst available failure mode, because it looks like it worked.
+   * {@code workflow_run} completion is the only event that means the images exist.
+   *
+   * <p>Anything that fails a condition gets the existing {@code 202 ignored} rather than an error:
+   * GitHub retries non-2xx, and there is nothing here worth retrying. Note that {@code
+   * workflow_run} also arrives with {@code action: requested} and {@code action: in_progress},
+   * whose {@code conclusion} is null — the conclusion check alone filters those, so there is no
+   * need to test {@code action} as well and no second condition to keep in step with GitHub.
+   */
+  private ResponseEntity<?> handleWorkflowRun(final JsonNode payload) {
+    DeployWorkflowService service = deployWorkflowService.getIfAvailable();
+    if (!deployProperties.triggerEnabled() || service == null) {
+      return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
+    }
+
+    JsonNode workflowRun = payload.path("workflow_run");
+    String owner = payload.path("repository").path("owner").path("login").asText();
+    String repository = payload.path("repository").path("name").asText();
+    String headSha = workflowRun.path("head_sha").asText();
+
+    if (!deployProperties.workflowName().equals(workflowRun.path("name").asText())
+        || !"success".equals(workflowRun.path("conclusion").asText())
+        || !deployProperties.branch().equals(workflowRun.path("head_branch").asText())
+        || !deployProperties.slug().equals(owner + "/" + repository)
+        || headSha.isBlank()) {
+      return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
+    }
+
+    long installationId = payload.path("installation").path("id").asLong();
+    DeployAccepted accepted =
+        service.start(
+            headSha,
+            DeployRequest.TRIGGER_WEBHOOK,
+            installationId > 0 ? installationId : null);
     return ResponseEntity.accepted().body(accepted);
   }
 

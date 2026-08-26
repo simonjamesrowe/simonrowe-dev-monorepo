@@ -1,0 +1,149 @@
+<!doctype html>
+<!--
+  Served for simonrowe.dev / www.simonrowe.dev / api.simonrowe.dev when the
+  upstream is down and NO deploy is in progress — i.e. in place of nginx's raw
+  502/504 page (see config/nginx/nginx-proxy.conf).
+
+  This is the half of the pair that earns its keep outside deploys: an unplanned
+  outage previously showed a bare nginx error, which reads as "this site is
+  broken and nobody knows" rather than "something is down and it is being fixed".
+
+  Same constraint as maintenance.html, and it matters more here: EVERYTHING IS
+  INLINE AND NOTHING IS FETCHED. By definition an upstream is unreachable when
+  this renders, so an external stylesheet, font or image would be the second
+  thing to fail on the page whose whole job is to fail gracefully.
+
+  Deliberately worded differently from maintenance.html. A visitor who sees this
+  is not waiting out a planned couple of minutes, and telling them they are would
+  be a lie the page cannot keep.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Slower than the maintenance page's 30s: an unplanned outage is not a
+         couple of minutes, and hammering a struggling upstream does not help. -->
+    <meta http-equiv="refresh" content="60" />
+    <meta name="robots" content="noindex" />
+    <title>Temporarily unavailable — simonrowe.dev</title>
+    <style>
+      :root {
+        --surface: #0f131c;
+        --surface-container: #1c2029;
+        --primary: #77d1ff;
+        --on-surface: #dfe2ef;
+        --on-surface-muted: #97a0b5;
+        --outline: #2b3140;
+        /* Warmer than --primary, so the two pages are legibly different states
+           rather than the same page with different words. */
+        --warning: #f0b866;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        padding: 2rem 1.25rem;
+        background: var(--surface);
+        color: var(--on-surface);
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        font-size: 1rem;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 34rem;
+        padding: 2.5rem 2rem;
+        border: 1px solid var(--outline);
+        border-radius: 1rem;
+        background: var(--surface-container);
+        text-align: left;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        margin: 0 0 1.25rem;
+        color: var(--warning);
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .dot {
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 50%;
+        background: var(--warning);
+      }
+
+      h1 {
+        margin: 0 0 0.9rem;
+        font-family: "Space Grotesk", "Inter", -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        font-size: clamp(1.6rem, 5vw, 2.1rem);
+        font-weight: 600;
+        line-height: 1.2;
+        letter-spacing: -0.015em;
+      }
+
+      p {
+        margin: 0 0 1rem;
+        color: var(--on-surface-muted);
+      }
+
+      p:last-of-type {
+        margin-bottom: 0;
+      }
+
+      .footnote {
+        margin-top: 1.75rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--outline);
+        color: var(--on-surface-muted);
+        font-size: 0.85rem;
+      }
+
+      .footnote a {
+        color: var(--primary);
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+      }
+
+      .footnote a:hover,
+      .footnote a:focus-visible {
+        border-bottom-color: var(--primary);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <p class="eyebrow"><span class="dot"></span> Temporarily unavailable</p>
+      <h1>This part of the site is not responding</h1>
+      <p>
+        Something behind simonrowe.dev is down. This is not a planned update, and
+        it is being watched — a health monitor checks the site every minute and
+        restarts what it can on its own.
+      </p>
+      <p>This page reloads itself, so you can leave it open and come back.</p>
+      <p class="footnote">
+        If it is still like this in a while, you can reach me on
+        <a href="https://www.linkedin.com/in/simonjamesrowe/">LinkedIn</a>.
+      </p>
+    </main>
+  </body>
+</html>

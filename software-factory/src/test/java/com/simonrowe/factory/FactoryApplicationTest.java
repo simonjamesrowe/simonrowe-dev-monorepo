@@ -2,9 +2,15 @@ package com.simonrowe.factory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.simonrowe.factory.deploy.api.DeployWorkflowService;
+import com.simonrowe.factory.deploy.config.DeployTaskQueues;
+import com.simonrowe.factory.deploy.persistence.DeployIndexInitializer;
+import com.simonrowe.factory.deploy.workflow.DeployActivitiesImpl;
 import io.temporal.spring.boot.autoconfigure.template.WorkersTemplate;
+import io.temporal.worker.Worker;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -38,9 +44,34 @@ class FactoryApplicationTest {
   }
 
   @Autowired private WorkersTemplate workersTemplate;
+  @Autowired private ApplicationContext context;
 
   @Test
   void startsTheWebhookApiAndTheReviewWorkerInOneContext() {
     assertThat(workersTemplate.getWorkers()).isNotEmpty();
+  }
+
+  @Test
+  void startsWithEveryDeployFlagOffAndNothingThatCouldDeploy() {
+    // The default shape, and the one this feature ships in. Merging must change nothing in
+    // production until an operator opts in.
+    assertThat(context.getBeanNamesForType(DeployActivitiesImpl.class)).isEmpty();
+    assertThat(context.getBeanNamesForType(DeployWorkflowService.class)).isEmpty();
+
+    // And no deploy index is created. Same reason CveFixIndexInitializer is gated: an
+    // unreachable Mongo must not fail this context and take the webhook receiver and the
+    // code-review worker - neither of which needs Mongo - down with it.
+    assertThat(context.getBeanNamesForType(DeployIndexInitializer.class)).isEmpty();
+  }
+
+  @Test
+  void registersDeployWorkflowPollerEvenWithTheFlagsOff() {
+    // Not a bug, and worth pinning so it is not "fixed". @WorkflowImpl classpath scanning is
+    // unconditional, so this JVM does poll the deploy queue for workflow tasks. That is harmless:
+    // a workflow implementation only schedules activities, and the activity implementations are
+    // absent here (asserted above), so this JVM cannot execute a deploy step.
+    assertThat(workersTemplate.getWorkers())
+        .extracting(Worker::getTaskQueue)
+        .contains(DeployTaskQueues.DEPLOY);
   }
 }

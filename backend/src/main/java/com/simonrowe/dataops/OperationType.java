@@ -5,6 +5,5 @@ public enum OperationType {
   RESTORE,
   CLEAR,
   REBUILD_INDEX,
-  REDEPLOY,
   REEMBED_CONTENT
 }

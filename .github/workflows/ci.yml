@@ -153,6 +153,19 @@ jobs:
       - name: Build software factory container
         run: docker build -f Dockerfile.software-factory -t software-factory:test .
 
+      # The shell side of auto-deploy: restart-prod.sh's phases, sync-config against
+      # throwaway git clones, and the nginx maintenance/unavailable pages.
+      #
+      # In this job rather than a new one because it needs a Docker daemon (the nginx
+      # tests run a real nginx:alpine, and sync-config uses `docker compose config
+      # --hash`), and this job already has one for the image build above. A new job
+      # would cost a fresh runner and a cold Gradle cache for three bash files.
+      #
+      # run-tests.sh exports DRY_RUN=1 for every child, so no test can perform a real
+      # restart even if it forgets to set it.
+      - name: Run deploy shell tests
+        run: ./scripts/test/run-tests.sh
+
   # Static analysis for all three modules in one project. See
   # docs/runbooks/static-analysis.md.
   #

@@ -33,6 +33,17 @@ spring:
         # @ActivityImpl is never registered: the container is healthy, the schedule fires, and
         # nothing ever runs.
         - com.simonrowe.factory.cvefix.workflow
+        # Same for the deploy queue. Note what this does NOT gate: classpath scanning for
+        # @WorkflowImpl is unconditional (WorkersTemplate creates a worker for every task queue
+        # a discovered class names), and both `software-factory` and `deployer` run this image —
+        # so both register a deploy *workflow*-task poller. That is harmless: a workflow
+        # implementation is deterministic orchestration that only schedules activities.
+        #
+        # The executor gate is DeployActivitiesImpl's @ConditionalOnProperty on
+        # factory.deploy.enabled, which is true only on `deployer`. Only that container holds an
+        # implementation of any side-effecting step, which is what confines the Docker socket to
+        # the container with no ingress. See specs/036-auto-deploy-on-merge/research.md §11.
+        - com.simonrowe.factory.deploy.workflow
       register-activity-beans: true
 
 factory:
@@ -138,3 +149,57 @@ factory:
       # burn the whole repair budget on it and end CI_UNRESOLVED, blocking all later runs.
       advisory-checks:
         - evaluate
+  deploy:
+    # TWO flags, deliberately separate, both off. The receiver and the executor must be
+    # switchable independently so a broken deployer can be silenced without also silencing
+    # code review.
+    #
+    # `enabled` registers DeployActivitiesImpl. It is true only on the `deployer` service, and
+    # it is the only thing that keeps the Docker socket out of the JVM that terminates untrusted
+    # internet traffic. `trigger-enabled` gates the workflow_run webhook branch and the client
+    # stub; it is true only on `software-factory`.
+    enabled: ${FACTORY_DEPLOY_ENABLED:false}
+    trigger-enabled: ${FACTORY_DEPLOY_TRIGGER_ENABLED:false}
+    # The repository allowlist, and it is a set of exactly one. There is no shared allowlist to
+    # reuse: factory.feedback.repos is feedback-only and factory.cvefix pins owner/repository as
+    # scalars, which is the pattern followed here.
+    owner: simonjamesrowe
+    repository: simonrowe-dev-monorepo
+    # The Publish workflow's completion is the ONLY event that means the three images exist.
+    # pull_request `closed` fires on merge, minutes before the ARM builds finish, so deploying
+    # on that would pull the previous :latest and report success.
+    workflow-name: Publish
+    branch: main
+    compose-file: ${FACTORY_DEPLOY_COMPOSE_FILE:/workspace/repo/docker-compose.prod.yml}
+    script: ${FACTORY_DEPLOY_SCRIPT:/workspace/repo/scripts/restart-prod.sh}
+    repo-dir: ${FACTORY_DEPLOY_REPO_DIR:/workspace/repo}
+    # Pinned rather than read from the checkout's remote: sync-config asserts the target commit
+    # is an ancestor of what this URL serves, so a tampered remote must not be able to redirect
+    # it. The repository is public, so the fetch needs no credential and no write access.
+    repo-url: ${FACTORY_DEPLOY_REPO_URL:https://github.com/simonjamesrowe/simonrowe-dev-monorepo.git}
+    # The images to pull. Tunable without a rebuild, like FACTORY_MAX_CHANGED_FILES.
+    services: ${FACTORY_DEPLOY_SERVICES:backend,frontend,software-factory}
+    # An allowlist of services the automation may recreate, not a denylist of ones it may not:
+    # a service added to compose next year is held for a human by default. `deployer` is
+    # deliberately absent — it excludes itself. Widening this is a config change, not a code
+    # change.
+    recreatable: ${FACTORY_DEPLOY_RECREATABLE:backend,frontend,software-factory,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend}
+    # An escape hatch for the case where rollback itself is the problem.
+    rollback-enabled: ${FACTORY_DEPLOY_ROLLBACK_ENABLED:true}
+    # Turns the git fast-forward off without disabling the whole deployer, leaving images-only
+    # deploys working.
+    sync-config: ${FACTORY_DEPLOY_SYNC_CONFIG:true}
+    # Shared with nginx as the `deploy-state` volume — read-write here, read-only there.
+    state-dir: ${FACTORY_DEPLOY_STATE_DIR:/var/run/deploy-state}
+    # Ceiling for one shell phase. `pull` fetches three ARM images to a Pi and `verify` allows
+    # the script's own 420s settle budget, so this has to be generous; the activity's
+    # start-to-close timeout in DeployWorkflowImpl must stay above it.
+    phase-timeout: ${FACTORY_DEPLOY_PHASE_TIMEOUT:30m}
+    agent:
+      command: ${CLAUDE_COMMAND:claude}
+      model: ${FACTORY_DEPLOY_MODEL:sonnet}
+      effort: ${FACTORY_DEPLOY_EFFORT:medium}
+      # Modest on purpose: the agent has no Bash tool and reads a handful of captured text
+      # files, so there is nothing for a large turn budget to buy.
+      max-turns: ${FACTORY_DEPLOY_MAX_TURNS:12}
+      timeout: ${FACTORY_DEPLOY_TIMEOUT:10m}

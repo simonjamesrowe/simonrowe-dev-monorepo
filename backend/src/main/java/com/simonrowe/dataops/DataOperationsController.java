@@ -28,7 +28,6 @@ public class DataOperationsController {
   private final BackupService backupService;
   private final RestoreService restoreService;
   private final ClearService clearService;
-  private final RedeployService redeployService;
   private final com.simonrowe.search.IndexService indexService;
   private final com.simonrowe.embedding.EmbeddingService embeddingService;
 
@@ -38,7 +37,6 @@ public class DataOperationsController {
       final BackupService backupService,
       final RestoreService restoreService,
       final ClearService clearService,
-      final RedeployService redeployService,
       final com.simonrowe.search.IndexService indexService,
       final com.simonrowe.embedding.EmbeddingService embeddingService
   ) {
@@ -47,7 +45,6 @@ public class DataOperationsController {
     this.backupService = backupService;
     this.restoreService = restoreService;
     this.clearService = clearService;
-    this.redeployService = redeployService;
     this.indexService = indexService;
     this.embeddingService = embeddingService;
   }
@@ -158,19 +155,6 @@ public class DataOperationsController {
             "Re-embedding failed: " + ex.getMessage());
       }
     });
-    return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
-  }
-
-  @PostMapping("/redeploy")
-  public ResponseEntity<?> startRedeploy() {
-    if (!redeployService.isDockerAvailable()) {
-      return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-          .body(java.util.Map.of("message",
-              "Docker is not accessible. Ensure the Docker socket is mounted."));
-    }
-    DataOperation operation =
-        requireNoOperationInProgress(OperationType.REDEPLOY);
-    CompletableFuture.runAsync(redeployService::performRedeploy);
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
   }
 
