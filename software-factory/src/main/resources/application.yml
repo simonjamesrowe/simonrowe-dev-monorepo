@@ -203,3 +203,32 @@ factory:
       # files, so there is nothing for a large turn budget to buy.
       max-turns: ${FACTORY_DEPLOY_MAX_TURNS:12}
       timeout: ${FACTORY_DEPLOY_TIMEOUT:10m}
+  linear:
+    # The issue sink. Off by default like every other module: with this false nothing polls the
+    # `linear` task queue, no Mongo index is touched, and no credential is read.
+    #
+    # True on `software-factory` ONLY. The `deployer` runs the same image and must stay false —
+    # that is what keeps a tracker credential out of the JVM holding the Docker socket.
+    enabled: ${FACTORY_LINEAR_ENABLED:false}
+    api-key: ${LINEAR_API_KEY:}
+    api-base-url: ${LINEAR_API_URL:https://api.linear.app/graphql}
+    # The human team key (e.g. SIM), not a UUID. Resolved to a team id lazily on first filing
+    # and cached — never at boot, for the reason CveFixScheduleInitializer documents: an
+    # unreachable third party must not fail the context and take the webhook receiver down with
+    # it.
+    team-key: ${FACTORY_LINEAR_TEAM_KEY:}
+    # Synthetic and deliberately non-resolving. This is the dedup key, not a link: it is
+    # stamped on the issue as an attachment and looked up with attachmentsForURL.
+    fingerprint-base-url: https://factory.simonrowe.dev/fingerprint
+    # Reads Linear and writes linear_issues; performs no issueCreate/attachmentCreate/
+    # commentCreate. Proves the lookup and the decision table against the real tracker without
+    # leaving anything in it.
+    dry-run: ${FACTORY_LINEAR_DRY_RUN:false}
+    request-timeout: 30s
+    producers:
+      deploy:
+        label: "factory:deploy"
+        priority: 1
+      cvefix:
+        label: "factory:cvefix"
+        priority: 3
