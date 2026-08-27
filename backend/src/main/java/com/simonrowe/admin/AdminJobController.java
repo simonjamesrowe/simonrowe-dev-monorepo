@@ -1,6 +1,7 @@
 package com.simonrowe.admin;
 
 import com.simonrowe.common.Image;
+import com.simonrowe.common.LogSafe;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
 import java.time.Instant;
@@ -105,7 +106,7 @@ public class AdminJobController {
         existing.createdAt(), Instant.now(), existing.legacyId());
     Job saved = jobRepository.save(updated);
     contentChangePublisher.publishUpdated(ContentType.JOB, saved.id());
-    LOG.info("Updated job: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Updated job: id={}, user={}", LogSafe.value(id), jwt.getSubject());
     return saved;
   }
 
@@ -118,7 +119,7 @@ public class AdminJobController {
     Job job = getById(id);
     jobRepository.delete(job);
     contentChangePublisher.publishDeleted(ContentType.JOB, id);
-    LOG.info("Deleted job: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Deleted job: id={}, user={}", LogSafe.value(id), jwt.getSubject());
   }
 
   @SuppressWarnings("unchecked")

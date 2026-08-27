@@ -1,5 +1,6 @@
 package com.simonrowe.summary;
 
+import com.simonrowe.common.LogSafe;
 import com.simonrowe.events.SummaryRequestEvent;
 import java.time.Instant;
 import org.slf4j.Logger;
@@ -31,6 +32,6 @@ public class SummaryRequestPublisher {
   public void publish(final String articleId) {
     kafkaTemplate.send(TOPIC, articleId,
         new SummaryRequestEvent(articleId, Instant.now()));
-    LOG.info("Published summary request: articleId={}", articleId);
+    LOG.info("Published summary request: articleId={}", LogSafe.value(articleId));
   }
 }

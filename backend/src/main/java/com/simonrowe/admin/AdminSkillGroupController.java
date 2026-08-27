@@ -1,6 +1,7 @@
 package com.simonrowe.admin;
 
 import com.simonrowe.common.Image;
+import com.simonrowe.common.LogSafe;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -114,7 +115,7 @@ public class AdminSkillGroupController {
     );
 
     SkillGroup saved = skillGroupRepository.save(updated);
-    LOG.info("Updated skill group: id={}, user={}", id,
+    LOG.info("Updated skill group: id={}, user={}", LogSafe.value(id),
         jwt.getSubject());
     return saved;
   }
@@ -127,7 +128,7 @@ public class AdminSkillGroupController {
   ) {
     SkillGroup group = getById(id);
     skillGroupRepository.delete(group);
-    LOG.info("Deleted skill group: id={}, user={}", id,
+    LOG.info("Deleted skill group: id={}, user={}", LogSafe.value(id),
         jwt.getSubject());
   }
 

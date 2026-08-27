@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import com.mongodb.client.MongoClient;
@@ -125,9 +126,10 @@ public class BackupService {
         operationsService.updateProgress("Adding media files...", 60);
         Path uploadsDir = Path.of(uploadsPath);
         if (Files.exists(uploadsDir) && Files.isDirectory(uploadsDir)) {
-          List<Path> mediaFiles = Files.walk(uploadsDir)
-              .filter(Files::isRegularFile)
-              .toList();
+          List<Path> mediaFiles;
+          try (Stream<Path> walk = Files.walk(uploadsDir)) {
+            mediaFiles = walk.filter(Files::isRegularFile).toList();
+          }
           mediaFileCount = mediaFiles.size();
           narrationAudioFileCount = (int) mediaFiles.stream()
               .filter(path -> uploadsDir.relativize(path).startsWith("narrations"))
@@ -225,9 +227,10 @@ public class BackupService {
 
       Path uploadsDir = Path.of(uploadsPath);
       if (Files.exists(uploadsDir) && Files.isDirectory(uploadsDir)) {
-        List<Path> mediaFiles = Files.walk(uploadsDir)
-            .filter(Files::isRegularFile)
-            .toList();
+        List<Path> mediaFiles;
+        try (Stream<Path> walk = Files.walk(uploadsDir)) {
+          mediaFiles = walk.filter(Files::isRegularFile).toList();
+        }
         for (Path mediaFile : mediaFiles) {
           String entryPath = "uploads/" + uploadsDir.relativize(mediaFile);
           zos.putNextEntry(new ZipEntry(entryPath));

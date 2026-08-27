@@ -1,5 +1,6 @@
 package com.simonrowe.admin;
 
+import com.simonrowe.common.LogSafe;
 import com.simonrowe.embedding.EmbeddingService;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
@@ -141,7 +142,7 @@ public class AdminCodeExampleController {
     );
 
     CodeExample saved = codeExampleRepository.save(updated);
-    LOG.info("Updated code example: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Updated code example: id={}, user={}", LogSafe.value(id), jwt.getSubject());
     contentChangePublisher.publishUpdated(ContentType.CODE_EXAMPLE, saved.id());
     embedCodeExample(saved);
     return toDto(saved);
@@ -157,7 +158,7 @@ public class AdminCodeExampleController {
     codeExampleRepository.delete(example);
     embeddingService.removeContent(id);
     contentChangePublisher.publishDeleted(ContentType.CODE_EXAMPLE, id);
-    LOG.info("Deleted code example: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Deleted code example: id={}, user={}", LogSafe.value(id), jwt.getSubject());
   }
 
   private void embedCodeExample(final CodeExample example) {

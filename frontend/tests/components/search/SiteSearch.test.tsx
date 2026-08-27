@@ -126,7 +126,11 @@ describe('SiteSearch', () => {
     await userEvent.type(input, 'spring')
     await userEvent.keyboard('{Enter}')
 
-    // No error thrown when onChatStart is undefined
+    // Enter with no callback must be survivable. Assert the component is still mounted
+    // and holding its query rather than relying on "no error was thrown" — a test body
+    // with no assertion also passes when it never runs at all (Sonar typescript:S2699).
+    expect(input).toBeInTheDocument()
+    expect(input).toHaveValue('spring')
   })
 
   it('closes dropdown on Escape key', async () => {

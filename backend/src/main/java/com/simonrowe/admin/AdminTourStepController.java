@@ -1,5 +1,6 @@
 package com.simonrowe.admin;
 
+import com.simonrowe.common.LogSafe;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -108,7 +109,7 @@ public class AdminTourStepController {
     );
 
     TourStep saved = tourStepRepository.save(updated);
-    LOG.info("Updated tour step: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Updated tour step: id={}, user={}", LogSafe.value(id), jwt.getSubject());
     return saved;
   }
 
@@ -120,7 +121,7 @@ public class AdminTourStepController {
   ) {
     TourStep step = getById(id);
     tourStepRepository.delete(step);
-    LOG.info("Deleted tour step: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Deleted tour step: id={}, user={}", LogSafe.value(id), jwt.getSubject());
   }
 
   @PatchMapping("/reorder")
