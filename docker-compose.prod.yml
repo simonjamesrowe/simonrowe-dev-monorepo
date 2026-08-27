@@ -238,7 +238,17 @@ services:
     # Measured: ~264MB; also forks Claude Code and git, so leave real headroom
     mem_limit: 1500m
     mem_reservation: 384m
-    pull_policy: always
+    # `missing`, not `always`. scripts/monitor-prod.sh runs a bare `docker compose up -d`
+    # every minute whenever it sees anything unsettled, and that command resolves :latest
+    # with no flag to stop it. With `always`, two things follow: a rollback cannot hold -
+    # the watchdog re-pulls the broken :latest within 60 seconds and the site breaks again
+    # with nothing in the deploy log to explain it - and the watchdog can silently upgrade
+    # this service as a side effect of healing an unrelated container.
+    #
+    # With `missing`, pulling is something only the deployer and an explicit
+    # restart-prod.sh run do. restart-prod.sh is unaffected: it runs `docker compose pull`
+    # explicitly before `up -d`.
+    pull_policy: missing
     restart: unless-stopped
     # Deliberately no `env_file: .env`. This container terminates untrusted internet
     # traffic (the GitHub webhook) and also holds the Claude and GitHub App credentials
@@ -307,6 +317,139 @@ services:
       retries: 10
       start_period: 15s
 
+  # The executor half of auto-deploy on merge. Same image as software-factory, run a
+  # second time with different module flags - the pattern FACTORY_CVEFIX_ENABLED already
+  # establishes for turning parts of this JVM on and off.
+  #
+  # WHY A SECOND CONTAINER AND NOT JUST software-factory. This one holds
+  # /var/run/docker.sock, which is root-equivalent on the host. software-factory
+  # terminates untrusted internet traffic (the GitHub webhook), and that is the single
+  # worst place in the system to put host-root capability. So the socket goes on a
+  # container with NO ingress at all: its trigger arrives over Temporal, on an internal
+  # network, from a service that has already verified an HMAC signature.
+  #
+  # WHY THE SAME IMAGE AND NOT A MINIMAL ONE. An alpine-plus-docker-CLI image would be
+  # smaller, but it would have no Claude binary and no GitHub App key - and the failure
+  # path needs both: on a bad deploy an agent reads the captured logs and writes up what
+  # broke, and posting that write-up needs an installation token. Building a second image
+  # to carry those two things would duplicate Dockerfile.software-factory almost exactly.
+  #
+  # IT NEVER RECREATES ITSELF, and therefore does not self-update. `deployer` is absent
+  # from FACTORY_DEPLOY_SERVICES and from FACTORY_DEPLOY_RECREATABLE. Recreating the
+  # container that is mid-orchestration is how the backend's old redeploy path went wrong
+  # (it needed an ephemeral helper container to work around it). Updating this one is a
+  # documented manual step:
+  #
+  #     docker compose -f docker-compose.prod.yml up -d --no-deps deployer
+  #
+  # That is an accepted staleness risk, the same shape as the bug that left
+  # software-factory on an old image for months. It is in docs/runbooks/deploy.md AND in
+  # the prod-deploy skill so it surfaces during a deploy rather than only in a runbook.
+  deployer:
+    image: ${FACTORY_IMAGE:-ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory:latest}
+    # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits carry
+    # roughly 2x headroom. NOTE: INERT until the kernel memory cgroup is enabled - see
+    # scripts/enable-memory-cgroup.sh.
+    # Same JVM as software-factory (~264MB) but forks Claude only on the failure path.
+    mem_limit: 1g
+    mem_reservation: 256m
+    # `missing`, matching backend/frontend/software-factory below: pulling an image is
+    # something only the deployer and an explicit restart-prod.sh run should do, so that
+    # monitor-prod.sh's bare `up -d` cannot change which version is running.
+    pull_policy: missing
+    restart: unless-stopped
+    # Deliberately no `env_file: .env`, carrying software-factory's prohibition forward.
+    # This container holds the Docker socket, so the argument is stronger here, not
+    # weaker: declare what it needs, and nothing else.
+    #
+    # Note what is absent: GITHUB_WEBHOOK_SECRET and FACTORY_TRIGGER_TOKEN. The deployer
+    # receives nothing - no webhook, no HTTP trigger - so it needs neither.
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xshare:off"
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      FACTORY_MONGODB_URI: mongodb://mongodb:27017/software_factory
+      # Off by default. Turning it on registers DeployActivitiesImpl, which is the ONLY
+      # thing that makes this container - rather than software-factory - the one that can
+      # execute a deploy step. See docs/runbooks/deploy.md for the rollout order, and
+      # assert a live poller on the `deploy` task queue afterwards: a container can be
+      # healthy with no poller registered, in which case nothing ever deploys.
+      FACTORY_DEPLOY_ENABLED: ${FACTORY_DEPLOY_ENABLED:-false}
+      # Hard-coded false, not overridable from .env. The deployer must never start
+      # workflows - it is the executor, and the trigger belongs on the container that
+      # receives the signed webhook.
+      FACTORY_DEPLOY_TRIGGER_ENABLED: "false"
+      FACTORY_DEPLOY_SYNC_CONFIG: ${FACTORY_DEPLOY_SYNC_CONFIG:-true}
+      FACTORY_DEPLOY_ROLLBACK_ENABLED: ${FACTORY_DEPLOY_ROLLBACK_ENABLED:-true}
+      FACTORY_DEPLOY_SERVICES: ${FACTORY_DEPLOY_SERVICES:-backend,frontend,software-factory}
+      # An allowlist, not a denylist: a service added to this file next year is held for a
+      # human by default rather than silently recreated by the first deploy that touches
+      # it. The absentees are absent for concrete reasons - recreating
+      # dependencytrack-apiserver crash-loops it unless its KEK comes from env,
+      # langfuse-clickhouse carries a pinned image and a lazy-materialisation workaround,
+      # recreating pinggy collides with its own still-live tunnel, and mongodb,
+      # elasticsearch and kafka are the data. Widening this is a config change.
+      FACTORY_DEPLOY_RECREATABLE: ${FACTORY_DEPLOY_RECREATABLE:-backend,frontend,software-factory,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend}
+      FACTORY_DEPLOY_COMPOSE_FILE: /workspace/repo/docker-compose.prod.yml
+      FACTORY_DEPLOY_SCRIPT: /workspace/repo/scripts/restart-prod.sh
+      FACTORY_DEPLOY_REPO_DIR: /workspace/repo
+      FACTORY_DEPLOY_REPO_URL: ${FACTORY_DEPLOY_REPO_URL:-https://github.com/simonjamesrowe/simonrowe-dev-monorepo.git}
+      FACTORY_DEPLOY_STATE_DIR: /var/run/deploy-state
+      # For the failure-path agent and for posting the write-up. The agent itself gets no
+      # Bash tool and ClaudeCliRunner strips everything outside its allowlist from the
+      # child process, so the key below never reaches it.
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?set GITHUB_APP_CLIENT_ID in .env}
+      GITHUB_APP_PRIVATE_KEY_PATH: /run/secrets/github-app.pem
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set CLAUDE_CODE_OAUTH_TOKEN in .env}
+      FACTORY_DEPLOY_MODEL: ${FACTORY_DEPLOY_MODEL:-sonnet}
+      FACTORY_DEPLOY_EFFORT: ${FACTORY_DEPLOY_EFFORT:-medium}
+    volumes:
+      # Root on the host. Unavoidable for anything that deploys; mitigated by this
+      # container having no ingress, no published port and no public route.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The same mechanism, and the same reason, as the mount `backend` is losing: the
+      # compose defaults are Linux paths, and macOS/OrbStack differs. See CLAUDE.md.
+      - ${DOCKER_BINARY_PATH:-/usr/bin/docker}:/usr/local/bin/docker:ro
+      - ${DOCKER_PLUGINS_PATH:-/usr/libexec/docker/cli-plugins}:/usr/local/lib/docker/cli-plugins:ro
+      # The WHOLE deploy directory, READ-WRITE. This is the one genuinely new capability
+      # in the feature: the deployer runs git in here, and the compose file, the nginx
+      # conf, the maintenance pages and restart-prod.sh all live here.
+      #
+      # Not a privilege escalation - it already holds the Docker socket, which is root on
+      # the host - but a wider blast radius for a bug. It is fenced by sync-config's
+      # clean-tree check, its ancestor assertion against a pinned URL, and --ff-only,
+      # which together bound it to "some commit on origin/main".
+      #
+      # It also picks up .env as part of the directory, which it needs because
+      # `docker compose` interpolates it. That is not new access: it is the same file
+      # `backend` mounts today and is losing.
+      - .:/workspace/repo
+      - ${GITHUB_APP_PRIVATE_KEY_PATH:?set GITHUB_APP_PRIVATE_KEY_PATH in .env}:/run/secrets/github-app.pem:ro
+      # Read-write here, read-only on nginx. The maintenance flag and the recorded
+      # rollback image ids.
+      - deploy-state:/var/run/deploy-state
+      # Scratch space for the failure-path evidence directory.
+      - deployer-workspace:/workspace/scratch
+    depends_on:
+      temporal:
+        condition: service_healthy
+      temporal-create-namespace:
+        condition: service_completed_successfully
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/localhost/8091 && printf 'GET /actuator/health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 4 cat <&3 | grep -q '\"status\":\"UP\"'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
   uploads-init:
     image: busybox
     volumes:
@@ -322,7 +465,17 @@ services:
     # Measured: ~842MB; the buildpack JVM has no explicit -Xmx and sizes from this limit
     mem_limit: 2g
     mem_reservation: 512m
-    pull_policy: always
+    # `missing`, not `always`. scripts/monitor-prod.sh runs a bare `docker compose up -d`
+    # every minute whenever it sees anything unsettled, and that command resolves :latest
+    # with no flag to stop it. With `always`, two things follow: a rollback cannot hold -
+    # the watchdog re-pulls the broken :latest within 60 seconds and the site breaks again
+    # with nothing in the deploy log to explain it - and the watchdog can silently upgrade
+    # this service as a side effect of healing an unrelated container.
+    #
+    # With `missing`, pulling is something only the deployer and an explicit
+    # restart-prod.sh run do. restart-prod.sh is unaffected: it runs `docker compose pull`
+    # explicitly before `up -d`.
+    pull_policy: missing
     user: "0:0"
     restart: unless-stopped
     env_file:
@@ -372,11 +525,20 @@ services:
       SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}
     volumes:
       - backend-uploads:/workspace/uploads
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${DOCKER_BINARY_PATH:-/usr/bin/docker}:/usr/local/bin/docker:ro
-      - ${DOCKER_PLUGINS_PATH:-/usr/libexec/docker/cli-plugins}:/usr/local/lib/docker/cli-plugins:ro
-      - ./docker-compose.prod.yml:/workspace/docker-compose.prod.yml:ro
-      - ./.env:/workspace/.env:ro
+      # NO DOCKER SOCKET, no docker CLI, no compose file and no .env copy. All five
+      # mounts were removed with RedeployService: the admin-UI redeploy is gone, and
+      # nothing else in backend/src/main/java shells out to a host process (there is a
+      # test asserting no ProcessBuilder remains).
+      #
+      # This is the largest single security improvement in the auto-deploy change, and
+      # it is a consequence of the feature rather than the point of it: the container
+      # serving the public API no longer holds host-root capability, nor a copy of the
+      # deployment configuration and every production secret. Deploys are performed by
+      # the `deployer` service above, which has no ingress at all.
+      #
+      # DOCKER_BINARY_PATH / DOCKER_PLUGINS_PATH survive as variables - the deployer
+      # uses them now - so the macOS/OrbStack note in CLAUDE.md stays true, pointed at
+      # a different service.
       # /dev/null keeps a disabled deployment bootable before credentials are configured.
       # Once enabled, GOOGLE_CLOUD_TTS_CREDENTIALS_PATH must name the real host JSON file.
       - ${GOOGLE_CLOUD_TTS_CREDENTIALS_PATH:-/dev/null}:/run/secrets/google-cloud-tts.json:ro
@@ -429,7 +591,17 @@ services:
     # Measured: ~4MB (static nginx)
     mem_limit: 256m
     mem_reservation: 64m
-    pull_policy: always
+    # `missing`, not `always`. scripts/monitor-prod.sh runs a bare `docker compose up -d`
+    # every minute whenever it sees anything unsettled, and that command resolves :latest
+    # with no flag to stop it. With `always`, two things follow: a rollback cannot hold -
+    # the watchdog re-pulls the broken :latest within 60 seconds and the site breaks again
+    # with nothing in the deploy log to explain it - and the watchdog can silently upgrade
+    # this service as a side effect of healing an unrelated container.
+    #
+    # With `missing`, pulling is something only the deployer and an explicit
+    # restart-prod.sh run do. restart-prod.sh is unaffected: it runs `docker compose pull`
+    # explicitly before `up -d`.
+    pull_policy: missing
     restart: unless-stopped
     volumes:
       - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
@@ -447,6 +619,13 @@ services:
     restart: unless-stopped
     volumes:
       - ./config/nginx/nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      # The themed maintenance and unavailable pages. Bind-mounted like the proxy conf, so
+      # they come from the deploy directory rather than from an image - which matters
+      # because the frontend image is exactly what is unavailable when they are served.
+      - ./config/nginx/maintenance:/etc/nginx/maintenance:ro
+      # READ-ONLY on purpose. The flag is written by `deployer` and only read here; nginx
+      # decides what to serve, it never decides whether a deploy is in progress.
+      - deploy-state:/var/run/deploy-state:ro
     depends_on:
       frontend:
         condition: service_started
@@ -920,3 +1099,14 @@ volumes:
   # Where the software factory clones pull-request branches. A named volume rather
   # than a host bind so contributor-authored code never lands on the host filesystem.
   software-factory-workspace:
+  # Scratch space for the deployer's failure-path evidence directory.
+  deployer-workspace:
+  # The deploy flag file and the recorded rollback image ids. Read-write on `deployer`,
+  # read-only on `nginx`.
+  #
+  # A named volume rather than a host bind deliberately: it keeps the flag off the host
+  # filesystem, gives nginx a genuinely read-only view, and - found while testing - a host
+  # bind mount on macOS does not propagate a delete into an already-running container, so
+  # the maintenance page would appear stuck on forever. See
+  # scripts/test/test-nginx-maintenance.sh.
+  deploy-state:

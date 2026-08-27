@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CloudUpload,
   CloudDownload,
-  Rocket,
   RefreshCw,
   Trash2,
   CheckCircle,
@@ -20,7 +19,6 @@ import {
   startClear,
   startRebuildIndex,
   startReembed,
-  startRedeploy,
   connectProgress,
   type DataOperation,
   type DataOperationsStatus,
@@ -53,9 +51,6 @@ export function DataOperationsAdmin() {
   // Reembed state
   const [showReembedConfirm, setShowReembedConfirm] = useState(false)
 
-  // Redeploy state
-  const [showRedeployConfirm, setShowRedeployConfirm] = useState(false)
-  const [reconnecting, setReconnecting] = useState(false)
 
   const eventSourceRef = useRef<{ close: () => void } | null>(null)
 
@@ -78,29 +73,8 @@ export function DataOperationsAdmin() {
     loadStatus()
   }, [loadStatus])
 
-  const pollForReconnection = useCallback(async () => {
-    setReconnecting(true)
-    const poll = setInterval(async () => {
-      try {
-        const data = await fetchDataOpsStatus(getAccessToken)
-        clearInterval(poll)
-        setReconnecting(false)
-        setStatus(data)
-        setOperation(data.currentOperation ?? data.lastOperation ?? null)
-        if (data.lastOperation?.status === 'COMPLETED') {
-          setSuccess(data.lastOperation.resultSummary || 'Operation completed successfully')
-          setError(null)
-        } else if (data.lastOperation?.status === 'FAILED') {
-          setError(data.lastOperation.errorMessage || 'Operation failed')
-          setSuccess(null)
-        }
-      } catch {
-        // Backend still restarting, keep polling
-      }
-    }, 3000)
-  }, [getAccessToken])
 
-  const connectSse = useCallback(async (isRedeploy = false) => {
+  const connectSse = useCallback(async () => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close()
     }
@@ -123,15 +97,9 @@ export function DataOperationsAdmin() {
           eventSourceRef.current = null
         }
       },
-      () => {
-        if (isRedeploy) {
-          eventSourceRef.current = null
-          pollForReconnection()
-        }
-      },
     )
     eventSourceRef.current = es
-  }, [getAccessToken, loadStatus, pollForReconnection])
+  }, [getAccessToken, loadStatus])
 
   useEffect(() => {
     return () => {
@@ -225,19 +193,6 @@ export function DataOperationsAdmin() {
     }
   }
 
-  // --- Redeploy ---
-  const handleRedeployConfirm = async () => {
-    try {
-      setShowRedeployConfirm(false)
-      setError(null)
-      setSuccess(null)
-      await connectSse(true)
-      await startRedeploy(getAccessToken)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start redeploy')
-    }
-  }
-
   if (loading) {
     return <div className="admin-loading">Loading...</div>
   }
@@ -277,16 +232,6 @@ export function DataOperationsAdmin() {
             />
           </div>
           <p className="data-ops__progress-message">{operation.progressMessage}</p>
-        </div>
-      )}
-
-      {/* Reconnecting */}
-      {reconnecting && (
-        <div className="data-ops__progress">
-          <div className="data-ops__progress-header">
-            <Loader size={16} className="data-ops__spinner" />
-            <span>Backend is restarting... Reconnecting</span>
-          </div>
         </div>
       )}
 
@@ -372,22 +317,6 @@ export function DataOperationsAdmin() {
             type="button"
           >
             Re-embed All
-          </button>
-        </div>
-
-        <div className="data-ops__card">
-          <div className="data-ops__card-icon"><Rocket size={24} /></div>
-          <h3 className="data-ops__card-title">Redeploy Site</h3>
-          <p className="data-ops__card-desc">
-            Pull latest container images and restart the application.
-          </p>
-          <button
-            className="admin-btn admin-btn--primary"
-            disabled={operationInProgress || reconnecting}
-            onClick={() => setShowRedeployConfirm(true)}
-            type="button"
-          >
-            Start Redeploy
           </button>
         </div>
       </div>
@@ -567,35 +496,6 @@ export function DataOperationsAdmin() {
                 onClick={handleReembedConfirm}
               >
                 Re-embed
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Redeploy Confirm Dialog */}
-      {showRedeployConfirm && (
-        <div className="confirm-dialog-backdrop" onClick={() => setShowRedeployConfirm(false)}>
-          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <h2 className="confirm-dialog__title">Redeploy Site</h2>
-            <p className="confirm-dialog__message">
-              This will pull the latest container images from the registry and restart the application.
-              The site will be briefly unavailable during the restart.
-            </p>
-            <div className="confirm-dialog__actions">
-              <button
-                type="button"
-                className="confirm-dialog__btn confirm-dialog__btn--cancel"
-                onClick={() => setShowRedeployConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="confirm-dialog__btn confirm-dialog__btn--confirm"
-                onClick={handleRedeployConfirm}
-              >
-                Redeploy
               </button>
             </div>
           </div>

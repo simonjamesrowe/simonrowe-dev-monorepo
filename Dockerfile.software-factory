@@ -51,8 +51,18 @@ RUN set -eux; \
 FROM eclipse-temurin:21-jre
 
 # git clones the pull-request branch the agent reviews.
+#
+# curl and jq are here for the deploy flow, not the reviewer: the same image runs
+# as the `deployer` service, which executes scripts/restart-prod.sh. That script's
+# container settle loop parses `docker compose ps --format json` with jq and its
+# verification curls the public hostnames. jq was previously installed only in the
+# throwaway `claude` stage above, so it never reached the runtime image.
+#
+# jq deliberately rather than python3: the settle-loop parser used to be an inline
+# Python program, and keeping it would mean carrying a whole Python runtime in this
+# image for one JSON filter. See specs/036-auto-deploy-on-merge/research.md §3.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git \
+    && apt-get install -y --no-install-recommends ca-certificates git curl jq \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 10003 factory \

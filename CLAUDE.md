@@ -178,6 +178,20 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   A `start_period` is free when boot is fast: the first successful probe ends it early.
   Recovery needs no special action — once ES is healthy, a plain `up -d` starts both
   stranded containers (`monitor-prod.sh` does this within a minute).
+- **`deployer`** is a second instance of `FACTORY_IMAGE` with no ingress, holding
+  `/var/run/docker.sock` and a **read-write** mount of the deploy directory. It executes deploys
+  off the `deploy` Temporal queue and is the only container permitted to run
+  `scripts/restart-prod.sh`'s host-mutating phases. It excludes itself from
+  `FACTORY_DEPLOY_SERVICES` and `FACTORY_DEPLOY_RECREATABLE`, so it never recreates itself — and
+  therefore must be updated by hand. `backend` no longer holds the Docker socket, the compose
+  file or `.env`, which is the largest single security improvement in that change.
+- **nginx serves themed maintenance/unavailable pages** from
+  `config/nginx/maintenance/*.html` (bind-mounted, all CSS inlined, no external asset — the
+  frontend that would serve those assets is what is down). The maintenance page is driven by
+  `/var/run/deploy-state/maintenance.on` in the `deploy-state` volume, read-write on `deployer`
+  and **read-only** on `nginx`. Deliberately outside the flag: `/healthz` (failing it marks nginx
+  unhealthy and `pinggy` waits on that, taking every hostname offline),
+  `POST /webhooks/github`, and the four ops hostnames.
 - **Recover a downed/partial stack** from the deploy directory: `docker compose -f docker-compose.prod.yml up -d`
   (reconciles containers stuck in `created`, respecting `depends_on` ordering). Minimal alternative:
   `docker start simonrowe-dev-monorepo-langfuse-1 && docker start simonrowe-dev-monorepo-nginx-1`.
@@ -197,6 +211,59 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 036-auto-deploy-on-merge: A merge to `main` now deploys itself. `software-factory` gains a
+  `workflow_run` branch on its existing signed webhook — accepted only for
+  `Publish`/`success`/`main`/allowlisted-repo — which **signal-with-starts** a Temporal workflow
+  on the fixed id `deploy-prod` carrying the head SHA. A new `deployer` container (the same
+  `FACTORY_IMAGE`, no ingress, holding the Docker socket) polls the `deploy` queue and runs
+  phases of `scripts/restart-prod.sh`: `sync-config` → `maintenance-on` → `pull` → `recreate` →
+  `verify` → `maintenance-off` → `verify-public`, with rollback + a `Bash`-less Claude triage +
+  a GitHub issue and commit comment on failure. Things that are load-bearing and easy to break:
+  - **The socket is confined to `deployer` by ONE annotation.** Both containers run the same
+    image, and `@WorkflowImpl` classpath scanning is unconditional, so **both** register a
+    *workflow*-task poller on the `deploy` queue — harmless, since a workflow only schedules
+    activities. What stops `software-factory` executing a deploy step is that
+    `DeployActivitiesImpl` carries `@ConditionalOnProperty(factory.deploy.enabled)` and that flag
+    is true only on `deployer`. Note a class-level `@ConditionalOnProperty` is evaluated by the
+    *component scanner*: declare the same class through an explicit `@Bean` method and the
+    annotation is silently ignored, which is why `DeployWorkerRegistrationTest` component-scans
+    rather than wiring the beans directly.
+  - **`error_page 503 @maintenance` has no `=`.** With `= @maintenance` nginx rewrites the status
+    to the named location's 200, so the maintenance page would be served as a success — and
+    `verify-public` (which treats 503 as failure) would PASS while the page was still up. The
+    flag check lives inside `location /`, never at server level, or it would 503
+    `POST /webhooks/github` — the endpoint that triggered the deploy.
+  - **`pull_policy: always` → `missing`** on `backend`/`frontend`/`software-factory`.
+    `monitor-prod.sh` runs a bare `up -d` every minute, which resolves `:latest`; with `always` a
+    rollback was undone within 60 seconds and the watchdog could silently upgrade a service while
+    healing an unrelated container.
+  - **`sync-config` decides which services a compose change affects BEFORE moving `HEAD`**
+    (`git show <sha>:docker-compose.prod.yml` + `docker compose config --hash='*'`). Fast-
+    forwarding and then declining to recreate would leave the directory ahead of what is running,
+    and the watchdog's next `up -d` would apply the held-back change within the minute. Fenced by
+    a clean-tree check (`--untracked-files=no`, so a hand-edited `.env` never blocks), an
+    anonymous fetch from a **pinned** URL, `merge-base --is-ancestor`, `--ff-only`, and an
+    eight-service recreate allowlist. Declines exit `2` (survivable) rather than `1`.
+  - **`pull` truncates `rollback-images` rather than appending**: activities are retried, and an
+    append would record the freshly-pulled image as the rollback target.
+  - `deploy_runs` keys on the Temporal **run** id, not the workflow id — the workflow id is the
+    fixed `deploy-prod`, so keying on it (the `CveFixRunRecord` pattern) would collapse all
+    history into one document.
+  - The settle-loop parser moved `python3` → `jq` (so the image needs no Python; `curl`/`jq`
+    added to the runtime stage) and now handles compose's JSON-**array** output as well as JSON
+    Lines — the old parser only handled the latter, so a compose upgrade would have made every
+    container look settled.
+  - **The `deployer` never recreates itself**, so it does not self-update:
+    `docker compose -f docker-compose.prod.yml up -d --no-deps deployer` after any merge touching
+    `software-factory/`. Same shape as the bug that left `software-factory` on an old image for
+    months; recorded in `docs/runbooks/deploy.md` and the `prod-deploy` skill.
+  - Both flags (`FACTORY_DEPLOY_ENABLED`, `FACTORY_DEPLOY_TRIGGER_ENABLED`) default **off**, so
+    merging changes nothing until an operator opts in. A human must subscribe the GitHub App to
+    `workflow_run` or the feature is inert with no error anywhere.
+  - Test the script with `DRY_RUN=1` and a throwaway `STATE_DIR`
+    (`./scripts/test/run-tests.sh`). The `sync-config` tests deliberately opt out of `DRY_RUN`
+    because real git behaviour is what they verify, and are safe because each builds its own
+    throwaway origin+clone. See `docs/runbooks/deploy.md` and `specs/036-auto-deploy-on-merge/`.
 - 035-listen-from-listing: Narration audio is playable straight from `/blogs` and `/news-events`.
   New public `GET /api/narrations/ready?contentType=BLOG|ARTICLE_SUMMARY` returns
   `[{contentId, audioUrl, durationSeconds}]`, one row per content id (newest `READY`, via a
@@ -315,7 +382,7 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - On macOS, running the production compose file under OrbStack requires overriding `DOCKER_BINARY_PATH=/opt/homebrew/bin/docker` and `DOCKER_PLUGINS_PATH=~/.docker/cli-plugins`, since the compose defaults assume a Linux Docker install.
 - There is a management-port mismatch between environments: `docker-compose.prod.yml` sets `MANAGEMENT_SERVER_PORT: 8081`, while `application.yml` defaults `management.server.port` to `8082`; local health checks should target `8082` unless an env override is in effect.
 - The README's backup/restore instructions are stale: `scripts/create-backup.sh`, `scripts/restore-backup.sh`, and `scripts/migrate-strapi-data.js` no longer exist in the repo — use `scripts/backup.sh` and `scripts/restore.sh` instead.
-- The backend exposes a self-redeploy endpoint, `POST /api/admin/data-operations/redeploy`, which pulls the backend, frontend, nginx and software-factory images and restarts the backend container via an ephemeral `docker:cli` helper container (since the backend can't safely recreate its own running container). `software-factory` is restarted on its own with `--no-deps` and best-effort: it declares `temporal` and `mongodb` as `service_healthy` dependencies, and a failure appends `WARNING: could not restart software-factory` to the completion message rather than aborting the redeploy.
+- **The backend has no self-redeploy endpoint any more.** `POST /api/admin/data-operations/redeploy` and `RedeployService` were deleted in `036-auto-deploy-on-merge`, together with the backend's `/var/run/docker.sock`, docker-CLI, compose-file and `.env` mounts. Deploys are performed by the `deployer` container instead. A `NoHostProcessLaunchTest` now fails the build if any `ProcessBuilder` reappears in `backend/src/main/java`, and Constitution Principle II (2.0.0) prohibits it.
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies

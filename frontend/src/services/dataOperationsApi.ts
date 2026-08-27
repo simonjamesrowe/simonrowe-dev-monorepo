@@ -8,7 +8,7 @@ const DATA_OPS_URL = `${API_BASE_URL}/api/admin/data-operations`
 
 export interface DataOperation {
   id: string
-  type: 'BACKUP' | 'RESTORE' | 'CLEAR' | 'REBUILD_INDEX' | 'REDEPLOY'
+  type: 'BACKUP' | 'RESTORE' | 'CLEAR' | 'REBUILD_INDEX'
   status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
   startedAt: string
   completedAt: string | null
@@ -158,18 +158,6 @@ export async function startReembed(
 ): Promise<DataOperation> {
   const token = await getAccessToken()
   const response = await authFetch(`${DATA_OPS_URL}/reembed`, token, { method: 'POST' })
-  return handleResponse<DataOperation>(response)
-}
-
-// ---------------------------------------------------------------------------
-// Redeploy
-// ---------------------------------------------------------------------------
-
-export async function startRedeploy(
-  getAccessToken: GetAccessToken,
-): Promise<DataOperation> {
-  const token = await getAccessToken()
-  const response = await authFetch(`${DATA_OPS_URL}/redeploy`, token, { method: 'POST' })
   return handleResponse<DataOperation>(response)
 }
 
