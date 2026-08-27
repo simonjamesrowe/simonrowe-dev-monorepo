@@ -34,6 +34,7 @@ import io.temporal.worker.Worker;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
@@ -336,7 +337,9 @@ class DeployWorkflowTest {
 
     // Losing the notice is bad; losing the record of a rollback would be worse.
     assertThat(outcome.result().status()).isEqualTo(DeployStatus.ROLLED_BACK);
-    assertThat(lastRecordedRun(activities).issueUrl()).isNull();
+    // commitCommentUrl, not issueUrl: the sink is off in this request, so issueUrl is null
+    // whether or not report threw, and asserting it would discriminate nothing.
+    assertThat(lastRecordedRun(activities).commitCommentUrl()).isNull();
   }
 
   // ---------------------------------------------------------------------------
@@ -402,6 +405,32 @@ class DeployWorkflowTest {
     LinearActivities linear = linearActivities();
     when(activities.renderFailure(any(), any()))
         .thenThrow(ApplicationFailure.newNonRetryableFailure("no renderer", "IllegalState"));
+    failPhaseOnce(activities, DeployPhase.VERIFY, 1);
+
+    Outcome outcome = executeFiling(activities, linear, requestFilingToLinear());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.ROLLED_BACK);
+    verify(linear, never()).fileIssue(any());
+    DeployRunRecord record = lastRecordedRun(activities);
+    assertThat(record.linearFilingFailed()).isTrue();
+    assertThat(record.issueUrl()).isNull();
+  }
+
+  // 60s, where every other test here takes about a second. Narrowing the catch this test guards
+  // does not make it fail - it makes it WAIT, because the workflow task is retried forever and
+  // the test environment will not skip that. Without the timeout a regression hangs the suite
+  // with no output; with it, the suite says which test and stops.
+  @Timeout(60)
+  @Test
+  void stillRecordsTheRunWhenFilingThrowsSomethingOtherThanAnActivityFailure() {
+    // The catch has to be as wide as the invariant. An exhausted activity arrives as
+    // ActivityFailure, but plenty of things on the workflow thread do not - encoding the
+    // IssueFiling payload, for one - and those are not TemporalFailures, so they fail the
+    // workflow task and Temporal retries it forever: the deploy hangs and recordRun never runs.
+    // A null Rendered reproduces that class cheaply, by NPE-ing on rendered.title().
+    DeployActivities activities = activities();
+    LinearActivities linear = linearActivities();
+    when(activities.renderFailure(any(), any())).thenReturn(null);
     failPhaseOnce(activities, DeployPhase.VERIFY, 1);
 
     Outcome outcome = executeFiling(activities, linear, requestFilingToLinear());
@@ -640,6 +669,14 @@ class DeployWorkflowTest {
       final DeployActivities activities,
       final LinearActivities linear,
       final DeployRequest request) {
+    // A filing scheduled on a queue nothing polls does not fail - it waits, and the test
+    // environment will not skip that timer, so the whole suite hangs indefinitely instead of
+    // reporting anything. This class has been bitten by that twice; trade it for a legible throw.
+    if (linear == null && request.linearFilingEnabled()) {
+      throw new IllegalArgumentException(
+          "linearFilingEnabled needs a LinearActivities worker - use executeFiling(..), "
+              + "not execute(..), or the suite will hang rather than fail");
+    }
     try (TestWorkflowEnvironment environment = environment(activities, linear)) {
       DeployWorkflow workflow = stub(environment);
       DeployResult result = workflow.run(request);

@@ -16,7 +16,6 @@ import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.RetryOptions;
-import io.temporal.failure.ActivityFailure;
 import io.temporal.spring.boot.WorkflowImpl;
 import io.temporal.workflow.Workflow;
 import java.time.Duration;
@@ -431,13 +430,17 @@ public class DeployWorkflowImpl implements DeployWorkflow {
                     "commit " + sha + ", workflow run " + Workflow.getInfo().getRunId(),
                     Workflow.getInfo().getRunId(),
                     Workflow.getInfo().getWorkflowId()));
-        // Null-guarded rather than dereferenced: an NPE here is a workflow-task failure, which
-        // Temporal retries forever, so it would hang the deploy rather than fail it.
+        // Null-guarded rather than dereferenced. The catch below would contain the NPE, but "no
+        // URL came back" is honestly a filing that returned nothing rather than one that failed.
         linearIssueUrl = filed == null ? null : filed.issueUrl();
-      } catch (ActivityFailure failure) {
-        // The tracker is not allowed to change the deploy's outcome. Rollback has already run.
+      } catch (RuntimeException exception) {
+        // As wide as the three sibling catches in this method, and deliberately not just the
+        // exhausted-activity type: encoding the IssueFiling payload happens on THIS thread, so a
+        // converter error is not a TemporalFailure, would fail the workflow task, and Temporal
+        // retries those forever - hanging the deploy and losing recordRun entirely. The tracker
+        // is not allowed to change the deploy's outcome by any route.
         Workflow.getLogger(DeployWorkflowImpl.class)
-            .warn("Could not file the deploy failure into Linear", failure);
+            .warn("Could not file the deploy failure into Linear", exception);
         linearFilingFailed = true;
       }
     }

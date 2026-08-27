@@ -31,8 +31,10 @@ import org.springframework.data.mongodb.core.mapping.Document;
  *     the sink is disabled, when nothing failed, or when the filing itself failed
  * @param commitCommentUrl the comment posted on the deployed commit
  * @param detail one line summarising the run
- * @param linearFilingFailed true when the run failed and the sink could not be reached, so a
- *     failure with no ticket is distinguishable from a failure nobody tried to file
+ * @param linearFilingFailed true when the run failed, filing was attempted, and no ticket was
+ *     filed - whatever the cause: the sink unreachable, the rendering of the ticket itself
+ *     failing, or the payload not encoding. All of them are the same fact to a reader, which is
+ *     that a failure went untracked. What this distinguishes is a failure nobody tried to file
  */
 @Document(collection = "deploy_runs")
 public record DeployRunRecord(
