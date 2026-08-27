@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CloudUpload,
   CloudDownload,
+  Database,
   RefreshCw,
   Trash2,
   CheckCircle,
@@ -15,6 +16,7 @@ import {
   fetchDataOpsStatus,
   startBackup,
   fetchBackups,
+  fetchPlatformBackups,
   startRestore,
   startClear,
   startRebuildIndex,
@@ -40,6 +42,12 @@ export function DataOperationsAdmin() {
   const [loadingBackups, setLoadingBackups] = useState(false)
   const [selectedBackup, setSelectedBackup] = useState<BackupMetadata | null>(null)
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
+
+  // Platform backup state. The archive list is loaded on mount rather than
+  // behind a button: its whole purpose is to make a stalled nightly job obvious
+  // at a glance, which a list you have to click to see does not do.
+  const [platformBackups, setPlatformBackups] = useState<BackupMetadata[]>([])
+  const [platformBackupsError, setPlatformBackupsError] = useState<string | null>(null)
 
   // Clear-specific state
   const [showClearConfirm, setShowClearConfirm] = useState(false)
@@ -69,9 +77,27 @@ export function DataOperationsAdmin() {
     }
   }, [getAccessToken])
 
+  const loadPlatformBackups = useCallback(async () => {
+    try {
+      setPlatformBackupsError(null)
+      setPlatformBackups(await fetchPlatformBackups(getAccessToken))
+    } catch (err) {
+      // Reported inside the card rather than in the page-level banner: failing to
+      // list archives is not the same as failing to back up, and conflating them
+      // is how an operator concludes the nightly job is broken when it is not.
+      setPlatformBackupsError(
+        err instanceof Error ? err.message : 'Failed to load platform backups',
+      )
+    }
+  }, [getAccessToken])
+
   useEffect(() => {
     loadStatus()
   }, [loadStatus])
+
+  useEffect(() => {
+    loadPlatformBackups()
+  }, [loadPlatformBackups])
 
 
   const connectSse = useCallback(async () => {
@@ -254,6 +280,43 @@ export function DataOperationsAdmin() {
               Backup Now (full)
             </button>
           </div>
+        </div>
+
+        {/*
+          Platform Data. Read-only: the archive list is here so a stalled nightly job
+          is obvious at a glance, without shell access. No buttons, for two different
+          reasons — the capture runs in the `deployer` (constitution 2.0.0 keeps Docker
+          access out of this container) and restore is a host script, because the
+          scenario that motivates it is a rebuilt host.
+        */}
+        <div className="data-ops__card">
+          <div className="data-ops__card-icon"><Database size={24} /></div>
+          <h3 className="data-ops__card-title">Platform Data</h3>
+          <p className="data-ops__card-desc">
+            Langfuse, Dependency-Track and Temporal (Postgres) plus the LLM trace store
+            (ClickHouse). Captured nightly at 02:00 by the deployer, kept separately
+            from the site backups above. Run one on demand with{' '}
+            <code>scripts/backup-platform.sh</code>; restore with{' '}
+            <code>scripts/restore-platform.sh</code>.
+          </p>
+          {platformBackupsError ? (
+            <p className="data-ops__card-note data-ops__result--error">
+              {platformBackupsError}
+            </p>
+          ) : platformBackups.length === 0 ? (
+            <p className="data-ops__card-note">No platform backups yet.</p>
+          ) : (
+            <ul className="data-ops__backup-list">
+              {platformBackups.map((backup) => (
+                <li key={backup.fileId} className="data-ops__backup-list-item">
+                  <span>{new Date(backup.createdAt).toLocaleString()}</span>
+                  <span className="data-ops__backup-list-size">
+                    {backup.fileSizeFormatted}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="data-ops__card">

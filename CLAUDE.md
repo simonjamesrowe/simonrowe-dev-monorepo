@@ -211,6 +211,56 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 034-platform-datastore-backup: nightly (02:00) + on-demand capture of the four
+  `langfuse-db` Postgres databases (`langfuse`, `dtrack`, `temporal`,
+  `temporal_visibility`) and the ClickHouse `default` database. **It runs in the
+  `deployer`, not the backend** — `scripts/backup-platform.sh` invoked by a Temporal
+  activity on a paused-by-default nightly schedule (`platform-backup-nightly`,
+  `FACTORY_PLATFORM_BACKUP_ENABLED`). Constitution 2.0.0 forbids `ProcessBuilder` and
+  Docker access in the container serving public traffic, so the capture cannot live
+  there; the Java side never invokes `docker` itself, exactly as `PhaseRunner` only
+  ever runs `restart-prod.sh`. The backend keeps **only** `GET
+  /api/admin/data-operations/platform-backups` and a read-only "Platform Data" card,
+  because listing a Drive folder is a network call. There is no capture button and no
+  restore endpoint. **Enabling the flag does not start backing up** — the schedule is
+  created paused, and after unpausing you must assert a live poller on the
+  `platform-backup` task queue, since a healthy container with no poller runs nothing
+  and says nothing.
+  **The separate Drive folder (`simonrowe-platform-backups`) is load-bearing:**
+  retention deletes everything past the newest 7 `.zip` in a folder, so sharing one
+  would make the two backup types evict each other and silently halve both recovery
+  windows. The script resolves it by name and never falls back to
+  `GOOGLE_DRIVE_FOLDER_ID`; `GoogleDriveFolderResolutionTest` guards the backend's
+  listing side of the same rule. Upload is Google's resumable protocol in `curl`
+  (session URI + ranged PUT), with Temporal retry over the top.
+  New `langfuse-clickhouse-backups` volume + `config/clickhouse/backup-disk.xml`
+  (`<backups><allowed_path>`) + a `clickhouse-backups-init` busybox one-shot that
+  `chown`s the volume to `101:101`. **The chown is required, not defensive:**
+  `/backups` does not exist in the ClickHouse image, so the volume is created
+  root-owned while the server drops to uid 101 even when the container starts as
+  root — verified, `BACKUP` fails `CANNOT_OPEN_FILE errno 13` without it.
+  `clickhouse-backups-init` is registered in `ONESHOT_SERVICES` in
+  `scripts/monitor-prod.sh`; a one-shot missing from that list reads as a broken
+  container every cron tick and makes the watchdog reconcile the whole stack once a
+  minute forever. Restore is **`scripts/restore-platform.sh`** on the host, per-target
+  (`langfuse`/`dtrack`/`temporal`/`all`), never stops `langfuse-db` itself (dropping
+  databases inside a running server is what keeps the targets independent), restarts
+  stopped consumers from an `EXIT` trap so a failed restore leaves them running, and
+  **refuses to run when the archive's SHA-256 secret fingerprints don't match `.env`**
+  — Langfuse/DT rows restored under different secrets load fine and then fail to
+  decrypt, a failure that presents as success. Both scripts compute that fingerprint
+  with `printf '%s'`, never `echo`: a trailing newline would refuse every legitimate
+  restore. Verified against the pinned `clickhouse-server:26.7.1.1315`:
+  `DROP DATABASE ... SYNC` then `RESTORE DATABASE` works (also into an
+  existing-but-empty `default`, which the entrypoint recreates on restart);
+  `allow_non_empty_tables` is deliberately **unused** because it appends and would
+  duplicate every trace row; and `docker cp` alone is not enough — it preserves host
+  ownership, so the file must be chowned to 101:101 or the restore fails
+  `CANNOT_OPEN_FILE` with no hint that ownership is the cause. The two backups **can
+  now overlap** (no shared mutex); the 22:00/02:00 gap is kept for I/O contention, not
+  exclusion. Deploying recreates `langfuse-clickhouse` and `deployer`. ClickHouse
+  archive size is **unbounded and still unmeasured** (no TTL on trace tables); measure
+  before trusting the Drive quota. See `docs/runbooks/platform-backup-restore.md`.
 - 036-auto-deploy-rollout-fixes: Turning auto-deploy on for the first time (2026-08-27)
   found that **the `deployer` could not perform a single deploy step**, for nine separate
   reasons, none of which any test could catch — they are all properties of running
@@ -444,6 +494,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.9 (web, security OAuth2 resource server, data-mongodb), `@auth0/auth0-react` (adds `loginWithPopup` usage), Lucide React `Heart` icon. No new dependencies. (029-favourite-news-events)
 - MongoDB — new `favourites` collection (record + `@Document`, unique compound index on `userId,type,contentId`). Existing `aggregated_articles` / `aggregated_events` unchanged. (029-favourite-news-events)
 - Static analysis: SonarQube Cloud (`org.sonarqube` 6.0.1.5171, project key `simonjamesrowe_simonrowe-dev-monorepo`), JaCoCo 0.8.12 on `backend` (0.78 floor) and `software-factory` (report only), `@vitest/coverage-v8` ^3.0.0 for frontend LCOV, ESLint 9 in CI. No persistence. (033-sonarqube-static-analysis)
+- Java 21 (backend), TypeScript 5.x / React 19 (frontend), bash (restore script) + Spring Boot 3.5.x `@Scheduled`/`@RestController`, the existing Google Drive API client, `java.util.zip`, `java.lang.ProcessBuilder`. **No new dependencies in any module.** (034-platform-datastore-backup)
+- No application persistence: reads Postgres 15 (`langfuse-db`) and ClickHouse (`langfuse-clickhouse`) via `docker exec`, writes a zip to Google Drive. One new Docker named volume (`langfuse-clickhouse-backups`) as the ClickHouse→backend handoff. (034-platform-datastore-backup)
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16, Embabel `Ai` (`com.embabel.agent.api.common.Ai`, the established inline-LLM injection point alongside `ArticleSectionWriter`/`DigestComposer`), Mongock, Bucket4j via the existing `RateLimitInterceptor`, `react-markdown`, Lucide React `Sparkles`. **No new dependencies in either module.** (034-article-summary-audio)
 - MongoDB — new `article_summaries` collection (mutable `@Document` class, not a record, because the generation flow transitions it in place); `narrations` changed from `blogId` to `contentType` + `contentId`. Indexes via Mongock change units `V020`/`V021` — `auto-index-creation` is off, so `@Indexed`/`@CompoundIndex` alone are decorative. (034-article-summary-audio)
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16 (web, security OAuth2 resource server, data-mongodb), `MongoTemplate` aggregation, existing `useAuth`/`useEnsureAuthenticated` (Auth0), Lucide React. **No new dependencies in either module.** (035-listen-from-listing)

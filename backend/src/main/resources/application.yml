@@ -170,6 +170,20 @@ google:
     client-secret: ${GOOGLE_DRIVE_CLIENT_SECRET:}
     refresh-token: ${GOOGLE_DRIVE_REFRESH_TOKEN:}
     folder-id: ${GOOGLE_DRIVE_FOLDER_ID:}
+    # Read-only here: the backend lists this folder for the admin page, but the
+    # capture and its retention live in scripts/backup-platform.sh (constitution
+    # 2.0.0 - no Docker access in the container serving public traffic).
+    #
+    # Platform backups MUST NOT share a folder with the application backups above.
+    # Retention keeps the newest N *.zip in a folder, so a shared folder would make
+    # the two backup types evict each other and silently degrade today's "last 7
+    # days" guarantee to roughly "last 3 days" of each.
+    #
+    # Leave this blank in normal operation: the platform folder is then resolved by
+    # name (`simonrowe-platform-backups`). Set it only to pin a specific folder —
+    # note that unlike folder-id above, leaving it blank does NOT fall back to the
+    # application folder.
+    platform-folder-id: ${GOOGLE_DRIVE_PLATFORM_FOLDER_ID:}
 
 # On-demand narration is deliberately disabled unless the operator completes
 # docs/setup/google-cloud-tts.md and explicitly enables it. Google Drive's OAuth
@@ -416,6 +430,12 @@ aggregation:
     max-source-chars: 12000
 
 backup:
+  # Application data: MongoDB, uploaded media, Elasticsearch embeddings.
+  #
+  # The platform datastore backup (Postgres + ClickHouse) is NOT configured here.
+  # It runs in the `deployer` container as scripts/backup-platform.sh on a Temporal
+  # schedule, because constitution 2.0.0 forbids Docker access in this container.
+  # See docs/runbooks/platform-backup-restore.md.
   schedule:
     cron: "0 0 22 * * *"
     zone: "Europe/London"

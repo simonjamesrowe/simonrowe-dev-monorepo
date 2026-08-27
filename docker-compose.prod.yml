@@ -457,6 +457,21 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set CLAUDE_CODE_OAUTH_TOKEN in .env}
       FACTORY_DEPLOY_MODEL: ${FACTORY_DEPLOY_MODEL:-sonnet}
       FACTORY_DEPLOY_EFFORT: ${FACTORY_DEPLOY_EFFORT:-medium}
+      # Nightly platform datastore backup (Postgres x4 + ClickHouse). It lives here for
+      # the same reason the deploy does: it needs `docker exec` into the datastores, and
+      # constitution 2.0.0 keeps host-level container access off the container that
+      # terminates public traffic.
+      #
+      # Off by default. Enabling registers PlatformBackupActivitiesImpl, which is the
+      # only thing that lets a container execute the capture. It does NOT start backing
+      # up: PlatformBackupScheduleInitializer creates the schedule paused, and an
+      # operator unpauses it after a manual --dry-run. Assert a live poller on the
+      # `platform-backup` task queue afterwards - a healthy container with no poller
+      # means the schedule fires and nothing runs. See
+      # docs/runbooks/platform-backup-restore.md.
+      FACTORY_PLATFORM_BACKUP_ENABLED: ${FACTORY_PLATFORM_BACKUP_ENABLED:-false}
+      FACTORY_PLATFORM_BACKUP_SCRIPT: /workspace/repo/scripts/backup-platform.sh
+      FACTORY_PLATFORM_BACKUP_REPO_DIR: /workspace/repo
     # The socket below is root:docker 0660 on the host, and this container runs as
     # `factory` (uid 10003) with no supplementary groups - so mounting it is not on its
     # own enough to be able to use it. Without this the container is healthy, registers
@@ -855,6 +870,25 @@ services:
       timeout: 5s
       retries: 5
 
+  # Chowns the langfuse-clickhouse-backups volume so ClickHouse can write its
+  # BACKUP output there. NOT optional: /backups does not exist in the ClickHouse
+  # image, so Docker creates the named volume empty and root-owned, while the
+  # server below runs as 101:101 — every `BACKUP DATABASE default TO File(...)`
+  # would fail on permissions. (langfuse-clickhouse-data does not need this
+  # because /var/lib/clickhouse *does* exist in the image, so Docker seeds the
+  # volume with the image's content and ownership.) Same pattern as uploads-init.
+  #
+  # One-shot: it exits 0 and stays `exited` for the life of the stack. That is
+  # success, so it is registered in ONESHOT_SERVICES in scripts/monitor-prod.sh —
+  # a one-shot missing from that list reads as a broken container on every cron
+  # tick and makes the watchdog reconcile the whole stack once a minute forever.
+  clickhouse-backups-init:
+    image: busybox
+    volumes:
+      - langfuse-clickhouse-backups:/backups
+    command: ["sh", "-c", "chown -R 101:101 /backups"]
+    restart: "no"
+
   langfuse-clickhouse:
     # Pinned to the exact build the data directory was created with. The upstream Langfuse
     # compose file itself uses an unpinned tag; do NOT change this to a bare `latest` — 26.7
@@ -871,6 +905,9 @@ services:
     mem_reservation: 512m
     restart: unless-stopped
     user: "101:101"
+    depends_on:
+      clickhouse-backups-init:
+        condition: service_completed_successfully
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
@@ -878,6 +915,14 @@ services:
     volumes:
       - langfuse-clickhouse-data:/var/lib/clickhouse
       - langfuse-clickhouse-logs:/var/log/clickhouse-server
+      # Where `BACKUP DATABASE default TO File('...')` writes. Nothing else mounts
+      # this: scripts/backup-platform.sh (in the `deployer`) extracts the archive with
+      # `docker cp` and sweeps stale staging files with `docker exec`, so it needs the
+      # Docker socket rather than the volume.
+      - langfuse-clickhouse-backups:/backups
+      # Declares /backups as an allowed backup path. Without it, BACKUP is
+      # refused outright and no ClickHouse data is ever captured.
+      - ./config/clickhouse/backup-disk.xml:/etc/clickhouse-server/config.d/backup-disk.xml:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
       interval: 5s
@@ -1203,6 +1248,15 @@ volumes:
   langfuse-db-data:
   langfuse-clickhouse-data:
   langfuse-clickhouse-logs:
+  # Staging area for the nightly platform backup: langfuse-clickhouse writes its own
+  # BACKUP output here (/backups), and scripts/backup-platform.sh pulls it out with
+  # `docker cp`. Transient by design — the script removes the file once it is in the
+  # archive, and sweeps orphans from crashed runs on the next pass.
+  #
+  # A named volume rather than a tmpfs so it survives a ClickHouse restart mid-capture,
+  # and so the sweep has something stable to clean. Created root-owned at a path absent
+  # from the image, hence clickhouse-backups-init's chown to 101:101.
+  langfuse-clickhouse-backups:
   langfuse-redis-data:
   langfuse-minio-data:
   # Dependency-Track's /data (HOME): Lucene indexes and analyzer working state.

@@ -44,6 +44,9 @@ spring:
         # implementation of any side-effecting step, which is what confines the Docker socket to
         # the container with no ingress. See specs/036-auto-deploy-on-merge/research.md §11.
         - com.simonrowe.factory.deploy.workflow
+        # Same again for the platform-backup queue. Its own queue rather than sharing `deploy`:
+        # a capture can run for hours and must never sit in front of a deploy.
+        - com.simonrowe.factory.platformbackup.workflow
       register-activity-beans: true
 
 factory:
@@ -203,3 +206,20 @@ factory:
       # files, so there is nothing for a large turn budget to buy.
       max-turns: ${FACTORY_DEPLOY_MAX_TURNS:12}
       timeout: ${FACTORY_DEPLOY_TIMEOUT:10m}
+  platform-backup:
+    # Off by default, and true only on the `deployer` service. This flag registers
+    # PlatformBackupActivitiesImpl, which is the only thing that lets a container execute the
+    # capture - and the capture needs the Docker socket, so it must stay on the container with
+    # no ingress. Same shape, and same reason, as factory.deploy.enabled above.
+    #
+    # Turning it on does NOT start backing up: PlatformBackupScheduleInitializer creates the
+    # schedule paused, and an operator unpauses it after watching a manual --dry-run. Assert a
+    # live poller on the `platform-backup` task queue afterwards - a container can be healthy
+    # with no poller registered, in which case the schedule fires and nothing ever runs.
+    enabled: ${FACTORY_PLATFORM_BACKUP_ENABLED:false}
+    script: ${FACTORY_PLATFORM_BACKUP_SCRIPT:/workspace/repo/scripts/backup-platform.sh}
+    # The deploy directory, which is also where the script reads .env from.
+    working-directory: ${FACTORY_PLATFORM_BACKUP_REPO_DIR:/workspace/repo}
+    # Generous on purpose: the ClickHouse archive is unbounded, the Pi has four cores, and a
+    # premature kill is indistinguishable from a real failure.
+    timeout: ${FACTORY_PLATFORM_BACKUP_TIMEOUT:6h}

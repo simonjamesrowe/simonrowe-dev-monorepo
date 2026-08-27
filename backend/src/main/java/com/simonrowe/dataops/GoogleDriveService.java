@@ -26,6 +26,15 @@ public class GoogleDriveService {
 
   private static final Logger LOG = LoggerFactory.getLogger(GoogleDriveService.class);
   static final String FOLDER_NAME = "simonrowe-backups";
+  /**
+   * Platform backups live in their own folder, and this is not cosmetic.
+   * {@link #listBackups(String)} returns every {@code .zip} in a folder and
+   * {@link BackupRetentionService} deletes everything past the newest N. Sharing a
+   * folder would make the two backup types evict each other, silently degrading
+   * the "last 7 days" guarantee to roughly "last 3 days" of each — a failure
+   * invisible until someone needs a six-day-old backup.
+   */
+  static final String PLATFORM_FOLDER_NAME = "simonrowe-platform-backups";
   private static final String FOLDER_MIME = "application/vnd.google-apps.folder";
   // 1 MB chunks — small enough that the per-chunk PUT/308 round-trip is
   // dominated by data transfer rather than acks, and progress logs land
@@ -35,13 +44,16 @@ public class GoogleDriveService {
   @Nullable
   private final Drive drive;
   private final String configuredFolderId;
+  private final String configuredPlatformFolderId;
 
   public GoogleDriveService(
       @Nullable final Drive drive,
-      @Value("${google.drive.folder-id:}") final String configuredFolderId
+      @Value("${google.drive.folder-id:}") final String configuredFolderId,
+      @Value("${google.drive.platform-folder-id:}") final String configuredPlatformFolderId
   ) {
     this.drive = drive;
     this.configuredFolderId = configuredFolderId;
+    this.configuredPlatformFolderId = configuredPlatformFolderId;
   }
 
   public boolean isConnected() {
@@ -70,15 +82,61 @@ public class GoogleDriveService {
     }
   }
 
+  /**
+   * Resolves the folder holding application backups (MongoDB, media,
+   * embeddings).
+   *
+   * <p>Honours {@code google.drive.folder-id} when set, otherwise looks up
+   * {@link #FOLDER_NAME} and creates it on absence. This behaviour is unchanged
+   * and must stay unchanged — the platform backup must not disturb it.
+   *
+   * @return the Drive folder id
+   * @throws IOException if the Drive lookup or creation fails
+   */
   public String findOrCreateFolder() throws IOException {
     checkDrive();
     if (configuredFolderId != null && !configuredFolderId.isBlank()) {
       LOG.debug("Using pre-configured Google Drive folder id={}", configuredFolderId);
       return configuredFolderId;
     }
+    return findOrCreateFolderByName(FOLDER_NAME);
+  }
 
+  /**
+   * Resolves the folder holding platform datastore backups (Postgres +
+   * ClickHouse).
+   *
+   * <p>Deliberately does <em>not</em> fall back to {@code google.drive.folder-id}
+   * when {@code google.drive.platform-folder-id} is unset: it resolves
+   * {@link #PLATFORM_FOLDER_NAME} instead. Falling back would put both backup
+   * types in one folder, where retention would make them evict each other — see
+   * {@link #PLATFORM_FOLDER_NAME}.
+   *
+   * @return the Drive folder id
+   * @throws IOException if the Drive lookup or creation fails
+   */
+  public String findOrCreatePlatformFolder() throws IOException {
+    checkDrive();
+    if (configuredPlatformFolderId != null && !configuredPlatformFolderId.isBlank()) {
+      LOG.debug("Using pre-configured Google Drive platform folder id={}",
+          configuredPlatformFolderId);
+      return configuredPlatformFolderId;
+    }
+    return findOrCreateFolderByName(PLATFORM_FOLDER_NAME);
+  }
+
+  /**
+   * Finds a folder by name, creating it if absent. Never consults any configured
+   * folder id, so callers cannot accidentally collapse two folders into one.
+   *
+   * @param folderName the folder name to resolve
+   * @return the Drive folder id
+   * @throws IOException if the Drive lookup or creation fails
+   */
+  public String findOrCreateFolderByName(final String folderName) throws IOException {
+    checkDrive();
     FileList result = drive.files().list()
-        .setQ("name = '" + FOLDER_NAME + "' and mimeType = '"
+        .setQ("name = '" + folderName + "' and mimeType = '"
             + FOLDER_MIME + "' and trashed = false")
         .setFields("files(id, name)")
         .setPageSize(1)
@@ -91,13 +149,13 @@ public class GoogleDriveService {
     }
 
     File folderMetadata = new File();
-    folderMetadata.setName(FOLDER_NAME);
+    folderMetadata.setName(folderName);
     folderMetadata.setMimeType(FOLDER_MIME);
     File folder = drive.files().create(folderMetadata)
         .setFields("id")
         .setSupportsAllDrives(true)
         .execute();
-    LOG.info("Created Google Drive folder '{}' with id={}", FOLDER_NAME, folder.getId());
+    LOG.info("Created Google Drive folder '{}' with id={}", folderName, folder.getId());
     return folder.getId();
   }
 
