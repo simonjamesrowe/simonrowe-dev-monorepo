@@ -72,3 +72,8 @@ rate-limit:
     requests-per-minute: 10000
   summary:
     requests-per-minute: 10000
+platform:
+  releases:
+    summaries:
+      enabled: false
+      model: test-model

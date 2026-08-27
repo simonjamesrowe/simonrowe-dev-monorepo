@@ -35,6 +35,7 @@ const BlogListingPage = named(() => import('./pages/BlogListingPage'), 'BlogList
 const BlogDetailPage = named(() => import('./pages/BlogDetailPage'), 'BlogDetailPage')
 const NewsEventsPage = named(() => import('./pages/NewsEventsPage'), 'NewsEventsPage')
 const McpPage = named(() => import('./pages/McpPage'), 'McpPage')
+const StatusPage = named(() => import('./pages/StatusPage'), 'StatusPage')
 const NotFoundPage = named(() => import('./pages/NotFoundPage'), 'NotFoundPage')
 
 const AdminLayout = named(() => import('./components/admin/AdminLayout'), 'AdminLayout')
@@ -175,6 +176,7 @@ function App() {
         <Route element={<PublicLayout><BlogDetailPage /></PublicLayout>} path="/blogs/:id" />
         <Route element={<PublicLayout><NewsEventsPage /></PublicLayout>} path="/news-events" />
         <Route element={<PublicLayout><McpPage /></PublicLayout>} path="/mcp" />
+        <Route element={<PublicLayout><StatusPage /></PublicLayout>} path="/status" />
         {/* Legacy singular paths, still shared externally. */}
         <Route element={<Navigate replace to="/blogs" />} path="/blog" />
         <Route element={<LegacyBlogDetailRedirect />} path="/blog/:id" />

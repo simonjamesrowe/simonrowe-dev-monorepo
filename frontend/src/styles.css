@@ -10023,3 +10023,265 @@ body[data-narration-bar] .app-layout__main {
     gap: 0.5rem;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Version badge — the footer's link to /status.
+   Sits in the single .footer__bar flex row, so it must stay small enough not
+   to force that bar to wrap on a narrow phone.
+   --------------------------------------------------------------------------- */
+.version-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.version-badge:hover,
+.version-badge:focus-visible {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+
+.version-badge__label {
+  opacity: 0.6;
+}
+
+.version-badge__sha {
+  letter-spacing: 0.02em;
+}
+
+/* ---------------------------------------------------------------------------
+   Platform status page (/status).
+   Mobile: the service grid collapses to one column and the component list
+   stacks its key/value pairs rather than scrolling sideways.
+   --------------------------------------------------------------------------- */
+.status-page {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+.status-page__title {
+  margin: 0 0 0.5rem;
+}
+
+.status-page__intro,
+.status-page__note {
+  color: var(--color-text-muted);
+  max-width: 46rem;
+  line-height: 1.6;
+}
+
+.status-page__note {
+  font-size: 0.9rem;
+}
+
+.status-page__section {
+  margin-top: 3rem;
+}
+
+.status-page__section-title {
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.status-page__empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.status-page__drift {
+  border-left: 3px solid var(--color-accent, #d97706);
+  background: color-mix(in srgb, var(--color-accent, #d97706) 8%, transparent);
+  padding: 0.75rem 1rem;
+  border-radius: 0 4px 4px 0;
+  line-height: 1.5;
+}
+
+.status-page__services {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+
+.service-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.service-card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.service-card__name {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.service-card__sha {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.service-card__sha--unknown {
+  font-style: italic;
+}
+
+.service-card__subject {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.service-card__facts {
+  margin: 0.75rem 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.service-card__facts dt {
+  color: var(--color-text-muted);
+}
+
+.service-card__facts dd {
+  margin: 0;
+}
+
+.component-table {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.component-table__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.component-table__name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.component-table__version {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.component-table__tag--floating {
+  font-style: italic;
+}
+
+.release-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.release {
+  border-left: 2px solid var(--color-border);
+  padding-left: 1rem;
+}
+
+.release--running {
+  border-left-color: var(--color-accent, #d97706);
+}
+
+.release__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+}
+
+.release__type {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  color: var(--color-text-muted);
+}
+
+.release__sha {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--color-text-muted);
+}
+
+.release__date,
+.release__badge {
+  color: var(--color-text-muted);
+}
+
+.release__badge {
+  font-weight: 600;
+  color: var(--color-accent, #d97706);
+}
+
+.release__subject {
+  margin: 0.4rem 0 0.4rem;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.release__summary {
+  margin: 0;
+  line-height: 1.65;
+  color: var(--color-text-muted);
+}
+
+.release__summary--pending {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+@media (max-width: 40rem) {
+  .status-page {
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .status-page__services {
+    grid-template-columns: 1fr;
+  }
+
+  .component-table__row {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+}

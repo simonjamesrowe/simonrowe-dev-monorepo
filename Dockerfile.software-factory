@@ -18,6 +18,17 @@ COPY backend/build.gradle.kts backend/build.gradle.kts
 COPY software-factory/build.gradle.kts software-factory/build.gradle.kts
 COPY software-factory/src/ software-factory/src/
 
+# Passed in from CI (publish.yml's publish-software-factory job resolves these from its
+# full-history checkout) since .git is deliberately excluded from this build context by
+# .dockerignore — see the comment above factoryGitText in software-factory/build.gradle.kts.
+# Must be set before the Gradle invocation below, which is what reads them.
+ARG GIT_SHA
+ARG GIT_COMMIT_TIME
+ARG GIT_COMMIT_SUBJECT
+ENV GIT_SHA=${GIT_SHA} \
+    GIT_COMMIT_TIME=${GIT_COMMIT_TIME} \
+    GIT_COMMIT_SUBJECT=${GIT_COMMIT_SUBJECT}
+
 RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew :software-factory:bootJar --no-daemon
 

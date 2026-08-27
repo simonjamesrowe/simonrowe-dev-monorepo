@@ -211,6 +211,52 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 037-platform-status-page: A public `/status` page reports which commit each first-party
+  service runs, the third-party image tags, and a changelog with AI-written release notes.
+  Every version fact is **baked into the artifact at build time** (`springBoot { buildInfo }`
+  with the commit SHA in `additional`, plus two generated resources) and self-reported — no
+  Docker socket, so nothing new touches the one container that can mutate prod.
+  `GET /api/platform/status` returns three services (backend, `software-factory`, `deployer`);
+  the frontend adds its own entry client-side because the backend cannot know which bundle a
+  browser loaded. Things that are load-bearing:
+  - **`software-factory`/`deployer` version metadata comes from CI build args, not git inside
+    the image.** `Dockerfile.software-factory` runs Gradle in the build stage with `.git/`
+    excluded by `.dockerignore`, so `software-factory/build.gradle.kts` reads
+    `GIT_SHA`/`GIT_COMMIT_TIME`/`GIT_COMMIT_SUBJECT` env vars first and only falls back to
+    running `git` directly for a local build. `publish.yml`'s `publish-software-factory` job
+    resolves those three on its full-history runner checkout and passes them as
+    `docker/build-push-action` build-args. Get this wrong and both services permanently report
+    `unknown` with no error anywhere — it happened once during implementation.
+  - **`publish.yml`'s `fetch-depth: 0` only needs to be on three of the four checkouts** —
+    `publish-backend`, `publish-frontend`, `publish-software-factory`. The default depth-1
+    checkout makes `git log` return ONE commit, so the changelog ships with a single entry and
+    looks like it worked; the `sbom` job stays shallow on purpose, since it never runs
+    `generateReleaseHistory` or reads `buildInfo`.
+  - **`buildInfo`'s `time` is the COMMIT timestamp, not wall-clock** — a wall-clock value
+    changes every build and invalidates `:backend:bootJar` in the cache `ci-build-speedup`
+    only just got working.
+  - **Summaries are generated at ingest by `ReleaseSummarySweep`, never on view.**
+    `/api/platform/**` is deliberately absent from `RateLimitInterceptor`'s explicit four-path
+    allowlist in `WebConfig` (the page makes two requests per view), so an LLM call on the read
+    path would be both a cost and abuse problem. Releases go `PENDING` → `READY`/`FAILED` only,
+    with no intermediate claimed state — `ReleaseSummarySweep.sweep()` reads `findPending()` and
+    calls `summarise()` directly, no `findAndModify` claim step in between. Safe today only
+    because prod runs one backend instance and `@Scheduled(fixedDelay)` cannot let a second tick
+    overlap the first; revisit before ever running two instances or switching to `fixedRate`.
+  - **Release records are written by `ReleaseRecorder` on startup, not Mongock** — deliberate
+    deviation: they are derived, self-healing data a restore has to re-establish, and
+    change-unit LLM I/O would run against the shared Testcontainers Mongo. `V022` creates
+    indexes only, and `RestoreService` calls `createIndexes()` directly because Mongock will
+    not re-run a recorded change unit. `PlatformRelease` has no `insertions`/`deletions`
+    fields — dropped as dead schema with no data source and no consumer.
+  - **software-factory's `GET /api/version` is unauthenticated on purpose** — unrouted by
+    nginx, discloses only a public-repo SHA. Token-protecting it would hand the backend a
+    token that also authorises `/api/reviews`. This endpoint is what makes `deployer` drift
+    visible, since it never recreates itself.
+  - One commit == one release: `main` is squash-merged and Publish runs on every merge.
+    Historical entries are labelled **published**, not deployed — `deploy_runs` is empty.
+  - `platform_releases` is in `BackupService.BACKUP_COLLECTIONS` and
+    `RestoreService.IMPORT_ORDER_INDEPENDENT`. See `docs/runbooks/platform-status.md`.
 - 034-platform-datastore-backup: nightly (02:00) + on-demand capture of the four
   `langfuse-db` Postgres databases (`langfuse`, `dtrack`, `temporal`,
   `temporal_visibility`) and the ClickHouse `default` database. **It runs in the
