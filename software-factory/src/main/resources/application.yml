@@ -241,7 +241,14 @@ factory:
     # commentCreate. Proves the lookup and the decision table against the real tracker without
     # leaving anything in it.
     dry-run: ${FACTORY_LINEAR_DRY_RUN:false}
-    request-timeout: 30s
+    # 15s, and this number is arithmetic, not taste. One filing on a cold team cache is four
+    # sequential Linear calls (fingerprint lookup, team/label/triage resolution, issueCreate,
+    # attachmentCreate) and both producers give fileIssue a 90s startToCloseTimeout. Temporal
+    # does not interrupt a non-heartbeating activity, so an attempt that outlives that timeout
+    # keeps running while attempt 2 starts, sees an empty lookup and files a SECOND ticket.
+    # 4 x 15s = 60s fits inside 90s; 4 x 30s = 120s did not. Raising this means raising the
+    # activity timeout in DeployWorkflowImpl and CveFixWorkflowImpl too.
+    request-timeout: 15s
     producers:
       deploy:
         label: "factory:deploy"

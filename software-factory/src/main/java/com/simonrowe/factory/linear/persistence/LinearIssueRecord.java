@@ -16,9 +16,16 @@ import org.springframework.data.mongodb.core.mapping.Document;
  * still open. This document exists to answer "what has the sink filed, and did it dedup
  * correctly?" outside Temporal's retention window.
  *
- * <p>{@code attachmentPending} closes the one real duplicate risk: an {@code issueCreate} that
- * succeeds followed by an {@code attachmentCreate} that fails. Without it a retry finds no
- * attachment and files a second ticket; with it, the retry repairs by attaching.
+ * <p>{@code attachmentPending} closes <strong>one</strong> of this sink's duplicate-ticket
+ * risks, not all of them: the window where an {@code issueCreate} succeeds and the
+ * {@code attachmentCreate} after it fails. Without the flag a retry finds no attachment and files
+ * a second ticket; with it, a retry landing in that gap repairs by attaching. The other two are
+ * closed elsewhere, and this Javadoc is the wrong place to look for them — a retry after a
+ * <em>fully</em> successful filing is caught by {@link #hasOccurrence} against the
+ * caller-supplied occurrence id, and a filing attempt outliving its activity
+ * {@code startToCloseTimeout} while Temporal starts a second one is held off by keeping
+ * {@code factory.linear.request-timeout} small enough that the worst-case four sequential Linear
+ * calls still fit inside that timeout.
  */
 @Document(collection = "linear_issues")
 public record LinearIssueRecord(

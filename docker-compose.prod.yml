@@ -410,8 +410,11 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set CLAUDE_CODE_OAUTH_TOKEN in .env}
       FACTORY_DEPLOY_MODEL: ${FACTORY_DEPLOY_MODEL:-sonnet}
       FACTORY_DEPLOY_EFFORT: ${FACTORY_DEPLOY_EFFORT:-medium}
-      # No LINEAR_* here on purpose. This container holds the Docker socket; the tracker
-      # credential lives only on `software-factory`. See docs/runbooks/linear.md.
+      # No variable whose name contains LINEAR here, on purpose - not the key and not
+      # FACTORY_LINEAR_ENABLED, which is what would register the sink in this JVM at all. This
+      # container holds the Docker socket; the tracker credential lives only on
+      # `software-factory`. DeployerLinearCredentialTest fails the build on either. See
+      # docs/runbooks/linear.md.
     volumes:
       # Root on the host. Unavoidable for anything that deploys; mitigated by this
       # container having no ingress, no published port and no public route.

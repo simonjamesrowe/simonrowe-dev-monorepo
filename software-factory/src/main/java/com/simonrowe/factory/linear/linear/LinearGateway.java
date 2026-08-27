@@ -157,8 +157,9 @@ public class LinearGateway {
    * @param title the issue title
    * @param body the issue description, in Markdown
    * @param priority the Linear priority integer
-   * @param labelName the label to apply; skipped when the team has no such label, because a
-   *     missing label must not cost the finding
+   * @param labelName the label to apply; skipped with a {@code WARN} when the team has no such
+   *     label, because a missing label must not cost the finding — but a silent skip would make
+   *     the missing label undetectable
    * @return the created issue
    * @throws LinearApiException on any API fault, or when Linear reports the mutation unsuccessful
    */
@@ -174,6 +175,16 @@ public class LinearGateway {
     String labelId = team.labelIds().get(labelName);
     if (labelId != null) {
       input.putArray("labelIds").add(labelId);
+    } else {
+      // The only runtime signal that human prerequisite 2 was skipped. Silently omitting the
+      // label files every ticket unlabelled, forever, successfully, with nothing anywhere to
+      // notice - and the label is how a human tells factory tickets apart in Triage.
+      log.warn(
+          "Team {} has no label named {} - filing this issue unlabelled. Create the label in "
+              + "Linear; teamContext() caches positively for the process lifetime, so the "
+              + "container needs restarting before the new label is picked up.",
+          properties.teamKey(),
+          labelName);
     }
     JsonNode result = execute(CREATE_ISSUE, Map.of("input", input)).path("issueCreate");
     if (!result.path("success").asBoolean(false)) {

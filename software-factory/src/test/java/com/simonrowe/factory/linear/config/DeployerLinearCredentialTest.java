@@ -13,14 +13,22 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Enforces credential confinement in {@code docker-compose.prod.yml}: the {@code deployer}
- * service must never declare a {@code LINEAR_}-prefixed environment variable.
+ * service must never declare an environment variable whose name <strong>contains</strong>
+ * {@code LINEAR}.
+ *
+ * <p>Containing, not starting with — and that is the whole point of the check rather than a
+ * detail of it. A {@code LINEAR_}-prefix match catches {@code LINEAR_API_KEY} and misses
+ * {@code FACTORY_LINEAR_ENABLED}, which is precisely the more dangerous of the two: setting it
+ * true is what registers {@code LinearActivitiesImpl} in the socket-holding JVM and makes
+ * {@code deployer} poll the {@code linear} queue. The credential would then be the second edit,
+ * not the first.
  *
  * <p>{@code LinearActivitiesImpl}'s class-level {@code @ConditionalOnProperty} keeps the Linear
  * credential out of the JVM even if it were present in the process environment, but nothing stops
- * a future compose edit handing the key straight to {@code deployer} — the container holding
- * {@code /var/run/docker.sock}, root-equivalent on the host. This test reads the compose file
- * itself, the same way a reviewer would, rather than trusting the Spring-side gate alone. See
- * {@code docs/runbooks/linear.md}.
+ * a future compose edit handing the key — or the flag that makes the key useful — straight to
+ * {@code deployer}, the container holding {@code /var/run/docker.sock}, root-equivalent on the
+ * host. This test reads the compose file itself, the same way a reviewer would, rather than
+ * trusting the Spring-side gate alone. See {@code docs/runbooks/linear.md}.
  *
  * <p>A hand-rolled line scan rather than a YAML library, matching {@code NoHostProcessLaunchTest}
  * in the backend module: this module carries no YAML dependency, and one line of the compose file
@@ -41,7 +49,13 @@ class DeployerLinearCredentialTest {
   private static final Pattern MAPPING_KEY = Pattern.compile("^\\s+([A-Za-z0-9_]+):.*");
 
   private static final String DEPLOYER_SERVICE = "deployer";
-  private static final String FORBIDDEN_PREFIX = "LINEAR_";
+
+  /**
+   * Matched as a substring of the variable name, deliberately: {@code FACTORY_LINEAR_ENABLED}
+   * carries no secret but is the switch that would put the sink — and therefore the need for the
+   * credential — inside the socket-holding container.
+   */
+  private static final String FORBIDDEN_FRAGMENT = "LINEAR";
 
   @Test
   void deployerServiceDeclaresNoLinearVariable() throws IOException {
@@ -55,7 +69,7 @@ class DeployerLinearCredentialTest {
         continue;
       }
       Matcher key = MAPPING_KEY.matcher(line);
-      if (key.matches() && key.group(1).startsWith(FORBIDDEN_PREFIX)) {
+      if (key.matches() && key.group(1).contains(FORBIDDEN_FRAGMENT)) {
         offendingKeys.add(key.group(1));
       }
     }
@@ -63,7 +77,8 @@ class DeployerLinearCredentialTest {
     assertThat(offendingKeys)
         .as(
             "`deployer` holds /var/run/docker.sock and must hold as few other credentials as "
-                + "possible; the Linear tracker key belongs only on `software-factory`. See "
+                + "possible; the Linear tracker key AND the flag that would make it needed "
+                + "(FACTORY_LINEAR_ENABLED) belong only on `software-factory`. See "
                 + "docs/runbooks/linear.md.")
         .isEmpty();
   }

@@ -26,7 +26,9 @@ class LinearPropertiesTest {
     assertThat(properties.apiBaseUrl()).isEqualTo("https://api.linear.app/graphql");
     assertThat(properties.fingerprintBaseUrl())
         .isEqualTo("https://factory.simonrowe.dev/fingerprint");
-    assertThat(properties.requestTimeout()).isEqualTo(Duration.ofSeconds(30));
+    // 15s x the four sequential calls one cold filing makes = 60s, inside the 90s
+    // startToCloseTimeout both producers give fileIssue. See LinearProperties.
+    assertThat(properties.requestTimeout()).isEqualTo(Duration.ofSeconds(15));
   }
 
   @Test

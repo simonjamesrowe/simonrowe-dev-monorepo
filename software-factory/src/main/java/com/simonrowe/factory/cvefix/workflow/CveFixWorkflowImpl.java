@@ -337,8 +337,18 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
    */
   private void fileUnfixable(
       final CveFixRequest request, final List<UnfixableComponent> newlyRecorded) {
-    // The flag first: with the sink disabled nothing polls the `linear` queue, so scheduling the
+    // Two conditions, and only the first is load-bearing.
+    //
+    // The flag: with the sink disabled nothing polls the `linear` queue, so scheduling the
     // activity would stall the run until its schedule-to-close timeout rather than fail fast.
+    // It is checked FIRST deliberately.
+    //
+    // The null: purely defensive. It is tempting to justify it as replay protection for a history
+    // written while `recordUnfixable` was a `void` activity - a completed void activity replays
+    // as a null result - but that reasoning does not hold: such a history also carries a
+    // `CveFixRequest` serialized without `linearFilingEnabled`, which deserializes false, so the
+    // flag check above short-circuits and this half is never reached. Keep it as a cheap guard
+    // against a future activity that can legitimately return null; do not rely on it for replay.
     if (!request.linearFilingEnabled() || newlyRecorded == null) {
       return;
     }
@@ -362,8 +372,14 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
         // exhausted-activity type: encoding the IssueFiling payload happens on THIS thread, so a
         // converter error is not a TemporalFailure, would fail the workflow task, and Temporal
         // retries those forever — hanging the run and losing recordRun entirely.
+        //
+        // `component`, not `component.purl()`: a handler whose whole job is to stop an exception
+        // escaping must not be able to throw one itself. SLF4J formats a null argument; a
+        // dereference of a null element would NPE out of the catch and hang the run anyway,
+        // which is exactly what stillFinishesTheRunWhenFilingThrowsSomethingOtherThanAn-
+        // ActivityFailure caught.
         Workflow.getLogger(CveFixWorkflowImpl.class)
-            .warn("Could not file {} into Linear", component.purl(), exception);
+            .warn("Could not file {} into Linear", component, exception);
       }
     }
   }

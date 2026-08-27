@@ -25,6 +25,21 @@ public record LinearProperties(
 
   private static final int NORMAL_PRIORITY = 3;
 
+  /**
+   * Per-HTTP-call timeout, and it is arithmetic rather than taste.
+   *
+   * <p>The worst case of one {@code IssueFiler.file} on a cold team cache is <strong>four
+   * sequential Linear calls</strong>: the fingerprint lookup, the team/label/triage resolution,
+   * {@code issueCreate} and {@code attachmentCreate}. Both producers give the {@code fileIssue}
+   * activity a 90-second {@code startToCloseTimeout}, and Temporal does not interrupt a
+   * non-heartbeating activity — it simply starts attempt 2 while attempt 1 runs on. Attempt 2
+   * then sees an empty lookup and files a <strong>second ticket</strong>. At 15s the worst case
+   * is 60s, comfortably inside 90s; at the original 30s it was 120s, and that duplicate was
+   * reachable. <strong>Do not raise this without raising the activity timeout in
+   * {@code DeployWorkflowImpl} and {@code CveFixWorkflowImpl} to match.</strong>
+   */
+  private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(15);
+
   public LinearProperties {
     apiKey = apiKey == null ? "" : apiKey;
     apiBaseUrl = apiBaseUrl == null ? "https://api.linear.app/graphql" : apiBaseUrl;
@@ -33,7 +48,7 @@ public record LinearProperties(
         fingerprintBaseUrl == null
             ? "https://factory.simonrowe.dev/fingerprint"
             : fingerprintBaseUrl;
-    requestTimeout = requestTimeout == null ? Duration.ofSeconds(30) : requestTimeout;
+    requestTimeout = requestTimeout == null ? DEFAULT_REQUEST_TIMEOUT : requestTimeout;
     Map<String, Producer> merged = new HashMap<>();
     merged.put("deploy", new Producer("factory:deploy", 1));
     merged.put("cvefix", new Producer("factory:cvefix", NORMAL_PRIORITY));

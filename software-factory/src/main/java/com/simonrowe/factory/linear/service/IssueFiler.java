@@ -101,7 +101,7 @@ public class IssueFiler {
           "Occurrence {} already filed for fingerprint {}; treating as a replay",
           filing.occurrenceId(),
           fingerprint);
-      return new FiledIssue(
+      return reported(
           previous.decision(), existing.issueIdentifier(), existing.issueUrl(), fingerprint);
     }
 
@@ -217,11 +217,45 @@ public class IssueFiler {
                     properties.dryRun()),
                 now,
                 observed));
-    return new FiledIssue(decision, saved.issueIdentifier(), saved.issueUrl(), fingerprint);
+    return reported(decision, saved.issueIdentifier(), saved.issueUrl(), fingerprint);
+  }
+
+  /**
+   * The answer handed back to the producer, which is deliberately not a mirror of what was
+   * persisted.
+   *
+   * <p><strong>A {@code SUPPRESSED} occurrence reports no issue at all.</strong> The suppression
+   * arm leaves the stored record pointing at whatever it last filed, and that is correct for an
+   * audit trail — but it makes a reachable, ordinary sequence lie to the producer: occurrence 1
+   * files {@code SIM-42}, a human cancels {@code SIM-42}, occurrence 2 resolves to
+   * {@code SUPPRESSED} and would otherwise be handed {@code SIM-42} back. The deploy producer
+   * puts that URL on {@code DeployRunRecord.issueUrl} and writes a commit comment reading
+   * "tracked in Linear", pointing a reader at a declined ticket that never received this
+   * occurrence's diagnosis. "We stayed quiet" and "here is the ticket" are different facts, so
+   * only the first is reported. Mongo still holds the history.
+   *
+   * @param decision the decision taken
+   * @param issueIdentifier the stored identifier, or null
+   * @param issueUrl the stored URL, or null
+   * @param fingerprint this problem's fingerprint
+   * @return the outcome, with the issue fields cleared for a suppressed occurrence
+   */
+  private static FiledIssue reported(
+      final FilingDecision decision,
+      final String issueIdentifier,
+      final String issueUrl,
+      final String fingerprint) {
+    if (decision == FilingDecision.SUPPRESSED) {
+      return new FiledIssue(decision, null, null, fingerprint);
+    }
+    return new FiledIssue(decision, issueIdentifier, issueUrl, fingerprint);
   }
 
   private static LinearIssueDecision lastDecisionFor(
       final LinearIssueRecord record, final String occurrenceId) {
+    // Filtering on occurrenceId alone, with no dry-run filter, is safe: a dry-run entry can never
+    // FOLLOW a real one for the same occurrenceId, because hasOccurrence would have returned true
+    // and this method would never have been reached. So the last entry for the id is the real one.
     return record.decisions().stream()
         .filter(d -> occurrenceId.equals(d.occurrenceId()))
         .reduce((first, second) -> second)

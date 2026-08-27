@@ -41,8 +41,10 @@ import io.temporal.failure.ApplicationFailure;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 
 class CveFixWorkflowTest {
@@ -497,13 +499,40 @@ class CveFixWorkflowTest {
     when(activities.recordUnfixable(anyList(), anyList())).thenReturn(List.of(UNFIXABLE));
     LinearActivities linear = linearActivities();
     when(linear.fileIssue(any()))
-        .thenThrow(ApplicationFailure.newNonRetryableFailure("Linear down", "LinearApiError"));
+        .thenThrow(ApplicationFailure.newNonRetryableFailure("Linear down", "LINEAR_API_ERROR"));
 
     CveFixResult result = runFiling(activities, linear, FILING_REQUEST);
 
     assertThat(result.status()).isEqualTo(CveFixStatus.COMPLETED);
     assertThat(recordedRun(activities).status()).isEqualTo(CveFixStatus.COMPLETED);
     verify(activities).recordUnfixable(List.of(UNFIXABLE), COMPONENTS);
+  }
+
+  // 60s, where every other test in this class takes about a second. Narrowing the catch in
+  // fileUnfixable to ActivityFailure does not make this test FAIL - it makes it WAIT. A raw JDK
+  // exception on the workflow thread is not a TemporalFailure, so it fails the workflow TASK, and
+  // Temporal retries workflow tasks forever with no give-up: the run hangs and recordRun never
+  // happens. Without the timeout a regression hangs the whole suite with no output; with it, the
+  // suite names this test and stops. Ported from DeployWorkflowTest's
+  // stillRecordsTheRunWhenFilingThrowsSomethingOtherThanAnActivityFailure, so the lesson is
+  // enforced on BOTH producers rather than one.
+  @Timeout(60)
+  @Test
+  void stillFinishesTheRunWhenFilingThrowsSomethingOtherThanAnActivityFailure() {
+    // A null element in what recordUnfixable reports reproduces that class of fault cheaply:
+    // component.purl() NPEs on the workflow thread, inside the try, exactly where building the
+    // IssueFiling payload would.
+    CveFixActivities activities = activities();
+    when(activities.checkCi(anyString())).thenReturn(outcome(CiState.GREEN));
+    when(activities.recordUnfixable(anyList(), anyList()))
+        .thenReturn(Collections.singletonList(null));
+    LinearActivities linear = linearActivities();
+
+    CveFixResult result = runFiling(activities, linear, FILING_REQUEST);
+
+    assertThat(result.status()).isEqualTo(CveFixStatus.COMPLETED);
+    assertThat(recordedRun(activities).status()).isEqualTo(CveFixStatus.COMPLETED);
+    verify(linear, never()).fileIssue(any());
   }
 
   /**

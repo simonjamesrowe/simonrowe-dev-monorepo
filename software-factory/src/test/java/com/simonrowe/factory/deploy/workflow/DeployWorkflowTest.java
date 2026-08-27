@@ -382,7 +382,7 @@ class DeployWorkflowTest {
     DeployActivities activities = activities();
     LinearActivities linear = linearActivities();
     when(linear.fileIssue(any()))
-        .thenThrow(ApplicationFailure.newNonRetryableFailure("Linear down", "LinearApiError"));
+        .thenThrow(ApplicationFailure.newNonRetryableFailure("Linear down", "LINEAR_API_ERROR"));
     failPhaseOnce(activities, DeployPhase.VERIFY, 1);
 
     Outcome outcome = executeFiling(activities, linear, requestFilingToLinear());

@@ -135,6 +135,69 @@ class IssueFilerTest {
   }
 
   @Test
+  void suppressedOccurrenceReportsNoIssueEvenWhenTheRecordStillCarriesOne() {
+    // Reachable on the ordinary path, not a hypothetical: occurrence 1 filed SIM-1, a human
+    // cancelled SIM-1, occurrence 2 arrives. The SUPPRESSED arm deliberately leaves the record
+    // pointing at that issue, so `finish` would otherwise hand the stored identifier and URL
+    // back to the producer - and DeployWorkflowImpl would put that URL on a run that filed
+    // nothing, with a commit comment inviting a reader to a declined ticket that does not
+    // contain this run's diagnosis. "We stayed quiet" and "here is the ticket" are different
+    // facts.
+    String fingerprint = Fingerprint.of("deploy", List.of("recreate", "backend"));
+    LinearIssueRecord filedThenCancelled =
+        LinearIssueRecord.first(fingerprint, "deploy", List.of("recreate", "backend"), NOW)
+            .withPendingAttachment("i1", "SIM-1", "https://linear.app/i/1")
+            .withAttachmentWritten()
+            .withDecision(
+                new LinearIssueDecision(
+                    NOW, FilingDecision.FILED_NEW, "run-0", "deploy-prod", "x", false),
+                NOW,
+                IssueStateType.TRIAGE);
+    when(records.findById(fingerprint)).thenReturn(Optional.of(filedThenCancelled));
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.CANCELED)));
+
+    FiledIssue filed = filer().file(filing());
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.SUPPRESSED);
+    assertThat(filed.issueIdentifier()).isNull();
+    assertThat(filed.issueUrl()).isNull();
+
+    // Only what is RETURNED is blanked. The audit trail keeps the whole history, which is the
+    // only place the declined ticket is still recoverable from.
+    ArgumentCaptor<LinearIssueRecord> saved = ArgumentCaptor.forClass(LinearIssueRecord.class);
+    verify(records).save(saved.capture());
+    assertThat(saved.getValue().issueIdentifier()).isEqualTo("SIM-1");
+    assertThat(saved.getValue().issueUrl()).isEqualTo("https://linear.app/i/1");
+    assertThat(saved.getValue().lastKnownStateType()).isEqualTo(IssueStateType.CANCELED);
+  }
+
+  @Test
+  void replayOfSuppressedOccurrenceAlsoReportsNoIssue() {
+    // The replay arm returns the STORED decision, so it needs the same treatment: a retry of a
+    // suppressed occurrence must not start reporting a ticket the first attempt correctly
+    // withheld.
+    String fingerprint = Fingerprint.of("deploy", List.of("recreate", "backend"));
+    LinearIssueRecord suppressed =
+        LinearIssueRecord.first(fingerprint, "deploy", List.of("recreate", "backend"), NOW)
+            .withPendingAttachment("i1", "SIM-1", "https://linear.app/i/1")
+            .withAttachmentWritten()
+            .withDecision(
+                new LinearIssueDecision(
+                    NOW, FilingDecision.SUPPRESSED, "run-1", "deploy-prod", "x", false),
+                NOW,
+                IssueStateType.CANCELED);
+    when(records.findById(fingerprint)).thenReturn(Optional.of(suppressed));
+
+    FiledIssue filed = filer().file(filing());
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.SUPPRESSED);
+    assertThat(filed.issueIdentifier()).isNull();
+    assertThat(filed.issueUrl()).isNull();
+    verifyNoInteractions(gateway);
+  }
+
+  @Test
   void filesRegressionNamingThePredecessorInTheBody() {
     when(gateway.issuesForFingerprint(anyString()))
         .thenReturn(List.of(issue(IssueStateType.COMPLETED)));
