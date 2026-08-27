@@ -147,7 +147,7 @@ git checkout must not hit a build error, and the page renders "dev build".
 New MongoDB collection **`platform_releases`**, `_id` = the full commit SHA:
 
 ```
-shortSha, commitTime, subject, body, type, filesChanged[], insertions, deletions,
+shortSha, commitTime, subject, body, type, filesChanged[],
 summary, summaryStatus (PENDING | READY | FAILED), summaryAttempts,
 firstSeenAt, source (RUNNING | PUBLISHED_HISTORY), updatedAt
 ```
