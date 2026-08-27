@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -70,7 +71,7 @@ public class ProdImageCatalog {
       return ((Map<String, Object>) services).entrySet().stream()
           .filter(entry -> included(entry.getKey()))
           .map(entry -> component(entry.getKey(), entry.getValue()))
-          .filter(java.util.Objects::nonNull)
+          .filter(Objects::nonNull)
           .sorted(Comparator.comparing(PlatformComponent::name))
           .toList();
     } catch (IOException | RuntimeException e) {
@@ -94,12 +95,29 @@ public class ProdImageCatalog {
     if (image == null) {
       return null;
     }
-    String reference = resolve(image.toString().trim());
-    int separator = reference.lastIndexOf(':');
+    return parseReference(name, image.toString());
+  }
+
+  /**
+   * Splits a compose {@code image:} reference into repository and tag, resolving {@code
+   * ${VAR:-default}} interpolation first.
+   *
+   * <p>Package-private so it is directly testable without a classpath resource — the
+   * registry-port-versus-tag disambiguation below is easy to get wrong silently, so it is
+   * exercised straight from a raw reference string rather than only indirectly through {@link
+   * #components()}.
+   *
+   * @param name the compose service name
+   * @param reference the raw {@code image:} value, e.g. {@code mongo:8} or {@code host:5000/img}
+   * @return the parsed component, with {@code tag} defaulted to {@code latest} when absent
+   */
+  static PlatformComponent parseReference(final String name, final String reference) {
+    String resolved = resolve(reference.trim());
+    int separator = resolved.lastIndexOf(':');
     // A colon before the last slash belongs to a registry port, not a tag.
-    boolean tagged = separator > reference.lastIndexOf('/');
-    String repository = tagged ? reference.substring(0, separator) : reference;
-    String tag = tagged ? reference.substring(separator + 1) : LATEST;
+    boolean tagged = separator > resolved.lastIndexOf('/');
+    String repository = tagged ? resolved.substring(0, separator) : resolved;
+    String tag = tagged ? resolved.substring(separator + 1) : LATEST;
     return new PlatformComponent(name, repository, tag, LATEST.equals(tag));
   }
 

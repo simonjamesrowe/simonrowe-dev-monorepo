@@ -74,6 +74,54 @@ class ProdImageCatalogTest {
     assertThat(names).isSorted();
   }
 
+  // ProdImageCatalog.parseReference is exercised directly here because the real compose file
+  // has no host:port/image entries today, so the registry-port-versus-tag split would
+  // otherwise be untested and free to regress silently.
+
+  @Test
+  void treatsRegistryPortAsPartOfRepository() {
+    PlatformComponent parsed =
+        ProdImageCatalog.parseReference("registry-example", "host:5000/image");
+
+    assertThat(parsed.image()).isEqualTo("host:5000/image");
+    assertThat(parsed.tag()).isEqualTo("latest");
+    assertThat(parsed.floating()).isTrue();
+  }
+
+  @Test
+  void splitsTagAfterRegistryPort() {
+    PlatformComponent parsed =
+        ProdImageCatalog.parseReference("registry-example", "host:5000/image:1.2.3");
+
+    assertThat(parsed.image()).isEqualTo("host:5000/image");
+    assertThat(parsed.tag()).isEqualTo("1.2.3");
+    assertThat(parsed.floating()).isFalse();
+  }
+
+  @Test
+  void parsesPlainTaggedReference() {
+    PlatformComponent parsed = ProdImageCatalog.parseReference("mongodb", "mongo:8");
+
+    assertThat(parsed).isEqualTo(new PlatformComponent("mongodb", "mongo", "8", false));
+  }
+
+  @Test
+  void parsesPlainUntaggedReferenceAsFloatingLatest() {
+    PlatformComponent parsed = ProdImageCatalog.parseReference("mongodb", "mongo");
+
+    assertThat(parsed).isEqualTo(new PlatformComponent("mongodb", "mongo", "latest", true));
+  }
+
+  @Test
+  void resolvesInterpolatedDefaultAndMarksItFloating() {
+    PlatformComponent parsed =
+        ProdImageCatalog.parseReference("example", "${FACTORY_IMAGE:-ghcr.io/example/img:latest}");
+
+    assertThat(parsed.image()).isEqualTo("ghcr.io/example/img");
+    assertThat(parsed.tag()).isEqualTo("latest");
+    assertThat(parsed.floating()).isTrue();
+  }
+
   private PlatformComponent component(final String name) {
     return catalog.components().stream()
         .filter(c -> c.name().equals(name))
