@@ -291,11 +291,20 @@ factory:
     team-key: ${FACTORY_LINEAR_TEAM_KEY:}
     fingerprint-base-url: https://factory.simonrowe.dev/fingerprint
     dry-run: ${FACTORY_LINEAR_DRY_RUN:false}   # reads Linear, writes nothing to it
-    request-timeout: 30s
+    request-timeout: 30s   # AMENDED 2026-08-27 to 15s — see below
     producers:
       deploy:  { label: "factory:deploy",  priority: 1 }
       cvefix:  { label: "factory:cvefix",  priority: 3 }
 ```
+
+**Amended 2026-08-27 (final review): `request-timeout` is 15s, not 30s.** The filing
+activity's `startToCloseTimeout` is 90s, but the worst case of `IssueFiler.file` on a cold
+cache is four sequential HTTP calls — fingerprint lookup, team resolution, `issueCreate`,
+`attachmentCreate`. At 30s each that is ~120s, and Temporal does not interrupt a
+non-heartbeating activity: attempt 1 keeps running while attempt 2 starts, sees an empty
+lookup, and files a second ticket. At 15s the worst case is 60s, comfortably inside 90s.
+**Raising either value requires raising the other.** The live values are in
+`application.yml` and `docs/runbooks/linear.md`; this document is a dated artefact.
 
 `dry-run` still **reads** Linear — resolving the fingerprint and computing the
 decision is the whole point of the mode — and writes the outcome to
