@@ -30,8 +30,7 @@ class LinearPropertiesTest {
   }
 
   @Test
-  @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
-  void carriesAPolicyForEachKnownProducer() {
+  void carriesPolicyForEachKnownProducer() {
     LinearProperties properties = defaults();
     assertThat(properties.producerFor("deploy").label()).isEqualTo("factory:deploy");
     assertThat(properties.producerFor("deploy").priority()).isEqualTo(1);
@@ -40,8 +39,7 @@ class LinearPropertiesTest {
   }
 
   @Test
-  @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
-  void anUnconfiguredProducerFallsBackToAGenericLabelRatherThanFailing() {
+  void anUnconfiguredProducerFallsBackToGenericLabelRatherThanFailing() {
     // A future producer that ships before its config entry must still file, not throw:
     // losing the finding is worse than mislabelling it.
     LinearProperties.Producer fallback = defaults().producerFor("bughunter");

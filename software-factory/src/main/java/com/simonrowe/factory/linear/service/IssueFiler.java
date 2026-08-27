@@ -213,7 +213,8 @@ public class IssueFiler {
                     decision,
                     filing.occurrenceId(),
                     filing.workflowId(),
-                    filing.occurrenceDetail()),
+                    filing.occurrenceDetail(),
+                    properties.dryRun()),
                 now,
                 observed));
     return new FiledIssue(decision, saved.issueIdentifier(), saved.issueUrl(), fingerprint);

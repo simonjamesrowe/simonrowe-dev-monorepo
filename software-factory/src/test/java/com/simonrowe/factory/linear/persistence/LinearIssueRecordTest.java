@@ -19,16 +19,23 @@ class LinearIssueRecordTest {
 
   private static LinearIssueDecision decision(final String occurrenceId) {
     return new LinearIssueDecision(
-        T0, FilingDecision.COMMENTED_EXISTING, occurrenceId, "deploy-prod", "recreate failed");
+        T0, FilingDecision.COMMENTED_EXISTING, occurrenceId, "deploy-prod", "recreate failed",
+        false);
+  }
+
+  private static LinearIssueDecision dryRunDecision(final String occurrenceId) {
+    return new LinearIssueDecision(
+        T0, FilingDecision.COMMENTED_EXISTING, occurrenceId, "deploy-prod", "recreate failed",
+        true);
   }
 
   @Test
-  void firstRecordHasNoIssueYetAndOneOccurrence() {
+  void firstRecordHasNoIssueYetAndNoOccurrenceCountedYet() {
     LinearIssueRecord record = fresh();
     assertThat(record.id()).isEqualTo("fp");
     assertThat(record.issueId()).isNull();
     assertThat(record.attachmentPending()).isFalse();
-    assertThat(record.occurrences()).isEqualTo(1);
+    assertThat(record.occurrences()).isEqualTo(0);
     assertThat(record.decisions()).isEmpty();
   }
 
@@ -54,10 +61,20 @@ class LinearIssueRecordTest {
     Instant later = T0.plusSeconds(3600);
     LinearIssueRecord record =
         fresh().withDecision(decision("run-1"), later, IssueStateType.STARTED);
-    assertThat(record.occurrences()).isEqualTo(2);
+    assertThat(record.occurrences()).isEqualTo(1);
     assertThat(record.lastSeenAt()).isEqualTo(later);
     assertThat(record.firstFiledAt()).isEqualTo(T0);
     assertThat(record.lastKnownStateType()).isEqualTo(IssueStateType.STARTED);
+  }
+
+  @Test
+  void hasOccurrenceIgnoresDryRunEntries() {
+    // A dry run audits what would have happened, not what did, so it must never stand in for
+    // a real retry of the same occurrence — otherwise switching dryRun off mid-backoff would
+    // let the replay guard return the hypothetical decision instead of actually filing.
+    LinearIssueRecord record =
+        fresh().withDecision(dryRunDecision("run-1"), T0, IssueStateType.TRIAGE);
+    assertThat(record.hasOccurrence("run-1")).isFalse();
   }
 
   @Test
@@ -70,7 +87,7 @@ class LinearIssueRecordTest {
     assertThat(record.decisions().get(0).occurrenceId()).isEqualTo("run-5");
     assertThat(record.decisions().get(19).occurrenceId()).isEqualTo("run-24");
     // The counter is not capped, only the log.
-    assertThat(record.occurrences()).isEqualTo(26);
+    assertThat(record.occurrences()).isEqualTo(25);
   }
 
   @Test

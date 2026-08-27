@@ -57,7 +57,8 @@ public record LinearIssueRecord(
    * @param producer the producer key
    * @param keyParts the structured parts the fingerprint was computed from, kept for readability
    * @param seenAt when this occurrence arrived
-   * @return a record with no issue yet and one occurrence counted
+   * @return a record with no issue yet and no occurrence counted — {@link #withDecision} counts
+   *     the first one
    */
   public static LinearIssueRecord first(
       final String fingerprint,
@@ -75,7 +76,7 @@ public record LinearIssueRecord(
         false,
         seenAt,
         seenAt,
-        1,
+        0,
         null,
         List.of());
   }
@@ -85,13 +86,16 @@ public record LinearIssueRecord(
    * event.
    *
    * @param occurrenceId the producing run id, may be null
-   * @return true when the id appears in the retained decision log
+   * @return true when the id appears in the retained decision log against a real, non-dry-run
+   *     decision — a dry run audits what would have happened, not what did, so it must never
+   *     stand in for a real retry of the same occurrence
    */
   public boolean hasOccurrence(final String occurrenceId) {
     if (occurrenceId == null) {
       return false;
     }
-    return decisions.stream().anyMatch(d -> occurrenceId.equals(d.occurrenceId()));
+    return decisions.stream()
+        .anyMatch(d -> occurrenceId.equals(d.occurrenceId()) && !d.dryRun());
   }
 
   /**

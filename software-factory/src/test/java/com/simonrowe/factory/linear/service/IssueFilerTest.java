@@ -5,8 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -20,6 +22,7 @@ import com.simonrowe.factory.linear.domain.IssueStateType;
 import com.simonrowe.factory.linear.domain.TrackedIssue;
 import com.simonrowe.factory.linear.linear.LinearApiException;
 import com.simonrowe.factory.linear.linear.LinearGateway;
+import com.simonrowe.factory.linear.persistence.LinearIssueDecision;
 import com.simonrowe.factory.linear.persistence.LinearIssueRecord;
 import com.simonrowe.factory.linear.persistence.LinearIssueRepository;
 import java.time.Clock;
@@ -30,6 +33,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 class IssueFilerTest {
 
@@ -87,6 +91,22 @@ class IssueFilerTest {
     verify(gateway)
         .createIssue(eq("recreate failed on backend"), anyString(), eq(1), eq("factory:deploy"));
     verify(gateway).attachFingerprint(eq("i9"), anyString());
+
+    // The ordering is the entire recovery mechanism: a failure between createIssue and
+    // attachFingerprint must be recoverable by attaching, never by filing a second issue. Pin
+    // it with InOrder rather than trusting three independent "was it called" verifications,
+    // which would stay green even if the save moved below attachFingerprint or was deleted.
+    InOrder inOrder = inOrder(gateway, records);
+    inOrder.verify(gateway).createIssue(anyString(), anyString(), anyInt(), anyString());
+    inOrder.verify(records).save(any(LinearIssueRecord.class));
+    inOrder.verify(gateway).attachFingerprint(eq("i9"), anyString());
+
+    ArgumentCaptor<LinearIssueRecord> savedRecords =
+        ArgumentCaptor.forClass(LinearIssueRecord.class);
+    verify(records, times(2)).save(savedRecords.capture());
+    assertThat(savedRecords.getAllValues().get(0).attachmentPending()).isTrue();
+    assertThat(savedRecords.getAllValues().get(0).issueId()).isEqualTo("i9");
+    assertThat(savedRecords.getAllValues().get(1).attachmentPending()).isFalse();
   }
 
   @Test
@@ -143,15 +163,39 @@ class IssueFilerTest {
             Optional.of(
                 LinearIssueRecord.first(fingerprint, "deploy", List.of("recreate", "backend"), NOW)
                     .withPendingAttachment("i9", "SIM-9", "https://linear.app/i/9")));
-    when(gateway.issuesForFingerprint(anyString())).thenReturn(List.of());
 
     FiledIssue filed = filer().file(filing());
 
     verify(gateway).attachFingerprint(eq("i9"), anyString());
     verify(gateway).addComment(eq("i9"), anyString());
     verify(gateway, never()).createIssue(anyString(), anyString(), anyInt(), anyString());
+    // The known issue id on the record is the authority; a fresh lookup must never run, or a
+    // legitimately-empty result (Linear indexing lag) would make the decider file a duplicate.
+    verify(gateway, never()).issuesForFingerprint(anyString());
     assertThat(filed.decision()).isEqualTo(FilingDecision.COMMENTED_EXISTING);
     assertThat(filed.issueIdentifier()).isEqualTo("SIM-9");
+  }
+
+  @Test
+  void dryRunSkipsPendingAttachmentRepairWithoutWritingToLinear() {
+    // dryRun must hold even on the repair path: an operator investigating a half-completed
+    // filing with dryRun on must not trigger a live attachmentCreate/commentCreate.
+    properties = new LinearProperties(true, "k", null, "SIM", null, true, null, null);
+    String fingerprint = Fingerprint.of("deploy", List.of("recreate", "backend"));
+    LinearIssueRecord pending =
+        LinearIssueRecord.first(fingerprint, "deploy", List.of("recreate", "backend"), NOW)
+            .withPendingAttachment("i9", "SIM-9", "https://linear.app/i/9");
+    when(records.findById(fingerprint)).thenReturn(Optional.of(pending));
+
+    FiledIssue filed = filer().file(filing());
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.COMMENTED_EXISTING);
+    verifyNoInteractions(gateway);
+    ArgumentCaptor<LinearIssueRecord> saved = ArgumentCaptor.forClass(LinearIssueRecord.class);
+    verify(records).save(saved.capture());
+    // The guard deliberately saves the untouched record, not a "repaired" copy: nothing was
+    // actually attached, so the pending flag must still say so.
+    assertThat(saved.getValue().attachmentPending()).isTrue();
   }
 
   @Test
@@ -163,8 +207,8 @@ class IssueFilerTest {
             .withPendingAttachment("i1", "SIM-1", "u")
             .withAttachmentWritten()
             .withDecision(
-                new com.simonrowe.factory.linear.persistence.LinearIssueDecision(
-                    NOW, FilingDecision.COMMENTED_EXISTING, "run-1", "deploy-prod", "x"),
+                new LinearIssueDecision(
+                    NOW, FilingDecision.COMMENTED_EXISTING, "run-1", "deploy-prod", "x", false),
                 NOW,
                 IssueStateType.STARTED);
     when(records.findById(fingerprint)).thenReturn(Optional.of(already));
@@ -188,7 +232,40 @@ class IssueFilerTest {
     assertThat(filed.issueIdentifier()).isNull();
     verify(gateway).issuesForFingerprint(anyString());
     verify(gateway, never()).createIssue(anyString(), anyString(), anyInt(), anyString());
+    verify(gateway, never()).addComment(anyString(), anyString());
+    verify(gateway, never()).attachFingerprint(anyString(), anyString());
+    verify(gateway, never()).relateIssues(anyString(), anyString());
     verify(records).save(any(LinearIssueRecord.class));
+  }
+
+  @Test
+  void realFilingAfterDryRunOfSameOccurrenceIsNotSuppressedByReplayGuard() {
+    // The natural rollout gesture: dry run is switched off while a retry of the same
+    // occurrence is still in backoff. The dry-run entry it left behind must not satisfy the
+    // replay guard, or the retry would return the earlier hypothetical decision (a null
+    // issue identifier) instead of actually filing.
+    properties = new LinearProperties(true, "k", null, "SIM", null, true, null, null);
+    when(gateway.issuesForFingerprint(anyString())).thenReturn(List.of());
+
+    FiledIssue dryRunResult = filer().file(filing());
+    assertThat(dryRunResult.decision()).isEqualTo(FilingDecision.FILED_NEW);
+    assertThat(dryRunResult.issueIdentifier()).isNull();
+
+    ArgumentCaptor<LinearIssueRecord> savedDuringDryRun =
+        ArgumentCaptor.forClass(LinearIssueRecord.class);
+    verify(records).save(savedDuringDryRun.capture());
+    String fingerprint = Fingerprint.of("deploy", List.of("recreate", "backend"));
+    when(records.findById(fingerprint)).thenReturn(Optional.of(savedDuringDryRun.getValue()));
+
+    properties = new LinearProperties(true, "k", null, "SIM", null, false, null, null);
+    when(gateway.createIssue(anyString(), anyString(), anyInt(), anyString()))
+        .thenReturn(new LinearGateway.CreatedIssue("i9", "SIM-9", "https://linear.app/i/9"));
+
+    FiledIssue realResult = filer().file(filing());
+
+    assertThat(realResult.decision()).isEqualTo(FilingDecision.FILED_NEW);
+    assertThat(realResult.issueIdentifier()).isEqualTo("SIM-9");
+    verify(gateway).createIssue(anyString(), anyString(), anyInt(), anyString());
   }
 
   @Test

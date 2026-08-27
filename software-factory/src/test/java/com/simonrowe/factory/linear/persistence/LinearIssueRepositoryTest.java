@@ -47,7 +47,8 @@ class LinearIssueRepositoryTest {
                 .withAttachmentWritten()
                 .withDecision(
                     new LinearIssueDecision(
-                        Instant.EPOCH, FilingDecision.FILED_NEW, "run-1", "deploy-prod", "boom"),
+                        Instant.EPOCH, FilingDecision.FILED_NEW, "run-1", "deploy-prod", "boom",
+                        false),
                     Instant.EPOCH,
                     IssueStateType.TRIAGE));
 
@@ -61,7 +62,7 @@ class LinearIssueRepositoryTest {
     assertThat(loaded.decisions()).hasSize(1);
     assertThat(loaded.decisions().get(0).decision()).isEqualTo(FilingDecision.FILED_NEW);
     assertThat(loaded.decisions().get(0).occurrenceId()).isEqualTo("run-1");
-    assertThat(saved.occurrences()).isEqualTo(2);
+    assertThat(saved.occurrences()).isEqualTo(1);
   }
 
   @Test
