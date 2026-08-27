@@ -1,5 +1,6 @@
 package com.simonrowe.platform;
 
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,11 +13,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 class PlatformReleasesControllerTest extends AbstractIntegrationTest {
 
   private static final String NEWER = "840c311abcdef0123456789abcdef0123456789a";
   private static final String OLDER = "39e0f7aabcdef0123456789abcdef0123456789a";
+
+  /** Matches neither seeded fixture, so it is the deterministic "nothing is running" case. */
+  private static final String NON_MATCHING_SHA = "0000000000000000000000000000000000000a";
 
   @Autowired
   private PlatformReleaseRepository repository;
@@ -24,12 +29,19 @@ class PlatformReleasesControllerTest extends AbstractIntegrationTest {
   @Autowired
   private MongoTemplate mongoTemplate;
 
-  @Autowired
+  /**
+   * Mocked (rather than the real, build-info-backed instance) so {@code running} can be
+   * exercised deterministically in both directions: the real bean reports whatever SHA this
+   * test binary was built from, which never matches a hardcoded fixture, so the {@code true}
+   * branch of {@code ReleaseResponse.from} would otherwise never run.
+   */
+  @MockitoBean
   private RunningVersion runningVersion;
 
   @BeforeEach
   void seed() {
     mongoTemplate.dropCollection(PlatformRelease.class);
+    when(runningVersion.commit()).thenReturn(NON_MATCHING_SHA);
     store(NEWER, 1756200000L, "docs: overhaul the README (#118)", ReleaseSummaryStatus.READY,
         "The README was rewritten.");
     store(OLDER, 1756100000L, "feat: deploy automatically (#116)", ReleaseSummaryStatus.PENDING,
@@ -101,14 +113,25 @@ class PlatformReleasesControllerTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void marksTheRunningReleaseWhenThisBuildMatchesOne() throws Exception {
-    // In a test build the running SHA is whatever HEAD was at compile time, which will not
-    // match the seeded fixtures — so assert the flag is present and false rather than
-    // asserting a specific entry is running.
+  void marksTheMatchingReleaseAsRunningAndLeavesTheOtherNotRunning() throws Exception {
+    when(runningVersion.commit()).thenReturn(NEWER);
+
     mockMvc.perform(get("/api/platform/releases"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].running")
-            .value(runningVersion.commit().equals(NEWER)));
+        .andExpect(jsonPath("$[0].sha").value(NEWER))
+        .andExpect(jsonPath("$[0].running").value(true))
+        .andExpect(jsonPath("$[1].sha").value(OLDER))
+        .andExpect(jsonPath("$[1].running").value(false));
+  }
+
+  @Test
+  void marksEveryReleaseAsNotRunningWhenNoStoredReleaseMatches() throws Exception {
+    when(runningVersion.commit()).thenReturn(NON_MATCHING_SHA);
+
+    mockMvc.perform(get("/api/platform/releases"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].running").value(false))
+        .andExpect(jsonPath("$[1].running").value(false));
   }
 
   @Test
