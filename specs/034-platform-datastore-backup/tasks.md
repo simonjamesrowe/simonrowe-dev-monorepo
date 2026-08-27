@@ -53,13 +53,13 @@ fingerprint *formats* (data-model.md §2, §3).
 
 ### Phase R1: Remove the superseded Java capture path
 
-- [ ] RT001 Delete `PlatformBackupService`, `PlatformBackupScheduler`, `PlatformBackupProperties`, `PlatformManifest`, `SecretFingerprinter`, `CommandRunner`, `ProcessCommandRunner` from `backend/src/main/java/com/simonrowe/dataops/`, and their five test classes. All of it violates constitution 2.0.0 or becomes dead with the capture moved
-- [ ] RT002 Remove `PlatformBackupProperties` from `@EnableConfigurationProperties` in `backend/src/main/java/com/simonrowe/WebConfig.java` (note main also removed `RedeployProperties` there — keep both removals)
-- [ ] RT003 Remove `POST /platform-backup` from `backend/src/main/java/com/simonrowe/dataops/DataOperationsController.java`, keeping `GET /platform-backups`; drop `PLATFORM_BACKUP` from `OperationType` since nothing in the backend runs the operation
-- [ ] RT004 Remove `prunePlatformToLimit()` and the `platformMaxBackups` field from `BackupRetentionService`, and their tests — the script owns retention now. **Keep every existing application-backup assertion untouched** (FR-014, SC-004)
-- [ ] RT005 Remove the `backup.platform.*` block from `backend/src/main/resources/application.yml`, keeping `google.drive.platform-folder-id` (the backend still resolves that folder to list it)
-- [ ] RT006 Remove the `langfuse-clickhouse-backups:/clickhouse-backups` mount from the `backend` service in `docker-compose.prod.yml`
-- [ ] RT007 Confirm `NoHostProcessLaunchTest` passes — the single check that this phase is complete
+- [X] RT001 Delete `PlatformBackupService`, `PlatformBackupScheduler`, `PlatformBackupProperties`, `PlatformManifest`, `SecretFingerprinter`, `CommandRunner`, `ProcessCommandRunner` from `backend/src/main/java/com/simonrowe/dataops/`, and their five test classes. All of it violates constitution 2.0.0 or becomes dead with the capture moved
+- [X] RT002 Remove `PlatformBackupProperties` from `@EnableConfigurationProperties` in `backend/src/main/java/com/simonrowe/WebConfig.java` (note main also removed `RedeployProperties` there — keep both removals)
+- [X] RT003 Remove `POST /platform-backup` from `backend/src/main/java/com/simonrowe/dataops/DataOperationsController.java`, keeping `GET /platform-backups`; drop `PLATFORM_BACKUP` from `OperationType` since nothing in the backend runs the operation
+- [X] RT004 Remove `prunePlatformToLimit()` and the `platformMaxBackups` field from `BackupRetentionService`, and their tests — the script owns retention now. **Keep every existing application-backup assertion untouched** (FR-014, SC-004)
+- [X] RT005 Remove the `backup.platform.*` block from `backend/src/main/resources/application.yml`, keeping `google.drive.platform-folder-id` (the backend still resolves that folder to list it)
+- [X] RT006 Remove the `langfuse-clickhouse-backups:/clickhouse-backups` mount from the `backend` service in `docker-compose.prod.yml`
+- [X] RT007 Confirm `NoHostProcessLaunchTest` passes — the single check that this phase is complete
 
 **Checkpoint**: `cd backend && ../gradlew test checkstyleMain checkstyleTest` green, including main's `NoHostProcessLaunchTest`.
 
@@ -67,18 +67,18 @@ fingerprint *formats* (data-model.md §2, §3).
 
 ### Phase R2: The capture script (the bulk of the work)
 
-- [ ] RT008 Create `scripts/backup-platform.sh` with the house shape: `#!/usr/bin/env bash`, `set -euo pipefail`, `SCRIPT_DIR`/`PROJECT_DIR`, precondition validation, `--dry-run`/`--keep-local`/`--no-upload` flags. Mirror `restore-platform.sh` so the pair reads as one tool
-- [ ] RT009 [P] Port the `.env` reader and the `sha256`/`fingerprint_of` helpers verbatim from `restore-platform.sh` into a shared idiom. **`printf '%s'`, never `echo`** — the newline trap from R7, now the only place it can occur
-- [ ] RT010 Implement the orphan sweep of the ClickHouse backup directory before anything else (FR-008)
-- [ ] RT011 Implement `pg_dumpall --roles-only` and the four `pg_dump` calls via `docker exec -e PGPASSWORD` (bare name, no value — R2 keeps the password out of `argv`), checking each exit code and asserting non-empty output before continuing
-- [ ] RT012 Implement the ClickHouse capture: `BACKUP DATABASE default TO File(...)`, move the result off the shared volume, and collect `system.parts` row counts **excluding `.inner%`** (R5 — those UUIDs change across a restore)
-- [ ] RT013 Write `manifest.json` last, to the schema in data-model.md §2, including the four secret fingerprints (§3), the per-dump byte counts and the running image tags
-- [ ] RT014 Zip the tree to a staging path with owner-only permissions — the archive carries `pg_dumpall` role password hashes
-- [ ] RT015 Implement Drive OAuth + folder resolution by **name** (`simonrowe-platform-backups`), reusing the token-exchange code already proven in `restore-platform.sh`. It must never fall back to `GOOGLE_DRIVE_FOLDER_ID` (R1)
-- [ ] RT016 Implement the **resumable** upload: session-URI `POST`, then ranged `PUT` with resume-on-interrupt (R12). This is the one genuinely new, unproven piece
-- [ ] RT017 Implement retention: list `.zip` in the platform folder, delete past the newest 7, log a per-file failure without aborting the sweep (FR-019). Prune **only after a successful upload** (FR-013)
-- [ ] RT018 Implement `trap`-based cleanup of the local archive and the ClickHouse volume file on **both** paths (FR-008)
-- [ ] RT019 `shellcheck scripts/backup-platform.sh` clean; `--dry-run` prints every command and changes nothing
+- [X] RT008 Create `scripts/backup-platform.sh` with the house shape: `#!/usr/bin/env bash`, `set -euo pipefail`, `SCRIPT_DIR`/`PROJECT_DIR`, precondition validation, `--dry-run`/`--keep-local`/`--no-upload` flags. Mirror `restore-platform.sh` so the pair reads as one tool
+- [X] RT009 [P] Port the `.env` reader and the `sha256`/`fingerprint_of` helpers verbatim from `restore-platform.sh` into a shared idiom. **`printf '%s'`, never `echo`** — the newline trap from R7, now the only place it can occur
+- [X] RT010 Implement the orphan sweep of the ClickHouse backup directory before anything else (FR-008)
+- [X] RT011 Implement `pg_dumpall --roles-only` and the four `pg_dump` calls via `docker exec -e PGPASSWORD` (bare name, no value — R2 keeps the password out of `argv`), checking each exit code and asserting non-empty output before continuing
+- [X] RT012 Implement the ClickHouse capture: `BACKUP DATABASE default TO File(...)`, move the result off the shared volume, and collect `system.parts` row counts **excluding `.inner%`** (R5 — those UUIDs change across a restore)
+- [X] RT013 Write `manifest.json` last, to the schema in data-model.md §2, including the four secret fingerprints (§3), the per-dump byte counts and the running image tags
+- [X] RT014 Zip the tree to a staging path with owner-only permissions — the archive carries `pg_dumpall` role password hashes
+- [X] RT015 Implement Drive OAuth + folder resolution by **name** (`simonrowe-platform-backups`), reusing the token-exchange code already proven in `restore-platform.sh`. It must never fall back to `GOOGLE_DRIVE_FOLDER_ID` (R1)
+- [X] RT016 Implement the **resumable** upload: session-URI `POST`, then ranged `PUT` with resume-on-interrupt (R12). This is the one genuinely new, unproven piece
+- [X] RT017 Implement retention: list `.zip` in the platform folder, delete past the newest 7, log a per-file failure without aborting the sweep (FR-019). Prune **only after a successful upload** (FR-013)
+- [X] RT018 Implement `trap`-based cleanup of the local archive and the ClickHouse volume file on **both** paths (FR-008)
+- [X] RT019 `shellcheck scripts/backup-platform.sh` clean; `--dry-run` prints every command and changes nothing
 
 **Checkpoint**: a real capture against a throwaway stack produces an archive whose entries and manifest match data-model.md, and `restore-platform.sh` restores from it.
 
@@ -86,12 +86,12 @@ fingerprint *formats* (data-model.md §2, §3).
 
 ### Phase R3: Temporal orchestration in the deployer
 
-- [ ] RT020 [P] Add `PlatformBackupProperties` (`@ConfigurationProperties`) to `software-factory` — script path, enabled flag, task queue — following `DeployProperties`
-- [ ] RT021 Implement `PlatformBackupActivitiesImpl`, invoking the script through the existing `ProcessRunner` and forwarding output to `Activity.getExecutionContext().heartbeat()` so a long capture cannot trip the heartbeat timeout. Model on `PhaseRunner`; **this is the only Java that touches the script**
-- [ ] RT022 Implement `PlatformBackupWorkflow`/`Impl` — one activity, an explicit retry policy, a `startToCloseTimeout` sized past the measured capture. Retry is what replaces the client-library upload resumability revision 1 relied on
-- [ ] RT023 Implement `PlatformBackupScheduleInitializer` — 02:00 Europe/London, declared in code so a deploy reconciles it, **paused by default** behind `FACTORY_PLATFORM_BACKUP_ENABLED`. Copy `CveFixScheduleInitializer` including its posture
-- [ ] RT024 [P] Tests: `PlatformBackupActivitiesImplTest` (mirroring `PhaseRunnerTest`), `PlatformBackupWorkflowTest` using the Temporal test framework, `PlatformBackupScheduleInitializerTest`. Cover the failure path — a non-zero script exit must fail the activity, not be swallowed
-- [ ] RT025 Add the deployer's `FACTORY_PLATFORM_BACKUP_*` env and the `langfuse-clickhouse-backups:/backups` mount to `docker-compose.prod.yml`, following the `FACTORY_DEPLOY_SCRIPT` convention
+- [X] RT020 [P] Add `PlatformBackupProperties` (`@ConfigurationProperties`) to `software-factory` — script path, enabled flag, task queue — following `DeployProperties`
+- [X] RT021 Implement `PlatformBackupActivitiesImpl`, invoking the script through the existing `ProcessRunner` and forwarding output to `Activity.getExecutionContext().heartbeat()` so a long capture cannot trip the heartbeat timeout. Model on `PhaseRunner`; **this is the only Java that touches the script**
+- [X] RT022 Implement `PlatformBackupWorkflow`/`Impl` — one activity, an explicit retry policy, a `startToCloseTimeout` sized past the measured capture. Retry is what replaces the client-library upload resumability revision 1 relied on
+- [X] RT023 Implement `PlatformBackupScheduleInitializer` — 02:00 Europe/London, declared in code so a deploy reconciles it, **paused by default** behind `FACTORY_PLATFORM_BACKUP_ENABLED`. Copy `CveFixScheduleInitializer` including its posture
+- [X] RT024 [P] Tests: `PlatformBackupActivitiesImplTest` (mirroring `PhaseRunnerTest`), `PlatformBackupWorkflowTest` using the Temporal test framework, `PlatformBackupScheduleInitializerTest`. Cover the failure path — a non-zero script exit must fail the activity, not be swallowed
+- [X] RT025 Add the deployer's `FACTORY_PLATFORM_BACKUP_*` env and the `langfuse-clickhouse-backups:/backups` mount to `docker-compose.prod.yml`, following the `FACTORY_DEPLOY_SCRIPT` convention
 
 **Checkpoint**: `./gradlew :software-factory:check` green; a workflow run triggered by hand executes the script and reports success.
 
@@ -99,9 +99,9 @@ fingerprint *formats* (data-model.md §2, §3).
 
 ### Phase R4: Frontend, docs, rollout
 
-- [ ] RT026 Reduce the "Platform Data" card and `dataOperationsApi.ts` to the read-only listing: drop `startPlatformBackup`, drop `PLATFORM_BACKUP` from the `DataOperation` union, keep the archive list and the error handling that reports a *listing* failure distinctly. Update `DataOperationsAdmin.platform.test.tsx` to match, and add the pointer to `scripts/backup-platform.sh` (FR-025a)
-- [ ] RT027 Rewrite the capture half of `docs/runbooks/platform-backup-restore.md`: the script, the schedule, how to enable it, **how to assert a live poller on the task queue** (a `healthy` container with no poller is a documented silent-failure mode here), and the on-demand command. The restore half is unchanged
-- [ ] RT028 Update the `034-platform-datastore-backup` entry in `CLAUDE.md` to describe the deployer/Temporal shape rather than the backend one, and record that the backend deliberately holds no Docker access
+- [X] RT026 Reduce the "Platform Data" card and `dataOperationsApi.ts` to the read-only listing: drop `startPlatformBackup`, drop `PLATFORM_BACKUP` from the `DataOperation` union, keep the archive list and the error handling that reports a *listing* failure distinctly. Update `DataOperationsAdmin.platform.test.tsx` to match, and add the pointer to `scripts/backup-platform.sh` (FR-025a)
+- [X] RT027 Rewrite the capture half of `docs/runbooks/platform-backup-restore.md`: the script, the schedule, how to enable it, **how to assert a live poller on the task queue** (a `healthy` container with no poller is a documented silent-failure mode here), and the on-demand command. The restore half is unchanged
+- [X] RT028 Update the `034-platform-datastore-backup` entry in `CLAUDE.md` to describe the deployer/Temporal shape rather than the backend one, and record that the backend deliberately holds no Docker access
 
 ---
 
@@ -112,8 +112,8 @@ fingerprint *formats* (data-model.md §2, §3).
 
 ### New rollout gates
 
-- [ ] RT029 **Measure the resumable upload** against a realistically sized archive before trusting it (NFR-003, R12) — interrupt it mid-flight and confirm it resumes rather than restarting
-- [ ] RT030 After enabling the schedule, **assert a live poller** on the capture task queue (SC-013). Do not infer it from container health
+- [~] RT029 **NOT DONE — needs a real Drive account and a realistically sized archive.** Measure the resumable upload against a realistically sized archive before trusting it (NFR-003, R12) — interrupt it mid-flight and confirm it resumes rather than restarting
+- [~] RT030 **NOT DONE — rollout step, needs the production host.** After enabling the schedule, **assert a live poller** on the capture task queue (SC-013). Do not infer it from container health
 
 ---
 
