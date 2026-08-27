@@ -55,6 +55,17 @@ public class LinearGateway {
   private static final String CREATE_RELATION =
       "mutation($input:IssueRelationCreateInput!){issueRelationCreate(input:$input){success}}";
 
+  // GraphQL wire names shared by the queries/mutations above and the response handling below.
+  // VAR_INPUT is the variable every mutation binds its input object to; FIELD_NODES is the
+  // items field of a GraphQL connection (teams/states/labels/attachments all use it);
+  // FIELD_ISSUE_ID is the input field naming which issue a mutation acts on; FIELD_SUCCESS and
+  // FIELD_ERRORS are the mutation-result and top-level-error fields respectively.
+  private static final String VAR_INPUT = "input";
+  private static final String FIELD_NODES = "nodes";
+  private static final String FIELD_ISSUE_ID = "issueId";
+  private static final String FIELD_SUCCESS = "success";
+  private static final String FIELD_ERRORS = "errors";
+
   private static final Logger log = LoggerFactory.getLogger(LinearGateway.class);
 
   private final LinearProperties properties;
@@ -93,14 +104,14 @@ public class LinearGateway {
       JsonNode team =
           execute(TEAM_QUERY, Map.of("key", properties.teamKey()))
               .path("teams")
-              .path("nodes")
+              .path(FIELD_NODES)
               .path(0);
       if (team.isMissingNode() || team.path("id").asText("").isEmpty()) {
         throw new LinearApiException(
             "Linear has no team with key " + properties.teamKey(), false);
       }
       String triageStateId = null;
-      for (JsonNode state : team.path("states").path("nodes")) {
+      for (JsonNode state : team.path("states").path(FIELD_NODES)) {
         if ("triage".equals(state.path("type").asText())) {
           triageStateId = state.path("id").asText();
         }
@@ -114,7 +125,7 @@ public class LinearGateway {
             false);
       }
       Map<String, String> labels = new HashMap<>();
-      for (JsonNode label : team.path("labels").path("nodes")) {
+      for (JsonNode label : team.path("labels").path(FIELD_NODES)) {
         labels.put(label.path("name").asText(), label.path("id").asText());
       }
       cachedTeam = new TeamContext(team.path("id").asText(), triageStateId, Map.copyOf(labels));
@@ -133,7 +144,7 @@ public class LinearGateway {
     JsonNode nodes =
         execute(ATTACHMENTS_QUERY, Map.of("url", fingerprintUrl))
             .path("attachmentsForURL")
-            .path("nodes");
+            .path(FIELD_NODES);
     List<TrackedIssue> issues = new ArrayList<>();
     for (JsonNode node : nodes) {
       JsonNode issue = node.path("issue");
@@ -186,8 +197,8 @@ public class LinearGateway {
           properties.teamKey(),
           labelName);
     }
-    JsonNode result = execute(CREATE_ISSUE, Map.of("input", input)).path("issueCreate");
-    if (!result.path("success").asBoolean(false)) {
+    JsonNode result = execute(CREATE_ISSUE, Map.of(VAR_INPUT, input)).path("issueCreate");
+    if (!result.path(FIELD_SUCCESS).asBoolean(false)) {
       throw new LinearApiException("Linear issueCreate reported failure", false);
     }
     JsonNode issue = result.path("issue");
@@ -204,11 +215,11 @@ public class LinearGateway {
    */
   public void attachFingerprint(final String issueId, final String fingerprintUrl) {
     ObjectNode input = objectMapper.createObjectNode();
-    input.put("issueId", issueId);
+    input.put(FIELD_ISSUE_ID, issueId);
     input.put("url", fingerprintUrl);
     input.put("title", "factory fingerprint");
-    JsonNode result = execute(CREATE_ATTACHMENT, Map.of("input", input)).path("attachmentCreate");
-    if (!result.path("success").asBoolean(false)) {
+    JsonNode result = execute(CREATE_ATTACHMENT, Map.of(VAR_INPUT, input)).path("attachmentCreate");
+    if (!result.path(FIELD_SUCCESS).asBoolean(false)) {
       throw new LinearApiException("Linear attachmentCreate reported failure", false);
     }
   }
@@ -222,10 +233,10 @@ public class LinearGateway {
    */
   public void addComment(final String issueId, final String body) {
     ObjectNode input = objectMapper.createObjectNode();
-    input.put("issueId", issueId);
+    input.put(FIELD_ISSUE_ID, issueId);
     input.put("body", body);
-    JsonNode result = execute(CREATE_COMMENT, Map.of("input", input)).path("commentCreate");
-    if (!result.path("success").asBoolean(false)) {
+    JsonNode result = execute(CREATE_COMMENT, Map.of(VAR_INPUT, input)).path("commentCreate");
+    if (!result.path(FIELD_SUCCESS).asBoolean(false)) {
       throw new LinearApiException("Linear commentCreate reported failure", false);
     }
   }
@@ -242,11 +253,11 @@ public class LinearGateway {
    */
   public void relateIssues(final String issueId, final String relatedIssueId) {
     ObjectNode input = objectMapper.createObjectNode();
-    input.put("issueId", issueId);
+    input.put(FIELD_ISSUE_ID, issueId);
     input.put("relatedIssueId", relatedIssueId);
     input.put("type", "related");
     try {
-      execute(CREATE_RELATION, Map.of("input", input));
+      execute(CREATE_RELATION, Map.of(VAR_INPUT, input));
     } catch (LinearApiException exception) {
       log.warn("Could not link {} as a regression of {}", issueId, relatedIssueId, exception);
     }
@@ -303,8 +314,8 @@ public class LinearGateway {
     } catch (IOException exception) {
       throw new LinearApiException("Linear returned unparseable JSON", false, exception);
     }
-    if (root.has("errors") && !root.path("errors").isEmpty()) {
-      throw new LinearApiException("Linear GraphQL error: " + root.path("errors"), false);
+    if (root.has(FIELD_ERRORS) && !root.path(FIELD_ERRORS).isEmpty()) {
+      throw new LinearApiException("Linear GraphQL error: " + root.path(FIELD_ERRORS), false);
     }
     return root.path("data");
   }
