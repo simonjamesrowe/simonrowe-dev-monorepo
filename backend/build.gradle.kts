@@ -86,8 +86,48 @@ springBoot {
 // compose file itself — rather than a JSON summary generated in Gradle — keeps all the
 // parsing in Java where it is unit-testable, and makes drift between parser and compose
 // file a test failure rather than a silent wrong answer.
+//
+// ---------------------------------------------------------------------------
+// The changelog on /status. 50 commits are baked so the AI summary sweep has depth;
+// the page itself requests 20.
+//
+// Separators rather than JSON: generating JSON here would mean hand-rolling escaping
+// for arbitrary commit messages. `git log` emits ASCII record/unit separators for free
+// and BakedReleaseHistory parses them.
+//
+// The task's only input is the HEAD SHA, so it re-runs when and only when HEAD moves.
+//
+// NOTE: in CI this yields ONE commit unless the checkout uses fetch-depth: 0. See
+// .github/workflows/publish.yml.
+// ---------------------------------------------------------------------------
+val releaseHistoryFile = layout.buildDirectory.file("generated/platform/release-history.txt")
+
+val releaseHistoryRaw: Provider<String> = gitText(
+    "-c", "core.quotepath=false",
+    "log", "-n", "50",
+    "--format=%x1e%H%x1f%ct%x1f%s%x1f%b%x1f",
+    "--name-only",
+)
+
+val generateReleaseHistory by tasks.registering {
+    description = "Bakes the last 50 commits on this branch into a backend resource."
+    val sha = headSha
+    val raw = releaseHistoryRaw
+    val output = releaseHistoryFile
+    inputs.property("headSha", sha)
+    outputs.file(output)
+    doLast {
+        val file = output.get().asFile
+        file.parentFile.mkdirs()
+        file.writeText(raw.get())
+    }
+}
+
 tasks.named<ProcessResources>("processResources") {
     from(rootProject.file("docker-compose.prod.yml")) {
+        into("platform")
+    }
+    from(generateReleaseHistory) {
         into("platform")
     }
 }
