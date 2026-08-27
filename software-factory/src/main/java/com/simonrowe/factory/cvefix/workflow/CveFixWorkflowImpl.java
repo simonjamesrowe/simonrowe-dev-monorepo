@@ -379,15 +379,18 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
    * @return the rendered Markdown body
    */
   private static String unfixableBody(final UnfixableComponent component) {
+    // Labelled as the agent's own view on purpose: UnfixableComponent's ids are model output,
+    // and the authoritative set is the one FindingSuppressor stores from Dependency-Track. Here
+    // they are context for a human, never a key - the purl is the key.
     String advisories =
         component.vulnerabilityIds().isEmpty()
-            ? "none reported"
+            ? "none given"
             : String.join(", ", component.vulnerabilityIds());
     return "The CVE-fix agent declined to bump this component, so it is now suppressed and will "
         + "not cost another agent run until its Dependency-Track finding set changes.\n\n"
         + "- **Component:** `"
         + component.purl()
-        + "`\n- **Advisories:** "
+        + "`\n- **Advisories (as the agent reported them):** "
         + advisories
         + "\n- **Reason given:** "
         + component.reason()
