@@ -35,6 +35,15 @@ import org.springframework.stereotype.Component;
 public class GitHubCredentials {
 
   private static final String API_VERSION = "2026-03-10";
+
+  /**
+   * The only access level {@link #accessToken} ever asks for.
+   *
+   * <p>A constant rather than four literals so that adding a fifth permission cannot quietly ask
+   * for a different level than the other four — every entry in this block is load-bearing, and
+   * GitHub 422s the whole token request if any one of them exceeds the installation's grant.
+   */
+  private static final String WRITE = "write";
   private static final java.time.Duration EXPIRY_MARGIN = java.time.Duration.ofMinutes(5);
 
   private final CodeReviewProperties properties;
@@ -204,10 +213,10 @@ public class GitHubCredentials {
         ObjectNode permissions =
             objectMapper
                 .createObjectNode()
-                .put("checks", "write")
-                .put("contents", "write")
-                .put("issues", "write")
-                .put("pull_requests", "write");
+                .put("checks", WRITE)
+                .put("contents", WRITE)
+                .put("issues", WRITE)
+                .put("pull_requests", WRITE);
         payload.set("permissions", permissions);
       }
       HttpRequest request =
