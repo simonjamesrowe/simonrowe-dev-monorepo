@@ -257,6 +257,111 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     Historical entries are labelled **published**, not deployed — `deploy_runs` is empty.
   - `platform_releases` is in `BackupService.BACKUP_COLLECTIONS` and
     `RestoreService.IMPORT_ORDER_INDEPENDENT`. See `docs/runbooks/platform-status.md`.
+- 034-platform-datastore-backup: nightly (02:00) + on-demand capture of the four
+  `langfuse-db` Postgres databases (`langfuse`, `dtrack`, `temporal`,
+  `temporal_visibility`) and the ClickHouse `default` database. **It runs in the
+  `deployer`, not the backend** — `scripts/backup-platform.sh` invoked by a Temporal
+  activity on a paused-by-default nightly schedule (`platform-backup-nightly`,
+  `FACTORY_PLATFORM_BACKUP_ENABLED`). Constitution 2.0.0 forbids `ProcessBuilder` and
+  Docker access in the container serving public traffic, so the capture cannot live
+  there; the Java side never invokes `docker` itself, exactly as `PhaseRunner` only
+  ever runs `restart-prod.sh`. The backend keeps **only** `GET
+  /api/admin/data-operations/platform-backups` and a read-only "Platform Data" card,
+  because listing a Drive folder is a network call. There is no capture button and no
+  restore endpoint. **Enabling the flag does not start backing up** — the schedule is
+  created paused, and after unpausing you must assert a live poller on the
+  `platform-backup` task queue, since a healthy container with no poller runs nothing
+  and says nothing.
+  **The separate Drive folder (`simonrowe-platform-backups`) is load-bearing:**
+  retention deletes everything past the newest 7 `.zip` in a folder, so sharing one
+  would make the two backup types evict each other and silently halve both recovery
+  windows. The script resolves it by name and never falls back to
+  `GOOGLE_DRIVE_FOLDER_ID`; `GoogleDriveFolderResolutionTest` guards the backend's
+  listing side of the same rule. Upload is Google's resumable protocol in `curl`
+  (session URI + ranged PUT), with Temporal retry over the top.
+  New `langfuse-clickhouse-backups` volume + `config/clickhouse/backup-disk.xml`
+  (`<backups><allowed_path>`) + a `clickhouse-backups-init` busybox one-shot that
+  `chown`s the volume to `101:101`. **The chown is required, not defensive:**
+  `/backups` does not exist in the ClickHouse image, so the volume is created
+  root-owned while the server drops to uid 101 even when the container starts as
+  root — verified, `BACKUP` fails `CANNOT_OPEN_FILE errno 13` without it.
+  `clickhouse-backups-init` is registered in `ONESHOT_SERVICES` in
+  `scripts/monitor-prod.sh`; a one-shot missing from that list reads as a broken
+  container every cron tick and makes the watchdog reconcile the whole stack once a
+  minute forever. Restore is **`scripts/restore-platform.sh`** on the host, per-target
+  (`langfuse`/`dtrack`/`temporal`/`all`), never stops `langfuse-db` itself (dropping
+  databases inside a running server is what keeps the targets independent), restarts
+  stopped consumers from an `EXIT` trap so a failed restore leaves them running, and
+  **refuses to run when the archive's SHA-256 secret fingerprints don't match `.env`**
+  — Langfuse/DT rows restored under different secrets load fine and then fail to
+  decrypt, a failure that presents as success. Both scripts compute that fingerprint
+  with `printf '%s'`, never `echo`: a trailing newline would refuse every legitimate
+  restore. Verified against the pinned `clickhouse-server:26.7.1.1315`:
+  `DROP DATABASE ... SYNC` then `RESTORE DATABASE` works (also into an
+  existing-but-empty `default`, which the entrypoint recreates on restart);
+  `allow_non_empty_tables` is deliberately **unused** because it appends and would
+  duplicate every trace row; and `docker cp` alone is not enough — it preserves host
+  ownership, so the file must be chowned to 101:101 or the restore fails
+  `CANNOT_OPEN_FILE` with no hint that ownership is the cause. The two backups **can
+  now overlap** (no shared mutex); the 22:00/02:00 gap is kept for I/O contention, not
+  exclusion. Deploying recreates `langfuse-clickhouse` and `deployer`. ClickHouse
+  archive size is **unbounded and still unmeasured** (no TTL on trace tables); measure
+  before trusting the Drive quota. See `docs/runbooks/platform-backup-restore.md`.
+- 036-auto-deploy-rollout-fixes: Turning auto-deploy on for the first time (2026-08-27)
+  found that **the `deployer` could not perform a single deploy step**, for nine separate
+  reasons, none of which any test could catch — they are all properties of running
+  `docker compose` *inside a container against the host daemon*, and the unit tests mock
+  the shell. All are fixed in `docker-compose.prod.yml`; see the new
+  "Running compose from inside the deployer" section of `docs/runbooks/deploy.md`.
+  The ones worth remembering because they fail deceptively:
+  - **Relative bind mounts are resolved against the compose project directory and then
+    handed to the HOST daemon.** With the old `.:/workspace/repo`, compose asked the
+    daemon for `/workspace/repo/frontend/nginx.conf`, which exists only inside the
+    deployer. **The daemon creates a missing bind source as an empty directory instead of
+    erroring**, so the container dies with "not a directory" and the host root gets a
+    stray `/workspace/...`. Nine binds are affected, including nginx's own proxy conf and
+    the maintenance page. Fixed by mounting the deploy directory **at its own host path on
+    both sides** (`${DEPLOY_DIR}:${DEPLOY_DIR}`).
+  - **`COMPOSE_PROJECT_NAME` was left on `backend`** when 036 moved the Docker socket to
+    `deployer`. Compose derives the project from the directory name, so the deployer would
+    have built a *second, parallel stack* and reported a successful deploy while the live
+    site ran the old images.
+  - **Compose gives the process environment precedence over `.env`.** Any variable that is
+    both interpolated in the compose file and set in the deployer's own environment
+    resolves to the container's value when the deployer runs compose. Two collided:
+    `GITHUB_APP_PRIVATE_KEY_PATH` meant both the host mount source and the in-container
+    path (now split into `..._HOST_PATH` + `..._PATH` — **do not merge them back**), and
+    `FACTORY_DEPLOY_TRIGGER_ENABLED` was pinned `"false"` on `deployer`, which would have
+    re-rendered `software-factory` with the trigger **off** — auto-deploy would have
+    worked exactly once and then disabled itself. That line is now deliberately absent.
+  - **`FACTORY_DEPLOY_TRIGGER_ENABLED` was never passed to `software-factory` at all.**
+    That service has no `env_file`, and the variable appeared only on `deployer`, so
+    rollout step 7 ("set it true on software-factory") was a silent no-op.
+  - **`.env` must be group-readable and the deployer joins its OWNING group.** A
+    `chgrp factory .env` does not hold: `sed -i` and every rename-based editor recreates
+    the file with the host user's group, and the next deploy dies at `recreate` with
+    `permission denied` *after* the maintenance page is up (ends `ROLLBACK_FAILED`).
+    `group_add` now carries `DOCKER_GID` (the socket is `root:docker 0660` and the
+    container runs as uid 10003) and `DEPLOY_ENV_GID`.
+  - Also: the `deploy-state` named volume is created `root:root`, so `maintenance-on`
+    could not write the flag — fixed with a `deploy-state-init` chown service mirroring
+    `uploads-init`; and git refuses the host-owned checkout ("dubious ownership"), which
+    `sync-config` misreports as "<dir> is not a git checkout" — fixed with
+    `GIT_CONFIG_COUNT`/`KEY_0`/`VALUE_0` setting `safe.directory`.
+  - **`monitor-prod.sh` was not deploy-aware.** It polls www every minute and treats the
+    maintenance page's 503 as a fault, and a deploy outlasts its 3-strike threshold — so
+    the watchdog reconciled the stack underneath a running deploy. It now stands down
+    while `deploy-state/maintenance.on` is set (read through nginx, which mounts the
+    volume read-only, so it needs no root). `deploy-state-init` was also added to
+    `ONESHOT_SERVICES`, or its `exited 0` fires a stack reconcile every single minute.
+  - Still open, deliberately not fixed here: `reconcile()` in `restart-prod.sh` runs a
+    **bare `up -d`**, which ignores `FACTORY_DEPLOY_RECREATABLE` entirely — so the
+    deployer's self-exclusion is incomplete and a merge that changes the `deployer`
+    service will have the deploy recreate the deployer mid-flight and kill its own
+    workflow. Also `DeployWorkflowImpl` reports `maintenancePageLeftUp: true` on the
+    sync-config-failed path, where the page was never raised.
+  - The `restart-prod.sh` parser tests (6 checks) cannot pass on the Pi: **the host has no
+    `jq`**, which lives only in the deployer image. Pre-existing, not a regression.
 - 036-auto-deploy-on-merge: A merge to `main` now deploys itself. `software-factory` gains a
   `workflow_run` branch on its existing signed webhook — accepted only for
   `Publish`/`success`/`main`/allowlisted-repo — which **signal-with-starts** a Temporal workflow
@@ -435,6 +540,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.9 (web, security OAuth2 resource server, data-mongodb), `@auth0/auth0-react` (adds `loginWithPopup` usage), Lucide React `Heart` icon. No new dependencies. (029-favourite-news-events)
 - MongoDB — new `favourites` collection (record + `@Document`, unique compound index on `userId,type,contentId`). Existing `aggregated_articles` / `aggregated_events` unchanged. (029-favourite-news-events)
 - Static analysis: SonarQube Cloud (`org.sonarqube` 6.0.1.5171, project key `simonjamesrowe_simonrowe-dev-monorepo`), JaCoCo 0.8.12 on `backend` (0.78 floor) and `software-factory` (report only), `@vitest/coverage-v8` ^3.0.0 for frontend LCOV, ESLint 9 in CI. No persistence. (033-sonarqube-static-analysis)
+- Java 21 (backend), TypeScript 5.x / React 19 (frontend), bash (restore script) + Spring Boot 3.5.x `@Scheduled`/`@RestController`, the existing Google Drive API client, `java.util.zip`, `java.lang.ProcessBuilder`. **No new dependencies in any module.** (034-platform-datastore-backup)
+- No application persistence: reads Postgres 15 (`langfuse-db`) and ClickHouse (`langfuse-clickhouse`) via `docker exec`, writes a zip to Google Drive. One new Docker named volume (`langfuse-clickhouse-backups`) as the ClickHouse→backend handoff. (034-platform-datastore-backup)
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16, Embabel `Ai` (`com.embabel.agent.api.common.Ai`, the established inline-LLM injection point alongside `ArticleSectionWriter`/`DigestComposer`), Mongock, Bucket4j via the existing `RateLimitInterceptor`, `react-markdown`, Lucide React `Sparkles`. **No new dependencies in either module.** (034-article-summary-audio)
 - MongoDB — new `article_summaries` collection (mutable `@Document` class, not a record, because the generation flow transitions it in place); `narrations` changed from `blogId` to `contentType` + `contentId`. Indexes via Mongock change units `V020`/`V021` — `auto-index-creation` is off, so `@Indexed`/`@CompoundIndex` alone are decorative. (034-article-summary-audio)
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16 (web, security OAuth2 resource server, data-mongodb), `MongoTemplate` aggregation, existing `useAuth`/`useEnsureAuthenticated` (Auth0), Lucide React. **No new dependencies in either module.** (035-listen-from-listing)

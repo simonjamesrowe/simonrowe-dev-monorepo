@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!--
+  Allows `BACKUP DATABASE default TO File('<name>.zip')`.
+
+  ClickHouse refuses a File() backup destination unless the path sits under an
+  explicitly allowed path, so without this overlay the nightly platform backup
+  fails with "Path ... is not allowed for backups" and no ClickHouse data is ever
+  captured. `/backups` is the `langfuse-clickhouse-backups` named volume, shared
+  read-write with the `backend` container, which is how the archive gets from
+  ClickHouse to the uploader (see docs/runbooks/platform-backup-restore.md).
+
+  The volume is mounted at a path that does NOT exist in the image, so Docker
+  creates it empty and root-owned while this container runs as 101:101. The
+  `clickhouse-backups-init` one-shot service chowns it; without that every BACKUP
+  fails on permissions instead of on this setting.
+-->
+<clickhouse>
+    <backups>
+        <allowed_path>/backups/</allowed_path>
+    </backups>
+</clickhouse>

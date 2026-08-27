@@ -34,9 +34,18 @@ the artifacts.
 
 | Module | Language | Coverage produced by | Artifact | Floor |
 | --- | --- | --- | --- | --- |
-| `backend` | Java 21 | `:backend:jacocoTestReport` | `jacoco-report` | **0.78, enforced** |
+| `backend` | Java 21 | `:backend:jacocoTestReport` | `jacoco-report` | **0.78 instruction, enforced** |
 | `software-factory` | Java 21 | `:software-factory:jacocoTestReport` | `software-factory-jacoco-report` | none — report only |
-| frontend | TypeScript | `npm run test:coverage` | `frontend-coverage` | none — report only |
+| frontend | TypeScript | `npm run test:coverage` | `frontend-coverage` | **45% lines / 78% branches / 58% functions, enforced** |
+
+The frontend floors are Vitest `coverage.thresholds` in `frontend/vite.config.ts`,
+so they are enforced by `npm run test:coverage` — which is what the `frontend` CI
+job already runs, and what the pre-commit hook runs for staged `frontend/` paths.
+Nothing new had to be added to CI. **Sonar sees the same lcov but its gate is
+advisory; this is the blocking half.** Each floor sits a few points under its
+measurement, the same margin the backend's 0.78 leaves against its 82.5% — enough
+that adding one untested file does not turn an unrelated pull request red. Raise
+them when the number rises.
 
 Baseline at the time this landed, all measured locally:
 
@@ -46,8 +55,11 @@ Baseline at the time this landed, all measured locally:
 | `software-factory` | **80.4%** instruction, 78.5% line, 67.0% branch | first ever measurement |
 | frontend | **44.72%** statements, 80.03% branch | first ever measurement |
 
+Re-measured 2026-08-27, when the frontend floors were set: **48.66% lines, 81.37%
+branches, 62.73% functions**, over 77 test files / 596 tests.
+
 `npm run lint` exits 0 with 5 `react-refresh/only-export-components` warnings and
-0 errors. The frontend suite is 67 test files / 450 tests, all passing.
+0 errors.
 
 **The backend figure is the number to compare against** when checking for failure
 mode 5 — Sonar should report backend coverage within about a percentage point of
@@ -101,6 +113,49 @@ The `pr-review-loop` skill automates this loop, including the two API reads
 `api/qualitygates/project_status`). The project is public, so those reads should
 succeed anonymously.
 
+### New code on `main` is *30 days*, and that setting is not in this repository
+
+On a pull request, "new code" is the diff, so the gate reads correctly whatever
+the project is configured with. On `main` it is whatever
+`sonar.leak.period` says, and the SonarQube Cloud default —
+`previous_version` — is wrong for this repository in a way that is invisible
+until you look for it:
+
+- `previous_version` resets the period when the analysed **project version**
+  changes. The root `build.gradle.kts` pins `version = "0.0.1-SNAPSHOT"` and
+  nothing bumps it, so after the one analysis that introduced that string the
+  period never reset again. It grows by one day, every day, forever.
+- Measured on 2026-08-27, before the change: **286 of the project's 294 open
+  issues counted as "new code"** — that is, almost the whole codebase. Every
+  pre-existing vulnerability was scored against the new-code security condition,
+  which is why the `main` gate read `ERROR` on `new_security_rating` while no
+  recent commit had introduced a vulnerability at all.
+
+It is now **`sonar.leak.period = 30`** (Number of days), set at project scope:
+
+```bash
+# The setting is server-side. A scanner property will not do it: the analysis
+# reports into the period the server already holds.
+curl -u "$SONAR_CLOUD_TOKEN:" -X POST https://sonarcloud.io/api/settings/set \
+  --data-urlencode component=simonjamesrowe_simonrowe-dev-monorepo \
+  --data-urlencode key=sonar.leak.period \
+  --data-urlencode value=30
+
+curl -u "$SONAR_CLOUD_TOKEN:" \
+  "https://sonarcloud.io/api/settings/values?component=simonjamesrowe_simonrowe-dev-monorepo&keys=sonar.leak.period"
+```
+
+`SONAR_CLOUD_TOKEN` is in the repository `.env`. There is no
+`api/new_code_periods/*` on SonarQube Cloud — that web service is SonarQube
+Server only, and calling it returns `Unknown url`, which reads like a
+permissions problem and is not one.
+
+Confirm it took effect from the *next* analysis rather than from the write: the
+`periods` block of `api/qualitygates/project_status` should report
+`"mode":"days","parameter":"30"`. Because this lives in the SaaS project and not
+in the repository, **it does not survive re-creating the project** — it is on the
+[operator checklist](#operator-checklist--steps-only-a-human-can-do) below.
+
 ## Operator checklist — steps only a human can do
 
 None of this can be done from a workspace. Until it is complete the `sonar` job
@@ -133,7 +188,14 @@ ahead of this checklist is safe and changes no CI behaviour.
       Paste the token into that prompt in your own shell. **Never** paste a token
       value into a chat, echo it to a terminal, or write it to a file.
 
-- [ ] **6. Verify on the next pull request**: the `sonar` job runs the analysis
+- [ ] **6. Set the new code definition on `main` to Number of days: 30.**
+      The default, Previous version, silently never resets here — see
+      [New code on `main` is *30 days*](#new-code-on-main-is-30-days-and-that-setting-is-not-in-this-repository)
+      for why, and for the one-line API call that sets it. Skipping this does not
+      break anything visibly; it makes the `main` gate score the whole codebase as
+      new code.
+
+- [ ] **7. Verify on the next pull request**: the `sonar` job runs the analysis
       step instead of skipping it; the SonarQube check appears; coverage is
       non-zero for all three modules; and the backend coverage percentage agrees
       with the JaCoCo figure (see failure mode 5).
@@ -311,13 +373,26 @@ Each of these was deliberately deferred, with the reason recorded:
 - **Set a `software-factory` coverage floor.** The measurement now exists: 80.4%
   instruction, 78.5% line. A floor at the backend's 0.78 is immediately
   satisfiable.
-- **Set a frontend coverage floor.** Baseline is 44.72% statements.
 - **Clear the five ESLint warnings** and add `--max-warnings 0` to the lint step.
   All five are `react-refresh/only-export-components` and all are fixable by
   moving a context or a constant to its own file:
   `src/components/skills/SkillRatingBar.tsx`,
   `src/components/tour/TourProvider.tsx`, `src/contexts/ChatContext.tsx`,
   `src/contexts/ThemeContext.tsx`, `src/hooks/useDrawer.tsx`.
+
+## Standing declines
+
+Findings that will keep reappearing on `main` and are deliberately not being
+fixed. They are recorded here, and not marked "won't fix" in the SonarQube UI,
+for the reason given in [How to read the gate](#how-to-read-the-gate): a decision
+that lives only in the SaaS project is invisible to review. Re-open any of them
+if the reasoning stops holding.
+
+| Rule | Where | Why declined |
+| --- | --- | --- |
+| `java:S4502` — CSRF protection disabled | `auth/SecurityConfig.java` | The API is a stateless OAuth2 resource server: `SessionCreationPolicy.STATELESS`, bearer-token auth, no cookie the browser attaches ambiently. CSRF tokens defend session cookies; there is no session. Enabling it would break every admin write for no gain. |
+| `java:S5443` — publicly writable directory (×3) | `dataops/BackupService.java`, `dataops/RestoreService.java` | All three are `Files.createTempFile`, the NIO form, which creates with `O_CREAT\|O_EXCL` and — on POSIX — owner-only permissions, unlike the legacy `File.createTempFile`. There is no symlink-preemption window to attack. Moving backups off `/tmp` is a separate change with disk-space consequences on the Pi. |
+| `tssecurity:S8476` — tainted client-side request URL | `services/narrationApi.ts` | `contentId` is already `encodeURIComponent`-ed at both branches of the URL it builds, so it cannot introduce a path segment or a query. Sonar wants allowlist *validation* rather than encoding; encoding is sufficient for a path segment. |
 
 ## Deliberately not done
 

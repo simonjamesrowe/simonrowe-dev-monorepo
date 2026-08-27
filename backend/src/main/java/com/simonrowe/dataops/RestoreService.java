@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
@@ -333,16 +334,17 @@ public class RestoreService {
     Path uploadsDir = Path.of(uploadsPath);
 
     if (Files.exists(uploadsDir)) {
-      Files.walk(uploadsDir)
-          .sorted(java.util.Comparator.reverseOrder())
-          .filter(p -> !p.equals(uploadsDir))
-          .forEach(p -> {
-            try {
-              Files.delete(p);
-            } catch (IOException ex) {
-              LOG.warn("Failed to delete file during restore cleanup: {}", p, ex);
-            }
-          });
+      try (Stream<Path> walk = Files.walk(uploadsDir)) {
+        walk.sorted(java.util.Comparator.reverseOrder())
+            .filter(p -> !p.equals(uploadsDir))
+            .forEach(p -> {
+              try {
+                Files.delete(p);
+              } catch (IOException ex) {
+                LOG.warn("Failed to delete file during restore cleanup: {}", p, ex);
+              }
+            });
+      }
     }
 
     Files.createDirectories(uploadsDir);

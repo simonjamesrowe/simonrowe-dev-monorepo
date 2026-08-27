@@ -80,6 +80,41 @@ public class DataOperationsController {
     }
   }
 
+  /**
+   * Lists the retained platform archives, newest first.
+   *
+   * <p>Reads the <em>platform</em> Drive folder, which is deliberately a different
+   * folder from the one {@link #listBackups()} reads. The two retention windows are
+   * independent so that neither backup type can evict the other.
+   *
+   * <p>This is the whole of the backend's involvement in the platform backup. The
+   * capture itself runs in the {@code deployer} container as {@code
+   * scripts/backup-platform.sh}, because constitution 2.0.0 forbids this container —
+   * the one terminating public traffic — from holding the Docker socket or launching
+   * a host process. Listing a Drive folder is a network call, so it stays here.
+   *
+   * @return the retained platform archives
+   */
+  @GetMapping("/platform-backups")
+  public List<BackupMetadata> listPlatformBackups() {
+    requireDriveConnected();
+    try {
+      String folderId = googleDriveService.findOrCreatePlatformFolder();
+      return googleDriveService.listBackups(folderId);
+    } catch (IOException ex) {
+      LOG.error("Failed to list platform backups", ex);
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+          "Failed to list platform backups: " + ex.getMessage());
+    }
+  }
+
+  // No platform capture or restore endpoint here, for two different reasons.
+  // Capture: constitution 2.0.0 forbids host-level container access in this
+  // container, so it runs in the `deployer` on a Temporal schedule. An admin-UI
+  // trigger is deferred, not cancelled - it needs a Temporal client here.
+  // Restore: scripts/restore-platform.sh, because the scenario that motivates it is
+  // a rebuilt host, where this application is the thing being rebuilt.
+
   @PostMapping("/restore")
   public ResponseEntity<DataOperation> startRestore(
       @RequestBody final RestoreRequest request

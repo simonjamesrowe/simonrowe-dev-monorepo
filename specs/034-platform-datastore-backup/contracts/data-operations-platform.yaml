@@ -1,0 +1,182 @@
+openapi: 3.1.0
+info:
+  title: Platform datastore backup — admin data operations
+  version: 2.0.0
+  description: |
+    Endpoints added to the existing `/api/admin/data-operations` controller.
+
+    REVISION 2 (2026-08-26): constitution 2.0.0 moved the capture out of the backend
+    into the `deployer` container, so **`POST /platform-backup` is deferred** and is
+    NOT implemented. It is retained below, marked `deprecated: true`, because the
+    capability is deferred rather than cancelled — see spec.md "Deferred". Only
+    `GET /platform-backups` ships: listing a Drive folder is a network call and needs
+    no host access. On-demand capture is `scripts/backup-platform.sh`.
+
+    There is deliberately **no** restore endpoint: restore is a host shell script
+    (`scripts/restore-platform.sh`), per ADR 2 of the approved design. The scenario
+    that motivates restore is a rebuilt host, where the backend is the thing being
+    rebuilt — so a button inside it is the wrong tool.
+
+servers:
+  - url: https://api.simonrowe.dev
+    description: Production
+  - url: http://localhost:8080
+    description: Local
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/admin/data-operations/platform-backup:
+    post:
+      operationId: startPlatformBackup
+      deprecated: true
+      summary: "[DEFERRED - not implemented] Capture the platform datastores now"
+      description: |
+        Starts a platform backup asynchronously and returns immediately with the
+        operation record. Progress is reported on the existing SSE stream at
+        `GET /api/admin/data-operations/progress` — this feature adds no new
+        stream.
+
+        At most one data operation runs at a time across the whole controller;
+        a trigger arriving while any other operation holds the mutex is refused
+        with `409` rather than queued.
+      tags: [data-operations]
+      responses:
+        '202':
+          description: Accepted; the backup is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataOperation'
+        '401':
+          description: No bearer token, or the token is invalid.
+        '403':
+          description: Authenticated but not an administrator.
+        '409':
+          description: Another data operation is already in progress.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: |
+            Google Drive is not connected, so there is nowhere to upload the
+            archive. Matches the sibling `/backup` endpoint's behaviour.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/admin/data-operations/platform-backups:
+    get:
+      operationId: listPlatformBackups
+      summary: List the retained platform archives
+      description: |
+        Returns the archives in the platform Drive folder
+        (`simonrowe-platform-backups`), newest first. This is a **different
+        folder** from the application backups returned by
+        `GET /api/admin/data-operations/backups` — the two retention windows are
+        independent by design, so that neither backup type can evict the other.
+      tags: [data-operations]
+      responses:
+        '200':
+          description: The retained archives, newest first. At most 7 in normal operation.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BackupMetadata'
+        '401':
+          description: No bearer token, or the token is invalid.
+        '403':
+          description: Authenticated but not an administrator.
+        '500':
+          description: The Drive listing failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Google Drive is not connected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Auth0 access token. The caller must hold the admin role.
+
+  schemas:
+    DataOperation:
+      type: object
+      description: Reused unchanged from the existing controller.
+      required: [id, type, status, startedAt, progressMessage, progressPercent]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [BACKUP, RESTORE, CLEAR, REBUILD_INDEX, REEMBED_CONTENT]
+          description: |
+            REVISION 2: `PLATFORM_BACKUP` is gone and `REDEPLOY` was removed by
+            036-auto-deploy-on-merge. The platform capture no longer runs as a backend
+            data operation, so it emits no progress events here.
+        status:
+          type: string
+          enum: [IN_PROGRESS, COMPLETED, FAILED]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: [string, 'null']
+          format: date-time
+        progressMessage:
+          type: string
+        progressPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        errorMessage:
+          type: [string, 'null']
+        resultSummary:
+          type: [string, 'null']
+          description: |
+            On success, a human summary — per-database dump sizes, ClickHouse row
+            counts and the total archive size.
+
+    BackupMetadata:
+      type: object
+      description: |
+        Reused unchanged from the application backup path — same record, same
+        `formatFileSize` helper. A parallel type would duplicate the formatting
+        logic for no gain.
+      required: [fileId, fileName, createdAt, fileSize, fileSizeFormatted]
+      properties:
+        fileId:
+          type: string
+        fileName:
+          type: string
+          examples: ['platform-backup-20260825-020000.zip']
+        createdAt:
+          type: string
+          format: date-time
+        fileSize:
+          type: integer
+          format: int64
+        fileSizeFormatted:
+          type: string
+          examples: ['913.4 MB']
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
