@@ -108,8 +108,16 @@ check "recreate uses --no-deps --pull never per service" \
   "[[ \$(grep -c 'up -d --no-deps --pull never' <<<\"\$out\") -eq 3 ]]"
 check "recreate never touches deployer" "! grep -q 'never deployer' <<<\"\$out\""
 check "recreate restarts nginx" "grep -q 'restart nginx' <<<\"\$out\""
-check "recreate reconciles the whole stack afterwards" \
-  "grep -qE 'DRY-RUN: docker compose -f [^ ]+ up -d\$' <<<\"\$out\""
+# The reconcile must name its services rather than running a bare `up -d`. A bare
+# one recreates the deployer whenever the shared software-factory:latest tag has
+# just been repointed by the pull phase - which SIGTERMs the container running
+# this very script. It happened twice in production before this was fixed.
+check "recreate reconciles the rest of the stack afterwards" \
+  "grep -qE 'DRY-RUN: docker compose -f [^ ]+ up -d [a-z]' <<<\"\$out\""
+check "recreate's reconcile EXCLUDES the deployer" \
+  "! grep -E 'DRY-RUN: docker compose -f [^ ]+ up -d .*(^| )deployer( |\$)' <<<\"\$out\""
+check "recreate's reconcile still covers the other services" \
+  "grep -E 'DRY-RUN: docker compose -f [^ ]+ up -d ' <<<\"\$out\" | grep -q backend"
 
 # ---------------------------------------------------------------------------
 echo "  rollback"
@@ -162,8 +170,10 @@ state="$TMP/state-all"
 out="$(run_phase "$state" all)"
 check "all pulls the whole compose file, not per-service" \
   "grep -qE 'DRY-RUN: docker compose -f [^ ]+ pull\$' <<<\"\$out\""
-check "all reconciles the whole stack" \
-  "grep -qE 'DRY-RUN: docker compose -f [^ ]+ up -d\$' <<<\"\$out\""
+check "all reconciles the rest of the stack" \
+  "grep -qE 'DRY-RUN: docker compose -f [^ ]+ up -d [a-z]' <<<\"\$out\""
+check "all's reconcile EXCLUDES the deployer" \
+  "! grep -E 'DRY-RUN: docker compose -f [^ ]+ up -d .*(^| )deployer( |\$)' <<<\"\$out\""
 check "all uses no --no-deps form" "! grep -q -- '--no-deps' <<<\"\$out\""
 check "all checks www" "grep -q 'www.simonrowe.dev' <<<\"\$out\""
 check "all checks console" "grep -q 'console.simonrowe.dev' <<<\"\$out\""
