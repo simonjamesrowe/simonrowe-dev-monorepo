@@ -20,9 +20,17 @@ import java.time.Duration;
  * @param pollInterval how long to wait between CI polls
  * @param repairBudget how many repair attempts are allowed after the first push
  * @param maxWait the wall-clock cap on the whole CI loop
+ * @param linearFilingEnabled whether to file each newly-recorded unfixable component into Linear.
+ *     Carried on the request for the same reason as the CI settings above, plus a second one: with
+ *     the sink disabled nothing polls the {@code linear} queue, so scheduling the activity would
+ *     stall the run until its schedule-to-close timeout.
  */
 public record CveFixRequest(
-    boolean dryRun, Duration pollInterval, int repairBudget, Duration maxWait) {
+    boolean dryRun,
+    Duration pollInterval,
+    int repairBudget,
+    Duration maxWait,
+    boolean linearFilingEnabled) {
 
   /** Fills in the production defaults so a sparse hand-written JSON input still behaves. */
   public CveFixRequest {

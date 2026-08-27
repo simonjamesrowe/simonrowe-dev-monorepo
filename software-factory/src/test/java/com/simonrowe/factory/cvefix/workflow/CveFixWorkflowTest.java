@@ -30,8 +30,14 @@ import com.simonrowe.factory.cvefix.github.CveFixPrGateway;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.cvefix.workflow.CveFixActivities.FixSummary;
 import com.simonrowe.factory.cvefix.workflow.CveFixActivities.PushResult;
+import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.linear.domain.FiledIssue;
+import com.simonrowe.factory.linear.domain.FilingDecision;
+import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.client.WorkflowFailedException;
 import io.temporal.client.WorkflowOptions;
+import io.temporal.failure.ApplicationFailure;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
 import java.time.Duration;
@@ -55,9 +61,15 @@ class CveFixWorkflowTest {
               List.of("CVE-2026-0001"),
               List.of(new Finding(PURL, "lib", "1.0.0", "CVE-2026-0001", "HIGH", ""))));
 
+  private static final String LINEAR_URL = "https://linear.app/simonrowe/issue/SIM-9";
+
   private static final UnfixableComponent UNFIXABLE =
       new UnfixableComponent(
           "pkg:maven/org.example/stuck@2.0.0", List.of("CVE-2026-0002"), "no release yet");
+
+  private static final UnfixableComponent OTHER_UNFIXABLE =
+      new UnfixableComponent(
+          "pkg:npm/other-stuck@3.0.0", List.of("CVE-2026-0003"), "the fix needs a major bump");
 
   private static final FixSummary SUMMARY =
       new FixSummary(
@@ -66,7 +78,11 @@ class CveFixWorkflowTest {
           "bumped one dependency");
 
   private static final CveFixRequest REQUEST =
-      new CveFixRequest(false, Duration.ofMinutes(3), 3, Duration.ofHours(3));
+      new CveFixRequest(false, Duration.ofMinutes(3), 3, Duration.ofHours(3), false);
+
+  /** The same request with the Linear issue sink switched on. */
+  private static final CveFixRequest FILING_REQUEST =
+      new CveFixRequest(false, Duration.ofMinutes(3), 3, Duration.ofHours(3), true);
 
   @Test
   void skipsWhenTheCveFixPullRequestIsAlreadyOpen() {
@@ -162,7 +178,7 @@ class CveFixWorkflowTest {
             new PushResult("sha-2", second),
             new PushResult("sha-3", SUMMARY));
 
-    run(activities, new CveFixRequest(false, Duration.ofMinutes(3), 2, Duration.ofHours(3)));
+    run(activities, new CveFixRequest(false, Duration.ofMinutes(3), 2, Duration.ofHours(3), false));
 
     verify(activities, times(3)).proposeAndPush(anyList(), any(), anyList());
     verify(activities).proposeAndPush(COMPONENTS, null, List.of());
@@ -187,7 +203,9 @@ class CveFixWorkflowTest {
             new PushResult("sha-3", SUMMARY));
 
     CveFixResult result =
-        run(activities, new CveFixRequest(false, Duration.ofMinutes(3), 2, Duration.ofHours(3)));
+        run(
+            activities,
+            new CveFixRequest(false, Duration.ofMinutes(3), 2, Duration.ofHours(3), false));
 
     assertThat(result.status()).isEqualTo(CveFixStatus.CI_UNRESOLVED);
     assertThat(result.prUrl()).isEqualTo(NEW_PR_URL);
@@ -223,7 +241,9 @@ class CveFixWorkflowTest {
     when(activities.checkCi(anyString())).thenReturn(outcome(CiState.PENDING));
 
     CveFixResult result =
-        run(activities, new CveFixRequest(false, Duration.ofMinutes(3), 3, Duration.ofMinutes(10)));
+        run(
+            activities,
+            new CveFixRequest(false, Duration.ofMinutes(3), 3, Duration.ofMinutes(10), false));
 
     assertThat(result.status()).isEqualTo(CveFixStatus.CI_UNRESOLVED);
     assertThat(result.detail()).contains("wall-clock cap").doesNotContain("repair budget");
@@ -249,7 +269,9 @@ class CveFixWorkflowTest {
     CveFixActivities activities = activities();
 
     CveFixResult result =
-        run(activities, new CveFixRequest(true, Duration.ofMinutes(3), 3, Duration.ofHours(3)));
+        run(
+            activities,
+            new CveFixRequest(true, Duration.ofMinutes(3), 3, Duration.ofHours(3), false));
 
     // DRY_RUN rather than COMPLETED: the run pushed a branch and recorded suppressions, so the
     // status has to say so on its own without an operator reading detail().
@@ -265,7 +287,7 @@ class CveFixWorkflowTest {
     CveFixActivities polling = activities();
     when(polling.checkCi(anyString())).thenReturn(outcome(CiState.PENDING));
 
-    run(polling, new CveFixRequest(false, Duration.ofSeconds(30), 3, Duration.ofMinutes(2)));
+    run(polling, new CveFixRequest(false, Duration.ofSeconds(30), 3, Duration.ofMinutes(2), false));
 
     // A 30s interval inside a 2m cap polls roughly four times; the 3m production default,
     // which this workflow cannot read because it has no CveFixProperties, would poll at most once.
@@ -277,7 +299,9 @@ class CveFixWorkflowTest {
         .thenReturn(new PushResult("sha-1", SUMMARY), new PushResult("sha-2", SUMMARY));
 
     CveFixResult result =
-        run(repairing, new CveFixRequest(false, Duration.ofSeconds(30), 1, Duration.ofHours(3)));
+        run(
+            repairing,
+            new CveFixRequest(false, Duration.ofSeconds(30), 1, Duration.ofHours(3), false));
 
     assertThat(result.detail()).contains("repair budget of 1");
     verify(repairing, times(2)).proposeAndPush(anyList(), any(), anyList());
@@ -323,7 +347,7 @@ class CveFixWorkflowTest {
     when(red.checkCi(anyString())).thenReturn(outcome(CiState.RED));
     when(red.proposeAndPush(anyList(), any(), anyList()))
         .thenReturn(new PushResult("sha-1", SUMMARY), new PushResult("sha-2", SUMMARY));
-    run(red, new CveFixRequest(false, Duration.ofMinutes(3), 1, Duration.ofHours(3)));
+    run(red, new CveFixRequest(false, Duration.ofMinutes(3), 1, Duration.ofHours(3), false));
     CveFixRunRecord unresolved = recordedRun(red);
     assertThat(unresolved.status()).isEqualTo(CveFixStatus.CI_UNRESOLVED);
     assertThat(unresolved.ciAttempts()).isEqualTo(1);
@@ -340,7 +364,7 @@ class CveFixWorkflowTest {
     when(red.checkCi(anyString())).thenReturn(outcome(CiState.RED));
     when(red.proposeAndPush(anyList(), any(), anyList()))
         .thenReturn(new PushResult("sha-1", SUMMARY), new PushResult("sha-2", SUMMARY));
-    run(red, new CveFixRequest(false, Duration.ofMinutes(3), 1, Duration.ofHours(3)));
+    run(red, new CveFixRequest(false, Duration.ofMinutes(3), 1, Duration.ofHours(3), false));
     verify(red).recordUnfixable(List.of(UNFIXABLE), COMPONENTS);
 
     CveFixActivities nothingFixable = activities();
@@ -360,6 +384,128 @@ class CveFixWorkflowTest {
     verify(empty, never()).recordUnfixable(anyList(), anyList());
   }
 
+  // ---------------------------------------------------------------------------
+  // The Linear issue sink
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void filesOneIssuePerNewlyRecordedComponent() {
+    CveFixActivities activities = activities();
+    when(activities.proposeAndPush(anyList(), any(), anyList()))
+        .thenReturn(
+            new PushResult(
+                null, new FixSummary(List.of(), List.of(UNFIXABLE, OTHER_UNFIXABLE), "stuck")));
+    // Only what recordUnfixable reports as new information files; the daily schedule re-runs with
+    // an unchanged finding set most days and must file nothing then.
+    when(activities.recordUnfixable(anyList(), anyList()))
+        .thenReturn(List.of(UNFIXABLE, OTHER_UNFIXABLE));
+    LinearActivities linear = linearActivities();
+
+    CveFixResult result = runFiling(activities, linear, FILING_REQUEST);
+
+    assertThat(result.status()).isEqualTo(CveFixStatus.NOTHING_FIXABLE);
+    ArgumentCaptor<IssueFiling> filings = ArgumentCaptor.forClass(IssueFiling.class);
+    verify(linear, times(2)).fileIssue(filings.capture());
+    assertThat(filings.getAllValues())
+        .extracting(IssueFiling::producer)
+        .containsOnly("cvefix");
+    // The purl alone, the key UnfixableFindingRecord itself uses: one ticket per component
+    // however many advisories accumulate against it.
+    assertThat(filings.getAllValues())
+        .extracting(IssueFiling::keyParts)
+        .containsExactly(List.of(UNFIXABLE.purl()), List.of(OTHER_UNFIXABLE.purl()));
+    assertThat(filings.getAllValues())
+        .extracting(IssueFiling::title)
+        .containsExactly(
+            "Cannot auto-fix " + UNFIXABLE.purl(), "Cannot auto-fix " + OTHER_UNFIXABLE.purl());
+    assertThat(filings.getAllValues().get(0).body()).contains(UNFIXABLE.reason());
+
+    // The run id PLUS the purl. One run files several components, and a bare run id would make
+    // the second look like a replay of the first and be silently dropped.
+    List<String> occurrenceIds =
+        filings.getAllValues().stream().map(IssueFiling::occurrenceId).toList();
+    assertThat(occurrenceIds).doesNotHaveDuplicates();
+    assertThat(occurrenceIds.get(0)).endsWith(":" + UNFIXABLE.purl());
+    assertThat(occurrenceIds.get(1)).endsWith(":" + OTHER_UNFIXABLE.purl());
+    // indexOf, not lastIndexOf: a purl is full of colons, so only the first one separates the
+    // run id from it. The occurrence id is an identity key, never parsed in production.
+    String runId = occurrenceIds.get(0).substring(0, occurrenceIds.get(0).indexOf(':'));
+    assertThat(runId).isNotBlank();
+    assertThat(occurrenceIds.get(1)).startsWith(runId + ":");
+    assertThat(filings.getAllValues().get(0).occurrenceDetail()).contains(runId);
+    assertThat(filings.getAllValues().get(0).workflowId()).isEqualTo("cve-fix-test");
+  }
+
+  @Test
+  void filesNothingWhenNoComponentIsNewInformation() {
+    CveFixActivities activities = activities();
+    when(activities.proposeAndPush(anyList(), any(), anyList()))
+        .thenReturn(new PushResult(null, new FixSummary(List.of(), List.of(UNFIXABLE), "stuck")));
+    // The give-up was already stored under the same fingerprint, so nothing is new.
+    when(activities.recordUnfixable(anyList(), anyList())).thenReturn(List.of());
+    LinearActivities linear = linearActivities();
+
+    runFiling(activities, linear, FILING_REQUEST);
+
+    verify(linear, never()).fileIssue(any());
+  }
+
+  @Test
+  void filesNothingWhenTheSinkIsDisabled() {
+    // With factory.linear.enabled false nothing polls the `linear` queue, so scheduling the
+    // activity at all would stall the run until its schedule-to-close timeout. The queue IS
+    // polled here, which is what makes "nothing was scheduled" the only reading of this result.
+    CveFixActivities activities = activities();
+    when(activities.proposeAndPush(anyList(), any(), anyList()))
+        .thenReturn(new PushResult(null, new FixSummary(List.of(), List.of(UNFIXABLE), "stuck")));
+    when(activities.recordUnfixable(anyList(), anyList())).thenReturn(List.of(UNFIXABLE));
+    LinearActivities linear = linearActivities();
+
+    CveFixResult result = runFiling(activities, linear, REQUEST);
+
+    assertThat(result.status()).isEqualTo(CveFixStatus.NOTHING_FIXABLE);
+    verify(linear, never()).fileIssue(any());
+  }
+
+  @Test
+  void filesOnEveryGiveUpPathIncludingAfterTheRepairBudget() {
+    CveFixActivities activities = activities();
+    when(activities.checkCi(anyString())).thenReturn(outcome(CiState.RED));
+    when(activities.proposeAndPush(anyList(), any(), anyList()))
+        .thenReturn(new PushResult("sha-1", SUMMARY), new PushResult("sha-2", SUMMARY));
+    when(activities.recordUnfixable(anyList(), anyList())).thenReturn(List.of(UNFIXABLE));
+    LinearActivities linear = linearActivities();
+
+    CveFixResult result =
+        runFiling(
+            activities,
+            linear,
+            new CveFixRequest(false, Duration.ofMinutes(3), 1, Duration.ofHours(3), true));
+
+    assertThat(result.status()).isEqualTo(CveFixStatus.CI_UNRESOLVED);
+    verify(linear, times(1)).fileIssue(any());
+  }
+
+  @Test
+  void filingFailureLeavesTheRunsStatusAndSuppressionRecordsUntouched() {
+    // The suppression record is already written; the ticket is a nicety by comparison. Note the
+    // failure is thrown at us as an ActivityFailure, but the workflow catches RuntimeException -
+    // encoding the payload happens on the workflow thread, and a raw JDK exception there is not a
+    // TemporalFailure, so it would fail the workflow task and Temporal retries those forever.
+    CveFixActivities activities = activities();
+    when(activities.checkCi(anyString())).thenReturn(outcome(CiState.GREEN));
+    when(activities.recordUnfixable(anyList(), anyList())).thenReturn(List.of(UNFIXABLE));
+    LinearActivities linear = linearActivities();
+    when(linear.fileIssue(any()))
+        .thenThrow(ApplicationFailure.newNonRetryableFailure("Linear down", "LinearApiError"));
+
+    CveFixResult result = runFiling(activities, linear, FILING_REQUEST);
+
+    assertThat(result.status()).isEqualTo(CveFixStatus.COMPLETED);
+    assertThat(recordedRun(activities).status()).isEqualTo(CveFixStatus.COMPLETED);
+    verify(activities).recordUnfixable(List.of(UNFIXABLE), COMPONENTS);
+  }
+
   /**
    * {@code withoutAnnotations()} is required: Mockito copies {@code @ActivityMethod} onto the
    * mock's own methods, and Temporal rejects a class carrying that annotation outside the
@@ -374,6 +520,13 @@ class CveFixWorkflowTest {
         .thenReturn(new CveFixPrGateway.OpenPullRequest(11, NEW_PR_URL));
     when(activities.ciFailureLogs(anyString())).thenReturn(LOGS);
     return activities;
+  }
+
+  private static LinearActivities linearActivities() {
+    LinearActivities linear = mock(LinearActivities.class, withSettings().withoutAnnotations());
+    when(linear.fileIssue(any()))
+        .thenReturn(new FiledIssue(FilingDecision.FILED_NEW, "SIM-9", LINEAR_URL, "fp"));
+    return linear;
   }
 
   private static CiOutcome outcome(final CiState state) {
@@ -391,16 +544,46 @@ class CveFixWorkflowTest {
     return execute(activities, request).result();
   }
 
+  private CveFixResult runFiling(
+      final CveFixActivities activities,
+      final LinearActivities linear,
+      final CveFixRequest request) {
+    return execute(activities, linear, request).result();
+  }
+
+  private Outcome execute(final CveFixActivities activities, final CveFixRequest request) {
+    return execute(activities, null, request);
+  }
+
   /**
    * Runs the workflow against a time-skipping test environment so the CI loop's {@code
    * Workflow.sleep} calls cost no wall-clock time, and queries the final progress before the
    * environment closes.
+   *
+   * <p>{@code linear} is a second worker on its own task queue, exactly as in production, where it
+   * is polled by {@code software-factory}. Passing null models the sink not being deployed at all;
+   * passing a mock while leaving {@code linearFilingEnabled} false is the stronger case, because
+   * then "nothing was filed" cannot be explained away by nothing polling the queue.
    */
-  private Outcome execute(final CveFixActivities activities, final CveFixRequest request) {
+  private Outcome execute(
+      final CveFixActivities activities,
+      final LinearActivities linear,
+      final CveFixRequest request) {
+    // A filing scheduled on a queue nothing polls does not fail - it waits, and the test
+    // environment will not skip that timer, so the whole suite hangs indefinitely instead of
+    // reporting anything. Trade that for a legible throw.
+    if (linear == null && request.linearFilingEnabled()) {
+      throw new IllegalArgumentException(
+          "linearFilingEnabled needs a LinearActivities worker - use runFiling(..), "
+              + "not run(..), or the suite will hang rather than fail");
+    }
     try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
       Worker worker = environment.newWorker(CveFixTaskQueues.CVE_FIX);
       worker.registerWorkflowImplementationTypes(CveFixWorkflowImpl.class);
       worker.registerActivitiesImplementations(activities);
+      if (linear != null) {
+        environment.newWorker(LinearTaskQueues.LINEAR).registerActivitiesImplementations(linear);
+      }
       environment.start();
       CveFixWorkflow workflow =
           environment

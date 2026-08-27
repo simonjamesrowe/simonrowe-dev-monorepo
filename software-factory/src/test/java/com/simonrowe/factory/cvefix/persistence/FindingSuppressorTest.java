@@ -110,7 +110,7 @@ class FindingSuppressorTest {
     UnfixableComponent unfixable =
         new UnfixableComponent("pkg:maven/x/y@1", List.of("CVE-1"), "no fix available");
 
-    suppressor.record(List.of(unfixable), List.of());
+    assertThat(suppressor.record(List.of(unfixable), List.of())).isEmpty();
 
     verifyNoInteractions(repository);
   }

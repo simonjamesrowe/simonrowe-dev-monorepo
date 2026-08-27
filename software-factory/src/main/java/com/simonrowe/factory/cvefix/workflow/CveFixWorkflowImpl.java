@@ -8,9 +8,13 @@ import com.simonrowe.factory.cvefix.domain.CveFixProgress;
 import com.simonrowe.factory.cvefix.domain.CveFixRequest;
 import com.simonrowe.factory.cvefix.domain.CveFixResult;
 import com.simonrowe.factory.cvefix.domain.CveFixStatus;
+import com.simonrowe.factory.cvefix.domain.UnfixableComponent;
 import com.simonrowe.factory.cvefix.github.CveFixPrBodyRenderer;
 import com.simonrowe.factory.cvefix.github.CveFixPrGateway;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
+import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.RetryOptions;
 import io.temporal.failure.ApplicationFailure;
@@ -68,6 +72,26 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
               .setRetryOptions(RetryOptions.newBuilder().setMaximumAttempts(1).build())
               .build());
 
+  /**
+   * The issue sink, on its own task queue.
+   *
+   * <p>Executed by whichever container polls {@code linear} — {@code software-factory}, which
+   * alone holds {@code LINEAR_API_KEY}.
+   *
+   * <p>2m schedule-to-close, deliberately short. With {@code factory.linear.enabled} false nothing
+   * polls this queue, and a misconfiguration must cost the run two minutes per component, not the
+   * default. {@code linearFilingEnabled} on the request is the primary guard; this is the backstop.
+   */
+  private final LinearActivities linear =
+      Workflow.newActivityStub(
+          LinearActivities.class,
+          ActivityOptions.newBuilder()
+              .setTaskQueue(LinearTaskQueues.LINEAR)
+              .setStartToCloseTimeout(Duration.ofSeconds(90))
+              .setScheduleToCloseTimeout(Duration.ofMinutes(2))
+              .setRetryOptions(NETWORK_RETRIES)
+              .build());
+
   private CveFixProgress current = CveFixProgress.accepted();
   private String workflowId;
   private Instant startedAt;
@@ -117,7 +141,8 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
         // FixProposal.isEmpty() is bumps.isEmpty(), so a run whose every component was declined
         // lands here with a populated unfixable list. Recording it is what stops a CVE with no
         // available fix costing an agent run every night.
-        networkActivities.recordUnfixable(push.summary().unfixable(), components);
+        fileUnfixable(
+            request, networkActivities.recordUnfixable(push.summary().unfixable(), components));
         current = new CveFixProgress(CveFixPhase.COMPLETED, "No bump was possible", 0);
         return finish(
             CveFixStatus.NOTHING_FIXABLE, "the agent produced no dependency bump it could push");
@@ -128,7 +153,8 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
         // branch alone runs nothing, and the diff is left on the branch for a human to look at.
         // DRY_RUN, not COMPLETED: the branch push and this recordUnfixable are both real side
         // effects, so the distinction has to be legible at a glance rather than only in detail().
-        networkActivities.recordUnfixable(push.summary().unfixable(), components);
+        fileUnfixable(
+            request, networkActivities.recordUnfixable(push.summary().unfixable(), components));
         current = new CveFixProgress(CveFixPhase.COMPLETED, "Dry run", bumpDescriptions.size());
         return finish(
             CveFixStatus.DRY_RUN,
@@ -195,6 +221,7 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       // has already used its whole budget of wall clock stops instead of polling once more.
       if (Workflow.currentTimeMillis() >= deadline) {
         return giveUp(
+            request,
             components,
             pullRequest,
             summary,
@@ -211,7 +238,7 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       CiOutcome outcome = networkActivities.checkCi(headSha);
 
       if (outcome.state() == CiOutcome.CiState.GREEN) {
-        networkActivities.recordUnfixable(summary.unfixable(), components);
+        fileUnfixable(request, networkActivities.recordUnfixable(summary.unfixable(), components));
         current = new CveFixProgress(CveFixPhase.COMPLETED, "CI is green", ciAttempts);
         return finish(
             CveFixStatus.COMPLETED, "CI is green; the pull request is waiting for a human");
@@ -221,6 +248,7 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       }
       if (ciAttempts >= request.repairBudget()) {
         return giveUp(
+            request,
             components,
             pullRequest,
             summary,
@@ -237,6 +265,7 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
         // the rest of the budget. Stop now, keeping the previous attempt's summary, which is what
         // is actually on the branch.
         return giveUp(
+            request,
             components,
             pullRequest,
             summary,
@@ -255,15 +284,23 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
    * Comments on the pull request, leaves it open for a human, records what stayed unfixable and
    * persists the run. {@code CveFixPhase} has no unresolved phase, so the phase is
    * {@code COMPLETED} and {@code detail} carries why the run stopped.
+   *
+   * @param request this run's settings, read only for the issue-sink flag
+   * @param components the current finding set, whose fingerprints decide what is new information
+   * @param pullRequest the pull request left open for a human
+   * @param summary what is actually on the branch
+   * @param detail why the run stopped
+   * @return the terminal result
    */
   private CveFixResult giveUp(
+      final CveFixRequest request,
       final List<ComponentFindings> components,
       final CveFixPrGateway.OpenPullRequest pullRequest,
       final CveFixActivities.FixSummary summary,
       final String detail) {
     networkActivities.commentOnPullRequest(
         pullRequest.number(), CveFixPrBodyRenderer.giveUpComment(summary, ciAttempts));
-    networkActivities.recordUnfixable(summary.unfixable(), components);
+    fileUnfixable(request, networkActivities.recordUnfixable(summary.unfixable(), components));
     current = new CveFixProgress(CveFixPhase.COMPLETED, detail, ciAttempts);
     return finish(CveFixStatus.CI_UNRESOLVED, detail);
   }
@@ -283,6 +320,79 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
             detail));
     return new CveFixResult(
         workflowId, status, prUrl, bumpDescriptions.size(), unfixableCount, detail);
+  }
+
+  /**
+   * Files one Linear issue per component this run newly recorded as unfixable.
+   *
+   * <p>Only the newly-recorded ones, which is why {@code recordUnfixable} reports them: the
+   * schedule is daily and an unchanged finding set is the normal case, so filing everything stored
+   * would comment on the same ticket every 24 hours forever.
+   *
+   * <p>Never changes the run's outcome. The suppression record is already written by the time this
+   * is called, and the ticket is a nicety by comparison.
+   *
+   * @param request this run's settings, read only for the issue-sink flag
+   * @param newlyRecorded the components {@code recordUnfixable} reported as new information
+   */
+  private void fileUnfixable(
+      final CveFixRequest request, final List<UnfixableComponent> newlyRecorded) {
+    // The flag first: with the sink disabled nothing polls the `linear` queue, so scheduling the
+    // activity would stall the run until its schedule-to-close timeout rather than fail fast.
+    if (!request.linearFilingEnabled() || newlyRecorded == null) {
+      return;
+    }
+    for (UnfixableComponent component : newlyRecorded) {
+      try {
+        linear.fileIssue(
+            new IssueFiling(
+                "cvefix",
+                // The component purl alone: the key UnfixableFindingRecord already uses, so one
+                // ticket per component however many advisories accumulate against it.
+                List.of(component.purl()),
+                "Cannot auto-fix " + component.purl(),
+                unfixableBody(component),
+                "run " + Workflow.getInfo().getRunId(),
+                // The run id PLUS the purl. One run files several components, and a bare run id
+                // would make the second look like a replay of the first and be silently dropped.
+                Workflow.getInfo().getRunId() + ":" + component.purl(),
+                Workflow.getInfo().getWorkflowId()));
+      } catch (RuntimeException exception) {
+        // As wide as the sibling catch in recordFailedRun, and deliberately not just the
+        // exhausted-activity type: encoding the IssueFiling payload happens on THIS thread, so a
+        // converter error is not a TemporalFailure, would fail the workflow task, and Temporal
+        // retries those forever — hanging the run and losing recordRun entirely.
+        Workflow.getLogger(CveFixWorkflowImpl.class)
+            .warn("Could not file {} into Linear", component.purl(), exception);
+      }
+    }
+  }
+
+  /**
+   * The issue description for one component the agent declined to bump.
+   *
+   * <p>Static and side-effect-free, so a {@code @WorkflowImpl} may build it directly without
+   * breaking determinism — the same reason {@link CveFixPrBodyRenderer#giveUpComment} is callable
+   * from here.
+   *
+   * @param component the component the agent declined to bump
+   * @return the rendered Markdown body
+   */
+  private static String unfixableBody(final UnfixableComponent component) {
+    String advisories =
+        component.vulnerabilityIds().isEmpty()
+            ? "none reported"
+            : String.join(", ", component.vulnerabilityIds());
+    return "The CVE-fix agent declined to bump this component, so it is now suppressed and will "
+        + "not cost another agent run until its Dependency-Track finding set changes.\n\n"
+        + "- **Component:** `"
+        + component.purl()
+        + "`\n- **Advisories:** "
+        + advisories
+        + "\n- **Reason given:** "
+        + component.reason()
+        + "\n\nFixing this needs a human: either a manual bump, a code change to suit a new major "
+        + "version, or a decision to accept the risk.\n";
   }
 
   /** Keeps the counts reported by the result and the run record on the latest pushed proposal. */

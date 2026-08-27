@@ -143,9 +143,9 @@ public class CveFixActivitiesImpl implements CveFixActivities {
   }
 
   @Override
-  public void recordUnfixable(
+  public List<UnfixableComponent> recordUnfixable(
       final List<UnfixableComponent> unfixable, final List<ComponentFindings> components) {
-    suppressor.record(unfixable, components);
+    return suppressor.record(unfixable, components);
   }
 
   @Override

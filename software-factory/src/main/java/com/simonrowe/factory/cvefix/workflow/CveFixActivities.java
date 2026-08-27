@@ -87,10 +87,15 @@ public interface CveFixActivities {
    * fingerprint is computed — the agent never supplies one.
    *
    * @param unfixable the components the agent declined to bump, from this run
-   * @param components every component with an open finding this run
+   * @param components the current finding set, whose per-component fingerprints decide what counts
+   *     as new information
+   * @return only the components newly recorded — absent before, or stored under a different
+   *     fingerprint. The daily schedule re-runs this with an unchanged finding set most days, and
+   *     returning those would comment on the same Linear ticket every 24 hours forever.
    */
   @ActivityMethod
-  void recordUnfixable(List<UnfixableComponent> unfixable, List<ComponentFindings> components);
+  List<UnfixableComponent> recordUnfixable(
+      List<UnfixableComponent> unfixable, List<ComponentFindings> components);
 
   /**
    * Persists the outcome of one CVE-fix run.
