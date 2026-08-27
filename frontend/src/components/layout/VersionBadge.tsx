@@ -1,28 +1,25 @@
+import { Activity } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-import { FRONTEND_BUILD_TIME, FRONTEND_SHORT_COMMIT } from '../../config/version'
+import { FRONTEND_SHORT_COMMIT } from '../../config/version'
 
 /**
- * The running frontend's commit, linking to /status.
+ * Footer entry point to /status: one more icon in the existing footer icon row, styled
+ * identically to its neighbours (GitHub, LinkedIn, Mail, Download) via `.footer__icon-link`.
  *
  * Rendered from the bundle's own baked SHA rather than from the API on purpose: this sits in
  * the footer of every page, so a fetch here would put a request on every single page view to
- * report a value the bundle already knows.
- *
- * It also makes /status discoverable without spending a seventh TopNav slot, which is the
- * change that would have hurt the mobile nav.
+ * report a value the bundle already knows. Deliberately network-free: no hook, no API call.
  */
 export function VersionBadge() {
-  const buildTime = FRONTEND_BUILD_TIME ? new Date(FRONTEND_BUILD_TIME) : null
-  const validBuildTime = buildTime && !Number.isNaN(buildTime.getTime()) ? buildTime : null
-  const title = validBuildTime
-    ? `Version ${FRONTEND_SHORT_COMMIT}, built ${validBuildTime.toLocaleString()}`
-    : `Version ${FRONTEND_SHORT_COMMIT}`
+  const label =
+    FRONTEND_SHORT_COMMIT === 'dev'
+      ? 'Platform status — dev build'
+      : `Platform status — version ${FRONTEND_SHORT_COMMIT}`
 
   return (
-    <Link aria-label={title} className="version-badge" title={title} to="/status">
-      <span className="version-badge__label">v</span>
-      <span className="version-badge__sha">{FRONTEND_SHORT_COMMIT}</span>
+    <Link aria-label={label} className="footer__icon-link" title={label} to="/status">
+      <Activity size={18} />
     </Link>
   )
 }
