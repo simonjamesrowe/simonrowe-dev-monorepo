@@ -36,7 +36,9 @@ Add:
 * * * * * /path/to/scripts/monitor-prod.sh >> /var/log/prod-health/monitor.log 2>&1
 ```
 
-See `docs/prod-health-monitoring.md` for full Raspberry Pi setup instructions.
+See `docs/runbooks/prod-monitoring.md` for full Raspberry Pi setup instructions.
+(This document originally pointed at `docs/prod-health-monitoring.md`, which has
+since been merged into that runbook.)
 
 ### Stop production
 

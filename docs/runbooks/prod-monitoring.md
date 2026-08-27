@@ -66,6 +66,98 @@ Two traps, both already hit in this repo:
 Dependency-Track needs **two** probes: its frontend renders fine while its API is
 dead, which is exactly how the 2026-08-14 outage stayed invisible.
 
+The full probe list lives in `ENDPOINTS` in the script, as
+`<service>|<url>|<expected-codes>`:
+
+| Service | Probe |
+| --- | --- |
+| `frontend` | `https://www.simonrowe.dev/` |
+| `backend` | `https://api.simonrowe.dev/api/profile` |
+| `langfuse` | `https://langfuse.simonrowe.dev/` |
+| `dependencytrack-apiserver` | `https://dependency-track.simonrowe.dev/api/version` |
+| `dependencytrack-frontend` | `https://dependency-track.simonrowe.dev/` |
+| `temporal-ui` | `https://temporal.simonrowe.dev/` |
+| `portainer` | `https://console.simonrowe.dev/` |
+
+One-shot init containers (`uploads-init`, `temporal-db-init`,
+`temporal-schema-init`, `temporal-create-namespace`, `dependencytrack-db-init`)
+are excluded from the layer-2 health sweep — they are *supposed* to exit, and
+other services gate on them with `condition: service_completed_successfully`.
+
+### Installing it
+
+```bash
+./scripts/install-prod-monitoring.sh
+```
+
+Run from the repo root on the Pi. It enables and starts `cron`, creates
+`/var/log/prod-health/monitor.log`, installs `/etc/logrotate.d/prod-health`
+(daily, 7 days, `copytruncate`), registers the once-a-minute crontab entry with
+this machine's absolute repo path, and then runs one verification check. It is
+idempotent: an existing entry for the same script is replaced, not duplicated.
+
+Doing it by hand instead:
+
+```bash
+sudo mkdir -p /var/log/prod-health
+sudo chown "$USER:$USER" /var/log/prod-health
+crontab -e
+# * * * * * /absolute/path/to/repo/scripts/monitor-prod.sh >> /var/log/prod-health/monitor.log 2>&1
+sudo systemctl enable cron && sudo systemctl start cron
+```
+
+### Configuration
+
+Every knob is an environment variable with a default. To change one under cron,
+set it inline in the crontab entry.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `CHECK_URL` | `https://www.simonrowe.dev` | Layer-1 site probe. Must be a URL nginx actually serves |
+| `FAILURE_THRESHOLD` | `3` | Consecutive site failures before a whole-stack reconcile |
+| `MAX_RESTARTS` | `3` | Whole-stack reconciles allowed per `BACKOFF_WINDOW` |
+| `BACKOFF_WINDOW` | `600` | Whole-stack backoff window, seconds |
+| `SERVICE_FAILURE_THRESHOLD` | `3` | Consecutive bad ticks before restarting one service |
+| `SERVICE_MAX_RESTARTS` | `2` | Restarts allowed per service per `SERVICE_BACKOFF_WINDOW` |
+| `SERVICE_BACKOFF_WINDOW` | `1800` | Per-service backoff window, seconds |
+| `STATE_DIR` | `/tmp/prod-health` | Where the counters live |
+| `COMPOSE_PROJECT` | `simonrowe-dev-monorepo` | Compose project name |
+| `DRY_RUN` | `0` | `1` logs intended commands and skips all remediation |
+
+Per-service remediation is deliberately less trigger-happy than the whole-stack
+path: a container restart is cheap, but a restart *loop* is worse than one bad
+service.
+
+### State files
+
+In `STATE_DIR`:
+
+- `failure_count` — consecutive layer-1 failures, reset on success or reconcile
+- `restart_timestamps` — epoch times of recent whole-stack reconciles, pruned each run
+- `svc_<service>` — per-service failure counters and restart history
+
+They live in `/tmp`, so a reboot clears them. That is the wanted behaviour: after
+a reboot the stack needs starting fresh anyway, and a stale backoff window would
+stop the watchdog helping exactly when it is most needed.
+
+To reset by hand: `rm -rf /tmp/prod-health`.
+
+### When the watchdog itself is not running
+
+```bash
+crontab -l | grep monitor-prod          # is it registered?
+systemctl status cron                   # is cron running?
+grep CRON /var/log/syslog | tail -20    # is it firing?
+ls -la scripts/monitor-prod.sh          # is it executable?
+```
+
+If the log is full of `CRIT` instead, the stack reconcile is not helping. Check
+host connectivity (`curl -I https://google.com`), container states
+(`docker compose -f docker-compose.prod.yml ps -a` — anything in `Created` or
+`Restarting`), the pinggy token (`docker compose -f docker-compose.prod.yml logs pinggy`;
+one token allows one active tunnel, reclaim with `PINGGY_TOKEN=<token>+force`), and
+[status.pinggy.io](https://status.pinggy.io).
+
 ## Host defect: the memory cgroup is disabled
 
 ```bash
@@ -197,3 +289,15 @@ curl -s https://dependency-track.simonrowe.dev/api/v1/oidc/available   # -> true
 curl -s https://langfuse.simonrowe.dev/api/auth/providers | head -c 200 # -> includes "auth0"
 curl -s -o /dev/null -w '%{redirect_url}\n' https://temporal.simonrowe.dev/auth/sso
 ```
+
+## Production scripts reference
+
+| Script | Purpose |
+| --- | --- |
+| `scripts/start-prod.sh` | Start all production services and wait for health |
+| `scripts/stop-prod.sh` | Stop all production services (data volumes preserved) |
+| `scripts/restart-prod.sh` | Phased restart; also the script the `deployer` runs — see [deploy.md](deploy.md) |
+| `scripts/status-prod.sh` | Health of every service plus external reachability |
+| `scripts/monitor-prod.sh` | Single-run watchdog check (designed for cron) |
+| `scripts/install-prod-monitoring.sh` | Install the cron job, log file and logrotate config |
+| `scripts/enable-memory-cgroup.sh` | Report/apply/revert the kernel memory-cgroup fix |
