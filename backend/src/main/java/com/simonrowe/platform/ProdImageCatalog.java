@@ -13,7 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
+import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 /**
  * The third-party images production is declared to run, parsed from the copy of
@@ -62,7 +64,13 @@ public class ProdImageCatalog {
   @SuppressWarnings("unchecked")
   private static List<PlatformComponent> parse() {
     try (InputStream stream = new ClassPathResource(RESOURCE).getInputStream()) {
-      Map<String, Object> root = new Yaml().load(stream);
+      // SafeConstructor, not the default Constructor: the default can instantiate arbitrary
+      // Java types from YAML tags (the classic !!javax.script.ScriptEngineManager gadget).
+      // The file parsed here is baked into our own image from the repo, so this is not
+      // reachable today — it is defence in depth against this parser later being pointed at
+      // a less trusted source.
+      Map<String, Object> root =
+          new Yaml(new SafeConstructor(new LoaderOptions())).load(stream);
       Object services = root == null ? null : root.get("services");
       if (!(services instanceof Map)) {
         LOG.warn("No services block in {}; the status page will list no components", RESOURCE);

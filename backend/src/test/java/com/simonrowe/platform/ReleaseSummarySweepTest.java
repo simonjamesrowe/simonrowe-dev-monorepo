@@ -78,6 +78,20 @@ class ReleaseSummarySweepTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void capsAnOverlongSummaryBeforeStoringIt() {
+    pending("840c311abcdef0123456789abcdef0123456789a", 1756200000L);
+
+    sweepReturning("x".repeat(5000)).sweep();
+
+    String stored = repository
+        .findById("840c311abcdef0123456789abcdef0123456789a").orElseThrow().getSummary();
+    // The value is rendered on a public page, so it must not be unbounded no matter what
+    // the model returns.
+    assertThat(stored).hasSizeLessThan(5000);
+    assertThat(stored).endsWith("… (truncated)");
+  }
+
+  @Test
   void honoursTheBatchSize() {
     pending("aaa0000abcdef0123456789abcdef0123456789a", 1756200000L);
     pending("bbb0000abcdef0123456789abcdef0123456789a", 1756100000L);
