@@ -331,6 +331,38 @@ phase_recreate() {
 # www while the operator saw only a wall of "Container ... Running" lines. Record
 # the failure and press on to the verification, which explains what is actually
 # broken.
+# Service names for the reconcile, deployer excluded, one per line.
+#
+# Two sources, because the comment below is a promise the single-source version did
+# not keep: "enumerating must not be the step that fails". `docker compose config`
+# is authoritative but needs a working docker, which the shell tests and CI do not
+# have — there it returned nothing, the reconcile skipped itself, and the deploy
+# quietly stopped reconciling anything.
+#
+# The fallback reads the top-level keys of the `services:` block straight out of the
+# compose file: two-space-indented, non-comment, ends in a colon. That is enough to
+# preserve the property that actually matters — an explicit list that never contains
+# `deployer`, and never a bare `up -d`.
+enumerate_services() {
+  local names
+  names="$(docker compose -f "$COMPOSE_FILE" config --no-interpolate --services 2>/dev/null || true)"
+
+  if [[ -z "$names" ]]; then
+    names="$(
+      awk '
+        /^services:/ { in_services = 1; next }
+        /^[a-zA-Z_-]+:/ { in_services = 0 }
+        in_services && /^  [a-zA-Z0-9._-]+:[[:space:]]*$/ {
+          gsub(/^  |:[[:space:]]*$/, "")
+          print
+        }
+      ' "$COMPOSE_FILE" 2>/dev/null || true
+    )"
+  fi
+
+  printf '%s\n' "$names" | grep -vx deployer | grep -v '^$' | sort
+}
+
 reconcile() {
   echo "Reconciling production services..."
   local rc=0
@@ -363,11 +395,16 @@ reconcile() {
   # --no-interpolate: this only needs the service NAMES, and asking compose to
   # interpolate would make the list depend on a fully-populated .env. Enumerating
   # must not be the step that fails.
-  local targets
-  mapfile -t targets < <(
-    docker compose -f "$COMPOSE_FILE" config --no-interpolate --services 2>/dev/null |
-      grep -vx deployer | sort
-  )
+  # NOT `mapfile`/`readarray`: those are bash 4 builtins and macOS ships bash 3.2,
+  # where this function died with "mapfile: command not found" — taking the rest of
+  # the `all` phase with it, so the script could not be tested on a Mac at all.
+  # A read loop is portable and does the same job.
+  local targets=()
+  local service
+  while IFS= read -r service; do
+    [[ -n "$service" ]] && targets+=("$service")
+  done < <(enumerate_services)
+
   if [[ "${#targets[@]}" -eq 0 ]]; then
     echo "WARNING: could not enumerate services; skipping reconcile rather than"
     echo "         running a bare 'up -d' that could recreate this container."
