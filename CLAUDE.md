@@ -238,11 +238,11 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   - **Summaries are generated at ingest by `ReleaseSummarySweep`, never on view.**
     `/api/platform/**` is deliberately absent from `RateLimitInterceptor`'s explicit four-path
     allowlist in `WebConfig` (the page makes two requests per view), so an LLM call on the read
-    path would be both a cost and abuse problem. `ReleaseSummaryStatus.GENERATING` exists and
-    its Javadoc claims it guards against a double-claim, but the sweep never sets it — it reads
-    `PENDING` and writes straight to `READY`/`FAILED`. Safe today only because prod runs one
-    backend instance and `@Scheduled(fixedDelay)` cannot let a second tick overlap the first;
-    revisit before ever running two instances or switching to `fixedRate`.
+    path would be both a cost and abuse problem. Releases go `PENDING` → `READY`/`FAILED` only,
+    with no intermediate claimed state — `ReleaseSummarySweep.sweep()` reads `findPending()` and
+    calls `summarise()` directly, no `findAndModify` claim step in between. Safe today only
+    because prod runs one backend instance and `@Scheduled(fixedDelay)` cannot let a second tick
+    overlap the first; revisit before ever running two instances or switching to `fixedRate`.
   - **Release records are written by `ReleaseRecorder` on startup, not Mongock** — deliberate
     deviation: they are derived, self-healing data a restore has to re-establish, and
     change-unit LLM I/O would run against the shared Testcontainers Mongo. `V022` creates
