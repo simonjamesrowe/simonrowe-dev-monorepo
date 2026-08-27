@@ -2,6 +2,7 @@ package com.simonrowe.platform;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * One commit on {@code main}, as baked into the image at build time.
@@ -50,7 +51,6 @@ public record BakedRelease(
     int scope = prefix.indexOf('(');
     String type = (scope > 0 ? prefix.substring(0, scope) : prefix).trim();
     // A space means this was prose that happened to contain a colon, not a type.
-    return type.isEmpty() || type.contains(" ") ? OTHER_TYPE : type.toLowerCase(
-        java.util.Locale.ROOT);
+    return type.isEmpty() || type.contains(" ") ? OTHER_TYPE : type.toLowerCase(Locale.ROOT);
   }
 }

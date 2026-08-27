@@ -72,6 +72,11 @@ public class BakedReleaseHistory {
    * @return the parsed releases, newest first; malformed records are skipped, not fatal
    */
   static List<BakedRelease> parse(final String raw) {
+    // Known limitation: only the FIELD_COUNT split is validated, not the byte content of each
+    // field. A literal 0x1e/0x1f control byte inside a commit subject or body would silently
+    // misalign record/field boundaries instead of being flagged. Accepted because those bytes
+    // essentially never occur in real commit text, and separators were chosen over line-based
+    // parsing specifically because commit bodies contain newlines.
     if (raw == null || raw.isBlank()) {
       return List.of();
     }
