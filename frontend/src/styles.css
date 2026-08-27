@@ -10024,39 +10024,9 @@ body[data-narration-bar] .app-layout__main {
   }
 }
 
-/* ---------------------------------------------------------------------------
-   Version badge — the footer's link to /status.
-   Sits in the single .footer__bar flex row, so it must stay small enough not
-   to force that bar to wrap on a narrow phone.
-   --------------------------------------------------------------------------- */
-.version-badge {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.15rem;
-  padding: 0.15rem 0.45rem;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.7rem;
-  line-height: 1.4;
-  color: var(--color-text-muted);
-  text-decoration: none;
-  transition: color 0.15s ease, border-color 0.15s ease;
-}
-
-.version-badge:hover,
-.version-badge:focus-visible {
-  color: var(--color-text);
-  border-color: var(--color-text-muted);
-}
-
-.version-badge__label {
-  opacity: 0.6;
-}
-
-.version-badge__sha {
-  letter-spacing: 0.02em;
-}
+/* The version badge that used to live here directly after the copyright is now an icon
+   in .footer__icons, styled by .footer__icon-link like its neighbours — see
+   VersionBadge.tsx. No bespoke styling needed. */
 
 /* ---------------------------------------------------------------------------
    Platform status page (/status).
@@ -10098,6 +10068,63 @@ body[data-narration-bar] .app-layout__main {
   margin-bottom: 1rem;
 }
 
+/* Platform components and Recent releases toggle their own content; Running now stays a
+   plain heading (`.status-page__section-title` above) since it is never collapsed. */
+.collapsible-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0 0 1rem;
+  padding: 0 0 0.5rem;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.collapsible-section__header:hover,
+.collapsible-section__header:focus-visible {
+  color: var(--color-primary);
+}
+
+.collapsible-section__title {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: inherit;
+}
+
+.collapsible-section__count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-text-muted);
+  background: var(--color-surface-subtle);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+}
+
+.collapsible-section__chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.collapsible-section__chevron--open {
+  transform: rotate(180deg);
+}
+
 .status-page__empty {
   color: var(--color-text-muted);
   font-style: italic;
@@ -10119,8 +10146,16 @@ body[data-narration-bar] .app-layout__main {
 
 .service-card {
   border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
   border-radius: 8px;
   padding: 1rem;
+  box-shadow: var(--shadow-md);
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.service-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .service-card__header {
@@ -10203,21 +10238,72 @@ body[data-narration-bar] .app-layout__main {
   font-style: italic;
 }
 
+/* The filter pills above the timeline and the "Show more" row below it reuse
+   .feed__filters / .feed__pill / .feed__load-more verbatim (see the News & Events feed)
+   rather than defining a second, near-identical set of pill/load-more rules. */
+.release-timeline {
+  margin-top: 1.25rem;
+}
+
+.release-timeline .feed__filters-scroll {
+  margin-bottom: 1.5rem;
+}
+
+/* A continuous spine down the left with a marker dot per entry. The spine is a pseudo
+   element on the list so it reads as one line rather than N disconnected segments; each
+   entry's own marker (`.release::before`) sits on top of it. */
 .release-list {
+  position: relative;
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 1.85rem;
   display: grid;
   gap: 1.5rem;
 }
 
-.release {
-  border-left: 2px solid var(--color-border);
-  padding-left: 1rem;
+.release-list::before {
+  content: '';
+  position: absolute;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  left: 0.45rem;
+  width: 2px;
+  background: var(--color-border);
 }
 
-.release--running {
-  border-left-color: var(--color-accent, #d97706);
+.release {
+  position: relative;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 0.85rem;
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.release:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.release::before {
+  content: '';
+  position: absolute;
+  top: 1.35rem;
+  left: -1.6rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+  background: var(--color-panel);
+  border: 2px solid var(--color-border);
+}
+
+/* The entry running in production gets a visually distinct, filled/ringed marker rather
+   than the hollow default. */
+.release--running::before {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
 }
 
 .release__header {
@@ -10237,6 +10323,36 @@ body[data-narration-bar] .app-layout__main {
   border: 1px solid var(--color-border);
   border-radius: 3px;
   color: var(--color-text-muted);
+}
+
+/* Colored by conventional-commit type, using only tokens that are actually defined
+   (--color-gold/--color-rose/--color-orange/--color-violet are not — see
+   .timeline-entry's dead nth-child cycling above for what that mistake looks like).
+   Anything not listed here (chore, ci, build, other, ...) keeps the muted default above. */
+.release__type--feat {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.release__type--fix {
+  color: var(--error);
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+}
+
+.release__type--perf {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.release__type--docs,
+.release__type--refactor,
+.release__type--test {
+  color: var(--secondary);
+  border-color: var(--secondary);
+  background: color-mix(in srgb, var(--secondary) 12%, transparent);
 }
 
 .release__sha {
