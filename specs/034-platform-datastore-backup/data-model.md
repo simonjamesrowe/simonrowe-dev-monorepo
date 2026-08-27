@@ -1,7 +1,13 @@
 # Data Model: Platform Datastore Backup
 
 **Feature**: 034-platform-datastore-backup
-**Date**: 2026-08-25
+**Date**: 2026-08-25 — **still current after Revision 2 (2026-08-26)**
+
+> Revision 2 moved the capture from Java to bash in the `deployer`, but **this
+> document is unchanged and remains the specification**: the archive layout, the
+> manifest schema, the fingerprint scheme and the restore targets are all
+> implementation-independent, and archives are format-compatible across the revision.
+> Only §5 (in-memory Java records) is superseded — those types are deleted.
 
 This feature adds no application persistence — no MongoDB collection, no index, no
 Mongock change unit. Its "data model" is the archive format and the in-memory
@@ -184,7 +190,11 @@ Why the consumer lists are what they are:
 
 ---
 
-## 5. In-memory records (backend)
+## 5. In-memory records (backend) — SUPERSEDED by Revision 2
+
+> These Java records are deleted: the manifest is now assembled in
+> `scripts/backup-platform.sh`. The **schema** they encoded is still authoritative —
+> see §2. `BackupMetadata` survives, because the backend still lists archives.
 
 Java records, no persistence, no reflection (native-image safe).
 

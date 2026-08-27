@@ -4,9 +4,30 @@
 
 **Created**: 2026-08-25
 
-**Status**: Draft
+**Status**: Draft — **Revision 2, 2026-08-26**
 
 **Input**: User description: "Platform datastore backup (Postgres + ClickHouse) — implement the approved design at docs/superpowers/specs/2026-08-25-platform-datastore-backup-design.md: nightly + on-demand backup of the four Postgres databases (langfuse, dtrack, temporal, temporal_visibility) and the ClickHouse default database, uploaded to a separate Google Drive folder with retention of 7, plus a host restore shell script and runbook."
+
+## Revision 2 — what changed and why
+
+Constitution 2.0.0 (merged to `main` in `036-auto-deploy-on-merge`) prohibits host
+processes and Docker access in the container serving the public API. The capture
+therefore moves out of the backend into the `deployer`, as a shell script on a
+Temporal schedule. See plan.md "Revision 2" and research **R11**–**R13**.
+
+Requirement impact, in full:
+
+| Requirement | Change |
+|---|---|
+| FR-020, FR-023, FR-024 | **Deferred** — the on-demand trigger, its live progress and the shared mutex. See "Deferred" below. |
+| FR-025 | **Narrowed** to the read-only archive listing. |
+| NFR-001 | **Strengthened** — now also "no host-level container access in the backend". |
+| NFR-003 | **Restated** — resumability is still required, but must be provided by the upload implementation plus workflow retry rather than by a client library. |
+| Everything else | **Unchanged.** In particular the archive format, manifest, fingerprints, folder separation, retention and the whole restore story are untouched. |
+
+User story impact: **US1 (P1) and US3 (P2) are unchanged.** US2 (P2) is reduced to its
+visibility half — the operator can still see at a glance whether the nightly job is
+healthy, but triggers a capture from the shell rather than a button.
 
 ## Overview
 
@@ -49,9 +70,9 @@ dumps, and that only the newest 7 archives remain.
    uploaded successfully, **Then** the oldest is removed and exactly 7 remain.
 3. **Given** off-host storage is not connected, **When** the nightly time arrives,
    **Then** the run is skipped with a clear warning and nothing fails.
-4. **Given** another data operation is already running, **When** the nightly time
-   arrives, **Then** the platform backup is skipped with a logged message and no
-   partial archive is left behind.
+4. **Given** a capture is already in flight, **When** the nightly time arrives,
+   **Then** a second concurrent capture does not start, and the situation is visible
+   in the scheduler rather than silent.
 5. **Given** a database dump fails partway through, **When** the run ends, **Then**
    the run is reported as failed, no archive is uploaded, no removal of existing
    archives happens, and no temporary files are left on disk.
@@ -61,33 +82,40 @@ dumps, and that only the newest 7 archives remain.
 
 ---
 
-### User Story 2 - The operator can take a platform backup on demand before a risky change (Priority: P2)
+### User Story 2 - The operator can see the nightly job is healthy, and capture on demand before a risky change (Priority: P2)
 
 Before upgrading one of the platform tools or performing maintenance, the operator
 wants to capture the platform datastores immediately rather than relying on last
-night's copy, and to see at a glance that the nightly job is actually running.
+night's copy — and, at any time, to see at a glance that the nightly job is actually
+running.
 
 **Why this priority**: Valuable but not protective on its own — the nightly capture
-already gives a recovery point. This story makes the capability visible and gives
-the operator control at the moment of risk, which is when it matters most.
+already gives a recovery point. This story makes the capability *visible*, which is
+what stops a silently-stopped backup going unnoticed for weeks.
 
-**Independent Test**: From the administration area, trigger a platform backup and
-watch it progress to completion, then confirm the new archive appears in the listed
-backups with its date and size.
+**Revision 2**: the visibility half ships; the in-browser trigger is deferred (FR-020,
+FR-023). On-demand capture is a documented single command instead (FR-025a). The
+listing, not the button, is what this story's value rests on.
+
+**Independent Test**: Load the administration page with archives present in off-host
+storage and confirm they are listed with date and size; separately, run the documented
+command and confirm a new archive appears in that list.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authenticated administrator on the data operations page, **When**
-   they trigger a platform backup, **Then** progress is reported live and completion
-   or failure is stated explicitly.
-2. **Given** an authenticated administrator on the data operations page, **When**
-   the page loads, **Then** the retained platform backups are listed with date and
-   size, making a stalled nightly job obvious.
-3. **Given** a request from someone who is not an authenticated administrator,
-   **When** they attempt to trigger a platform backup or list platform backups,
-   **Then** the request is rejected.
-4. **Given** a platform backup is already running, **When** a second trigger
-   arrives, **Then** it is refused rather than running two captures at once.
+1. **Given** an authenticated administrator on the data operations page, **When** the
+   page loads, **Then** the retained platform backups are listed with date and size,
+   making a stalled nightly job obvious.
+2. **Given** an operator with shell access, **When** they run the documented capture
+   command, **Then** it reports progress and a definite final outcome, and the new
+   archive appears in the listing.
+3. **Given** a request from someone who is not an authenticated administrator, **When**
+   they attempt to list platform backups, **Then** the request is rejected.
+4. **Given** off-host storage cannot be reached, **When** the page loads, **Then** the
+   failure is reported as a *listing* failure and is not presented as a backup
+   failure.
+5. *(Deferred with FR-020.)* **Given** an authenticated administrator, **When** they
+   trigger a capture from the page, **Then** progress is reported live.
 
 ---
 
@@ -214,23 +242,29 @@ untouched and still running.
 
 #### On-demand use
 
-- **FR-020**: An authenticated administrator MUST be able to trigger a platform
-  capture immediately.
+- **FR-020**: *(Deferred — see below.)* An authenticated administrator MUST be able to
+  trigger a platform capture immediately.
 - **FR-021**: An authenticated administrator MUST be able to list the retained
   platform archives with their date and size.
-- **FR-022**: Both capabilities MUST reject unauthenticated and non-administrator
-  requests.
-- **FR-023**: An on-demand capture MUST report live progress and a definite final
-  outcome to the administrator.
-- **FR-024**: At most one data operation MUST run at a time; a trigger arriving while
-  another operation runs MUST be refused rather than queued or run concurrently.
+- **FR-022**: Every administrative capability here MUST reject unauthenticated and
+  non-administrator requests.
+- **FR-023**: *(Deferred with FR-020.)* An on-demand capture MUST report live progress
+  and a definite final outcome to the administrator.
+- **FR-024**: *(Superseded.)* Concurrency is now the scheduler's concern: the capture
+  MUST NOT run twice concurrently. A durable workflow with a stable per-run identity
+  satisfies this. The previous cross-operation mutex no longer applies, because the
+  capture no longer shares a process with the application backup.
 - **FR-025**: The administration interface MUST present platform backups as their own
-  distinct area, showing the trigger and the retained archive list.
+  distinct area showing the retained archive list. A trigger control is **not**
+  required.
+- **FR-025a**: An operator MUST be able to run a capture on demand without the
+  administration interface, and that path MUST be documented in the runbook.
 
 #### Restore
 
 - **FR-026**: Restore MUST be operable without the application running, so that it
-  works on a host being rebuilt.
+  works on a host being rebuilt. *(Unaffected by revision 2 — restore was always a host
+  script.)*
 - **FR-027**: Restore MUST be selectable per tool — observability, vulnerability
   tracking, workflow history, or all — so that restoring one cannot affect the
   others.
@@ -269,15 +303,26 @@ untouched and still running.
 
 ### Non-Functional Requirements
 
-- **NFR-001**: The capture MUST NOT require any new host-level prerequisite —
-  no new installed package, service unit, or manual setup step beyond deploying
-  the change.
+- **NFR-001**: The capture MUST NOT require any new host-level prerequisite — no new
+  installed package, service unit, or manual setup step beyond deploying the change.
+- **NFR-001a**: The container serving the public API MUST NOT gain host-level container
+  access, a host process, a copy of the compose file, or a copy of the production
+  environment file. *(Constitution 2.0.0; enforced by `NoHostProcessLaunchTest`.)*
 - **NFR-002**: The capture MUST NOT require any new secret to be provisioned or
   distributed.
 - **NFR-003**: Uploads MUST be resumable and MUST achieve the same throughput as the
-  existing application backup on the same uplink.
+  existing application backup on the same uplink. Resumability MAY be provided by the
+  upload implementation, by durable workflow retry, or both — but it MUST be
+  **measured against a realistically sized archive**, not assumed.
 - **NFR-004**: The archive size MUST be measured on the production host before
   rollout, and the result assessed against available off-host storage quota.
+
+### Deferred (not cancelled)
+
+- **The on-demand trigger in the admin UI** (FR-020, FR-023). Starting the capture
+  workflow from the backend requires a Temporal client there, which is new surface for
+  the lower-priority half of the feature. Until it lands, FR-025a covers the need. The
+  read-only listing — which is what makes a stalled job visible, SC-006 — ships now.
 
 ### Out of Scope
 
@@ -318,8 +363,10 @@ untouched and still running.
   without bound nor drops below 7 while nightly runs succeed.
 - **SC-004**: The application backup's retained count remains 7 after platform
   backups are introduced — the two backup types never evict each other.
-- **SC-005**: An operator can trigger a platform backup and see its outcome without
-  leaving the administration interface and without shell access.
+- **SC-005**: *(Deferred with FR-020.)* An operator can trigger a platform backup and
+  see its outcome without leaving the administration interface and without shell
+  access. Until then: an operator can trigger a capture with a single documented
+  command and see its outcome in that command's output.
 - **SC-006**: An operator can determine whether the nightly job is healthy in under
   one minute, from the archive list alone.
 - **SC-007**: A restore of any single tool has been performed successfully at least
@@ -333,7 +380,10 @@ untouched and still running.
 - **SC-010**: A failed capture uploads nothing, deletes nothing already stored, and
   leaves no files behind on the host.
 - **SC-011**: Rolling this out requires no manual host setup beyond the deployment
-  itself.
+  itself, plus one deliberate enable step for the paused-by-default schedule.
+- **SC-013**: After enabling, a live poller is observable on the capture task queue —
+  a `healthy` container with no poller is a known silent-failure mode in this repo and
+  MUST be checked explicitly rather than inferred from container health.
 - **SC-012**: The archive's size on the production host is measured and recorded
   before rollout, so the storage-quota risk is known rather than discovered.
 

@@ -4,7 +4,25 @@
 
 **Input**: Feature specification from `/specs/034-platform-datastore-backup/spec.md`
 
-**Design source**: `docs/superpowers/specs/2026-08-25-platform-datastore-backup-design.md` (approved; ADRs 1–6 are settled and not re-litigated here)
+**Design source**: `docs/superpowers/specs/2026-08-25-platform-datastore-backup-design.md` (approved; ADRs 2–6 stand. **ADR 1 is superseded** — see below)
+
+## Revision 2 — 2026-08-26
+
+> **ADR 1 no longer holds.** `main` merged `036-auto-deploy-on-merge` (#116), which
+> deleted `RedeployService`, stripped the Docker socket, Docker CLI, Compose plugin,
+> compose file and `.env` from the `backend` container, raised the constitution to
+> **2.0.0** prohibiting `ProcessBuilder` anywhere in `backend/src/main/java`, and added
+> `NoHostProcessLaunchTest` to enforce it. ADR 1's premise — that the backend already
+> held the socket because `RedeployService` needed it — was deliberately removed.
+>
+> **The capture moves to the `deployer` container, script-first, on a Temporal
+> schedule.** Reasoning and rejected alternatives: research **R11**, **R12**, **R13**.
+>
+> Unchanged by this revision: the archive format, the manifest, the fingerprint scheme,
+> the Drive folder isolation, the ClickHouse `BACKUP`/`RESTORE` findings,
+> `scripts/restore-platform.sh`, the runbook, and the compose volume + init service +
+> watchdog registration. Everything verified in R4/R5 still stands — only *which
+> process runs the commands* changes.
 
 ## Summary
 
@@ -15,14 +33,18 @@ uploaded to a **separate** Drive folder with its own retention window of 7. Plus
 host-side restore script that targets one tool at a time and refuses to run
 against mismatched secrets.
 
-The capture runs inside the backend (ADR 1): it already runs as `user: "0:0"` with
-the docker socket and CLI bind-mounted, so `docker exec langfuse-db pg_dump` needs
-no new host prerequisite, and it reuses `GoogleDriveService`'s tuned resumable
-upload, `DataOperationsService`'s SSE stream and mutex, and
-`BackupRetentionService`'s prune. Restore is bash (ADR 2), because the scenario
-that motivates it is a rebuilt host where the backend is the thing being rebuilt.
+The capture runs in the **`deployer`** container as `scripts/backup-platform.sh`,
+invoked by a Temporal activity and scheduled nightly. That follows `main`'s own
+pattern rather than inventing one: `PhaseRunner`'s javadoc states *"this is the whole
+of the Java side's relationship with Docker: it never invokes `docker` itself. The
+script is the single deploy mechanism, shared with the human who types
+`./scripts/restart-prod.sh` by hand."* The capture script is the symmetric sibling of
+`scripts/restore-platform.sh`, which is already written and verified end to end.
 
-Two details that reading the code surfaced govern the shape of the work.
+Restore is bash (ADR 2) and is **unaffected** — it always ran on the host, so the
+constitution change does not touch it.
+
+Two details that reading the code surfaced still govern the shape of the work.
 First, `GoogleDriveService.findOrCreateFolder()` short-circuits on a configured
 folder id, so a naive call from the platform path would land platform backups in
 the Mongo folder and make the two retention windows evict each other — the exact
@@ -33,50 +55,49 @@ reconciles the whole stack every minute forever (research R4).
 
 ## Technical Context
 
-**Language/Version**: Java 21 (backend), TypeScript 5.x / React 19 (frontend), bash (restore script)
+**Language/Version**: **bash** (capture *and* restore), Java 21 (`software-factory` Temporal glue; `backend` listing only), TypeScript 5.x / React 19 (frontend)
 
-**Primary Dependencies**: Spring Boot 3.5.x (`@Scheduled`, `@RestController`), Google Drive API client (existing `GoogleDriveService`), `java.util.zip`, `java.lang.ProcessBuilder`. **No new dependencies in any module.**
+**Primary Dependencies**: Temporal (`temporal-spring-boot-starter`, already in `software-factory`), `curl` + `python3` in the script, the existing `GoogleDriveService` for the read-only listing. **No new dependency in any module.**
 
-**Storage**: No application persistence. Reads Postgres 15 (`langfuse-db`) and ClickHouse (`langfuse-clickhouse`) through `docker exec`; writes a zip to Google Drive. One new Docker named volume (`langfuse-clickhouse-backups`) as the ClickHouse↔backend handoff.
+**Storage**: No application persistence. The script reads Postgres 15 (`langfuse-db`) and ClickHouse (`langfuse-clickhouse`) through `docker exec` and uploads a zip to Google Drive. One new Docker named volume (`langfuse-clickhouse-backups`) as the ClickHouse→script handoff.
 
-**Testing**: JUnit 5 + Mockito + AssertJ (backend, mirroring `BackupSchedulerTest`/`BackupRetentionServiceTest`), Vitest + Testing Library (frontend), `--dry-run` plus one real local restore for the script.
+**Testing**: `shellcheck` + `--dry-run` + a real capture and restore against a throwaway stack (the method that found three real bugs in R5); JUnit 5 + Mockito for the Temporal activity and schedule initializer, mirroring `PhaseRunnerTest` and `CveFixScheduleInitializerTest`; Vitest for the reduced frontend card.
 
 **Target Platform**: Linux ARM64 (Raspberry Pi) under Docker Compose; backend is a GraalVM native image built by `bootBuildImage`.
 
 **Project Type**: Web application — Spring Boot backend + React frontend in a monorepo, plus root-level `scripts/` and `config/`.
 
-**Performance Goals**: Not latency-sensitive. The capture must stream rather than buffer, because dump sizes are unbounded and the backend container is capped at 2 GB. Upload throughput must match the existing Mongo backup (~1 MB/s on this uplink) by reusing the tuned Apache transport rather than a fresh HTTP client.
+**Performance Goals**: Not latency-sensitive. The capture streams each dump straight to disk rather than buffering, because dump sizes are unbounded. Upload must be **resumable** — restarting a multi-GB upload on a residential uplink is expensive — and the resumable path must be measured, not assumed (research R12).
 
 **Constraints**:
+- **Constitution 2.0.0**: no `ProcessBuilder` in `backend/src/main/java`, and `backend` holds no Docker socket, CLI, Compose plugin, compose file or `.env`. `NoHostProcessLaunchTest` enforces it.
 - No new host prerequisite, no new secret, no new dependency (spec NFR-001/002).
 - Must not alter the Mongo backup's schedule, folder or retention (FR-014).
-- GraalVM native image: no new reflection; `ProcessBuilder` is already proven by `RedeployService`.
-- Checkstyle (Google Java Style) and the backend's 0.78 JaCoCo floor both apply.
+- Checkstyle (Google Java Style) applies to the `software-factory` module too (`:software-factory:check`).
 - ClickHouse image is pinned at `26.7.1.1315` and must not move.
+- The deployer's `FACTORY_DEPLOY_RECREATABLE` allowlist deliberately excludes `langfuse-clickhouse`. Not a conflict — the capture `docker exec`s into it, never recreates it — but worth stating so nobody widens the allowlist on this feature's account.
 
-**Scale/Scope**: ~5 new backend classes, 2 new endpoints, 1 frontend card, 1 bash script (~400 lines), 1 runbook, compose + config changes. ClickHouse archive size is **unmeasured and unbounded** — measuring it is a blocking pre-rollout task (spec NFR-004).
+**Scale/Scope**: 1 bash script (~350 lines), ~3 small `software-factory` classes (activity, workflow, schedule initializer), 1 read-only backend endpoint retained, 1 reduced frontend card, 1 runbook, compose + config changes. ClickHouse archive size is **unmeasured and unbounded** — measuring it is a blocking pre-rollout task (spec NFR-004).
 
 ## Constitution Check
 
-*GATE: evaluated against `.specify/memory/constitution.md` v1.11.0.*
+*GATE: re-evaluated against `.specify/memory/constitution.md` **v2.0.0**.*
 
 | Principle | Verdict | Notes |
 |---|---|---|
-| I — Monorepo, separate containers | **PASS** | No new container. Adds one named volume, one config overlay, and one busybox one-shot (same pattern as the existing `uploads-init`). |
-| II — Modern Java & React stack | **PASS** | Java 21, Spring Boot 3.5.x, no new dependency. Native-image safe: `ProcessBuilder` only, no reflection. |
-| VIII — Backup & Restore | **PASS** | Extends the principle's own model: Drive via `GoogleDriveService` with OAuth2 from `GOOGLE_DRIVE_*`, triggered from `DataOperationsController`, zip archives in a configurable folder. The existing `backup.sh`/`restore.sh` pair is untouched, as the principle requires. |
-| IX — Shell scripting standards | **PASS** | `restore-platform.sh` uses `#!/usr/bin/env bash`, `set -euo pipefail`, `SCRIPT_DIR`/`PROJECT_DIR` via `$(cd "$(dirname "$0")" && pwd)`, validates preconditions with clear errors, cleans up temp files, and interacts with containers via `docker exec`/`docker cp`. |
-| Testing (Testcontainers / JaCoCo) | **PASS** | New logic is unit-testable with mocks; the process-spawning boundary is behind an injectable seam so no Testcontainers Postgres is needed. Coverage floor respected. |
+| I — Monorepo, separate containers | **PASS** | No new container: the capture runs in the existing `deployer`. Adds one named volume, one config overlay, and one busybox one-shot (the `uploads-init` pattern). |
+| II — Modern Java & React stack, **no host process in the backend** | **PASS** — and this revision is what makes it pass | Revision 1 would have failed: `ProcessCommandRunner` used `ProcessBuilder` in `backend/src/main/java`. All of it is deleted. The backend keeps only a Drive listing, which is a network call. |
+| VIII — Backup & Restore | **PASS, more squarely than before** | The principle says backup should be "simple shell scripts". Revision 1 argued around that by putting the capture in Java; revision 2 simply complies. Drive still goes through OAuth2 `GOOGLE_DRIVE_*` credentials, and `backup.sh`/`restore.sh` remain untouched. |
+| IX — Shell scripting standards | **PASS** | Both scripts use `#!/usr/bin/env bash`, `set -euo pipefail`, `SCRIPT_DIR`/`PROJECT_DIR` via `$(cd "$(dirname "$0")" && pwd)`, validate preconditions with clear errors, clean up temp files, and reach containers via `docker exec`/`docker cp`. |
+| Deploy orchestration (new in 2.0.0) | **PASS** | Host-level container access stays in the `deployer`, which has no ingress. The trigger is a durable Temporal workflow, not an HTTP call. |
+| Testing | **PASS** | The activity and schedule initializer are unit-testable with mocks (`PhaseRunnerTest`, `CveFixScheduleInitializerTest` are the models). The script is covered by `shellcheck`, `--dry-run`, and a real end-to-end run. |
 
 **Deviations requiring justification**: none. No entry in Complexity Tracking.
 
-One item deserves flagging rather than justifying: principle VIII describes backup
-as "simple shell scripts", and this puts the *capture* in Java. That is ADR 1 in
-the approved design, and the principle's own second half already mandates that
-Drive backup be driven from `DataOperationsController` via `GoogleDriveService` —
-i.e. the principle already describes an application-side Drive backup path. This
-extends that path; it does not contradict the principle. The *restore* half stays
-in bash, exactly as the principle's spirit prefers.
+Worth recording: revision 1 needed a paragraph explaining why putting the capture in
+Java did not really contradict Principle VIII. Revision 2 does not need that
+paragraph, which is a reasonable signal the new shape fits the repo better rather
+than merely satisfying it.
 
 ## Project Structure
 
@@ -86,11 +107,11 @@ in bash, exactly as the principle's spirit prefers.
 specs/034-platform-datastore-backup/
 ├── plan.md              # This file
 ├── spec.md              # Feature specification
-├── research.md          # Phase 0 — R1..R10, resolves both design open questions
+├── research.md          # Phase 0 — R1..R10, plus R11-R13 (the revision-2 decisions)
 ├── data-model.md        # Phase 1 — manifest schema, archive layout, restore targets
 ├── quickstart.md        # Phase 1 — how to exercise this locally
 ├── contracts/
-│   └── data-operations-platform.yaml   # OpenAPI for the two new endpoints
+│   └── data-operations-platform.yaml   # OpenAPI — POST now marked deferred
 ├── checklists/
 │   └── requirements.md
 └── tasks.md             # Phase 2 — /speckit.tasks output
@@ -99,49 +120,63 @@ specs/034-platform-datastore-backup/
 ### Source code
 
 ```text
+scripts/
+├── backup-platform.sh                # NEW — capture + manifest + Drive upload + retention.
+│                                     #       The whole Docker-touching half of the feature.
+├── restore-platform.sh               # UNCHANGED — already written and verified
+└── monitor-prod.sh                   # EDIT — ONESHOT_SERVICES (research R4)
+
+software-factory/src/main/java/com/simonrowe/factory/platformbackup/
+├── PlatformBackupActivities.java        # NEW — activity interface
+├── PlatformBackupActivitiesImpl.java    # NEW — invokes backup-platform.sh via the
+│                                        #       existing ProcessRunner, heartbeating
+├── PlatformBackupWorkflow.java          # NEW — one activity, a retry policy
+├── PlatformBackupWorkflowImpl.java      # NEW
+├── PlatformBackupScheduleInitializer.java  # NEW — nightly 02:00 Temporal schedule,
+│                                        #       modelled on CveFixScheduleInitializer
+└── config/PlatformBackupProperties.java # NEW — script path, enabled flag, task queue
+
+software-factory/src/test/java/com/simonrowe/factory/platformbackup/
+├── PlatformBackupActivitiesImplTest.java   # NEW — mirrors PhaseRunnerTest
+├── PlatformBackupWorkflowTest.java         # NEW — Temporal test framework
+└── PlatformBackupScheduleInitializerTest.java  # NEW
+
 backend/src/main/java/com/simonrowe/dataops/
-├── PlatformBackupService.java        # NEW — builds the archive, uploads it
-├── PlatformBackupScheduler.java      # NEW — nightly @Scheduled, mirrors BackupScheduler
-├── PlatformBackupProperties.java     # NEW — container names, db list, folder, paths
-├── PlatformManifest.java             # NEW — manifest record + JSON serialisation
-├── SecretFingerprinter.java          # NEW — domain-separated SHA-256 (research R7)
-├── CommandRunner.java                # NEW — injectable ProcessBuilder seam (testability)
 ├── GoogleDriveService.java           # EDIT — findOrCreateFolderByName + platform folder
-├── BackupRetentionService.java       # EDIT — pruneToLimit(folderId, max) generalisation
-├── OperationType.java                # EDIT — add PLATFORM_BACKUP
-└── DataOperationsController.java     # EDIT — two new endpoints
+├── DataOperationsController.java     # EDIT — GET /platform-backups ONLY
+└── OperationType.java                # UNCHANGED — PLATFORM_BACKUP no longer needed
+                                      #   (nothing in the backend runs the operation)
 
 backend/src/test/java/com/simonrowe/dataops/
-├── PlatformBackupServiceTest.java        # NEW
-├── PlatformBackupSchedulerTest.java      # NEW
-├── SecretFingerprinterTest.java          # NEW
-├── PlatformManifestTest.java             # NEW
-├── GoogleDriveFolderResolutionTest.java  # NEW — the R1 regression guard
-├── BackupRetentionServiceTest.java       # EDIT — folder param, existing asserts kept
-└── DataOperationsControllerTest.java     # NEW/EDIT — the two endpoints + admin auth
+└── GoogleDriveFolderResolutionTest.java  # KEEP — the R1 regression guard, unaffected
 
-backend/src/main/resources/application.yml    # EDIT — backup.platform.* block
+frontend/src/services/dataOperationsApi.ts    # EDIT — fetchPlatformBackups only
+frontend/src/pages/admin/DataOperationsAdmin.tsx  # EDIT — read-only "Platform Data" card
+frontend/tests/admin/DataOperationsAdmin.platform.test.tsx  # EDIT — drop trigger tests
 
-frontend/src/services/dataOperationsApi.ts    # EDIT — 2 calls, PLATFORM_BACKUP in union
-frontend/src/pages/admin/DataOperationsAdmin.tsx  # EDIT — "Platform Data" card
-frontend/tests/admin/DataOperationsAdmin.platform.test.tsx  # NEW
-
-scripts/restore-platform.sh                   # NEW — the restore path
-scripts/monitor-prod.sh                       # EDIT — ONESHOT_SERVICES (research R4)
-
-config/clickhouse/backup-disk.xml             # NEW — <backups><allowed_path>
-docker-compose.prod.yml                       # EDIT — volume, mounts, init service
-docs/runbooks/platform-backup-restore.md      # NEW
+config/clickhouse/backup-disk.xml             # UNCHANGED — already written
+docker-compose.prod.yml                       # EDIT — volume + clickhouse mounts +
+                                              #   clickhouse-backups-init + deployer env
+docs/runbooks/platform-backup-restore.md      # EDIT — capture section rewritten
 CLAUDE.md                                     # EDIT — Recent Changes entry
 ```
 
-**Structure Decision**: Everything backend-side lands in the existing
-`com.simonrowe.dataops` package alongside `BackupService`, `BackupScheduler` and
-`RedeployService`. That is where the operation mutex, the Drive client, the SSE
-stream and the `docker` process-spawning precedent all already live; a new package
-would separate the new code from every collaborator it has. The restore script
-sits in `scripts/` with the other operational bash. The ClickHouse config overlay
-follows `config/searxng/` and `config/temporal/`.
+**Deleted from revision 1** (all of it violated constitution 2.0.0 or became dead):
+`PlatformBackupService`, `PlatformBackupScheduler`, `PlatformBackupProperties`,
+`PlatformManifest`, `SecretFingerprinter`, `CommandRunner`, `ProcessCommandRunner`,
+and their five test classes; the `POST /platform-backup` endpoint; the
+`langfuse-clickhouse-backups` mount on `backend`; and `BackupRetentionService`'s
+platform overloads (the script owns retention now). The manifest format and the
+fingerprint scheme survive as *specifications* — data-model.md §2 and §3 — and are
+reimplemented in bash.
+
+**Structure Decision**: the Docker-touching work lives in `scripts/`, and Java only
+orchestrates. That is `main`'s established pattern (`PhaseRunner` → `restart-prod.sh`)
+rather than a new one, and it means the capture and the restore are siblings in the
+same language, reviewed the same way and runnable by hand the same way. The Temporal
+glue goes in `software-factory` because that is the module the `deployer` image is
+built from and the only one with a Temporal dependency. The backend keeps exactly the
+part that needs no host access: reading a Drive folder listing.
 
 ## Design detail
 
@@ -160,108 +195,109 @@ platform-backup-YYYYMMDD-HHMMSS.zip
 
 Schema and field semantics: [data-model.md](./data-model.md).
 
-### `PlatformBackupService` sequence
+### `scripts/backup-platform.sh`
 
-Ordered so that the cheapest failures happen first and nothing is uploaded until
-everything is captured.
+Same sequence as revision 1, same ordering rationale — cheapest failures first, and
+nothing uploaded until everything is captured. Only the language and the host change.
 
-1. **Sweep orphans** from the ClickHouse backup volume — residue from crashed
-   prior runs. Skipping this lets a few failed nights fill the SD card silently
-   (FR-008).
-2. `pg_dumpall --roles-only` → `postgres/roles.sql`.
-3. `pg_dump -d <db>` for each of the four databases, **streamed** into the zip
-   entry, counting bytes (research R8).
-4. `BACKUP DATABASE default TO File('<name>.zip')` via `clickhouse-client`, then
-   copy the result off the shared volume into `clickhouse/default.zip`, and query
-   `system.tables`/`system.parts` for per-table row counts.
-5. Write `manifest.json` last — it records byte counts and row counts only now
-   known.
-6. Upload to `simonrowe-platform-backups` via `GoogleDriveService`, reporting
-   progress on the same SSE stream the Mongo backup uses.
-7. `finally`: delete the local zip **and** the ClickHouse volume file.
+1. **Sweep orphans** from the ClickHouse backup volume. Residue from crashed prior
+   runs; skipping it lets a few failed nights quietly fill the SD card (FR-008).
+2. `docker exec -e PGPASSWORD langfuse-db pg_dumpall --roles-only` → `postgres/roles.sql`.
+3. `docker exec -e PGPASSWORD langfuse-db pg_dump -d <db>` per database, streamed to
+   disk, counting bytes for the manifest.
+4. `BACKUP DATABASE default TO File(...)` via `clickhouse-client`, then move the result
+   off the shared volume, plus the `system.parts` row counts (excluding `.inner%`,
+   research R5).
+5. Write `manifest.json` **last** — it records sizes and counts only known by then.
+6. `zip` the tree, upload to `simonrowe-platform-backups`, prune to 7.
+7. `trap`-based cleanup of the local archive **and** the volume file, on both paths.
 
-Returns `boolean`, matching `BackupService.performBackup()`: `true` after
-`completeOperation`, `false` after `failOperation`. Exceptions are caught and
-converted, never propagated (the controller runs it on a `CompletableFuture` where
-a thrown exception would vanish and leave the mutex held).
+Flags mirror `restore-platform.sh` so the pair reads as one tool: `--dry-run`,
+`--keep-local`, `--no-upload`. `--dry-run` is not decoration — the script `docker
+exec`s into live datastores, so there must be a way to read what it would do.
 
-### Testability seam
+Credential and `.env` access is identical to the restore script: read off disk from
+`$PROJECT_DIR/.env` with a parser, never sourced. Inside the deployer that resolves to
+`/workspace/repo/.env`, which the whole-deploy-directory mount provides (research R11).
 
-Every `docker`/`clickhouse-client` invocation goes through `CommandRunner`, a
-thin interface over `ProcessBuilder` exposing "run and stream stdout to an
-`OutputStream`" and "run and capture stdout as a string". `PlatformBackupService`
-depends on the interface, so `PlatformBackupServiceTest` can assert archive
-entries, failure handling, manifest content and temp-file cleanup with a fake —
-no Docker, no Postgres, no Testcontainers. Without this seam the service is only
-testable in an environment that has the whole prod stack running, which in
-practice means untested.
+### Secret fingerprinting moves to bash — and gets simpler
 
-### `PlatformBackupScheduler`
+Revision 1 needed `SecretFingerprinter` in Java plus a known-answer test, because the
+manifest was *written* in Java and *verified* in bash, and a trailing newline on either
+side would have refused every legitimate restore (research R7).
 
-```java
-@Scheduled(
-    cron = "${backup.platform.schedule.cron:0 0 2 * * *}",
-    zone = "${backup.platform.schedule.zone:Europe/London}")
-```
+Both sides are now bash, computing
+`sha256("platform-backup-fingerprint-v1:" + name + ":" + value)` with the same
+`printf '%s'` helper. The cross-language contract disappears, and with it that entire
+failure mode. The scheme itself is unchanged, so **archives are format-compatible
+across the revision** — data-model.md §3 remains the specification.
 
-Same five-step shape as `BackupScheduler`: skip if Drive is disconnected, skip if
-the mutex is held, run, prune **only** on success, report a prune failure
-distinctly from a backup failure, and wrap everything so nothing reaches the
-scheduler thread. 02:00 is four hours clear of the 22:00 Mongo backup because the
-mutex is global and an overlap costs the platform backup its whole night
-(research R9).
+### Temporal glue in `software-factory`
 
-### `BackupRetentionService` generalisation
+Deliberately thin, modelled on `PhaseRunner` / `DeployActivitiesImpl`:
 
-`pruneToLimit()` → `pruneToLimit(String folderId, int maxBackups)`, with
-`pruneToLimit()` retained as the Mongo-path overload resolving the existing folder
-and `backup.retention.max-backups`. Today's behaviour is preserved exactly and the
-existing tests stay as they are, which is the point: FR-014 and SC-004 make "the
-Mongo backup is unchanged" a verifiable requirement, not a hope.
+- **`PlatformBackupActivitiesImpl`** — runs the script through the existing
+  `ProcessRunner`, forwarding output to `Activity.getExecutionContext().heartbeat()` so
+  a long capture does not trip the heartbeat timeout. This is the *only* Java that
+  touches the script.
+- **`PlatformBackupWorkflow`** — one activity, a retry policy, a
+  `startToCloseTimeout` sized well past the measured capture (see the open item in
+  Risks). Retry is what replaces the library-level upload resumability revision 1 got
+  from `GoogleDriveService`.
+- **`PlatformBackupScheduleInitializer`** — declares a 02:00 Europe/London schedule in
+  code so a deploy reconciles it, copying `CveFixScheduleInitializer` including its
+  **paused-by-default** posture behind `FACTORY_PLATFORM_BACKUP_ENABLED`.
 
-### Endpoints
+Gated off by default for the same reason the deploy and cve-fix flows are: a container
+can be `healthy` with no poller registered, so enabling is a deliberate step with a
+poller assertion after it.
 
-| Method | Path | Behaviour |
-|---|---|---|
-| `POST` | `/api/admin/data-operations/platform-backup` | `202` + `DataOperation`; `409` if the mutex is held; `503` if Drive is down |
-| `GET` | `/api/admin/data-operations/platform-backups` | `200` + `BackupMetadata[]` from the platform folder |
+### What the backend keeps
 
-Both admin-authenticated exactly like their siblings. No restore endpoint (ADR 2).
-Contract: [contracts/data-operations-platform.yaml](./contracts/data-operations-platform.yaml).
+`GET /api/admin/data-operations/platform-backups` and
+`GoogleDriveService.findOrCreatePlatformFolder()`. Both are network calls to Drive, so
+constitution 2.0.0 does not touch them, and `GoogleDriveFolderResolutionTest` — the R1
+regression guard against the two backup types evicting each other — stays exactly as
+written.
+
+`POST /platform-backup`, `OperationType.PLATFORM_BACKUP`, the SSE progress and the
+operation mutex all go. The mutex mattered when both backups shared
+`DataOperationsService`; now the platform capture runs in a different container
+entirely, and Temporal's own de-duplication (one workflow id per schedule) does that
+job. **Note the consequence**: the two backups can now overlap. That is fine and
+arguably better — the 22:00/02:00 gap was chosen to dodge a shared mutex that no
+longer exists — but the reason for the gap is now different, so it is recorded here
+rather than silently inherited.
 
 ### Frontend
 
-A "Platform Data" card in `DataOperationsAdmin.tsx` with a "Back Up Now" button
-and a list of retained archives (date + size). Read-only beyond the trigger — its
-job is to make a stalled nightly job obvious at a glance (SC-006). Requires
-`PLATFORM_BACKUP` in the `DataOperation.type` union or the SSE events are typed as
-impossible (research R10).
+The "Platform Data" card stays, minus its button: date-and-size list of retained
+archives, loaded on mount. That is what satisfies SC-006 — a stalled nightly is
+visible at a glance — and it needs no trigger to do it. The card gains one line
+pointing at `scripts/backup-platform.sh` for on-demand capture, mirroring how it
+already points at `restore-platform.sh`.
 
 ### Compose and config
 
-- `config/clickhouse/backup-disk.xml` — `<backups><allowed_path>/backups/</allowed_path></backups>`, mounted read-only into `/etc/clickhouse-server/config.d/`.
-- `langfuse-clickhouse-backups` named volume → `/backups` in `langfuse-clickhouse`, `/clickhouse-backups` in `backend`.
-- `clickhouse-backups-init` busybox one-shot chowning the volume to `101:101`, because a volume at a path absent from the image is created root-owned and ClickHouse runs as `101:101` (research R4).
-- `clickhouse-backups-init` added to `monitor-prod.sh`'s `ONESHOT_SERVICES`.
+Unchanged from revision 1 except for the mounts:
 
-### Config additions (`application.yml`)
+- `config/clickhouse/backup-disk.xml` — already written, unchanged.
+- `langfuse-clickhouse-backups` volume → `/backups` in `langfuse-clickhouse`, and now
+  **`/backups` in `deployer`** instead of `/clickhouse-backups` in `backend`.
+- `clickhouse-backups-init` busybox one-shot chowning it to `101:101` — unchanged, and
+  still required (R4 proved it empirically).
+- `clickhouse-backups-init` in `monitor-prod.sh`'s `ONESHOT_SERVICES` — unchanged.
+- New deployer env: `FACTORY_PLATFORM_BACKUP_ENABLED`,
+  `FACTORY_PLATFORM_BACKUP_SCRIPT: /workspace/repo/scripts/backup-platform.sh`,
+  following the existing `FACTORY_DEPLOY_SCRIPT` convention.
 
-```yaml
-backup:
-  schedule:      { cron: "0 0 22 * * *", zone: "Europe/London" }   # unchanged
-  retention:     { max-backups: 7 }                                # unchanged
-  platform:
-    schedule:    { cron: "0 0 2 * * *", zone: "Europe/London" }
-    retention:   { max-backups: 7 }
-    postgres-container: langfuse-db
-    clickhouse-container: langfuse-clickhouse
-    databases: [langfuse, dtrack, temporal, temporal_visibility]
-    clickhouse-backup-path: /clickhouse-backups
+### Config additions
 
-google:
-  drive:
-    platform-folder-id: ${GOOGLE_DRIVE_PLATFORM_FOLDER_ID:}
-```
+`backup.platform.*` moves out of `application.yml` — the backend no longer runs the
+capture — and becomes script defaults overridable by environment, matching
+`restore-platform.sh`. `google.drive.platform-folder-id` **stays** in
+`application.yml`, because the backend still resolves that folder to list it.
+
 
 ### Restore script
 
@@ -287,16 +323,21 @@ database rather than stopped (FR-035).
 
 ## Risks
 
-| Risk | Mitigation |
-|---|---|
-| Platform backups land in the Mongo folder and the two evict each other, silently | Dedicated name-based resolver; a test asserts the two resolvers diverge when `google.drive.folder-id` is set (research R1) |
-| ClickHouse `BACKUP` fails on volume permissions | `clickhouse-backups-init` chown, plus a first-run verification task |
-| New one-shot service makes the watchdog reconcile the stack every minute | `clickhouse-backups-init` added to `ONESHOT_SERVICES` in the same change (research R4) |
-| ClickHouse restore incantation differs on the pinned build | Blocking verification task against `26.7.1.1315` before the runbook is written; two documented fallbacks (research R5) |
-| Fingerprint check refuses every legitimate restore over a trailing newline | `printf '%s'` in bash, explicit cross-language test vector (research R7) |
-| Archive too large for the Drive quota at 7 copies | Measured on the host before rollout; the answer is a ClickHouse TTL, scoped out (research R6) |
-| A truncated dump is archived and reported as success | Exit code checked after stdout reaches EOF, not before; stderr drained on a separate thread (research R8) |
-| Deploy recreates `langfuse-clickhouse` and `backend` | Combine with the pending memory-cgroup reboot, which recreates ~17 containers anyway |
+Carried forward from revision 1, plus the ones this revision introduces.
+
+| Risk | Mitigation | Status |
+|---|---|---|
+| Platform backups land in the Mongo folder and the two evict each other, silently | Dedicated name-based resolver; `GoogleDriveFolderResolutionTest` asserts the two resolvers diverge when `google.drive.folder-id` is set | Unchanged, already built and tested |
+| ClickHouse `BACKUP` fails on volume permissions | `clickhouse-backups-init` chown | Proven empirically in R4 |
+| New one-shot makes the watchdog reconcile the stack every minute | Registered in `ONESHOT_SERVICES` | Unchanged, already done |
+| ClickHouse restore incantation differs on the pinned build | `DROP … SYNC` + `RESTORE`, verified against `26.7.1.1315` | Closed in R5 |
+| Fingerprint check refuses every legitimate restore | Both sides bash now, one shared helper | **Risk reduced** — the cross-language contract is gone |
+| Archive too large for the Drive quota at 7 copies | Measure on the host before rollout | **Still open** (NFR-004, task T045) |
+| A truncated dump is archived and reported as success | `set -euo pipefail`, explicit exit-code checks after each `docker exec`, non-empty assertions before zipping | Re-implemented in bash; needs re-proving |
+| **Resumable Drive upload in bash is unproven** | Implement Google's session-URI + ranged-PUT protocol; **measure against a real multi-GB archive** before trusting it | **NEW, open** (research R12) |
+| **A `healthy` deployer with no registered poller means nothing ever backs up, silently** | Paused-by-default flag; assert a live poller on the task queue as an explicit rollout step, as the deploy and cve-fix runbooks already require | **NEW** — this exact failure mode is documented twice already in this repo |
+| **The capture and the Mongo backup can now overlap** | Accepted: they touch different datastores and different Drive folders. The 22:00/02:00 gap is kept, but for I/O contention on a 4-core Pi rather than for a mutex | **NEW, accepted** |
+| Deploy recreates `langfuse-clickhouse` and `deployer` | Both gain mounts; combine with the pending memory-cgroup reboot | Unchanged |
 
 ## Complexity Tracking
 

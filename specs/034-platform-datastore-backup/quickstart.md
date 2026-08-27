@@ -1,6 +1,12 @@
 # Quickstart: Platform Datastore Backup
 
-**Feature**: 034-platform-datastore-backup
+**Feature**: 034-platform-datastore-backup — **Revision 2, 2026-08-26**
+
+> **Revision 2**: the capture is now `scripts/backup-platform.sh`, run in the
+> `deployer` container on a Temporal schedule, not a Spring service in the backend.
+> Sections below that describe triggering it from the admin UI or running
+> `PlatformBackupServiceTest` are superseded — see plan.md "Revision 2". The Drive
+> folder-isolation check and the whole restore section are unchanged and still apply.
 
 How to build, test and exercise this feature. For operating it in production, see
 `docs/runbooks/platform-backup-restore.md` (written as part of this work).
@@ -10,23 +16,28 @@ How to build, test and exercise this feature. For operating it in production, se
 ## Build and test
 
 ```bash
-# Backend unit tests + checkstyle (the pre-commit hook runs these)
-cd backend && ../gradlew test checkstyleMain checkstyleTest
+# The capture script — the bulk of the feature
+shellcheck scripts/backup-platform.sh
+./scripts/backup-platform.sh --dry-run
 
-# Just this feature's tests
-cd backend && ../gradlew test --tests 'com.simonrowe.dataops.*'
+# Temporal glue in the deployer's module
+./gradlew :software-factory:check
+
+# Backend: only the read-only Drive listing remains for this feature.
+# NoHostProcessLaunchTest is the one that proves the capture really did move out.
+cd backend && ../gradlew test checkstyleMain checkstyleTest
+cd backend && ../gradlew test --tests 'com.simonrowe.NoHostProcessLaunchTest'
 
 # Frontend
-cd frontend && npm test
-cd frontend && npm run lint      # blocking in CI
+cd frontend && npm test && npm run lint
 ```
 
-Every new backend test is a plain unit test with mocks — no Docker, no Postgres,
-no Testcontainers. That is deliberate: `PlatformBackupService` takes a
-`CommandRunner` seam over `ProcessBuilder`, so the archive contents, the failure
-paths, the manifest and the temp-file cleanup are all assertable with a fake.
-Without that seam the service would only be testable on a host running the whole
-production stack, which in practice means untested.
+The capture is bash, so it is verified the way the restore script was: `shellcheck`,
+a `--dry-run` read-through, and a real run against a throwaway stack. That method
+found three real bugs the first time round (a swallowed `ALTER ROLE`, a `docker cp`
+ownership failure, and unstable MV inner-table UUIDs), none of which a unit test would
+have caught. The Java that remains — the Temporal activity, workflow and schedule
+initializer — is thin and mock-tested.
 
 ---
 
@@ -54,21 +65,22 @@ docker compose -f docker-compose.prod.yml up clickhouse-backups-init
 docker exec langfuse-clickhouse sh -c 'touch /backups/.probe && rm /backups/.probe && echo writable'
 ```
 
-Trigger a capture from the admin UI ("Platform Data" → "Back Up Now") or directly:
+Trigger a capture by running the script — there is no admin-UI button in revision 2:
 
 ```bash
-curl -X POST -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8080/api/admin/data-operations/platform-backup
+./scripts/backup-platform.sh --dry-run     # always first
+./scripts/backup-platform.sh
 
+# The listing is still served by the backend, and is what the admin card shows.
 curl -H "Authorization: Bearer $TOKEN" \
   http://localhost:8080/api/admin/data-operations/platform-backups | python3 -m json.tool
 ```
 
-To watch the nightly path without waiting for 02:00, override the cron:
-
-```bash
-BACKUP_PLATFORM_SCHEDULE_CRON='0 */5 * * * *' ./scripts/start-backend.sh
-```
+To exercise the scheduled path without waiting for 02:00, trigger the workflow
+directly rather than editing the schedule — and remember the schedule is paused by
+default behind `FACTORY_PLATFORM_BACKUP_ENABLED`. **Assert a live poller on the task
+queue afterwards**: a `healthy` deployer with no registered poller runs nothing and
+says nothing.
 
 ### Inspect an archive
 
@@ -140,7 +152,7 @@ an open question rather than a known quantity (spec SC-007).
 | Fingerprint mismatch | Edit `ENCRYPTION_KEY` in `.env`, then restore | Refused with an explanation naming the key; proceeds only with `--force` |
 | Mid-restore failure | Point `--file` at a zip with a truncated `postgres/dtrack.sql` | Aborts, and the stopped consumer is **restarted** — services run against pre-restore data, never left down |
 | Missing roles | Drop the `dtrack` role before restoring | Recreated from `roles.sql`; existing roles untouched |
-| Trailing-newline bug | — | Covered by `SecretFingerprinterTest`'s cross-language vector; if a legitimate restore is ever refused, suspect `echo` vs `printf '%s'` first |
+| Trailing-newline bug | — | Both sides are bash now and share one `fingerprint_of` helper, so the cross-language mismatch cannot occur. If a legitimate restore is ever refused, still suspect `echo` vs `printf '%s'` first |
 
 ---
 

@@ -335,6 +335,143 @@ it to work as described.
 
 ---
 
+## R11 — Constitution 2.0.0 invalidates ADR 1 (added 2026-08-26)
+
+**This supersedes ADR 1 of the approved design.** Everything below R10 was written
+against a repository where the backend held the Docker socket. It no longer does.
+
+### What changed underneath us
+
+`main` merged `036-auto-deploy-on-merge` (#116) while this branch was in review. It:
+
+- **Deleted `RedeployService`** and, with it, all five host-capability mounts on
+  `backend`: `/var/run/docker.sock`, the Docker CLI, the Compose plugin,
+  `docker-compose.prod.yml` and `.env`.
+- **Added a `deployer` container** — the `software-factory` image with
+  `FACTORY_DEPLOY_ENABLED`, holding the socket, with no ingress and no published
+  port, driven over a Temporal `deploy` task queue.
+- **Amended the constitution to 2.0.0 (MAJOR)**:
+
+  > The container serving the public API MUST NOT hold host-level container access
+  > (`/var/run/docker.sock`, the Docker CLI, or the Compose plugin), MUST NOT hold a
+  > copy of `docker-compose.prod.yml`, and MUST NOT hold a copy of the production
+  > environment file. No code in the backend MAY launch a host process —
+  > `ProcessBuilder` and equivalents are prohibited in `backend/src/main/java`, and a
+  > test enforces this.
+
+- **Added `NoHostProcessLaunchTest`**, which scans `backend/src/main/java` for
+  `ProcessBuilder` / `Runtime.exec` and fails the build. Its javadoc names this exact
+  situation in advance: *"The next change that wants to shell out from the backend
+  will look reasonable in isolation, and re-adding the socket mount to get it working
+  will look like a small step."*
+
+ADR 1's stated premise — *"the backend container already runs as `user: "0:0"` with
+`/var/run/docker.sock` and the docker CLI bind-mounted; `RedeployService` uses exactly
+this"* — is now false, deliberately. `ProcessCommandRunner` fails the new test, and
+even with the test removed the capture could not run: there is no socket to exec
+through.
+
+There is no correct textual merge resolution. Re-adding the mounts reverses a
+documented security improvement and violates a MAJOR principle; keeping main's posture
+leaves the feature compiled-in and non-functional. It needed a design decision, so the
+merge was aborted rather than committed.
+
+### Decision: move the capture to the deployer, script-first
+
+**Chosen.** Three things made this cheaper than expected, all verified against `main`
+rather than assumed:
+
+1. **`main`'s own pattern is "Java orchestrates, a shell script owns Docker."**
+   `PhaseRunner`'s javadoc: *"This is the whole of the Java side's relationship with
+   Docker: it never invokes `docker` itself. The script is the single deploy
+   mechanism, shared with the human who types `./scripts/restart-prod.sh` by hand, so
+   there is exactly one place where the deploy behaviour lives."* So the capture
+   becomes `scripts/backup-platform.sh` — the symmetric sibling of the already-written
+   and end-to-end-verified `scripts/restore-platform.sh` — and the Temporal activity
+   is a thin wrapper, exactly as `PhaseRunner` wraps `restart-prod.sh`.
+
+2. **The deployer can read `.env`.** It deliberately has no `env_file:`, but it mounts
+   the whole deploy directory read-write at `/workspace/repo`, and `.env` lives there
+   (`FACTORY_DEPLOY_REPO_DIR: /workspace/repo`). `restore-platform.sh` already reads
+   `.env` off disk with a parser rather than sourcing it, so secret fingerprinting and
+   Drive credentials carry over unchanged. Scripts are addressed the same way today:
+   `FACTORY_DEPLOY_SCRIPT: /workspace/repo/scripts/restart-prod.sh`.
+
+3. **A nightly Temporal schedule has a precedent.** `CveFixScheduleInitializer`
+   declares a schedule in code, paused by default, reconciled by deploy. That replaces
+   `@Scheduled` and is strictly better here: durable, with retry and heartbeating, and
+   unaffected by a backend restart.
+
+**The feature gets smaller.** `PlatformBackupService`, `CommandRunner`,
+`ProcessCommandRunner`, `PlatformBackupScheduler` and `PlatformBackupProperties`
+(~800 lines with tests) collapse into ~350 lines of bash. The secret fingerprint stops
+being a cross-language contract — both sides are bash now — which deletes the entire
+`echo`-vs-`printf` failure mode that R7 needed a known-answer test to guard.
+
+### Alternatives rejected
+
+| Option | Rejected because |
+|---|---|
+| Re-add the socket to `backend` | Reverses a deliberate security improvement, violates constitution 2.0.0, and defeats a test written specifically to catch it. |
+| Host cron script, no Temporal | Works, and matches Principle VIII, but throws away durable retry, heartbeating and the reconciled-by-deploy schedule the deployer already provides for free. |
+| Backend talks to the datastores over the network (JDBC + ClickHouse HTTP) | No host process, keeps the admin UI — but Postgres would need a hand-rolled JDBC dump instead of `pg_dump`, reintroducing exactly the "hand-rolled export has blind spots" risk ADR 3 rejected for ClickHouse. |
+
+---
+
+## R12 — Where the Google Drive upload happens (added 2026-08-26)
+
+**Decision**: upload from `backup-platform.sh` with `curl`, implementing Google's
+resumable upload protocol.
+
+**Rationale**: `GoogleDriveService` and its tuned transport live in `backend`, and
+there is no shared Gradle module — only `backend` and `software-factory`. The three
+ways to bridge that:
+
+| Option | Cost |
+|---|---|
+| Port `GoogleDriveService` + `GoogleDriveConfig` into `software-factory` | Duplicates ~340 lines including socket tuning with a documented 5 KB/s → 1 MB/s history. Two copies of that is a trap. |
+| Script captures to a shared volume; `backend` uploads | Keeps the tuned transport, but couples two containers with a handoff protocol — the same fiddliness the ClickHouse volume handoff already has, doubled. |
+| **Upload from the script with `curl`** (chosen) | One owner for the whole lifecycle; extends a path already proven, since `restore-platform.sh` does Drive OAuth and download in bash and was tested end to end. |
+
+**Correcting ADR 1.** It claimed a bash upload "would get neither that throughput nor
+resumability." The throughput half is wrong: the 5 KB/s figure came from the default
+Apache transport under the GraalVM native image, which is a JVM problem, not an HTTP
+one — `curl` does not have it. The resumability half stands, and is the real work:
+Google's resumable protocol needs a session-URI POST plus a ranged PUT, roughly 40
+lines.
+
+**Open, and must be measured not assumed** (same standard as R5/R6): restarting a
+multi-GB upload on a residential uplink is expensive, so the resumable path has to be
+exercised against a real archive before it is trusted. Temporal's retry policy softens
+this — a failed night retries with backoff — but does not remove the cost.
+
+---
+
+## R13 — What stays in the backend (added 2026-08-26)
+
+**Decision**: the backend keeps the **read-only** Drive listing and loses the trigger.
+
+Listing archives is a network call to Drive. It needs no Docker, no host process and
+no `.env` beyond credentials the backend already holds, so `GET
+/api/admin/data-operations/platform-backups`, `findOrCreatePlatformFolder()` and
+`GoogleDriveFolderResolutionTest` all survive the constitution change untouched. So
+does the "Platform Data" card, minus its button.
+
+That matters because the listing, not the button, is what satisfies SC-006 — an
+operator can still see at a glance that the nightly job has stalled.
+
+**The on-demand trigger is deferred.** `backend` has no Temporal client, so starting
+the workflow from the admin UI means adding one. That would not violate anything — a
+Temporal client is not a host process — but it is new surface for the P2 half of a
+feature whose P1 is the nightly capture. Until it lands, an operator triggers a
+capture by running `scripts/backup-platform.sh` by hand, which is what they would do
+for a restore anyway.
+
+Spec impact: FR-020, FR-023 and FR-024 move to a deferred section; FR-025 narrows to
+the read-only listing; US2 is reduced to its visibility half.
+
+---
+
 ## Summary of resolved unknowns
 
 | # | Unknown | Resolution |
@@ -349,5 +486,8 @@ it to work as described.
 | R8 | Dump streaming | Stream to zip, drain stderr on a thread, exit code after EOF |
 | R9 | Schedule | 02:00, four hours clear of the 22:00 Mongo backup |
 | R10 | Missed touchpoints | Frontend union type, watchdog one-shot list, label rendering |
+| R11 | **Constitution 2.0.0 bans host processes in the backend** | **ADR 1 superseded: capture moves to the `deployer` via a script + Temporal** |
+| R12 | Where the Drive upload runs | In the script, with `curl` + resumable protocol; measure before trusting |
+| R13 | What stays in the backend | Read-only Drive listing keeps SC-006; on-demand trigger deferred |
 
 No `NEEDS CLARIFICATION` markers remain.

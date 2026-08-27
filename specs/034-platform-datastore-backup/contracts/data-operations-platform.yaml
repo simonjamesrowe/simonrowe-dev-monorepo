@@ -1,9 +1,16 @@
 openapi: 3.1.0
 info:
   title: Platform datastore backup — admin data operations
-  version: 1.0.0
+  version: 2.0.0
   description: |
-    Two endpoints added to the existing `/api/admin/data-operations` controller.
+    Endpoints added to the existing `/api/admin/data-operations` controller.
+
+    REVISION 2 (2026-08-26): constitution 2.0.0 moved the capture out of the backend
+    into the `deployer` container, so **`POST /platform-backup` is deferred** and is
+    NOT implemented. It is retained below, marked `deprecated: true`, because the
+    capability is deferred rather than cancelled — see spec.md "Deferred". Only
+    `GET /platform-backups` ships: listing a Drive folder is a network call and needs
+    no host access. On-demand capture is `scripts/backup-platform.sh`.
 
     There is deliberately **no** restore endpoint: restore is a host shell script
     (`scripts/restore-platform.sh`), per ADR 2 of the approved design. The scenario
@@ -23,7 +30,8 @@ paths:
   /api/admin/data-operations/platform-backup:
     post:
       operationId: startPlatformBackup
-      summary: Capture the platform datastores now and upload the archive
+      deprecated: true
+      summary: "[DEFERRED - not implemented] Capture the platform datastores now"
       description: |
         Starts a platform backup asynchronously and returns immediately with the
         operation record. Progress is reported on the existing SSE stream at
@@ -116,11 +124,11 @@ components:
           format: uuid
         type:
           type: string
-          enum: [BACKUP, RESTORE, CLEAR, REBUILD_INDEX, REDEPLOY, REEMBED_CONTENT, PLATFORM_BACKUP]
+          enum: [BACKUP, RESTORE, CLEAR, REBUILD_INDEX, REEMBED_CONTENT]
           description: |
-            `PLATFORM_BACKUP` is new in this feature. The frontend's
-            `DataOperation.type` union must be widened to match or SSE progress
-            events for a platform backup are typed as never occurring.
+            REVISION 2: `PLATFORM_BACKUP` is gone and `REDEPLOY` was removed by
+            036-auto-deploy-on-merge. The platform capture no longer runs as a backend
+            data operation, so it emits no progress events here.
         status:
           type: string
           enum: [IN_PROGRESS, COMPLETED, FAILED]
