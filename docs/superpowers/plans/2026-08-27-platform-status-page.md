@@ -22,6 +22,7 @@
 - **Historical releases are labelled "published", not "deployed".** `deploy_runs` is empty (`FACTORY_DEPLOY_ENABLED` unset), so deployment cannot be evidenced.
 - **CSS:** plain CSS, BEM naming, appended to the single `frontend/src/styles.css`, using existing custom properties. No CSS-in-JS, no new stylesheet.
 - **Tests must pass Checkstyle too.** Run `../gradlew :backend:test :backend:checkstyleMain :backend:checkstyleTest` from `backend/`.
+- **Checkstyle's `AbbreviationAsWordInName` runs with `allowedAbbreviationLength=0`**, so **two consecutive capitals anywhere in an identifier fails the build** — including test method names. `reportsADevBuild…` fails (`AD`); `reportsDevBuild…` passes. Found the hard way in Task 1. Watch for this when naming anything containing a one-letter word followed by a capital.
 
 ## Verified facts (do not re-derive)
 
@@ -123,7 +124,7 @@ class RunningVersionTest {
   }
 
   @Test
-  void reportsADevBuildWhenNoBuildInfoIsPresent() {
+  void reportsDevBuildWhenNoBuildInfoIsPresent() {
     RunningVersion version = new RunningVersion(null);
 
     ServiceVersion current = version.current();
@@ -2237,7 +2238,7 @@ class VersionControllerTest {
   }
 
   @Test
-  void reportsADevBuildWhenNoBuildInfoIsPresent() {
+  void reportsDevBuildWhenNoBuildInfoIsPresent() {
     FactoryVersion version = new VersionController(null).version();
 
     assertThat(version.commit()).isEqualTo("unknown");
@@ -2413,8 +2414,12 @@ val factoryHeadEpoch: Provider<String> =
 springBoot {
     buildInfo {
         properties {
+            // BuildInfoProperties.time is Property<String> (ISO-8601), NOT Property<Instant> —
+            // verified against the Spring Boot Gradle plugin 3.5.16 while implementing Task 1,
+            // where passing an Instant did not compile. Format it explicitly.
             time.set(factoryHeadEpoch.map {
-                java.time.Instant.ofEpochSecond(it.ifBlank { "0" }.toLong())
+                DateTimeFormatter.ISO_INSTANT.format(
+                    Instant.ofEpochSecond(it.ifBlank { "0" }.toLong()))
             })
             additional.put("commit", factoryHeadSha.map { it.ifBlank { "unknown" } })
             additional.put("commitTime", factoryHeadEpoch.map { it.ifBlank { "0" } })
@@ -2422,6 +2427,16 @@ springBoot {
         }
     }
 }
+```
+
+These two imports must go at the **top of the file**, above the `plugins { }` block — not
+inline as `java.time.Instant`. `BuildInfoProperties` exposes its own `time` property, and inside
+that lambda's implicit-receiver scope a fully-qualified `java.time...` reference hits a Kotlin
+DSL name-resolution clash. This is exactly how `backend/build.gradle.kts` does it after Task 1:
+
+```kotlin
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 ```
 
 - [ ] **Step 6: Run the test to verify it passes**
