@@ -32,7 +32,12 @@ export function ReleaseList({ releases }: ReleaseListProps) {
     return counts
   }, [releases])
 
-  const types = useMemo(() => Array.from(typeCounts.keys()).sort(), [typeCounts])
+  // Explicit comparator: a bare sort() coerces to string, which happens to be right for
+  // these lowercase type names but states no intent and trips typescript:S2871.
+  const types = useMemo(
+    () => Array.from(typeCounts.keys()).sort((a, b) => a.localeCompare(b)),
+    [typeCounts],
+  )
 
   const filtered = useMemo(
     () => (activeType ? releases.filter((release) => release.type === activeType) : releases),
