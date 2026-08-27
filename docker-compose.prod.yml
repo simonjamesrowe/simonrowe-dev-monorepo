@@ -803,9 +803,10 @@ services:
     volumes:
       - langfuse-clickhouse-data:/var/lib/clickhouse
       - langfuse-clickhouse-logs:/var/log/clickhouse-server
-      # Where `BACKUP DATABASE default TO File('...')` writes, and where the
-      # backend reads the result from. Shared read-write with the backend
-      # container, which mounts the same volume at /clickhouse-backups.
+      # Where `BACKUP DATABASE default TO File('...')` writes. Nothing else mounts
+      # this: scripts/backup-platform.sh (in the `deployer`) extracts the archive with
+      # `docker cp` and sweeps stale staging files with `docker exec`, so it needs the
+      # Docker socket rather than the volume.
       - langfuse-clickhouse-backups:/backups
       # Declares /backups as an allowed backup path. Without it, BACKUP is
       # refused outright and no ClickHouse data is ever captured.
@@ -1135,12 +1136,14 @@ volumes:
   langfuse-db-data:
   langfuse-clickhouse-data:
   langfuse-clickhouse-logs:
-  # Handoff volume for the nightly platform backup: langfuse-clickhouse writes
-  # its own BACKUP output here (/backups) and the backend reads it back out
-  # (/clickhouse-backups) to fold into the archive. It is transient by design —
-  # the backend deletes the file after upload and sweeps orphans on the next run
-  # — but it must be a named volume, not a tmpfs or bind, so the two containers
-  # genuinely share it. Created root-owned; chowned by clickhouse-backups-init.
+  # Staging area for the nightly platform backup: langfuse-clickhouse writes its own
+  # BACKUP output here (/backups), and scripts/backup-platform.sh pulls it out with
+  # `docker cp`. Transient by design — the script removes the file once it is in the
+  # archive, and sweeps orphans from crashed runs on the next pass.
+  #
+  # A named volume rather than a tmpfs so it survives a ClickHouse restart mid-capture,
+  # and so the sweep has something stable to clean. Created root-owned at a path absent
+  # from the image, hence clickhouse-backups-init's chown to 101:101.
   langfuse-clickhouse-backups:
   langfuse-redis-data:
   langfuse-minio-data:
