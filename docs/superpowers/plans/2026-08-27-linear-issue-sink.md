@@ -52,7 +52,7 @@
 
 | File | Change |
 | --- | --- |
-| `software-factory/src/main/resources/application.yml` | `factory.linear` block; `com.simonrowe.factory.linear.workflow` added to `workflow-packages` |
+| `software-factory/src/main/resources/application.yml` | `factory.linear` block; a comment recording that `linear` is the first activity-only task queue (**no** `workflow-packages` entry — see research item 7) |
 | `deploy/domain/DeployRequest.java` | `+ boolean linearFilingEnabled` |
 | `deploy/api/DeployWorkflowService.java` | Sets that flag from `LinearProperties` |
 | `deploy/workflow/DeployWorkflowImpl.java` | Files to Linear, then reports; passes the issue URL into the report |
@@ -2732,7 +2732,15 @@ git commit -m "feat: file Linear issues idempotently, with dry-run and attachmen
 **Interfaces:**
 - Produces: `@ActivityInterface LinearActivities` with `@ActivityMethod FiledIssue fileIssue(IssueFiling filing)`; `LinearActivitiesImpl` annotated `@ActivityImpl(taskQueues = LinearTaskQueues.LINEAR)` and `@ConditionalOnProperty(name = "factory.linear.enabled", havingValue = "true")`.
 
-**If Task 1 Step 6 found that activity-only task queues get no worker,** additionally create `workflow/FileIssueWorkflow.java` + `FileIssueWorkflowImpl.java` annotated `@WorkflowImpl(taskQueues = LinearTaskQueues.LINEAR)`, whose `run` does nothing but call the activity. Its only purpose is to make the queue exist. Note that in the runbook.
+**RESOLVED — do not build the fallback.** Research item 7 settled this against
+`io.temporal:temporal-spring-boot-starter:1.36.0`:
+`WorkersTemplate.configureActivityBeansByTaskQueue` iterates every `@ActivityImpl` bean's
+declared task queues and creates a worker when `workerFactory.tryGetWorker` returns null.
+Activity discovery is `beanFactory.getBeansWithAnnotation(ActivityImpl.class)`, gated by
+`register-activity-beans` (already `true`) and **independent of `workflow-packages`**.
+So: **no `FileIssueWorkflow` stub, and no `workflow-packages` entry** — that list drives
+`@WorkflowImpl` scanning only, and an entry for a workflow-less package does nothing while
+falsely implying one lives there. Add a comment in that block instead.
 
 - [ ] **Step 1: Write the failing activity test**
 
@@ -2891,22 +2899,25 @@ public class LinearActivitiesImpl implements LinearActivities {
 Run: `./gradlew :software-factory:test --tests "com.simonrowe.factory.linear.workflow.LinearActivitiesImplTest"`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 5: Register the workflow package**
+- [ ] **Step 5: Document the activity-only queue — add NO list entry**
 
-In `application.yml`, add to `spring.temporal.workers-auto-discovery.workflow-packages`:
+In `application.yml`, add a comment to the `spring.temporal.workers-auto-discovery` block, in
+the voice of the two already there. **Do not add a `workflow-packages` entry** (see above).
 
 ```yaml
-        # The issue sink. NOTE this is the first ACTIVITY-ONLY task queue in this application:
-        # no @WorkflowImpl names `linear`, so the worker for that queue is created from
-        # LinearActivitiesImpl's @ActivityImpl(taskQueues = ...) alone. Verified in
-        # specs/037-linear-issue-sink/research.md — if that ever stops holding, the symptom is
-        # the usual quiet one: the container is healthy, a producer schedules fileIssue, and the
-        # activity sits in the queue until its schedule-to-close timeout.
+        # `linear` is this application's FIRST ACTIVITY-ONLY task queue and deliberately has no
+        # entry in this list: no @WorkflowImpl names it, and this list drives @WorkflowImpl
+        # scanning only. Its worker is created from LinearActivitiesImpl's
+        # @ActivityImpl(taskQueues = ...) alone, which `register-activity-beans: true` below is
+        # what enables — flipping that setting silently leaves this queue unpolled. Verified
+        # against starter 1.36.0 in specs/037-linear-issue-sink/research.md item 7. If it ever
+        # stops holding, the symptom is the usual quiet one: the container is healthy, a
+        # producer schedules fileIssue, and the activity sits in the queue until its
+        # schedule-to-close timeout.
         #
         # Only `software-factory` sets factory.linear.enabled, so only `software-factory` holds
         # LinearActivitiesImpl and only it polls this queue. The `deployer` never receives
         # LINEAR_API_KEY.
-        - com.simonrowe.factory.linear.workflow
 ```
 
 - [ ] **Step 6: Write the registration gate test**
@@ -3412,7 +3423,11 @@ In `docker-compose.prod.yml`, under the `software-factory` service's `environmen
       LINEAR_API_KEY: ${LINEAR_API_KEY:-}
 ```
 
-Add nothing to the `deployer` service. Add a comment there stating the omission is deliberate, so a future tidy-up does not "fix" it:
+Add nothing to the `deployer` service. **Add a test that fails if someone ever does** — the
+`@ConditionalOnProperty` gate keeps the credential out of the JVM, but nothing today stops a
+compose edit handing `deployer` the key: parse `docker-compose.prod.yml` and assert no `LINEAR_`
+variable appears under the `deployer` service. Then add a comment there stating the omission is
+deliberate, so a future tidy-up does not "fix" it:
 
 ```yaml
       # No LINEAR_* here on purpose. This container holds the Docker socket; the tracker
