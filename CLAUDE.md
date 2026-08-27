@@ -211,6 +211,72 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 039-linear-issue-sink: A sixth `software-factory` module, `com.simonrowe.factory.linear` — a
+  **sink** with no trigger, schedule or webhook of its own, on a new `linear` Temporal task queue.
+  Files findings from `deploy` (failed deploys) and `cvefix` (unfixable CVE components) into
+  Linear exactly once per distinct problem, and stays quiet once a human has declined one.
+  **`linear` is the factory's first activity-only task queue**: verified live against
+  `temporal-spring-boot-starter` that `@ActivityImpl(taskQueues = "linear")` alone gets a worker,
+  with no `@WorkflowImpl` and deliberately no entry in `workflow-packages` for it — so
+  `temporal task-queue describe --task-queue linear` correctly shows **one activity poller and
+  zero workflow pollers**; do not "fix" that shape to match the other five queues. Fingerprint is
+  `sha256("v1:" + producer + ":" + keyParts)` — deploy's key parts are failing phase +
+  `DeployStatus` (not the service, which is not structured anywhere), cvefix's is the component
+  purl alone (`UnfixableFindingRecord`'s existing key). **Bumping `Fingerprint.VERSION` (`v1`)
+  orphans every existing ticket** — a deliberate, one-time cost, never a casual change.
+  Precedence when resolving every issue carrying a fingerprint via Linear's `attachmentsForURL`:
+  **open > (canceled or duplicate) > completed.** Linear ships a `duplicate` state type out of
+  the box and sets `canceledAt` (not `completedAt`) on it — verified live, and not in the
+  original design — so a duplicate-closed ticket suppresses exactly like a canceled one, rather
+  than falling through to `UNKNOWN` (classified open) and having the sink keep commenting on a
+  ticket someone declined. **Reopening a cancelled or duplicate issue un-suppresses it**, because
+  open outranks that band; no config flag exists for this, it is just what the precedence gives
+  you. A regression (fixed, then recurred) files a **new** issue linked to the completed one,
+  because the same fingerprint URL can legally sit on two issues (also verified live). Mongo's
+  `linear_issues` is the audit trail, never the source of truth — state is always re-read from
+  Linear. `attachmentPending` on that record is set true between `issueCreate` and
+  `attachmentCreate` and cleared after, specifically so a retry landing in that gap **repairs by
+  attaching** rather than filing a second ticket for the same problem.
+  **Credential confinement**: `deployer` runs the same image as `software-factory` and holds
+  `/var/run/docker.sock`, so it must never hold `LINEAR_API_KEY`. The **only** thing stopping
+  that is `LinearActivitiesImpl`'s class-level `@ConditionalOnProperty(factory.linear.enabled)` —
+  evaluated by the component scanner, so declaring the class through an explicit `@Bean` method
+  would register it unconditionally and silently ignore the annotation, the same trap
+  `DeployActivitiesImpl` documents. `docker-compose.prod.yml` declares
+  `FACTORY_LINEAR_*`/`LINEAR_API_KEY` only under `software-factory`; a new
+  `DeployerLinearCredentialTest` reads the compose file and fails the build if any variable whose
+  name **contains** `LINEAR` appears under `deployer`, because the Java-side gate alone does not
+  stop a future compose edit handing the credential to the socket-holding container directly.
+  Containing rather than prefixed on purpose: a `LINEAR_` prefix catches `LINEAR_API_KEY` and
+  misses `FACTORY_LINEAR_ENABLED`, the flag that actually registers `LinearActivitiesImpl` in the
+  socket-holding JVM. Both
+  producers carry a request-level `linearFilingEnabled` flag — set by whichever side builds the
+  request from its own configuration, since a `@WorkflowImpl` cannot inject Spring properties —
+  as the primary guard against scheduling `fileIssue` at all while the sink is disabled; the
+  activity's 2-minute `scheduleToCloseTimeout` is only the backstop, because with
+  `factory.linear.enabled=false` nothing polls the `linear` queue and an unguarded schedule would
+  otherwise stall the producing deploy or CVE run until that timeout instead of failing in
+  milliseconds. **The deploy failure path's GitHub issue is gone** — `gh issue list --state all`
+  returned nothing, proving it had never once fired — and the commit comment that replaces it now
+  names the Linear ticket instead. Off by default everywhere; see `docs/runbooks/linear.md`,
+  including two tracked-not-fixed gaps: a `sync-config` or `maintenance-on` deploy failure still
+  files nothing (faithful parity with the dead GitHub path, but the worse case since the
+  automation itself is wedged), and with the sink disabled `DeployWorkflowImpl` still computes
+  the full triage diagnosis via `renderFailure` and then discards it, because that call sits
+  inside the `linearFilingEnabled` guard and `DeployRunRecord` persists no triage field.
+- feedback (PR #99, 2026-08-11 — never previously in this file): the review-feedback loop,
+  `com.simonrowe.factory.feedback`, on the `review-feedback` Temporal task queue, triggered on PR
+  close. Harvests the closed review's conversation with Haiku, writes
+  `software_factory.review_learnings`, and — when the harvest finds lessons — opens
+  `agent-feedback`-labelled guidance PRs (Sonnet) against `agent-setup` and/or the source repo.
+  PRs already labelled `agent-feedback` are never harvested, which is the loop guard stopping the
+  distiller from learning from its own guidance PRs. Master switch `FACTORY_FEEDBACK_ENABLED`,
+  off by default. Needed a GitHub App permission bump (Contents read → read/write) before its
+  image could ship, which is exactly the outage `software-factory-manual-actions.md`'s item 1
+  records: `GitHubCredentials.mintInstallationToken` requests `contents: write` on **every**
+  installation token regardless of which path is minting it, so an unbumped permission 422s token
+  minting for code review too, not just for feedback. See "Review feedback loop" in
+  `docs/runbooks/software-factory.md`.
 - 038-deploy-rollout-fixes-2: The first three merges after auto-deploy went live
   (2026-08-27) deployed **nothing**, with no visible symptom beyond the site staying on
   the old version. Three causes:

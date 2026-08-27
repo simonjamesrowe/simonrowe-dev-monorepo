@@ -26,9 +26,15 @@ import org.springframework.data.mongodb.core.mapping.Document;
  * @param rollbackTaken whether a rollback was attempted
  * @param rollbackStatus how the rollback ended, or null when none was attempted
  * @param maintenancePageLeftUp true when the run ended with the site showing the maintenance page
- * @param issueUrl the reported issue
+ * @param issueUrl the tracked issue this run filed, <strong>in Linear</strong> — not a GitHub
+ *     issue, which is what this field carried before the issue sink replaced that path. Null when
+ *     the sink is disabled, when nothing failed, or when the filing itself failed
  * @param commitCommentUrl the comment posted on the deployed commit
  * @param detail one line summarising the run
+ * @param linearFilingFailed true when the run failed, filing was attempted, and no ticket was
+ *     filed - whatever the cause: the sink unreachable, the rendering of the ticket itself
+ *     failing, or the payload not encoding. All of them are the same fact to a reader, which is
+ *     that a failure went untracked. What this distinguishes is a failure nobody tried to file
  */
 @Document(collection = "deploy_runs")
 public record DeployRunRecord(
@@ -46,7 +52,8 @@ public record DeployRunRecord(
     boolean maintenancePageLeftUp,
     String issueUrl,
     String commitCommentUrl,
-    String detail) {
+    String detail,
+    boolean linearFilingFailed) {
 
   public DeployRunRecord {
     phases = phases == null ? List.of() : List.copyOf(phases);

@@ -5,6 +5,7 @@ import com.simonrowe.factory.deploy.config.DeployTaskQueues;
 import com.simonrowe.factory.deploy.domain.DeployProgress;
 import com.simonrowe.factory.deploy.domain.DeployRequest;
 import com.simonrowe.factory.deploy.workflow.DeployWorkflow;
+import com.simonrowe.factory.linear.config.LinearProperties;
 import io.temporal.api.common.v1.WorkflowExecution;
 import io.temporal.api.enums.v1.WorkflowIdReusePolicy;
 import io.temporal.client.BatchRequest;
@@ -26,11 +27,24 @@ public class DeployWorkflowService {
 
   private final WorkflowClient workflowClient;
   private final DeployProperties properties;
+  private final LinearProperties linearProperties;
 
+  /**
+   * Creates the trigger.
+   *
+   * @param workflowClient the client used to signal-with-start
+   * @param properties the deploy policy carried onto every request
+   * @param linearProperties read here, on the trigger side, because the workflow itself cannot
+   *     inject configuration — and because scheduling a filing on a queue nothing polls would
+   *     stall the deploy
+   */
   public DeployWorkflowService(
-      final WorkflowClient workflowClient, final DeployProperties properties) {
+      final WorkflowClient workflowClient,
+      final DeployProperties properties,
+      final LinearProperties linearProperties) {
     this.workflowClient = workflowClient;
     this.properties = properties;
+    this.linearProperties = linearProperties;
   }
 
   /**
@@ -76,7 +90,8 @@ public class DeployWorkflowService {
             properties.syncConfig(),
             properties.rollbackEnabled(),
             properties.services(),
-            false);
+            false,
+            linearProperties.enabled());
 
     BatchRequest batch = workflowClient.newSignalWithStartRequest();
     batch.add(workflow::run, request);

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.simonrowe.factory.cvefix.config.CveFixProperties;
 import com.simonrowe.factory.cvefix.domain.CveFixRequest;
+import com.simonrowe.factory.linear.config.LinearProperties;
 import io.temporal.api.enums.v1.ScheduleOverlapPolicy;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.client.schedules.Schedule;
@@ -51,11 +52,20 @@ class CveFixScheduleInitializerTest {
 
   @BeforeEach
   void setUp() {
+    initializer = initializer(linearProperties(false));
+  }
+
+  private CveFixScheduleInitializer initializer(final LinearProperties linear) {
     CveFixProperties.Ci ci =
         new CveFixProperties.Ci(Duration.ofMinutes(7), 5, Duration.ofHours(4), List.of("evaluate"));
     CveFixProperties properties =
         new CveFixProperties(true, null, null, null, null, null, null, null, null, null, ci);
-    initializer = new CveFixScheduleInitializer(scheduleClient, properties);
+    return new CveFixScheduleInitializer(scheduleClient, properties, linear);
+  }
+
+  private static LinearProperties linearProperties(final boolean enabled) {
+    return new LinearProperties(
+        enabled, null, null, null, null, false, null, null);
   }
 
   private Schedule createdSchedule() {
@@ -136,7 +146,19 @@ class CveFixScheduleInitializerTest {
     // The workflow cannot inject CveFixProperties, so the CI settings have to travel in the
     // request this initializer schedules.
     assertThat(action.getArguments().get(0, CveFixRequest.class))
-        .isEqualTo(new CveFixRequest(false, Duration.ofMinutes(7), 5, Duration.ofHours(4)));
+        .isEqualTo(new CveFixRequest(false, Duration.ofMinutes(7), 5, Duration.ofHours(4), false));
+  }
+
+  @Test
+  void carriesTheLinearSinkFlagFromConfigurationIntoTheScheduledRequest() {
+    // Same reason as the CI settings: the workflow cannot inject properties. And with the sink
+    // disabled nothing polls the `linear` queue, so the flag has to reach the workflow or a run
+    // would stall on an activity nobody executes.
+    initializer(linearProperties(true)).run(null);
+
+    ScheduleActionStartWorkflow action =
+        (ScheduleActionStartWorkflow) createdSchedule().getAction();
+    assertThat(action.getArguments().get(0, CveFixRequest.class).linearFilingEnabled()).isTrue();
   }
 
   @Test

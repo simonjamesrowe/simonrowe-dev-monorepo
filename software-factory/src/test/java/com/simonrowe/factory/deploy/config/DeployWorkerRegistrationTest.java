@@ -12,6 +12,7 @@ import com.simonrowe.factory.deploy.api.DeployWorkflowService;
 import com.simonrowe.factory.deploy.persistence.DeployIndexInitializer;
 import com.simonrowe.factory.deploy.persistence.DeployRunRepository;
 import com.simonrowe.factory.deploy.workflow.DeployActivitiesImpl;
+import com.simonrowe.factory.linear.config.LinearProperties;
 import io.temporal.client.WorkflowClient;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
@@ -129,7 +130,9 @@ class DeployWorkerRegistrationTest {
    */
   @Configuration
   @ComponentScan("com.simonrowe.factory.deploy")
-  @EnableConfigurationProperties(DeployProperties.class)
+  // LinearProperties too: the trigger reads factory.linear.enabled to decide whether a failure is
+  // filed, because a @WorkflowImpl cannot inject configuration of its own.
+  @EnableConfigurationProperties({DeployProperties.class, LinearProperties.class})
   static class ScannedDeployPackage {
 
     @Bean

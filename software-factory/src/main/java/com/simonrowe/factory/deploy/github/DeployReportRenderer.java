@@ -18,7 +18,9 @@ import org.springframework.stereotype.Component;
 public class DeployReportRenderer {
 
   /**
-   * The issue title.
+   * The issue title, now the Linear issue's title.
+   *
+   * <p>Unchanged by the move off GitHub Issues: it already rendered exactly what a tracker wants.
    *
    * @param record the run
    * @param triage the diagnosis, or null when none was produced
@@ -92,13 +94,18 @@ public class DeployReportRenderer {
   /**
    * The commit comment: the same facts, shorter, because it is read in passing.
    *
+   * <p>This is the in-context breadcrumb on the merge that broke production, and the one part of
+   * the report that stayed on GitHub. It names the Linear ticket rather than repeating its body.
+   *
    * @param record the run
    * @param triage the diagnosis, or null when none was produced
-   * @param issueUrl the issue this run opened, or null when it could not be opened
+   * @param linearIssueUrl the Linear issue this run filed, or null when nothing was filed
    * @return markdown
    */
   public String commitComment(
-      final DeployRunRecord record, final DeployActivities.Triage triage, final String issueUrl) {
+      final DeployRunRecord record,
+      final DeployActivities.Triage triage,
+      final String linearIssueUrl) {
     StringBuilder body = new StringBuilder();
     body.append(siteState(record)).append("\n\n");
     if (triage != null) {
@@ -107,8 +114,8 @@ public class DeployReportRenderer {
         body.append(triage.suggestedNextStep()).append("\n\n");
       }
     }
-    if (issueUrl != null && !issueUrl.isBlank()) {
-      body.append("Full diagnosis: ").append(issueUrl).append("\n");
+    if (linearIssueUrl != null && !linearIssueUrl.isBlank()) {
+      body.append("Full diagnosis, tracked in Linear: ").append(linearIssueUrl).append("\n");
     }
     return body.toString();
   }

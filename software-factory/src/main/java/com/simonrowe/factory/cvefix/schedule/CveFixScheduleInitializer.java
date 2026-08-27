@@ -4,6 +4,7 @@ import com.simonrowe.factory.cvefix.config.CveFixProperties;
 import com.simonrowe.factory.cvefix.config.CveFixTaskQueues;
 import com.simonrowe.factory.cvefix.domain.CveFixRequest;
 import com.simonrowe.factory.cvefix.workflow.CveFixWorkflow;
+import com.simonrowe.factory.linear.config.LinearProperties;
 import io.temporal.api.enums.v1.ScheduleOverlapPolicy;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.client.schedules.Schedule;
@@ -70,6 +71,7 @@ public class CveFixScheduleInitializer implements ApplicationRunner {
 
   private final ScheduleClient scheduleClient;
   private final CveFixProperties properties;
+  private final LinearProperties linearProperties;
 
   /**
    * Creates the initializer.
@@ -77,11 +79,16 @@ public class CveFixScheduleInitializer implements ApplicationRunner {
    * @param scheduleClient the Temporal schedule client, auto-configured by the Temporal starter
    * @param properties the bound {@code factory.cvefix} configuration, whose CI settings are copied
    *     into the scheduled request
+   * @param linearProperties the bound {@code factory.linear} configuration, whose enabled flag is
+   *     copied into the scheduled request for the same reason
    */
   public CveFixScheduleInitializer(
-      final ScheduleClient scheduleClient, final CveFixProperties properties) {
+      final ScheduleClient scheduleClient,
+      final CveFixProperties properties,
+      final LinearProperties linearProperties) {
     this.scheduleClient = scheduleClient;
     this.properties = properties;
+    this.linearProperties = linearProperties;
   }
 
   /**
@@ -135,7 +142,8 @@ public class CveFixScheduleInitializer implements ApplicationRunner {
                         false,
                         properties.ci().pollInterval(),
                         properties.ci().repairBudget(),
-                        properties.ci().maxWait()))
+                        properties.ci().maxWait(),
+                        linearProperties.enabled()))
                 .build())
         .setSpec(
             ScheduleSpec.newBuilder().setIntervals(List.of(new ScheduleIntervalSpec(INTERVAL)))

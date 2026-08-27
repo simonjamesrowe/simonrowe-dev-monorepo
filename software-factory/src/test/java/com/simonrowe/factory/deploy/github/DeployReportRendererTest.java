@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 class DeployReportRendererTest {
 
   private static final String SHA = "0123456789abcdef0123456789abcdef01234567";
+  private static final String LINEAR_URL = "https://linear.app/simonrowe/issue/SIM-9";
 
   private final DeployReportRenderer renderer = new DeployReportRenderer();
 
@@ -49,7 +50,8 @@ class DeployReportRendererTest {
         pageLeftUp,
         null,
         null,
-        "detail");
+        "detail",
+        false);
   }
 
   private static SyncOutcome applied() {
@@ -180,7 +182,7 @@ class DeployReportRendererTest {
             Instant.parse("2026-08-26T10:00:00Z"), Instant.parse("2026-08-26T10:05:00Z"),
             DeployStatus.FAILED,
             List.of(new PhaseOutcome(DeployPhase.VERIFY, false, 1, "a | b | c", 1L)),
-            applied(), false, null, false, null, null, "detail");
+            applied(), false, null, false, null, null, "detail", false);
 
     assertThat(renderer.issueBody(run, null)).contains("a \\| b \\| c");
   }
@@ -262,28 +264,42 @@ class DeployReportRendererTest {
   // ---------------------------------------------------------------------------
 
   @Test
-  void theCommitCommentIsShortAndLinksTheIssue() {
+  void theCommitCommentIsShortAndNamesTheLinearTicket() {
     String comment =
         renderer.commitComment(
             record(DeployStatus.ROLLED_BACK, true, DeployStatus.ROLLED_BACK, false, applied()),
             triage(),
-            "https://github.com/o/r/issues/1");
+            LINEAR_URL);
 
     assertThat(comment)
         .contains("The site is up, on the previous version")
         .contains("backend never became healthy")
-        .contains("https://github.com/o/r/issues/1");
-    // Short: the long form belongs in the issue.
+        .contains("Linear")
+        .contains(LINEAR_URL);
+    // Short: the long form belongs in the ticket.
     assertThat(comment).doesNotContain("## Phases");
   }
 
   @Test
-  void theCommitCommentOmitsTheIssueLinkWhenTheIssueCouldNotBeOpened() {
+  void theCommitCommentOmitsTheTicketLinkWhenNothingWasFiled() {
+    // Null covers three cases that must all read the same way in the comment: the sink disabled,
+    // the filing having failed, and a deploy with nothing to file.
     String comment =
         renderer.commitComment(
             record(DeployStatus.ROLLED_BACK, true, DeployStatus.ROLLED_BACK, false, applied()),
             triage(),
             null);
+
+    assertThat(comment).doesNotContain("Full diagnosis").doesNotContain("Linear");
+  }
+
+  @Test
+  void theCommitCommentOmitsTheTicketLinkWhenTheUrlIsBlank() {
+    String comment =
+        renderer.commitComment(
+            record(DeployStatus.ROLLED_BACK, true, DeployStatus.ROLLED_BACK, false, applied()),
+            triage(),
+            "  ");
 
     assertThat(comment).doesNotContain("Full diagnosis");
   }

@@ -14,7 +14,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.AfterEach;
@@ -24,7 +23,6 @@ import org.junit.jupiter.api.Test;
 class DeployReportGatewayTest {
 
   private static final String SHA = "0123456789abcdef0123456789abcdef01234567";
-  private static final String ISSUES_PATH = "/repos/simonjamesrowe/simonrowe-dev-monorepo/issues";
   private static final String COMMIT_COMMENTS_PATH =
       "/repos/simonjamesrowe/simonrowe-dev-monorepo/commits/" + SHA + "/comments";
 
@@ -102,28 +100,6 @@ class DeployReportGatewayTest {
   }
 
   @Test
-  void opensAnIssueAndReturnsItsUrl() {
-    responses.put(
-        "POST " + ISSUES_PATH, "{\"number\": 5, \"html_url\": \"https://github.com/o/r/issues/5\"}");
-
-    String url = gateway().openIssue("Deploy failed", "body", List.of("deploy-failure"), 1L);
-
-    assertThat(url).isEqualTo("https://github.com/o/r/issues/5");
-    assertThat(seenBodies.get("POST " + ISSUES_PATH))
-        .contains("\"title\":\"Deploy failed\"")
-        .contains("\"labels\":[\"deploy-failure\"]");
-  }
-
-  @Test
-  void omitsTheLabelsFieldWhenThereAreNone() {
-    responses.put("POST " + ISSUES_PATH, "{\"html_url\": \"https://github.com/o/r/issues/5\"}");
-
-    gateway().openIssue("Deploy failed", "body", List.of(), 1L);
-
-    assertThat(seenBodies.get("POST " + ISSUES_PATH)).doesNotContain("labels");
-  }
-
-  @Test
   void commentsOnCommitAndReturnsItsUrl() {
     responses.put(
         "POST " + COMMIT_COMMENTS_PATH,
@@ -137,15 +113,8 @@ class DeployReportGatewayTest {
 
   @Test
   void throwsOnNonSuccessStatusRatherThanReportingNothingQuietly() {
-    statuses.put("POST " + ISSUES_PATH, 422);
-
-    assertThatThrownBy(() -> gateway().openIssue("t", "b", List.of(), 1L))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("422");
-  }
-
-  @Test
-  void commitCommentFailureIsAlsoLoud() {
+    // Loud, deliberately: the caller catches this and records that it could not comment. Silently
+    // returning a null URL would make a lost report indistinguishable from a posted one.
     statuses.put("POST " + COMMIT_COMMENTS_PATH, 500);
 
     assertThatThrownBy(() -> gateway().commentOnCommit(SHA, "b", 1L))

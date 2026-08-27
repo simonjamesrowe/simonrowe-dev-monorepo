@@ -30,6 +30,8 @@ import com.simonrowe.factory.cvefix.github.CveFixPrGateway;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRepository;
 import com.simonrowe.factory.cvefix.persistence.FindingSuppressor;
+import com.simonrowe.factory.cvefix.persistence.UnfixableFindingRecord;
+import com.simonrowe.factory.cvefix.persistence.UnfixableFindingRepository;
 import com.simonrowe.factory.git.RepositoryWorkspace;
 import com.simonrowe.factory.git.RepositoryWorkspaceFactory;
 import java.time.Instant;
@@ -54,6 +56,25 @@ class CveFixActivitiesImplTest {
       new CveFixActivitiesImpl(
           dependencyTrackClient, suppressor, workspaceFactory, credentials, fixEngine, prGateway,
           ciStatusGateway, runRepository, properties());
+
+  /**
+   * The store behind {@link #suppressingActivities}, so a test can seed what an earlier run
+   * already recorded.
+   */
+  private final UnfixableFindingRepository unfixableRepository =
+      mock(UnfixableFindingRepository.class);
+
+  /**
+   * A second adapter over a <em>real</em> {@link FindingSuppressor}.
+   *
+   * <p>"Which components were newly recorded" is decided by comparing this run's fingerprints
+   * against the stored ones, so a mocked suppressor would only be asserting the stub. The rest of
+   * the class keeps the mock, because those tests are about delegation.
+   */
+  private final CveFixActivitiesImpl suppressingActivities =
+      new CveFixActivitiesImpl(
+          dependencyTrackClient, new FindingSuppressor(unfixableRepository), workspaceFactory,
+          credentials, fixEngine, prGateway, ciStatusGateway, runRepository, properties());
 
   @Test
   void fetchActionableFindingsGroupsThenSuppresses() {
@@ -244,6 +265,57 @@ class CveFixActivitiesImplTest {
     activities.recordUnfixable(unfixable, components);
 
     verify(suppressor).record(unfixable, components);
+  }
+
+  @Test
+  void returnsOnlyTheComponentsItNewlyRecorded() {
+    // One component already recorded with the same fingerprint, one with a different fingerprint,
+    // one never seen. Only the last two are new information and only they should file.
+    givenStored("pkg:maven/a/b@1", "pkg:maven/a/b@1|CVE-1");
+    givenStored("pkg:maven/c/d@1", "pkg:maven/c/d@1|CVE-OLD");
+
+    List<UnfixableComponent> newlyRecorded =
+        suppressingActivities.recordUnfixable(
+            List.of(
+                unfixable("pkg:maven/a/b@1"),
+                unfixable("pkg:maven/c/d@1"),
+                unfixable("pkg:npm/e@1")),
+            List.of(
+                componentFindings("pkg:maven/a/b@1", "CVE-1"),
+                componentFindings("pkg:maven/c/d@1", "CVE-NEW"),
+                componentFindings("pkg:npm/e@1", "CVE-2")));
+
+    assertThat(newlyRecorded)
+        .extracting(UnfixableComponent::purl)
+        .containsExactlyInAnyOrder("pkg:maven/c/d@1", "pkg:npm/e@1");
+  }
+
+  @Test
+  void repeatedGiveUpOnUnchangedFindingsRecordsNothingNew() {
+    // Without this the daily schedule would comment on the same ticket every 24 hours forever.
+    givenStored("pkg:maven/a/b@1", "pkg:maven/a/b@1|CVE-1");
+
+    assertThat(
+            suppressingActivities.recordUnfixable(
+                List.of(unfixable("pkg:maven/a/b@1")),
+                List.of(componentFindings("pkg:maven/a/b@1", "CVE-1"))))
+        .isEmpty();
+  }
+
+  private void givenStored(final String purl, final String fingerprint) {
+    when(unfixableRepository.findByPurl(purl))
+        .thenReturn(
+            Optional.of(
+                new UnfixableFindingRecord(
+                    purl, purl, fingerprint, List.of(), "no fix published", Instant.EPOCH)));
+  }
+
+  private static UnfixableComponent unfixable(final String purl) {
+    return new UnfixableComponent(purl, List.of(), "no fix published");
+  }
+
+  private static ComponentFindings componentFindings(final String purl, final String... ids) {
+    return new ComponentFindings(purl, "name", "1.0", List.of(ids), List.of());
   }
 
   @Test

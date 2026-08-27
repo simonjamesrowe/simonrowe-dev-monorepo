@@ -171,27 +171,26 @@ public class DeployActivitiesImpl implements DeployActivities {
 
   @Override
   public Report report(
-      final DeployRunRecord record, final Triage triage, final Long installationId) {
-    String issueUrl = null;
+      final DeployRunRecord record,
+      final Triage triage,
+      final Long installationId,
+      final String linearIssueUrl) {
     String commentUrl = null;
-    try {
-      issueUrl =
-          reportGateway.openIssue(
-              renderer.issueTitle(record, triage),
-              renderer.issueBody(record, triage),
-              List.of("deploy-failure"),
-              installationId);
-    } catch (RuntimeException exception) {
-      LOG.warn("Could not open the deploy-failure issue", exception);
-    }
     try {
       commentUrl =
           reportGateway.commentOnCommit(
-              record.sha(), renderer.commitComment(record, triage, issueUrl), installationId);
+              record.sha(),
+              renderer.commitComment(record, triage, linearIssueUrl),
+              installationId);
     } catch (RuntimeException exception) {
       LOG.warn("Could not comment on the deployed commit", exception);
     }
-    return new Report(issueUrl, commentUrl);
+    return new Report(commentUrl);
+  }
+
+  @Override
+  public Rendered renderFailure(final DeployRunRecord record, final Triage triage) {
+    return new Rendered(renderer.issueTitle(record, triage), renderer.issueBody(record, triage));
   }
 
   @Override

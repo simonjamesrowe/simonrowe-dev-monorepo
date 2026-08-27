@@ -126,6 +126,46 @@ Deliveries) shows the `workflow_run` events and the `202` responses, including
 the `{"status":"ignored"}` ones for `requested` and `in_progress` — those are
 expected and correct.
 
+## 4. Linear issue sink prerequisites — **done, narrower production key recommended**
+
+The [Linear issue sink](linear.md) needs three things a human must set up in
+Linear before `FACTORY_LINEAR_ENABLED` is ever turned on anywhere. All three
+were provisioned during the design's research spike against team `SIM`
+(`specs/039-linear-issue-sink/research.md`).
+
+1. **Team exists, with Triage enabled — done.** Triage is a per-team toggle,
+   off by default, and the whole suppression design depends on it (an
+   `issueCreate` naming the triage state fails outright on a team with none).
+   `teamUpdate(input:{triageEnabled:true})` was run against team `SIM`; the
+   `Triage` state now exists on it.
+2. **Labels `factory:deploy` and `factory:cvefix` — done.** Both created on
+   team `SIM` during the same spike.
+3. **API key minted and added to prod `.env` as `LINEAR_API_KEY` — outstanding.**
+
+   **Do not reuse the key from the research spike.** It carries **Read +
+   Write + Create issues + Create comments**, team-limited — which is
+   everything the sink calls — but `teamUpdate` *also* succeeded against it,
+   which means it carries **Admin** scope on top of that. The sink never calls
+   `teamUpdate` or anything else Admin-only, so running production on that key
+   would be handing a webhook-adjacent process more privilege than it uses.
+
+   **Do this:** mint a **second** key scoped to the same four permissions
+   (Read, Write, Create issues, Create comments), team-limited to `SIM`, with
+   **no** Admin scope, and put that one in the prod `.env` as
+   `LINEAR_API_KEY`. Keep `.env` at `0600`.
+
+Two probe issues (SIM-5, SIM-6) created during the spike were deleted, and
+`attachmentsForURL` for their fingerprint now returns zero nodes — nothing
+left behind for a future filing to trip over.
+
+### Verifying it
+
+Once the narrower key is in place and `FACTORY_LINEAR_ENABLED=true`, follow the
+[rollout order in linear.md](linear.md#rollout-order): dry-run a `cvefix`
+finding first and confirm `linear_issues` records `FILED_NEW` with no ticket
+actually created, then clear dry-run and confirm a real filing appears in
+Linear under team `SIM`, in Triage, labelled correctly.
+
 ## What is *not* a manual action
 
 - **Deploying `software-factory`.** Handled by auto-deploy on merge since

@@ -310,6 +310,13 @@ services:
       # startup to Dependency-Track would be a regression.
       DEPENDENCYTRACK_BASE_URL: ${DEPENDENCYTRACK_BASE_URL:-http://dependencytrack-apiserver:8080}
       FACTORY_MONGODB_URI: mongodb://mongodb:27017/software_factory
+      # The issue sink. Off by default. Deliberately NOT set on `deployer`, which runs this
+      # same image: that container holds /var/run/docker.sock and must hold as few other
+      # credentials as possible. See docs/runbooks/linear.md.
+      FACTORY_LINEAR_ENABLED: ${FACTORY_LINEAR_ENABLED:-false}
+      FACTORY_LINEAR_TEAM_KEY: ${FACTORY_LINEAR_TEAM_KEY:-}
+      FACTORY_LINEAR_DRY_RUN: ${FACTORY_LINEAR_DRY_RUN:-false}
+      LINEAR_API_KEY: ${LINEAR_API_KEY:-}
     volumes:
       - ${GITHUB_APP_PRIVATE_KEY_HOST_PATH:?set GITHUB_APP_PRIVATE_KEY_HOST_PATH in .env}:/run/secrets/github-app.pem:ro
       - software-factory-workspace:/workspace
@@ -479,6 +486,11 @@ services:
       # operator does after enabling it would be to hit "script not found".
       FACTORY_PLATFORM_BACKUP_SCRIPT: ${DEPLOY_DIR:-/home/simonrowe/workspace/simonjamesrowe/simonrowe-dev-monorepo}/scripts/backup-platform.sh
       FACTORY_PLATFORM_BACKUP_REPO_DIR: ${DEPLOY_DIR:-/home/simonrowe/workspace/simonjamesrowe/simonrowe-dev-monorepo}
+      # No variable whose name contains LINEAR here, on purpose - not the key and not
+      # FACTORY_LINEAR_ENABLED, which is what would register the sink in this JVM at all. This
+      # container holds the Docker socket; the tracker credential lives only on
+      # `software-factory`. DeployerLinearCredentialTest fails the build on either. See
+      # docs/runbooks/linear.md.
     # The socket below is root:docker 0660 on the host, and this container runs as
     # `factory` (uid 10003) with no supplementary groups - so mounting it is not on its
     # own enough to be able to use it. Without this the container is healthy, registers
