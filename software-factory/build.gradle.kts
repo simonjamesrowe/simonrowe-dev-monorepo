@@ -27,6 +27,17 @@ jacoco {
 //
 // This is what makes deployer drift visible. `deployer` excludes itself from its own
 // recreate list, so it does not self-update; without a reported SHA that goes unnoticed.
+//
+// Docker builds this module (Dockerfile.software-factory) WITHOUT a .git directory:
+// .dockerignore excludes it deliberately, and shipping the whole repo history into a build
+// context that ends up baked into a shipped image is the wrong trade. So the git-derived
+// providers below are a FALLBACK, not the primary source. GIT_SHA / GIT_COMMIT_TIME /
+// GIT_COMMIT_SUBJECT environment variables win first: publish.yml's
+// `publish-software-factory` job resolves them from its full-history checkout
+// (fetch-depth: 0) and passes them in as docker/build-push-action build-args, which
+// Dockerfile.software-factory's build stage re-exposes as ENV before the Gradle invocation
+// that reads them here. A bare `./gradlew build` with no env vars set still works, falling
+// through to git (if `.git` is present) or the "" / "unknown" / "0" defaults below.
 val factoryGitDir = rootProject.file(".git")
 
 fun factoryGitText(vararg args: String): Provider<String> =
@@ -40,11 +51,12 @@ fun factoryGitText(vararg args: String): Provider<String> =
         }.standardOutput.asText
     }
 
-val factoryHeadSha: Provider<String> = factoryGitText("rev-parse", "HEAD").map { it.trim() }
-val factoryHeadSubject: Provider<String> =
-    factoryGitText("log", "-1", "--format=%s").map { it.trim() }
-val factoryHeadEpoch: Provider<String> =
-    factoryGitText("log", "-1", "--format=%ct").map { it.trim() }
+val factoryHeadSha: Provider<String> = providers.environmentVariable("GIT_SHA")
+    .orElse(factoryGitText("rev-parse", "HEAD").map { it.trim() })
+val factoryHeadSubject: Provider<String> = providers.environmentVariable("GIT_COMMIT_SUBJECT")
+    .orElse(factoryGitText("log", "-1", "--format=%s").map { it.trim() })
+val factoryHeadEpoch: Provider<String> = providers.environmentVariable("GIT_COMMIT_TIME")
+    .orElse(factoryGitText("log", "-1", "--format=%ct").map { it.trim() })
 
 springBoot {
     buildInfo {

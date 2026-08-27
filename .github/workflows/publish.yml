@@ -111,6 +111,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # .dockerignore excludes .git/ from the build context on purpose (shipping full repo
+      # history into an image that gets published is the wrong trade), so
+      # software-factory/build.gradle.kts's buildInfo block cannot read it from inside the
+      # Docker build the way backend's bootBuildImage reads it directly on the runner. Resolve
+      # it here instead and pass it in as build-args below. The delimited form for `subject`
+      # guards against a commit subject containing characters that would otherwise break a
+      # plain KEY=VALUE line written to GITHUB_OUTPUT.
+      - name: Resolve commit metadata
+        id: commit-meta
+        run: |
+          {
+            echo "time=$(git log -1 --format=%ct)"
+            echo "subject<<COMMIT_SUBJECT_EOF"
+            git log -1 --format=%s
+            echo "COMMIT_SUBJECT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and push software factory image
         uses: docker/build-push-action@v6
         with:
@@ -120,6 +137,10 @@ jobs:
           tags: |
             ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory:latest
             ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory:${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            GIT_COMMIT_TIME=${{ steps.commit-meta.outputs.time }}
+            GIT_COMMIT_SUBJECT=${{ steps.commit-meta.outputs.subject }}
 
   sbom:
     name: Publish SBOMs to Dependency-Track
