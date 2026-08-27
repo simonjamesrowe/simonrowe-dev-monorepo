@@ -1,6 +1,7 @@
 package com.simonrowe.admin;
 
 import com.simonrowe.blog.BlogContentType;
+import com.simonrowe.common.LogSafe;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -137,7 +138,7 @@ public class AdminBlogController {
     );
 
     Blog saved = blogRepository.save(updated);
-    LOG.info("Updated blog: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Updated blog: id={}, user={}", LogSafe.value(id), jwt.getSubject());
     contentChangePublisher.publishUpdated(
         com.simonrowe.events.ContentChangeEvent.ContentType.BLOG, saved.id());
     return toDto(saved);
@@ -153,7 +154,7 @@ public class AdminBlogController {
     blogRepository.delete(blog);
     contentChangePublisher.publishDeleted(
         com.simonrowe.events.ContentChangeEvent.ContentType.BLOG, id);
-    LOG.info("Deleted blog: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Deleted blog: id={}, user={}", LogSafe.value(id), jwt.getSubject());
   }
 
   private Blog findById(final String id) {
