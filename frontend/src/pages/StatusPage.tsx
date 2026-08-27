@@ -50,7 +50,7 @@ export function StatusPage() {
       </header>
 
       <section className="status-page__section">
-        <h2 className="status-page__section-title">Currently running</h2>
+        <h2 className="status-page__section-title">Running now</h2>
         {loading ? <LoadingIndicator /> : null}
         {error ? <ErrorMessage message={error} onRetry={retry} /> : null}
         <DriftWarning services={services} />
@@ -65,7 +65,7 @@ export function StatusPage() {
         <h2 className="status-page__section-title">Platform components</h2>
         <p className="status-page__note">
           The third-party images the production compose file declares. Pinned tags are what is
-          deployed; an unpinned tag means the running digest cannot be reported.
+          running; a floating tag means the running digest is not pinned and cannot be reported.
         </p>
         <ComponentTable components={status?.components ?? []} />
       </section>
@@ -73,11 +73,10 @@ export function StatusPage() {
       <section className="status-page__section">
         <h2 className="status-page__section-title">Recent releases</h2>
         <p className="status-page__note">
-          Every merge to <code>main</code> publishes an image, so one commit is one release. Only
-          the badged entry below is what is deployed today; every other entry records what was{' '}
-          <strong>published</strong>, not deployed — deploys are manual, so there is no
-          deployment history to report. Summaries are written by a model when a release is first
-          seen.
+          Every merge to <code>main</code> publishes an image, so one commit is one release.
+          Entries other than the one running now record what was <strong>published</strong>,
+          not what was deployed — deploys are manual, so there is no deployment history to
+          report. Summaries are written by a model when a release is first seen.
         </p>
         {releasesLoading ? <LoadingIndicator /> : null}
         {releasesError ? (

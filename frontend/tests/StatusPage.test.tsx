@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -81,6 +81,26 @@ const RELEASES: Release[] = [
     summary: null,
     summaryStatus: 'PENDING',
   },
+  {
+    sha: 'deadbeefabcdef0123456789abcdef0123456789a',
+    shortSha: 'deadbee',
+    type: 'fix',
+    subject: 'fix: patch a broken thing (#120)',
+    commitTime: '2026-08-20T10:00:00Z',
+    running: false,
+    summary: null,
+    summaryStatus: 'FAILED',
+  },
+  {
+    sha: 'cafebabeabcdef0123456789abcdef0123456789a',
+    shortSha: 'cafebab',
+    type: 'chore',
+    subject: 'chore: tidy something (#121)',
+    commitTime: '2026-08-19T10:00:00Z',
+    running: false,
+    summary: null,
+    summaryStatus: 'GENERATING',
+  },
 ]
 
 function renderPage() {
@@ -111,6 +131,13 @@ describe('StatusPage', () => {
     expect(screen.getByText('frontend')).toBeInTheDocument()
     expect(screen.getByText('software-factory')).toBeInTheDocument()
     expect(screen.getByText('deployer')).toBeInTheDocument()
+
+    // Backend first, frontend adjacent second: the two versions that most often drift
+    // sit next to each other. A future reorder of the services array should fail here.
+    const names = Array.from(document.querySelectorAll('.service-card__name')).map(
+      (node) => node.textContent,
+    )
+    expect(names).toEqual(['backend', 'frontend', 'software-factory', 'deployer'])
   })
 
   it('shows an unreachable service as not reporting rather than hiding it', () => {
@@ -155,7 +182,14 @@ describe('StatusPage', () => {
   it('labels a floating tag rather than presenting it as a version', () => {
     renderPage()
 
-    expect(screen.getByText(/floating/i)).toBeInTheDocument()
+    // Scoped to the floating-badge element rather than a page-wide /floating/i: the
+    // components note explaining the badge uses the same word, and a page-wide query
+    // would match both.
+    const row = screen.getByText('alloy').closest('.component-table__row')
+    expect(row).not.toBeNull()
+    const badge = row?.querySelector('.component-table__tag--floating')
+    expect(badge).not.toBeNull()
+    expect(badge).toHaveTextContent(/floating/i)
   })
 
   it('renders the AI release note for a ready release', () => {
@@ -169,16 +203,43 @@ describe('StatusPage', () => {
   it('renders a pending release from its subject with a pending note', () => {
     renderPage()
 
-    expect(
-      screen.getByText('feat: deploy automatically on merge to main (#116)'),
-    ).toBeInTheDocument()
-    expect(screen.getByText(/summary pending/i)).toBeInTheDocument()
+    // Scoped to this release's own entry rather than a page-wide /summary pending/i:
+    // the FAILED/GENERATING fixtures below also render a pending note (or don't), so a
+    // page-wide query would match more than this one release.
+    const entry = screen
+      .getByText('feat: deploy automatically on merge to main (#116)')
+      .closest('.release')
+    expect(entry).not.toBeNull()
+    expect(within(entry as HTMLElement).getByText(/summary pending/i)).toBeInTheDocument()
+  })
+
+  it('renders a FAILED release from its subject with no pending note', () => {
+    renderPage()
+
+    const entry = screen.getByText('fix: patch a broken thing (#120)').closest('.release')
+    expect(entry).not.toBeNull()
+    expect(within(entry as HTMLElement).queryByText(/summary pending/i)).not.toBeInTheDocument()
+  })
+
+  it('renders a GENERATING release with a pending note, same as PENDING', () => {
+    renderPage()
+
+    const entry = screen.getByText('chore: tidy something (#121)').closest('.release')
+    expect(entry).not.toBeNull()
+    expect(within(entry as HTMLElement).getByText(/summary pending/i)).toBeInTheDocument()
   })
 
   it('badges the running release', () => {
     renderPage()
 
-    expect(screen.getByText(/running now/i)).toBeInTheDocument()
+    // Scoped to the running release's own entry rather than a page-wide /running now/i:
+    // the releases note explaining the badge also says "the one running now", and a
+    // page-wide query would match both.
+    const entry = screen
+      .getByText('docs: overhaul the README (#118)')
+      .closest('.release')
+    expect(entry).not.toBeNull()
+    expect(within(entry as HTMLElement).getByText(/running now/i)).toBeInTheDocument()
   })
 
   it('links each release to its GitHub commit', () => {
