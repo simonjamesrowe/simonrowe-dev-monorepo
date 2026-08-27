@@ -4,13 +4,17 @@
 #
 # Covers the four Postgres databases in langfuse-db (langfuse, dtrack, temporal,
 # temporal_visibility) and the ClickHouse `default` database. The archives are
-# produced by the backend's nightly PlatformBackupService and live in the
+# produced by scripts/backup-platform.sh — run nightly in the `deployer` by the
+# `platform-backup` Temporal workflow, or by hand — and live in the
 # `simonrowe-platform-backups` Google Drive folder.
 #
-# WHY THIS IS A SHELL SCRIPT AND NOT AN ADMIN BUTTON
-#   The scenario that motivates restore is "the Pi died, here is a new one". In
-#   that scenario the backend is the thing being rebuilt, so a restore button
-#   inside it is the wrong tool. This works whether or not the application runs.
+# WHY BOTH HALVES ARE SHELL SCRIPTS AND NOT ADMIN BUTTONS
+#   Capture: constitution 2.0.0 forbids the container that terminates public traffic
+#   from holding the Docker socket or launching a host process, and the capture needs
+#   `docker exec` into the datastores.
+#   Restore: the scenario that motivates it is "the Pi died, here is a new one", where
+#   the backend is the thing being rebuilt — so a button inside it is the wrong tool.
+#   This works whether or not the application runs.
 #
 # USAGE
 #   restore-platform.sh --list
@@ -131,7 +135,7 @@ run_clickhouse() {
 # ---------------------------------------------------------------------------
 
 usage() {
-  sed -n '3,38p' "$0" | sed 's|^# \{0,1\}||'
+  sed -n '3,41p' "$0" | sed 's|^# \{0,1\}||'
 }
 
 parse_args() {
