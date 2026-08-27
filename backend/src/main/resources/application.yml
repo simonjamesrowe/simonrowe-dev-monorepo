@@ -429,3 +429,17 @@ langfuse:
   environment: ${LANGFUSE_ENVIRONMENT:development}
   scores-enabled: ${LANGFUSE_SCORES_ENABLED:false}
   content-capture-enabled: ${LANGFUSE_CONTENT_CAPTURE_ENABLED:true}
+
+# The /status page's changelog. Summaries are generated at INGEST — when a release record is
+# created — never on view: a public endpoint that called an LLM per request would be both a
+# cost problem and an abuse vector.
+platform:
+  releases:
+    summaries:
+      # A one-off backfill of 50 releases costs 50 small calls; steady state is one per merge.
+      enabled: ${PLATFORM_RELEASE_SUMMARIES_ENABLED:true}
+      # 3 per tick every 2 minutes clears a 50-release backfill in ~35 minutes without
+      # holding a scheduler thread for long or spiking the OpenAI bill in one burst.
+      batch-size: 3
+      max-attempts: 3
+      model: ${PLATFORM_RELEASE_SUMMARY_MODEL:gpt-5.6-luna}
