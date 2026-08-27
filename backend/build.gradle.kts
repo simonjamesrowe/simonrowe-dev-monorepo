@@ -1,3 +1,6 @@
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+
 plugins {
     id("org.springframework.boot")
     id("io.spring.dependency-management")
@@ -32,6 +35,111 @@ checkstyle {
 
 jacoco {
     toolVersion = libs.versions.jacoco.get()
+}
+
+// ---------------------------------------------------------------------------
+// Build metadata baked into the image, served by GET /api/platform/status.
+//
+// `time` is pinned to the COMMIT timestamp, never wall-clock. A wall-clock value
+// changes on every build, which would invalidate :backend:bootJar in the Gradle
+// build cache — the cache ci-build-speedup only just got working for the first
+// time. The commit time is both deterministic and the more meaningful value.
+//
+// Every git read degrades to a constant rather than failing the build: the Docker
+// build context and a source tarball both lack .git, and `./gradlew build` must
+// still work there.
+// ---------------------------------------------------------------------------
+val gitDir = rootProject.file(".git")
+
+fun gitText(vararg args: String): Provider<String> =
+    if (!gitDir.exists()) {
+        providers.provider { "" }
+    } else {
+        providers.exec {
+            workingDir = rootProject.projectDir
+            commandLine(listOf("git") + args)
+            isIgnoreExitValue = true
+        }.standardOutput.asText
+    }
+
+val headSha: Provider<String> = gitText("rev-parse", "HEAD").map { it.trim() }
+val headSubject: Provider<String> = gitText("log", "-1", "--format=%s").map { it.trim() }
+val headEpoch: Provider<String> = gitText("log", "-1", "--format=%ct").map { it.trim() }
+val headBranch: Provider<String> =
+    gitText("rev-parse", "--abbrev-ref", "HEAD").map { it.trim() }
+
+springBoot {
+    buildInfo {
+        properties {
+            time.set(headEpoch.map {
+                DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochSecond(it.ifBlank { "0" }.toLong()))
+            })
+            additional.put("commit", headSha.map { it.ifBlank { "unknown" } })
+            additional.put("commitTime", headEpoch.map { it.ifBlank { "0" } })
+            additional.put("commitSubject", headSubject.map { it.ifBlank { "" } })
+            additional.put("branch", headBranch.map { it.ifBlank { "unknown" } })
+        }
+    }
+}
+
+// The status page reports which third-party image tags production runs. Shipping the
+// compose file itself — rather than a JSON summary generated in Gradle — keeps all the
+// parsing in Java where it is unit-testable, and makes drift between parser and compose
+// file a test failure rather than a silent wrong answer.
+//
+// ---------------------------------------------------------------------------
+// The changelog on /status. 50 commits are baked so the AI summary sweep has depth;
+// the page itself requests 20.
+//
+// Separators rather than JSON: generating JSON here would mean hand-rolling escaping
+// for arbitrary commit messages. `git log` emits ASCII record/unit separators for free
+// and BakedReleaseHistory parses them.
+//
+// The task's only input is the HEAD SHA, so it re-runs when and only when HEAD moves.
+//
+// NOTE: in CI this yields ONE commit unless the checkout uses fetch-depth: 0. See
+// .github/workflows/publish.yml.
+// ---------------------------------------------------------------------------
+val releaseHistoryFile = layout.buildDirectory.file("generated/platform/release-history.txt")
+
+val releaseHistoryRaw: Provider<String> = gitText(
+    "-c", "core.quotepath=false",
+    "log", "-n", "50",
+    "--format=%x1e%H%x1f%ct%x1f%s%x1f%b%x1f",
+    "--name-only",
+)
+
+val generateReleaseHistory by tasks.registering {
+    description = "Bakes the last 50 commits on this branch into a backend resource."
+    val sha = headSha
+    val raw = releaseHistoryRaw
+    val output = releaseHistoryFile
+    inputs.property("headSha", sha)
+    outputs.file(output)
+    doLast {
+        val file = output.get().asFile
+        file.parentFile.mkdirs()
+        file.writeText(raw.get())
+    }
+}
+
+tasks.named<ProcessResources>("processResources") {
+    from(rootProject.file("docker-compose.prod.yml")) {
+        into("platform")
+    }
+    from(generateReleaseHistory) {
+        into("platform")
+    }
+}
+
+normalization {
+    runtimeClasspath {
+        // release-history.txt embeds HEAD's SHA and message, so it changes on every commit.
+        // Without this, it would change :backend:test's classpath cache key every commit and
+        // no test task could ever be FROM-CACHE again — silently undoing ci-build-speedup.
+        // No test reads this resource; BakedReleaseHistoryTest exercises parse() directly.
+        ignore("platform/release-history.txt")
+    }
 }
 
 val jacocoExcludes = listOf(

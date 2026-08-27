@@ -4,7 +4,7 @@
 
 **Status**: Approved
 
-**Successor artefact**: `specs/037-linear-issue-sink/` (via speckit)
+**Successor artefact**: `specs/039-linear-issue-sink/` (via speckit)
 
 ## Why this, and why first
 
@@ -17,6 +17,9 @@ a finding a human needs to see.
 | `feedback` | `review-feedback` | PR close | harvests the review conversation, writes `review_learnings`, opens `agent-feedback` guidance PRs |
 | `cvefix` | `cve-fix` | paused 24h Temporal schedule | reads Dependency-Track, bumps dependencies, opens a PR, polls CI |
 | `deploy` | `deploy` | signed `workflow_run` webhook | the `deployer` container runs `restart-prod.sh` phases, with rollback, triage and reporting |
+
+(A sixth module, `platformbackup`, landed on `main` while this was being built. It has no
+findings to file and is untouched by this work.)
 
 Two of those produce findings with no home. `deploy` opens a GitHub issue on
 failure — and `gh issue list --state all` returns nothing, so that path has never
@@ -40,7 +43,7 @@ what the successor features are allowed to file.
 
 ### In
 
-- A fifth module, `com.simonrowe.factory.linear`: a **sink**, with no trigger,
+- A new module, `com.simonrowe.factory.linear`: a **sink**, with no trigger,
   schedule or webhook of its own.
 - A `linear` Temporal task queue with one activity, `fileIssue`, executed only by
   `software-factory`.

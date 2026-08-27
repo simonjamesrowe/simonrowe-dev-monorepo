@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 
 import { API_BASE_URL } from '../../config/api'
 import { useProfile } from '../../hooks/useProfile'
+import { VersionBadge } from './VersionBadge'
 
 const SOCIAL_ICONS: Record<string, ReactNode> = {
   github: <Github size={18} />,
@@ -97,6 +98,9 @@ export function Footer() {
             >
               <Download size={18} />
             </a>
+          </li>
+          <li>
+            <VersionBadge />
           </li>
         </ul>
 

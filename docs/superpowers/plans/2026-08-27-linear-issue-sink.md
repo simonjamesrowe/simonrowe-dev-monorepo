@@ -4,7 +4,7 @@
 
 **Goal:** Give the software factory one place to file a finding a human needs to see — Linear — filing exactly once per distinct problem, and knowing when a human has already declined it.
 
-**Architecture:** A fifth module, `com.simonrowe.factory.linear`, is a *sink*: no webhook, no schedule, no trigger of its own. It exposes one Temporal activity, `fileIssue`, on a new `linear` task queue that only the `software-factory` container polls — so the `deployer`, which holds the Docker socket, never receives a Linear credential. Identity is a deterministic fingerprint stamped onto the Linear issue as an attachment; issue *state* is always read back from Linear, and Mongo holds only an audit trail.
+**Architecture:** A new module, `com.simonrowe.factory.linear`, is a *sink*: no webhook, no schedule, no trigger of its own. It exposes one Temporal activity, `fileIssue`, on a new `linear` task queue that only the `software-factory` container polls — so the `deployer`, which holds the Docker socket, never receives a Linear credential. Identity is a deterministic fingerprint stamped onto the Linear issue as an attachment; issue *state* is always read back from Linear, and Mongo holds only an audit trail.
 
 **Tech Stack:** Java 21, Spring Boot 3.5.x, Temporal Java SDK (`io.temporal:temporal-spring-boot-starter`), Spring Data MongoDB, `java.net.http.HttpClient` against Linear's GraphQL API. **No new dependencies in `software-factory/build.gradle.kts`.**
 
@@ -84,7 +84,7 @@ Two of these can invalidate the design. Nothing else in this plan should be writ
 3. A Linear personal API key is exported locally as `LINEAR_API_KEY`, and the team key (e.g. `SIM`) as `LINEAR_TEAM_KEY`.
 
 **Files:**
-- Create: `specs/037-linear-issue-sink/research.md`
+- Create: `specs/039-linear-issue-sink/research.md`
 
 - [ ] **Step 1: Resolve the team and capture its workflow states**
 
@@ -152,12 +152,12 @@ Read `WorkersTemplate` in that version's sources. Record the answer. If activity
 
 - [ ] **Step 7: Delete the probe issues and write up**
 
-Delete both probe issues in Linear. Write `specs/037-linear-issue-sink/research.md` with one section per item: the question, the exact query run, the raw answer, and the decision it forces. Where an answer contradicts the design, state which task changes and how.
+Delete both probe issues in Linear. Write `specs/039-linear-issue-sink/research.md` with one section per item: the question, the exact query run, the raw answer, and the decision it forces. Where an answer contradicts the design, state which task changes and how.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add specs/037-linear-issue-sink/research.md
+git add specs/039-linear-issue-sink/research.md
 git commit -m "docs: settle the Linear API and Temporal questions for the issue sink"
 ```
 
@@ -313,7 +313,7 @@ public record LinearProperties(
    * different target state or priority for CVE tickets, say — without a code change.
    *
    * @param label the Linear label applied to every issue this producer files
-   * @param priority the Linear priority integer; see specs/037-linear-issue-sink/research.md
+   * @param priority the Linear priority integer; see specs/039-linear-issue-sink/research.md
    */
   public record Producer(String label, int priority) {
 
@@ -2910,7 +2910,7 @@ the voice of the two already there. **Do not add a `workflow-packages` entry** (
         # scanning only. Its worker is created from LinearActivitiesImpl's
         # @ActivityImpl(taskQueues = ...) alone, which `register-activity-beans: true` below is
         # what enables — flipping that setting silently leaves this queue unpolled. Verified
-        # against starter 1.36.0 in specs/037-linear-issue-sink/research.md item 7. If it ever
+        # against starter 1.36.0 in specs/039-linear-issue-sink/research.md item 7. If it ever
         # stops holding, the symptom is the usual quiet one: the container is healthy, a
         # producer schedules fileIssue, and the activity sits in the queue until its
         # schedule-to-close timeout.
@@ -3457,7 +3457,7 @@ Its opening still says the container *"hosts only `codereview`"* — three modul
 
 - [ ] **Step 5: Update `CLAUDE.md`**
 
-Add a `037-linear-issue-sink` Recent Changes entry covering: the activity-only task queue and its poller shape; the credential confinement and the single annotation that enforces it; open > canceled > completed with reopen-to-un-suppress; `attachmentPending` and why the record is written between create and attach; the `linearFilingEnabled`-on-the-request guard and why an unpolled queue would otherwise stall a deploy; that the deploy GitHub issue is gone; and that bumping the fingerprint's `v1` orphans every ticket.
+Add a `039-linear-issue-sink` Recent Changes entry covering: the activity-only task queue and its poller shape; the credential confinement and the single annotation that enforces it; open > canceled > completed with reopen-to-un-suppress; `attachmentPending` and why the record is written between create and attach; the `linearFilingEnabled`-on-the-request guard and why an unpolled queue would otherwise stall a deploy; that the deploy GitHub issue is gone; and that bumping the fingerprint's `v1` orphans every ticket.
 
 Add the missing `feedback` module entry too — CLAUDE.md has never mentioned it, and it has been in production since PR #99.
 

@@ -1,6 +1,7 @@
 package com.simonrowe.admin;
 
 import com.simonrowe.common.Image;
+import com.simonrowe.common.LogSafe;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
 import java.time.Instant;
@@ -119,7 +120,7 @@ public class AdminSkillController {
 
     Skill saved = skillRepository.save(updated);
     contentChangePublisher.publishUpdated(ContentType.SKILL, saved.id());
-    LOG.info("Updated skill: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Updated skill: id={}, user={}", LogSafe.value(id), jwt.getSubject());
     return saved;
   }
 
@@ -132,7 +133,7 @@ public class AdminSkillController {
     Skill skill = getById(id);
     skillRepository.delete(skill);
     contentChangePublisher.publishDeleted(ContentType.SKILL, id);
-    LOG.info("Deleted skill: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Deleted skill: id={}, user={}", LogSafe.value(id), jwt.getSubject());
   }
 
   @PatchMapping("/reorder")

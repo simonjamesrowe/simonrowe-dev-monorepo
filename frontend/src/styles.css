@@ -6488,6 +6488,38 @@ a:hover {
   flex: 1;
 }
 
+/* Platform Data card: the retained platform archives, shown inline so a stalled
+   nightly job is visible without opening anything. */
+.data-ops__card-note {
+  font-size: 0.75rem;
+  color: var(--on-surface-variant, var(--color-text-muted, #64748b));
+  margin: 0.5rem 0 0;
+}
+
+.data-ops__backup-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--on-surface-variant, var(--color-text-muted, #64748b));
+}
+
+.data-ops__backup-list-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.data-ops__backup-list-item:first-child {
+  border-top: none;
+}
+
+.data-ops__backup-list-size {
+  font-variant-numeric: tabular-nums;
+}
+
 .data-ops__backup-panel {
   background: var(--surface-container-low, var(--color-bg, #fff));
   border: 1px solid var(--color-border);
@@ -9989,5 +10021,383 @@ body[data-narration-bar] .app-layout__main {
   .narration-bar__transport {
     flex: 1 1 auto;
     gap: 0.5rem;
+  }
+}
+
+/* The version badge that used to live here directly after the copyright is now an icon
+   in .footer__icons, styled by .footer__icon-link like its neighbours — see
+   VersionBadge.tsx. No bespoke styling needed. */
+
+/* ---------------------------------------------------------------------------
+   Platform status page (/status).
+   Mobile: the service grid collapses to one column and the component list
+   stacks its key/value pairs rather than scrolling sideways.
+   --------------------------------------------------------------------------- */
+.status-page {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+.status-page__title {
+  margin: 0 0 0.5rem;
+}
+
+.status-page__intro,
+.status-page__note {
+  color: var(--color-text-muted);
+  max-width: 46rem;
+  line-height: 1.6;
+}
+
+.status-page__note {
+  font-size: 0.9rem;
+}
+
+.status-page__section {
+  margin-top: 3rem;
+}
+
+.status-page__section-title {
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Platform components and Recent releases toggle their own content; Running now stays a
+   plain heading (`.status-page__section-title` above) since it is never collapsed. */
+.collapsible-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0 0 1rem;
+  padding: 0 0 0.5rem;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.collapsible-section__header:hover,
+.collapsible-section__header:focus-visible {
+  color: var(--color-primary);
+}
+
+.collapsible-section__title {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: inherit;
+}
+
+.collapsible-section__count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-text-muted);
+  background: var(--color-surface-subtle);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+}
+
+.collapsible-section__chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.collapsible-section__chevron--open {
+  transform: rotate(180deg);
+}
+
+.status-page__empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.status-page__drift {
+  border-left: 3px solid var(--color-accent, #d97706);
+  background: color-mix(in srgb, var(--color-accent, #d97706) 8%, transparent);
+  padding: 0.75rem 1rem;
+  border-radius: 0 4px 4px 0;
+  line-height: 1.5;
+}
+
+.status-page__services {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+
+.service-card {
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: var(--shadow-md);
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.service-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.service-card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.service-card__name {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.service-card__sha {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.service-card__sha--unknown {
+  font-style: italic;
+}
+
+.service-card__subject {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.service-card__facts {
+  margin: 0.75rem 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.service-card__facts dt {
+  color: var(--color-text-muted);
+}
+
+.service-card__facts dd {
+  margin: 0;
+}
+
+.component-table {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.component-table__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.component-table__name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.component-table__version {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.component-table__tag--floating {
+  font-style: italic;
+}
+
+/* The filter pills above the timeline and the "Show more" row below it reuse
+   .feed__filters / .feed__pill / .feed__load-more verbatim (see the News & Events feed)
+   rather than defining a second, near-identical set of pill/load-more rules. */
+.release-timeline {
+  margin-top: 1.25rem;
+}
+
+.release-timeline .feed__filters-scroll {
+  margin-bottom: 1.5rem;
+}
+
+/* A continuous spine down the left with a marker dot per entry. The spine is a pseudo
+   element on the list so it reads as one line rather than N disconnected segments; each
+   entry's own marker (`.release::before`) sits on top of it. */
+.release-list {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1.85rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.release-list::before {
+  content: '';
+  position: absolute;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  left: 0.45rem;
+  width: 2px;
+  background: var(--color-border);
+}
+
+.release {
+  position: relative;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 0.85rem;
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.release:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.release::before {
+  content: '';
+  position: absolute;
+  top: 1.35rem;
+  left: -1.6rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+  background: var(--color-panel);
+  border: 2px solid var(--color-border);
+}
+
+/* The entry running in production gets a visually distinct, filled/ringed marker rather
+   than the hollow default. */
+.release--running::before {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+
+.release__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+}
+
+.release__type {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  color: var(--color-text-muted);
+}
+
+/* Colored by conventional-commit type, using only tokens that are actually defined
+   (--color-gold/--color-rose/--color-orange/--color-violet are not — see
+   .timeline-entry's dead nth-child cycling above for what that mistake looks like).
+   Anything not listed here (chore, ci, build, other, ...) keeps the muted default above. */
+.release__type--feat {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.release__type--fix {
+  color: var(--error);
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+}
+
+.release__type--perf {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.release__type--docs,
+.release__type--refactor,
+.release__type--test {
+  color: var(--secondary);
+  border-color: var(--secondary);
+  background: color-mix(in srgb, var(--secondary) 12%, transparent);
+}
+
+.release__sha {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--color-text-muted);
+}
+
+.release__date,
+.release__badge {
+  color: var(--color-text-muted);
+}
+
+.release__badge {
+  font-weight: 600;
+  color: var(--color-accent, #d97706);
+}
+
+.release__subject {
+  margin: 0.4rem 0 0.4rem;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.release__summary {
+  margin: 0;
+  line-height: 1.65;
+  color: var(--color-text-muted);
+}
+
+.release__summary--pending {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+@media (max-width: 40rem) {
+  .status-page {
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .status-page__services {
+    grid-template-columns: 1fr;
+  }
+
+  .component-table__row {
+    flex-direction: column;
+    gap: 0.15rem;
   }
 }

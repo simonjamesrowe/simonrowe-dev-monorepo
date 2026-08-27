@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import com.mongodb.client.MongoClient;
@@ -44,7 +45,11 @@ public class BackupService {
       "content_sources", "favourites", "narrations",
       // Generated article summaries cost an LLM call each, so a backup that skipped them
       // would silently discard paid-for content on the next restore.
-      "article_summaries"
+      "article_summaries",
+      // Release notes on /status are the same: one LLM call per release, and the backfill
+      // of history is only baked into the image that produced it — a restore into a newer
+      // image could not regenerate the older entries at all.
+      "platform_releases"
   );
 
   private final MongoClient mongoClient;
@@ -125,9 +130,10 @@ public class BackupService {
         operationsService.updateProgress("Adding media files...", 60);
         Path uploadsDir = Path.of(uploadsPath);
         if (Files.exists(uploadsDir) && Files.isDirectory(uploadsDir)) {
-          List<Path> mediaFiles = Files.walk(uploadsDir)
-              .filter(Files::isRegularFile)
-              .toList();
+          List<Path> mediaFiles;
+          try (Stream<Path> walk = Files.walk(uploadsDir)) {
+            mediaFiles = walk.filter(Files::isRegularFile).toList();
+          }
           mediaFileCount = mediaFiles.size();
           narrationAudioFileCount = (int) mediaFiles.stream()
               .filter(path -> uploadsDir.relativize(path).startsWith("narrations"))
@@ -225,9 +231,10 @@ public class BackupService {
 
       Path uploadsDir = Path.of(uploadsPath);
       if (Files.exists(uploadsDir) && Files.isDirectory(uploadsDir)) {
-        List<Path> mediaFiles = Files.walk(uploadsDir)
-            .filter(Files::isRegularFile)
-            .toList();
+        List<Path> mediaFiles;
+        try (Stream<Path> walk = Files.walk(uploadsDir)) {
+          mediaFiles = walk.filter(Files::isRegularFile).toList();
+        }
         for (Path mediaFile : mediaFiles) {
           String entryPath = "uploads/" + uploadsDir.relativize(mediaFile);
           zos.putNextEntry(new ZipEntry(entryPath));

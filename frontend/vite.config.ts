@@ -48,6 +48,22 @@ export default defineConfig({
       // build.gradle.kts); text keeps the number visible in the CI log.
       reporter: ['text', 'lcov'],
       reportsDirectory: 'coverage',
+      // A ratchet against regression, not a target. Measured 2026-08-27:
+      // 48.66% lines, 81.37% branches, 62.73% functions. Each floor sits a few
+      // points under its measurement, the same margin the backend's 0.78 JaCoCo
+      // floor leaves against its 82.5% — enough that adding an untested file in
+      // an unrelated pull request does not turn the build red, tight enough that
+      // deleting a test suite does.
+      //
+      // `npm run test:coverage` is what CI runs, so this is enforced by the
+      // frontend job. Sonar sees the same lcov but its gate is advisory; this is
+      // the blocking half. Raise these when the number rises — do not lower them.
+      thresholds: {
+        lines: 45,
+        statements: 45,
+        branches: 78,
+        functions: 58,
+      },
     },
   },
 })

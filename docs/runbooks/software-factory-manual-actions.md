@@ -131,7 +131,7 @@ expected and correct.
 The [Linear issue sink](linear.md) needs three things a human must set up in
 Linear before `FACTORY_LINEAR_ENABLED` is ever turned on anywhere. All three
 were provisioned during the design's research spike against team `SIM`
-(`specs/037-linear-issue-sink/research.md`).
+(`specs/039-linear-issue-sink/research.md`).
 
 1. **Team exists, with Triage enabled — done.** Triage is a per-team toggle,
    off by default, and the whole suppression design depends on it (an

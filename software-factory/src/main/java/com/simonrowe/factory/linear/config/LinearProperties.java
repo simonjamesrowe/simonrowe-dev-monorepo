@@ -81,7 +81,7 @@ public record LinearProperties(
    *
    * @param label the Linear label applied to every issue this producer files
    * @param priority the Linear priority integer; see
-   *     specs/037-linear-issue-sink/research.md
+   *     specs/039-linear-issue-sink/research.md
    */
   public record Producer(String label, int priority) {
 

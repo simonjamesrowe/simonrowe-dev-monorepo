@@ -9,9 +9,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
+import com.simonrowe.migration.changeunits.V022CreatePlatformReleaseIndexes;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -27,6 +29,14 @@ public class RestoreService {
 
   private static final Logger LOG = LoggerFactory.getLogger(RestoreService.class);
 
+  // Declared above the collection lists below because those lists reference them in their
+  // own initialisers, and a static field cannot be forward-referenced from one.
+  private static final String FAVOURITES = "favourites";
+  private static final String ARTICLE_SUMMARIES = "article_summaries";
+  private static final String PLATFORM_RELEASES = "platform_releases";
+  private static final String FAVOURITES_UNIQUE_INDEX = "idx_type_content";
+  private static final String FAVOURITES_LIST_INDEX = "idx_type_created";
+
   private static final List<String> IMPORT_ORDER_INDEPENDENT = List.of(
       "tags", "skills", "profiles", "social_medias", "tourSteps", "media_assets",
       "content_sources", "aggregated_articles", "aggregated_events",
@@ -35,17 +45,14 @@ public class RestoreService {
       "favourites",
       // Article summaries are the same shape: no @DBRef, one plain articleId pointing at
       // aggregated_articles, so they follow it here rather than in the ordered list.
-      "article_summaries"
+      ARTICLE_SUMMARIES,
+      // Releases reference nothing at all — the _id is a commit SHA — so order is free.
+      PLATFORM_RELEASES
   );
 
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
       "skill_groups", "jobs", "blogs", "code_examples", "narrations"
   );
-
-  private static final String FAVOURITES = "favourites";
-  private static final String ARTICLE_SUMMARIES = "article_summaries";
-  private static final String FAVOURITES_UNIQUE_INDEX = "idx_type_content";
-  private static final String FAVOURITES_LIST_INDEX = "idx_type_created";
 
   private final MongoTemplate mongoTemplate;
   private final GoogleDriveService googleDriveService;
@@ -198,6 +205,9 @@ public class RestoreService {
       if (ARTICLE_SUMMARIES.equals(collectionName)) {
         ensureArticleSummaryIndexes();
       }
+      if (PLATFORM_RELEASES.equals(collectionName)) {
+        ensurePlatformReleaseIndexes();
+      }
 
       progress += progressPerCollection;
     }
@@ -242,6 +252,21 @@ public class RestoreService {
   void ensureArticleSummaryIndexes() {
     V020CreateArticleSummaryIndexes.createIndexes(mongoTemplate);
     LOG.info("Recreated article summary indexes after restore");
+  }
+
+  /**
+   * Recreates the platform-release indexes after a restore, for the same reason
+   * {@link #ensureFavouriteIndexes()} exists: {@code dropCollection} takes the
+   * collection's indexes with it, and {@code V022} has already been recorded as
+   * executed, so Mongock will never put them back.
+   *
+   * <p>Definitions live in {@code V022CreatePlatformReleaseIndexes} and are called from
+   * there rather than restated, so the two cannot drift.
+   * Package-private so the round-trip test can exercise it directly.
+   */
+  void ensurePlatformReleaseIndexes() {
+    V022CreatePlatformReleaseIndexes.createIndexes(mongoTemplate);
+    LOG.info("Recreated platform release indexes after restore");
   }
 
   /**
@@ -311,16 +336,17 @@ public class RestoreService {
     Path uploadsDir = Path.of(uploadsPath);
 
     if (Files.exists(uploadsDir)) {
-      Files.walk(uploadsDir)
-          .sorted(java.util.Comparator.reverseOrder())
-          .filter(p -> !p.equals(uploadsDir))
-          .forEach(p -> {
-            try {
-              Files.delete(p);
-            } catch (IOException ex) {
-              LOG.warn("Failed to delete file during restore cleanup: {}", p, ex);
-            }
-          });
+      try (Stream<Path> walk = Files.walk(uploadsDir)) {
+        walk.sorted(java.util.Comparator.reverseOrder())
+            .filter(p -> !p.equals(uploadsDir))
+            .forEach(p -> {
+              try {
+                Files.delete(p);
+              } catch (IOException ex) {
+                LOG.warn("Failed to delete file during restore cleanup: {}", p, ex);
+              }
+            });
+      }
     }
 
     Files.createDirectories(uploadsDir);

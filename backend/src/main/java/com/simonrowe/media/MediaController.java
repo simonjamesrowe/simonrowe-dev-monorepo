@@ -1,5 +1,6 @@
 package com.simonrowe.media;
 
+import com.simonrowe.common.LogSafe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -67,6 +68,6 @@ public class MediaController {
       @AuthenticationPrincipal final Jwt jwt
   ) {
     mediaService.delete(id);
-    LOG.info("Deleted media: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Deleted media: id={}, user={}", LogSafe.value(id), jwt.getSubject());
   }
 }

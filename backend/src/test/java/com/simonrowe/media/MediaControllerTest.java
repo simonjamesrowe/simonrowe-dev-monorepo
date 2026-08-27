@@ -1,5 +1,8 @@
 package com.simonrowe.media;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.endsWith;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static com.simonrowe.AdminTestAuth.adminJwt;
@@ -44,6 +47,60 @@ class MediaControllerTest extends AbstractIntegrationTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.fileName").value("test-image.jpg"))
         .andExpect(jsonPath("$.mimeType").value(MediaType.IMAGE_JPEG_VALUE));
+  }
+
+  @Test
+  void uploadKeepsLegitimateExtension() throws Exception {
+    final MockMultipartFile file = new MockMultipartFile(
+        "file",
+        "diagram.PNG",
+        MediaType.IMAGE_PNG_VALUE,
+        "fake-image-content".getBytes()
+    );
+
+    mockMvc.perform(multipart("/api/admin/media")
+            .file(file)
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.originalPath").value(endsWith("/original.png")));
+  }
+
+  // The stored path is built from the client-supplied name, so a name carrying path
+  // syntax must not reach it. Spring already strips separators and the "original."
+  // prefix stops Path.resolve treating the value as absolute, but the service must not
+  // depend on either — see MediaService.getExtension (Sonar javasecurity:S2083).
+  @Test
+  void uploadDiscardsAnExtensionCarryingPathSyntax() throws Exception {
+    final MockMultipartFile file = new MockMultipartFile(
+        "file",
+        "evil.jpg/../../../../tmp/pwned",
+        MediaType.IMAGE_JPEG_VALUE,
+        "fake-image-content".getBytes()
+    );
+
+    mockMvc.perform(multipart("/api/admin/media")
+            .file(file)
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isCreated())
+        // Falls back to the extension implied by the validated MIME type.
+        .andExpect(jsonPath("$.originalPath").value(endsWith("/original.jpg")))
+        .andExpect(jsonPath("$.originalPath").value(not(containsString(".."))));
+  }
+
+  @Test
+  void uploadFallsBackToTheMimeTypeWhenTheNameHasNoExtension() throws Exception {
+    final MockMultipartFile file = new MockMultipartFile(
+        "file",
+        "screenshot",
+        "image/webp",
+        "fake-image-content".getBytes()
+    );
+
+    mockMvc.perform(multipart("/api/admin/media")
+            .file(file)
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.originalPath").value(endsWith("/original.webp")));
   }
 
   @Test

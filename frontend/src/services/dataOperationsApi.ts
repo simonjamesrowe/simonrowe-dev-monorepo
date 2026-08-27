@@ -8,7 +8,13 @@ const DATA_OPS_URL = `${API_BASE_URL}/api/admin/data-operations`
 
 export interface DataOperation {
   id: string
-  type: 'BACKUP' | 'RESTORE' | 'CLEAR' | 'REBUILD_INDEX'
+  // Must list every OperationType the backend can emit. A missing member makes that
+  // operation's SSE progress events typed as impossible, so the UI silently stops
+  // narrating them - REEMBED_CONTENT was missing for exactly that reason.
+  //
+  // No PLATFORM_BACKUP: the platform capture runs in the `deployer` container, not as
+  // a backend data operation, so it emits nothing here.
+  type: 'BACKUP' | 'RESTORE' | 'CLEAR' | 'REBUILD_INDEX' | 'REEMBED_CONTENT'
   status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
   startedAt: string
   completedAt: string | null
@@ -100,6 +106,27 @@ export async function fetchBackups(
 ): Promise<BackupMetadata[]> {
   const token = await getAccessToken()
   const response = await authFetch(`${DATA_OPS_URL}/backups`, token)
+  return handleResponse<BackupMetadata[]>(response)
+}
+
+// ---------------------------------------------------------------------------
+// Platform backup (Postgres + ClickHouse)
+//
+// A separate Drive folder from the application backups above, with its own retention
+// window, so that neither backup type can evict the other.
+//
+// Read-only, deliberately. The capture runs in the `deployer` container as
+// scripts/backup-platform.sh - constitution 2.0.0 forbids the backend from holding
+// Docker access - and restore is scripts/restore-platform.sh on the host. So there is
+// no start call here, only a listing, which is what makes a stalled nightly job
+// visible on the admin page.
+// ---------------------------------------------------------------------------
+
+export async function fetchPlatformBackups(
+  getAccessToken: GetAccessToken,
+): Promise<BackupMetadata[]> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${DATA_OPS_URL}/platform-backups`, token)
   return handleResponse<BackupMetadata[]>(response)
 }
 

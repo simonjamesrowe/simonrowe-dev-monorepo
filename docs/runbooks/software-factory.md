@@ -4,7 +4,7 @@ The software factory is a modular monolith: one image
 (`Dockerfile.software-factory`), run as two containers with different module
 flags — `software-factory`, which terminates the GitHub webhook and holds the
 GitHub/Claude/Linear credentials, and `deployer`, which holds
-`/var/run/docker.sock` and nothing else. Five modules exist today:
+`/var/run/docker.sock` and nothing else. Six modules exist today:
 
 | Module | Temporal queue | Trigger | Role | Runbook |
 | --- | --- | --- | --- | --- |
@@ -13,6 +13,7 @@ GitHub/Claude/Linear credentials, and `deployer`, which holds
 | `cvefix` | `cve-fix` | paused 24h Temporal schedule | Reads Dependency-Track, bumps dependencies, opens a PR, polls CI to green | [cvefix.md](cvefix.md) |
 | `deploy` | `deploy` | signed `workflow_run` webhook | Runs `restart-prod.sh` phases on `deployer`, with rollback, triage and reporting | [deploy.md](deploy.md) |
 | `linear` | `linear` | none — a sink, not a producer | Files `deploy` and `cvefix` findings into Linear exactly once per distinct problem | [linear.md](linear.md) |
+| `platformbackup` | `platform-backup` | paused nightly (02:00) Temporal schedule | Captures the four Postgres databases and ClickHouse from `deployer`, which has the socket | [platform-backup-restore.md](platform-backup-restore.md) |
 
 `linear` is the odd one out on purpose: it has no trigger of its own and its
 task queue has **no workflow poller at all**, only an activity poller — see

@@ -58,7 +58,7 @@ knowing before touching this table:
 
 - **`duplicate` suppresses, exactly like `canceled`.** Linear ships a
   `duplicate` state type out of the box (verified live against team `SIM`:
-  `specs/037-linear-issue-sink/research.md`), and moving an issue there sets
+  `specs/039-linear-issue-sink/research.md`), and moving an issue there sets
   `canceledAt`, not `completedAt`. Declining a machine-filed ticket as a
   duplicate means "already tracked elsewhere", which is the same decline as
   "not a bug, never tell me again" — so it shares the suppression band rather

@@ -170,6 +170,20 @@ google:
     client-secret: ${GOOGLE_DRIVE_CLIENT_SECRET:}
     refresh-token: ${GOOGLE_DRIVE_REFRESH_TOKEN:}
     folder-id: ${GOOGLE_DRIVE_FOLDER_ID:}
+    # Read-only here: the backend lists this folder for the admin page, but the
+    # capture and its retention live in scripts/backup-platform.sh (constitution
+    # 2.0.0 - no Docker access in the container serving public traffic).
+    #
+    # Platform backups MUST NOT share a folder with the application backups above.
+    # Retention keeps the newest N *.zip in a folder, so a shared folder would make
+    # the two backup types evict each other and silently degrade today's "last 7
+    # days" guarantee to roughly "last 3 days" of each.
+    #
+    # Leave this blank in normal operation: the platform folder is then resolved by
+    # name (`simonrowe-platform-backups`). Set it only to pin a specific folder —
+    # note that unlike folder-id above, leaving it blank does NOT fall back to the
+    # application folder.
+    platform-folder-id: ${GOOGLE_DRIVE_PLATFORM_FOLDER_ID:}
 
 # On-demand narration is deliberately disabled unless the operator completes
 # docs/setup/google-cloud-tts.md and explicitly enables it. Google Drive's OAuth
@@ -416,6 +430,12 @@ aggregation:
     max-source-chars: 12000
 
 backup:
+  # Application data: MongoDB, uploaded media, Elasticsearch embeddings.
+  #
+  # The platform datastore backup (Postgres + ClickHouse) is NOT configured here.
+  # It runs in the `deployer` container as scripts/backup-platform.sh on a Temporal
+  # schedule, because constitution 2.0.0 forbids Docker access in this container.
+  # See docs/runbooks/platform-backup-restore.md.
   schedule:
     cron: "0 0 22 * * *"
     zone: "Europe/London"
@@ -429,3 +449,25 @@ langfuse:
   environment: ${LANGFUSE_ENVIRONMENT:development}
   scores-enabled: ${LANGFUSE_SCORES_ENABLED:false}
   content-capture-enabled: ${LANGFUSE_CONTENT_CAPTURE_ENABLED:true}
+
+# The /status page's changelog. Summaries are generated at INGEST — when a release record is
+# created — never on view: a public endpoint that called an LLM per request would be both a
+# cost problem and an abuse vector.
+platform:
+  releases:
+    summaries:
+      # A one-off backfill of 50 releases costs 50 small calls; steady state is one per merge.
+      enabled: ${PLATFORM_RELEASE_SUMMARIES_ENABLED:true}
+      # 3 per tick every 2 minutes clears a 50-release backfill in ~35 minutes without
+      # holding a scheduler thread for long or spiking the OpenAI bill in one burst.
+      batch-size: 3
+      max-attempts: 3
+      model: ${PLATFORM_RELEASE_SUMMARY_MODEL:gpt-5.6-luna}
+  # The other first-party JVMs, asked over the Docker network. Neither is routed by nginx.
+  # Note the port: software-factory serves on 8090, not 8080.
+  services:
+    factory-base-url: ${PLATFORM_FACTORY_URL:http://software-factory:8090}
+    deployer-base-url: ${PLATFORM_DEPLOYER_URL:http://deployer:8090}
+    # A status page must not be able to hang on a restarting sibling container.
+    timeout: 1s
+    cache-ttl: 60s
