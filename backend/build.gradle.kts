@@ -82,6 +82,16 @@ springBoot {
     }
 }
 
+// The status page reports which third-party image tags production runs. Shipping the
+// compose file itself — rather than a JSON summary generated in Gradle — keeps all the
+// parsing in Java where it is unit-testable, and makes drift between parser and compose
+// file a test failure rather than a silent wrong answer.
+tasks.named<ProcessResources>("processResources") {
+    from(rootProject.file("docker-compose.prod.yml")) {
+        into("platform")
+    }
+}
+
 val jacocoExcludes = listOf(
     "com/simonrowe/migration/**",
     "com/simonrowe/dataops/**",
