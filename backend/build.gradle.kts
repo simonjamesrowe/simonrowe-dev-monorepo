@@ -1,3 +1,6 @@
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+
 plugins {
     id("org.springframework.boot")
     id("io.spring.dependency-management")
@@ -32,6 +35,51 @@ checkstyle {
 
 jacoco {
     toolVersion = libs.versions.jacoco.get()
+}
+
+// ---------------------------------------------------------------------------
+// Build metadata baked into the image, served by GET /api/platform/status.
+//
+// `time` is pinned to the COMMIT timestamp, never wall-clock. A wall-clock value
+// changes on every build, which would invalidate :backend:bootJar in the Gradle
+// build cache — the cache ci-build-speedup only just got working for the first
+// time. The commit time is both deterministic and the more meaningful value.
+//
+// Every git read degrades to a constant rather than failing the build: the Docker
+// build context and a source tarball both lack .git, and `./gradlew build` must
+// still work there.
+// ---------------------------------------------------------------------------
+val gitDir = rootProject.file(".git")
+
+fun gitText(vararg args: String): Provider<String> =
+    if (!gitDir.exists()) {
+        providers.provider { "" }
+    } else {
+        providers.exec {
+            workingDir = rootProject.projectDir
+            commandLine(listOf("git") + args)
+            isIgnoreExitValue = true
+        }.standardOutput.asText
+    }
+
+val headSha: Provider<String> = gitText("rev-parse", "HEAD").map { it.trim() }
+val headSubject: Provider<String> = gitText("log", "-1", "--format=%s").map { it.trim() }
+val headEpoch: Provider<String> = gitText("log", "-1", "--format=%ct").map { it.trim() }
+val headBranch: Provider<String> =
+    gitText("rev-parse", "--abbrev-ref", "HEAD").map { it.trim() }
+
+springBoot {
+    buildInfo {
+        properties {
+            time.set(headEpoch.map {
+                DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochSecond(it.ifBlank { "0" }.toLong()))
+            })
+            additional.put("commit", headSha.map { it.ifBlank { "unknown" } })
+            additional.put("commitTime", headEpoch.map { it.ifBlank { "0" } })
+            additional.put("commitSubject", headSubject.map { it.ifBlank { "" } })
+            additional.put("branch", headBranch.map { it.ifBlank { "unknown" } })
+        }
+    }
 }
 
 val jacocoExcludes = listOf(
