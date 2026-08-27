@@ -40,9 +40,10 @@ class FilingDecisionTest {
 
   @Test
   void suppressesWhenTheOnlyIssueWasCancelled() {
-    assertThat(new FilingDecider().decide(List.of(issue("1", IssueStateType.CANCELED, OLD))))
-        .extracting(FilingDecider.Outcome::decision)
-        .isEqualTo(FilingDecision.SUPPRESSED);
+    FilingDecider.Outcome outcome =
+        new FilingDecider().decide(List.of(issue("1", IssueStateType.CANCELED, OLD)));
+    assertThat(outcome.decision()).isEqualTo(FilingDecision.SUPPRESSED);
+    assertThat(outcome.subject().id()).isEqualTo("1");
   }
 
   @Test
@@ -68,17 +69,48 @@ class FilingDecisionTest {
   }
 
   @Test
+  void openOutranksCancelledEvenWhenCancelledIsNewer() {
+    // Same rule as openOutranksCancelled, but with the timestamps inverted so a recency-first
+    // implementation cannot pass by coincidence: the open issue is older, yet still wins the
+    // band. Getting this wrong would swallow a real regression as a stale suppression.
+    FilingDecider.Outcome outcome =
+        new FilingDecider()
+            .decide(
+                List.of(
+                    issue("open", IssueStateType.STARTED, OLD),
+                    issue("cancelled", IssueStateType.CANCELED, NEW)));
+    assertThat(outcome.decision()).isEqualTo(FilingDecision.COMMENTED_EXISTING);
+    assertThat(outcome.subject().id()).isEqualTo("open");
+  }
+
+  @Test
   void cancelledOutranksCompleted() {
     // A regression was filed for a completed issue, then declined. "Never tell me again" is a
     // more deliberate human statement than "this was once fixed".
-    assertThat(
-            new FilingDecider()
-                .decide(
-                    List.of(
-                        issue("done", IssueStateType.COMPLETED, OLD),
-                        issue("declined", IssueStateType.CANCELED, NEW))))
-        .extracting(FilingDecider.Outcome::decision)
-        .isEqualTo(FilingDecision.SUPPRESSED);
+    FilingDecider.Outcome outcome =
+        new FilingDecider()
+            .decide(
+                List.of(
+                    issue("done", IssueStateType.COMPLETED, OLD),
+                    issue("declined", IssueStateType.CANCELED, NEW)));
+    assertThat(outcome.decision()).isEqualTo(FilingDecision.SUPPRESSED);
+    assertThat(outcome.subject().id()).isEqualTo("declined");
+  }
+
+  @Test
+  void cancelledOutranksCompletedEvenWhenCompletedIsNewer() {
+    // Same rule as cancelledOutranksCompleted, but with the timestamps inverted so a
+    // recency-first implementation cannot pass by coincidence: the cancelled issue is older,
+    // yet still wins the band. Getting this wrong would re-file an issue a human declined,
+    // forever.
+    FilingDecider.Outcome outcome =
+        new FilingDecider()
+            .decide(
+                List.of(
+                    issue("declined", IssueStateType.CANCELED, OLD),
+                    issue("done", IssueStateType.COMPLETED, NEW)));
+    assertThat(outcome.decision()).isEqualTo(FilingDecision.SUPPRESSED);
+    assertThat(outcome.subject().id()).isEqualTo("declined");
   }
 
   @Test
@@ -123,5 +155,18 @@ class FilingDecisionTest {
     assertThat(IssueStateType.from("cancelled")).isEqualTo(IssueStateType.CANCELED);
     assertThat(IssueStateType.from("something-new")).isEqualTo(IssueStateType.UNKNOWN);
     assertThat(IssueStateType.from(null)).isEqualTo(IssueStateType.UNKNOWN);
+  }
+
+  @ParameterizedTest
+  @EnumSource(IssueStateType.class)
+  void everyStateIsOpenOrCompletedOrCanceled(final IssueStateType type) {
+    // IssueStateType.open() is exhaustively partitioned today: false means exactly COMPLETED or
+    // CANCELED. FilingDecider relies on that partition — its regression band is "whatever is
+    // left after open and cancelled are removed" rather than an explicit COMPLETED filter. A new
+    // closed constant that is neither of those two, or flipping UNKNOWN to closed, would silently
+    // fall into the regression band and re-file forever with no other test catching it.
+    assertThat(
+            type.open() || type == IssueStateType.COMPLETED || type == IssueStateType.CANCELED)
+        .isTrue();
   }
 }
