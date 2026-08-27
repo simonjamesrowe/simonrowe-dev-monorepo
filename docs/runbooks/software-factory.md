@@ -1,9 +1,23 @@
 # Software Factory Production Runbook
 
-The software factory is one container, `software-factory`, running the GitHub
-webhook receiver and the Temporal code-review worker in the same JVM. It is the
-first module of what is intended to become a modular monolith; today it hosts
-only `codereview`.
+The software factory is a modular monolith: one image
+(`Dockerfile.software-factory`), run as two containers with different module
+flags — `software-factory`, which terminates the GitHub webhook and holds the
+GitHub/Claude/Linear credentials, and `deployer`, which holds
+`/var/run/docker.sock` and nothing else. Five modules exist today:
+
+| Module | Temporal queue | Trigger | Role | Runbook |
+| --- | --- | --- | --- | --- |
+| `codereview` | `code-review` | signed `pull_request` webhook | Clones the branch, runs Claude Code, posts one PR comment plus inline findings | this file, [Entry points](#entry-points) onward |
+| `feedback` | `review-feedback` | PR close | Harvests the review conversation, writes `review_learnings`, opens `agent-feedback` guidance PRs | this file, [Review feedback loop](#review-feedback-loop) |
+| `cvefix` | `cve-fix` | paused 24h Temporal schedule | Reads Dependency-Track, bumps dependencies, opens a PR, polls CI to green | [cvefix.md](cvefix.md) |
+| `deploy` | `deploy` | signed `workflow_run` webhook | Runs `restart-prod.sh` phases on `deployer`, with rollback, triage and reporting | [deploy.md](deploy.md) |
+| `linear` | `linear` | none — a sink, not a producer | Files `deploy` and `cvefix` findings into Linear exactly once per distinct problem | [linear.md](linear.md) |
+
+`linear` is the odd one out on purpose: it has no trigger of its own and its
+task queue has **no workflow poller at all**, only an activity poller — see
+[linear.md](linear.md#what-this-is-and-what-it-is-not) before assuming that
+shape is a fault.
 
 It was previously two deployables — a credential-free `reviewer-api` container
 and a `temporal-reviewer-worker` host service that owned the GitHub App key and

@@ -294,6 +294,13 @@ services:
       # startup to Dependency-Track would be a regression.
       DEPENDENCYTRACK_BASE_URL: ${DEPENDENCYTRACK_BASE_URL:-http://dependencytrack-apiserver:8080}
       FACTORY_MONGODB_URI: mongodb://mongodb:27017/software_factory
+      # The issue sink. Off by default. Deliberately NOT set on `deployer`, which runs this
+      # same image: that container holds /var/run/docker.sock and must hold as few other
+      # credentials as possible. See docs/runbooks/linear.md.
+      FACTORY_LINEAR_ENABLED: ${FACTORY_LINEAR_ENABLED:-false}
+      FACTORY_LINEAR_TEAM_KEY: ${FACTORY_LINEAR_TEAM_KEY:-}
+      FACTORY_LINEAR_DRY_RUN: ${FACTORY_LINEAR_DRY_RUN:-false}
+      LINEAR_API_KEY: ${LINEAR_API_KEY:-}
     volumes:
       - ${GITHUB_APP_PRIVATE_KEY_PATH:?set GITHUB_APP_PRIVATE_KEY_PATH in .env}:/run/secrets/github-app.pem:ro
       - software-factory-workspace:/workspace
@@ -403,6 +410,8 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set CLAUDE_CODE_OAUTH_TOKEN in .env}
       FACTORY_DEPLOY_MODEL: ${FACTORY_DEPLOY_MODEL:-sonnet}
       FACTORY_DEPLOY_EFFORT: ${FACTORY_DEPLOY_EFFORT:-medium}
+      # No LINEAR_* here on purpose. This container holds the Docker socket; the tracker
+      # credential lives only on `software-factory`. See docs/runbooks/linear.md.
     volumes:
       # Root on the host. Unavoidable for anything that deploys; mitigated by this
       # container having no ingress, no published port and no public route.
