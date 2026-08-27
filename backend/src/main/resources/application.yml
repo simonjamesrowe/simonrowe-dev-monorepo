@@ -443,3 +443,11 @@ platform:
       batch-size: 3
       max-attempts: 3
       model: ${PLATFORM_RELEASE_SUMMARY_MODEL:gpt-5.6-luna}
+  # The other first-party JVMs, asked over the Docker network. Neither is routed by nginx.
+  # Note the port: software-factory serves on 8090, not 8080.
+  services:
+    factory-base-url: ${PLATFORM_FACTORY_URL:http://software-factory:8090}
+    deployer-base-url: ${PLATFORM_DEPLOYER_URL:http://deployer:8090}
+    # A status page must not be able to hang on a restarting sibling container.
+    timeout: 1s
+    cache-ttl: 60s
