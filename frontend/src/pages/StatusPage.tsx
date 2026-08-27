@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
+import { CollapsibleSection } from '../components/status/CollapsibleSection'
 import { ComponentTable } from '../components/status/ComponentTable'
 import { DriftWarning } from '../components/status/DriftWarning'
 import { ReleaseList } from '../components/status/ReleaseList'
@@ -62,27 +63,38 @@ export function StatusPage() {
       </section>
 
       <section className="status-page__section">
-        <h2 className="status-page__section-title">Platform components</h2>
-        <p className="status-page__note">
-          The third-party images the production compose file declares. Pinned tags are what is
-          running; a floating tag means the running digest is not pinned and cannot be reported.
-        </p>
-        <ComponentTable components={status?.components ?? []} />
+        <CollapsibleSection
+          count={loading ? undefined : (status?.components.length ?? 0)}
+          defaultOpen={false}
+          title="Platform components"
+        >
+          <p className="status-page__note">
+            The third-party images the production compose file declares. Pinned tags are what is
+            running; a floating tag means the running digest is not pinned and cannot be
+            reported.
+          </p>
+          <ComponentTable components={status?.components ?? []} />
+        </CollapsibleSection>
       </section>
 
       <section className="status-page__section">
-        <h2 className="status-page__section-title">Recent releases</h2>
-        <p className="status-page__note">
-          Every merge to <code>main</code> publishes an image, so one commit is one release.
-          Entries other than the one running now record what was <strong>published</strong>,
-          not what was deployed — deploys are manual, so there is no deployment history to
-          report. Summaries are written by a model when a release is first seen.
-        </p>
-        {releasesLoading ? <LoadingIndicator /> : null}
-        {releasesError ? (
-          <ErrorMessage message={releasesError} onRetry={retryReleases} />
-        ) : null}
-        <ReleaseList releases={releases} />
+        <CollapsibleSection
+          count={releasesLoading ? undefined : releases.length}
+          defaultOpen
+          title="Recent releases"
+        >
+          <p className="status-page__note">
+            Every merge to <code>main</code> publishes an image, so one commit is one release.
+            Entries other than the one running now record what was <strong>published</strong>,
+            not what was deployed — deploys are manual, so there is no deployment history to
+            report. Summaries are written by a model when a release is first seen.
+          </p>
+          {releasesLoading ? <LoadingIndicator /> : null}
+          {releasesError ? (
+            <ErrorMessage message={releasesError} onRetry={retryReleases} />
+          ) : null}
+          <ReleaseList releases={releases} />
+        </CollapsibleSection>
       </section>
     </div>
   )

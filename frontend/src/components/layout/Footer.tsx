@@ -57,8 +57,6 @@ export function Footer() {
           &copy; {new Date().getFullYear()} {name}
         </p>
 
-        <VersionBadge />
-
         <ul className="footer__icons">
           {socialLinks.map((link) => {
             const label = link.name?.trim() || SOCIAL_LABELS[link.type] || link.type
@@ -100,6 +98,9 @@ export function Footer() {
             >
               <Download size={18} />
             </a>
+          </li>
+          <li>
+            <VersionBadge />
           </li>
         </ul>
 

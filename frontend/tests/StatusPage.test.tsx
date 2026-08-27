@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -101,6 +102,26 @@ function renderPage() {
   )
 }
 
+/** Platform components is collapsed by default; several assertions need it open first. */
+async function expandComponents() {
+  await userEvent.click(screen.getByRole('button', { name: /platform components/i }))
+}
+
+function buildRelease(index: number, overrides: Partial<Release> = {}): Release {
+  const sha = `release${index}abcdef0123456789abcdef0123456789`.slice(0, 40)
+  return {
+    sha,
+    shortSha: sha.slice(0, 7),
+    type: 'feat',
+    subject: `feat: change number ${index}`,
+    commitTime: `2026-08-${String(20 - (index % 20)).padStart(2, '0')}T10:00:00Z`,
+    running: false,
+    summary: null,
+    summaryStatus: 'PENDING',
+    ...overrides,
+  }
+}
+
 describe('StatusPage', () => {
   beforeEach(() => {
     mockStatus.mockReturnValue({ status: STATUS, loading: false, error: null, retry: vi.fn() })
@@ -158,8 +179,9 @@ describe('StatusPage', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('lists third-party components with their tags', () => {
+  it('lists third-party components with their tags', async () => {
     renderPage()
+    await expandComponents()
 
     // Scoped to the component row rather than a bare getByText('8'): a formatted date
     // elsewhere on the page can contain "8" and getByText throws on multiple matches.
@@ -169,8 +191,9 @@ describe('StatusPage', () => {
     expect(row).toHaveTextContent('8')
   })
 
-  it('labels a floating tag rather than presenting it as a version', () => {
+  it('labels a floating tag rather than presenting it as a version', async () => {
     renderPage()
+    await expandComponents()
 
     // Scoped to the floating-badge element rather than a page-wide /floating/i: the
     // components note explaining the badge uses the same word, and a page-wide query
@@ -278,5 +301,79 @@ describe('StatusPage', () => {
     // asserts on it (grep the tests directory for LoadingIndicator) rather than assuming
     // it renders the word "loading".
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
+  })
+
+  describe('collapsible sections', () => {
+    it('collapses Platform components by default, and reveals it on click', async () => {
+      renderPage()
+
+      expect(screen.queryByText('mongodb')).not.toBeInTheDocument()
+      const header = screen.getByRole('button', { name: /platform components/i })
+      expect(header).toHaveAttribute('aria-expanded', 'false')
+
+      await userEvent.click(header)
+
+      expect(header).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByText('mongodb')).toBeInTheDocument()
+    })
+
+    it('expands Recent releases by default', () => {
+      renderPage()
+
+      const header = screen.getByRole('button', { name: /recent releases/i })
+      expect(header).toHaveAttribute('aria-expanded', 'true')
+      expect(
+        screen.getByText('docs: overhaul the README (#118)'),
+      ).toBeInTheDocument()
+    })
+  })
+
+  describe('release paging and filtering', () => {
+    const MANY_RELEASES: Release[] = Array.from({ length: 12 }, (_, index) =>
+      buildRelease(index, { type: index === 0 ? 'fix' : 'feat' }),
+    )
+
+    it('renders only 8 releases initially, and Show more/Show less step by 8', async () => {
+      mockReleases.mockReturnValue({
+        releases: MANY_RELEASES,
+        loading: false,
+        error: null,
+        retry: vi.fn(),
+      })
+
+      renderPage()
+
+      expect(document.querySelectorAll('.release')).toHaveLength(8)
+      expect(screen.queryByRole('button', { name: /show less/i })).not.toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: /show more/i }))
+
+      expect(document.querySelectorAll('.release')).toHaveLength(12)
+      expect(screen.queryByRole('button', { name: /show more/i })).not.toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: /show less/i }))
+
+      expect(document.querySelectorAll('.release')).toHaveLength(8)
+    })
+
+    it('filters by type and resets the visible count', async () => {
+      mockReleases.mockReturnValue({
+        releases: MANY_RELEASES,
+        loading: false,
+        error: null,
+        retry: vi.fn(),
+      })
+
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: /show more/i }))
+      expect(document.querySelectorAll('.release')).toHaveLength(12)
+
+      await userEvent.click(screen.getByRole('button', { name: /^fix/i }))
+
+      // Only the one 'fix' release exists in the fixture, and paging is back to the top.
+      expect(document.querySelectorAll('.release')).toHaveLength(1)
+      expect(screen.queryByRole('button', { name: /show more/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /show less/i })).not.toBeInTheDocument()
+    })
   })
 })
