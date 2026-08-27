@@ -10,6 +10,7 @@ import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewFinding;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
+import com.simonrowe.factory.codereview.domain.ThreadAction;
 import io.temporal.failure.ApplicationFailure;
 import java.io.IOException;
 import java.net.URI;
@@ -24,9 +25,13 @@ import org.springframework.stereotype.Component;
  * Minimal GitHub REST adapter.
  *
  * <p>Every review of a pull request writes through <em>one</em> comment, found by {@link
- * #statusMarker}, and replaces the inline findings the previous review left. Reviews used to be
- * posted afresh on every push, keyed by head SHA, so a pull request accumulated one summary per
- * push and one copy of each finding per push — pull request 102 collected three.
+ * #statusMarker}. Reviews used to be posted afresh on every push, keyed by head SHA, so a pull
+ * request accumulated one summary per push and one copy of each finding per push — pull request 102
+ * collected three.
+ *
+ * <p>Inline findings are <em>reconciled</em>, never deleted. That work belongs to {@link
+ * ReviewThreadGateway}, which reaches GitHub over GraphQL because REST can neither read nor set a
+ * thread's resolution state.
  *
  * <p>App authentication can replace its token without workflow changes.
  */
@@ -41,17 +46,20 @@ public class GitHubGateway {
   private final GitHubCredentials credentials;
   private final ObjectMapper objectMapper;
   private final ReviewMarkdownRenderer renderer;
+  private final ReviewThreadGateway reviewThreadGateway;
   private final HttpClient httpClient;
 
   public GitHubGateway(
       final CodeReviewProperties properties,
       final GitHubCredentials credentials,
       final ObjectMapper objectMapper,
-      final ReviewMarkdownRenderer renderer) {
+      final ReviewMarkdownRenderer renderer,
+      final ReviewThreadGateway reviewThreadGateway) {
     this.properties = properties;
     this.credentials = credentials;
     this.objectMapper = objectMapper;
     this.renderer = renderer;
+    this.reviewThreadGateway = reviewThreadGateway;
     this.httpClient =
         HttpClient.newBuilder()
             .connectTimeout(properties.github().requestTimeout())
@@ -131,13 +139,22 @@ public class GitHubGateway {
   }
 
   /**
-   * Replaces the previous review: stale inline findings are deleted, the surviving ones re-anchored
-   * to the current diff, and the summary written into the status comment.
+   * Reconciles the new report against the conversations already on the pull request, then writes
+   * the summary into the status comment.
    *
-   * <p>Findings are posted as individual comments rather than gathered into a submitted review. A
-   * submitted review can be neither deleted nor hidden, so one per push would accumulate on the
-   * pull request even after its comments were pruned — and GitHub rejects a {@code COMMENT} review
-   * with an empty body, so there is no bodiless review to post instead.
+   * <p>Findings that are still reported keep the thread they already have — same posting time, same
+   * position, same replies. Findings that have gone are replied to and resolved. Findings with no
+   * thread get one. <b>Nothing is deleted.</b>
+   *
+   * <p>This replaced a delete-everything-and-repost strategy, which was the only option available
+   * while findings had no identity, and was wrong on four counts: deletion is not resolution, a
+   * standing finding read as brand new on every push, GitHub's "N resolved" counter stayed
+   * permanently zero, and deleting a thread root took a human's reply with it.
+   *
+   * <p>Findings are still posted as individual comments rather than gathered into a submitted
+   * review. A submitted review can be neither deleted nor hidden, so one per push would accumulate
+   * on the pull request even after its comments were pruned — and GitHub rejects a {@code COMMENT}
+   * review with an empty body, so there is no bodiless review to post instead.
    */
   public void publishReview(
       final PullRequestContext pullRequest,
@@ -146,21 +163,30 @@ public class GitHubGateway {
     List<ReviewFinding> unanchored = new ArrayList<>();
     String accessToken = requireAccessToken(pullRequest);
 
-    // Unconditional: a push that fixed everything is exactly the one that must clear the board.
-    deletePreviousFindings(pullRequest, accessToken);
+    List<ThreadAction> actions =
+        ReviewThreadGateway.reconcile(
+            reviewThreadGateway.fetchThreads(pullRequest), report.findings());
 
-    if (!report.findings().isEmpty()) {
-      String path =
-          findingCommentsPath(
-              pullRequest.owner(), pullRequest.repository(), pullRequest.pullNumber());
-      for (ReviewFinding finding : report.findings()) {
-        HttpResponse<String> response =
-            send("POST", path, findingCommentPayload(pullRequest, finding), accessToken);
-        if (response.statusCode() == 422) {
-          // This one did not anchor to the current diff; the summary carries it instead.
-          unanchored.add(finding);
-        } else {
-          requireSuccess(response, "POST", path);
+    String path =
+        findingCommentsPath(
+            pullRequest.owner(), pullRequest.repository(), pullRequest.pullNumber());
+    for (ThreadAction action : actions) {
+      switch (action) {
+        case ThreadAction.Leave ignored -> {
+          // Doing nothing is the entire improvement over the previous behaviour.
+        }
+        case ThreadAction.ReplyAndResolve resolve ->
+            reviewThreadGateway.replyAndResolve(
+                pullRequest, resolve.nodeId(), pullRequest.headSha());
+        case ThreadAction.PostNew post -> {
+          HttpResponse<String> response =
+              send("POST", path, findingCommentPayload(pullRequest, post.finding()), accessToken);
+          if (response.statusCode() == 422) {
+            // This one did not anchor to the current diff; the summary carries it instead.
+            unanchored.add(post.finding());
+          } else {
+            requireSuccess(response, "POST", path);
+          }
         }
       }
     }
@@ -219,29 +245,6 @@ public class GitHubGateway {
   }
 
   /**
-   * Removes the inline comments the previous review left.
-   *
-   * <p>A finding fixed since the last push would otherwise stay on the pull request forever, and
-   * one that still stands would be posted again beside its own duplicate.
-   */
-  private void deletePreviousFindings(
-      final PullRequestContext pullRequest, final String accessToken) {
-    JsonNode comments =
-        fetchAllPages(
-            findingCommentsPath(
-                pullRequest.owner(), pullRequest.repository(), pullRequest.pullNumber()),
-            accessToken);
-    for (String id : findingCommentIds(comments)) {
-      String path = findingCommentPath(pullRequest.owner(), pullRequest.repository(), id);
-      HttpResponse<String> response = send("DELETE", path, null, accessToken);
-      // A comment someone already deleted is exactly the state being aimed for.
-      if (response.statusCode() != 404 && response.statusCode() != 410) {
-        requireSuccess(response, "DELETE", path);
-      }
-    }
-  }
-
-  /**
    * Identifies this reviewer's status comment on a pull request.
    *
    * <p>Scoped to the pull request, not the commit. The marker used to carry the head SHA, which
@@ -267,11 +270,6 @@ public class GitHubGateway {
     return "/repos/" + owner + "/" + repository + "/pulls/" + pullNumber + "/comments";
   }
 
-  static String findingCommentPath(
-      final String owner, final String repository, final String commentId) {
-    return "/repos/" + owner + "/" + repository + "/pulls/comments/" + commentId;
-  }
-
   /** The id of the first comment carrying {@code marker}, or null when none does. */
   static String findCommentId(final JsonNode comments, final String marker) {
     for (JsonNode comment : comments) {
@@ -280,17 +278,6 @@ public class GitHubGateway {
       }
     }
     return null;
-  }
-
-  /** The ids of every inline comment this reviewer posted, in listing order. */
-  static List<String> findingCommentIds(final JsonNode comments) {
-    List<String> ids = new ArrayList<>();
-    for (JsonNode comment : comments) {
-      if (comment.path("body").asText("").contains(ReviewMarkdownRenderer.FINDING_MARKER)) {
-        ids.add(comment.path("id").asText());
-      }
-    }
-    return ids;
   }
 
   /**

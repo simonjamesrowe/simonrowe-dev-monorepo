@@ -72,7 +72,15 @@ class CodeReviewWorkflowTest {
 
       assertThat(activities.calls)
           .containsExactly(
-              "openStatusComment", "loadPullRequest", "runReview", "publishReview");
+              "openStatusComment",
+              "loadPullRequest",
+              // After loading, never before: a check run must name a commit, and the head SHA is
+              // only certain here. openStatusComment holds only a ReviewRequest, whose
+              // expectedHeadSha is nullable on the manual-review path.
+              "openCheckRun",
+              "runReview",
+              "publishReview",
+              "completeCheckRun");
       assertThat(activities.publishedStatusCommentId).isEqualTo("status-1");
       assertThat(result.report()).isEqualTo(REPORT);
       assertThat(workflow.progress().phase()).isEqualTo(ReviewPhase.COMPLETED);
@@ -169,6 +177,7 @@ class CodeReviewWorkflowTest {
       ReviewResult result = workflow.review(request(false));
 
       assertThat(activities.calls).containsExactly("loadPullRequest", "runReview");
+      assertThat(activities.calls).doesNotContain("openCheckRun", "completeCheckRun");
       assertThat(result.published()).isFalse();
     }
   }
@@ -189,6 +198,100 @@ class CodeReviewWorkflowTest {
     }
   }
 
+  // --- the Code Review check run --------------------------------------------------------------
+
+  @Test
+  void failedReviewTurnsTheCheckRunRed() {
+    RecordingActivities activities = new RecordingActivities();
+    activities.failReviewWith =
+        ApplicationFailure.newNonRetryableFailure("Claude exited with 1", "AGENT_FAILED");
+
+    try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
+      CodeReviewWorkflow workflow = start(environment, activities, "review-check-failure");
+
+      assertThatThrownBy(() -> workflow.review(request(true)))
+          .isInstanceOf(WorkflowFailedException.class);
+
+      assertThat(activities.calls).contains("openCheckRun", "failCheckRun");
+      assertThat(activities.failedCheckRunId).isEqualTo("check-1");
+    }
+  }
+
+  /**
+   * The fail-closed path, and the reason silence now blocks. A review that dies before the head
+   * SHA is known has no commit to attach a check to — so it creates none, and a required status
+   * check that is absent blocks the merge. Creating one just to fail it would be strictly worse:
+   * it would only work while the reviewer could still reach GitHub.
+   */
+  @Test
+  void reviewThatDiesBeforeTheHeadShaIsKnownCreatesNoCheckRunAtAll() {
+    RecordingActivities activities = new RecordingActivities();
+    activities.failLoadWith =
+        ApplicationFailure.newNonRetryableFailure(
+            "GitHub App token endpoint returned 422", "GITHUB_TOKEN_REJECTED");
+
+    try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
+      CodeReviewWorkflow workflow = start(environment, activities, "review-check-absent");
+
+      assertThatThrownBy(() -> workflow.review(request(true)))
+          .isInstanceOf(WorkflowFailedException.class);
+
+      assertThat(activities.calls).doesNotContain("openCheckRun", "failCheckRun");
+      // The pull request still says why, in the status comment.
+      assertThat(activities.calls).contains("publishFailure");
+    }
+  }
+
+  /** Losing the check run must not lose the review; the absence blocks the merge on its own. */
+  @Test
+  void checkRunThatCannotBeOpenedDoesNotFailTheReview() {
+    RecordingActivities activities = new RecordingActivities();
+    activities.failOpenCheckRun = true;
+
+    try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
+      CodeReviewWorkflow workflow = start(environment, activities, "review-check-broken");
+
+      ReviewResult result = workflow.review(request(true));
+
+      assertThat(result.report()).isEqualTo(REPORT);
+      assertThat(activities.calls).doesNotContain("completeCheckRun");
+      assertThat(workflow.progress().phase()).isEqualTo(ReviewPhase.COMPLETED);
+    }
+  }
+
+  @Test
+  void reviewThatFailedAfterTheCheckCouldNotBeOpenedDoesNotTryToFailIt() {
+    RecordingActivities activities = new RecordingActivities();
+    activities.failOpenCheckRun = true;
+    activities.failReviewWith =
+        ApplicationFailure.newNonRetryableFailure("Claude exited with 1", "AGENT_FAILED");
+
+    try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
+      CodeReviewWorkflow workflow = start(environment, activities, "review-check-broken-failure");
+
+      assertThatThrownBy(() -> workflow.review(request(true)))
+          .isInstanceOf(WorkflowFailedException.class);
+
+      assertThat(activities.calls).doesNotContain("failCheckRun");
+    }
+  }
+
+  @Test
+  void dryRunPublishesNoCheckRunEither() {
+    RecordingActivities activities = new RecordingActivities();
+    activities.failReviewWith =
+        ApplicationFailure.newNonRetryableFailure("Claude exited with 1", "AGENT_FAILED");
+
+    try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
+      CodeReviewWorkflow workflow = start(environment, activities, "review-dry-run-check");
+
+      assertThatThrownBy(() -> workflow.review(request(false)))
+          .isInstanceOf(WorkflowFailedException.class);
+
+      assertThat(activities.calls).doesNotContain("openCheckRun", "failCheckRun");
+    }
+  }
+
   /** One fake for every case, so each test states only the behaviour it is about. */
   private static final class RecordingActivities implements ReviewActivities {
 
@@ -196,8 +299,11 @@ class CodeReviewWorkflowTest {
     private boolean failOpen;
     private RuntimeException failLoadWith;
     private RuntimeException failReviewWith;
+    private boolean failOpenCheckRun;
     private String publishedStatusCommentId;
     private String failureStatusCommentId;
+    private String completedCheckRunId;
+    private String failedCheckRunId;
     private ReviewFailure failure;
 
     @Override
@@ -251,6 +357,33 @@ class CodeReviewWorkflowTest {
       calls.add("publishFailure");
       failureStatusCommentId = statusCommentId;
       failure = reported;
+    }
+
+    @Override
+    public String openCheckRun(final PullRequestContext pullRequest, final String workflowId) {
+      calls.add("openCheckRun");
+      if (failOpenCheckRun) {
+        throw ApplicationFailure.newNonRetryableFailure("checks 422", "GITHUB_TOKEN_REJECTED");
+      }
+      return "check-1";
+    }
+
+    @Override
+    public void completeCheckRun(
+        final PullRequestContext pullRequest,
+        final String checkRunId,
+        final ReviewReport reviewReport) {
+      calls.add("completeCheckRun");
+      completedCheckRunId = checkRunId;
+    }
+
+    @Override
+    public void failCheckRun(
+        final PullRequestContext pullRequest,
+        final String checkRunId,
+        final ReviewFailure reported) {
+      calls.add("failCheckRun");
+      failedCheckRunId = checkRunId;
     }
   }
 }

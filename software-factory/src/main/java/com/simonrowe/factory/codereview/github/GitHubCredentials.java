@@ -35,6 +35,15 @@ import org.springframework.stereotype.Component;
 public class GitHubCredentials {
 
   private static final String API_VERSION = "2026-03-10";
+
+  /**
+   * The only access level {@link #accessToken} ever asks for.
+   *
+   * <p>A constant rather than four literals so that adding a fifth permission cannot quietly ask
+   * for a different level than the other four — every entry in this block is load-bearing, and
+   * GitHub 422s the whole token request if any one of them exceeds the installation's grant.
+   */
+  private static final String WRITE = "write";
   private static final java.time.Duration EXPIRY_MARGIN = java.time.Duration.ofMinutes(5);
 
   private final CodeReviewProperties properties;
@@ -190,14 +199,24 @@ public class GitHubCredentials {
       // paths share this one method, the App's Contents permission must be bumped to read & write
       // *before* deploying an image that requests it (see docs/runbooks/software-factory.md's
       // rollout order) — otherwise every token mint 422s and both code-review and feedback fail.
+      //
+      // `checks` must be write: the code-review path publishes its verdict as a `Code Review`
+      // check run (CheckRunGateway), which is the only review signal a merge ruleset can read.
+      // This permission carries the exact same rollout hazard as `contents` above and it is the
+      // reason it is called out twice: the App's Checks permission must be granted and the
+      // installation permission update accepted BEFORE deploying an image that requests it.
+      // Get that order wrong and every accessToken() mint 422s — taking down code review AND the
+      // feedback loop, silently, because the failure path needs a token too. Only commentToken()
+      // survives such a drift, because it deliberately sends no permissions block at all.
       ObjectNode payload = objectMapper.createObjectNode();
       if (requestWritePermissions) {
         ObjectNode permissions =
             objectMapper
                 .createObjectNode()
-                .put("contents", "write")
-                .put("issues", "write")
-                .put("pull_requests", "write");
+                .put("checks", WRITE)
+                .put("contents", WRITE)
+                .put("issues", WRITE)
+                .put("pull_requests", WRITE);
         payload.set("permissions", permissions);
       }
       HttpRequest request =

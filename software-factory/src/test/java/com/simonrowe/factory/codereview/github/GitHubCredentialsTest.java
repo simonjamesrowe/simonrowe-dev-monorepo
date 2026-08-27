@@ -67,7 +67,10 @@ class GitHubCredentialsTest {
       // pull request permission, so read here fails the publish with 403 after a clean review.
       // contents must be write, not read: the feedback loop's guidance-branch push 403s
       // otherwise, regardless of what the App's own settings allow.
+      // checks must be write: the `Code Review` check run is the only review signal a merge
+      // ruleset can read, and without the grant this whole token request 422s.
       assertThat(requestBody.get())
+          .contains("\"checks\":\"write\"")
           .contains("\"contents\":\"write\"")
           .contains("\"issues\":\"write\"")
           .contains("\"pull_requests\":\"write\"");

@@ -171,6 +171,15 @@ Create a private, organization-owned GitHub App named `simonrowe-code-reviewer`:
     below. `GitHubCredentials` requests `contents: write` on every installation token mint —
     for both the code-review and feedback paths, since they share one method — so this
     permission must be granted before any image that mints tokens is deployed, not after.
+  - Checks: read & write — required to publish the `Code Review` check run, which is the only
+    review signal a merge ruleset can read (038-pr-governance). **Identical rollout hazard to
+    Contents above, and it is the one that bites**: `GitHubCredentials.mintInstallationToken`
+    sends an explicit `permissions` block, and GitHub 422s the *entire* token request when it
+    asks for more than the installation was granted. Deploying an image that requests
+    `checks: write` before the grant lands therefore breaks every `accessToken()` mint — taking
+    down code review **and** the feedback loop at once, silently, because reporting the failure
+    needs a token too. Grant it, accept the installation permission update, *then* deploy.
+    See [docs/runbooks/pr-governance.md](pr-governance.md).
   - Issues: read and write
   - Pull requests: read and write — **write is required**, even though the
     advisory comment is posted to the issue comments endpoint. GitHub governs
@@ -650,3 +659,61 @@ Expect one `workflow` and one `activity` poller. Zero pollers means the webhook 
   have been lost from the outcome. Now 40m. Recompute it in
   `ReviewFeedbackWorkflowImpl` whenever `FACTORY_FEEDBACK_DISTILL_TIMEOUT` or the target count
   changes: it is workflow code, so it cannot read the configured value at runtime.
+
+## The `Code Review` check run and thread reconciliation
+
+Added by 038-pr-governance. Full detail, including the ruleset and the emergency bypass, is in
+[docs/runbooks/pr-governance.md](pr-governance.md); what follows is what an operator debugging
+`software-factory` itself needs.
+
+### Check-run semantics
+
+Every publishing review creates one check run named exactly **`Code Review`** on the head commit.
+
+| State | Meaning |
+| --- | --- |
+| `in_progress` | Created right after `loadPullRequest` returns — the first moment the head SHA is known. It is *not* created when the status comment is opened, because at that point only a `ReviewRequest` exists and its `expectedHeadSha` is nullable on the manual-review path. |
+| `completed` / `success` | Verdict was `approve` or `comment` **and** no `CRITICAL` finding. |
+| `completed` / `failure` | Verdict was `request_changes` **or** any `CRITICAL` finding, **or** the review failed. Both conditions are evaluated independently: the engine can emit a verdict inconsistent with its own severities, and when it does the finding wins. |
+| **absent** | The review died before the head SHA was known — or `software-factory` is down. **This blocks the merge**, by design. |
+
+Only `success` and `failure` are ever sent. `neutral` is deliberately never used: whether it
+satisfies a ruleset's required status check is version-dependent GitHub behaviour, and this check
+stands between a critical finding and `main`.
+
+**An absent check is the outage signal.** If pull requests are stuck with `Code Review` never
+appearing, that is the fail-closed path working — the reviewer is not running. Check for a live
+poller on the `code-review` task queue, not just the container healthcheck: a container can be
+`healthy` with no poller registered, in which case webhooks return `202` and nothing ever reviews.
+
+### Thread reconciliation
+
+Findings are no longer deleted and reposted on every push. Each inline comment carries a
+fingerprint — `sha256(file + NUL + normalise(title))` — in its marker, and republishing reconciles
+the new report against the threads already on the pull request:
+
+| Existing thread | Fingerprint in new report | Action |
+| --- | --- | --- |
+| open | yes | left completely untouched |
+| resolved | yes | fresh thread — it regressed |
+| open | no | reply `No longer reported as of <sha>`, then resolve |
+| resolved | no | left alone |
+| none | yes | new thread |
+| not this reviewer's | n/a | never touched |
+
+**Nothing is deleted, ever.** `ThreadAction` has no delete case and a test asserts it stays that
+way. Deletion was never resolution: it left GitHub's "N resolved" counter permanently zero and
+destroyed a thread root even when a human had replied to it.
+
+The fingerprint excludes the **line** (lines move on every rebase) and the **severity** (the model
+re-grades between runs). It cannot survive a re-worded title, which reads as one resolved and one
+new — which is exactly why the reply says *"no longer reported"* rather than *"fixed"*.
+
+Reading and resolving threads uses **GraphQL**, because REST can neither see `isResolved` nor set
+it. This needs only `pull_requests: write`, already held — the check run is the only part of
+038-pr-governance that required a new grant.
+
+**First run after deploy:** threads opened before this change carry the old bare marker
+`<!-- temporal-code-review-finding -->`, match no fingerprint, and are therefore replied to and
+resolved. That is the correct outcome for a pre-change artefact, and nothing is destroyed. Expect a
+burst of resolutions on any pull request that was open across the deploy.
