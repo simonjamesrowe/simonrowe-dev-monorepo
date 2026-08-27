@@ -211,6 +211,36 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 038-deploy-rollout-fixes-2: The first three merges after auto-deploy went live
+  (2026-08-27) deployed **nothing**, with no visible symptom beyond the site staying on
+  the old version. Three causes:
+  - **`sync-config` validated the incoming compose file with
+    `docker compose -f $(mktemp) config -q`.** Compose derives the project directory —
+    and so where it looks for `.env` — from the compose file's own location, so it read
+    `/tmp/.env`, found nothing, and every `${VAR:?}` failed as "required variable is
+    missing a value". Indistinguishable from the real `missing-variable` decline, and it
+    names whichever required variable compose reaches first, so three merges blamed three
+    different variables that were all present. Nothing deployed and the site was never
+    touched — `sync-config` fails before `maintenance-on`. Fixed with
+    `--project-directory "$PROJECT_DIR"`. `service_hashes` had the identical bug with a
+    **silent** failure: stderr discarded, empty hash list, which reads as "no service
+    changed" and would let a non-allowlisted service past the held-back check.
+  - **`reconcile()`'s bare `up -d` recreates the `deployer` mid-deploy**, SIGTERMing the
+    container running the workflow; the replacement is left in `created` because the
+    process that would start it is the one being killed. The trigger is NOT a change to
+    the deployer's service definition — `deployer` and `software-factory` share
+    `${FACTORY_IMAGE}` (`software-factory:latest`) and the `pull` phase re-tags `:latest`,
+    so compose sees an image change on the deployer on **every deploy where the factory
+    image changed**. Happened twice. `reconcile()` now enumerates services with
+    `config --no-interpolate --services` (interpolating would make enumeration depend on
+    a full `.env`) and excludes `deployer`.
+  - **`FACTORY_PLATFORM_BACKUP_SCRIPT`/`_REPO_DIR` pointed at `/workspace/repo`**, which
+    stopped existing when 036-auto-deploy-rollout-fixes moved the deploy-directory mount
+    to its own host path. Inert only because `FACTORY_PLATFORM_BACKUP_ENABLED` defaults
+    false. Any new `deployer` path variable must use `${DEPLOY_DIR}`.
+  Note the interaction that hid all of this: `sync-config` checks `already-current`
+  **before** the compose validation, so a rehearsal deploy on the SHA already in
+  production exercises none of it. Only a real fast-forward reaches the broken code.
 - 037-platform-status-page: A public `/status` page reports which commit each first-party
   service runs, the third-party image tags, and a changelog with AI-written release notes.
   Every version fact is **baked into the artifact at build time** (`springBoot { buildInfo }`

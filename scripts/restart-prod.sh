@@ -334,7 +334,46 @@ phase_recreate() {
 reconcile() {
   echo "Reconciling production services..."
   local rc=0
-  compose up -d || rc=$?
+
+  # EVERY SERVICE EXCEPT THE DEPLOYER, never a bare `up -d`.
+  #
+  # This runs *inside* the deployer, so a bare `up -d` that decides the deployer
+  # needs recreating SIGTERMs the container executing this very script. What
+  # follows is not a clean failure: the replacement is left in `created` because
+  # the process that would have started it has just been killed, and the deploy
+  # workflow sits with no worker until the activity heartbeat times out.
+  #
+  # It is not a rare edge case. `deployer` and `software-factory` share one image
+  # reference, ${FACTORY_IMAGE} = software-factory:latest, and the `pull` phase a
+  # few steps earlier RE-TAGS :latest to the newly pulled image. The running
+  # deployer was created from the old :latest, so by the time this function runs
+  # compose sees an image change and wants to recreate it - on EVERY deploy where
+  # the factory image changed, whether or not the deployer's own service
+  # definition was touched. Observed twice in production.
+  #
+  # `deployer` is already absent from FACTORY_DEPLOY_SERVICES and
+  # FACTORY_DEPLOY_RECREATABLE; a bare `up -d` ignored both, so that exclusion was
+  # incomplete. The deployer is updated by hand, by design - see
+  # docs/runbooks/deploy.md "Keeping the deployer current".
+  #
+  # Listing services explicitly keeps the reconcile's real purpose intact: it
+  # still starts anything stuck in `created` and applies any compose change to
+  # everything else.
+  #
+  # --no-interpolate: this only needs the service NAMES, and asking compose to
+  # interpolate would make the list depend on a fully-populated .env. Enumerating
+  # must not be the step that fails.
+  local targets
+  mapfile -t targets < <(
+    docker compose -f "$COMPOSE_FILE" config --no-interpolate --services 2>/dev/null |
+      grep -vx deployer | sort
+  )
+  if [[ "${#targets[@]}" -eq 0 ]]; then
+    echo "WARNING: could not enumerate services; skipping reconcile rather than"
+    echo "         running a bare 'up -d' that could recreate this container."
+    return 0
+  fi
+  compose up -d "${targets[@]}" || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     echo
     echo "WARNING: 'docker compose up -d' exited ${rc}. Continuing to verification"
@@ -407,7 +446,12 @@ git_in_repo() {
 # documented contract.
 service_hashes() {
   local file="$1"
-  docker compose -f "$file" config --hash='*' 2>/dev/null |
+  # --project-directory, for the same reason as the config -q calls in
+  # phase_sync_config: "$file" is a mktemp copy, and without this compose would
+  # take /tmp as the project directory and find no .env. Here the failure is
+  # SILENT - stderr is discarded and an empty hash list reads as "no service
+  # changed", so a held-back service would sail through the allowlist check.
+  docker compose --project-directory "$PROJECT_DIR" -f "$file" config --hash='*' 2>/dev/null |
     awk 'NF >= 2 { print $1 "\t" $NF }' | sort
 }
 
@@ -498,9 +542,18 @@ phase_sync_config() {
   # and that failure is exactly the signal we want. Declining here is far better
   # than discovering it after HEAD moved, at which point every subsequent
   # `docker compose` command on the box is broken.
+  #
+  # --project-directory IS LOAD-BEARING. Both files here are mktemp copies, and
+  # compose derives the project directory - and therefore where it looks for
+  # .env - from the compose file's own location. Without this, compose reads
+  # /tmp/.env, finds nothing, and EVERY `${VAR:?}` in the file fails as "required
+  # variable ... is missing a value". That is indistinguishable from the genuine
+  # missing-variable case this check exists to catch, so sync-config declined
+  # every single merge while reporting a variable that was present in .env all
+  # along. Observed on three consecutive merges before it was found.
   local candidate_config_error
-  if ! candidate_config_error="$(docker compose -f "$candidate" config -q 2>&1)"; then
-    if docker compose -f "$current_copy" config -q >/dev/null 2>&1; then
+  if ! candidate_config_error="$(docker compose --project-directory "$PROJECT_DIR" -f "$candidate" config -q 2>&1)"; then
+    if docker compose --project-directory "$PROJECT_DIR" -f "$current_copy" config -q >/dev/null 2>&1; then
       local missing
       # Best effort only. The decline does not depend on parsing the name.
       missing="$(printf '%s' "$candidate_config_error" |

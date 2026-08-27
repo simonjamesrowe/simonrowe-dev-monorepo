@@ -168,6 +168,47 @@ because Elasticsearch needs ~130s to bind 9200 on this Pi and the backend anothe
 containers and explains the `created` state, and the run's triage issue quotes
 the logs.
 
+### sync-config declines every merge, naming a variable that IS in .env
+
+Fixed, but worth knowing the shape. `sync-config` validates the incoming compose
+file by writing it to `mktemp` and running `docker compose -f <tmp> config -q`.
+Compose derives the project directory — and therefore where it looks for `.env` —
+from the **compose file's own location**, so it read `/tmp/.env`, found nothing,
+and every `${VAR:?}` failed as "required variable ... is missing a value".
+
+That is indistinguishable from the genuine `missing-variable` case the check
+exists to catch, and it fires on *whichever* required variable compose reaches
+first — so three consecutive merges reported three different variables, all of
+them present in `.env` all along. Nothing deployed: `sync-config` fails before
+`maintenance-on`, so the site is never touched and the only symptom is that
+merges silently stop reaching production.
+
+Every `docker compose` call against a file outside the project directory needs
+`--project-directory "$PROJECT_DIR"`. `service_hashes` had the same bug with a
+worse failure mode: its stderr is discarded, so it returned an empty hash list,
+which reads as "no service changed" and would let a non-allowlisted service
+through the held-back check.
+
+### The deploy kills its own deployer
+
+Fixed. `reconcile()` used to run a bare `docker compose up -d`, which ignored
+`FACTORY_DEPLOY_RECREATABLE` and would recreate the `deployer` — SIGTERMing the
+container running the deploy. The replacement is left in `created`, because the
+process that would have started it was the one being killed, and the workflow
+then sits with no worker until the activity heartbeat times out.
+
+The trigger is not "the merge changed the deployer". `deployer` and
+`software-factory` share `${FACTORY_IMAGE}` (`software-factory:latest`), and the
+`pull` phase re-tags `:latest` to the new image — so compose sees an image change
+on the deployer on **every deploy where the factory image changed**. It happened
+twice before the cause was understood.
+
+`reconcile()` now enumerates services (`config --no-interpolate --services`) and
+excludes `deployer`. If it is ever reintroduced, the symptom is a deploy that
+stalls for ~10 minutes mid-`recreate` with the maintenance page up, and recovers
+on its own once someone runs
+`docker compose -f docker-compose.prod.yml up -d --no-deps deployer`.
+
 ## Running compose from inside the deployer
 
 The deployer drives the **host's** Docker daemon from inside a container, and that
