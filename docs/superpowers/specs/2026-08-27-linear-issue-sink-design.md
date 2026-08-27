@@ -77,6 +77,33 @@ what the successor features are allowed to file.
 - **Linear as a work queue.** Reading a ticket and acting on it — auto-picking-up
   CVE tickets, for instance. The seam for it is in this design; the feature is not.
 - **A deploy error-class taxonomy.** See the fingerprint section.
+- **Five documentation/Javadoc residuals from the final review (2026-08-27).** All real,
+  all small, none a code defect. Parked rather than fixed because they surfaced *in* the
+  final fix wave's own re-review, and a second wave was not justified; fold them into the
+  pull-request loop.
+  1. **`DeployRunRecord.issueUrl` and `DeployResult` enumerate three null cases** — sink
+     disabled, nothing failed, filing failed — but a *human-declined* ticket is a fourth,
+     since a `SUPPRESSED` occurrence now reports no issue. Worse,
+     `DeployRunRecord.linearFilingFailed`'s Javadoc says "no ticket was filed — whatever
+     the cause", yet a suppressed occurrence attempted filing, filed nothing, and leaves
+     the flag **false**. So `issueUrl: null, linearFilingFailed: false` in `deploy_runs`
+     currently reads as "the sink is off", when it may mean "a human declined this ticket".
+     One clause in each of two Javadocs.
+  2. **The load-bearing timeout arithmetic says four sequential Linear calls; the
+     `FILED_REGRESSION` path makes five** (`relateIssues`). 5 x 15s = 75s, still inside the
+     90s `startToCloseTimeout`, so no duplicate window is open — but the slack is 15s, not
+     30s, and that comment is what a future editor will do arithmetic against.
+  3. **`FiledIssue`'s Javadoc still says "null ... for a dry run".** The suppressed half is
+     now enforced; the dry-run half is not — a dry run over a fingerprint that already
+     carries a ticket returns that ticket's identifier.
+  4. **`linear.md` rollout steps 5 and 6 never say to recreate the container** after
+     editing `.env`. Followed literally the flag has not taken effect, so step 5 files a
+     **real** ticket while instructing the operator to confirm none was created. Step 6's
+     `deleteOne` also uses a placeholder purl with no instruction for finding the real one.
+  5. `DeployerLinearCredentialTest`'s `contains("LINEAR")` is case-sensitive, so a
+     lowercase `linear_api_key` mapping key would slip through. Env-var convention makes
+     this unlikely.
+
 - **Two deploy failure paths that file nothing** (found in Task 10 review, 2026-08-27).
   A `SyncDecision.FAILED` and a failed `maintenance-on` both exit `DeployWorkflowImpl`
   via `finish`, which reports only for `DEPLOYED_IMAGES_ONLY`. This is **faithful
