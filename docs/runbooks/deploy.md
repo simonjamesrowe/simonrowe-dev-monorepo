@@ -96,7 +96,8 @@ docker exec -it simonrowe-dev-monorepo-mongodb-1 mongosh software_factory \
 
 Each record holds the commit, the trigger, every phase's outcome, the
 configuration-sync decision, whether a rollback was taken and whether it
-verified, whether the maintenance page was left up, and the reported issue URL.
+verified, whether the maintenance page was left up, and the reported issue URL —
+a Linear ticket, not a GitHub issue; see [linear.md](linear.md).
 
 For a run still inside the retention window, `temporal.simonrowe.dev` shows the
 live phase and the `progress()` query.
@@ -109,8 +110,9 @@ Check the run record's `maintenancePageLeftUp` and `status`:
 
 - `ROLLBACK_FAILED` — **this is the case that needs a human now.** The deploy
   failed, the rollback also failed verification, and the page was deliberately
-  left up rather than exposing a broken site. Read the issue the run opened, then
-  fix forward or restore by hand.
+  left up rather than exposing a broken site. Read the Linear ticket the run
+  filed (`issueUrl` on the run record; see [linear.md](linear.md)), then fix
+  forward or restore by hand.
 - `ROLLBACK_DISABLED` — the operator turned rollback off, so the broken version
   is still running behind the page.
 
@@ -165,8 +167,8 @@ so `software-factory` holds no implementation of any deploy step.
 `verify` waits up to `VERIFY_TIMEOUT` (420s) for every container to settle,
 because Elasticsearch needs ~130s to bind 9200 on this Pi and the backend another
 ~90s after that. That is normal. If it fails, the settle loop names the
-containers and explains the `created` state, and the run's triage issue quotes
-the logs.
+containers and explains the `created` state, and the run's Linear ticket, when
+filing is enabled, quotes the logs (see [linear.md](linear.md)).
 
 ## Rollout order
 
