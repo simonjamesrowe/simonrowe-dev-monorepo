@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 
 import { API_BASE_URL } from '../../config/api'
 import { useProfile } from '../../hooks/useProfile'
+import { VersionBadge } from './VersionBadge'
 
 const SOCIAL_ICONS: Record<string, ReactNode> = {
   github: <Github size={18} />,
@@ -55,6 +56,8 @@ export function Footer() {
         <p className="footer__copyright">
           &copy; {new Date().getFullYear()} {name}
         </p>
+
+        <VersionBadge />
 
         <ul className="footer__icons">
           {socialLinks.map((link) => {
