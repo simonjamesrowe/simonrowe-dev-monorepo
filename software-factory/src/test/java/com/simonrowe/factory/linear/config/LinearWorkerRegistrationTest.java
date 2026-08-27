@@ -1,7 +1,11 @@
 package com.simonrowe.factory.linear.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.linear.linear.LinearGateway;
@@ -10,6 +14,7 @@ import com.simonrowe.factory.linear.persistence.LinearIssueRepository;
 import com.simonrowe.factory.linear.service.FilingDecider;
 import com.simonrowe.factory.linear.service.IssueFiler;
 import com.simonrowe.factory.linear.workflow.LinearActivitiesImpl;
+import io.temporal.spring.boot.ActivityImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -66,26 +71,55 @@ class LinearWorkerRegistrationTest {
   @Test
   void theDeployerShapeHoldsNoFilingImplementation() {
     // The combination that matters: the container with the Docker socket must hold no
-    // implementation that reads LINEAR_API_KEY.
+    // implementation that reads LINEAR_API_KEY. Note factory.deploy.enabled is declarative here:
+    // this harness only scans com.simonrowe.factory.linear, so setting it is not itself proof of
+    // anything about the deploy package — it is recorded to document intent, not to exercise a
+    // cross-module interaction this scan cannot see. That makes this test behaviourally identical
+    // to theSinkIsAbsentWhenTheFlagIsExplicitlyFalse; it is kept anyway as intent-documentation.
     runner
         .withPropertyValues("factory.deploy.enabled=true", "factory.linear.enabled=false")
         .run(context -> assertThat(context).doesNotHaveBean(LinearActivitiesImpl.class));
   }
 
   @Test
-  void theUngatedCollaboratorsAreHarmlessWithTheFlagOff() {
-    // LinearGateway, FilingDecider and IssueFiler are plain @Component beans with no
-    // @ConditionalOnProperty of their own, so they are always instantiated regardless of the
-    // flag. That is intended to be harmless because none of them performs I/O at construction
-    // time (LinearGateway only builds an HttpClient and resolves its team lazily on first use).
-    // This test exists so a future constructor-time network call on any of the three is caught
-    // here rather than surfacing as a context-startup failure on the deployer.
-    runner.run(
-        context -> {
-          assertThat(context).hasSingleBean(LinearGateway.class);
-          assertThat(context).hasSingleBean(FilingDecider.class);
-          assertThat(context).hasSingleBean(IssueFiler.class);
-        });
+  void theActivityImplementationDeclaresTheLinearTaskQueue() {
+    // Nothing else pins this: removing or retargeting @ActivityImpl would leave the queue
+    // unpolled with no other test noticing, and research item 7's finding that an
+    // activity-only queue gets a worker was a one-off manual source read, not something any
+    // test observes.
+    ActivityImpl annotation = LinearActivitiesImpl.class.getAnnotation(ActivityImpl.class);
+    assertThat(annotation).isNotNull();
+    assertThat(annotation.taskQueues()).containsExactly(LinearTaskQueues.LINEAR);
+  }
+
+  @Test
+  void noCollaboratorPerformsIoAtConstructionTime() {
+    // Bean presence alone does not prove this: it only catches a throwing constructor. A
+    // constructor that performs I/O and returns cleanly — a Mongo call against this test's mock,
+    // which hands back Mockito defaults like 0L/null, or an HTTP call that happens to succeed —
+    // would leave a presence-only assertion green while still doing real work at context-startup
+    // time. So this asserts two things instead: that neither Mongo collaborator saw any
+    // interaction, and that construction cannot have made a live HTTP call, by pointing
+    // factory.linear.api-base-url at a closed local port so any attempt fails fast,
+    // deterministically, and offline — rather than reaching the real api.linear.app (the
+    // LinearProperties default) or hanging for up to the 30s connect timeout on a networked
+    // runner.
+    runner
+        .withPropertyValues("factory.linear.api-base-url=http://127.0.0.1:1/graphql")
+        .run(
+            context -> {
+              assertThat(context).hasSingleBean(LinearGateway.class);
+              assertThat(context).hasSingleBean(FilingDecider.class);
+              assertThat(context).hasSingleBean(IssueFiler.class);
+              MongoTemplate mongoTemplate = context.getBean(MongoTemplate.class);
+              // Spring's own ApplicationContextAwareProcessor calls setApplicationContext on
+              // every ApplicationContextAware bean, including this mock, purely as container
+              // wiring — that one call is not evidence of anything the linear module did, so it
+              // is acknowledged rather than counted against the "no I/O at construction" claim.
+              verify(mongoTemplate).setApplicationContext(any());
+              verifyNoMoreInteractions(mongoTemplate);
+              verifyNoInteractions(context.getBean(LinearIssueRepository.class));
+            });
   }
 
   /** A real component scan of the linear package, with external collaborators mocked. */

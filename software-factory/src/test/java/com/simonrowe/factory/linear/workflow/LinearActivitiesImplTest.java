@@ -36,12 +36,24 @@ class LinearActivitiesImplTest {
   void mapsNonRetryableFaultsToNonRetryableApplicationFailures() {
     // Temporal retries every exception by default. A revoked or read-only API key would then
     // burn the whole retry budget on a fault that cannot resolve itself.
-    when(filer.file(any(IssueFiling.class)))
-        .thenThrow(new LinearApiException("Linear rejected the API key with 401", false));
+    LinearApiException fault =
+        new LinearApiException("Linear rejected the API key with 401", false);
+    when(filer.file(any(IssueFiling.class))).thenThrow(fault);
 
     assertThatThrownBy(() -> activities.fileIssue(filing()))
         .isInstanceOf(ApplicationFailure.class)
-        .satisfies(e -> assertThat(((ApplicationFailure) e).isNonRetryable()).isTrue());
+        .satisfies(
+            e -> {
+              ApplicationFailure failure = (ApplicationFailure) e;
+              assertThat(failure.isNonRetryable()).isTrue();
+              // SCREAMING_SNAKE, matching every other failure type in this codebase
+              // (STALE_PULL_REQUEST, MISSING_GITHUB_CREDENTIALS, CVE_FIX_PR_NOT_OPENED).
+              assertThat(failure.getType()).isEqualTo("LINEAR_API_ERROR");
+              assertThat(failure.getDetails().get(String.class)).isEqualTo("deploy");
+              // The cause must not be dropped: it is populated for the most opaque faults
+              // (an unparseable Linear response), and a triager needs to see it.
+              assertThat(failure.getCause()).isSameAs(fault);
+            });
   }
 
   @Test

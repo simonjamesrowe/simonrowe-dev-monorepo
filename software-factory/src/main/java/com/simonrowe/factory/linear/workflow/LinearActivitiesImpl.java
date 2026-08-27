@@ -45,8 +45,10 @@ public class LinearActivitiesImpl implements LinearActivities {
         // Let it out: Temporal's retry policy is the right place to back off a 429 or a 5xx.
         throw exception;
       }
-      throw ApplicationFailure.newNonRetryableFailure(
-          exception.getMessage(), "LinearApiError", filing.producer());
+      // WithCause, not the cause-dropping overload: the most opaque non-retryable faults (an
+      // unparseable Linear response) carry a wrapped IOException that a triager needs to see.
+      throw ApplicationFailure.newNonRetryableFailureWithCause(
+          exception.getMessage(), "LINEAR_API_ERROR", exception, filing.producer());
     }
   }
 }
