@@ -29,6 +29,14 @@ public class RestoreService {
 
   private static final Logger LOG = LoggerFactory.getLogger(RestoreService.class);
 
+  // Declared above the collection lists below because those lists reference them in their
+  // own initialisers, and a static field cannot be forward-referenced from one.
+  private static final String FAVOURITES = "favourites";
+  private static final String ARTICLE_SUMMARIES = "article_summaries";
+  private static final String PLATFORM_RELEASES = "platform_releases";
+  private static final String FAVOURITES_UNIQUE_INDEX = "idx_type_content";
+  private static final String FAVOURITES_LIST_INDEX = "idx_type_created";
+
   private static final List<String> IMPORT_ORDER_INDEPENDENT = List.of(
       "tags", "skills", "profiles", "social_medias", "tourSteps", "media_assets",
       "content_sources", "aggregated_articles", "aggregated_events",
@@ -37,20 +45,14 @@ public class RestoreService {
       "favourites",
       // Article summaries are the same shape: no @DBRef, one plain articleId pointing at
       // aggregated_articles, so they follow it here rather than in the ordered list.
-      "article_summaries",
+      ARTICLE_SUMMARIES,
       // Releases reference nothing at all — the _id is a commit SHA — so order is free.
-      "platform_releases"
+      PLATFORM_RELEASES
   );
 
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
       "skill_groups", "jobs", "blogs", "code_examples", "narrations"
   );
-
-  private static final String FAVOURITES = "favourites";
-  private static final String ARTICLE_SUMMARIES = "article_summaries";
-  private static final String PLATFORM_RELEASES = "platform_releases";
-  private static final String FAVOURITES_UNIQUE_INDEX = "idx_type_content";
-  private static final String FAVOURITES_LIST_INDEX = "idx_type_created";
 
   private final MongoTemplate mongoTemplate;
   private final GoogleDriveService googleDriveService;
