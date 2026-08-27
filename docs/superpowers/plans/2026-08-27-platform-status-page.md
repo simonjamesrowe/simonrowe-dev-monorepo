@@ -443,7 +443,7 @@ class ProdImageCatalogTest {
   }
 
   @Test
-  void marksFloatingTagsRatherThanInventingAVersion() {
+  void marksFloatingTagsRatherThanInventingVersion() {
     PlatformComponent alloy = component("alloy");
 
     assertThat(alloy.tag()).isEqualTo("latest");
@@ -722,16 +722,16 @@ import org.junit.jupiter.api.Test;
 
 class BakedReleaseHistoryTest {
 
-  private static final String US = "\u001f";
-  private static final String RS = "\u001e";
+  private static final String UNIT_SEP = "\u001f";
+  private static final String RECORD_SEP = "\u001e";
 
   @Test
   void parsesOneCommitPerRecord() {
-    String raw = RS + "840c311abcdef0123456789abcdef0123456789a" + US + "1756200000" + US
-        + "docs: overhaul the README (#118)" + US + "Rewrote it.\n\nAdded diagrams." + US
+    String raw = RECORD_SEP + "840c311abcdef0123456789abcdef0123456789a" + UNIT_SEP + "1756200000" + UNIT_SEP
+        + "docs: overhaul the README (#118)" + UNIT_SEP + "Rewrote it.\n\nAdded diagrams." + UNIT_SEP
         + "\nREADME.md\ndocs/architecture.md\n"
-        + RS + "39e0f7aabcdef0123456789abcdef0123456789a" + US + "1756100000" + US
-        + "feat: deploy automatically on merge to main (#116)" + US + "" + US
+        + RECORD_SEP + "39e0f7aabcdef0123456789abcdef0123456789a" + UNIT_SEP + "1756100000" + UNIT_SEP
+        + "feat: deploy automatically on merge to main (#116)" + UNIT_SEP + "" + UNIT_SEP
         + "\ndocker-compose.prod.yml\n";
 
     List<BakedRelease> releases = BakedReleaseHistory.parse(raw);
@@ -765,22 +765,22 @@ class BakedReleaseHistoryTest {
 
   @Test
   void skipsMalformedRecordsRatherThanFailing() {
-    String raw = RS + "onlyonefield";
+    String raw = RECORD_SEP + "onlyonefield";
 
     assertThat(BakedReleaseHistory.parse(raw)).isEmpty();
   }
 
   @Test
-  void skipsARecordWithAnUnparseableTimestamp() {
-    String raw = RS + "840c311abcdef0123456789abcdef0123456789a" + US + "not-a-number" + US
-        + "feat: thing" + US + "" + US + "\n";
+  void skipsRecordWithAnUnparseableTimestamp() {
+    String raw = RECORD_SEP + "840c311abcdef0123456789abcdef0123456789a" + UNIT_SEP + "not-a-number" + UNIT_SEP
+        + "feat: thing" + UNIT_SEP + "" + UNIT_SEP + "\n";
 
     assertThat(BakedReleaseHistory.parse(raw)).isEmpty();
   }
 
   private static BakedRelease release(final String subject) {
-    String raw = RS + "840c311abcdef0123456789abcdef0123456789a" + US + "1756200000" + US
-        + subject + US + "" + US + "\n";
+    String raw = RECORD_SEP + "840c311abcdef0123456789abcdef0123456789a" + UNIT_SEP + "1756200000" + UNIT_SEP
+        + subject + UNIT_SEP + "" + UNIT_SEP + "\n";
     return BakedReleaseHistory.parse(raw).get(0);
   }
 }
@@ -1565,7 +1565,7 @@ class ReleaseRecorderTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void insertsNothingOnASecondRun() {
+  void insertsNothingOnSecondRun() {
     ReleaseRecorder recorder = recorder(List.of(
         baked(RUNNING_SHA, "docs: overhaul the README", 1756200000L),
         baked(OLDER_SHA, "feat: deploy automatically", 1756100000L)));
@@ -1593,7 +1593,7 @@ class ReleaseRecorderTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void promotesAPublishedRecordToRunningWhenThisBuildBootsOnIt() {
+  void promotesPublishedRecordToRunningWhenThisBuildBootsOnIt() {
     // The history is baked before the deploy, so the running SHA is usually already
     // present as PUBLISHED_HISTORY from an earlier boot. Booting on it is the evidence
     // that upgrades the claim, and it must not cost the summary.
@@ -1913,7 +1913,7 @@ class ReleaseSummarySweepTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void treatsAnEmptyCompletionAsAFailedAttempt() {
+  void treatsEmptyCompletionAsFailedAttempt() {
     pending("840c311abcdef0123456789abcdef0123456789a", 1756200000L);
 
     sweepReturning("   ").sweep();
@@ -2926,7 +2926,7 @@ class PlatformReleasesControllerTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void exposesAPendingSummaryAsPendingRatherThanHidingTheEntry() throws Exception {
+  void exposesPendingSummaryRatherThanHidingTheEntry() throws Exception {
     mockMvc.perform(get("/api/platform/releases"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[1].summaryStatus").value("PENDING"))
@@ -2949,7 +2949,7 @@ class PlatformReleasesControllerTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void rejectsANonPositiveLimit() throws Exception {
+  void rejectsNonPositiveLimit() throws Exception {
     mockMvc.perform(get("/api/platform/releases").param("limit", "0"))
         .andExpect(status().isBadRequest());
   }
@@ -3227,7 +3227,7 @@ public class PlatformReleasesController {
 Run from `backend/`: `../gradlew :backend:test --tests 'com.simonrowe.platform.Platform*ControllerTest'`
 Expected: PASS, 12 tests.
 
-If `rejectsANonPositiveLimit` returns 500 rather than 400, the project has no handler mapping
+If `rejectsNonPositiveLimit` returns 500 rather than 400, the project has no handler mapping
 `ConstraintViolationException` to 400. Check with
 `grep -rn "ConstraintViolationException" backend/src/main/java`. If none exists, replace the
 `@Min(1)` validation with an explicit check in the controller that throws
