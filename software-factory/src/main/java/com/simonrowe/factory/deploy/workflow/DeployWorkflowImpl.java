@@ -428,7 +428,17 @@ public class DeployWorkflowImpl implements DeployWorkflow {
                     rendered.title(),
                     rendered.body(),
                     "commit " + sha + ", workflow run " + Workflow.getInfo().getRunId(),
-                    Workflow.getInfo().getRunId(),
+                    // The run id PLUS the commit, exactly as cvefix appends the purl. ONE run can
+                    // file more than once: the drain loop in run() re-enters deployOnce when a
+                    // newer commit was signalled mid-deploy, and every pass presents the same run
+                    // id. A bare run id would make the second failure look like a replay of the
+                    // first to LinearIssueRecord.hasOccurrence, and IssueFiler would silently
+                    // return the earlier decision without commenting or filing. The loop only
+                    // re-enters when the signalled sha differs from the one just deployed, so the
+                    // pair is distinct per pass - and if an operator re-signals a commit this run
+                    // already deployed, collapsing that onto the earlier occurrence is the right
+                    // reading anyway: same run, same commit, same problem.
+                    Workflow.getInfo().getRunId() + ":" + sha,
                     Workflow.getInfo().getWorkflowId()));
         // Null-guarded rather than dereferenced. The catch below would contain the NPE, but "no
         // URL came back" is honestly a filing that returned nothing rather than one that failed.

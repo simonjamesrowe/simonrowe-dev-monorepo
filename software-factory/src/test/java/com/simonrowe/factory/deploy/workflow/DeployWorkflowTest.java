@@ -369,11 +369,54 @@ class DeployWorkflowTest {
     assertThat(filing.getValue().title()).contains("Deploy failed");
     assertThat(filing.getValue().body()).contains("previous version");
     assertThat(filing.getValue().occurrenceDetail()).contains(SHA);
+    // The commit is part of the occurrence id, not just of the prose detail: the run id alone is
+    // not unique per filing, because one run can file once per pass of the drain loop.
+    assertThat(filing.getValue().occurrenceId()).contains(SHA);
+    assertThat(filing.getValue().workflowId()).isEqualTo(DeployWorkflow.WORKFLOW_ID);
 
     assertThat(outcome.result().issueUrl()).isEqualTo(LINEAR_URL);
     DeployRunRecord record = lastRecordedRun(activities);
     assertThat(record.issueUrl()).isEqualTo(LINEAR_URL);
     assertThat(record.linearFilingFailed()).isFalse();
+  }
+
+  @Test
+  void filesOneOccurrencePerCommitInTheDrainLoop() {
+    // Two failing passes of the drain loop in ONE Temporal run. `verify` fails forever here, so
+    // both passes fail the same way and produce identical key parts - which is the point: the
+    // fingerprint is the same problem, so the occurrence id is the only thing that can tell the
+    // second real failure apart from a replay of the first.
+    //
+    // With a bare run id as the occurrence id, IssueFiler's replay guard
+    // (LinearIssueRecord.hasOccurrence) short-circuits the second filing and returns the first
+    // pass's decision without touching Linear: no comment, no ticket, and the second commit's
+    // failure is silently lost.
+    DeployActivities activities = activities();
+    LinearActivities linear = linearActivities();
+    failPhase(activities, DeployPhase.VERIFY, 1);
+
+    Outcome outcome =
+        executeSignalling(activities, linear, requestFilingToLinear(), NEWER_SHA);
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.ROLLBACK_FAILED);
+
+    ArgumentCaptor<IssueFiling> filings = ArgumentCaptor.forClass(IssueFiling.class);
+    verify(linear, times(2)).fileIssue(filings.capture());
+    List<IssueFiling> filed = filings.getAllValues();
+
+    // Same problem, so deliberately the same key parts - the fingerprint must collapse these onto
+    // one ticket.
+    assertThat(filed)
+        .extracting(IssueFiling::keyParts)
+        .containsOnly(List.of("verify", "ROLLBACK_FAILED"));
+    // One Temporal run, so the same workflow id throughout.
+    assertThat(filed)
+        .extracting(IssueFiling::workflowId)
+        .containsOnly(DeployWorkflow.WORKFLOW_ID);
+    // But two distinct occurrences, each naming its own commit.
+    assertThat(filed).extracting(IssueFiling::occurrenceId).doesNotHaveDuplicates();
+    assertThat(filed.get(0).occurrenceId()).contains(SHA);
+    assertThat(filed.get(1).occurrenceId()).contains(NEWER_SHA);
   }
 
   @Test
@@ -696,7 +739,22 @@ class DeployWorkflowTest {
       final DeployActivities activities,
       final DeployRequest request,
       final String signalledSha) {
-    try (TestWorkflowEnvironment environment = environment(activities, null)) {
+    return executeSignalling(activities, null, request, signalledSha);
+  }
+
+  private Outcome executeSignalling(
+      final DeployActivities activities,
+      final LinearActivities linear,
+      final DeployRequest request,
+      final String signalledSha) {
+    // Same trade as executeFiling: a filing on an unpolled queue hangs the suite rather than
+    // failing it, so refuse the combination up front.
+    if (linear == null && request.linearFilingEnabled()) {
+      throw new IllegalArgumentException(
+          "linearFilingEnabled needs a LinearActivities worker - pass one to executeSignalling, "
+              + "or the suite will hang rather than fail");
+    }
+    try (TestWorkflowEnvironment environment = environment(activities, linear)) {
       DeployWorkflow workflow = stub(environment);
       DeployWorkflow signaller =
           environment

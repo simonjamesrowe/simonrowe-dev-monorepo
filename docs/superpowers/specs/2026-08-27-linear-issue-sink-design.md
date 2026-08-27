@@ -271,9 +271,19 @@ Two consequences worth stating:
    pending record **repairs by attaching**, never by re-creating.
 2. **A retry after a fully successful create** finds the attachment and posts a
    spurious "it happened again" comment. Closed by a caller-supplied
-   `occurrenceId` — the producing workflow's run id — checked against the decision
-   log. Mongo-based rather than Linear-based on purpose: the worst case of a lost
-   record is one duplicate comment, not a duplicate ticket.
+   `occurrenceId` — checked against the decision log. Mongo-based rather than
+   Linear-based on purpose: the worst case of a lost record is one duplicate
+   comment, not a duplicate ticket.
+
+   **The run id alone is not enough for either producer**, and the design's
+   original "the producing workflow's run id" was wrong on both sides. One run
+   can file several times: `cvefix` files once per unfixable component, and
+   `deploy`'s drain loop re-enters `deployOnce` when a newer commit is signalled
+   mid-deploy. So the id is the run id plus the thing that varies within the run
+   — `runId:purl` for cvefix, `runId:sha` for deploy. With a bare run id the
+   second real occurrence in one run is read as a replay of the first and
+   silently dropped: no ticket, no comment, and the producer's own run record
+   echoes the earlier decision.
 
 ## Failure boundaries
 
