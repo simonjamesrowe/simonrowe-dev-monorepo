@@ -25,7 +25,7 @@ public interface PlatformReleaseRepository extends MongoRepository<PlatformRelea
   }
 
   /**
-   * Releases awaiting a summary, oldest commit first.
+   * Releases awaiting a summary, newest commit first.
    *
    * @param limit how many to claim
    * @return pending releases

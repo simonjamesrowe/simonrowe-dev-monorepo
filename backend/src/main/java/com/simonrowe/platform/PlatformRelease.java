@@ -108,7 +108,7 @@ public class PlatformRelease {
   }
 
   public List<String> getFilesChanged() {
-    return filesChanged;
+    return filesChanged == null ? List.of() : List.copyOf(filesChanged);
   }
 
   public void setFilesChanged(final List<String> filesChanged) {
