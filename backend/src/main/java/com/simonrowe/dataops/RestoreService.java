@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
+import com.simonrowe.migration.changeunits.V022CreatePlatformReleaseIndexes;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -35,7 +36,9 @@ public class RestoreService {
       "favourites",
       // Article summaries are the same shape: no @DBRef, one plain articleId pointing at
       // aggregated_articles, so they follow it here rather than in the ordered list.
-      "article_summaries"
+      "article_summaries",
+      // Releases reference nothing at all — the _id is a commit SHA — so order is free.
+      "platform_releases"
   );
 
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
@@ -44,6 +47,7 @@ public class RestoreService {
 
   private static final String FAVOURITES = "favourites";
   private static final String ARTICLE_SUMMARIES = "article_summaries";
+  private static final String PLATFORM_RELEASES = "platform_releases";
   private static final String FAVOURITES_UNIQUE_INDEX = "idx_type_content";
   private static final String FAVOURITES_LIST_INDEX = "idx_type_created";
 
@@ -198,6 +202,9 @@ public class RestoreService {
       if (ARTICLE_SUMMARIES.equals(collectionName)) {
         ensureArticleSummaryIndexes();
       }
+      if (PLATFORM_RELEASES.equals(collectionName)) {
+        ensurePlatformReleaseIndexes();
+      }
 
       progress += progressPerCollection;
     }
@@ -242,6 +249,21 @@ public class RestoreService {
   void ensureArticleSummaryIndexes() {
     V020CreateArticleSummaryIndexes.createIndexes(mongoTemplate);
     LOG.info("Recreated article summary indexes after restore");
+  }
+
+  /**
+   * Recreates the platform-release indexes after a restore, for the same reason
+   * {@link #ensureFavouriteIndexes()} exists: {@code dropCollection} takes the
+   * collection's indexes with it, and {@code V022} has already been recorded as
+   * executed, so Mongock will never put them back.
+   *
+   * <p>Definitions live in {@code V022CreatePlatformReleaseIndexes} and are called from
+   * there rather than restated, so the two cannot drift.
+   * Package-private so the round-trip test can exercise it directly.
+   */
+  void ensurePlatformReleaseIndexes() {
+    V022CreatePlatformReleaseIndexes.createIndexes(mongoTemplate);
+    LOG.info("Recreated platform release indexes after restore");
   }
 
   /**

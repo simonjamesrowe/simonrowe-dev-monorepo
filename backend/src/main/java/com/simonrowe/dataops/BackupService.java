@@ -44,7 +44,11 @@ public class BackupService {
       "content_sources", "favourites", "narrations",
       // Generated article summaries cost an LLM call each, so a backup that skipped them
       // would silently discard paid-for content on the next restore.
-      "article_summaries"
+      "article_summaries",
+      // Release notes on /status are the same: one LLM call per release, and the backfill
+      // of history is only baked into the image that produced it — a restore into a newer
+      // image could not regenerate the older entries at all.
+      "platform_releases"
   );
 
   private final MongoClient mongoClient;
