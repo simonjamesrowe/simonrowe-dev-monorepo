@@ -134,6 +134,19 @@ class LinearGatewayWriteTest {
   }
 
   @Test
+  void failsNonRetryablyWhenAttachFingerprintReportsUnsuccessful() {
+    // The fingerprint attachment is the only thing that lets the sink find an issue again; a
+    // silently swallowed failure here would file a duplicate ticket on every occurrence.
+    byOperation.put("attachmentCreate", "{\"data\":{\"attachmentCreate\":{\"success\":false}}}");
+    assertThatThrownBy(
+            () -> gateway().attachFingerprint("i9", "https://factory.simonrowe.dev/fp/abc"))
+        .isInstanceOf(LinearApiException.class)
+        .hasMessageContaining("attachmentCreate")
+        .extracting(e -> ((LinearApiException) e).retryable())
+        .isEqualTo(false);
+  }
+
+  @Test
   void addsComment() {
     byOperation.put(
         "commentCreate",
@@ -142,6 +155,16 @@ class LinearGatewayWriteTest {
     gateway().addComment("i9", "seen again at deadbeef");
 
     assertThat(bodies.get(bodies.size() - 1)).contains("commentCreate").contains("deadbeef");
+  }
+
+  @Test
+  void failsNonRetryablyWhenAddCommentReportsUnsuccessful() {
+    byOperation.put("commentCreate", "{\"data\":{\"commentCreate\":{\"success\":false}}}");
+    assertThatThrownBy(() -> gateway().addComment("i9", "seen again"))
+        .isInstanceOf(LinearApiException.class)
+        .hasMessageContaining("commentCreate")
+        .extracting(e -> ((LinearApiException) e).retryable())
+        .isEqualTo(false);
   }
 
   @Test
