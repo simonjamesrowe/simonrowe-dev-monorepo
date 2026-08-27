@@ -3,8 +3,8 @@
 Public page reporting which commit each first-party service is running, which third-party
 image tags production declares, and a changelog of recent releases with AI-written notes. Design
 and plan: `docs/superpowers/specs/2026-08-27-platform-status-page-design.md` and
-`docs/superpowers/plans/2026-08-27-platform-status-page.md` — this feature predates the
-`specs/NNN-*` convention used by earlier work, so there is no `specs/037-*` directory.
+`docs/superpowers/plans/2026-08-27-platform-status-page.md` — there is no `specs/037-*`
+directory for this feature.
 
 ## What it can and cannot evidence
 
