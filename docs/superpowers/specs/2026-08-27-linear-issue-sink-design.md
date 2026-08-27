@@ -77,6 +77,17 @@ what the successor features are allowed to file.
 - **Linear as a work queue.** Reading a ticket and acting on it — auto-picking-up
   CVE tickets, for instance. The seam for it is in this design; the feature is not.
 - **A deploy error-class taxonomy.** See the fingerprint section.
+- **Two deploy failure paths that file nothing** (found in Task 10 review, 2026-08-27).
+  A `SyncDecision.FAILED` and a failed `maintenance-on` both exit `DeployWorkflowImpl`
+  via `finish`, which reports only for `DEPLOYED_IMAGES_ONLY`. This is **faithful
+  parity** — `openIssue` was only ever reachable from `report`, so neither path opened a
+  GitHub issue either — but the `sync-config` gap is worth closing. It is the outcome
+  where production is untouched while the automation is *wedged* (dirty tree,
+  non-ancestor sha, fetch failure), it recurs identically on every subsequent merge, and
+  it is invisible outside Mongo and Temporal's retention window. Deliberately not fixed
+  here: routing `finish`'s failure statuses through reporting also changes commit-comment
+  behaviour and needs its own key-parts decision (`sync_config` + `FAILED` would work).
+  **Tracked item, not just a paragraph.**
 
 ## Architecture
 

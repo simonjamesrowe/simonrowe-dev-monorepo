@@ -3461,7 +3461,21 @@ Add a `037-linear-issue-sink` Recent Changes entry covering: the activity-only t
 
 Add the missing `feedback` module entry too — CLAUDE.md has never mentioned it, and it has been in production since PR #99.
 
-- [ ] **Step 6: Full verification**
+- [ ] **Step 6: Confirm the transitional reduction is over**
+
+Until `FACTORY_LINEAR_ENABLED=true` is live on `software-factory`, a failed deploy's only
+human-readable output is the **short commit comment** — headline plus next step. `renderFailure`
+sits inside the `linearFilingEnabled` guard, and `DeployRunRecord` persists no triage field, so
+with the sink off the agent computes `triage.diagnosis()`, `confidence()`, `errorClass()`, the
+`logExcerpts()` and the whole phases/config-sync table **and then discards them**. They used to
+go into the GitHub `issueBody`.
+
+That is the intended default-off posture, but it is a real reduction while the flag is off. So
+this step is not documentation: after Step 4 enables the flag, **trigger a failure and confirm
+the filed Linear issue actually contains the long-form diagnosis**, not just the headline. If it
+does not, the sink is enabled but the diagnosis is still being thrown away.
+
+- [ ] **Step 7: Full verification**
 
 ```bash
 ./gradlew :software-factory:check
@@ -3469,7 +3483,7 @@ Add the missing `feedback` module entry too — CLAUDE.md has never mentioned it
 ```
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add docker-compose.prod.yml docs/runbooks CLAUDE.md
