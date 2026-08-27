@@ -74,6 +74,33 @@ class LinearIssueRecordTest {
   }
 
   @Test
+  void withIssueCarriesEveryOtherFieldThroughUnchangedAndLeavesAttachmentPendingFalse() {
+    LinearIssueRecord seeded =
+        fresh()
+            .withDecision(decision("run-1"), T0.plusSeconds(60), IssueStateType.STARTED)
+            .withPendingAttachment("old-id", "SIM-7", "https://linear.app/i/7")
+            .withAttachmentWritten();
+
+    LinearIssueRecord pointedElsewhere =
+        seeded.withIssue("i9", "SIM-9", "https://linear.app/i/9");
+
+    assertThat(pointedElsewhere.issueId()).isEqualTo("i9");
+    assertThat(pointedElsewhere.issueIdentifier()).isEqualTo("SIM-9");
+    assertThat(pointedElsewhere.issueUrl()).isEqualTo("https://linear.app/i/9");
+    assertThat(pointedElsewhere.attachmentPending()).isFalse();
+    // Everything else carries through unchanged.
+    assertThat(pointedElsewhere.id()).isEqualTo(seeded.id());
+    assertThat(pointedElsewhere.producer()).isEqualTo(seeded.producer());
+    assertThat(pointedElsewhere.fingerprintVersion()).isEqualTo(seeded.fingerprintVersion());
+    assertThat(pointedElsewhere.keyParts()).isEqualTo(seeded.keyParts());
+    assertThat(pointedElsewhere.firstFiledAt()).isEqualTo(seeded.firstFiledAt());
+    assertThat(pointedElsewhere.lastSeenAt()).isEqualTo(seeded.lastSeenAt());
+    assertThat(pointedElsewhere.occurrences()).isEqualTo(seeded.occurrences());
+    assertThat(pointedElsewhere.lastKnownStateType()).isEqualTo(seeded.lastKnownStateType());
+    assertThat(pointedElsewhere.decisions()).isEqualTo(seeded.decisions());
+  }
+
+  @Test
   void cappedOutOccurrenceIsNoLongerRecognised() {
     // Known and accepted: beyond 20 decisions a replay could post a duplicate comment. The
     // window is far wider than any activity retry, and one duplicate comment is a benign

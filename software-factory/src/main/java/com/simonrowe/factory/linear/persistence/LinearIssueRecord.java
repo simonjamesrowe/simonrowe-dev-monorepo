@@ -143,6 +143,23 @@ public record LinearIssueRecord(
   }
 
   /**
+   * Points this record at an issue that is already known to carry the fingerprint — found by
+   * lookup rather than just created — leaving {@code attachmentPending} false.
+   *
+   * @param newIssueId the Linear issue UUID
+   * @param newIssueIdentifier the human identifier, e.g. {@code SIM-42}
+   * @param newIssueUrl the issue's web URL
+   * @return a new record pointing at the issue
+   */
+  public LinearIssueRecord withIssue(
+      final String newIssueId, final String newIssueIdentifier, final String newIssueUrl) {
+    return new LinearIssueRecord(
+        id, producer, fingerprintVersion, keyParts,
+        newIssueId, newIssueIdentifier, newIssueUrl, false,
+        firstFiledAt, lastSeenAt, occurrences, lastKnownStateType, decisions);
+  }
+
+  /**
    * Clears the pending flag once the fingerprint attachment is written.
    *
    * @return a new record with {@code attachmentPending} cleared
