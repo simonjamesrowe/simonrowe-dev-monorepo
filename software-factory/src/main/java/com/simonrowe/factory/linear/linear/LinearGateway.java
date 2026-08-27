@@ -16,6 +16,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -38,6 +40,22 @@ public class LinearGateway {
   private static final String ATTACHMENTS_QUERY =
       "query($url:String!){attachmentsForURL(url:$url){nodes{issue{id identifier url "
           + "createdAt state{type}}}}}";
+
+  private static final String CREATE_ISSUE =
+      "mutation($input:IssueCreateInput!){issueCreate(input:$input){success "
+          + "issue{id identifier url}}}";
+
+  private static final String CREATE_ATTACHMENT =
+      "mutation($input:AttachmentCreateInput!){attachmentCreate(input:$input){success "
+          + "attachment{id}}}";
+
+  private static final String CREATE_COMMENT =
+      "mutation($input:CommentCreateInput!){commentCreate(input:$input){success comment{id}}}";
+
+  private static final String CREATE_RELATION =
+      "mutation($input:IssueRelationCreateInput!){issueRelationCreate(input:$input){success}}";
+
+  private static final Logger log = LoggerFactory.getLogger(LinearGateway.class);
 
   private final LinearProperties properties;
   private final ObjectMapper objectMapper;
@@ -134,6 +152,96 @@ public class LinearGateway {
   }
 
   /**
+   * Creates an issue in the team's Triage state.
+   *
+   * @param title the issue title
+   * @param body the issue description, in Markdown
+   * @param priority the Linear priority integer
+   * @param labelName the label to apply; skipped when the team has no such label, because a
+   *     missing label must not cost the finding
+   * @return the created issue
+   * @throws LinearApiException on any API fault, or when Linear reports the mutation unsuccessful
+   */
+  public CreatedIssue createIssue(
+      final String title, final String body, final int priority, final String labelName) {
+    TeamContext team = teamContext();
+    ObjectNode input = objectMapper.createObjectNode();
+    input.put("teamId", team.teamId());
+    input.put("stateId", team.triageStateId());
+    input.put("title", title);
+    input.put("description", body);
+    input.put("priority", priority);
+    String labelId = team.labelIds().get(labelName);
+    if (labelId != null) {
+      input.putArray("labelIds").add(labelId);
+    }
+    JsonNode result = execute(CREATE_ISSUE, Map.of("input", input)).path("issueCreate");
+    if (!result.path("success").asBoolean(false)) {
+      throw new LinearApiException("Linear issueCreate reported failure", false);
+    }
+    JsonNode issue = result.path("issue");
+    return new CreatedIssue(
+        issue.path("id").asText(), issue.path("identifier").asText(), issue.path("url").asText());
+  }
+
+  /**
+   * Stamps the fingerprint onto an issue. This is what makes the issue findable again.
+   *
+   * @param issueId the Linear issue UUID
+   * @param fingerprintUrl the synthetic key URL
+   * @throws LinearApiException on any API fault, or when Linear reports the mutation unsuccessful
+   */
+  public void attachFingerprint(final String issueId, final String fingerprintUrl) {
+    ObjectNode input = objectMapper.createObjectNode();
+    input.put("issueId", issueId);
+    input.put("url", fingerprintUrl);
+    input.put("title", "factory fingerprint");
+    JsonNode result = execute(CREATE_ATTACHMENT, Map.of("input", input)).path("attachmentCreate");
+    if (!result.path("success").asBoolean(false)) {
+      throw new LinearApiException("Linear attachmentCreate reported failure", false);
+    }
+  }
+
+  /**
+   * Adds a comment recording one more occurrence.
+   *
+   * @param issueId the Linear issue UUID
+   * @param body the comment, in Markdown
+   * @throws LinearApiException on any API fault, or when Linear reports the mutation unsuccessful
+   */
+  public void addComment(final String issueId, final String body) {
+    ObjectNode input = objectMapper.createObjectNode();
+    input.put("issueId", issueId);
+    input.put("body", body);
+    JsonNode result = execute(CREATE_COMMENT, Map.of("input", input)).path("commentCreate");
+    if (!result.path("success").asBoolean(false)) {
+      throw new LinearApiException("Linear commentCreate reported failure", false);
+    }
+  }
+
+  /**
+   * Links a regression issue to the issue that claimed to fix it.
+   *
+   * <p><strong>Best effort by design.</strong> The regression issue's body always names its
+   * predecessor, so the relation is a convenience. Losing the link must never lose the ticket, so
+   * every fault here is swallowed.
+   *
+   * @param issueId the new regression issue
+   * @param relatedIssueId the completed issue it regressed from
+   */
+  public void relateIssues(final String issueId, final String relatedIssueId) {
+    ObjectNode input = objectMapper.createObjectNode();
+    input.put("issueId", issueId);
+    input.put("relatedIssueId", relatedIssueId);
+    input.put("type", "related");
+    try {
+      execute(CREATE_RELATION, Map.of("input", input));
+    } catch (LinearApiException exception) {
+      log.warn("Could not link {} as a regression of {}", issueId, relatedIssueId, exception);
+    }
+  }
+
+  /**
    * Executes a GraphQL document and returns its {@code data} node.
    *
    * @param document the query or mutation
@@ -198,5 +306,15 @@ public class LinearGateway {
    * @param labelIds label name to label id, for the labels that exist on the team
    */
   public record TeamContext(String teamId, String triageStateId, Map<String, String> labelIds) {
+  }
+
+  /**
+   * An issue Linear has just created.
+   *
+   * @param id the issue UUID
+   * @param identifier the human identifier, e.g. {@code SIM-42}
+   * @param url the issue's web URL
+   */
+  public record CreatedIssue(String id, String identifier, String url) {
   }
 }
