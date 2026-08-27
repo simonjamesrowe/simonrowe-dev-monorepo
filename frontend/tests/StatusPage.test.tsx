@@ -91,16 +91,6 @@ const RELEASES: Release[] = [
     summary: null,
     summaryStatus: 'FAILED',
   },
-  {
-    sha: 'cafebabeabcdef0123456789abcdef0123456789a',
-    shortSha: 'cafebab',
-    type: 'chore',
-    subject: 'chore: tidy something (#121)',
-    commitTime: '2026-08-19T10:00:00Z',
-    running: false,
-    summary: null,
-    summaryStatus: 'GENERATING',
-  },
 ]
 
 function renderPage() {
@@ -204,8 +194,8 @@ describe('StatusPage', () => {
     renderPage()
 
     // Scoped to this release's own entry rather than a page-wide /summary pending/i:
-    // the FAILED/GENERATING fixtures below also render a pending note (or don't), so a
-    // page-wide query would match more than this one release.
+    // the FAILED fixture below also renders (or doesn't) a pending note, so a page-wide
+    // query would match more than this one release.
     const entry = screen
       .getByText('feat: deploy automatically on merge to main (#116)')
       .closest('.release')
@@ -219,14 +209,6 @@ describe('StatusPage', () => {
     const entry = screen.getByText('fix: patch a broken thing (#120)').closest('.release')
     expect(entry).not.toBeNull()
     expect(within(entry as HTMLElement).queryByText(/summary pending/i)).not.toBeInTheDocument()
-  })
-
-  it('renders a GENERATING release with a pending note, same as PENDING', () => {
-    renderPage()
-
-    const entry = screen.getByText('chore: tidy something (#121)').closest('.release')
-    expect(entry).not.toBeNull()
-    expect(within(entry as HTMLElement).getByText(/summary pending/i)).toBeInTheDocument()
   })
 
   it('badges the running release', () => {

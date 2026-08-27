@@ -1,6 +1,8 @@
 package com.simonrowe.platform;
 
 import java.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.lang.Nullable;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class RunningVersion {
 
+  private static final Logger LOG = LoggerFactory.getLogger(RunningVersion.class);
   private static final String SERVICE_NAME = "backend";
   private static final int SHORT_SHA_LENGTH = 7;
 
@@ -73,7 +76,13 @@ public class RunningVersion {
     if (value == null || value.isBlank()) {
       return null;
     }
-    long epochSeconds = Long.parseLong(value.trim());
+    long epochSeconds;
+    try {
+      epochSeconds = Long.parseLong(value.trim());
+    } catch (final NumberFormatException e) {
+      LOG.warn("Non-numeric commitTime in build-info.properties: {}", value, e);
+      return null;
+    }
     // The Gradle task writes 0 when git was unavailable, which keeps the build output
     // deterministic. Epoch is never a real commit time, so it means "unknown".
     return epochSeconds == 0L ? null : Instant.ofEpochSecond(epochSeconds);

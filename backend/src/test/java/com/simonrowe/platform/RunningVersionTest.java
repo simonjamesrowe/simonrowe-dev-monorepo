@@ -61,6 +61,16 @@ class RunningVersionTest {
   }
 
   @Test
+  void treatsNonNumericCommitTimeAsUnknown() {
+    Properties properties = new Properties();
+    properties.put("commit", "840c311abcdef0123456789abcdef0123456789a");
+    properties.put("commitTime", "not-a-number");
+    RunningVersion version = new RunningVersion(new BuildProperties(properties));
+
+    assertThat(version.current().commitTime()).isNull();
+  }
+
+  @Test
   void startedAtIsSetOnConstruction() {
     Instant before = Instant.now();
     RunningVersion version = new RunningVersion(null);

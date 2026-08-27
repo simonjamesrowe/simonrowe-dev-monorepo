@@ -1,6 +1,7 @@
 import type { ServiceVersion } from '../../types/platform'
 
 const COMMIT_URL = 'https://github.com/simonjamesrowe/simonrowe-dev-monorepo/commit/'
+const UNKNOWN_COMMIT = 'unknown'
 
 interface ServiceVersionCardProps {
   version: ServiceVersion
@@ -33,14 +34,18 @@ export function ServiceVersionCard({ version }: ServiceVersionCardProps) {
       <header className="service-card__header">
         <h3 className="service-card__name">{version.name}</h3>
         {version.reachable ? (
-          <a
-            className="service-card__sha"
-            href={`${COMMIT_URL}${version.commit}`}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            {version.shortCommit}
-          </a>
+          version.commit === UNKNOWN_COMMIT ? (
+            <span className="service-card__sha">{version.shortCommit}</span>
+          ) : (
+            <a
+              className="service-card__sha"
+              href={`${COMMIT_URL}${version.commit}`}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              {version.shortCommit}
+            </a>
+          )
         ) : (
           <span className="service-card__sha service-card__sha--unknown">not reporting</span>
         )}

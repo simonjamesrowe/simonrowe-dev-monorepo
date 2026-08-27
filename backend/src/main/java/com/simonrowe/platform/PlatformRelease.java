@@ -9,8 +9,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
  * One release, keyed by the full commit SHA.
  *
  * <p>A mutable class rather than a record, following {@code ArticleSummary}: the summary sweep
- * transitions the document in place through {@code PENDING} → {@code GENERATING} →
- * {@code READY}.
+ * transitions the document in place from {@code PENDING} to {@code READY} (or {@code FAILED}).
  *
  * <p>The {@code _id} is the SHA itself, which is what makes seeding idempotent — a second
  * insert of the same release is a duplicate-key error rather than a second row.

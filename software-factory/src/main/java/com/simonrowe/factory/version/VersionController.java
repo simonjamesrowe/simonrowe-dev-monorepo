@@ -1,6 +1,8 @@
 package com.simonrowe.factory.version;
 
 import java.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.lang.Nullable;
@@ -29,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/version")
 public class VersionController {
 
+  private static final Logger LOG = LoggerFactory.getLogger(VersionController.class);
   private static final String UNKNOWN_COMMIT = "unknown";
   private static final String DEV_SHORT_COMMIT = "dev";
   private static final int SHORT_SHA_LENGTH = 7;
@@ -66,7 +69,13 @@ public class VersionController {
     if (value == null || value.isBlank()) {
       return null;
     }
-    long epochSeconds = Long.parseLong(value.trim());
+    long epochSeconds;
+    try {
+      epochSeconds = Long.parseLong(value.trim());
+    } catch (final NumberFormatException e) {
+      LOG.warn("Non-numeric commitTime in build-info.properties: {}", value, e);
+      return null;
+    }
     // The Gradle task writes 0 when git was unavailable, to keep the output deterministic.
     return epochSeconds == 0L ? null : Instant.ofEpochSecond(epochSeconds);
   }

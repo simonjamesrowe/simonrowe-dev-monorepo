@@ -6,9 +6,6 @@ public enum ReleaseSummaryStatus {
   /** Seeded, not yet summarised. */
   PENDING,
 
-  /** Claimed by a sweep tick. Guards against two ticks summarising the same release. */
-  GENERATING,
-
   /** Summarised. */
   READY,
 

@@ -1,8 +1,8 @@
 /**
- * Mirrors the backend's `ReleaseSummaryStatus` enum. `PENDING` and `GENERATING` both mean
- * "no paragraph yet"; `FAILED` means there never will be one for this release.
+ * Mirrors the backend's `ReleaseSummaryStatus` enum. `PENDING` means "no paragraph yet";
+ * `FAILED` means there never will be one for this release.
  */
-export type ReleaseSummaryStatus = 'PENDING' | 'GENERATING' | 'READY' | 'FAILED'
+export type ReleaseSummaryStatus = 'PENDING' | 'READY' | 'FAILED'
 
 /**
  * One first-party service's version. Every field but `name` and `reachable` may be absent:

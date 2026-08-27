@@ -132,6 +132,16 @@ tasks.named<ProcessResources>("processResources") {
     }
 }
 
+normalization {
+    runtimeClasspath {
+        // release-history.txt embeds HEAD's SHA and message, so it changes on every commit.
+        // Without this, it would change :backend:test's classpath cache key every commit and
+        // no test task could ever be FROM-CACHE again — silently undoing ci-build-speedup.
+        // No test reads this resource; BakedReleaseHistoryTest exercises parse() directly.
+        ignore("platform/release-history.txt")
+    }
+}
+
 val jacocoExcludes = listOf(
     "com/simonrowe/migration/**",
     "com/simonrowe/dataops/**",

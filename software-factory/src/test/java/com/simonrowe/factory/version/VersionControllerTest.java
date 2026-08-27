@@ -52,4 +52,14 @@ class VersionControllerTest {
     assertThat(new VersionController(new BuildProperties(properties)).version().commitTime())
         .isNull();
   }
+
+  @Test
+  void treatsNonNumericCommitTimeAsUnknown() {
+    Properties properties = new Properties();
+    properties.put("commit", "840c311abcdef0123456789abcdef0123456789a");
+    properties.put("commitTime", "not-a-number");
+
+    assertThat(new VersionController(new BuildProperties(properties)).version().commitTime())
+        .isNull();
+  }
 }
