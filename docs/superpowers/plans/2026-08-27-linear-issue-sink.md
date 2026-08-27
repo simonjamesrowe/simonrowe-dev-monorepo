@@ -3074,8 +3074,8 @@ Add to the existing `DeployWorkflowTest`, following whatever `TestWorkflowEnviro
     ArgumentCaptor<IssueFiling> filing = ArgumentCaptor.forClass(IssueFiling.class);
     verify(linearActivities).fileIssue(filing.capture());
     assertThat(filing.getValue().producer()).isEqualTo("deploy");
-    // Phase and service, never the agent's headline: the fingerprint must be deterministic.
-    assertThat(filing.getValue().keyParts()).containsExactly("verify", "backend");
+    // Phase and status, never the agent's headline: the fingerprint must be deterministic.
+    assertThat(filing.getValue().keyParts()).containsExactly("verify", "ROLLED_BACK");
     verify(deployActivities)
         .report(any(), any(), any(), eq("https://linear.app/i/9"));
     assertThat(result.issueUrl()).isEqualTo("https://linear.app/i/9");
@@ -3188,7 +3188,9 @@ In `reportAndFinish`, before the `fast.report(...)` call:
                     "deploy",
                     // Structured, never the agent's headline: two phrasings of one failure must
                     // not become two tickets. Commit deliberately excluded — see the design.
-                    List.of(rendered.failingPhase(), rendered.failingService()),
+                    // Structured enum values already in scope: no parsing, no agent prose.
+                    List.of(
+                        failingPhase.name().toLowerCase(java.util.Locale.ROOT), status.name()),
                     rendered.title(),
                     rendered.body(),
                     "commit "
@@ -3211,17 +3213,19 @@ Add the rendering activity to `DeployActivities`:
 
 ```java
   /**
-   * Renders a failure for the issue sink, and extracts the structured key parts its fingerprint
-   * needs.
+   * Renders a failure for the issue sink.
    *
    * <p>The title and body are the existing {@code DeployReportRenderer.issueTitle} and {@code
-   * issueBody} — re-targeted from GitHub to Linear, not rewritten. The two key parts are separate
-   * from them on purpose: the title is agent prose and would fingerprint two phrasings of one
-   * failure as two problems.
+   * issueBody} — re-targeted from GitHub to Linear, not rewritten. Rendering is an activity
+   * because a {@code @WorkflowImpl} holds no Spring bean and cannot reach the renderer.
+   *
+   * <p>It deliberately does NOT supply the fingerprint key parts. Those are the failing phase and
+   * the deploy status, both already in workflow scope as parameters of {@code reportAndFinish} —
+   * structured enum values rather than agent prose, which is what a fingerprint requires.
    *
    * @param record the run so far
    * @param triage the agent's diagnosis, which may be null
-   * @return the rendered issue and its fingerprint key parts
+   * @return the rendered title and body
    */
   Rendered renderFailure(DeployRunRecord record, Triage triage);
 
@@ -3230,17 +3234,22 @@ Add the rendering activity to `DeployActivities`:
    *
    * @param title the issue title, agent prose — never part of the fingerprint
    * @param body the issue description, in Markdown
-   * @param failingPhase the lowercase phase name, e.g. {@code verify}
-   * @param failingService the service the phase failed on, or the literal {@code unknown} when the
-   *     phase output names none. {@code unknown} conflates distinct failures under one ticket,
-   *     which is visible in the ticket rather than silent — and is the evidence for the error-class
-   *     taxonomy this design defers
    */
-  record Rendered(String title, String body, String failingPhase, String failingService) {
+  record Rendered(String title, String body) {
   }
 ```
 
-Implement it in `DeployActivitiesImpl` by delegating to `DeployReportRenderer` for the title and body, taking the phase from the last failing `PhaseOutcome`, and deriving the service from that outcome's captured detail — with a deterministic `unknown` fallback and a unit test pinning both branches.
+Implement it in `DeployActivitiesImpl` by delegating to the existing
+`DeployReportRenderer.issueTitle` / `issueBody`, which are otherwise unchanged.
+
+**Key parts corrected 2026-08-27.** The design said "failing phase + failing service". The
+phase is structured and already a parameter of `reportAndFinish`, but **the failing service is
+not structured anywhere**: `PhaseOutcome.detail` is documented as "the trimmed tail of the
+phase's output, bounded to 4000 characters... it is not a log store". Deriving a service name
+from it means inventing a parser for `restart-prod.sh` failure output that nobody has observed
+in production — precisely the invented taxonomy this design deferred for lack of evidence.
+`DeployStatus` is structured, deterministic, in scope, and separates the cases that genuinely
+differ: `FAILED` (before recreate), `ROLLED_BACK`, `ROLLBACK_FAILED`, `ROLLBACK_DISABLED`.
 
 Then pass `linearIssueUrl` into `fast.report(provisional, triage, request.installationId(), linearIssueUrl)`, and `linearFilingFailed` into the `DeployRunRecord` built at the end.
 

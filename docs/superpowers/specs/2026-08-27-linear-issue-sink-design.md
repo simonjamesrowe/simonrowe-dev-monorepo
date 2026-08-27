@@ -143,7 +143,7 @@ fingerprint = sha256("v1:" + producer + ":" + keyParts.join("|"))
 
 | Producer | Key parts |
 | --- | --- |
-| `deploy` | failing phase + failing service, e.g. `recreate` + `backend` |
+| `deploy` | failing phase + deploy status, e.g. `recreate` + `ROLLED_BACK` |
 | `cvefix` | component purl — the key `UnfixableFindingRecord` already uses |
 
 The `v1` prefix follows the codebase's `FORMAT_VERSION` idiom and carries the
@@ -151,7 +151,13 @@ same warning `NarrationScriptBuilder.FORMAT_VERSION` does: **bumping it orphans
 every existing ticket**, so the next occurrence of a known problem files a
 duplicate. A deliberate, documented one-time cost.
 
-**The deploy fingerprint deliberately excludes the commit.** `recreate`/`backend`
+**Amended 2026-08-27 (Task 10):** the second key part is the **deploy status**, not the
+failing service. The service is not structured anywhere — `PhaseOutcome.detail` is only the
+trimmed tail of phase output, explicitly not a log store — so deriving it would mean inventing
+a parser for failure text nobody has observed. `DeployStatus` is structured and in scope, and
+separates `FAILED`, `ROLLED_BACK`, `ROLLBACK_FAILED` and `ROLLBACK_DISABLED`.
+
+**The deploy fingerprint deliberately excludes the commit.** `recreate`/`ROLLED_BACK`
 resolves to one ticket however many commits trip it; a recurrence comments,
 naming the new commit. The accepted cost is that two unrelated changes breaking
 the same phase share a ticket. The alternative — a coarse error class in the key,
