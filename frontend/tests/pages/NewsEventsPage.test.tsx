@@ -58,6 +58,8 @@ vi.mock('../../src/auth/useAuth', () => ({
 import { fetchNews, fetchNewsSources } from '../../src/services/newsApi'
 import { fetchEvents } from '../../src/services/eventsApi'
 import { getFavourites } from '../../src/services/favouritesApi'
+import { NarrationAudioStub } from '../testUtils/NarrationAudioStub'
+import { narrationAudioStub } from '../testUtils/narrationAudioValue'
 
 function article(id: string, title: string, sourceName = 'InfoQ'): ArticleResponse {
   return {
@@ -90,16 +92,25 @@ const emptyEventPage: EventPage = {
   size: 20,
 }
 
+/**
+ * `narration` is reassigned per test so a case can seed "this article has audio" or an in-flight
+ * stage before rendering. `renderPage` reads whatever is current.
+ */
+let narration = narrationAudioStub()
+
 function renderPage() {
   return render(
     <MemoryRouter>
-      <NewsEventsPage />
+      <NarrationAudioStub value={narration}>
+        <NewsEventsPage />
+      </NarrationAudioStub>
     </MemoryRouter>,
   )
 }
 
 describe('NewsEventsPage', () => {
   beforeEach(() => {
+    narration = narrationAudioStub()
     favouriteIds.clear()
     summarisedIds.clear()
     vi.mocked(fetchNews).mockReset()
@@ -431,5 +442,141 @@ describe('NewsEventsPage', () => {
     expect(screen.queryByRole('button', { name: /AI summary of A conference/ }))
       .not.toBeInTheDocument()
     expect(screen.queryByText('Summarise')).not.toBeInTheDocument()
+  })
+
+  describe('the listen control', () => {
+    it('advertises the duration for an article whose summary already has audio', async () => {
+      narration = narrationAudioStub({
+        ready: {
+          'ARTICLE_SUMMARY:a-1': {
+            contentId: 'a-1',
+            audioUrl: '/uploads/narrations/aaa/narration.mp3',
+            durationSeconds: 180,
+          },
+        },
+      })
+      vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
+
+      renderPage()
+
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+      expect(screen.getByRole('button', {
+        name: 'Listen to the 3 min audio version of First article',
+      })).toBeInTheDocument()
+    })
+
+    it('offers the cold Listen invitation for an article with no audio', async () => {
+      vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
+
+      renderPage()
+
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+      expect(screen.getByRole('button', {
+        name: 'Generate an audio version of First article',
+      })).toBeInTheDocument()
+    })
+
+    /** Three controls maximum: listen, summarise, favourite. */
+    it('sits alongside the summary and favourite controls, and no more', async () => {
+      vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
+
+      renderPage()
+
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+      const actions = document.querySelector('.feed__card-actions')!
+      expect(actions.querySelectorAll('button')).toHaveLength(3)
+      expect(actions.querySelector('.listen-button')).toBeInTheDocument()
+      expect(actions.querySelector('.summary-button')).toBeInTheDocument()
+    })
+
+    /**
+     * The Listen chain can produce a summary as an intermediate step. The provider sits above
+     * this page and publishes what finished; the page relays it into `useArticleSummaries`, so
+     * the card's summary control has to catch up without a reload.
+     */
+    it('flips the summary control when the Listen chain generated the summary', async () => {
+      narration = narrationAudioStub()
+      narration.lastCompleted = {
+        contentType: 'ARTICLE_SUMMARY',
+        contentId: 'a-1',
+        summaryWasGenerated: true,
+      }
+      vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
+
+      renderPage()
+
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+      // Would read "Summarise" without the noteSummarised relay: the ids set was fetched
+      // before the chain ran and is never refetched.
+      await waitFor(() => {
+        expect(screen.getByRole('button', {
+          name: 'Read the AI-generated summary of First article',
+        })).toBeInTheDocument()
+      })
+    })
+
+    it('leaves the summary control alone when the chain narrated an existing summary', async () => {
+      narration = narrationAudioStub()
+      narration.lastCompleted = {
+        contentType: 'ARTICLE_SUMMARY',
+        contentId: 'a-1',
+        summaryWasGenerated: false,
+      }
+      vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
+
+      renderPage()
+
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+      expect(screen.getByRole('button', {
+        name: 'Generate an AI summary of First article',
+      })).toBeInTheDocument()
+    })
+
+    it('shows the stage on the card while its audio is being generated', async () => {
+      narration = narrationAudioStub({
+        stages: { 'ARTICLE_SUMMARY:a-1': 'summarising' },
+      })
+      vi.mocked(fetchNews).mockResolvedValue(newsPage([
+        article('a-1', 'First article'),
+        article('a-2', 'Second article'),
+      ]))
+
+      renderPage()
+
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+      expect(screen.getByRole('button', { name: 'Summarising… for First article' }))
+        .toBeDisabled()
+      // The rest of the list is unaffected.
+      expect(screen.getByRole('button', {
+        name: 'Generate an audio version of Second article',
+      })).toBeEnabled()
+    })
+
+    /** Events are never summarised, so they can never have audio. */
+    it('is absent from event timeline items', async () => {
+      vi.mocked(fetchEvents).mockResolvedValue({
+        ...emptyEventPage,
+        content: [{
+          id: 'e-1',
+          title: 'A conference',
+          sourceName: 'Meetup',
+          originalUrl: 'https://example.com/e-1',
+          summary: 'Event summary',
+          eventDate: '2026-09-01T18:00:00Z',
+          venue: 'Somewhere',
+          location: 'London',
+          imageUrl: null,
+        }] as never,
+        totalElements: 1,
+        totalPages: 1,
+      })
+      vi.mocked(fetchNews).mockResolvedValue(newsPage([]))
+
+      renderPage()
+
+      await waitFor(() => expect(screen.getByText('A conference')).toBeInTheDocument())
+      expect(screen.queryByText('Listen')).not.toBeInTheDocument()
+      expect(document.querySelector('.listen-button')).not.toBeInTheDocument()
+    })
   })
 })

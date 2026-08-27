@@ -1,0 +1,58 @@
+{
+  "$comment": "Structured output for the deploy-failure triage agent. Ships to software-factory/src/main/resources/deploy-triage-schema.json. The agent gets Read against a scratch evidence directory and NO Bash tool: it explains captured output, it does not investigate. Every field is therefore a claim about what is in the evidence, and 'confidence' exists so a diagnosis the evidence does not support is labelled rather than dressed up.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["headline", "diagnosis", "confidence", "suspectedCause", "suggestedNextStep"],
+  "properties": {
+    "headline": {
+      "type": "string",
+      "description": "One line, under 100 characters, naming the failing component and the symptom. This becomes the GitHub issue title, so it must be readable on its own with no context."
+    },
+    "diagnosis": {
+      "type": "string",
+      "description": "Markdown. What the evidence shows, quoting the specific log lines or container states it rests on. Do not speculate beyond the evidence provided; say what is missing instead."
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "low means the captured evidence does not identify a cause. That is a legitimate and useful answer — a confident-sounding guess costs more than an honest 'the logs do not say'."
+    },
+    "suspectedCause": {
+      "type": "string",
+      "enum": [
+        "application-error",
+        "container-startup",
+        "healthcheck-timing",
+        "configuration",
+        "image-or-registry",
+        "dependency-service",
+        "infrastructure",
+        "deploy-script",
+        "unknown"
+      ],
+      "description": "Coarse category, so a run of these can be counted over time without reading each one. 'deploy-script' is included because a change to restart-prod.sh is a real and self-obscuring cause of deploy failure."
+    },
+    "failingServices": {
+      "type": "array",
+      "description": "Compose service names the evidence shows as unhealthy, exited or created. Empty when the failure was a hostname check rather than a container.",
+      "items": { "type": "string" }
+    },
+    "suspectCommits": {
+      "type": "array",
+      "description": "Commits from the supplied range that plausibly caused this, most likely first. Empty is correct when the range gives no signal.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sha", "why"],
+        "properties": {
+          "sha": { "type": "string" },
+          "why": { "type": "string" }
+        }
+      }
+    },
+    "suggestedNextStep": {
+      "type": "string",
+      "description": "One concrete action for the operator, phrased as a command or a check. Must not assume the site is up — it may be showing the maintenance page — and must not propose anything that needs a credential the operator has not been given."
+    }
+  }
+}

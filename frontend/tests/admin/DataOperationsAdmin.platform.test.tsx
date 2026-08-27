@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DataOperationsAdmin } from '../../src/pages/admin/DataOperationsAdmin'
@@ -7,7 +7,6 @@ vi.mock('../../src/services/dataOperationsApi', () => ({
   fetchDataOpsStatus: vi.fn(),
   startBackup: vi.fn(),
   fetchBackups: vi.fn(),
-  startPlatformBackup: vi.fn(),
   fetchPlatformBackups: vi.fn(),
   startRestore: vi.fn(),
   startClear: vi.fn(),
@@ -25,7 +24,6 @@ import {
   connectProgress,
   fetchDataOpsStatus,
   fetchPlatformBackups,
-  startPlatformBackup,
   type BackupMetadata,
   type DataOperation,
   type DataOperationsStatus,
@@ -34,7 +32,6 @@ import { useAuth } from '../../src/auth/useAuth'
 
 const mockFetchStatus = vi.mocked(fetchDataOpsStatus)
 const mockFetchPlatformBackups = vi.mocked(fetchPlatformBackups)
-const mockStartPlatformBackup = vi.mocked(startPlatformBackup)
 const mockConnectProgress = vi.mocked(connectProgress)
 const mockUseAuth = vi.mocked(useAuth)
 
@@ -73,7 +70,7 @@ function platformArchives(): BackupMetadata[] {
 function operation(overrides: Partial<DataOperation> = {}): DataOperation {
   return {
     id: 'op-1',
-    type: 'PLATFORM_BACKUP',
+    type: 'BACKUP',
     status: 'IN_PROGRESS',
     startedAt: '2026-08-25T02:00:00Z',
     completedAt: null,
@@ -112,14 +109,17 @@ describe('DataOperationsAdmin — Platform Data card', () => {
     expect(screen.getByText('858.3 MB')).toBeInTheDocument()
   })
 
-  it('triggers a platform backup and connects the progress stream', async () => {
-    mockStartPlatformBackup.mockResolvedValue(operation())
+  /**
+   * Constitution 2.0.0 moved the capture into the `deployer` container, so the card is
+   * read-only. Asserted rather than assumed: a stray trigger reappearing here would
+   * mean the backend had regained Docker access.
+   */
+  it('offers no capture trigger, and points at the script instead', async () => {
     render(<DataOperationsAdmin />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Back Up Now' }))
-
-    await waitFor(() => expect(mockStartPlatformBackup).toHaveBeenCalledWith(getAccessToken))
-    expect(mockConnectProgress).toHaveBeenCalled()
+    await screen.findByText('Platform Data')
+    expect(screen.queryByRole('button', { name: /back up now/i })).toBeNull()
+    expect(screen.getByText(/scripts\/backup-platform\.sh/)).toBeInTheDocument()
   })
 
   it('says so when no archive exists yet', async () => {
@@ -141,47 +141,23 @@ describe('DataOperationsAdmin — Platform Data card', () => {
     expect(await screen.findByText('Drive unreachable')).toBeInTheDocument()
   })
 
-  it('disables the trigger while another operation is in progress', async () => {
+  /**
+   * Still lists while another operation runs: the listing is independent of the
+   * backend's operation mutex now that the capture happens elsewhere.
+   */
+  it('still lists archives while another operation is in progress', async () => {
     mockFetchStatus.mockResolvedValue(
       status({ operationInProgress: true, currentOperation: operation({ type: 'BACKUP' }) }),
     )
     render(<DataOperationsAdmin />)
 
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Back Up Now' })).toBeDisabled(),
-    )
-  })
-
-  it('disables the trigger when Google Drive is not connected', async () => {
-    mockFetchStatus.mockResolvedValue(
-      status({ googleDriveConnected: false, googleDriveError: 'not configured' }),
-    )
-    render(<DataOperationsAdmin />)
-
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Back Up Now' })).toBeDisabled(),
-    )
+    expect(await screen.findByText('871.1 MB')).toBeInTheDocument()
   })
 
   /**
-   * `type.replace('_', ' ')` replaces only the first underscore, so a two-word
-   * type renders correctly while a three-word one would not. Asserted rather than
-   * assumed.
-   */
-  it('renders an in-progress platform backup with a readable label', async () => {
-    mockFetchStatus.mockResolvedValue(
-      status({ operationInProgress: true, currentOperation: operation() }),
-    )
-    render(<DataOperationsAdmin />)
-
-    expect(await screen.findByText('PLATFORM BACKUP in progress')).toBeInTheDocument()
-    expect(screen.getByText('Exporting database: dtrack')).toBeInTheDocument()
-  })
-
-  /**
-   * Platform restore is a host shell script by design. A restore button here would
-   * be the wrong tool for the scenario that motivates restore — a rebuilt host,
-   * where this application is the thing being rebuilt.
+   * Platform restore is a host shell script by design. A restore button here would be
+   * the wrong tool for the scenario that motivates restore — a rebuilt host, where
+   * this application is the thing being rebuilt.
    */
   it('offers no platform restore action', async () => {
     render(<DataOperationsAdmin />)

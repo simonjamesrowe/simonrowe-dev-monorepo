@@ -128,6 +128,22 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   `temporal-ui` and `dependencytrack-frontend` now have healthchecks, and the apiserver probes
   its API port too. **After any reboot, curl the public hostnames — do not trust a green
   `docker compose ps`.**
+- **The single-node Kafka broker needs every internal topic at replication-factor 1.**
+  `docker-compose.prod.yml` set no `KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR`, so the broker
+  used Kafka's default of **3**. With one broker registered, `__consumer_offsets` can never
+  be created, so there is **no group coordinator**: `FIND_COORDINATOR` times out and *no
+  consumer group can ever join*. Producers are unaffected, so the symptom is messages
+  published and silently never consumed — on 2026-08-25 all 13 `@KafkaListener` consumers in
+  prod were inert (13 subscribed, **zero** broker rebalances), which surfaced as narration
+  stuck on "Preparing audio" forever for both blogs and article summaries.
+  `docker-compose.yml` already carried the three settings and the comment explaining them;
+  they had never been ported to prod. Two things this cost time on: the
+  `kafka-broker-api-versions` healthcheck **stays green throughout** (it never exercises
+  group coordination), and **fixing the broker is not enough** — existing consumers do not
+  recover from a long `FIND_COORDINATOR` backoff, so `restart backend` after the broker is
+  healthy. Diagnose with `kafka-topics --list` (is `__consumer_offsets` there?) and
+  `kafka-consumer-groups --list` (empty = nothing has ever joined); use `kafka:29092`, not
+  `localhost:29092`, or the CLI's own FIND_COORDINATOR masks the answer.
 - **The kernel memory cgroup is disabled, so every `mem_limit` is unenforced.** `docker info`
   warns `No memory limit support` and `docker stats` reports `0B / 0B`. The Raspberry Pi
   *firmware* prepends `cgroup_disable=memory`; it is in `/proc/cmdline` but in **no file under
@@ -162,6 +178,20 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   A `start_period` is free when boot is fast: the first successful probe ends it early.
   Recovery needs no special action — once ES is healthy, a plain `up -d` starts both
   stranded containers (`monitor-prod.sh` does this within a minute).
+- **`deployer`** is a second instance of `FACTORY_IMAGE` with no ingress, holding
+  `/var/run/docker.sock` and a **read-write** mount of the deploy directory. It executes deploys
+  off the `deploy` Temporal queue and is the only container permitted to run
+  `scripts/restart-prod.sh`'s host-mutating phases. It excludes itself from
+  `FACTORY_DEPLOY_SERVICES` and `FACTORY_DEPLOY_RECREATABLE`, so it never recreates itself — and
+  therefore must be updated by hand. `backend` no longer holds the Docker socket, the compose
+  file or `.env`, which is the largest single security improvement in that change.
+- **nginx serves themed maintenance/unavailable pages** from
+  `config/nginx/maintenance/*.html` (bind-mounted, all CSS inlined, no external asset — the
+  frontend that would serve those assets is what is down). The maintenance page is driven by
+  `/var/run/deploy-state/maintenance.on` in the `deploy-state` volume, read-write on `deployer`
+  and **read-only** on `nginx`. Deliberately outside the flag: `/healthz` (failing it marks nginx
+  unhealthy and `pinggy` waits on that, taking every hostname offline),
+  `POST /webhooks/github`, and the four ops hostnames.
 - **Recover a downed/partial stack** from the deploy directory: `docker compose -f docker-compose.prod.yml up -d`
   (reconciles containers stuck in `created`, respecting `depends_on` ordering). Minimal alternative:
   `docker start simonrowe-dev-monorepo-langfuse-1 && docker start simonrowe-dev-monorepo-nginx-1`.
@@ -183,44 +213,164 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 ## Recent Changes
 - 034-platform-datastore-backup: nightly (02:00) + on-demand capture of the four
   `langfuse-db` Postgres databases (`langfuse`, `dtrack`, `temporal`,
-  `temporal_visibility`) and the ClickHouse `default` database, in
-  `PlatformBackupService`/`PlatformBackupScheduler`. **Uploads to a separate Drive
-  folder (`simonrowe-platform-backups`), and that separation is load-bearing:**
+  `temporal_visibility`) and the ClickHouse `default` database. **It runs in the
+  `deployer`, not the backend** — `scripts/backup-platform.sh` invoked by a Temporal
+  activity on a paused-by-default nightly schedule (`platform-backup-nightly`,
+  `FACTORY_PLATFORM_BACKUP_ENABLED`). Constitution 2.0.0 forbids `ProcessBuilder` and
+  Docker access in the container serving public traffic, so the capture cannot live
+  there; the Java side never invokes `docker` itself, exactly as `PhaseRunner` only
+  ever runs `restart-prod.sh`. The backend keeps **only** `GET
+  /api/admin/data-operations/platform-backups` and a read-only "Platform Data" card,
+  because listing a Drive folder is a network call. There is no capture button and no
+  restore endpoint. **Enabling the flag does not start backing up** — the schedule is
+  created paused, and after unpausing you must assert a live poller on the
+  `platform-backup` task queue, since a healthy container with no poller runs nothing
+  and says nothing.
+  **The separate Drive folder (`simonrowe-platform-backups`) is load-bearing:**
   retention deletes everything past the newest 7 `.zip` in a folder, so sharing one
   would make the two backup types evict each other and silently halve both recovery
-  windows. `GoogleDriveService.findOrCreateFolder()` short-circuits on
-  `GOOGLE_DRIVE_FOLDER_ID` (set via `env_file: .env`), so the platform path uses
-  `findOrCreatePlatformFolder()`, which resolves by name and deliberately does *not*
-  fall back to that id — `GoogleDriveFolderResolutionTest` guards it.
+  windows. The script resolves it by name and never falls back to
+  `GOOGLE_DRIVE_FOLDER_ID`; `GoogleDriveFolderResolutionTest` guards the backend's
+  listing side of the same rule. Upload is Google's resumable protocol in `curl`
+  (session URI + ranged PUT), with Temporal retry over the top.
   New `langfuse-clickhouse-backups` volume + `config/clickhouse/backup-disk.xml`
   (`<backups><allowed_path>`) + a `clickhouse-backups-init` busybox one-shot that
   `chown`s the volume to `101:101`. **The chown is required, not defensive:**
   `/backups` does not exist in the ClickHouse image, so the volume is created
-  root-owned while the server process drops to uid 101 even when the container
-  starts as root — verified, `BACKUP` fails `CANNOT_OPEN_FILE errno 13` without it.
+  root-owned while the server drops to uid 101 even when the container starts as
+  root — verified, `BACKUP` fails `CANNOT_OPEN_FILE errno 13` without it.
   `clickhouse-backups-init` is registered in `ONESHOT_SERVICES` in
   `scripts/monitor-prod.sh`; a one-shot missing from that list reads as a broken
   container every cron tick and makes the watchdog reconcile the whole stack once a
-  minute forever. Restore is **`scripts/restore-platform.sh`** on the host, not an
-  in-app operation — there is no restore endpoint and no restore button, because the
-  scenario that motivates restore is a rebuilt host where the backend is the thing
-  being rebuilt. It is per-target (`langfuse`/`dtrack`/`temporal`/`all`), never stops
-  `langfuse-db` itself (dropping databases inside a running server is what keeps the
-  targets independent), restarts stopped consumers from an `EXIT` trap so a failed
-  restore leaves them running rather than down, and **refuses to run when the
-  archive's SHA-256 secret fingerprints don't match `.env`** — Langfuse/DT rows
-  restored under different secrets load fine and then fail to decrypt, a failure
-  that presents as success. Verified against the pinned
-  `clickhouse-server:26.7.1.1315`: `DROP DATABASE ... SYNC` then `RESTORE DATABASE`
-  works (also into an existing-but-empty `default`, which the entrypoint recreates on
-  restart); `allow_non_empty_tables` is deliberately **unused** because it appends and
-  would duplicate every trace row; and `docker cp` alone is not enough — it preserves
-  host ownership, so the file must be chowned to 101:101 or the restore fails
-  `CANNOT_OPEN_FILE` with no hint that ownership is the cause. Deploying recreates
-  `langfuse-clickhouse` and `backend` (both gain mounts) — combine with the pending
-  memory-cgroup reboot. ClickHouse archive size is **unbounded and still unmeasured**
-  (no TTL on trace tables); measure before trusting the Drive quota. See
-  `docs/runbooks/platform-backup-restore.md`.
+  minute forever. Restore is **`scripts/restore-platform.sh`** on the host, per-target
+  (`langfuse`/`dtrack`/`temporal`/`all`), never stops `langfuse-db` itself (dropping
+  databases inside a running server is what keeps the targets independent), restarts
+  stopped consumers from an `EXIT` trap so a failed restore leaves them running, and
+  **refuses to run when the archive's SHA-256 secret fingerprints don't match `.env`**
+  — Langfuse/DT rows restored under different secrets load fine and then fail to
+  decrypt, a failure that presents as success. Both scripts compute that fingerprint
+  with `printf '%s'`, never `echo`: a trailing newline would refuse every legitimate
+  restore. Verified against the pinned `clickhouse-server:26.7.1.1315`:
+  `DROP DATABASE ... SYNC` then `RESTORE DATABASE` works (also into an
+  existing-but-empty `default`, which the entrypoint recreates on restart);
+  `allow_non_empty_tables` is deliberately **unused** because it appends and would
+  duplicate every trace row; and `docker cp` alone is not enough — it preserves host
+  ownership, so the file must be chowned to 101:101 or the restore fails
+  `CANNOT_OPEN_FILE` with no hint that ownership is the cause. The two backups **can
+  now overlap** (no shared mutex); the 22:00/02:00 gap is kept for I/O contention, not
+  exclusion. Deploying recreates `langfuse-clickhouse` and `deployer`. ClickHouse
+  archive size is **unbounded and still unmeasured** (no TTL on trace tables); measure
+  before trusting the Drive quota. See `docs/runbooks/platform-backup-restore.md`.
+- 036-auto-deploy-on-merge: A merge to `main` now deploys itself. `software-factory` gains a
+  `workflow_run` branch on its existing signed webhook — accepted only for
+  `Publish`/`success`/`main`/allowlisted-repo — which **signal-with-starts** a Temporal workflow
+  on the fixed id `deploy-prod` carrying the head SHA. A new `deployer` container (the same
+  `FACTORY_IMAGE`, no ingress, holding the Docker socket) polls the `deploy` queue and runs
+  phases of `scripts/restart-prod.sh`: `sync-config` → `maintenance-on` → `pull` → `recreate` →
+  `verify` → `maintenance-off` → `verify-public`, with rollback + a `Bash`-less Claude triage +
+  a GitHub issue and commit comment on failure. Things that are load-bearing and easy to break:
+  - **The socket is confined to `deployer` by ONE annotation.** Both containers run the same
+    image, and `@WorkflowImpl` classpath scanning is unconditional, so **both** register a
+    *workflow*-task poller on the `deploy` queue — harmless, since a workflow only schedules
+    activities. What stops `software-factory` executing a deploy step is that
+    `DeployActivitiesImpl` carries `@ConditionalOnProperty(factory.deploy.enabled)` and that flag
+    is true only on `deployer`. Note a class-level `@ConditionalOnProperty` is evaluated by the
+    *component scanner*: declare the same class through an explicit `@Bean` method and the
+    annotation is silently ignored, which is why `DeployWorkerRegistrationTest` component-scans
+    rather than wiring the beans directly.
+  - **`error_page 503 @maintenance` has no `=`.** With `= @maintenance` nginx rewrites the status
+    to the named location's 200, so the maintenance page would be served as a success — and
+    `verify-public` (which treats 503 as failure) would PASS while the page was still up. The
+    flag check lives inside `location /`, never at server level, or it would 503
+    `POST /webhooks/github` — the endpoint that triggered the deploy.
+  - **`pull_policy: always` → `missing`** on `backend`/`frontend`/`software-factory`.
+    `monitor-prod.sh` runs a bare `up -d` every minute, which resolves `:latest`; with `always` a
+    rollback was undone within 60 seconds and the watchdog could silently upgrade a service while
+    healing an unrelated container.
+  - **`sync-config` decides which services a compose change affects BEFORE moving `HEAD`**
+    (`git show <sha>:docker-compose.prod.yml` + `docker compose config --hash='*'`). Fast-
+    forwarding and then declining to recreate would leave the directory ahead of what is running,
+    and the watchdog's next `up -d` would apply the held-back change within the minute. Fenced by
+    a clean-tree check (`--untracked-files=no`, so a hand-edited `.env` never blocks), an
+    anonymous fetch from a **pinned** URL, `merge-base --is-ancestor`, `--ff-only`, and an
+    eight-service recreate allowlist. Declines exit `2` (survivable) rather than `1`.
+  - **`pull` truncates `rollback-images` rather than appending**: activities are retried, and an
+    append would record the freshly-pulled image as the rollback target.
+  - `deploy_runs` keys on the Temporal **run** id, not the workflow id — the workflow id is the
+    fixed `deploy-prod`, so keying on it (the `CveFixRunRecord` pattern) would collapse all
+    history into one document.
+  - The settle-loop parser moved `python3` → `jq` (so the image needs no Python; `curl`/`jq`
+    added to the runtime stage) and now handles compose's JSON-**array** output as well as JSON
+    Lines — the old parser only handled the latter, so a compose upgrade would have made every
+    container look settled.
+  - **The `deployer` never recreates itself**, so it does not self-update:
+    `docker compose -f docker-compose.prod.yml up -d --no-deps deployer` after any merge touching
+    `software-factory/`. Same shape as the bug that left `software-factory` on an old image for
+    months; recorded in `docs/runbooks/deploy.md` and the `prod-deploy` skill.
+  - Both flags (`FACTORY_DEPLOY_ENABLED`, `FACTORY_DEPLOY_TRIGGER_ENABLED`) default **off**, so
+    merging changes nothing until an operator opts in. A human must subscribe the GitHub App to
+    `workflow_run` or the feature is inert with no error anywhere.
+  - Test the script with `DRY_RUN=1` and a throwaway `STATE_DIR`
+    (`./scripts/test/run-tests.sh`). The `sync-config` tests deliberately opt out of `DRY_RUN`
+    because real git behaviour is what they verify, and are safe because each builds its own
+    throwaway origin+clone. See `docs/runbooks/deploy.md` and `specs/036-auto-deploy-on-merge/`.
+- 035-listen-from-listing: Narration audio is playable straight from `/blogs` and `/news-events`.
+  New public `GET /api/narrations/ready?contentType=BLOG|ARTICLE_SUMMARY` returns
+  `[{contentId, audioUrl, durationSeconds}]`, one row per content id (newest `READY`, via a
+  `match`/`sort`/`group first` aggregation). **This bulk read is a necessity, not an
+  optimisation**: `RateLimitInterceptor`'s POST-only exemption exists only in the summary
+  branch, so `/api/blogs/*/narration` is capped at 10/min per IP on `GET` too and per-card
+  polling would 429 on first render — the new path deliberately does not match that pattern.
+  For `ARTICLE_SUMMARY` the `contentId` **is the aggregated article id**, so the news page
+  needs no join. **`POST /api/blogs/{blogId}/narration` is now authenticated** (it spends the
+  same monthly TTS budget as summary narration) — the previously deliberate asymmetry is
+  gone, `SecurityConfigTest` asserts the new posture, and `BlogNarration` gained the
+  `useEnsureAuthenticated()` gate `SummaryNarration` already had; `GET` stays public on both.
+  Frontend: `NarrationAudioProvider` mounted **above `<Routes>` and inside `AuthProvider`**
+  holding a `new Audio()` **appended to `<body>`** — `PublicLayout` wraps each route
+  individually, so anything inside it remounts on navigation and a JSX `<audio>` there stops
+  playing; `<body>` rather than fully detached because `document.querySelectorAll('audio')`
+  only walks the document, so a detached element is invisible to `NarrationPanel`'s
+  "pause every other audio" and the two players talk over each other;
+  `ListenButton` (a keyed view over provider state, no local state) and `NarrationPlayerBar`
+  (inside `PublicLayout`, so never under `/admin`). The chain imports `useNarration`'s
+  `LONG_POLL_SECONDS`/`MAX_LONG_POLLS` rather than adding a second polling policy.
+  `useArticleSummaries` gained `noteSummarised(articleId)` so a summary produced by the
+  Listen chain flips the card without refetching the ids set.
+  Starting a chain **pauses and clears the audio element first**, and the bar renders its
+  transport only when the current track has an `audioUrl` — without both, pressing Listen on
+  a cold card while another track played left the previous audio running under a bar
+  relabelled to the new item, with a Pause button that paused a post the bar was not naming.
+  Only reproducible with one ready and one cold item at once, so it took a manual pass
+  against restored prod data to find.
+  `NarrationScriptBuilder.FORMAT_VERSION` is untouched. See `specs/035-listen-from-listing/`.
+- ci-build-speedup: `:backend:test` had grown to 13m28s in CI, and **421s of it was seven
+  `KafkaTemplate.send()` calls in one test class** (`FavouritesControllerTest`) each
+  blocking for the 60-second `max.block.ms` default, because the test profile points at
+  `localhost:9092` and CI has no broker there. `send()` is only asynchronous *once the
+  producer holds topic metadata*; before that it blocks the calling thread inside
+  `waitOnMetadata`. Dated precisely to commit `0cc86413` (PR #106, auto-summary on
+  favourite), which took CI from 418s to 795s in one step. Fixed in two places:
+  - Production `spring.kafka.producer.properties.max.block.ms: 5000`. The 60s default was
+    a live prod bug, not just a slow test — `FavouritesService.requestSummary` catches and
+    swallows publish failures so "the heart still fills", but the catch only runs *after*
+    the block, so a down broker hung a request thread for a full minute.
+  - A `SharedKafkaContainer` singleton (same static-initializer pattern as
+    `SharedMongoContainer`, deliberately not the per-class `@Container` lifecycle) wired
+    into `AbstractIntegrationTest`, so integration tests publish to a real broker rather
+    than a dead port. Mocking the publisher would have hidden the client behaviour that
+    caused this. `ApplicationTests` now reuses it instead of starting its own Kafka.
+    Note this changes an old invariant: Kafka is no longer confined to `ApplicationTests`.
+  Result: 870 tests, 10m02s → 2m21s locally.
+  **Separately, CI's Gradle build cache had never worked once.** `setup-gradle` writes its
+  cache only on the default branch (`cache-read-only: true` everywhere else) and keys it
+  per job id, and `ci.yml` triggered on `pull_request` only — so no run ever wrote a cache
+  that CI's own jobs could restore, and the backend job fell through its restore keys to
+  the 1.1MB `sbom` entry and recompiled cold every time. `ci.yml` now also runs on
+  `push: [main]`. With a warm cache an untouched module reports `:backend:test`
+  FROM-CACHE (verified locally: 1s after a full `clean`). The `concurrency` group cancels
+  superseded PR runs but deliberately never main — a cancelled main run is a lost cache
+  write that every subsequent PR would pay for.
 - 034-article-summary-audio: On-demand, globally shared AI summaries of aggregated news
   articles (`article_summaries`, id = `sha256(SUMMARY_FORMAT_VERSION + articleId)`) with
   optional audio. Generation is **synchronous** with an insert-first dedup guard — an LLM
@@ -232,8 +382,9 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   `BlogNarrationScriptBuilder` → `NarrationScriptBuilder`, but **`FORMAT_VERSION` stays the
   literal `blog-narration-v1`** because it feeds the fingerprint that *is* the narration
   `_id` — changing it orphans every stored blog MP3. `/api/blogs/{blogId}/narration` keeps
-  its path and its public `POST`; the summary narration `POST` is authenticated because it
-  can drain the 1,000,000 chars/month TTS budget. `ArticleSectionWriter`'s source-text
+  its path, but its `POST` is **no longer public** — 035-listen-from-listing made it
+  authenticated to match the summary narration `POST`, because both drain the same
+  1,000,000 chars/month TTS budget. `ArticleSectionWriter`'s source-text
   cascade is extracted to `ArticleSourceTextProvider`. `article_summaries` must be added to
   `BackupService.BACKUP_COLLECTIONS` and `RestoreService.IMPORT_ORDER_INDEPENDENT` (a
   restore drops collections, so `NarrationRestoreValidator.ensureIndexes()` — not Mongock —
@@ -281,7 +432,7 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - On macOS, running the production compose file under OrbStack requires overriding `DOCKER_BINARY_PATH=/opt/homebrew/bin/docker` and `DOCKER_PLUGINS_PATH=~/.docker/cli-plugins`, since the compose defaults assume a Linux Docker install.
 - There is a management-port mismatch between environments: `docker-compose.prod.yml` sets `MANAGEMENT_SERVER_PORT: 8081`, while `application.yml` defaults `management.server.port` to `8082`; local health checks should target `8082` unless an env override is in effect.
 - The README's backup/restore instructions are stale: `scripts/create-backup.sh`, `scripts/restore-backup.sh`, and `scripts/migrate-strapi-data.js` no longer exist in the repo — use `scripts/backup.sh` and `scripts/restore.sh` instead.
-- The backend exposes a self-redeploy endpoint, `POST /api/admin/data-operations/redeploy`, which pulls the backend, frontend, nginx and software-factory images and restarts the backend container via an ephemeral `docker:cli` helper container (since the backend can't safely recreate its own running container). `software-factory` is restarted on its own with `--no-deps` and best-effort: it declares `temporal` and `mongodb` as `service_healthy` dependencies, and a failure appends `WARNING: could not restart software-factory` to the completion message rather than aborting the redeploy.
+- **The backend has no self-redeploy endpoint any more.** `POST /api/admin/data-operations/redeploy` and `RedeployService` were deleted in `036-auto-deploy-on-merge`, together with the backend's `/var/run/docker.sock`, docker-CLI, compose-file and `.env` mounts. Deploys are performed by the `deployer` container instead. A `NoHostProcessLaunchTest` now fails the build if any `ProcessBuilder` reappears in `backend/src/main/java`, and Constitution Principle II (2.0.0) prohibits it.
 <!-- MANUAL ADDITIONS END -->
 
 ## Active Technologies
@@ -292,6 +443,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - No application persistence: reads Postgres 15 (`langfuse-db`) and ClickHouse (`langfuse-clickhouse`) via `docker exec`, writes a zip to Google Drive. One new Docker named volume (`langfuse-clickhouse-backups`) as the ClickHouse→backend handoff. (034-platform-datastore-backup)
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16, Embabel `Ai` (`com.embabel.agent.api.common.Ai`, the established inline-LLM injection point alongside `ArticleSectionWriter`/`DigestComposer`), Mongock, Bucket4j via the existing `RateLimitInterceptor`, `react-markdown`, Lucide React `Sparkles`. **No new dependencies in either module.** (034-article-summary-audio)
 - MongoDB — new `article_summaries` collection (mutable `@Document` class, not a record, because the generation flow transitions it in place); `narrations` changed from `blogId` to `contentType` + `contentId`. Indexes via Mongock change units `V020`/`V021` — `auto-index-creation` is off, so `@Indexed`/`@CompoundIndex` alone are decorative. (034-article-summary-audio)
+- Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16 (web, security OAuth2 resource server, data-mongodb), `MongoTemplate` aggregation, existing `useAuth`/`useEnsureAuthenticated` (Auth0), Lucide React. **No new dependencies in either module.** (035-listen-from-listing)
+- MongoDB — read-only. **No new collection, field, index or Mongock change unit**: the bulk ready-narration aggregation is already ordered by the existing `idx_narration_content_updated` (`{contentType: 1, contentId: 1, updatedAt: -1}`) on `narrations`. (035-listen-from-listing)
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,

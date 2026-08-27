@@ -1,22 +1,34 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.10.0 → 1.11.0 (MINOR)
+  Version change: 1.11.0 → 2.0.0 (MAJOR)
 
   Modified principles:
     - Principle II: Modern Java & React Stack
-      Changed: RAG advisor from QuestionAnswerAdvisor to custom
-      ContextAwareQuestionAnswerAdvisor with conversation-aware
-      vector search, structured document metadata, and code
-      example filtering from general RAG context.
+      REDEFINED: the "Docker redeploy MUST be available from the
+      admin UI / the backend MUST use ProcessBuilder to execute
+      Docker Compose CLI commands" rule is REMOVED and replaced
+      by a rule stating the opposite: deployment is performed by
+      a dedicated container, and the container serving the public
+      API MUST hold no host-level container access.
 
-  Added sections:
-    - Principle VII: Interactive Site Tour — new section covering
-      tour step data model, cross-page navigation, auto-advance
-      timer, interactive step actions, and search simulation.
-    - Renumbered Backup & Restore to VIII, Shell Scripting to IX.
+      Why MAJOR: this is a principle redefinition, not an
+      expansion. The old rule mandated a mechanism that forced
+      the internet-facing API container to hold
+      /var/run/docker.sock (root-equivalent on the host) plus
+      copies of docker-compose.prod.yml and .env. That mechanism
+      was never trusted in practice and is deleted by feature
+      036-auto-deploy-on-merge. The replacement is stated
+      positively so a future change reaching for a backend
+      ProcessBuilder is refused by the constitution rather than
+      by anyone's memory.
 
-  Removed sections: None
+  Added sections: None
+
+  Removed sections:
+    - Technology Stack Constraints: the "Docker redeploy" row is
+      replaced by a "Deployment" row naming the deployer
+      container and the Temporal deploy queue.
 
   Templates requiring updates:
     ✅ .specify/templates/plan-template.md — no changes needed
@@ -148,11 +160,29 @@ code and MongoDB persistence.
 - `CodeExample` entities MUST be stored in MongoDB with skill
   associations (`@DBRef`). Admin CRUD for code examples MUST
   follow the same DTO pattern as other admin endpoints.
-- Docker redeploy MUST be available from the admin UI. The backend
-  MUST use `ProcessBuilder` to execute Docker Compose CLI commands
-  (binary mounted from host). Redeploy configuration (compose file
-  path, services, docker binary path, self-restart delay) MUST be
-  externalised via `@ConfigurationProperties` records.
+- Production deployment MUST be performed by a dedicated container
+  that has no public ingress, and MUST be triggered over a durable
+  workflow rather than an HTTP call. The container serving the
+  public API MUST NOT hold host-level container access
+  (`/var/run/docker.sock`, the Docker CLI, or the Compose plugin),
+  MUST NOT hold a copy of `docker-compose.prod.yml`, and MUST NOT
+  hold a copy of the production environment file. No code in the
+  backend MAY launch a host process — `ProcessBuilder` and
+  equivalents are prohibited in `backend/src/main/java`, and a
+  test enforces this.
+  Rationale: an admin-UI redeploy implemented inside the backend
+  (removed in 036-auto-deploy-on-merge) required exactly those
+  capabilities in the one container that terminates untrusted
+  public traffic, which is the worst place in the system to hold
+  root-equivalent host access. Deploy orchestration belongs in a
+  container whose only trigger arrives over an internal, durable
+  queue from a signature-verified webhook.
+- Deploy orchestration configuration (compose file path, target
+  services, image tag, the allowlist of services the automation
+  may recreate, and every feature flag) MUST be externalised via
+  `@ConfigurationProperties` records with defaults, and every
+  such flag MUST default to off, so merging a deploy-automation
+  change cannot alter production until an operator opts in.
 - Real-time communication (e.g. chat streaming) MUST use Spring
   WebSocket with STOMP protocol. The frontend MUST use `@stomp/stompjs`
   as the WebSocket client library.
@@ -358,6 +388,7 @@ fish, or other shell languages MAY be used for project scripts.
 | CI/CD        | GitHub Actions                    | Build, test, publish   |
 | Registry     | GitHub Container Registry (ghcr)  | Docker images          |
 | Orchestration| Docker Compose                    | Local + production     |
+| Deployment   | `deployer` container + Temporal   | `deploy` task queue; no backend ProcessBuilder |
 | Exposure     | Pinggy                            | Production tunneling   |
 | Tracing      | OpenTelemetry Spring Boot Starter | Compile-time instrumentation |
 | Metrics      | Prometheus via Actuator           | Separate actuator port |
@@ -434,4 +465,4 @@ defined above.
   principles. Violations MUST be resolved before merge unless
   explicitly justified in a Complexity Tracking table.
 
-**Version**: 1.11.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-04-12
+**Version**: 2.0.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-08-26

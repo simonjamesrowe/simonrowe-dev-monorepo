@@ -8,8 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
@@ -29,6 +31,10 @@ public class NarrationService {
 
   private static final String AUDIO_ENCODING = "MP3";
   private static final Duration STATUS_POLL_INTERVAL = Duration.ofMillis(500);
+
+  /** Mongo field names used from more than one query in this class. */
+  private static final String STATUS_FIELD = "status";
+  private static final String DURATION_FIELD = "durationSeconds";
 
   private final NarrationRepository narrationRepository;
   private final NarrationProperties properties;
@@ -153,6 +159,49 @@ public class NarrationService {
   }
 
   /**
+   * Every item of a content type that has playable audio right now — one row per content id,
+   * the newest {@code READY} one.
+   *
+   * <p>The reduction has to happen in Mongo rather than in Java because narrations are
+   * fingerprint-addressed: the {@code _id} is a hash over the script text and the voice
+   * settings, so a single {@code contentId} legitimately accumulates several documents over its
+   * lifetime, and superseded ones are marked {@code STALE} rather than deleted. Loading them all
+   * to keep one per id would ship every stale sibling over the wire to reimplement a
+   * {@code $group} in application code.
+   *
+   * <p>{@code status = READY} in the match stage is the whole of the "never advertise something
+   * unplayable" guarantee: {@code STALE}, {@code FAILED}, {@code UNCERTAIN}, {@code QUEUED} and
+   * {@code PROCESSING} rows cannot reach the output. Note that a content id whose <em>newest</em>
+   * row is {@code STALE} still returns its older {@code READY} row, which is correct — that MP3
+   * is still on disk and still playable, and offering it beats pretending nothing exists.
+   *
+   * <p>{@code idx_narration_content_updated}
+   * ({@code {contentType: 1, contentId: 1, updatedAt: -1}}, declared on {@link Narration})
+   * already supports the {@code contentType} equality plus the {@code updatedAt} ordering, so
+   * this adds <strong>no index and therefore no Mongock change unit</strong>.
+   *
+   * @param contentType which kind of content to list
+   * @return the ready narrations, empty when nothing of this type has audio yet
+   */
+  public List<ReadyNarration> readyNarrations(final NarrationContentType contentType) {
+    Aggregation aggregation = Aggregation.newAggregation(
+        Aggregation.match(Criteria.where("contentType").is(contentType)
+            .and(STATUS_FIELD).is(NarrationStatus.READY)),
+        Aggregation.sort(Sort.by(Sort.Direction.DESC, "updatedAt")),
+        Aggregation.group("contentId")
+            .first("audioPath").as("audioUrl")
+            .first(DURATION_FIELD).as(DURATION_FIELD),
+        Aggregation.project("audioUrl", DURATION_FIELD).and("_id").as("contentId"));
+
+    return mongoTemplate
+        .aggregate(aggregation, Narration.class, ReadyNarration.class)
+        .getMappedResults()
+        .stream()
+        .filter(ready -> ready.contentId() != null && ready.audioUrl() != null)
+        .toList();
+  }
+
+  /**
    * Takes exclusive ownership of a queued narration for the duration of a lease.
    *
    * @param narrationId the narration to claim
@@ -161,9 +210,9 @@ public class NarrationService {
    */
   public Optional<Narration> claim(final String narrationId, final Instant now) {
     Query query = Query.query(Criteria.where("_id").is(narrationId)
-        .and("status").is(NarrationStatus.QUEUED));
+        .and(STATUS_FIELD).is(NarrationStatus.QUEUED));
     Update update = new Update()
-        .set("status", NarrationStatus.PROCESSING)
+        .set(STATUS_FIELD, NarrationStatus.PROCESSING)
         .set("leaseUntil", now.plus(properties.leaseDuration()))
         .set("startedAt", now)
         .set("updatedAt", now)

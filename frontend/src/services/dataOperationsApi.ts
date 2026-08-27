@@ -8,18 +8,13 @@ const DATA_OPS_URL = `${API_BASE_URL}/api/admin/data-operations`
 
 export interface DataOperation {
   id: string
-  // Must list every OperationType the backend can emit. A missing member makes
-  // that operation's SSE progress events typed as impossible, so the UI silently
-  // stops narrating them. REEMBED_CONTENT was already missing before
-  // PLATFORM_BACKUP was added.
-  type:
-    | 'BACKUP'
-    | 'RESTORE'
-    | 'CLEAR'
-    | 'REBUILD_INDEX'
-    | 'REDEPLOY'
-    | 'REEMBED_CONTENT'
-    | 'PLATFORM_BACKUP'
+  // Must list every OperationType the backend can emit. A missing member makes that
+  // operation's SSE progress events typed as impossible, so the UI silently stops
+  // narrating them - REEMBED_CONTENT was missing for exactly that reason.
+  //
+  // No PLATFORM_BACKUP: the platform capture runs in the `deployer` container, not as
+  // a backend data operation, so it emits nothing here.
+  type: 'BACKUP' | 'RESTORE' | 'CLEAR' | 'REBUILD_INDEX' | 'REEMBED_CONTENT'
   status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
   startedAt: string
   completedAt: string | null
@@ -117,19 +112,15 @@ export async function fetchBackups(
 // ---------------------------------------------------------------------------
 // Platform backup (Postgres + ClickHouse)
 //
-// A separate Drive folder from the application backups above, with its own
-// retention window, so that neither backup type can evict the other. There is
-// deliberately no platform restore call: restore is scripts/restore-platform.sh
-// on the host, because the scenario that motivates it is a rebuilt host.
+// A separate Drive folder from the application backups above, with its own retention
+// window, so that neither backup type can evict the other.
+//
+// Read-only, deliberately. The capture runs in the `deployer` container as
+// scripts/backup-platform.sh - constitution 2.0.0 forbids the backend from holding
+// Docker access - and restore is scripts/restore-platform.sh on the host. So there is
+// no start call here, only a listing, which is what makes a stalled nightly job
+// visible on the admin page.
 // ---------------------------------------------------------------------------
-
-export async function startPlatformBackup(
-  getAccessToken: GetAccessToken,
-): Promise<DataOperation> {
-  const token = await getAccessToken()
-  const response = await authFetch(`${DATA_OPS_URL}/platform-backup`, token, { method: 'POST' })
-  return handleResponse<DataOperation>(response)
-}
 
 export async function fetchPlatformBackups(
   getAccessToken: GetAccessToken,
@@ -194,18 +185,6 @@ export async function startReembed(
 ): Promise<DataOperation> {
   const token = await getAccessToken()
   const response = await authFetch(`${DATA_OPS_URL}/reembed`, token, { method: 'POST' })
-  return handleResponse<DataOperation>(response)
-}
-
-// ---------------------------------------------------------------------------
-// Redeploy
-// ---------------------------------------------------------------------------
-
-export async function startRedeploy(
-  getAccessToken: GetAccessToken,
-): Promise<DataOperation> {
-  const token = await getAccessToken()
-  const response = await authFetch(`${DATA_OPS_URL}/redeploy`, token, { method: 'POST' })
   return handleResponse<DataOperation>(response)
 }
 

@@ -8,12 +8,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Prunes a Google Drive backups folder so only the newest N backups are retained.
+ * Prunes the Google Drive backups folder so only the newest N application backups are
+ * retained.
  *
- * <p>Two independent windows, and they must stay independent. The sweep deletes
- * everything past the newest N {@code .zip} in whichever folder it is pointed at,
- * so if application and platform backups shared a folder they would evict each
- * other and quietly halve both recovery windows.
+ * <p>Platform-backup retention is deliberately <em>not</em> here: that archive is
+ * captured and pruned by {@code scripts/backup-platform.sh} in the {@code deployer},
+ * so its whole lifecycle has one owner. The separation the two folders exist to
+ * preserve is unchanged — the sweep deletes everything past the newest N {@code .zip}
+ * in whichever folder it is pointed at, so a shared folder would make the two backup
+ * types evict each other and quietly halve both recovery windows.
  */
 @Service
 public class BackupRetentionService {
@@ -25,9 +28,6 @@ public class BackupRetentionService {
 
   @Value("${backup.retention.max-backups:7}")
   private int maxBackups;
-
-  @Value("${backup.platform.retention.max-backups:7}")
-  private int platformMaxBackups;
 
   public BackupRetentionService(final GoogleDriveService googleDriveService) {
     this.googleDriveService = googleDriveService;
@@ -87,29 +87,6 @@ public class BackupRetentionService {
       return deleted;
     } catch (IOException ex) {
       LOG.error("Backup retention failed: {}", ex.getMessage());
-      return 0;
-    }
-  }
-
-  /**
-   * Deletes all but the newest {@code backup.platform.retention.max-backups}
-   * platform backups. Safe no-op when Drive is not connected.
-   *
-   * <p>Resolves the platform folder specifically — never the application folder —
-   * so this can never evict an application backup.
-   *
-   * @return the number of backups successfully deleted
-   */
-  public int prunePlatformToLimit() {
-    if (!googleDriveService.isConnected()) {
-      LOG.warn("Platform backup retention skipped: Google Drive is not connected");
-      return 0;
-    }
-    try {
-      return pruneToLimit(googleDriveService.findOrCreatePlatformFolder(),
-          platformMaxBackups);
-    } catch (IOException ex) {
-      LOG.error("Platform backup retention failed: {}", ex.getMessage());
       return 0;
     }
   }

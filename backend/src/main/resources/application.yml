@@ -73,6 +73,16 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # KafkaTemplate.send() is only asynchronous once the producer holds metadata for
+        # the topic. Before that it blocks the calling thread inside waitOnMetadata for up
+        # to max.block.ms, and the default is 60 SECONDS. Every publisher here is called
+        # on a request thread behind a swallow-and-carry-on catch, so the default turns
+        # "the broker is down" into a minute-long hang followed by success — favouriting
+        # an article was doing exactly that. Five seconds is comfortably longer than a
+        # healthy broker needs to answer a metadata request and short enough that a dead
+        # one degrades visibly rather than silently.
+        max.block.ms: 5000
   mail:
     host: smtp-relay.brevo.com
     port: 587
@@ -160,15 +170,19 @@ google:
     client-secret: ${GOOGLE_DRIVE_CLIENT_SECRET:}
     refresh-token: ${GOOGLE_DRIVE_REFRESH_TOKEN:}
     folder-id: ${GOOGLE_DRIVE_FOLDER_ID:}
-    # Platform backups MUST NOT share a folder with the application backups
-    # above. Retention keeps the newest N *.zip in a folder, so a shared folder
-    # would make the two backup types evict each other and silently degrade
-    # today's "last 7 days" guarantee to roughly "last 3 days" of each.
+    # Read-only here: the backend lists this folder for the admin page, but the
+    # capture and its retention live in scripts/backup-platform.sh (constitution
+    # 2.0.0 - no Docker access in the container serving public traffic).
     #
-    # Leave this blank in normal operation: the platform folder is then resolved
-    # by name (`simonrowe-platform-backups`), created on first use. Set it only
-    # to pin a specific folder — note that unlike folder-id above, leaving it
-    # blank does NOT fall back to the application folder.
+    # Platform backups MUST NOT share a folder with the application backups above.
+    # Retention keeps the newest N *.zip in a folder, so a shared folder would make
+    # the two backup types evict each other and silently degrade today's "last 7
+    # days" guarantee to roughly "last 3 days" of each.
+    #
+    # Leave this blank in normal operation: the platform folder is then resolved by
+    # name (`simonrowe-platform-backups`). Set it only to pin a specific folder —
+    # note that unlike folder-id above, leaving it blank does NOT fall back to the
+    # application folder.
     platform-folder-id: ${GOOGLE_DRIVE_PLATFORM_FOLDER_ID:}
 
 # On-demand narration is deliberately disabled unless the operator completes
@@ -384,24 +398,6 @@ web-fetch:
   max-chars: 8000
   timeout-seconds: 8
 
-redeploy:
-  compose-file: ${REDEPLOY_COMPOSE_FILE:/workspace/docker-compose.prod.yml}
-  project-name: ${REDEPLOY_PROJECT_NAME:${COMPOSE_PROJECT_NAME:simonrowe-dev-monorepo}}
-  services:
-    - backend
-    - frontend
-    - nginx
-    # CI publishes a software-factory image on every merge, but nothing deployed it
-    # until 2026-08-11, so the automated code reviewer ran whatever image was last
-    # started by hand. It is restarted on its own with --no-deps (see RedeployService):
-    # unlike frontend and nginx, it declares temporal and mongodb as service_healthy
-    # dependencies, and a redeploy must not be able to restart the database or be
-    # blocked by Temporal's health.
-    - software-factory
-  docker-binary: ${REDEPLOY_DOCKER_BINARY:docker}
-  self-restart-delay-seconds: 5
-  helper-image: ${REDEPLOY_HELPER_IMAGE:docker:cli}
-
 rate-limit:
   chat:
     requests-per-minute: 20
@@ -435,55 +431,16 @@ aggregation:
 
 backup:
   # Application data: MongoDB, uploaded media, Elasticsearch embeddings.
-  # Uploads all media over a residential uplink, so it can run for hours — which
-  # is why the platform backup below sits four hours clear of it.
+  #
+  # The platform datastore backup (Postgres + ClickHouse) is NOT configured here.
+  # It runs in the `deployer` container as scripts/backup-platform.sh on a Temporal
+  # schedule, because constitution 2.0.0 forbids Docker access in this container.
+  # See docs/runbooks/platform-backup-restore.md.
   schedule:
     cron: "0 0 22 * * *"
     zone: "Europe/London"
   retention:
     max-backups: 7
-  # Platform datastores: the four Postgres databases in langfuse-db plus the
-  # ClickHouse `default` database. Separate schedule, separate Drive folder and
-  # separate retention window from the application backup above — see
-  # docs/runbooks/platform-backup-restore.md.
-  platform:
-    schedule:
-      # 02:00 is deliberately four hours clear of the 22:00 application backup.
-      # DataOperationsService holds a single global mutex, so an overlap does not
-      # queue — it skips the whole night. The gap makes that rare; when it does
-      # happen it logs, skips, and self-corrects the next night.
-      cron: "0 0 2 * * *"
-      zone: "Europe/London"
-    retention:
-      max-backups: 7
-    # Same binary the redeploy path uses; the docker CLI is bind-mounted into
-    # this container by docker-compose.prod.yml.
-    docker-binary: ${REDEPLOY_DOCKER_BINARY:docker}
-    # Generous: a pg_dump of temporal_visibility on four ARM cores is slow, and a
-    # premature kill is indistinguishable from a real failure.
-    command-timeout-minutes: 120
-    postgres-container: ${PLATFORM_BACKUP_POSTGRES_CONTAINER:langfuse-db}
-    clickhouse-container: ${PLATFORM_BACKUP_CLICKHOUSE_CONTAINER:langfuse-clickhouse}
-    clickhouse-database: default
-    # Order matters only for readability; each is dumped independently so a
-    # restore can target one tool without touching the others.
-    databases:
-      - langfuse
-      - dtrack
-      - temporal
-      - temporal_visibility
-    # The langfuse-clickhouse-backups volume as mounted into *this* container.
-    # ClickHouse's own view of it (/backups) needs no entry here: BACKUP ... TO
-    # File('<name>') resolves a bare relative name against the server's configured
-    # allowed_path, so the statement never names a directory.
-    clickhouse-backup-path: ${PLATFORM_BACKUP_CLICKHOUSE_PATH:/clickhouse-backups}
-    # Images recorded in the manifest, so a restore knows which tool version
-    # produced the dump: a dtrack dump taken under 5.0.3 restored into a later
-    # major may need that version's own schema migration afterwards.
-    image-containers:
-      - langfuse
-      - dependencytrack-apiserver
-      - langfuse-clickhouse
 
 langfuse:
   host: ${LANGFUSE_HOST:https://langfuse.simonrowe.dev}

@@ -3,7 +3,6 @@ import {
   CloudUpload,
   CloudDownload,
   Database,
-  Rocket,
   RefreshCw,
   Trash2,
   CheckCircle,
@@ -17,13 +16,11 @@ import {
   fetchDataOpsStatus,
   startBackup,
   fetchBackups,
-  startPlatformBackup,
   fetchPlatformBackups,
   startRestore,
   startClear,
   startRebuildIndex,
   startReembed,
-  startRedeploy,
   connectProgress,
   type DataOperation,
   type DataOperationsStatus,
@@ -62,9 +59,6 @@ export function DataOperationsAdmin() {
   // Reembed state
   const [showReembedConfirm, setShowReembedConfirm] = useState(false)
 
-  // Redeploy state
-  const [showRedeployConfirm, setShowRedeployConfirm] = useState(false)
-  const [reconnecting, setReconnecting] = useState(false)
 
   const eventSourceRef = useRef<{ close: () => void } | null>(null)
 
@@ -105,29 +99,8 @@ export function DataOperationsAdmin() {
     loadPlatformBackups()
   }, [loadPlatformBackups])
 
-  const pollForReconnection = useCallback(async () => {
-    setReconnecting(true)
-    const poll = setInterval(async () => {
-      try {
-        const data = await fetchDataOpsStatus(getAccessToken)
-        clearInterval(poll)
-        setReconnecting(false)
-        setStatus(data)
-        setOperation(data.currentOperation ?? data.lastOperation ?? null)
-        if (data.lastOperation?.status === 'COMPLETED') {
-          setSuccess(data.lastOperation.resultSummary || 'Operation completed successfully')
-          setError(null)
-        } else if (data.lastOperation?.status === 'FAILED') {
-          setError(data.lastOperation.errorMessage || 'Operation failed')
-          setSuccess(null)
-        }
-      } catch {
-        // Backend still restarting, keep polling
-      }
-    }, 3000)
-  }, [getAccessToken])
 
-  const connectSse = useCallback(async (isRedeploy = false) => {
+  const connectSse = useCallback(async () => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close()
     }
@@ -140,11 +113,6 @@ export function DataOperationsAdmin() {
           setSuccess(op.resultSummary || 'Operation completed successfully')
           setError(null)
           loadStatus()
-          if (op.type === 'PLATFORM_BACKUP') {
-            // The new archive only appears in the list once Drive has it, so the
-            // refresh has to wait for completion rather than fire on the trigger.
-            loadPlatformBackups()
-          }
           es.close()
           eventSourceRef.current = null
         } else if (op.status === 'FAILED') {
@@ -155,15 +123,9 @@ export function DataOperationsAdmin() {
           eventSourceRef.current = null
         }
       },
-      () => {
-        if (isRedeploy) {
-          eventSourceRef.current = null
-          pollForReconnection()
-        }
-      },
     )
     eventSourceRef.current = es
-  }, [getAccessToken, loadStatus, loadPlatformBackups, pollForReconnection])
+  }, [getAccessToken, loadStatus])
 
   useEffect(() => {
     return () => {
@@ -183,18 +145,6 @@ export function DataOperationsAdmin() {
       await startBackup(getAccessToken)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start backup')
-    }
-  }
-
-  // --- Platform backup ---
-  const handlePlatformBackup = async () => {
-    try {
-      setError(null)
-      setSuccess(null)
-      await connectSse()
-      await startPlatformBackup(getAccessToken)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start platform backup')
     }
   }
 
@@ -269,19 +219,6 @@ export function DataOperationsAdmin() {
     }
   }
 
-  // --- Redeploy ---
-  const handleRedeployConfirm = async () => {
-    try {
-      setShowRedeployConfirm(false)
-      setError(null)
-      setSuccess(null)
-      await connectSse(true)
-      await startRedeploy(getAccessToken)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start redeploy')
-    }
-  }
-
   if (loading) {
     return <div className="admin-loading">Loading...</div>
   }
@@ -324,16 +261,6 @@ export function DataOperationsAdmin() {
         </div>
       )}
 
-      {/* Reconnecting */}
-      {reconnecting && (
-        <div className="data-ops__progress">
-          <div className="data-ops__progress-header">
-            <Loader size={16} className="data-ops__spinner" />
-            <span>Backend is restarting... Reconnecting</span>
-          </div>
-        </div>
-      )}
-
       {/* Action Cards */}
       <div className="data-ops__actions">
         <div className="data-ops__card">
@@ -356,31 +283,22 @@ export function DataOperationsAdmin() {
         </div>
 
         {/*
-          Platform Data. Read-only beyond the trigger: the archive list is here so
-          a stalled nightly job is obvious at a glance, without shell access. There
-          is deliberately no restore button — platform restore is
-          scripts/restore-platform.sh on the host, because the scenario that
-          motivates it is a rebuilt host where this application is being rebuilt.
+          Platform Data. Read-only: the archive list is here so a stalled nightly job
+          is obvious at a glance, without shell access. No buttons, for two different
+          reasons — the capture runs in the `deployer` (constitution 2.0.0 keeps Docker
+          access out of this container) and restore is a host script, because the
+          scenario that motivates it is a rebuilt host.
         */}
         <div className="data-ops__card">
           <div className="data-ops__card-icon"><Database size={24} /></div>
           <h3 className="data-ops__card-title">Platform Data</h3>
           <p className="data-ops__card-desc">
-            Back up Langfuse, Dependency-Track and Temporal (Postgres) plus the LLM
-            trace store (ClickHouse). Runs nightly at 02:00; kept separately from the
-            site backups above. Restore is <code>scripts/restore-platform.sh</code> on
-            the host.
+            Langfuse, Dependency-Track and Temporal (Postgres) plus the LLM trace store
+            (ClickHouse). Captured nightly at 02:00 by the deployer, kept separately
+            from the site backups above. Run one on demand with{' '}
+            <code>scripts/backup-platform.sh</code>; restore with{' '}
+            <code>scripts/restore-platform.sh</code>.
           </p>
-          <div className="data-ops__card-actions">
-            <button
-              className="admin-btn admin-btn--secondary"
-              disabled={operationInProgress || !driveConnected}
-              onClick={handlePlatformBackup}
-              type="button"
-            >
-              Back Up Now
-            </button>
-          </div>
           {platformBackupsError ? (
             <p className="data-ops__card-note data-ops__result--error">
               {platformBackupsError}
@@ -462,22 +380,6 @@ export function DataOperationsAdmin() {
             type="button"
           >
             Re-embed All
-          </button>
-        </div>
-
-        <div className="data-ops__card">
-          <div className="data-ops__card-icon"><Rocket size={24} /></div>
-          <h3 className="data-ops__card-title">Redeploy Site</h3>
-          <p className="data-ops__card-desc">
-            Pull latest container images and restart the application.
-          </p>
-          <button
-            className="admin-btn admin-btn--primary"
-            disabled={operationInProgress || reconnecting}
-            onClick={() => setShowRedeployConfirm(true)}
-            type="button"
-          >
-            Start Redeploy
           </button>
         </div>
       </div>
@@ -657,35 +559,6 @@ export function DataOperationsAdmin() {
                 onClick={handleReembedConfirm}
               >
                 Re-embed
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Redeploy Confirm Dialog */}
-      {showRedeployConfirm && (
-        <div className="confirm-dialog-backdrop" onClick={() => setShowRedeployConfirm(false)}>
-          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <h2 className="confirm-dialog__title">Redeploy Site</h2>
-            <p className="confirm-dialog__message">
-              This will pull the latest container images from the registry and restart the application.
-              The site will be briefly unavailable during the restart.
-            </p>
-            <div className="confirm-dialog__actions">
-              <button
-                type="button"
-                className="confirm-dialog__btn confirm-dialog__btn--cancel"
-                onClick={() => setShowRedeployConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="confirm-dialog__btn confirm-dialog__btn--confirm"
-                onClick={handleRedeployConfirm}
-              >
-                Redeploy
               </button>
             </div>
           </div>

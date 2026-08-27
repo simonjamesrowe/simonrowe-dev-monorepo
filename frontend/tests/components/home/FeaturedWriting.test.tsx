@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { FeaturedWriting } from '../../../src/components/home/FeaturedWriting'
 import type { BlogSummary } from '../../../src/types/blog'
+import { NarrationAudioStub } from '../../testUtils/NarrationAudioStub'
+import { narrationAudioStub } from '../../testUtils/narrationAudioValue'
 
 function post(index: number): BlogSummary {
   return {
@@ -24,7 +26,9 @@ function posts(count: number): BlogSummary[] {
 function renderFeatured(blogs?: BlogSummary[]) {
   return render(
     <MemoryRouter>
-      <FeaturedWriting blogs={blogs} />
+      <NarrationAudioStub value={narrationAudioStub()}>
+        <FeaturedWriting blogs={blogs} />
+      </NarrationAudioStub>
     </MemoryRouter>,
   )
 }

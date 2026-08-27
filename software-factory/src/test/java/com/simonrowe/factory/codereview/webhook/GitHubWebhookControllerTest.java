@@ -14,6 +14,9 @@ import com.simonrowe.factory.codereview.api.ReviewAccepted;
 import com.simonrowe.factory.codereview.api.ReviewWorkflowService;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
+import com.simonrowe.factory.deploy.api.DeployAccepted;
+import com.simonrowe.factory.deploy.api.DeployWorkflowService;
+import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.feedback.api.FeedbackAccepted;
 import com.simonrowe.factory.feedback.api.FeedbackWorkflowService;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
@@ -30,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -43,19 +47,29 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class GitHubWebhookControllerTest {
 
   private static final String SECRET = "webhook-secret";
+  private static final String HEAD_SHA = "0123456789abcdef0123456789abcdef01234567";
 
   private final ReviewWorkflowService workflowService = Mockito.mock(ReviewWorkflowService.class);
   private final FeedbackWorkflowService feedbackWorkflowService =
       Mockito.mock(FeedbackWorkflowService.class);
+  private final DeployWorkflowService deployWorkflowService =
+      Mockito.mock(DeployWorkflowService.class);
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
     mockMvc = buildMockMvc(feedbackProperties(true));
     when(workflowService.start(any())).thenReturn(new ReviewAccepted("workflow-1", true));
+    when(deployWorkflowService.start(any(), any(), any()))
+        .thenReturn(new DeployAccepted("deploy-prod", "run-1", HEAD_SHA));
   }
 
   private MockMvc buildMockMvc(final FeedbackProperties feedbackProperties) {
+    return buildMockMvc(feedbackProperties, deployProperties(true));
+  }
+
+  private MockMvc buildMockMvc(
+      final FeedbackProperties feedbackProperties, final DeployProperties deployProperties) {
     CodeReviewProperties properties =
         new CodeReviewProperties(
             new CodeReviewProperties.Github(
@@ -69,8 +83,28 @@ class GitHubWebhookControllerTest {
             workflowService,
             new ObjectMapper(),
             feedbackWorkflowService,
-            feedbackProperties);
+            feedbackProperties,
+            deployProperties,
+            deployWorkflowServiceProvider(deployProperties.triggerEnabled()));
     return MockMvcBuilders.standaloneSetup(controller).build();
+  }
+
+  /**
+   * Mirrors what Spring does: with {@code factory.deploy.trigger-enabled} false the bean is not in
+   * the context at all, so the provider supplies nothing.
+   */
+  private ObjectProvider<DeployWorkflowService> deployWorkflowServiceProvider(
+      final boolean triggerEnabled) {
+    @SuppressWarnings("unchecked")
+    ObjectProvider<DeployWorkflowService> provider = Mockito.mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(triggerEnabled ? deployWorkflowService : null);
+    return provider;
+  }
+
+  private static DeployProperties deployProperties(final boolean triggerEnabled) {
+    return new DeployProperties(
+        false, triggerEnabled, "example", "project", "Publish", "main",
+        null, null, null, null, null, null, null, null, null, null, null);
   }
 
   private static FeedbackProperties feedbackProperties(final boolean enabled) {
@@ -130,6 +164,33 @@ class GitHubWebhookControllerTest {
         }
         """
         .formatted(labelJson);
+  }
+
+  private static String workflowRunPayload(
+      final String name, final String conclusion, final String branch, final String repository) {
+    return """
+        {
+          "action": "completed",
+          "workflow_run": {
+            "name": "%s",
+            "conclusion": %s,
+            "head_branch": "%s",
+            "head_sha": "%s"
+          },
+          "repository": {"name": "%s", "owner": {"login": "example"}},
+          "installation": {"id": 999}
+        }
+        """
+        .formatted(
+            name,
+            conclusion == null ? "null" : "\"" + conclusion + "\"",
+            branch,
+            HEAD_SHA,
+            repository);
+  }
+
+  private static String publishSucceededOnMain() {
+    return workflowRunPayload("Publish", "success", "main", "project");
   }
 
   private ResultActions deliver(
@@ -309,6 +370,133 @@ class GitHubWebhookControllerTest {
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.status").value("ignored"));
 
+    verify(feedbackWorkflowService, never()).start(any());
+  }
+
+  // ---------------------------------------------------------------------------
+  // workflow_run -> deploy
+  //
+  // The completion of the Publish build is the ONLY event that means the three images exist.
+  // pull_request `closed` fires on merge, minutes before the ARM builds finish, so deploying on
+  // that would pull the previous :latest and report success - the worst available failure mode,
+  // because it looks like it worked.
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void startsDeployForSuccessfulPublishOnMain() throws Exception {
+    String payload = publishSucceededOnMain();
+
+    deliver(payload, sign(payload), "workflow_run")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.workflowId").value("deploy-prod"))
+        .andExpect(jsonPath("$.sha").value(HEAD_SHA));
+
+    ArgumentCaptor<String> sha = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<Long> installation = ArgumentCaptor.forClass(Long.class);
+    verify(deployWorkflowService)
+        .start(sha.capture(), Mockito.eq("workflow_run"), installation.capture());
+    assertThat(sha.getValue()).isEqualTo(HEAD_SHA);
+    assertThat(installation.getValue()).isEqualTo(999L);
+  }
+
+  @Test
+  void ignoresFailedPublish() throws Exception {
+    String payload = workflowRunPayload("Publish", "failure", "main", "project");
+
+    deliver(payload, sign(payload), "workflow_run")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("ignored"));
+
+    verify(deployWorkflowService, never()).start(any(), any(), any());
+  }
+
+  @Test
+  void ignoresAnInProgressPublishWhoseConclusionIsStillNull() throws Exception {
+    // workflow_run also arrives with action "requested" and "in_progress". The conclusion check
+    // alone filters those, which is why the controller does not also test `action` - one fewer
+    // condition to keep in step with GitHub.
+    String payload = workflowRunPayload("Publish", null, "main", "project");
+
+    deliver(payload, sign(payload), "workflow_run")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("ignored"));
+
+    verify(deployWorkflowService, never()).start(any(), any(), any());
+  }
+
+  @Test
+  void ignoresSuccessfulPublishOnAnotherBranch() throws Exception {
+    String payload = workflowRunPayload("Publish", "success", "feature/x", "project");
+
+    deliver(payload, sign(payload), "workflow_run")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("ignored"));
+
+    verify(deployWorkflowService, never()).start(any(), any(), any());
+  }
+
+  @Test
+  void ignoresAnotherWorkflowSucceedingOnMain() throws Exception {
+    String payload = workflowRunPayload("CI", "success", "main", "project");
+
+    deliver(payload, sign(payload), "workflow_run")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("ignored"));
+
+    verify(deployWorkflowService, never()).start(any(), any(), any());
+  }
+
+  @Test
+  void ignoresNonAllowlistedRepository() throws Exception {
+    String payload = workflowRunPayload("Publish", "success", "main", "someone-elses-project");
+
+    deliver(payload, sign(payload), "workflow_run")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("ignored"));
+
+    verify(deployWorkflowService, never()).start(any(), any(), any());
+  }
+
+  @Test
+  void ignoresEverythingWhenTheTriggerFlagIsOff() throws Exception {
+    // The default. Merging this feature must deploy nothing until an operator opts in.
+    mockMvc = buildMockMvc(feedbackProperties(true), deployProperties(false));
+    String payload = publishSucceededOnMain();
+
+    deliver(payload, sign(payload), "workflow_run")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("ignored"));
+
+    verify(deployWorkflowService, never()).start(any(), any(), any());
+  }
+
+  @Test
+  void rejectsAnUnsignedWorkflowRunBeforeLookingAtIt() throws Exception {
+    deliver(publishSucceededOnMain(), null, "workflow_run")
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.status").value("invalid"));
+
+    verify(deployWorkflowService, never()).start(any(), any(), any());
+  }
+
+  @Test
+  void rejectsWorkflowRunBodyThatIsNotJson() throws Exception {
+    String payload = "not json";
+
+    deliver(payload, sign(payload), "workflow_run")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value("malformed"));
+
+    verify(deployWorkflowService, never()).start(any(), any(), any());
+  }
+
+  @Test
+  void workflowRunDeliveryNeverStartsReview() throws Exception {
+    String payload = publishSucceededOnMain();
+
+    deliver(payload, sign(payload), "workflow_run").andExpect(status().isAccepted());
+
+    verify(workflowService, never()).start(any());
     verify(feedbackWorkflowService, never()).start(any());
   }
 }

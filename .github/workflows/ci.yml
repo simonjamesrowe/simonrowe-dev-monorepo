@@ -3,9 +3,29 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  # Not redundant with the pull_request trigger, and not here to gate merges — this is
+  # what makes Gradle's build cache work at all. `setup-gradle` writes its cache only on
+  # the default branch (`cache-read-only: true` everywhere else), and its key is scoped
+  # per job id, so a cache written by Publish's `publish-backend` job is not one that
+  # CI's `backend` job can read. With CI running on pull_request only, no run ever wrote
+  # a cache these jobs could restore: the backend job was falling through its restore
+  # keys to the 1.1MB `sbom` entry and recompiling everything from cold every time.
+  #
+  # Running the same workflow on main gives each job a warm cache of its own to restore,
+  # which is what lets an unchanged module report `:backend:test` FROM-CACHE instead of
+  # re-running the Testcontainers suite.
+  push:
+    branches: [main]
 
 permissions:
   contents: read
+
+# A PR that gets three pushes in a row should not leave three full runs racing; only the
+# newest commit's result matters. Main is deliberately excluded via the ref in the group
+# key — cancelling a main run would abandon the cache write that every PR then restores.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
@@ -132,6 +152,19 @@ jobs:
 
       - name: Build software factory container
         run: docker build -f Dockerfile.software-factory -t software-factory:test .
+
+      # The shell side of auto-deploy: restart-prod.sh's phases, sync-config against
+      # throwaway git clones, and the nginx maintenance/unavailable pages.
+      #
+      # In this job rather than a new one because it needs a Docker daemon (the nginx
+      # tests run a real nginx:alpine, and sync-config uses `docker compose config
+      # --hash`), and this job already has one for the image build above. A new job
+      # would cost a fresh runner and a cold Gradle cache for three bash files.
+      #
+      # run-tests.sh exports DRY_RUN=1 for every child, so no test can perform a real
+      # restart even if it forgets to set it.
+      - name: Run deploy shell tests
+        run: ./scripts/test/run-tests.sh
 
   # Static analysis for all three modules in one project. See
   # docs/runbooks/static-analysis.md.

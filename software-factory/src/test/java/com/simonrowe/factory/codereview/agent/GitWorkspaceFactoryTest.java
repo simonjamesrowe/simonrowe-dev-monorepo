@@ -147,6 +147,55 @@ class GitWorkspaceFactoryTest {
                     .containsEntry("GIT_CONFIG_VALUE_0", expectedHeader));
   }
 
+  /**
+   * ProcessRunner only heartbeats while a child process is running, and only every 10s, so a git
+   * command that finishes faster emits nothing at all. Workspace preparation therefore has to
+   * heartbeat per step itself: when it did not, the un-heartbeated run of clone, fetch, checkout,
+   * diff and secret sweep ran past the activity's heartbeat timeout on the Pi and killed a
+   * one-file review with lastHeartbeatDetails still on "Cloning pull request repository".
+   */
+  @Test
+  void heartbeatsEveryWorkspacePreparationStep() throws IOException {
+    Path origin = temporaryDirectory.resolve("beat-origin.git");
+    Path seed = temporaryDirectory.resolve("beat-seed");
+    git(temporaryDirectory, "init", "--bare", origin.toString());
+    git(temporaryDirectory, "init", seed.toString());
+    git(seed, "config", "user.name", "Reviewer Test");
+    git(seed, "config", "user.email", "reviewer@example.com");
+
+    Files.writeString(seed.resolve("visible.txt"), "before\n");
+    git(seed, "add", ".");
+    git(seed, "commit", "-m", "base");
+    final String baseSha = git(seed, "rev-parse", "HEAD").trim();
+
+    Files.writeString(seed.resolve("visible.txt"), "after\n");
+    git(seed, "commit", "-am", "pull request");
+    final String headSha = git(seed, "rev-parse", "HEAD").trim();
+    git(seed, "push", origin.toString(), "HEAD:refs/pull/1/head");
+
+    GitHubCredentials credentials = mock(GitHubCredentials.class);
+    when(credentials.accessToken(null)).thenReturn("");
+    GitWorkspaceFactory factory =
+        new GitWorkspaceFactory(properties(), credentials, new ProcessRunner());
+    PullRequestContext pullRequest =
+        new PullRequestContext(
+            "owner", "repository", 1, "title", "", origin.toString(), baseSha, headSha, null);
+
+    List<String> beats = new ArrayList<>();
+    try (GitWorkspaceFactory.Workspace workspace = factory.create(pullRequest, beats::add)) {
+      assertThat(workspace.changedFiles()).containsExactly("visible.txt");
+    }
+
+    assertThat(beats)
+        .contains(
+            "Cloning pull request repository",
+            "Fetching pull request head",
+            "Checking out " + headSha,
+            "Listing changed files",
+            "Building diff for 1 changed files",
+            "Removing credential files from the checkout");
+  }
+
   @Test
   void buildsBasicAuthorizationHeaderFromTheInstallationToken() {
     assertThat(GitWorkspaceFactory.basicAuthorizationHeader("ghs_example"))

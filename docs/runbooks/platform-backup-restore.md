@@ -14,6 +14,8 @@ folders](#why-two-separate-folders).
 | Schedule | 22:00 Europe/London | 02:00 Europe/London |
 | Drive folder | `simonrowe-backups` | `simonrowe-platform-backups` |
 | Retained | 7 | 7 |
+| Captured by | the backend, on `@Scheduled` | the `deployer`, on a Temporal schedule |
+| Capture command | admin Data Ops UI | `scripts/backup-platform.sh` |
 | Restore | admin Data Ops UI | `scripts/restore-platform.sh` (host shell) |
 
 ---
@@ -48,38 +50,93 @@ What to look for, in order:
 1. **A dated entry per night**, up to 7. A gap means a run was skipped or failed.
 2. **A size that does not swing wildly.** ClickHouse dominates the archive, so a
    sudden drop means the ClickHouse capture produced little or nothing.
-3. **Exactly 7, not more.** More means retention pruning is failing — the upload
-   is fine, the sweep is not. Look for `retention pruning failed` in the logs.
+3. **Exactly 7, not more.** More means retention pruning is failing — the upload is
+   fine, the sweep is not. The script prunes only after a successful upload, so look
+   for its `Retention:` lines in the deployer logs.
 
-### Why a run skips
+### Why a run failed or skipped
 
-Both are logged, both are by design, both self-correct the next night:
+The run is a Temporal workflow, so its history is the record — richer than a log line,
+and it survives a container restart:
 
 ```bash
-docker logs simonrowe-dev-monorepo-backend-1 2>&1 | grep -i "platform backup"
+# Recent runs, their status, and how many attempts each took
+docker exec simonrowe-dev-monorepo-temporal-1 \
+  temporal workflow list --query "WorkflowType='PlatformBackupWorkflow'"
+
+# Why one failed, including the script's own output
+docker exec simonrowe-dev-monorepo-temporal-1 \
+  temporal workflow show --workflow-id platform-backup-<scheduled-time>
 ```
 
-- `Nightly platform backup skipped: Google Drive is not connected` — credentials
-  problem, not a data problem.
-- `Nightly platform backup skipped: another data operation is in progress` — the
-  22:00 application backup overran into the 02:00 window. `DataOperationsService`
-  holds one global mutex, so an overlap does not queue, it costs the platform
-  backup its whole night. There is no retry, on purpose.
+Or read the script output directly: `docker logs simonrowe-dev-monorepo-deployer-1`.
 
-A *failed* run (as opposed to skipped) logs
-`Nightly platform backup failed; skipping retention prune` — nothing was uploaded
-and nothing was deleted, which is the intended outcome. A partial archive that
-evicted a good older one would be worse than no backup.
+- **Failed after 3 attempts** — the script exited non-zero three times. Nothing was
+  uploaded and nothing was pruned, which is the intended outcome: a partial archive
+  that evicted a good older one would be worse than no backup. The activity's error
+  carries the script's own message.
+- **Skipped** — the previous run was still going when this one fired, i.e. a capture
+  taking over 24 hours. The schedule's overlap policy is SKIP because two concurrent
+  captures would fight over the same ClickHouse staging file.
+- **Nothing at all** — the schedule is paused, the flag is off, or no poller is
+  registered. Check in that order; see §2a.
+
+Note the application and platform backups **can now overlap**. They no longer share
+the backend's operation mutex, because the capture runs in a different container. The
+22:00/02:00 gap is kept, but for I/O contention on a four-core Pi rather than for
+mutual exclusion.
 
 ---
 
 ## 2. Take a backup now
 
-Before upgrading Langfuse, Dependency-Track or Temporal, or before any
-maintenance that touches `langfuse-db`:
+Before upgrading Langfuse, Dependency-Track or Temporal, or before any maintenance
+that touches `langfuse-db`:
 
-Admin → Data Operations → **Platform Data** → **Back Up Now**. Progress streams
-live; the new archive appears in the list on completion.
+```bash
+cd ~/workspace/simonjamesrowe/simonrowe-dev-monorepo
+./scripts/backup-platform.sh --dry-run   # read it first
+./scripts/backup-platform.sh
+```
+
+There is **no button** for this. The capture needs `docker exec` into the datastores,
+and constitution 2.0.0 keeps host-level container access off the container that
+terminates public traffic — so it lives in the `deployer`, and the admin page shows
+the archive list only. The list is still the fastest way to confirm a capture landed.
+
+Useful flags: `--no-upload --out-dir DIR` captures without touching Drive (handy for
+testing a restore), `--keep-local` uploads but leaves the archive on disk.
+
+### Or trigger the workflow
+
+The scheduled path runs the same script through Temporal, which adds durable retry:
+
+```bash
+docker exec -it simonrowe-dev-monorepo-deployer-1 \
+  temporal workflow start --task-queue platform-backup \
+    --type PlatformBackupWorkflow --input false
+```
+
+## 2a. Enabling the nightly schedule (one-time)
+
+Deliberately a two-step rollout, matching the deploy and cve-fix flows.
+
+1. Set `FACTORY_PLATFORM_BACKUP_ENABLED=true` in `.env` and redeploy the `deployer`.
+   This registers the activity and **creates the schedule paused** — nothing backs up
+   yet.
+2. Run a manual `--dry-run`, then a real capture, and confirm the archive appears.
+3. Unpause `platform-backup-nightly` in the Temporal UI.
+4. **Assert a live poller**, which is the step people skip:
+
+```bash
+docker exec simonrowe-dev-monorepo-temporal-1 \
+  temporal task-queue describe --task-queue platform-backup
+```
+
+A container can be `healthy` with **no poller registered**, in which case the schedule
+fires and nothing ever runs — silently. This repo has hit that failure mode twice
+already (software-factory's `code-review` queue, and the deployer's `deploy` queue), so
+check it rather than infer it from container health.
 
 ---
 
@@ -314,8 +371,8 @@ wanted regardless.
 
 ## 8. Deployment note
 
-Rolling this feature out **recreates `langfuse-clickhouse` and `backend`**, because
-both gain volume mounts. If the memory-cgroup reboot described in `CLAUDE.md` is
+Rolling this feature out **recreates `langfuse-clickhouse`** (it gains the backup
+volume and the config overlay) **and `deployer`** (it gains the feature flags). If the memory-cgroup reboot described in `CLAUDE.md` is
 still pending, do both in the same maintenance window — that reboot recreates
 roughly 17 containers anyway.
 

@@ -26,10 +26,8 @@ public class DataOperationsController {
   private final DataOperationsService operationsService;
   private final GoogleDriveService googleDriveService;
   private final BackupService backupService;
-  private final PlatformBackupService platformBackupService;
   private final RestoreService restoreService;
   private final ClearService clearService;
-  private final RedeployService redeployService;
   private final com.simonrowe.search.IndexService indexService;
   private final com.simonrowe.embedding.EmbeddingService embeddingService;
 
@@ -37,20 +35,16 @@ public class DataOperationsController {
       final DataOperationsService operationsService,
       final GoogleDriveService googleDriveService,
       final BackupService backupService,
-      final PlatformBackupService platformBackupService,
       final RestoreService restoreService,
       final ClearService clearService,
-      final RedeployService redeployService,
       final com.simonrowe.search.IndexService indexService,
       final com.simonrowe.embedding.EmbeddingService embeddingService
   ) {
     this.operationsService = operationsService;
     this.googleDriveService = googleDriveService;
     this.backupService = backupService;
-    this.platformBackupService = platformBackupService;
     this.restoreService = restoreService;
     this.clearService = clearService;
-    this.redeployService = redeployService;
     this.indexService = indexService;
     this.embeddingService = embeddingService;
   }
@@ -87,30 +81,17 @@ public class DataOperationsController {
   }
 
   /**
-   * Captures the platform datastores now, rather than waiting for tonight's
-   * scheduled run — the operation an operator wants immediately before upgrading
-   * or maintaining one of the platform tools.
-   *
-   * <p>Progress arrives on the existing {@code /progress} SSE stream; this adds no
-   * new stream.
-   *
-   * @return {@code 202} with the started operation
-   */
-  @PostMapping("/platform-backup")
-  public ResponseEntity<DataOperation> startPlatformBackup() {
-    requireDriveConnected();
-    DataOperation operation =
-        requireNoOperationInProgress(OperationType.PLATFORM_BACKUP);
-    CompletableFuture.runAsync(() -> platformBackupService.performBackup());
-    return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
-  }
-
-  /**
    * Lists the retained platform archives, newest first.
    *
    * <p>Reads the <em>platform</em> Drive folder, which is deliberately a different
-   * folder from the one {@link #listBackups()} reads. The two retention windows
-   * are independent so that neither backup type can evict the other.
+   * folder from the one {@link #listBackups()} reads. The two retention windows are
+   * independent so that neither backup type can evict the other.
+   *
+   * <p>This is the whole of the backend's involvement in the platform backup. The
+   * capture itself runs in the {@code deployer} container as {@code
+   * scripts/backup-platform.sh}, because constitution 2.0.0 forbids this container —
+   * the one terminating public traffic — from holding the Docker socket or launching
+   * a host process. Listing a Drive folder is a network call, so it stays here.
    *
    * @return the retained platform archives
    */
@@ -127,10 +108,12 @@ public class DataOperationsController {
     }
   }
 
-  // There is deliberately no platform restore endpoint. Restore is
-  // scripts/restore-platform.sh: the scenario that motivates it is a rebuilt
-  // host, where this application is the thing being rebuilt, so a button inside
-  // it is the wrong tool.
+  // No platform capture or restore endpoint here, for two different reasons.
+  // Capture: constitution 2.0.0 forbids host-level container access in this
+  // container, so it runs in the `deployer` on a Temporal schedule. An admin-UI
+  // trigger is deferred, not cancelled - it needs a Temporal client here.
+  // Restore: scripts/restore-platform.sh, because the scenario that motivates it is
+  // a rebuilt host, where this application is the thing being rebuilt.
 
   @PostMapping("/restore")
   public ResponseEntity<DataOperation> startRestore(
@@ -207,19 +190,6 @@ public class DataOperationsController {
             "Re-embedding failed: " + ex.getMessage());
       }
     });
-    return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
-  }
-
-  @PostMapping("/redeploy")
-  public ResponseEntity<?> startRedeploy() {
-    if (!redeployService.isDockerAvailable()) {
-      return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-          .body(java.util.Map.of("message",
-              "Docker is not accessible. Ensure the Docker socket is mounted."));
-    }
-    DataOperation operation =
-        requireNoOperationInProgress(OperationType.REDEPLOY);
-    CompletableFuture.runAsync(redeployService::performRedeploy);
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
   }
 

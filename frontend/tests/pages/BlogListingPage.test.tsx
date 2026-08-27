@@ -11,6 +11,8 @@ vi.mock('../../src/services/blogApi', () => ({
 }))
 
 import { fetchBlogs } from '../../src/services/blogApi'
+import { NarrationAudioStub } from '../testUtils/NarrationAudioStub'
+import { narrationAudioStub } from '../testUtils/narrationAudioValue'
 
 const blogs: BlogSummary[] = [
   {
@@ -51,16 +53,22 @@ const mixedBlogs: BlogSummary[] = [
   },
 ]
 
+/** Reassigned per test so a case can seed "this post has audio" before rendering. */
+let narration = narrationAudioStub()
+
 function renderPage() {
   return render(
     <MemoryRouter>
-      <BlogListingPage />
+      <NarrationAudioStub value={narration}>
+        <BlogListingPage />
+      </NarrationAudioStub>
     </MemoryRouter>,
   )
 }
 
 describe('BlogListingPage', () => {
   beforeEach(() => {
+    narration = narrationAudioStub()
     vi.mocked(fetchBlogs).mockReset()
   })
 
@@ -224,5 +232,47 @@ describe('BlogListingPage', () => {
     // The digest is listed, but never promoted into the featured slot.
     expect(screen.getByText('Weekly Digest 42')).toBeInTheDocument()
     expect(document.querySelector('.featured-article')).toBeNull()
+  })
+
+  describe('the listen control', () => {
+    it('appears on the featured article and on every grid card', async () => {
+      vi.mocked(fetchBlogs).mockResolvedValue(mixedBlogs)
+
+      renderPage()
+      await waitFor(() => {
+        expect(screen.getByText('Event Sourcing Without Ceremony')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByRole('tab', { name: 'All' }))
+
+      expect(document.querySelector('.featured-article .listen-button')).toBeInTheDocument()
+      // One per grid card: the digest and the second engineering post.
+      expect(document.querySelectorAll('.article-card .listen-button')).toHaveLength(2)
+    })
+
+    it('advertises the duration for a post that already has audio', async () => {
+      narration = narrationAudioStub({
+        ready: {
+          'BLOG:e-1': {
+            contentId: 'e-1',
+            audioUrl: '/uploads/narrations/aaa/narration.mp3',
+            durationSeconds: 734,
+          },
+        },
+      })
+      vi.mocked(fetchBlogs).mockResolvedValue(mixedBlogs)
+
+      renderPage()
+
+      await waitFor(() => {
+        expect(screen.getByText('Event Sourcing Without Ceremony')).toBeInTheDocument()
+      })
+      expect(screen.getByRole('button', {
+        name: 'Listen to the 12 min audio version of Event Sourcing Without Ceremony',
+      })).toBeInTheDocument()
+      // The other post has none, so it keeps the cold invitation.
+      expect(screen.getByRole('button', {
+        name: 'Generate an audio version of Spring Boot Tips',
+      })).toBeInTheDocument()
+    })
   })
 })

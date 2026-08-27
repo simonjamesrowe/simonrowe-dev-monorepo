@@ -3,49 +3,36 @@ package com.simonrowe.dataops;
 import static com.simonrowe.AdminTestAuth.adminJwt;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.simonrowe.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * Covers the two endpoints that make the platform backup usable on demand.
+ * Covers the one platform-backup endpoint the backend still serves.
  *
- * <p>The admin-auth assertions are not ceremony: these endpoints read and write
- * a Drive folder holding every platform secret's worth of restorable data, and
- * they share a global mutex with destructive operations like {@code /clear}.
+ * <p>Listing is all that is left here: the capture runs in the {@code deployer} as
+ * {@code scripts/backup-platform.sh}, because constitution 2.0.0 forbids this
+ * container from holding Docker access. Reading a Drive folder is a network call, so
+ * it stays.
+ *
+ * <p>The admin-auth assertions are not ceremony — this endpoint names the archives
+ * holding every platform secret's worth of restorable data.
  */
 class DataOperationsControllerPlatformTest extends AbstractIntegrationTest {
 
   private static final String BASE = "/api/admin/data-operations";
 
   @MockitoBean
-  private PlatformBackupService platformBackupService;
-
-  @MockitoBean
   private GoogleDriveService googleDriveService;
-
-  @Autowired
-  private DataOperationsService operationsService;
-
-  @AfterEach
-  void releaseMutex() {
-    // The mutex is process-wide state on a shared context; a test that starts an
-    // operation and does not clear it would fail every later test with a 409.
-    operationsService.completeOperation("test cleanup");
-  }
 
   private List<BackupMetadata> platformBackups() {
     return List.of(
@@ -53,66 +40,6 @@ class DataOperationsControllerPlatformTest extends AbstractIntegrationTest {
             Instant.parse("2026-08-25T02:00:00Z"), 913448201L, "871.1 MB"),
         new BackupMetadata("id-2", "platform-backup-20260824-020000.zip",
             Instant.parse("2026-08-24T02:00:00Z"), 900000000L, "858.3 MB"));
-  }
-
-  // ---------------------------------------------------------------------------
-  // POST /platform-backup
-  // ---------------------------------------------------------------------------
-
-  @Test
-  void startPlatformBackupReturnsAcceptedAndRunsTheCapture() throws Exception {
-    when(googleDriveService.isConnected()).thenReturn(true);
-    when(platformBackupService.performBackup()).thenReturn(true);
-
-    mockMvc.perform(post(BASE + "/platform-backup").with(adminJwt()))
-        .andExpect(status().isAccepted())
-        .andExpect(jsonPath("$.type").value("PLATFORM_BACKUP"))
-        .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
-
-    // Runs asynchronously on a CompletableFuture, like its siblings, so the
-    // verification has to wait rather than assert immediately.
-    verify(platformBackupService, timeout(5_000)).performBackup();
-  }
-
-  @Test
-  void startPlatformBackupIsUnavailableWhenDriveIsNotConnected() throws Exception {
-    when(googleDriveService.isConnected()).thenReturn(false);
-
-    mockMvc.perform(post(BASE + "/platform-backup").with(adminJwt()))
-        .andExpect(status().isServiceUnavailable());
-
-    verify(platformBackupService, never()).performBackup();
-  }
-
-  /**
-   * Refused, not queued. Two captures at once would fight over the same
-   * ClickHouse staging file and the same operation-progress stream.
-   */
-  @Test
-  void startPlatformBackupConflictsWhenAnotherOperationIsInProgress() throws Exception {
-    when(googleDriveService.isConnected()).thenReturn(true);
-    operationsService.tryStartOperation(OperationType.CLEAR);
-
-    mockMvc.perform(post(BASE + "/platform-backup").with(adminJwt()))
-        .andExpect(status().isConflict());
-
-    verify(platformBackupService, never()).performBackup();
-  }
-
-  @Test
-  void startPlatformBackupRejectsAnonymousCallers() throws Exception {
-    mockMvc.perform(post(BASE + "/platform-backup"))
-        .andExpect(status().isUnauthorized());
-
-    verify(platformBackupService, never()).performBackup();
-  }
-
-  @Test
-  void startPlatformBackupRejectsNonAdminCallers() throws Exception {
-    mockMvc.perform(post(BASE + "/platform-backup").with(jwt()))
-        .andExpect(status().isForbidden());
-
-    verify(platformBackupService, never()).performBackup();
   }
 
   // ---------------------------------------------------------------------------

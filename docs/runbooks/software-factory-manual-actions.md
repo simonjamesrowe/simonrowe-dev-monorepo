@@ -88,19 +88,69 @@ container's own logs.
 If a query ever returns `invalid scope requested` again, that scope has been
 removed: re-tick **Read** on the `logs` row of the `alloy-publisher` policy.
 
+## 3. Subscribe the App to `workflow_run` — required before auto-deploy works
+
+Auto-deploy on merge is triggered by the completion of the `Publish` workflow,
+delivered as a `workflow_run` webhook. The App is not subscribed to that event
+today.
+
+**Without this, no delivery ever arrives and the feature is inert with no error
+anywhere** — no failed workflow, no log line, nothing in Temporal. There is
+nothing to notice, which is exactly why it is written down here.
+
+**Do this:**
+
+1. GitHub → `simonjamesrowe` org settings → Developer settings → GitHub Apps →
+   `simonrowe-code-reviewer` → Permissions & events
+2. **Subscribe to events → tick `Workflow run`**
+3. Save.
+
+No permission change is needed: `workflow_run` needs only `Actions: read`, and
+the payload the deploy branch reads (`name`, `conclusion`, `head_branch`,
+`head_sha`, `repository`, `installation`) is all in the delivery itself.
+
+No redeploy or restart is needed either — the webhook receiver already handles
+the event; it just never sees one.
+
+**Do this step LAST**, after `FACTORY_DEPLOY_ENABLED=true` on `deployer` and a
+rehearsal deploy from the Temporal UI. See the rollout order in
+[deploy.md](deploy.md). Subscribing first means the next merge deploys for real,
+with nothing rehearsed.
+
+### Verifying it
+
+Merge anything to `main`, wait for `Publish` to finish, then check
+`https://temporal.simonrowe.dev/namespaces/default/workflows` for a
+`deploy-prod` run. GitHub's own delivery log (App → Advanced → Recent
+Deliveries) shows the `workflow_run` events and the `202` responses, including
+the `{"status":"ignored"}` ones for `requested` and `in_progress` — those are
+expected and correct.
+
 ## What is *not* a manual action
 
-- **Deploying `software-factory`. Fixed in code on 2026-08-11** — it is now in
-  `redeploy.services`, so `POST /api/admin/data-operations/redeploy` pulls and
-  restarts it like everything else. It is restarted on its own with `--no-deps`,
-  because it declares `temporal` and `mongodb` as `service_healthy` dependencies
-  and a redeploy must neither restart the database nor be blocked by Temporal's
-  health. That restart is best-effort: a failure is reported in the operation's
-  completion message rather than aborting the redeploy, since stranding the
-  backend on its old image would be the worse outcome.
+- **Deploying `software-factory`.** Handled by auto-deploy on merge since
+  036-auto-deploy-on-merge: `software-factory` is in `FACTORY_DEPLOY_SERVICES`,
+  so a merge pulls and recreates it like `backend` and `frontend`. It is
+  recreated on its own with `--no-deps`, because it declares `temporal` and
+  `mongodb` as `service_healthy` dependencies and a deploy must neither restart
+  the database nor be blocked by Temporal's health.
+
+  Historical note: this used to be done by
+  `POST /api/admin/data-operations/redeploy` in the backend. **That endpoint no
+  longer exists** — it was deleted along with the backend's Docker socket mount,
+  because the container serving the public API should not hold host-root
+  capability. See [deploy.md](deploy.md).
 
   **Check `.env` does not pin `FACTORY_IMAGE`.** The compose default is
-  `…-software-factory:latest`, but the cutover script set `FACTORY_IMAGE`
-  explicitly. If it is pinned to a specific tag or digest, redeploy will keep
-  pulling that same image and the reviewer will still never advance — the exact
-  problem this change was meant to remove.
+  `…-software-factory:latest`, but the original cutover script set it
+  explicitly. If it is pinned to a specific tag or digest, every deploy keeps
+  pulling that same image and the reviewer never advances — the exact problem
+  this was meant to remove.
+
+- **Deploying the `deployer` itself is NOT automatic** — but it is also not on
+  this list, because it needs no GitHub or Grafana access. It is a one-line
+  command on the host and lives in [deploy.md](deploy.md):
+
+  ```bash
+  docker compose -f docker-compose.prod.yml up -d --no-deps deployer
+  ```

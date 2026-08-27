@@ -30,13 +30,6 @@ class BackupRetentionServiceTest {
     return service;
   }
 
-  private BackupRetentionService newService(final int maxBackups,
-      final int platformMaxBackups) {
-    BackupRetentionService service = newService(maxBackups);
-    ReflectionTestUtils.setField(service, "platformMaxBackups", platformMaxBackups);
-    return service;
-  }
-
   private List<BackupMetadata> backups(final int count) {
     List<BackupMetadata> list = new ArrayList<>();
     for (int i = 0; i < count; i++) {
@@ -134,94 +127,5 @@ class BackupRetentionServiceTest {
 
     assertThat(deleted).isZero();
     verify(googleDriveService, times(3)).deleteFile(anyString());
-  }
-
-  // ---------------------------------------------------------------------------
-  // Platform backups. The application assertions above are unchanged on purpose:
-  // "the existing backup still behaves exactly as it did" is the requirement most
-  // likely to regress here, so it is verified rather than assumed.
-  // ---------------------------------------------------------------------------
-
-  @Test
-  void prunesThePlatformFolderToItsOwnLimit() throws IOException {
-    when(googleDriveService.isConnected()).thenReturn(true);
-    when(googleDriveService.findOrCreatePlatformFolder()).thenReturn("platform-folder");
-    when(googleDriveService.listBackups("platform-folder")).thenReturn(backups(10));
-
-    BackupRetentionService service = newService(7, 7);
-    int deleted = service.prunePlatformToLimit();
-
-    assertThat(deleted).isEqualTo(3);
-    verify(googleDriveService).deleteFile("id-7");
-    verify(googleDriveService, never()).deleteFile("id-6");
-  }
-
-  /**
-   * The two windows are configured independently, so a change to one must not move
-   * the other.
-   */
-  @Test
-  void honoursIndependentLimitsForTheTwoBackupTypes() throws IOException {
-    when(googleDriveService.isConnected()).thenReturn(true);
-    when(googleDriveService.findOrCreatePlatformFolder()).thenReturn("platform-folder");
-    when(googleDriveService.listBackups("platform-folder")).thenReturn(backups(10));
-
-    BackupRetentionService service = newService(7, 3);
-    int deleted = service.prunePlatformToLimit();
-
-    assertThat(deleted).isEqualTo(7);
-  }
-
-  /**
-   * The load-bearing separation assertion: pruning platform backups must resolve
-   * the platform folder and never touch the application folder. A regression here
-   * would silently halve both recovery windows.
-   */
-  @Test
-  void neverResolvesTheApplicationFolderWhenPruningPlatformBackups() throws IOException {
-    when(googleDriveService.isConnected()).thenReturn(true);
-    when(googleDriveService.findOrCreatePlatformFolder()).thenReturn("platform-folder");
-    when(googleDriveService.listBackups("platform-folder")).thenReturn(backups(2));
-
-    BackupRetentionService service = newService(7, 7);
-    service.prunePlatformToLimit();
-
-    verify(googleDriveService, never()).findOrCreateFolder();
-    verify(googleDriveService, never()).listBackups("folder-1");
-  }
-
-  @Test
-  void platformPruneIsNoOpWhenDriveNotConnected() throws IOException {
-    when(googleDriveService.isConnected()).thenReturn(false);
-
-    BackupRetentionService service = newService(7, 7);
-
-    assertThat(service.prunePlatformToLimit()).isZero();
-    verify(googleDriveService, never()).findOrCreatePlatformFolder();
-    verify(googleDriveService, never()).deleteFile(anyString());
-  }
-
-  @Test
-  void platformPruneContinuesSweepWhenOneDeleteFails() throws IOException {
-    when(googleDriveService.isConnected()).thenReturn(true);
-    when(googleDriveService.findOrCreatePlatformFolder()).thenReturn("platform-folder");
-    when(googleDriveService.listBackups("platform-folder")).thenReturn(backups(10));
-    doThrow(new IOException("boom")).when(googleDriveService).deleteFile("id-7");
-
-    BackupRetentionService service = newService(7, 7);
-
-    assertThat(service.prunePlatformToLimit()).isEqualTo(2);
-    verify(googleDriveService, times(3)).deleteFile(anyString());
-  }
-
-  @Test
-  void folderParameterisedSweepDeletesOnlyBeyondTheGivenLimit() throws IOException {
-    when(googleDriveService.listBackups("some-folder")).thenReturn(backups(5));
-
-    BackupRetentionService service = newService(7, 7);
-
-    assertThat(service.pruneToLimit("some-folder", 2)).isEqualTo(3);
-    verify(googleDriveService).deleteFile("id-2");
-    verify(googleDriveService, never()).deleteFile("id-1");
   }
 }

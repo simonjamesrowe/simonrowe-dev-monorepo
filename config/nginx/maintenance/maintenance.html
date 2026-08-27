@@ -1,0 +1,158 @@
+<!doctype html>
+<!--
+  Served for simonrowe.dev / www.simonrowe.dev / api.simonrowe.dev while
+  /var/run/deploy-state/maintenance.on exists (see config/nginx/nginx-proxy.conf).
+
+  EVERYTHING IS INLINE AND NOTHING IS FETCHED. No stylesheet, no web font, no
+  image, no script. The frontend container that would serve those assets is
+  precisely what is being replaced while this page is up, so any external
+  reference would render as a broken page at exactly the wrong moment. Fonts are
+  stacks with system fallbacks for the same reason: Space Grotesk and Inter are
+  used if the visitor happens to have them, and the page looks deliberate either
+  way.
+
+  Colours are the site's own tokens, copied rather than imported:
+    --surface #0f131c  --surface-container #1c2029
+    --primary #77d1ff  --on-surface #dfe2ef
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Retries itself. Paired with the Retry-After header nginx adds. -->
+    <meta http-equiv="refresh" content="30" />
+    <meta name="robots" content="noindex" />
+    <title>Update in progress — simonrowe.dev</title>
+    <style>
+      :root {
+        --surface: #0f131c;
+        --surface-container: #1c2029;
+        --primary: #77d1ff;
+        --on-surface: #dfe2ef;
+        --on-surface-muted: #97a0b5;
+        --outline: #2b3140;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        padding: 2rem 1.25rem;
+        background: var(--surface);
+        color: var(--on-surface);
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        font-size: 1rem;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 34rem;
+        padding: 2.5rem 2rem;
+        border: 1px solid var(--outline);
+        border-radius: 1rem;
+        background: var(--surface-container);
+        text-align: left;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        margin: 0 0 1.25rem;
+        color: var(--primary);
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      /* A pure-CSS pulse, so there is no image and no script to load. */
+      .dot {
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 50%;
+        background: var(--primary);
+        animation: pulse 1.8s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 0.35;
+          transform: scale(0.85);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.15);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .dot {
+          animation: none;
+          opacity: 1;
+        }
+      }
+
+      h1 {
+        margin: 0 0 0.9rem;
+        font-family: "Space Grotesk", "Inter", -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        font-size: clamp(1.6rem, 5vw, 2.1rem);
+        font-weight: 600;
+        line-height: 1.2;
+        letter-spacing: -0.015em;
+      }
+
+      p {
+        margin: 0 0 1rem;
+        color: var(--on-surface-muted);
+      }
+
+      p:last-of-type {
+        margin-bottom: 0;
+      }
+
+      .footnote {
+        margin-top: 1.75rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--outline);
+        color: var(--on-surface-muted);
+        font-size: 0.85rem;
+      }
+
+      .footnote strong {
+        color: var(--on-surface);
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <p class="eyebrow"><span class="dot"></span> Update in progress</p>
+      <h1>A new version is going live</h1>
+      <p>
+        simonrowe.dev is being updated right now. This usually takes a couple of
+        minutes, and nothing is broken — the site is just mid-swap.
+      </p>
+      <p>This page reloads itself, so you can leave it open.</p>
+      <p class="footnote">
+        <strong>Deploys here are automatic.</strong> A merge builds, ships and
+        verifies itself, and rolls back on its own if the new version does not
+        come up clean.
+      </p>
+    </main>
+  </body>
+</html>
