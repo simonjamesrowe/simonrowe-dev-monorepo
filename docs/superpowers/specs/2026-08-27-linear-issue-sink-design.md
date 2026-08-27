@@ -57,9 +57,12 @@ what the successor features are allowed to file.
 
 ### Out, and each its own spec
 
-- **The hourly production bug-hunter.** The feature this sink exists for. Reads
-  Loki, Langfuse and the site itself looking for defects and usability problems,
-  and files them here.
+- **The scheduled production bug-hunter.** The feature this sink exists for.
+  Reads Loki, Langfuse and the site itself looking for defects and usability
+  problems, and files them here. Cadence decided 2026-08-27: **every 24 hours,
+  and the interval configurable** — so it follows `cve-fix-daily`'s shape (a
+  paused-by-default Temporal schedule declared in code, reconciled by a deploy)
+  but not its hardcoded `CveFixScheduleInitializer.INTERVAL` constant.
 - **Post-deploy production verification.** Smoke tests after an auto-deploy.
   Note `frontend/e2e/chat.prod-smoke.spec.ts` and a `prod-smoke` Playwright
   project already exist; the open question is whether the factory image should
