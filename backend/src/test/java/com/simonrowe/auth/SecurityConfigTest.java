@@ -144,4 +144,16 @@ class SecurityConfigTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/blogs/missing-blog/narration"))
         .andExpect(status().isNotFound());
   }
+
+  @Test
+  void platformStatusIsPublic() throws Exception {
+    mockMvc.perform(get("/api/platform/status"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void platformReleasesArePublic() throws Exception {
+    mockMvc.perform(get("/api/platform/releases"))
+        .andExpect(status().isOk());
+  }
 }
