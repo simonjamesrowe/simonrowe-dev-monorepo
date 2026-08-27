@@ -168,6 +168,102 @@ because Elasticsearch needs ~130s to bind 9200 on this Pi and the backend anothe
 containers and explains the `created` state, and the run's triage issue quotes
 the logs.
 
+## Running compose from inside the deployer
+
+The deployer drives the **host's** Docker daemon from inside a container, and that
+one fact caused every prerequisite failure found during the first rollout. All of
+them are now fixed in `docker-compose.prod.yml`; this section exists so a future
+change does not reintroduce one, because each failed in a way that looked like
+something else.
+
+| What | Why it breaks | Fix in place |
+| --- | --- | --- |
+| Bind-mount paths | Compose resolves the nine `./...` binds against its project directory and hands the result to the **host** daemon. A container-private project dir means host paths that do not exist — and the daemon *creates* a missing bind source as an empty directory rather than erroring, so the container fails with "not a directory" and the host root gets littered. | The deploy directory is mounted **at its own host path on both sides** (`${DEPLOY_DIR}:${DEPLOY_DIR}`). |
+| Project name | Compose derives it from the directory name, so a container-private path meant a *different, empty* project: `up -d` would build a second parallel stack and report success while the live site ran the old images. | `COMPOSE_PROJECT_NAME` pinned on `deployer`. |
+| Docker socket | `root:docker 0660`; the container runs as `factory` (uid 10003) with no supplementary groups. Healthy container, registered poller, then "permission denied" on the first compose call. | `group_add: ["${DOCKER_GID:-984}"]`. |
+| `.env` | 0600 and host-owned, but compose interpolates it on every call. | `.env` is mode **0640** and the deployer joins its **owning group** via `group_add`. Not a `chgrp` — see below. |
+| `deploy-state` volume | Docker creates a named volume `root:root`; `maintenance-on` and `pull` both write there. | `deploy-state-init`, mirroring `uploads-init`. |
+| git ownership | The checkout is owned by the host login, not `factory`, so git refuses it — and `sync-config` reports the misleading "`<dir>` is not a git checkout". | `GIT_CONFIG_COUNT`/`KEY_0`/`VALUE_0` set `safe.directory`. |
+| Variables the container also sets | **Compose gives the process environment precedence over `.env`.** Any variable that is both interpolated in this file and present in the deployer's own environment resolves to the *container's* value when the deployer runs compose. | The two that collided are split or removed — see below. |
+
+### The environment-precedence trap
+
+This is the subtle one, and it will happen again if someone reuses a name.
+
+- `GITHUB_APP_PRIVATE_KEY_PATH` meant two different things: the host path (mount
+  source) and the in-container path (what the app reads). The deployer sets the
+  container value, so its reconcile resolved the *mount source* to
+  `/run/secrets/github-app.pem`, which does not exist on the host. Now split into
+  `GITHUB_APP_PRIVATE_KEY_HOST_PATH` (source) and `GITHUB_APP_PRIVATE_KEY_PATH`
+  (destination). **Do not merge them back.**
+- `FACTORY_DEPLOY_TRIGGER_ENABLED` was pinned `"false"` on `deployer`. With the
+  flag true in `.env`, the deployer's own reconcile would have re-rendered
+  `software-factory` with the trigger **false** — auto-deploy would have worked
+  exactly once and then switched itself off, on the very deploy meant to enable
+  it. The line is now **absent**; the service has no `env_file`, so absence
+  already yields false.
+
+To check for a new collision:
+
+```bash
+grep -oE '\$\{[A-Z_][A-Z0-9_]*' docker-compose.prod.yml | sed 's/${//' | sort -u > /tmp/interp
+docker exec simonrowe-dev-monorepo-deployer-1 env | cut -d= -f1 | sort -u > /tmp/depenv
+comm -12 /tmp/interp /tmp/depenv     # any name here must mean the same thing on both sides
+```
+
+The definitive test is that both sides render the same stack:
+
+```bash
+D=/home/simonrowe/workspace/simonjamesrowe/simonrowe-dev-monorepo
+docker compose -f docker-compose.prod.yml config --hash='*' | sort > /tmp/a
+docker exec simonrowe-dev-monorepo-deployer-1 \
+  sh -c "cd $D && docker compose -f docker-compose.prod.yml config --hash='*'" | sort > /tmp/b
+diff /tmp/a /tmp/b        # must be empty
+```
+
+Run it from a **clean shell**: an interactive Claude Code session exports
+`CLAUDE_*` variables that this file interpolates, so `docker compose` run from one
+renders `software-factory` differently from cron. Prefix with
+`env -u CLAUDE_EFFORT -u CLAUDE_MODEL -u CLAUDE_TIMEOUT -u CLAUDE_MAX_TURNS -u CLAUDE_CODE_OAUTH_TOKEN`.
+
+### Why the deployer joins .env's group instead of .env changing group
+
+`docker compose` interpolates `.env` on every call, so the deployer must be able to
+read a host-owned 0640 file. The obvious fix — `chgrp factory .env` — **does not
+hold**, and fails in the worst possible way.
+
+`sed -i`, and every editor that writes a temp file and renames it over the
+original, recreates `.env` with the host user's default group. The chgrp is
+silently undone by the next edit of `.env`; nothing warns; and the next deploy
+fails at `recreate` with `open .../.env: permission denied` — *after* the
+maintenance page is up, so it takes the site down and ends `ROLLBACK_FAILED`
+(the rollback runs compose too, so it fails identically). This was observed
+exactly that way, caused by nothing more than flipping a flag with `sed -i`.
+
+So the group membership goes on the container, where an edit to `.env` cannot
+disturb it:
+
+```yaml
+group_add:
+  - "${DOCKER_GID:-984}"       # getent group docker
+  - "${DEPLOY_ENV_GID:-1000}"  # the group owning .env — `stat -c %G .env`
+```
+
+`.env` only has to stay **0640**. It is not world-readable, so no other host user
+gains access.
+
+## Host state this feature depends on
+
+Not in git, and lost on a host rebuild:
+
+```bash
+stat -c '%U:%G %a' .env      # must be group-readable (0640); its gid = DEPLOY_ENV_GID
+getent group docker          # gid must match DOCKER_GID (default 984)
+```
+
+`.env` must also define `DEPLOY_DIR` (the absolute deploy directory) and
+`GITHUB_APP_PRIVATE_KEY_HOST_PATH`.
+
 ## Rollout order
 
 Only needed once, and the order matters because each step can fail invisibly. See

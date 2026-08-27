@@ -1,5 +1,6 @@
 package com.simonrowe.admin;
 
+import com.simonrowe.common.LogSafe;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -136,7 +137,7 @@ public class AdminTagController {
     );
 
     Tag saved = tagRepository.save(updated);
-    LOG.info("Updated tag: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Updated tag: id={}, user={}", LogSafe.value(id), jwt.getSubject());
     return saved;
   }
 
@@ -148,7 +149,7 @@ public class AdminTagController {
   ) {
     Tag tag = getById(id);
     tagRepository.delete(tag);
-    LOG.info("Deleted tag: id={}, user={}", id, jwt.getSubject());
+    LOG.info("Deleted tag: id={}, user={}", LogSafe.value(id), jwt.getSubject());
   }
 
   private List<ValidationErrorResponse.FieldError> validateTag(

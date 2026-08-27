@@ -261,6 +261,61 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   exclusion. Deploying recreates `langfuse-clickhouse` and `deployer`. ClickHouse
   archive size is **unbounded and still unmeasured** (no TTL on trace tables); measure
   before trusting the Drive quota. See `docs/runbooks/platform-backup-restore.md`.
+- 036-auto-deploy-rollout-fixes: Turning auto-deploy on for the first time (2026-08-27)
+  found that **the `deployer` could not perform a single deploy step**, for nine separate
+  reasons, none of which any test could catch — they are all properties of running
+  `docker compose` *inside a container against the host daemon*, and the unit tests mock
+  the shell. All are fixed in `docker-compose.prod.yml`; see the new
+  "Running compose from inside the deployer" section of `docs/runbooks/deploy.md`.
+  The ones worth remembering because they fail deceptively:
+  - **Relative bind mounts are resolved against the compose project directory and then
+    handed to the HOST daemon.** With the old `.:/workspace/repo`, compose asked the
+    daemon for `/workspace/repo/frontend/nginx.conf`, which exists only inside the
+    deployer. **The daemon creates a missing bind source as an empty directory instead of
+    erroring**, so the container dies with "not a directory" and the host root gets a
+    stray `/workspace/...`. Nine binds are affected, including nginx's own proxy conf and
+    the maintenance page. Fixed by mounting the deploy directory **at its own host path on
+    both sides** (`${DEPLOY_DIR}:${DEPLOY_DIR}`).
+  - **`COMPOSE_PROJECT_NAME` was left on `backend`** when 036 moved the Docker socket to
+    `deployer`. Compose derives the project from the directory name, so the deployer would
+    have built a *second, parallel stack* and reported a successful deploy while the live
+    site ran the old images.
+  - **Compose gives the process environment precedence over `.env`.** Any variable that is
+    both interpolated in the compose file and set in the deployer's own environment
+    resolves to the container's value when the deployer runs compose. Two collided:
+    `GITHUB_APP_PRIVATE_KEY_PATH` meant both the host mount source and the in-container
+    path (now split into `..._HOST_PATH` + `..._PATH` — **do not merge them back**), and
+    `FACTORY_DEPLOY_TRIGGER_ENABLED` was pinned `"false"` on `deployer`, which would have
+    re-rendered `software-factory` with the trigger **off** — auto-deploy would have
+    worked exactly once and then disabled itself. That line is now deliberately absent.
+  - **`FACTORY_DEPLOY_TRIGGER_ENABLED` was never passed to `software-factory` at all.**
+    That service has no `env_file`, and the variable appeared only on `deployer`, so
+    rollout step 7 ("set it true on software-factory") was a silent no-op.
+  - **`.env` must be group-readable and the deployer joins its OWNING group.** A
+    `chgrp factory .env` does not hold: `sed -i` and every rename-based editor recreates
+    the file with the host user's group, and the next deploy dies at `recreate` with
+    `permission denied` *after* the maintenance page is up (ends `ROLLBACK_FAILED`).
+    `group_add` now carries `DOCKER_GID` (the socket is `root:docker 0660` and the
+    container runs as uid 10003) and `DEPLOY_ENV_GID`.
+  - Also: the `deploy-state` named volume is created `root:root`, so `maintenance-on`
+    could not write the flag — fixed with a `deploy-state-init` chown service mirroring
+    `uploads-init`; and git refuses the host-owned checkout ("dubious ownership"), which
+    `sync-config` misreports as "<dir> is not a git checkout" — fixed with
+    `GIT_CONFIG_COUNT`/`KEY_0`/`VALUE_0` setting `safe.directory`.
+  - **`monitor-prod.sh` was not deploy-aware.** It polls www every minute and treats the
+    maintenance page's 503 as a fault, and a deploy outlasts its 3-strike threshold — so
+    the watchdog reconciled the stack underneath a running deploy. It now stands down
+    while `deploy-state/maintenance.on` is set (read through nginx, which mounts the
+    volume read-only, so it needs no root). `deploy-state-init` was also added to
+    `ONESHOT_SERVICES`, or its `exited 0` fires a stack reconcile every single minute.
+  - Still open, deliberately not fixed here: `reconcile()` in `restart-prod.sh` runs a
+    **bare `up -d`**, which ignores `FACTORY_DEPLOY_RECREATABLE` entirely — so the
+    deployer's self-exclusion is incomplete and a merge that changes the `deployer`
+    service will have the deploy recreate the deployer mid-flight and kill its own
+    workflow. Also `DeployWorkflowImpl` reports `maintenancePageLeftUp: true` on the
+    sync-config-failed path, where the page was never raised.
+  - The `restart-prod.sh` parser tests (6 checks) cannot pass on the Pi: **the host has no
+    `jq`**, which lives only in the deployer image. Pre-existing, not a regression.
 - 036-auto-deploy-on-merge: A merge to `main` now deploys itself. `software-factory` gains a
   `workflow_run` branch on its existing signed webhook — accepted only for
   `Publish`/`success`/`main`/allowlisted-repo — which **signal-with-starts** a Temporal workflow

@@ -1,5 +1,6 @@
 package com.simonrowe.events;
 
+import com.simonrowe.common.LogSafe;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangeEvent.EventType;
 import java.time.Instant;
@@ -40,6 +41,7 @@ public class ContentChangePublisher {
     ContentChangeEvent event = new ContentChangeEvent(
         eventType, contentType, contentId, Instant.now());
     kafkaTemplate.send(TOPIC, contentId, event);
-    LOG.info("Published content change: {} {} {}", eventType, contentType, contentId);
+    LOG.info("Published content change: {} {} {}", eventType, contentType,
+        LogSafe.value(contentId));
   }
 }

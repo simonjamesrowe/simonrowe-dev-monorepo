@@ -1,45 +1,98 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/032-on-demand-narration/plan.md
+specs/036-auto-deploy-on-merge/plan.md
 <!-- SPECKIT END -->
 
-## Active Technologies
-- Java 21, TypeScript 5.7, React 19 + Spring Boot 3.5.x, Spring AI 1.1.4, Spring WebSocket STOMP, MongoDB, Elasticsearch, Kafka, Vite 6, @stomp/stompjs, lucide-react, react-markdown, react-syntax-highlighter (feat/frontend/landing-chat-widgets)
-- MongoDB for existing profile/jobs/skills/blog/code-example data; in-memory chat sessions only for chat state (feat/frontend/landing-chat-widgets)
-- Java 21, TypeScript 5.7, React 19 + Spring Boot 3.5.x, MongoDB, Vite 6, React Router, lucide-react, Testing Library, Vitest, JUnit 5 (feat/frontend/landing-chat-widgets)
-- Java 21, TypeScript 5.7, React 19 + Spring Boot 3.5.x, Spring Kafka, Spring Data MongoDB, Google Auth Library, Spring RestClient, CommonMark, Bucket4j, Micrometer, Vitest (simonrowe/feat/audio-on-demand)
-- MongoDB narration records, local uploaded MP3 assets, and temporary private Cloud Storage Long Audio output (simonrowe/feat/audio-on-demand)
+# simonrowe-dev-monorepo — agent guidelines
 
-## Recent Changes
-- feat/frontend/landing-chat-widgets: Added Java 21, TypeScript 5.7, React 19 + Spring Boot 3.5.x, Spring AI 1.1.4, Spring WebSocket STOMP, MongoDB, Elasticsearch, Kafka, Vite 6, @stomp/stompjs, lucide-react, react-markdown, react-syntax-highlighter
-- feat/frontend/landing-chat-widgets: Planned landing/profile split with centered chat-first homepage, public Profile page, and retargeted tour seed data
+## Read these first
 
-## Project Structure
+| File | What it holds |
+| --- | --- |
+| [CLAUDE.md](CLAUDE.md) | **The authoritative guide.** Commands, code style, key design decisions, and a long list of hard-won production facts (failure modes, gotchas, why things are the way they are). Read it before changing anything operational. |
+| [README.md](README.md) | What the project is, its modules, and an index of every doc |
+| [docs/architecture.md](docs/architecture.md) | System map, data stores, request paths, async flows |
+| [docs/software-factory.md](docs/software-factory.md) | The agents that review, patch and deploy this repo |
+| [.specify/memory/constitution.md](.specify/memory/constitution.md) | Project constitution — binding principles |
+
+This file exists so agents that read `AGENTS.md` rather than `CLAUDE.md` find
+their way. It deliberately does not duplicate CLAUDE.md; where the two disagree,
+CLAUDE.md wins.
+
+## Stack
+
+- **Backend** — Java 21, Spring Boot 3.5.16, Spring Data MongoDB, Spring Data
+  Elasticsearch, Spring Kafka, Spring Security (OAuth2 resource server),
+  Spring AI 1.1.8, Embabel, Mongock. Gradle, versions in
+  `gradle/libs.versions.toml`.
+- **Frontend** — React 19, TypeScript 5.7, Vite 6, React Router 7, Vitest,
+  Playwright. Plain CSS with BEM in a single `styles.css`.
+- **Software factory** — Spring Boot + Temporal, agents driven by the Claude
+  Code CLI.
+- **Infrastructure** — MongoDB 8, Elasticsearch 8.17, Kafka 7.8 (KRaft),
+  Temporal, Langfuse, all on one Raspberry Pi behind Cloudflare and a tunnel.
+
+## Project structure
+
 ```text
-backend/           # Spring Boot application
-  src/main/java/   # Java source (com.simonrowe.*)
-  src/test/java/   # Tests with Testcontainers
-  uploads/         # Media asset storage
-frontend/          # React + Vite application
-  src/             # TypeScript source
-  tests/           # Vitest tests
-scripts/           # Bash scripts for backup, restore, migration
+backend/            Spring Boot API — content, agents, chat, MCP, admin
+frontend/           React + Vite SPA (public site and /admin CMS)
+software-factory/   Temporal-backed agents: code review, cvefix, deploy, feedback
+scripts/            Local dev, backup/restore, production operations, monitoring
+config/             nginx, checkstyle, Grafana Alloy, OTel, SearXNG, Temporal
+docs/               Architecture, setup guides, production runbooks
+specs/              Spec-driven feature folders (spec, plan, tasks, research)
 ```
 
 ## Commands
+
 ```bash
-# Start/stop applications (sources env vars from .env files)
-./scripts/start.sh                      # Start both backend and frontend together
-./scripts/stop.sh                       # Stop both backend and frontend
-./scripts/start-backend.sh              # Start backend only (port 8080)
-./scripts/start-frontend.sh             # Start frontend only (port 5173)
+# Local environment (infrastructure in Docker, apps on the host)
+docker compose up -d                    # Mongo, Kafka, Elasticsearch, Temporal, Langfuse
+./scripts/start.sh                      # backend :8080, frontend :5173
+./scripts/stop.sh
 
 # Tests
-cd backend && ../gradlew test           # Run backend tests
-cd frontend && npm test                 # Run frontend tests (vitest)
+./gradlew :backend:test                 # Testcontainers — needs Docker, not compose
+./gradlew :software-factory:test
+cd frontend && npm test                 # Vitest
+./gradlew check                         # Checkstyle + tests + JaCoCo (0.78 floor)
 
-# Backup & Restore
-./scripts/backup.sh                     # Create backup to /Users/simonrowe/backups/
-./scripts/restore.sh                    # Restore latest backup
+# Data
+./scripts/backup.sh                     # MongoDB + uploads -> ~/backups
+./scripts/restore.sh                    # restore the newest tarball
 ```
+
+Actuator is on **8082** locally and **8081** in production.
+
+## Working rules
+
+- **Conventional commits and branch prefixes** (`feat/`, `fix/`, `chore/`). No
+  Jira tickets in this repo. Do not attribute agents in commits or PRs.
+- **Features are spec-first.** Work under `specs/<nnn>-<slug>/`; keep
+  `.specify/feature.json` pointing at the active feature.
+- **Data changes ship as Mongock change units** in `com.simonrowe.migration`,
+  never as ad-hoc scripts. Automatic index creation is off, so indexes must come
+  from a change unit — `@CompoundIndex` alone does nothing.
+- **The backend must not launch host processes.** `NoHostProcessLaunchTest`
+  fails the build if a `ProcessBuilder` appears in `backend/src/main/java`, and
+  Constitution Principle II prohibits it. Deploys are the `deployer` container's
+  job.
+- **Credentials come from `.env` files**, sourced from
+  `~/workspace/simonjamesrowe/env`. Never echo a credential value.
+- **Never test `scripts/monitor-prod.sh` or `scripts/restart-prod.sh` by just
+  running them** — every remediation path shells out to `docker compose` against
+  real production. Use `DRY_RUN=1` and a throwaway `STATE_DIR`.
+- **CI must be green and the automated reviewer satisfied before merge.** A red
+  `Static Analysis` check means a broken scanner, not a cosmetic advisory
+  failure.
+
+## Before touching production
+
+Read the relevant runbook in [docs/runbooks/](docs/runbooks/) first, and the
+production section of [CLAUDE.md](CLAUDE.md). This stack has several failure
+modes that are non-obvious and expensive to rediscover — a `healthy` container
+that serves nothing, a single-node Kafka broker that silently accepts writes no
+consumer can ever read, healthchecks whose cold-start budget strands dependent
+containers in `created`.

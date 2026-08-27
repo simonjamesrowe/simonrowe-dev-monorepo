@@ -1,5 +1,6 @@
 package com.simonrowe.admin;
 
+import com.simonrowe.common.LogSafe;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -102,7 +103,7 @@ public class AdminSocialMediaController {
 
     SocialMediaLink saved = socialMediaRepository.save(updated);
     LOG.info("Updated social media link: id={}, user={}",
-        id, jwt.getSubject());
+        LogSafe.value(id), jwt.getSubject());
     return saved;
   }
 
@@ -115,7 +116,7 @@ public class AdminSocialMediaController {
     SocialMediaLink link = getById(id);
     socialMediaRepository.delete(link);
     LOG.info("Deleted social media link: id={}, user={}",
-        id, jwt.getSubject());
+        LogSafe.value(id), jwt.getSubject());
   }
 
   private List<ValidationErrorResponse.FieldError> validateSocialMedia(

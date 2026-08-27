@@ -58,6 +58,7 @@ COMPOSE_PROJECT=${COMPOSE_PROJECT:-simonrowe-dev-monorepo}
 ONESHOT_SERVICES=(
   "uploads-init"
   "clickhouse-backups-init"
+  "deploy-state-init"
   "temporal-db-init"
   "temporal-schema-init"
   "temporal-create-namespace"
@@ -248,6 +249,40 @@ svc_restart() {
 }
 
 prune_old_restarts
+
+# ---------------------------------------------------------------------------
+# Layer 0: is a deploy in progress?
+# ---------------------------------------------------------------------------
+# Everything below this point treats "www is not serving" and "a container is not
+# running" as faults to remediate. During a deploy both are true ON PURPOSE: the
+# maintenance page returns 503 by design, and recreate stops and starts containers.
+#
+# This script and the deployer would otherwise fight each other on every merge. A
+# deploy holds the page up for longer than FAILURE_THRESHOLD ticks, so the watchdog
+# would reconcile the stack underneath a running deploy - and a bare `up -d` in the
+# middle of `recreate` can undo a rollback, restart a container the deploy is
+# waiting on, or recreate the deployer itself and kill the workflow orchestrating
+# the whole thing.
+#
+# The maintenance flag is the signal because it is exactly the window that matters:
+# the deployer raises it before pulling and drops it once the stack verifies. It is
+# read through nginx, which mounts the same volume read-only, so this needs no root
+# and no knowledge of the volume's host path. If nginx is not answering, the exec
+# fails and we fall through and remediate - which is right, because nginx being
+# down is a real emergency and is not something a deploy causes.
+deploy_in_progress() {
+  docker exec "${COMPOSE_PROJECT}-nginx-1" \
+    test -f /var/run/deploy-state/maintenance.on 2>/dev/null
+}
+
+if deploy_in_progress; then
+  log "INFO" "Maintenance flag is set - a deploy is in progress. Standing down."
+  # Deliberately reset, not preserved: the 503s counted here were caused by the
+  # deploy, and carrying them into the next tick would let a deploy that finishes
+  # at count 2 trigger a reconcile on the first real failure afterwards.
+  set_failure_count 0
+  exit 0
+fi
 
 # ---------------------------------------------------------------------------
 # Layer 1: is the public site up at all?
