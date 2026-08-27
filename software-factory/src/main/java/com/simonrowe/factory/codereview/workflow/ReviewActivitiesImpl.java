@@ -6,6 +6,7 @@ import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
+import com.simonrowe.factory.codereview.github.CheckRunGateway;
 import com.simonrowe.factory.codereview.github.GitHubGateway;
 import io.temporal.activity.Activity;
 import io.temporal.spring.boot.ActivityImpl;
@@ -17,11 +18,15 @@ import org.springframework.stereotype.Component;
 public class ReviewActivitiesImpl implements ReviewActivities {
 
   private final GitHubGateway gitHubGateway;
+  private final CheckRunGateway checkRunGateway;
   private final ReviewEngine reviewEngine;
 
   public ReviewActivitiesImpl(
-      final GitHubGateway gitHubGateway, final ReviewEngine reviewEngine) {
+      final GitHubGateway gitHubGateway,
+      final CheckRunGateway checkRunGateway,
+      final ReviewEngine reviewEngine) {
     this.gitHubGateway = gitHubGateway;
+    this.checkRunGateway = checkRunGateway;
     this.reviewEngine = reviewEngine;
   }
 
@@ -53,5 +58,26 @@ public class ReviewActivitiesImpl implements ReviewActivities {
   public void publishFailure(
       final ReviewRequest request, final String statusCommentId, final ReviewFailure failure) {
     gitHubGateway.publishFailure(request, statusCommentId, failure);
+  }
+
+  @Override
+  public String openCheckRun(final PullRequestContext pullRequest, final String workflowId) {
+    return checkRunGateway.open(pullRequest, workflowId);
+  }
+
+  @Override
+  public void completeCheckRun(
+      final PullRequestContext pullRequest,
+      final String checkRunId,
+      final ReviewReport report) {
+    checkRunGateway.complete(pullRequest, checkRunId, report);
+  }
+
+  @Override
+  public void failCheckRun(
+      final PullRequestContext pullRequest,
+      final String checkRunId,
+      final ReviewFailure failure) {
+    checkRunGateway.fail(pullRequest, checkRunId, failure);
   }
 }

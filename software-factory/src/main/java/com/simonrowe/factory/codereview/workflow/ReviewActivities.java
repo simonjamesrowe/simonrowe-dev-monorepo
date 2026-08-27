@@ -25,4 +25,20 @@ public interface ReviewActivities {
 
   @ActivityMethod
   void publishFailure(ReviewRequest request, String statusCommentId, ReviewFailure failure);
+
+  /**
+   * Opens the {@code Code Review} check run and returns its id.
+   *
+   * <p>Takes {@link PullRequestContext} rather than {@link ReviewRequest} because a check run must
+   * be attached to a commit, and the head SHA is only certain once the pull request has been
+   * loaded — {@code ReviewRequest.expectedHeadSha} is nullable on the manual-review path.
+   */
+  @ActivityMethod
+  String openCheckRun(PullRequestContext pullRequest, String workflowId);
+
+  @ActivityMethod
+  void completeCheckRun(PullRequestContext pullRequest, String checkRunId, ReviewReport report);
+
+  @ActivityMethod
+  void failCheckRun(PullRequestContext pullRequest, String checkRunId, ReviewFailure failure);
 }

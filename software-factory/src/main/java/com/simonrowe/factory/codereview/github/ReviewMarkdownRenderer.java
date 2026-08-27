@@ -1,9 +1,11 @@
 package com.simonrowe.factory.codereview.github;
 
+import com.simonrowe.factory.codereview.domain.FindingFingerprint;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewFinding;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 /** Renders the sticky status comment and the per-finding inline comments. */
@@ -11,15 +13,36 @@ import org.springframework.stereotype.Component;
 public class ReviewMarkdownRenderer {
 
   /**
-   * Stamped on every inline comment this reviewer posts.
+   * The bare marker every inline comment carried before findings had identity.
    *
-   * <p>It is what lets the next push tell its own stale findings apart from a human's reply and
-   * delete only the former. Without it, findings accumulate on the pull request push after push.
+   * <p>Kept only so threads opened before this change are still recognisable as this reviewer's
+   * own. They match no fingerprint, so on the first review after deploy they are replied to and
+   * resolved — the correct outcome for a pre-change artefact, and one that destroys nothing.
    */
-  public static final String FINDING_MARKER = "<!-- temporal-code-review-finding -->";
+  public static final String LEGACY_FINDING_MARKER = "<!-- temporal-code-review-finding -->";
 
+  /**
+   * Matches the marker stamped on every inline comment this reviewer posts, capturing the
+   * finding's fingerprint.
+   *
+   * <p>Defined here, beside the code that writes it, so the gateway that parses identity back out
+   * of a thread is reading exactly the string the renderer wrote — one definition, not two that
+   * can drift.
+   */
+  public static final Pattern FINDING_MARKER_PATTERN =
+      Pattern.compile("<!-- temporal-code-review-finding:([0-9a-f]{64}) -->");
+
+  /**
+   * States what the reviewer now does to a merge.
+   *
+   * <p>This used to read "Advisory only; this reviewer does not approve or block merges." That
+   * became false: the {@code Code Review} check run is a required status, and every other finding
+   * holds the merge through required conversation resolution.
+   */
   private static final String ADVISORY =
-      "\n_Advisory only; this reviewer does not approve or block merges._\n";
+      "\n_Critical findings and reviewer failures turn the `Code Review` check red and block the "
+          + "merge. Other findings block until their conversation is resolved — by fixing them, "
+          + "or by replying with why they are declined and resolving the thread._\n";
 
   /**
    * Renders the single comment that carries the whole review outcome.
@@ -64,8 +87,19 @@ public class ReviewMarkdownRenderer {
     return body.toString();
   }
 
+  /**
+   * Builds the identity-carrying marker for one fingerprint.
+   *
+   * <p>The fingerprint is what turns "delete everything and repost" into a reconcile: it survives
+   * a rebase moving the line and the model re-grading the severity, so the thread a finding opened
+   * can be found again on the next push instead of being destroyed and recreated.
+   */
+  public static String findingMarker(final String fingerprint) {
+    return "<!-- temporal-code-review-finding:" + fingerprint + " -->";
+  }
+
   public String renderFindingComment(final ReviewFinding finding) {
-    return FINDING_MARKER
+    return findingMarker(FindingFingerprint.of(finding))
         + "\n**"
         + finding.severity().toJson()
         + " — "

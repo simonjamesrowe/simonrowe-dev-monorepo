@@ -307,6 +307,56 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   Note the interaction that hid all of this: `sync-config` checks `already-current`
   **before** the compose validation, so a rehearsal deploy on the SHA already in
   production exercises none of it. Only a real fast-forward reaches the broken code.
+- 038-pr-governance: `main` gets a real gate, and review findings become resolvable instead of
+  deleted. Three mechanisms, deliberately independent. **(1) Findings carry identity.** The bare
+  `FINDING_MARKER` gains a fingerprint — `sha256(file + NUL + normalise(title))`, excluding the
+  **line** (moves on every rebase) and the **severity** (the model re-grades) — and
+  `GitHubGateway.publishReview`'s unconditional `deletePreviousFindings` is replaced by a
+  reconcile against existing threads. **Nothing is deleted any more**: `ThreadAction` has no
+  delete case and a test asserts it stays that way. Reading and resolving threads is **GraphQL**
+  (`ReviewThreadGateway`) because REST can neither see `isResolved` nor set it — that is the
+  actual reason delete-and-repost was the only strategy available before. Resolution needs only
+  `pull_requests: write`, already held. The reply is **"No longer reported as of `<sha>`", never
+  "Fixed"** — a re-worded title produces the same state as a genuine fix, so "fixed" would be a
+  lie. Threads the reviewer did not open are never touched; legacy bare-marker threads match no
+  fingerprint and so are resolved on the first run after deploy (correct, and destroys nothing).
+  **(2) The verdict becomes a `Code Review` check run**, since no merge path can read an issue
+  comment. `failure` when the verdict is `REQUEST_CHANGES` **or** any `CRITICAL` finding exists —
+  both checked independently, because the engine can emit a verdict inconsistent with its own
+  severities (`APPROVE` + `CRITICAL` must be red). **Only `success` and `failure` are ever sent**;
+  whether `neutral` satisfies a required check is version-dependent behaviour the gate must not
+  rest on. Created after `loadPullRequest`, not at `openStatusComment` time, because that holds
+  only a `ReviewRequest` whose `expectedHeadSha` is nullable on the manual path — so a review that
+  dies earlier creates **no check at all**, and an absent required check blocks. That is the fix
+  for silence being the normal presentation of failure. Accepted cost: a `software-factory`
+  outage stops all merging. **(3) `.github/rulesets/main.json`** requires four checks
+  (`Backend`/`Frontend`/`Software Factory Build & Test` + `Code Review`), **zero** approvals
+  (self-approval is forbidden, so requiring one deadlocks a solo maintainer permanently),
+  conversation resolution, linear history, and **no bypass actors**. Excluded on purpose:
+  `Static Analysis` (`continue-on-error: true`, so success is meaningless), `SonarCloud Code
+  Analysis` (would make an intentionally advisory gate blocking with no legitimate escape hatch,
+  and Constitution III bans manual overrides), `evaluate` (`paths:`-filtered, normally absent, and
+  an absent required check blocks forever).
+  Two things will brick the repository if done out of order, and neither is testable:
+  - **Grant the App `checks: write` BEFORE deploying.** `mintInstallationToken` sends an explicit
+    `permissions` block and GitHub 422s the *whole* token request when it over-reaches, which
+    takes down code review **and** the feedback loop together — same shape as the `contents:
+    write` incident. `commentToken` survives only because it deliberately sends no block at all.
+  - **Committing the ruleset does not apply it; apply it only after seeing a real `Code Review`
+    check.** Applying it first makes that required check permanently absent, blocking *every* PR
+    including the one that would fix it, with no bypass actor to recover with.
+  Also: `scripts/classify-change.sh` (+ `test-classify-change.sh`, auto-discovered by
+  `run-tests.sh`) maps changed paths to `auto-merge`/`ux-review`/`manual`. **Rule 4 —
+  unrecognised path ⇒ `manual`, never `auto-merge`** — so a new top-level directory defaults to
+  needing a human; and infra paths **outrank** backend-only ones because an auto-merge triggers
+  Publish, which triggers an unattended prod deploy. Expect far fewer unattended merges than
+  "backend-only ⇒ auto-merge" implies: conversation resolution means *any* `SUGGESTION` blocks
+  until fixed or declined. Deploying needs **both** `software-factory` and `deployer` (same image,
+  and `deployer` never recreates itself). Skills (`pr-review-loop`, `code-review-triage`) live in
+  `simonjamesrowe/agent-setup` and are follow-up. See `docs/runbooks/pr-governance.md`.
+  **Do not run `.specify/scripts/bash/update-agent-context.sh` on this file** — it fails with
+  `grep: repetition-operator operand invalid` and silently strips the lead line from eight
+  existing entries here.
 - 037-platform-status-page: A public `/status` page reports which commit each first-party
   service runs, the third-party image tags, and a changelog with AI-written release notes.
   Every version fact is **baked into the artifact at build time** (`springBoot { buildInfo }`

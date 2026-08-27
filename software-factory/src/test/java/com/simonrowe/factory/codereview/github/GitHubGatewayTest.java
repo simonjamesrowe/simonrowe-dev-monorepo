@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
+import com.simonrowe.factory.codereview.domain.FindingFingerprint;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewFinding;
@@ -23,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +55,9 @@ class GitHubGatewayTest {
    */
   private final Map<String, String> rejectedBodies = new ConcurrentHashMap<>();
 
+  /** The review threads GitHub reports, as the JSON array the GraphQL query returns. */
+  private final AtomicReference<String> threadNodes = new AtomicReference<>("[]");
+
   private HttpServer server;
   private ExecutorService serverExecutor;
 
@@ -81,7 +86,38 @@ class GitHubGatewayTest {
           exchange.getResponseBody().write(body);
           exchange.close();
         });
+    // Review threads live on GraphQL, because REST can neither read nor set thread resolution
+    // state. The one query and the two mutations are keyed by name so a test can assert which of
+    // them ran without matching on the whole query text.
+    server.createContext(
+        "/graphql",
+        exchange -> {
+          String sent =
+              new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+          String operation = graphQlOperation(sent);
+          requests.add("GRAPHQL " + operation);
+          sentBodies.merge("GRAPHQL " + operation, sent, (a, b) -> a + "\n" + b);
+          byte[] body =
+              ("reviewThreads".equals(operation)
+                      ? "{\"data\":{\"repository\":{\"pullRequest\":{\"reviewThreads\":"
+                          + "{\"nodes\":" + threadNodes.get() + "}}}}}"
+                      : "{\"data\":{}}")
+                  .getBytes(StandardCharsets.UTF_8);
+          exchange.sendResponseHeaders(200, body.length);
+          exchange.getResponseBody().write(body);
+          exchange.close();
+        });
     server.start();
+  }
+
+  private static String graphQlOperation(final String body) {
+    if (body.contains("addPullRequestReviewThreadReply")) {
+      return "addPullRequestReviewThreadReply";
+    }
+    if (body.contains("resolveReviewThread")) {
+      return "resolveReviewThread";
+    }
+    return "reviewThreads";
   }
 
   @AfterEach
@@ -143,21 +179,35 @@ class GitHubGatewayTest {
 
   // --- publishing ----------------------------------------------------------------------------
 
+  /**
+   * The behaviour this feature exists to change. A finding that is still reported keeps the thread
+   * it already has — its posting time, its position, and any reply on it. Previously it was
+   * deleted and reposted on every push, so it read as brand new each time and a human's reply went
+   * with the thread root.
+   */
   @Test
-  void publishingDeletesTheFindingCommentsEarlierPushesLeftAndKeepsEveryoneElses() {
-    responses.put(
-        "GET " + FINDING_COMMENTS,
-        """
-        [
-          {"id": 900, "body": "<!-- temporal-code-review-finding -->\\n**warning — Bad**"},
-          {"id": 901, "body": "I disagree with this one"}
-        ]
-        """);
+  void findingStillReportedKeepsItsExistingThreadUntouched() {
+    threadNodes.set(openThread("T1", FINDING));
 
     gateway().publishReview(pullRequest(), report(List.of(FINDING)), "55");
 
-    assertThat(requests).contains("DELETE " + FINDING_COMMENT_900);
-    assertThat(requests).doesNotContain("DELETE " + FINDING_COMMENT_901);
+    assertThat(requests).doesNotContain("POST " + FINDING_COMMENTS);
+    assertThat(requests).doesNotContain("GRAPHQL resolveReviewThread");
+  }
+
+  /** A thread this reviewer did not open is never resolved: that judgement belongs to a person. */
+  @Test
+  void threadOpenedByHumanIsLeftAlone() {
+    threadNodes.set(
+        """
+        [{"id": "H1", "isResolved": false, "comments": {"nodes": [
+          {"body": "I disagree with this one", "author": {"login": "s", "__typename": "User"}}
+        ]}}]
+        """);
+
+    gateway().publishReview(pullRequest(), report(List.of()), "55");
+
+    assertThat(requests).doesNotContain("GRAPHQL resolveReviewThread");
   }
 
   @Test
@@ -193,20 +243,61 @@ class GitHubGatewayTest {
   }
 
   /**
-   * The push that fixes everything is exactly the one that must clear the board. Pruning only when
-   * there is something new to say would leave the last push's warnings sitting under an approval.
+   * The push that fixes everything is exactly the one that must clear the board — but by resolving
+   * the conversations, not by destroying them. The reply is what makes the resolution legible
+   * later, and it says "no longer reported" rather than "fixed" because a re-worded title produces
+   * the same state as a genuine fix.
    */
   @Test
-  void reviewWithNoFindingsStillDeletesTheOnesTheLastPushLeft() {
-    responses.put(
-        "GET " + FINDING_COMMENTS,
-        "[{\"id\": 900, \"body\": \"<!-- temporal-code-review-finding -->\"}]");
+  void reviewWithNoFindingsRepliesToAndResolvesTheThreadsTheLastPushLeft() {
+    threadNodes.set(openThread("T1", FINDING));
 
     gateway().publishReview(pullRequest(), report(List.of()), "55");
 
-    assertThat(requests).contains("DELETE " + FINDING_COMMENT_900);
+    assertThat(requests).contains("GRAPHQL addPullRequestReviewThreadReply");
+    assertThat(requests).contains("GRAPHQL resolveReviewThread");
+    assertThat(sentBodies.get("GRAPHQL addPullRequestReviewThreadReply"))
+        .contains("No longer reported as of")
+        .doesNotContain("Fixed");
     assertThat(requests).doesNotContain("POST " + FINDING_COMMENTS);
     assertThat(requests).contains("PATCH " + STATUS_COMMENT_55);
+  }
+
+  /** Reply first, always: a resolution landing without its explanation is indistinguishable from
+   * someone quietly closing an inconvenient finding. */
+  @Test
+  void theReplyIsPostedBeforeTheThreadIsResolved() {
+    threadNodes.set(openThread("T1", FINDING));
+
+    gateway().publishReview(pullRequest(), report(List.of()), "55");
+
+    assertThat(requests.indexOf("GRAPHQL addPullRequestReviewThreadReply"))
+        .isLessThan(requests.indexOf("GRAPHQL resolveReviewThread"));
+  }
+
+  /** A resolved thread whose finding is back gets a fresh thread — reopening the old one would
+   * hide that it regressed. */
+  @Test
+  void findingThatRegressedAfterBeingResolvedGetsFreshThread() {
+    threadNodes.set(resolvedThread("T1", FINDING));
+
+    gateway().publishReview(pullRequest(), report(List.of(FINDING)), "55");
+
+    assertThat(requests).contains("POST " + FINDING_COMMENTS);
+    assertThat(requests).doesNotContain("GRAPHQL resolveReviewThread");
+  }
+
+  /**
+   * The guarantee the whole feature rests on. Deletion was never resolution: it left GitHub's "N
+   * resolved" counter permanently zero and took human replies down with the thread root.
+   */
+  @Test
+  void publishingNeverDeletesAnything() {
+    threadNodes.set(openThread("T1", FINDING));
+
+    gateway().publishReview(pullRequest(), report(List.of(DRIFTED)), "55");
+
+    assertThat(requests).noneMatch(request -> request.startsWith("DELETE "));
   }
 
   @Test
@@ -232,15 +323,26 @@ class GitHubGatewayTest {
     assertThat(requests).contains("POST " + STATUS_COMMENTS);
   }
 
+  /**
+   * A thread from before findings carried identity matches no fingerprint, so the first review
+   * after deploy replies to it and resolves it. That is the right outcome for a pre-change
+   * artefact, and it destroys nothing.
+   */
   @Test
-  void findingCommentAlreadyGoneIsNotTreatedAsFailure() {
-    responses.put(
-        "GET " + FINDING_COMMENTS,
-        "[{\"id\": 900, \"body\": \"<!-- temporal-code-review-finding -->\"}]");
-    statuses.put("DELETE " + FINDING_COMMENT_900, 404);
+  void legacyThreadFromBeforeFindingsHadIdentityIsResolvedRatherThanDeleted() {
+    threadNodes.set(
+        """
+        [{"id": "L1", "isResolved": false, "comments": {"nodes": [
+          {"body": "<!-- temporal-code-review-finding -->\\n**warning — Bad**",
+           "author": {"login": "bot", "__typename": "Bot"}}
+        ]}}]
+        """);
 
     gateway().publishReview(pullRequest(), report(List.of(FINDING)), "55");
 
+    assertThat(requests).contains("GRAPHQL resolveReviewThread");
+    assertThat(requests).noneMatch(request -> request.startsWith("DELETE "));
+    // The finding is still reported, so it gets a thread that does carry identity.
     assertThat(requests).contains("POST " + FINDING_COMMENTS);
   }
 
@@ -279,11 +381,9 @@ class GitHubGatewayTest {
   }
 
   @Test
-  void findingCommentsAreListedOnThePullRequestAndDeletedByIdOnTheRepository() {
+  void findingCommentsArePostedOnThePullRequestCollection() {
     assertThat(GitHubGateway.findingCommentsPath("example", "project", 42))
         .isEqualTo("/repos/example/project/pulls/42/comments");
-    assertThat(GitHubGateway.findingCommentPath("example", "project", "900"))
-        .isEqualTo("/repos/example/project/pulls/comments/900");
   }
 
   @Test
@@ -339,6 +439,28 @@ class GitHubGatewayTest {
     return new ReviewReport("Summary.", Verdict.COMMENT, findings);
   }
 
+  /** One open thread this reviewer opened for {@code finding}, as GraphQL reports it. */
+  private static String openThread(final String nodeId, final ReviewFinding finding) {
+    return threadJson(nodeId, finding, false);
+  }
+
+  private static String resolvedThread(final String nodeId, final ReviewFinding finding) {
+    return threadJson(nodeId, finding, true);
+  }
+
+  private static String threadJson(
+      final String nodeId, final ReviewFinding finding, final boolean resolved) {
+    return """
+        [{"id": "%s", "isResolved": %s, "comments": {"nodes": [
+          {"body": "%s", "author": {"login": "bot", "__typename": "Bot"}}
+        ]}}]
+        """
+        .formatted(
+            nodeId,
+            resolved,
+            ReviewMarkdownRenderer.findingMarker(FindingFingerprint.of(finding)));
+  }
+
   private GitHubGateway gateway() {
     CodeReviewProperties properties =
         new CodeReviewProperties(
@@ -353,10 +475,12 @@ class GitHubGatewayTest {
                 "claude", "sonnet", "medium", 12, java.time.Duration.ofMinutes(15),
                 java.nio.file.Path.of("/tmp"), 2097152, 80, "v1"),
             new CodeReviewProperties.Api("token"), "https://temporal.test");
+    GitHubCredentials credentials = new GitHubCredentials(properties, objectMapper);
     return new GitHubGateway(
         properties,
-        new GitHubCredentials(properties, objectMapper),
+        credentials,
         objectMapper,
-        new ReviewMarkdownRenderer());
+        new ReviewMarkdownRenderer(),
+        new ReviewThreadGateway(properties, credentials, objectMapper));
   }
 }

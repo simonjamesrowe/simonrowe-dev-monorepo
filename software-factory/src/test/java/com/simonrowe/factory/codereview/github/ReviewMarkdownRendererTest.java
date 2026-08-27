@@ -35,7 +35,7 @@ class ReviewMarkdownRendererTest {
     assertThat(body).startsWith("<!-- marker -->");
     assertThat(body).contains("One concrete problem.");
     assertThat(body).contains("**Verdict:** `comment`");
-    assertThat(body).contains("_Advisory only");
+    assertThat(body).contains("block the merge");
     assertThat(body).doesNotContain("### Findings");
   }
 
@@ -76,12 +76,39 @@ class ReviewMarkdownRendererTest {
     assertThat(comment).doesNotContain("src/App.java");
   }
 
-  /** Without a marker of its own, a stale finding comment cannot be told from a human's reply. */
+  /**
+   * The marker carries the finding's fingerprint, which is what turns "delete everything and
+   * repost" into a reconcile: the thread a finding opened can be found again on the next push.
+   */
   @Test
-  void findingCommentIsMarkedSoLaterPushesCanDeleteIt() {
+  void findingCommentCarriesItsOwnFingerprintedMarker() {
     String comment = renderer.renderFindingComment(finding());
 
-    assertThat(comment).startsWith(ReviewMarkdownRenderer.FINDING_MARKER);
+    assertThat(comment).startsWith("<!-- temporal-code-review-finding:");
+    assertThat(ReviewMarkdownRenderer.FINDING_MARKER_PATTERN.matcher(comment).find()).isTrue();
+  }
+
+  @Test
+  void theSameFindingRendersTheSameMarkerTwice() {
+    assertThat(renderer.renderFindingComment(finding()))
+        .isEqualTo(renderer.renderFindingComment(finding()));
+  }
+
+  @Test
+  void twoDifferentFindingsRenderTwoDifferentMarkers() {
+    ReviewFinding other =
+        new ReviewFinding(
+            Severity.WARNING, "src/Other.java", 1, "Unbounded loop", "Because.", "Bound it.");
+
+    assertThat(markerOf(renderer.renderFindingComment(finding())))
+        .isNotEqualTo(markerOf(renderer.renderFindingComment(other)));
+  }
+
+  private static String markerOf(final String comment) {
+    java.util.regex.Matcher matcher =
+        ReviewMarkdownRenderer.FINDING_MARKER_PATTERN.matcher(comment);
+    assertThat(matcher.find()).isTrue();
+    return matcher.group(1);
   }
 
   @Test
@@ -92,7 +119,7 @@ class ReviewMarkdownRendererTest {
     assertThat(body).contains("Automated code review");
     assertThat(body).contains("in progress");
     assertThat(body).contains("0123456");
-    assertThat(body).contains("Advisory only");
+    assertThat(body).contains("block the merge");
   }
 
   @Test

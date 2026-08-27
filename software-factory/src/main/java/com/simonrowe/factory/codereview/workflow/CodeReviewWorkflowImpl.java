@@ -67,11 +67,23 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
   @Override
   public ReviewResult review(final ReviewRequest request) {
     String statusCommentId = request.publish() ? openStatusComment(request) : null;
+    // Held outside the try so the catch block can tell "the check run exists and must be failed"
+    // apart from "no check run was ever created". Those are different outcomes, and the second one
+    // is load-bearing: an absent required check blocks the merge.
+    String checkRunId = null;
+    PullRequestContext pullRequest = null;
     try {
       current =
           new ReviewProgress(
               ReviewPhase.LOADING_PULL_REQUEST, "Loading GitHub metadata", null, null);
-      PullRequestContext pullRequest = networkActivities.loadPullRequest(request);
+      pullRequest = networkActivities.loadPullRequest(request);
+
+      if (request.publish()) {
+        // Opened here, not alongside the status comment: a check run must name a commit, and the
+        // head SHA is only certain now. `ReviewRequest.expectedHeadSha` is nullable on the manual
+        // path, so there is nothing to attach a check to before this point.
+        checkRunId = openCheckRun(pullRequest);
+      }
 
       current =
           new ReviewProgress(
@@ -82,10 +94,13 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
         current =
             new ReviewProgress(
                 ReviewPhase.PUBLISHING,
-                "Publishing advisory comment",
+                "Publishing review",
                 pullRequest.headSha(),
                 report);
         networkActivities.publishReview(pullRequest, report, statusCommentId);
+        if (checkRunId != null) {
+          networkActivities.completeCheckRun(pullRequest, checkRunId, report);
+        }
       }
 
       current =
@@ -99,10 +114,16 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
       String reason = safeFailureMessage(exception);
       current = new ReviewProgress(ReviewPhase.FAILED, reason, current.headSha(), current.report());
       if (request.publish()) {
-        reportFailure(
-            request,
-            statusCommentId,
-            new ReviewFailure(failedIn, reason, Workflow.getInfo().getWorkflowId()));
+        ReviewFailure failure =
+            new ReviewFailure(failedIn, reason, Workflow.getInfo().getWorkflowId());
+        reportFailure(request, statusCommentId, failure);
+        // Deliberately only when a check run already exists. A review that died before the head
+        // SHA was known has no commit to attach one to — and must not gain one, because the
+        // check's absence is what blocks the merge. This is the fix for silence being the normal
+        // presentation of a failed review: silence now blocks instead of passing.
+        if (checkRunId != null) {
+          failCheckRun(pullRequest, checkRunId, failure);
+        }
       }
       throw exception;
     }
@@ -123,6 +144,37 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
       Workflow.getLogger(CodeReviewWorkflowImpl.class)
           .warn("Could not open the review comment on the pull request", exception);
       return null;
+    }
+  }
+
+  /**
+   * Best-effort claim on the {@code Code Review} check run.
+   *
+   * <p>A failure here yields a null id and the review continues. Unlike the status comment, nothing
+   * needs to compensate for the loss: an absent required check blocks the merge on its own, which
+   * is exactly the outcome a reviewer that cannot publish should produce.
+   */
+  private String openCheckRun(final PullRequestContext pullRequest) {
+    try {
+      return networkActivities.openCheckRun(pullRequest, Workflow.getInfo().getWorkflowId());
+    } catch (RuntimeException exception) {
+      Workflow.getLogger(CodeReviewWorkflowImpl.class)
+          .warn("Could not open the Code Review check run", exception);
+      return null;
+    }
+  }
+
+  /**
+   * Best-effort red check. Like {@link #reportFailure}, a failure to report the failure must not
+   * replace the original one.
+   */
+  private void failCheckRun(
+      final PullRequestContext pullRequest, final String checkRunId, final ReviewFailure failure) {
+    try {
+      networkActivities.failCheckRun(pullRequest, checkRunId, failure);
+    } catch (RuntimeException exception) {
+      Workflow.getLogger(CodeReviewWorkflowImpl.class)
+          .warn("Could not fail the Code Review check run", exception);
     }
   }
 
