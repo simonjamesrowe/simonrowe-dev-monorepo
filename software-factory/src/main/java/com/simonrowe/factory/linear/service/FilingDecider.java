@@ -13,15 +13,21 @@ import org.springframework.stereotype.Component;
  *
  * <p>Pure and I/O-free: this is the feature, so it is exhaustively testable without a tracker.
  *
- * <p><strong>Precedence is open &gt; canceled &gt; completed.</strong> It has to be defined rather
- * than assumed, because the regression path deliberately leaves two issues sharing one
- * fingerprint. Two consequences are load-bearing:
+ * <p><strong>Precedence is open &gt; (canceled or duplicate) &gt; completed.</strong> It has to be
+ * defined rather than assumed, because the regression path deliberately leaves two issues sharing
+ * one fingerprint. {@link com.simonrowe.factory.linear.domain.IssueStateType#DUPLICATE} shares
+ * its band with {@link com.simonrowe.factory.linear.domain.IssueStateType#CANCELED} rather than
+ * getting one of its own, because Linear itself sets {@code canceledAt} — not {@code
+ * completedAt} — when an issue moves to a duplicate-type state. Three consequences are
+ * load-bearing:
  *
  * <ul>
- *   <li>Reopening a cancelled issue un-suppresses it, because open outranks canceled. That is the
- *       reversal gesture, and it needs no configuration.
- *   <li>Canceled outranks completed, because "never tell me again" is a more deliberate statement
- *       than "this was once fixed".
+ *   <li>Reopening a cancelled or duplicate issue un-suppresses it, because open outranks that
+ *       band. That is the reversal gesture, and it needs no configuration.
+ *   <li>Canceled and duplicate outrank completed, because "never tell me again" is a more
+ *       deliberate statement than "this was once fixed".
+ *   <li>Canceled and duplicate are equally weighted against each other; picking between two
+ *       issues in that band, when it happens, falls back to recency like every other band.
  * </ul>
  */
 @Component
@@ -43,7 +49,10 @@ public class FilingDecider {
     Optional<TrackedIssue> cancelled =
         newest(
             carryingFingerprint.stream()
-                .filter(i -> i.stateType() == IssueStateType.CANCELED)
+                .filter(
+                    i ->
+                        i.stateType() == IssueStateType.CANCELED
+                            || i.stateType() == IssueStateType.DUPLICATE)
                 .toList());
     if (cancelled.isPresent()) {
       return new Outcome(FilingDecision.SUPPRESSED, cancelled.get());

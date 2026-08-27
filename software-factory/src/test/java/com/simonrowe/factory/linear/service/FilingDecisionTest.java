@@ -114,6 +114,43 @@ class FilingDecisionTest {
   }
 
   @Test
+  void suppressesWhenTheOnlyIssueWasDuplicate() {
+    FilingDecider.Outcome outcome =
+        new FilingDecider().decide(List.of(issue("1", IssueStateType.DUPLICATE, OLD)));
+    assertThat(outcome.decision()).isEqualTo(FilingDecision.SUPPRESSED);
+    assertThat(outcome.subject().id()).isEqualTo("1");
+  }
+
+  @Test
+  void duplicateOutranksCompletedEvenWhenCompletedIsNewer() {
+    // Same rule as cancelledOutranksCompletedEvenWhenCompletedIsNewer: duplicate suppresses in
+    // the same precedence band as cancelled, so a completed issue that is newer still loses.
+    // Getting this wrong would re-file an issue a human closed as a duplicate, forever.
+    FilingDecider.Outcome outcome =
+        new FilingDecider()
+            .decide(
+                List.of(
+                    issue("duplicate", IssueStateType.DUPLICATE, OLD),
+                    issue("done", IssueStateType.COMPLETED, NEW)));
+    assertThat(outcome.decision()).isEqualTo(FilingDecision.SUPPRESSED);
+    assertThat(outcome.subject().id()).isEqualTo("duplicate");
+  }
+
+  @Test
+  void openOutranksDuplicateEvenWhenDuplicateIsNewer() {
+    // Same rule as openOutranksCancelledEvenWhenCancelledIsNewer, but for duplicate: the open
+    // issue is older, yet still wins the band.
+    FilingDecider.Outcome outcome =
+        new FilingDecider()
+            .decide(
+                List.of(
+                    issue("open", IssueStateType.STARTED, OLD),
+                    issue("duplicate", IssueStateType.DUPLICATE, NEW)));
+    assertThat(outcome.decision()).isEqualTo(FilingDecision.COMMENTED_EXISTING);
+    assertThat(outcome.subject().id()).isEqualTo("open");
+  }
+
+  @Test
   void picksTheNewestAmongSeveralOpenIssues() {
     FilingDecider.Outcome outcome =
         new FilingDecider()
@@ -153,20 +190,25 @@ class FilingDecisionTest {
     assertThat(IssueStateType.from("completed")).isEqualTo(IssueStateType.COMPLETED);
     assertThat(IssueStateType.from("canceled")).isEqualTo(IssueStateType.CANCELED);
     assertThat(IssueStateType.from("cancelled")).isEqualTo(IssueStateType.CANCELED);
+    assertThat(IssueStateType.from("duplicate")).isEqualTo(IssueStateType.DUPLICATE);
     assertThat(IssueStateType.from("something-new")).isEqualTo(IssueStateType.UNKNOWN);
     assertThat(IssueStateType.from(null)).isEqualTo(IssueStateType.UNKNOWN);
   }
 
   @ParameterizedTest
   @EnumSource(IssueStateType.class)
-  void everyStateIsOpenOrCompletedOrCanceled(final IssueStateType type) {
-    // IssueStateType.open() is exhaustively partitioned today: false means exactly COMPLETED or
-    // CANCELED. FilingDecider relies on that partition — its regression band is "whatever is
-    // left after open and cancelled are removed" rather than an explicit COMPLETED filter. A new
-    // closed constant that is neither of those two, or flipping UNKNOWN to closed, would silently
-    // fall into the regression band and re-file forever with no other test catching it.
+  void everyStateIsOpenOrCompletedOrCanceledOrDuplicate(final IssueStateType type) {
+    // IssueStateType.open() is exhaustively partitioned today: false means exactly COMPLETED,
+    // CANCELED, or DUPLICATE. FilingDecider relies on that partition — its regression band is
+    // "whatever is left after open, cancelled and duplicate are removed" rather than an explicit
+    // COMPLETED filter. A new closed constant that is none of those three, or flipping UNKNOWN to
+    // closed, would silently fall into the regression band and re-file forever with no other test
+    // catching it.
     assertThat(
-            type.open() || type == IssueStateType.COMPLETED || type == IssueStateType.CANCELED)
+            type.open()
+                || type == IssueStateType.COMPLETED
+                || type == IssueStateType.CANCELED
+                || type == IssueStateType.DUPLICATE)
         .isTrue();
   }
 }

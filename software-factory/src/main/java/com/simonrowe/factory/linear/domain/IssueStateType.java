@@ -24,6 +24,15 @@ public enum IssueStateType {
   /** Declined — "not a bug, never tell me again". */
   CANCELED(false),
   /**
+   * Declined as a duplicate of another issue.
+   *
+   * <p>Linear sets {@code canceledAt} (not {@code completedAt}) when an issue moves to a
+   * {@code duplicate}-type state, so this is treated as a decline in the same precedence band as
+   * {@link #CANCELED}. Moving an issue into this state requires a duplicate issue relation to
+   * already exist between it and another issue.
+   */
+  DUPLICATE(false),
+  /**
    * A state type this code does not recognise.
    *
    * <p>Treated as open on purpose: if Linear adds a type, the safe failure is "comment on the
