@@ -9,7 +9,7 @@ import type { ServiceVersion } from '../types/platform'
  *
  * Absent in local development, where the page shows a dev build rather than an error.
  */
-export const FRONTEND_COMMIT = import.meta.env.VITE_GIT_SHA ?? 'unknown'
+export const FRONTEND_COMMIT = import.meta.env.VITE_GIT_SHA || 'unknown'
 
 export const FRONTEND_SHORT_COMMIT =
   FRONTEND_COMMIT === 'unknown' ? 'dev' : FRONTEND_COMMIT.slice(0, 7)

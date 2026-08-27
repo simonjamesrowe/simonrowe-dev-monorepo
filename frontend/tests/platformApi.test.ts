@@ -52,14 +52,14 @@ describe('platformApi', () => {
     respondWith(STATUS)
 
     await expect(fetchPlatformStatus()).resolves.toEqual(STATUS)
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/platform/status'))
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/platform/status'), {})
   })
 
   it('fetches releases with the default limit of 20', async () => {
     respondWith(RELEASES)
 
     await expect(fetchReleases()).resolves.toEqual(RELEASES)
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('limit=20'))
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('limit=20'), {})
   })
 
   it('fetches releases with an explicit limit', async () => {
@@ -67,18 +67,22 @@ describe('platformApi', () => {
 
     await fetchReleases(5)
 
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('limit=5'))
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('limit=5'), {})
   })
 
+  // 4xx rather than 5xx: fetchWithRetry never retries a client error, so this proves the
+  // fallback message reaches the caller without paying for the 5xx retry backoff.
   it('throws a readable error on a failed status response', async () => {
-    respondWith(null, false, 503)
+    respondWith(null, false, 400)
 
     await expect(fetchPlatformStatus()).rejects.toThrow(/status/i)
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('throws a readable error on a failed releases response', async () => {
-    respondWith(null, false, 500)
+    respondWith(null, false, 400)
 
     await expect(fetchReleases()).rejects.toThrow(/releases/i)
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })

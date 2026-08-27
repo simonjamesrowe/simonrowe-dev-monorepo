@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config/api'
+import { fetchWithRetry } from './fetchWithRetry'
 import type { PlatformStatus, Release } from '../types/platform'
 
 const DEFAULT_LIMIT = 20
@@ -9,11 +10,9 @@ const DEFAULT_LIMIT = 20
  * @throws Error with a readable message when the request fails, so the page can show it
  */
 export async function fetchPlatformStatus(): Promise<PlatformStatus> {
-  const response = await fetch(`${API_BASE_URL}/api/platform/status`)
-  if (!response.ok) {
-    throw new Error(`Unable to load platform status (${response.status}).`)
-  }
-  return (await response.json()) as PlatformStatus
+  return fetchWithRetry<PlatformStatus>(`${API_BASE_URL}/api/platform/status`, {
+    fallbackMessage: 'Unable to load platform status.',
+  })
 }
 
 /**
@@ -22,9 +21,7 @@ export async function fetchPlatformStatus(): Promise<PlatformStatus> {
  * @param limit how many to request; the backend clamps this to 100
  */
 export async function fetchReleases(limit: number = DEFAULT_LIMIT): Promise<Release[]> {
-  const response = await fetch(`${API_BASE_URL}/api/platform/releases?limit=${limit}`)
-  if (!response.ok) {
-    throw new Error(`Unable to load releases (${response.status}).`)
-  }
-  return (await response.json()) as Release[]
+  return fetchWithRetry<Release[]>(`${API_BASE_URL}/api/platform/releases?limit=${limit}`, {
+    fallbackMessage: 'Unable to load releases.',
+  })
 }
