@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -21,13 +22,20 @@ import com.simonrowe.factory.deploy.domain.PhaseOutcome;
 import com.simonrowe.factory.deploy.domain.SyncDecision;
 import com.simonrowe.factory.deploy.domain.SyncOutcome;
 import com.simonrowe.factory.deploy.persistence.DeployRunRecord;
+import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.linear.domain.FiledIssue;
+import com.simonrowe.factory.linear.domain.FilingDecision;
+import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.client.WorkflowOptions;
+import io.temporal.failure.ApplicationFailure;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 /**
  * The deploy flow's behaviour, with activities mocked.
@@ -42,17 +50,31 @@ class DeployWorkflowTest {
   private static final String SHA = "0123456789abcdef0123456789abcdef01234567";
   private static final String NEWER_SHA = "fedcba9876543210fedcba9876543210fedcba98";
   private static final String PREVIOUS_SHA = "1111111111111111111111111111111111111111";
+  private static final String LINEAR_URL = "https://linear.app/simonrowe/issue/SIM-9";
 
+  /** The default request has the issue sink off, which is also its production default. */
   private static DeployRequest request() {
     return new DeployRequest(
         SHA, DeployRequest.TRIGGER_WEBHOOK, 999L, true, true,
-        List.of("backend", "frontend", "software-factory"), false);
+        List.of("backend", "frontend", "software-factory"), false, false);
   }
 
   private static DeployRequest request(final boolean syncConfig, final boolean rollbackEnabled) {
     return new DeployRequest(
         SHA, DeployRequest.TRIGGER_WEBHOOK, 999L, syncConfig, rollbackEnabled,
-        List.of("backend"), false);
+        List.of("backend"), false, false);
+  }
+
+  /** The same request with the Linear issue sink switched on. */
+  private static DeployRequest requestFilingToLinear() {
+    return requestFilingToLinear(true, true);
+  }
+
+  private static DeployRequest requestFilingToLinear(
+      final boolean syncConfig, final boolean rollbackEnabled) {
+    return new DeployRequest(
+        SHA, DeployRequest.TRIGGER_WEBHOOK, 999L, syncConfig, rollbackEnabled,
+        List.of("backend", "frontend", "software-factory"), false, true);
   }
 
   // ---------------------------------------------------------------------------
@@ -298,27 +320,16 @@ class DeployWorkflowTest {
     verify(activities)
         .captureEvidence(eq(DeployPhase.VERIFY), anyString(), eq(PREVIOUS_SHA), eq(SHA));
     verify(activities).triage("/tmp/evidence");
-    verify(activities).report(any(), any(), eq(999L));
+    verify(activities).report(any(), any(), eq(999L), any());
     // The scratch directory does not outlive the run.
     verify(activities).discardEvidence("/tmp/evidence");
-  }
-
-  @Test
-  void recordsTheIssueUrlOnTheRun() {
-    DeployActivities activities = activities();
-    failPhaseOnce(activities, DeployPhase.VERIFY, 1);
-
-    Outcome outcome = execute(activities, request());
-
-    assertThat(outcome.result().issueUrl()).isEqualTo("https://github.com/o/r/issues/1");
-    assertThat(lastRecordedRun(activities).issueUrl()).isEqualTo("https://github.com/o/r/issues/1");
   }
 
   @Test
   void stillRecordsTheRunWhenReportingFails() {
     DeployActivities activities = activities();
     failPhaseOnce(activities, DeployPhase.VERIFY, 1);
-    when(activities.report(any(), any(), any()))
+    when(activities.report(any(), any(), any(), any()))
         .thenThrow(new IllegalStateException("GitHub is unreachable"));
 
     Outcome outcome = execute(activities, request());
@@ -326,6 +337,122 @@ class DeployWorkflowTest {
     // Losing the notice is bad; losing the record of a rollback would be worse.
     assertThat(outcome.result().status()).isEqualTo(DeployStatus.ROLLED_BACK);
     assertThat(lastRecordedRun(activities).issueUrl()).isNull();
+  }
+
+  // ---------------------------------------------------------------------------
+  // The Linear issue sink
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void filesToLinearBeforeCommentingAndPassesTheUrlToTheReport() {
+    // The order is deliberate: the commit comment names the ticket, so the ticket has to exist
+    // before the comment is written.
+    DeployActivities activities = activities();
+    LinearActivities linear = linearActivities();
+    failPhaseOnce(activities, DeployPhase.VERIFY, 1);
+
+    Outcome outcome = executeFiling(activities, linear, requestFilingToLinear());
+
+    ArgumentCaptor<IssueFiling> filing = ArgumentCaptor.forClass(IssueFiling.class);
+    InOrder order = inOrder(linear, activities);
+    order.verify(linear).fileIssue(filing.capture());
+    order.verify(activities).report(any(), any(), eq(999L), eq(LINEAR_URL));
+
+    assertThat(filing.getValue().producer()).isEqualTo("deploy");
+    // Phase and status, never the agent's headline: the fingerprint must be deterministic, and
+    // two phrasings of one failure must not become two tickets.
+    assertThat(filing.getValue().keyParts()).containsExactly("verify", "ROLLED_BACK");
+    // The rendered title and body are the ones the GitHub issue used to carry.
+    assertThat(filing.getValue().title()).contains("Deploy failed");
+    assertThat(filing.getValue().body()).contains("previous version");
+    assertThat(filing.getValue().occurrenceDetail()).contains(SHA);
+
+    assertThat(outcome.result().issueUrl()).isEqualTo(LINEAR_URL);
+    DeployRunRecord record = lastRecordedRun(activities);
+    assertThat(record.issueUrl()).isEqualTo(LINEAR_URL);
+    assertThat(record.linearFilingFailed()).isFalse();
+  }
+
+  @Test
+  void stillRollsBackAndReportsWhenLinearFilingFails() {
+    // The tracker being down must never change the deploy's outcome.
+    DeployActivities activities = activities();
+    LinearActivities linear = linearActivities();
+    when(linear.fileIssue(any()))
+        .thenThrow(ApplicationFailure.newNonRetryableFailure("Linear down", "LinearApiError"));
+    failPhaseOnce(activities, DeployPhase.VERIFY, 1);
+
+    Outcome outcome = executeFiling(activities, linear, requestFilingToLinear());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.ROLLED_BACK);
+    verify(activities).runPhase(eq(DeployPhase.ROLLBACK), any(), anyBoolean());
+    // Reported anyway, with no ticket to name.
+    verify(activities).report(any(), any(), eq(999L), eq(null));
+    DeployRunRecord record = lastRecordedRun(activities);
+    assertThat(record.linearFilingFailed()).isTrue();
+    assertThat(record.issueUrl()).isNull();
+  }
+
+  @Test
+  void stillRecordsTheRunWhenRenderingTheFailureFails() {
+    // renderFailure is only markdown, but it is still an activity, and an exhausted one throws
+    // into the workflow. Escaping there would fail the whole workflow and lose the record of a
+    // rollback - which is the one thing this method must never trade away.
+    DeployActivities activities = activities();
+    LinearActivities linear = linearActivities();
+    when(activities.renderFailure(any(), any()))
+        .thenThrow(ApplicationFailure.newNonRetryableFailure("no renderer", "IllegalState"));
+    failPhaseOnce(activities, DeployPhase.VERIFY, 1);
+
+    Outcome outcome = executeFiling(activities, linear, requestFilingToLinear());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.ROLLED_BACK);
+    verify(linear, never()).fileIssue(any());
+    DeployRunRecord record = lastRecordedRun(activities);
+    assertThat(record.linearFilingFailed()).isTrue();
+    assertThat(record.issueUrl()).isNull();
+  }
+
+  @Test
+  void nothingIsFiledWhenTheSinkIsDisabled() {
+    // With factory.linear.enabled false nothing polls the `linear` queue, so scheduling the
+    // activity at all would stall the deploy until its schedule-to-close timeout. The queue IS
+    // polled here, which is what makes "nothing was scheduled" the only reading of this result.
+    DeployActivities activities = activities();
+    LinearActivities linear = linearActivities();
+    failPhaseOnce(activities, DeployPhase.VERIFY, 1);
+
+    Outcome outcome = executeFiling(activities, linear, request());
+
+    verify(linear, never()).fileIssue(any());
+    verify(activities).report(any(), any(), eq(999L), eq(null));
+    assertThat(outcome.result().issueUrl()).isNull();
+    assertThat(lastRecordedRun(activities).linearFilingFailed()).isFalse();
+  }
+
+  @Test
+  void filesNothingWhenTheDeploySucceeds() {
+    DeployActivities activities = activities();
+    LinearActivities linear = linearActivities();
+
+    Outcome outcome = executeFiling(activities, linear, requestFilingToLinear());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.DEPLOYED);
+    verify(linear, never()).fileIssue(any());
+  }
+
+  @Test
+  void filesNothingWhenOnlyImagesWereDeployed() {
+    // DEPLOYED_IMAGES_ONLY still comments, because a half-applied deploy must not be silent - but
+    // it is not a failure, so it does not open a ticket.
+    DeployActivities activities = activities();
+    LinearActivities linear = linearActivities();
+
+    Outcome outcome = executeFiling(activities, linear, requestFilingToLinear(false, true));
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.DEPLOYED_IMAGES_ONLY);
+    verify(linear, never()).fileIssue(any());
+    verify(activities).report(any(), eq(null), eq(999L), eq(null));
   }
 
   // ---------------------------------------------------------------------------
@@ -346,7 +473,7 @@ class DeployWorkflowTest {
 
     assertThat(outcome.result().status()).isEqualTo(DeployStatus.DEPLOYED_IMAGES_ONLY);
     // Reported even though the deploy succeeded: "deployed, but not all of it" must not be silent.
-    verify(activities).report(any(), eq(null), eq(999L));
+    verify(activities).report(any(), eq(null), eq(999L), eq(null));
     DeployRunRecord record = lastRecordedRun(activities);
     assertThat(record.configSync().heldBackServices()).containsExactly("mongodb");
     assertThat(record.configSync().manualCommand()).contains("up -d mongodb");
@@ -412,11 +539,23 @@ class DeployWorkflowTest {
             new DeployActivities.Triage(
                 "backend never became healthy", "diagnosis", "high", "container-startup",
                 List.of("backend"), List.of(), "check the backend logs"));
-    when(activities.report(any(), any(), any()))
-        .thenReturn(
-            new DeployActivities.Report(
-                "https://github.com/o/r/issues/1", "https://github.com/o/r/commit/x#c1"));
+    when(activities.renderFailure(any(), any()))
+        .thenAnswer(
+            invocation ->
+                new DeployActivities.Rendered(
+                    "Deploy failed: backend never became healthy (0123456)",
+                    "The site is up, on the previous version."));
+    when(activities.report(any(), any(), any(), any()))
+        .thenReturn(new DeployActivities.Report("https://github.com/o/r/commit/x#c1"));
     return activities;
+  }
+
+  /** The issue sink, mocked, filing successfully. */
+  private static LinearActivities linearActivities() {
+    LinearActivities linear = mock(LinearActivities.class, withSettings().withoutAnnotations());
+    when(linear.fileIssue(any()))
+        .thenReturn(new FiledIssue(FilingDecision.FILED_NEW, "SIM-9", LINEAR_URL, "fp"));
+    return linear;
   }
 
   /** Fails a phase on every call — for a phase the rollback path does not itself re-run. */
@@ -460,11 +599,24 @@ class DeployWorkflowTest {
     return captor.getValue();
   }
 
-  private TestWorkflowEnvironment environment(final DeployActivities activities) {
+  /**
+   * The two-queue environment production runs.
+   *
+   * <p>{@code linear} is a second worker on its own task queue, exactly as in production, where it
+   * is polled by {@code software-factory} and not by the {@code deployer}. Passing null models the
+   * sink not being deployed at all; passing a mock while leaving {@code linearFilingEnabled} false
+   * is the stronger case, because then "nothing was filed" cannot be explained away by nothing
+   * polling the queue.
+   */
+  private TestWorkflowEnvironment environment(
+      final DeployActivities activities, final LinearActivities linear) {
     TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance();
     Worker worker = environment.newWorker(DeployTaskQueues.DEPLOY);
     worker.registerWorkflowImplementationTypes(DeployWorkflowImpl.class);
     worker.registerActivitiesImplementations(activities);
+    if (linear != null) {
+      environment.newWorker(LinearTaskQueues.LINEAR).registerActivitiesImplementations(linear);
+    }
     environment.start();
     return environment;
   }
@@ -481,7 +633,14 @@ class DeployWorkflowTest {
   }
 
   private Outcome execute(final DeployActivities activities, final DeployRequest request) {
-    try (TestWorkflowEnvironment environment = environment(activities)) {
+    return executeFiling(activities, null, request);
+  }
+
+  private Outcome executeFiling(
+      final DeployActivities activities,
+      final LinearActivities linear,
+      final DeployRequest request) {
+    try (TestWorkflowEnvironment environment = environment(activities, linear)) {
       DeployWorkflow workflow = stub(environment);
       DeployResult result = workflow.run(request);
       return new Outcome(result);
@@ -500,7 +659,7 @@ class DeployWorkflowTest {
       final DeployActivities activities,
       final DeployRequest request,
       final String signalledSha) {
-    try (TestWorkflowEnvironment environment = environment(activities)) {
+    try (TestWorkflowEnvironment environment = environment(activities, null)) {
       DeployWorkflow workflow = stub(environment);
       DeployWorkflow signaller =
           environment

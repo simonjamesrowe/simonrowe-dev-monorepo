@@ -93,15 +93,39 @@ public interface DeployActivities {
   Triage triage(String evidenceDirectory);
 
   /**
-   * Posts the diagnosis as a comment on the deployed commit and as a tracked issue.
+   * Posts the diagnosis as a comment on the deployed commit.
+   *
+   * <p>The tracked issue is no longer GitHub's: it is filed into Linear before this runs, which is
+   * why the ticket's URL arrives as a parameter rather than being produced here. The order is
+   * deliberate — the comment names the ticket, so the ticket has to exist first.
    *
    * @param record the run so far, which supplies every fact the report needs
    * @param triage the diagnosis, or null when none was produced
    * @param installationId the GitHub App installation, or null to resolve it at run time
-   * @return the URLs of what was posted
+   * @param linearIssueUrl the Linear issue this run filed, or null when nothing was filed
+   * @return the URL of what was posted
    */
   @ActivityMethod
-  Report report(DeployRunRecord record, Triage triage, Long installationId);
+  Report report(
+      DeployRunRecord record, Triage triage, Long installationId, String linearIssueUrl);
+
+  /**
+   * Renders a failure for the issue sink.
+   *
+   * <p>The title and body are the existing {@code DeployReportRenderer.issueTitle} and {@code
+   * issueBody} — re-targeted from GitHub to Linear, not rewritten. Rendering is an activity
+   * because a {@code @WorkflowImpl} holds no Spring bean and cannot reach the renderer.
+   *
+   * <p>It deliberately does NOT supply the fingerprint key parts. Those are the failing phase and
+   * the deploy status, both already in workflow scope as parameters of {@code reportAndFinish} —
+   * structured enum values rather than agent prose, which is what a fingerprint requires.
+   *
+   * @param record the run so far
+   * @param triage the agent's diagnosis, which may be null
+   * @return the rendered title and body
+   */
+  @ActivityMethod
+  Rendered renderFailure(DeployRunRecord record, Triage triage);
 
   /**
    * Persists the outcome of one deploy.
@@ -162,9 +186,17 @@ public interface DeployActivities {
   /**
    * What reporting posted.
    *
-   * @param issueUrl the tracked issue
    * @param commitCommentUrl the comment on the deployed commit
    */
-  record Report(String issueUrl, String commitCommentUrl) {
+  record Report(String commitCommentUrl) {
+  }
+
+  /**
+   * A failure rendered for filing.
+   *
+   * @param title the issue title, agent prose — never part of the fingerprint
+   * @param body the issue description, in Markdown
+   */
+  record Rendered(String title, String body) {
   }
 }

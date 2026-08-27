@@ -11,16 +11,20 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**
- * Posts a deploy report: a comment on the deployed commit, and a tracked issue.
+ * Posts a deploy report: a comment on the deployed commit.
  *
- * <p>Two places on purpose. The commit comment is where someone looking at the merge will find
- * it; the issue is what does not get lost. Neither on its own is enough — a comment on a commit
- * nobody revisits is invisible, and an issue with no link from the change that caused it is hard
- * to place.
+ * <p>The commit comment is the in-context breadcrumb — it is where someone looking at the merge
+ * that broke production will find the diagnosis. It is deliberately not the only record: the
+ * tracked issue that must not get lost is filed into Linear by the issue sink, and its URL is
+ * rendered into this comment. A comment on a commit nobody revisits is invisible on its own, and
+ * a ticket with no link from the change that caused it is hard to place.
+ *
+ * <p>This class used to open a GitHub issue too. It no longer does: {@code gh issue list
+ * --state all} on this repository had never returned a single issue, so that half of the report
+ * was going somewhere nobody looks.
  *
  * <p>Modelled on {@code CveFixPrGateway}: same client, same API version header, same run-time
  * installation-token resolution. Deliberately a separate class rather than an extension of it —
@@ -64,33 +68,6 @@ public class DeployReportGateway {
             .connectTimeout(codeReviewProperties.github().requestTimeout())
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
-  }
-
-  /**
-   * Opens an issue.
-   *
-   * @param title the issue title
-   * @param body the issue body
-   * @param labels labels to apply; ignored by GitHub if they do not exist on the repository
-   * @param installationId the installation to authenticate as, or null to resolve it at run time
-   * @return the issue's html_url
-   */
-  public String openIssue(
-      final String title,
-      final String body,
-      final List<String> labels,
-      final Long installationId) {
-    ObjectNode payload = objectMapper.createObjectNode();
-    payload.put("title", title);
-    payload.put("body", body);
-    if (labels != null && !labels.isEmpty()) {
-      labels.forEach(payload.putArray("labels")::add);
-    }
-
-    String path = "/repos/" + properties.owner() + "/" + properties.repository() + "/issues";
-    HttpResponse<String> response = send("POST", path, payload, accessToken(installationId));
-    requireSuccess(response, "POST", path);
-    return parseJson(response).path("html_url").asText();
   }
 
   /**

@@ -10,14 +10,20 @@ import com.simonrowe.factory.deploy.domain.PhaseOutcome;
 import com.simonrowe.factory.deploy.domain.SyncDecision;
 import com.simonrowe.factory.deploy.domain.SyncOutcome;
 import com.simonrowe.factory.deploy.persistence.DeployRunRecord;
+import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.linear.domain.FiledIssue;
+import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.RetryOptions;
+import io.temporal.failure.ActivityFailure;
 import io.temporal.spring.boot.WorkflowImpl;
 import io.temporal.workflow.Workflow;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Deterministic deploy flow.
@@ -95,6 +101,27 @@ public class DeployWorkflowImpl implements DeployWorkflow {
               .setStartToCloseTimeout(Duration.ofMinutes(20))
               .setHeartbeatTimeout(Duration.ofMinutes(2))
               .setRetryOptions(NO_RETRY)
+              .build());
+
+  /**
+   * The issue sink, on its own task queue.
+   *
+   * <p>Executed by {@code software-factory}, not by the {@code deployer} that runs every other
+   * activity here — that is what keeps the tracker credential off the container holding the Docker
+   * socket.
+   *
+   * <p>2m schedule-to-close, deliberately short. With {@code factory.linear.enabled} false nothing
+   * polls this queue, and a misconfiguration must cost the deploy two minutes, not the default.
+   * {@code linearFilingEnabled} on the request is the primary guard; this is the backstop.
+   */
+  private final LinearActivities linear =
+      Workflow.newActivityStub(
+          LinearActivities.class,
+          ActivityOptions.newBuilder()
+              .setTaskQueue(LinearTaskQueues.LINEAR)
+              .setStartToCloseTimeout(Duration.ofSeconds(90))
+              .setScheduleToCloseTimeout(Duration.ofMinutes(2))
+              .setRetryOptions(INFRASTRUCTURE_RETRIES)
               .build());
 
   private DeployProgress current = DeployProgress.accepted();
@@ -337,11 +364,16 @@ public class DeployWorkflowImpl implements DeployWorkflow {
   }
 
   /**
-   * Diagnoses the failure, reports it, and persists the run.
+   * Diagnoses the failure, files it, reports it, and persists the run.
+   *
+   * <p>Reached only from the failure paths — {@link #failWithoutDeploying} and {@link
+   * #handleFailure} — so there is no success case to exclude here; {@link #finish} is the exit for
+   * a deploy that worked. That is why the issue sink needs no status guard: everything that
+   * arrives here is something worth a ticket.
    *
    * <p>Every step here is best-effort and none of them can fail the run: the deploy has already
-   * ended one way or another, and losing the record of it because GitHub was unreachable would be
-   * the worst possible trade.
+   * ended one way or another, and losing the record of it because GitHub or Linear was unreachable
+   * would be the worst possible trade.
    */
   private DeployResult reportAndFinish(
       final String recordId,
@@ -359,7 +391,7 @@ public class DeployWorkflowImpl implements DeployWorkflow {
     DeployRunRecord provisional =
         record(
             recordId, request, sha, startedAt, sync, status, rollbackTaken, rollbackStatus,
-            maintenancePageLeftUp, null, null, detail);
+            maintenancePageLeftUp, null, null, detail, false);
 
     current = new DeployProgress(DeployPhase.TRIAGE, "Diagnosing the failure", sha);
     String evidence = null;
@@ -374,10 +406,46 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       triage = null;
     }
 
+    // The ticket BEFORE the comment: the comment names the ticket, so the ticket has to exist
+    // first.
+    String linearIssueUrl = null;
+    boolean linearFilingFailed = false;
+    if (request.linearFilingEnabled()) {
+      current = new DeployProgress(DeployPhase.REPORT, "Filing the failure", sha);
+      try {
+        // Rendering happens in an activity, not here: a @WorkflowImpl must stay deterministic and
+        // holds no Spring bean, so it can reach neither DeployReportRenderer nor the phase output.
+        // Inside the try with the filing itself, deliberately: an exhausted render would otherwise
+        // escape and fail the whole workflow, losing the run record over a piece of markdown.
+        DeployActivities.Rendered rendered = fast.renderFailure(provisional, triage);
+        FiledIssue filed =
+            linear.fileIssue(
+                new IssueFiling(
+                    "deploy",
+                    // Structured enum values already in scope: no parsing, no agent prose. Two
+                    // phrasings of one failure must not become two tickets, which is why the
+                    // headline is deliberately absent. Commit excluded too - see the design.
+                    List.of(failedPhase.name().toLowerCase(Locale.ROOT), status.name()),
+                    rendered.title(),
+                    rendered.body(),
+                    "commit " + sha + ", workflow run " + Workflow.getInfo().getRunId(),
+                    Workflow.getInfo().getRunId(),
+                    Workflow.getInfo().getWorkflowId()));
+        // Null-guarded rather than dereferenced: an NPE here is a workflow-task failure, which
+        // Temporal retries forever, so it would hang the deploy rather than fail it.
+        linearIssueUrl = filed == null ? null : filed.issueUrl();
+      } catch (ActivityFailure failure) {
+        // The tracker is not allowed to change the deploy's outcome. Rollback has already run.
+        Workflow.getLogger(DeployWorkflowImpl.class)
+            .warn("Could not file the deploy failure into Linear", failure);
+        linearFilingFailed = true;
+      }
+    }
+
     current = new DeployProgress(DeployPhase.REPORT, "Reporting the failure", sha);
     DeployActivities.Report report = null;
     try {
-      report = fast.report(provisional, triage, request.installationId());
+      report = fast.report(provisional, triage, request.installationId(), linearIssueUrl);
     } catch (RuntimeException exception) {
       report = null;
     }
@@ -394,12 +462,12 @@ public class DeployWorkflowImpl implements DeployWorkflow {
         record(
             recordId, request, sha, startedAt, sync, status, rollbackTaken, rollbackStatus,
             maintenancePageLeftUp,
-            report == null ? null : report.issueUrl(),
+            linearIssueUrl,
             report == null ? null : report.commitCommentUrl(),
-            detail);
+            detail,
+            linearFilingFailed);
     fast.recordRun(finalRecord);
-    return new DeployResult(
-        status, sha, sync.decision(), report == null ? null : report.issueUrl(), detail);
+    return new DeployResult(status, sha, sync.decision(), linearIssueUrl, detail);
   }
 
   private String outputOf(final DeployPhase phase) {
@@ -442,16 +510,19 @@ public class DeployWorkflowImpl implements DeployWorkflow {
     DeployRunRecord built =
         record(
             recordId, request, sha, startedAt, sync, status, rollbackTaken, rollbackStatus,
-            maintenancePageLeftUp, null, null, detail);
+            maintenancePageLeftUp, null, null, detail, false);
 
     // Reported on SUCCESS, deliberately: "deployed, but not all of it" must not be silent. That
     // half-applied state - new images running against the previous commit's compose file and
     // nginx conf - is the exact thing this feature exists to make impossible to miss.
+    //
+    // Commented on, but never filed: the site is up and the deploy did what it said it did, so
+    // this is a notice rather than a defect, and a ticket per held-back deploy would be noise.
     String commentUrl = null;
     if (status == DeployStatus.DEPLOYED_IMAGES_ONLY) {
       try {
         DeployActivities.Report report =
-            fast.report(built, null, request.installationId());
+            fast.report(built, null, request.installationId(), null);
         commentUrl = report == null ? null : report.commitCommentUrl();
       } catch (RuntimeException exception) {
         // Best effort. Losing the notice is bad; losing the deploy record would be worse.
@@ -462,7 +533,7 @@ public class DeployWorkflowImpl implements DeployWorkflow {
     DeployRunRecord finalRecord =
         record(
             recordId, request, sha, startedAt, sync, status, rollbackTaken, rollbackStatus,
-            maintenancePageLeftUp, null, commentUrl, detail);
+            maintenancePageLeftUp, null, commentUrl, detail, false);
     fast.recordRun(finalRecord);
     return new DeployResult(status, sha, sync.decision(), null, detail);
   }
@@ -479,7 +550,8 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       final boolean maintenancePageLeftUp,
       final String issueUrl,
       final String commitCommentUrl,
-      final String detail) {
+      final String detail,
+      final boolean linearFilingFailed) {
     return new DeployRunRecord(
         recordId,
         WORKFLOW_ID,
@@ -495,6 +567,7 @@ public class DeployWorkflowImpl implements DeployWorkflow {
         maintenancePageLeftUp,
         issueUrl,
         commitCommentUrl,
-        detail);
+        detail,
+        linearFilingFailed);
   }
 }

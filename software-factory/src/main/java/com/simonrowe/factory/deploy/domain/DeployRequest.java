@@ -17,6 +17,11 @@ import java.util.List;
  * @param rollbackEnabled whether a failed verification may roll back
  * @param services the services whose images to pull and recreate
  * @param dryRun run the phases without deploying (the script's own DRY_RUN)
+ * @param linearFilingEnabled whether to file a failure into Linear. Carried on the request rather
+ *     than read from configuration because a {@code @WorkflowImpl} is instantiated by the Temporal
+ *     SDK and cannot inject properties — and because with the sink disabled nothing polls the
+ *     {@code linear} queue, so scheduling the activity would stall the deploy until its
+ *     schedule-to-close timeout.
  */
 public record DeployRequest(
     String sha,
@@ -25,7 +30,8 @@ public record DeployRequest(
     boolean syncConfig,
     boolean rollbackEnabled,
     List<String> services,
-    boolean dryRun) {
+    boolean dryRun,
+    boolean linearFilingEnabled) {
 
   /** Trigger value for a deploy started by a GitHub {@code workflow_run} delivery. */
   public static final String TRIGGER_WEBHOOK = "workflow_run";

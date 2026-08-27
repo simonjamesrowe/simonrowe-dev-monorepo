@@ -59,7 +59,8 @@ class DeployRunRepositoryTest {
         false,
         null,
         null,
-        "deployed");
+        "deployed",
+        false);
   }
 
   @Test

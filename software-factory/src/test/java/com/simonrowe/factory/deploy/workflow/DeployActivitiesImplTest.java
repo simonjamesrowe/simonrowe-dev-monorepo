@@ -37,6 +37,8 @@ class DeployActivitiesImplTest {
   private final DeployRunRepository runs = mock(DeployRunRepository.class);
   private final TriageEngine triageEngine = mock(TriageEngine.class);
   private final DeployReportGateway reportGateway = mock(DeployReportGateway.class);
+  // The real renderer, not a mock: renderFailure's whole claim is that it delegates to it.
+  private final DeployReportRenderer renderer = new DeployReportRenderer();
 
   @TempDir private Path stateDir;
 
@@ -51,8 +53,7 @@ class DeployActivitiesImplTest {
             stateDir.toString(), Duration.ofMinutes(30), null);
     activities =
         new DeployActivitiesImpl(
-            properties, phaseRunner, runs, triageEngine, reportGateway,
-            new DeployReportRenderer());
+            properties, phaseRunner, runs, triageEngine, reportGateway, renderer);
   }
 
   private static PhaseRunner.PhaseExecution execution(
@@ -222,29 +223,42 @@ class DeployActivitiesImplTest {
   }
 
   @Test
-  void reportsWhatItManagedToPostWhenTheIssueCannotBeOpened() {
-    when(reportGateway.openIssue(anyString(), anyString(), any(), any()))
-        .thenThrow(new IllegalStateException("GitHub 500"));
+  void namesTheLinearTicketInTheCommitComment() {
+    // The comment is the in-context breadcrumb on the merge that broke prod, and its whole value
+    // over the ticket is that it points at the ticket.
     when(reportGateway.commentOnCommit(anyString(), anyString(), any()))
         .thenReturn("https://github.com/o/r/commit/x#c1");
 
-    DeployActivities.Report report = activities.report(record(), null, 1L);
+    DeployActivities.Report report =
+        activities.report(record(), null, 1L, "https://linear.app/i/SIM-9");
 
-    assertThat(report.issueUrl()).isNull();
     assertThat(report.commitCommentUrl()).isEqualTo("https://github.com/o/r/commit/x#c1");
+    ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+    verify(reportGateway).commentOnCommit(anyString(), body.capture(), any());
+    assertThat(body.getValue()).contains("https://linear.app/i/SIM-9");
   }
 
   @Test
-  void stillOpensTheIssueWhenTheCommitCommentFails() {
-    when(reportGateway.openIssue(anyString(), anyString(), any(), any()))
-        .thenReturn("https://github.com/o/r/issues/1");
+  void returnsNothingRatherThanThrowingWhenTheCommitCommentFails() {
     when(reportGateway.commentOnCommit(anyString(), anyString(), any()))
         .thenThrow(new IllegalStateException("GitHub 500"));
 
-    DeployActivities.Report report = activities.report(record(), null, 1L);
+    DeployActivities.Report report = activities.report(record(), null, 1L, null);
 
-    assertThat(report.issueUrl()).isEqualTo("https://github.com/o/r/issues/1");
+    // A deploy that rolled back successfully but could not comment about it has still done the
+    // important part, so this must not fail the activity.
     assertThat(report.commitCommentUrl()).isNull();
+  }
+
+  @Test
+  void rendersTheFailureFromTheSameTitleAndBodyTheGitHubIssueUsed() {
+    // Re-targeted, not rewritten: renderFailure is the existing issueTitle/issueBody, exposed as
+    // an activity because a @WorkflowImpl holds no Spring bean and cannot reach the renderer.
+    DeployActivities.Rendered rendered = activities.renderFailure(record(), null);
+
+    assertThat(rendered.title()).isEqualTo(renderer.issueTitle(record(), null));
+    assertThat(rendered.body()).isEqualTo(renderer.issueBody(record(), null));
+    assertThat(rendered.title()).contains("Deploy failed");
   }
 
   // ---------------------------------------------------------------------------
@@ -376,7 +390,8 @@ class DeployActivitiesImplTest {
         false,
         null,
         null,
-        "rolled back");
+        "rolled back",
+        false);
   }
 
   @Test

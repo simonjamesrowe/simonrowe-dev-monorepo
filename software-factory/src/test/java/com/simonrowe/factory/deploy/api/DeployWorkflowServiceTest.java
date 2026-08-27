@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,11 +23,17 @@ import com.simonrowe.factory.deploy.persistence.DeployRunRecord;
 import com.simonrowe.factory.deploy.workflow.DeployActivities;
 import com.simonrowe.factory.deploy.workflow.DeployWorkflow;
 import com.simonrowe.factory.deploy.workflow.DeployWorkflowImpl;
+import com.simonrowe.factory.linear.config.LinearProperties;
+import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.linear.domain.FiledIssue;
+import com.simonrowe.factory.linear.domain.FilingDecision;
+import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.client.WorkflowStub;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +54,7 @@ class DeployWorkflowServiceTest {
 
   private TestWorkflowEnvironment environment;
   private DeployActivities activities;
+  private LinearActivities linear;
   private DeployWorkflowService service;
 
   @BeforeEach
@@ -62,14 +71,43 @@ class DeployWorkflowServiceTest {
               return new PhaseOutcome(phase, true, 0, "ok", 1L);
             });
 
+    // Stubbed because the sink tests below take the failure path. An unstubbed activity returning
+    // null is not a benign no-op here: the workflow puts every PhaseOutcome into a List.copyOf,
+    // which rejects nulls, and the resulting NPE is a workflow-task failure Temporal retries
+    // forever - so the test hangs rather than failing.
+    when(activities.rollbackConfig(anyString(), anyBoolean()))
+        .thenReturn(new PhaseOutcome(DeployPhase.ROLLBACK_CONFIG, true, 0, "restored", 1L));
+    when(activities.renderFailure(any(), any()))
+        .thenReturn(new DeployActivities.Rendered("Deploy failed", "body"));
+    when(activities.report(any(), any(), any(), any()))
+        .thenReturn(new DeployActivities.Report("https://github.com/o/r/commit/x#c1"));
+
+    linear = mock(LinearActivities.class, withSettings().withoutAnnotations());
+    when(linear.fileIssue(any()))
+        .thenReturn(
+            new FiledIssue(
+                FilingDecision.FILED_NEW, "SIM-9", "https://linear.app/i/SIM-9", "fp"));
+
     environment = TestWorkflowEnvironment.newInstance();
     Worker worker = environment.newWorker(DeployTaskQueues.DEPLOY);
     worker.registerWorkflowImplementationTypes(DeployWorkflowImpl.class);
     worker.registerActivitiesImplementations(activities);
+    // The sink's queue, polled exactly as it is in production. Registered for every test in this
+    // class so that "nothing was filed" cannot be explained away by nothing polling the queue.
+    environment.newWorker(LinearTaskQueues.LINEAR).registerActivitiesImplementations(linear);
     environment.start();
 
-    service =
-        new DeployWorkflowService(environment.getWorkflowClient(), properties());
+    service = serviceWithSink(false);
+  }
+
+  /** The trigger, wired to a sink that is either enabled or disabled. */
+  private DeployWorkflowService serviceWithSink(final boolean sinkEnabled) {
+    return new DeployWorkflowService(
+        environment.getWorkflowClient(), properties(), linearProperties(sinkEnabled));
+  }
+
+  private static LinearProperties linearProperties(final boolean enabled) {
+    return new LinearProperties(enabled, "key", null, "SIM", null, false, null, null);
   }
 
   @AfterEach
@@ -155,6 +193,41 @@ class DeployWorkflowServiceTest {
     assertThat(next.sha()).isEqualTo(NEWER_SHA);
     verify(activities).syncConfig(NEWER_SHA, false);
     verify(activities, times(2)).recordRun(any());
+  }
+
+  @Test
+  void carriesTheSinkFlagOntoTheRequestSoTheWorkflowNeedsNoConfiguration() {
+    // A @WorkflowImpl cannot inject properties, so the trigger is the only place this flag can be
+    // read. Read the wrong way round and either every deploy stalls on an unpolled queue or the
+    // sink is silently dead.
+    failVerifyOnce();
+    serviceWithSink(true).start(SHA, DeployRequest.TRIGGER_WEBHOOK, 999L);
+    awaitCompletion();
+
+    verify(linear).fileIssue(any());
+  }
+
+  @Test
+  void schedulesNothingOnTheSinkQueueWhenTheSinkIsDisabled() {
+    failVerifyOnce();
+    serviceWithSink(false).start(SHA, DeployRequest.TRIGGER_WEBHOOK, 999L);
+    awaitCompletion();
+
+    verify(linear, never()).fileIssue(any());
+  }
+
+  /**
+   * Fails {@code verify} on its first call only, so the rollback path runs and verifies clean.
+   * Failing it forever would model "the previous version is also broken", a different scenario.
+   */
+  private void failVerifyOnce() {
+    AtomicInteger calls = new AtomicInteger();
+    when(activities.runPhase(eq(DeployPhase.VERIFY), any(), anyBoolean()))
+        .thenAnswer(
+            invocation ->
+                calls.getAndIncrement() == 0
+                    ? new PhaseOutcome(DeployPhase.VERIFY, false, 1, "verify failed", 1L)
+                    : new PhaseOutcome(DeployPhase.VERIFY, true, 0, "ok", 1L));
   }
 
   @Test
