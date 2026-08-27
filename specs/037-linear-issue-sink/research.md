@@ -133,5 +133,7 @@ job. It found a real defect within hours of being written.
 - Probe issues SIM-5 and SIM-6 created and deleted; `attachmentsForURL` for the probe
   fingerprint now returns zero nodes.
 
-Ids are recorded here for reference only — **nothing hardcodes them.** The gateway
-resolves the team, its triage state and its label ids at runtime from the team key.
+**No ids are recorded above, deliberately — and nothing hardcodes them anyway.** The gateway
+resolves the team, its triage state and its label ids at runtime from the team key, so the only
+configuration production needs is the human team key (`SIM`) and the API key; writing UUIDs into
+a spec would be both useless and a small secret-hygiene liability.

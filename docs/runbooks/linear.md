@@ -112,12 +112,45 @@ Before the image ships with `FACTORY_LINEAR_ENABLED=true` anywhere:
    `FACTORY_LINEAR_ENABLED=true` on **`software-factory` only**, recreate, then
    run the [poller check](#verifying-the-poller). This is the live test of the
    activity-only-queue risk — nothing else proves it.
-5. `FACTORY_LINEAR_DRY_RUN=true`. Drive a `cvefix` dry run through the manual
-   endpoint and confirm `linear_issues` records `FILED_NEW` with **no** ticket
-   actually created in Linear (dry-run still reads Linear and computes the
-   decision — it performs no `issueCreate`/`attachmentCreate`/`commentCreate`).
+5. `FACTORY_LINEAR_DRY_RUN=true`, then drive a `cvefix` dry run by starting the
+   workflow directly — step (e) of [cvefix.md's rollout](cvefix.md#rollout-order).
+   **Pass `linearFilingEnabled` explicitly.** `CveFixRequest` deliberately gives
+   it no default (unlike the three CI settings), so a hand-written input that
+   omits it deserializes `false`, `CveFixWorkflowImpl.fileUnfixable` returns
+   immediately, and **nothing reaches `linear_issues` at all** — which reads
+   exactly like a broken sink:
+
+   ```bash
+   docker run --rm --network simonrowe-dev-monorepo_default \
+     temporalio/admin-tools:1.31.2 \
+     temporal workflow start \
+       --address temporal:7233 --namespace default \
+       --type CveFixWorkflow \
+       --task-queue cve-fix \
+       --workflow-id cve-fix-dryrun-$(date +%Y%m%d%H%M) \
+       --input '{"dryRun":true,"linearFilingEnabled":true}'
+   ```
+
+   Confirm `linear_issues` records `FILED_NEW` with **no** ticket actually
+   created in Linear (dry-run still reads Linear and computes the decision — it
+   performs no `issueCreate`/`attachmentCreate`/`commentCreate`).
 6. Clear dry-run. Fire the same occurrence twice and confirm the second time
-   comments on the existing ticket rather than filing a second one.
+   comments on the existing ticket rather than filing a second one — but
+   **clear the component's `unfixable_findings` row before each fire.** Step 5
+   has a real side effect that otherwise blocks this: a `cvefix` dry run writes
+   suppression rows for every component it could not fix, and
+   `FindingSuppressor.retainActionable` is applied at *fetch* time, so the
+   component is dropped before the agent ever sees it. The next run then reports
+   nothing newly recorded, `fileUnfixable` iterates an empty list, and the first
+   live filing never happens:
+
+   ```bash
+   docker exec simonrowe-dev-monorepo-mongodb-1 mongosh software_factory --eval \
+     'db.unfixable_findings.deleteOne({_id: "pkg:maven/group/artifact@1.2.3"})'
+   ```
+
+   See [Unfixable findings](cvefix.md#unfixable-findings) for what those rows
+   are and why a dry run writes them.
 
 ## Credential confinement
 
@@ -138,10 +171,14 @@ Two layers enforce this:
   under the `software-factory` service. `deployer`'s block carries a comment
   recording that the omission is deliberate, and
   `DeployerLinearCredentialTest` (`software-factory/src/test/java/com/simonrowe/factory/linear/config/`)
-  reads the compose file and fails the build if a `LINEAR_`-prefixed variable
-  ever appears under `deployer` — because a config gate in Java does nothing
-  to stop a compose edit handing the credential to the socket-holding
-  container directly.
+  reads the compose file and fails the build if any variable whose name
+  **contains** `LINEAR` ever appears under `deployer` — because a config gate in
+  Java does nothing to stop a compose edit handing the credential to the
+  socket-holding container directly. **Containing, not prefixed**: a
+  `LINEAR_`-prefix match would catch `LINEAR_API_KEY` and miss
+  `FACTORY_LINEAR_ENABLED`, and it is that flag which registers
+  `LinearActivitiesImpl` in the socket-holding JVM and makes `deployer` poll the
+  `linear` queue in the first place.
 
 ## Reading `linear_issues`
 
@@ -192,6 +229,14 @@ will ever file anything, silently.
   fails loudly and non-retryably rather than falling back to the backlog — this
   is deliberate (see [Human prerequisites](#human-prerequisites)), so the fix is
   to enable Triage on the team, not to change the code.
+- **A missing label costs nothing but is easy to miss.** Unlike Triage, a
+  `factory:deploy`/`factory:cvefix` label that does not exist on the team does
+  **not** fail the filing: the ticket is created unlabelled and a `WARN` naming
+  the label and the team key is the only signal. `LinearGateway.teamContext()`
+  also caches **positively for the process lifetime** — team id, triage state id
+  and label ids are resolved once on first filing and never re-read — so a label
+  created *after* the flag was enabled needs a `docker restart` of
+  `software-factory` before the sink will use it.
 - **Bumping `Fingerprint.VERSION` (currently `v1`) orphans every existing
   ticket.** The fingerprint is `sha256("v1:" + producer + ":" + keyParts)`; a
   version bump changes every fingerprint at once, so the next occurrence of a
@@ -199,6 +244,16 @@ will ever file anything, silently.
   duplicate. This is a deliberate, one-time, documented cost when it is truly
   needed — not something to do casually, and not something a routine change to
   this module should ever touch.
+- **`factory.linear.request-timeout` is 15s for an arithmetic reason, and
+  raising it alone reintroduces a duplicate ticket.** One filing on a cold team
+  cache makes four sequential Linear calls — fingerprint lookup, team/label/
+  triage resolution, `issueCreate`, `attachmentCreate` — and both producers give
+  `fileIssue` a 90-second `startToCloseTimeout`. Temporal does not interrupt a
+  non-heartbeating activity when that elapses; it starts attempt 2 while attempt
+  1 is still running, and attempt 2 sees an empty lookup and files a **second
+  ticket**. 4 x 15s = 60s fits inside 90s. If you ever need a longer per-call
+  timeout, raise the activity's `startToCloseTimeout` in `DeployWorkflowImpl`
+  and `CveFixWorkflowImpl` in the same change.
 - **A misconfigured sink costs up to two minutes per filing, not a hang.** Both
   producers schedule `fileIssue` on the `linear` queue with a 2-minute
   `scheduleToCloseTimeout`, specifically because with `factory.linear.enabled`
@@ -218,10 +273,11 @@ to rediscover:
 - **Two deploy failure paths file nothing into Linear at all: a
   `sync-config` failure, and a failed `maintenance-on`.** Both exit
   `DeployWorkflowImpl` via `finish`, which only ever reports for
-  `DEPLOYED_IMAGES_ONLY` — this is faithful parity with the old behaviour
-  (`openIssue` was only ever reachable from the failure path that calls
-  `report`, so neither of these opened a GitHub issue before the sink existed
-  either), but it is the worse gap of the two by far: `sync-config` failing
+  `DEPLOYED_IMAGES_ONLY` — this is faithful parity with the old behaviour (the
+  `openIssue` activity that this sink replaced, and which no longer exists in
+  the codebase, was only ever reachable from the failure path that calls
+  `report`, so neither of these paths opened a GitHub issue before the sink
+  existed either), but it is the worse gap of the two by far: `sync-config` failing
   means **production is untouched while the automation itself is wedged**
   (dirty tree, a non-ancestor sha, a fetch failure), it recurs identically on
   every subsequent merge until a human intervenes, and today it is invisible

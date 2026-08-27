@@ -250,9 +250,20 @@ Two consequences worth stating:
 The tracker being down must never change a producer's outcome.
 
 - Transient (5xx, rate limit): the activity throws, Temporal retries with capped
-  backoff. On exhaustion the producer catches `ActivityFailure`, records
-  `linearFilingFailed` on its own run record, and continues. A failed deploy still
-  rolls back; an unfixable CVE is still recorded.
+  backoff. On exhaustion the producer catches — `RuntimeException`, not just
+  `ActivityFailure`, because building the `IssueFiling` payload happens on the
+  workflow thread and a fault there is no `TemporalFailure`, so a narrow catch
+  fails the workflow *task* and Temporal retries those forever — and continues.
+  A failed deploy still rolls back; an unfixable CVE is still recorded.
+
+  **The two producers record the failure asymmetrically, on purpose.** `deploy`
+  sets `linearFilingFailed` on `DeployRunRecord` and reports with a null issue
+  URL. `cvefix` records nothing about filing on `cve_fix_runs` at all — it
+  discards the returned `FiledIssue` and only logs. One run files N components,
+  so a single boolean or URL field on the run record could not honestly describe
+  the outcome, and `linear_issues` already holds one audited row per
+  fingerprint with a per-occurrence decision log. That is the trail for cvefix;
+  `cve_fix_runs` is not.
 - `401`/`403`: non-retryable, fail fast and loud. A read-only key must not burn a
   retry budget.
 - **With `factory.linear.enabled=false`, nothing polls the `linear` queue**, so a

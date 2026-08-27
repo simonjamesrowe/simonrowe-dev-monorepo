@@ -244,9 +244,12 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   would register it unconditionally and silently ignore the annotation, the same trap
   `DeployActivitiesImpl` documents. `docker-compose.prod.yml` declares
   `FACTORY_LINEAR_*`/`LINEAR_API_KEY` only under `software-factory`; a new
-  `DeployerLinearCredentialTest` reads the compose file and fails the build if a `LINEAR_`-
-  prefixed variable ever appears under `deployer`, because the Java-side gate alone does not stop
-  a future compose edit handing the credential to the socket-holding container directly. Both
+  `DeployerLinearCredentialTest` reads the compose file and fails the build if any variable whose
+  name **contains** `LINEAR` appears under `deployer`, because the Java-side gate alone does not
+  stop a future compose edit handing the credential to the socket-holding container directly.
+  Containing rather than prefixed on purpose: a `LINEAR_` prefix catches `LINEAR_API_KEY` and
+  misses `FACTORY_LINEAR_ENABLED`, the flag that actually registers `LinearActivitiesImpl` in the
+  socket-holding JVM. Both
   producers carry a request-level `linearFilingEnabled` flag — set by whichever side builds the
   request from its own configuration, since a `@WorkflowImpl` cannot inject Spring properties —
   as the primary guard against scheduling `fileIssue` at all while the sink is disabled; the

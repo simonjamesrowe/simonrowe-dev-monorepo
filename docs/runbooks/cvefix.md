@@ -182,13 +182,21 @@ docker run --rm --network simonrowe-dev-monorepo_default \
     --input '{"dryRun":true,"pollInterval":"PT3M","repairBudget":3,"maxWait":"PT3H"}'
 ```
 
-The three CI fields are the JSON shape of `CveFixRequest`; ISO-8601 duration
-strings are what its `Duration` fields accept. They are optional —
+Those fields are the JSON shape of `CveFixRequest`; ISO-8601 duration strings
+are what its `Duration` fields accept. The three CI fields are optional —
 `'{"dryRun":true}'` works too, because the record's compact constructor fills in
 the same production defaults (3 minutes / 3 repairs / 3 hours). They are carried
 in the request rather than read from configuration because `@WorkflowImpl`
 classes are instantiated by the Temporal SDK, not Spring, and cannot inject
 `CveFixProperties`.
+
+`CveFixRequest` is a **five**-field record, and the fifth is
+`linearFilingEnabled`. It deliberately gets **no** default in the compact
+constructor, so a hand-written input that omits it deserializes `false` and the
+run files nothing into the issue tracker. That is the right default for a manual
+run, but it means a rollout that is specifically testing the Linear sink has to
+pass `'{"dryRun":true,"linearFilingEnabled":true}'` —
+see [linear.md](linear.md#rollout-order).
 
 Then read the history:
 
