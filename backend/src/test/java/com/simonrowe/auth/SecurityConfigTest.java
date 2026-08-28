@@ -156,4 +156,53 @@ class SecurityConfigTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/platform/releases"))
         .andExpect(status().isOk());
   }
+
+  @Test
+  void softwareFactoryStatusRejectsAnonymous() throws Exception {
+    // The whole point of the backend proxy is that the browser never holds the factory token.
+    // If this path were reachable unauthenticated, an anonymous caller would be able to make the
+    // backend spend its credential on their behalf.
+    mockMvc.perform(get("/api/admin/software-factory/status"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void softwareFactoryStatusRejectsAuthenticatedWithoutTheAdminRole() throws Exception {
+    mockMvc.perform(get("/api/admin/software-factory/status")
+            .with(jwt()
+                .jwt(j -> j.subject("test-user"))
+                .authorities(OTHER_AUTHORITY)))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void softwareFactoryActionsRejectAnonymous() throws Exception {
+    // Every start is a POST, and each one spends something: a model call, a Linear ticket, a
+    // Google Drive archive, or a production deploy.
+    for (String path : new String[] {
+        "/api/admin/software-factory/vulnerability-scans",
+        "/api/admin/software-factory/platform-backups",
+        "/api/admin/software-factory/feedback",
+        "/api/admin/software-factory/deploys"}) {
+      mockMvc.perform(post(path))
+          .andExpect(status().isUnauthorized());
+    }
+  }
+
+  @Test
+  void softwareFactoryRunProgressRejectsAnonymous() throws Exception {
+    mockMvc.perform(get("/api/admin/software-factory/runs/cve-scan-manual-1"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void softwareFactoryStatusReachesTheProxyForAnAdmin() throws Exception {
+    // 200 with both containers reported unreachable: nothing is listening on software-factory:8090
+    // in a test, and one unreachable container must never blank the page.
+    mockMvc.perform(get("/api/admin/software-factory/status")
+            .with(jwt()
+                .jwt(j -> j.subject("test-user"))
+                .authorities(ADMIN_AUTHORITY)))
+        .andExpect(status().isOk());
+  }
 }

@@ -67,6 +67,7 @@ spring:
       register-activity-beans: true
 
 factory:
+  runtime-role: ${FACTORY_RUNTIME_ROLE:software-factory}
   codereview:
     github:
       api-base-url: ${GITHUB_API_URL:https://api.github.com}
@@ -158,7 +159,7 @@ factory:
       timeout: ${FACTORY_CVEFIX_TIMEOUT:15m}
     ci:
       # 3m keeps unauthenticated GitHub API use near 20 req/hour, inside the 60/hour per-IP
-      # limit. Do not lower without moving CiStatusGateway to the installation token.
+      # Legacy issue-only request compatibility; no CI polling occurs in the current workflow.
       poll-interval: ${FACTORY_CVEFIX_POLL_INTERVAL:3m}
       repair-budget: ${FACTORY_CVEFIX_REPAIR_BUDGET:3}
       # 3h, not 45m: repair-budget + 1 iterations, each up to agent.timeout plus a full CI
@@ -258,6 +259,9 @@ factory:
         priority: 1
       cvefix:
         label: "factory:cvefix"
+        priority: 3
+      feedback:
+        label: "factory:feedback"
         priority: 3
   platform-backup:
     # Off by default, and true only on the `deployer` service. This flag registers

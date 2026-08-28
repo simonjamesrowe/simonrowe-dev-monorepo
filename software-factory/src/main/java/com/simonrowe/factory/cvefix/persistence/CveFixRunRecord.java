@@ -17,10 +17,33 @@ public record CveFixRunRecord(
     List<String> bumps,
     String prUrl,
     int ciAttempts,
-    String detail) {
+    String detail,
+    String runId,
+    int componentsSeen,
+    int filed,
+    int updated,
+    int suppressed,
+    int regressed,
+    List<String> issueUrls) {
 
   public CveFixRunRecord {
     bumps = bumps == null ? List.of() : List.copyOf(bumps);
+    issueUrls = issueUrls == null ? List.of() : List.copyOf(issueUrls);
+  }
+
+  /** Backward-compatible constructor for records and tests written before issue-only scanning. */
+  public CveFixRunRecord(
+      final String id,
+      final String workflowId,
+      final Instant startedAt,
+      final CveFixStatus status,
+      final int findingsSeen,
+      final List<String> bumps,
+      final String prUrl,
+      final int ciAttempts,
+      final String detail) {
+    this(id, workflowId, startedAt, status, findingsSeen, bumps, prUrl, ciAttempts, detail,
+        null, 0, 0, 0, 0, 0, List.of());
   }
 
   /**

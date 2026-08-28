@@ -102,7 +102,8 @@ public class IssueFiler {
           filing.occurrenceId(),
           fingerprint);
       return reported(
-          previous.decision(), existing.issueIdentifier(), existing.issueUrl(), fingerprint);
+          previous.decision(), existing.issueId(), existing.issueIdentifier(), existing.issueUrl(),
+          fingerprint);
     }
 
     LinearIssueRecord record =
@@ -217,7 +218,8 @@ public class IssueFiler {
                     properties.dryRun()),
                 now,
                 observed));
-    return reported(decision, saved.issueIdentifier(), saved.issueUrl(), fingerprint);
+    return reported(
+        decision, saved.issueId(), saved.issueIdentifier(), saved.issueUrl(), fingerprint);
   }
 
   /**
@@ -242,13 +244,14 @@ public class IssueFiler {
    */
   private static FiledIssue reported(
       final FilingDecision decision,
+      final String issueId,
       final String issueIdentifier,
       final String issueUrl,
       final String fingerprint) {
     if (decision == FilingDecision.SUPPRESSED) {
-      return new FiledIssue(decision, null, null, fingerprint);
+      return new FiledIssue(decision, null, null, null, fingerprint);
     }
-    return new FiledIssue(decision, issueIdentifier, issueUrl, fingerprint);
+    return new FiledIssue(decision, issueId, issueIdentifier, issueUrl, fingerprint);
   }
 
   private static LinearIssueDecision lastDecisionFor(

@@ -11,9 +11,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
+import com.simonrowe.factory.admin.FactoryTokenAuthenticator;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
+import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.feedback.domain.FeedbackProgress;
 import com.simonrowe.factory.feedback.domain.FeedbackRequest;
+import com.simonrowe.factory.linear.config.LinearProperties;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -46,7 +49,12 @@ class FeedbackControllerTest {
             null,
             new CodeReviewProperties.Api(configuredToken), "https://temporal.test");
     return MockMvcBuilders.standaloneSetup(
-            new FeedbackController(properties, workflowService, credentials))
+            new FeedbackController(
+                new FactoryTokenAuthenticator(properties),
+                new FeedbackProperties(true, null, null, null, null, null, null, null, null),
+                workflowService,
+                credentials,
+                new LinearProperties(true, "key", null, "SIM", null, false, null, null)))
         .build();
   }
 

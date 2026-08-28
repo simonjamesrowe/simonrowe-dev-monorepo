@@ -130,10 +130,10 @@ class CveFixScheduleInitializerTest {
 
   @Test
   // Named without "IsAManualTrigger": consecutive capitals are capped at one by checkstyle.
-  void isPausedOnCreationSoTheFirstRunIsTriggeredByHand() {
+  void isActiveOnCreationSoIssueOnlyScanningRunsByDefault() {
     initializer.run(null);
 
-    assertThat(createdSchedule().getState().isPaused()).isTrue();
+    assertThat(createdSchedule().getState().isPaused()).isFalse();
   }
 
   @Test

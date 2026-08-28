@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/036-auto-deploy-on-merge/plan.md
+specs/040-software-factory-console/plan.md
 <!-- SPECKIT END -->
 
 # simonrowe-dev-monorepo — agent guidelines
@@ -96,3 +96,13 @@ modes that are non-obvious and expensive to rediscover — a `healthy` container
 that serves nothing, a single-node Kafka broker that silently accepts writes no
 consumer can ever read, healthchecks whose cold-start budget strands dependent
 containers in `created`.
+
+## Active Technologies
+- Java 21 (`backend`, `software-factory`), TypeScript 5.7 / React 19,
+  Spring Boot 3.5.16, Temporal Java SDK 1.36.0
+- Existing MongoDB `software_factory` collections (`cve_fix_runs`,
+  `review_learnings`, `linear_issues`)
+
+## Recent Changes
+- 040-software-factory-console: Admin factory status/manual actions, issue-first
+  feedback, CVE-to-Linear ticketing, and active platform backups.

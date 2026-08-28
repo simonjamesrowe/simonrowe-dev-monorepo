@@ -23,6 +23,8 @@ import java.time.Duration;
 @WorkflowImpl(taskQueues = PlatformBackupTaskQueues.PLATFORM_BACKUP)
 public class PlatformBackupWorkflowImpl implements PlatformBackupWorkflow {
 
+  private PlatformBackupProgress current = PlatformBackupProgress.accepted();
+
   /**
    * Generous, and deliberately so. The capture dumps four databases and a ClickHouse database of
    * unbounded size on a four-core Pi, then uploads the result. A timeout that fires on a slow but
@@ -52,6 +54,19 @@ public class PlatformBackupWorkflowImpl implements PlatformBackupWorkflow {
 
   @Override
   public String backup(final boolean dryRun) {
-    return activities.capture(dryRun);
+    current = new PlatformBackupProgress("running", "Capturing platform datastores", dryRun);
+    try {
+      String result = activities.capture(dryRun);
+      current = new PlatformBackupProgress("completed", "Capture completed", dryRun);
+      return result;
+    } catch (RuntimeException exception) {
+      current = new PlatformBackupProgress("failed", "Capture failed", dryRun);
+      throw exception;
+    }
+  }
+
+  @Override
+  public PlatformBackupProgress progress() {
+    return current;
   }
 }

@@ -91,7 +91,8 @@ public record CveFixProperties(
       // 3 minutes keeps unauthenticated GitHub API use at ~20 requests/hour typical, and
       // ~40/hour worst case while polling a red pull request (reading the outcome and then its
       // failure logs are two separate requests) — both inside the 60/hour per-IP limit that
-      // route is subject to. See CiStatusGateway.
+      // Retained for serialized request compatibility with workflow histories from the former
+      // auto-fix implementation; the issue-only workflow does not poll CI.
       pollInterval = pollInterval == null ? Duration.ofMinutes(3) : pollInterval;
       repairBudget = repairBudget == 0 ? 3 : repairBudget;
       // 3h, not 45m: one repair iteration costs up to agent.timeout (15m) plus a whole CI
@@ -101,7 +102,7 @@ public record CveFixProperties(
       // The promptfoo evals job is continue-on-error advisory. Job-level continue-on-error
       // keeps the *run* from failing; it is not documented to rewrite the check-run
       // conclusion, so this list — not that setting — is what guarantees an advisory job
-      // cannot burn the repair budget. See CiStatusGateway and Task 8 Step 4.
+      // Retained for serialized request compatibility; the issue-only flow does not read it.
       advisoryChecks =
           advisoryChecks == null || advisoryChecks.isEmpty()
               ? List.of("evaluate")

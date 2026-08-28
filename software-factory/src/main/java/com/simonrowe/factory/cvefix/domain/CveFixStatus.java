@@ -1,8 +1,8 @@
 package com.simonrowe.factory.cvefix.domain;
 
-/** Terminal outcome of one CVE-fix run. */
+/** Terminal outcome of one vulnerability-report run. Legacy values remain for stored history. */
 public enum CveFixStatus {
-  /** CI went green; the pull request is waiting for a human to merge. */
+  /** The consolidated Linear report was filed or updated. */
   COMPLETED,
   /**
    * A dry run stopped before opening the pull request. Distinct from {@link #COMPLETED} because a
@@ -12,7 +12,7 @@ public enum CveFixStatus {
    * {@code DistillationStatus.DRY_RUN} in the feedback module.
    */
   DRY_RUN,
-  /** Dependency-Track reported nothing actionable. */
+  /** Dependency-Track reported no current findings. */
   NO_FINDINGS,
   /** A CVE pull request is already open, so this run did nothing. */
   SKIPPED_PR_OPEN,
@@ -24,6 +24,6 @@ public enum CveFixStatus {
    * request is left open either way, which makes every later run hit {@link #SKIPPED_PR_OPEN}.
    */
   CI_UNRESOLVED,
-  /** The run failed for an operational reason: Dependency-Track down, git error, agent error. */
+  /** The run failed for an operational reason such as Dependency-Track or Linear being down. */
   FAILED
 }

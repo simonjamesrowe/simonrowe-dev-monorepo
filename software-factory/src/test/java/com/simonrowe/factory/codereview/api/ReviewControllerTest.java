@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
+import com.simonrowe.factory.admin.FactoryTokenAuthenticator;
 import com.simonrowe.factory.codereview.domain.ReviewProgress;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
@@ -45,7 +46,8 @@ class ReviewControllerTest {
             null,
             new CodeReviewProperties.Api(configuredToken), "https://temporal.test");
     return MockMvcBuilders.standaloneSetup(
-            new ReviewController(properties, workflowService, credentials))
+            new ReviewController(
+                new FactoryTokenAuthenticator(properties), workflowService, credentials))
         .build();
   }
 

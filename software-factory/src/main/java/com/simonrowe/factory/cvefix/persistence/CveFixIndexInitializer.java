@@ -40,9 +40,6 @@ public class CveFixIndexInitializer implements ApplicationRunner {
   @Override
   public void run(final ApplicationArguments args) {
     mongoTemplate
-        .indexOps(UnfixableFindingRecord.class)
-        .createIndex(new Index().named("purl").on("purl", Sort.Direction.ASC).unique());
-    mongoTemplate
         .indexOps(CveFixRunRecord.class)
         .createIndex(new Index().named("startedAt").on("startedAt", Sort.Direction.DESC));
   }

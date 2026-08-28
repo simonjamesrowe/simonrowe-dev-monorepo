@@ -211,6 +211,57 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 040-software-factory-console: A `/admin/software-factory` page in the site's own admin area,
+  four modules switched **on** by default, and the CVE flow rewritten from "open a repair PR" to
+  "file one Linear ticket". Three things about it are load-bearing:
+  - **`GET /api/factory/status` is deliberately unauthenticated, and it has to stay that way.**
+    The backend asks *both* `software-factory` and `deployer` for it, and the `deployer` holds no
+    `FACTORY_TRIGGER_TOKEN` on purpose — token-protecting the endpoint would make the deployer
+    report itself permanently unreachable, which disables the deploy and platform-backup actions
+    with no configuration that recovers it. It returns booleans, queue names, poller counts and
+    schedule times; `GET /api/factory/runs/{id}` next to it *does* require the token, because a
+    run's `detail` is free-text diagnostics. Same reasoning as `/api/version`.
+  - **Enabled is not the same as able to work, and four flags now default true while their
+    credentials default empty.** `FACTORY_FEEDBACK_ENABLED`, `FACTORY_CVEFIX_ENABLED`,
+    `FACTORY_LINEAR_ENABLED` and `FACTORY_PLATFORM_BACKUP_ENABLED` are all `true` in
+    `docker-compose.prod.yml`; `LINEAR_API_KEY`, `FACTORY_LINEAR_TEAM_KEY` and
+    `DEPENDENCYTRACK_API_KEY` are all still `${...:-}`. `ModulePrerequisites` is the one place
+    that knows both, reports per-module `missingPrerequisites` on the status endpoint and logs
+    them once at `ApplicationReadyEvent`. It never fails startup: a missing prerequisite must
+    degrade one module, not take the factory down. A module's `ready` is the conjunction of flag,
+    poller *and* prerequisites, and the backend refuses an action whose module is not ready —
+    without that, a workflow started on a queue nothing polls does not fail, it sits in Temporal
+    looking accepted until an activity timeout.
+  - **One endpoint follows every module's runs**, because every factory workflow exposes a query
+    method named `progress` returning `{phase, detail, <one module-specific field>}`. It is read
+    as a `JsonNode` via an **untyped** stub: Temporal's `JacksonJsonPayloadConverter` does *not*
+    disable `FAIL_ON_UNKNOWN_PROPERTIES` (verified in the 1.36.0 jar), so a typed read of one
+    module's record throws on another's. Temporal's `executionStatus` and the workflow's `phase`
+    are reported separately — a failed workflow cannot answer a query at all, and "it failed" is
+    the most useful thing the page can say, so the query failing must not lose the status.
+  Also: the `deployer`'s status call deliberately sends no token; `deploy` and `platformbackup`
+  are taken from the **deployer** and reported unavailable when it is unreachable, never from
+  `software-factory`'s own (switched-off) view of them; and downstream statuses are translated
+  rather than forwarded — 409 stays 409 ("already in progress"), a downstream 503 becomes "reports
+  that module as disabled", 401/403 becomes 502, and only a real outage says "unavailable".
+  Collapsing all of those into "unavailable" was the first cut, and it sent an operator looking for
+  a down container when the answer was a flag.
+  **CVE fix is no longer a fix.** `ClaudeCliFixEngine`, `CveFixPrGateway`, `CiStatusGateway`,
+  `FindingSuppressor`, `UnfixableFindingRecord` and the git/branch/CI machinery are **deleted**
+  (~4,300 lines). The workflow reads Dependency-Track, groups findings by component, and files
+  **one** consolidated Linear ticket for the whole repository — key parts are the repo plus the
+  literal `current-vulnerabilities`, so a later scan comments the full current set on that same
+  long-lived ticket rather than filing a ticket per CVE. It never touches git, opens no PR and
+  polls no CI. `CveFixProperties`'s `agent` and `ci` blocks are retained but **unused**, purely so
+  a Temporal history serialized by the old implementation still deserializes. `DeployWorkflowService`
+  lost its `@ConditionalOnProperty(factory.deploy.trigger-enabled)` so the manual endpoint works
+  where the webhook is off; the webhook branch still checks `triggerEnabled()` itself.
+  Manual redeploy can only redeploy the commit already running: backend and frontend commits must
+  be equal and not `unknown`, the phrase `REDEPLOY <short-sha>` is re-validated server-side, and the
+  commit sent to Temporal is **the backend's own** — the browser's value only proves the two agree.
+  `FACTORY_RUNTIME_ROLE` (`software-factory` / `deployer`) is new, and is only how a container names
+  itself in its status response. See `docs/runbooks/software-factory.md`,
+  `docs/runbooks/cvefix.md`, `docs/runbooks/linear.md`, and `specs/040-software-factory-console/`.
 - 039-linear-issue-sink: A sixth `software-factory` module, `com.simonrowe.factory.linear` — a
   **sink** with no trigger, schedule or webhook of its own, on a new `linear` Temporal task queue.
   Files findings from `deploy` (failed deploys) and `cvefix` (unfixable CVE components) into
@@ -407,23 +458,23 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   `langfuse-db` Postgres databases (`langfuse`, `dtrack`, `temporal`,
   `temporal_visibility`) and the ClickHouse `default` database. **It runs in the
   `deployer`, not the backend** — `scripts/backup-platform.sh` invoked by a Temporal
-  activity on a paused-by-default nightly schedule (`platform-backup-nightly`,
+  activity on an active-by-default nightly schedule (`platform-backup-nightly`,
   `FACTORY_PLATFORM_BACKUP_ENABLED`). Constitution 2.0.0 forbids `ProcessBuilder` and
   Docker access in the container serving public traffic, so the capture cannot live
   there; the Java side never invokes `docker` itself, exactly as `PhaseRunner` only
-  ever runs `restart-prod.sh`. The backend keeps **only** `GET
-  /api/admin/data-operations/platform-backups` and a read-only "Platform Data" card,
-  because listing a Drive folder is a network call. There is no capture button and no
-  restore endpoint. **Enabling the flag does not start backing up** — the schedule is
-  created paused, and after unpausing you must assert a live poller on the
-  `platform-backup` task queue, since a healthy container with no poller runs nothing
-  and says nothing.
+  ever runs `restart-prod.sh`. The backend lists retained archives under Data Ops and
+  proxies dry-run or confirmed real captures from the Software Factory admin page to
+  the unrouted factory API. There is no restore endpoint. A newly created schedule is
+  active; an existing operator pause is preserved. Always assert a live poller on the
+  `platform-backup` task queue, since a healthy container with no poller runs nothing.
   **The separate Drive folder (`simonrowe-platform-backups`) is load-bearing:**
   retention deletes everything past the newest 7 `.zip` in a folder, so sharing one
   would make the two backup types evict each other and silently halve both recovery
   windows. The script resolves it by name and never falls back to
   `GOOGLE_DRIVE_FOLDER_ID`; `GoogleDriveFolderResolutionTest` guards the backend's
-  listing side of the same rule. Upload is Google's resumable protocol in `curl`
+  listing side of the same rule. The Software Factory admin page can start a dry run or
+  confirmed real capture through the backend-to-factory proxy; restore remains host-only.
+  Upload is Google's resumable protocol in `curl`
   (session URI + ranged PUT), with Temporal retry over the top.
   New `langfuse-clickhouse-backups` volume + `config/clickhouse/backup-disk.xml`
   (`<backups><allowed_path>`) + a `clickhouse-backups-init` busybox one-shot that

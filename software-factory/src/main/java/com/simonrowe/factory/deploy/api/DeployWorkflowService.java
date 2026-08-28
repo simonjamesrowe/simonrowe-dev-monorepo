@@ -11,18 +11,15 @@ import io.temporal.api.enums.v1.WorkflowIdReusePolicy;
 import io.temporal.client.BatchRequest;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowOptions;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
  * Starts deploys, keeping the webhook controller Temporal-agnostic.
  *
- * <p>Gated on {@code factory.deploy.trigger-enabled} so a JVM that is not allowed to trigger a
- * deploy holds no client stub at all — the {@code deployer} sets it false, and it is false by
- * default everywhere, which is what makes merging this feature change nothing in production.
+ * <p>The webhook caller checks {@code factory.deploy.trigger-enabled}; the internal admin API is
+ * separately token protected and intentionally remains available for confirmed manual redeploys.
  */
 @Service
-@ConditionalOnProperty(name = "factory.deploy.trigger-enabled", havingValue = "true")
 public class DeployWorkflowService {
 
   private final WorkflowClient workflowClient;

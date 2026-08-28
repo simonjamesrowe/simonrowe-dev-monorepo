@@ -39,9 +39,8 @@ import org.springframework.stereotype.Component;
  *       parts this code owns — but carries the server's current paused flag forward, because
  *       re-pausing a schedule the operator unpaused would silently stop the feature on every
  *       deploy.
- *   <li><strong>The first version is created paused.</strong> Turning the feature flag on must not
- *       start opening pull requests; the operator unpauses in the Temporal UI after watching a
- *       successful manual dry run. See {@code docs/runbooks/cvefix.md}.
+ *   <li><strong>The first version is active.</strong> The workflow is issue-only, so enabling the
+ *       flag makes the daily ownership report effective without a second operational step.
  * </ul>
  *
  * <p>The scheduled request carries the CI settings rather than the workflow reading them, because
@@ -59,7 +58,7 @@ import org.springframework.stereotype.Component;
 public class CveFixScheduleInitializer implements ApplicationRunner {
 
   /** Identifier of the schedule, as it appears in the Temporal UI. */
-  static final String SCHEDULE_ID = "cve-fix-daily";
+  public static final String SCHEDULE_ID = "cve-fix-daily";
 
   /** Base workflow id of each scheduled run; Temporal appends the scheduled time. */
   static final String WORKFLOW_ID = "cve-fix";
@@ -100,8 +99,8 @@ public class CveFixScheduleInitializer implements ApplicationRunner {
   public void run(final ApplicationArguments args) {
     try {
       scheduleClient.createSchedule(
-          SCHEDULE_ID, schedule(true), ScheduleOptions.newBuilder().build());
-      log.info("Created Temporal schedule {} (paused; unpause after a dry run)", SCHEDULE_ID);
+          SCHEDULE_ID, schedule(false), ScheduleOptions.newBuilder().build());
+      log.info("Created active Temporal schedule {}", SCHEDULE_ID);
     } catch (ScheduleAlreadyRunningException alreadyRunning) {
       scheduleClient
           .getHandle(SCHEDULE_ID)
@@ -148,8 +147,7 @@ public class CveFixScheduleInitializer implements ApplicationRunner {
         .setSpec(
             ScheduleSpec.newBuilder().setIntervals(List.of(new ScheduleIntervalSpec(INTERVAL)))
                 .build())
-        // SKIP, plus the workflow's own open-pull-request check, means only one run is ever in
-        // flight: a run that leaves a pull request open stalls the next one on purpose.
+        // A delayed scan never overlaps the next daily snapshot.
         .setPolicy(
             SchedulePolicy.newBuilder()
                 .setOverlap(ScheduleOverlapPolicy.SCHEDULE_OVERLAP_POLICY_SKIP)

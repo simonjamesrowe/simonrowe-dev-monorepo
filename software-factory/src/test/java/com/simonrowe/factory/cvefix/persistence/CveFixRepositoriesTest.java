@@ -30,7 +30,6 @@ class CveFixRepositoriesTest {
   }
 
   @Autowired private CveFixRunRepository runs;
-  @Autowired private UnfixableFindingRepository unfixable;
   @Autowired private MongoTemplate mongoTemplate;
 
   @Test
@@ -47,25 +46,7 @@ class CveFixRepositoriesTest {
   }
 
   @Test
-  void findsAnUnfixableComponentByPurl() {
-    unfixable.save(
-        new UnfixableFindingRecord(
-            UnfixableFindingRecord.idFor("pkg:maven/a/b@1"),
-            "pkg:maven/a/b@1",
-            "pkg:maven/a/b@1|CVE-1,CVE-9",
-            List.of("CVE-1", "CVE-9"),
-            "no released version clears CVE-9",
-            Instant.parse("2026-08-11T00:00:00Z")));
-
-    assertThat(unfixable.findByPurl("pkg:maven/a/b@1"))
-        .get()
-        .extracting(UnfixableFindingRecord::fingerprint)
-        .isEqualTo("pkg:maven/a/b@1|CVE-1,CVE-9");
-    assertThat(unfixable.findByPurl("pkg:npm/absent@1")).isEmpty();
-  }
-
-  @Test
-  void indexInitializerCreatesTheUniquePurlIndex() {
+  void indexInitializerCreatesTheRunHistoryIndex() {
     // CveFixIndexInitializer is an ApplicationRunner and is gated on the feature flag, so it
     // does not run inside this slice. Drive it directly — that also proves it is idempotent,
     // which matters because it runs on every restart.
@@ -73,11 +54,10 @@ class CveFixRepositoriesTest {
     initializer.run(null);
     initializer.run(null);
 
-    assertThat(mongoTemplate.indexOps(UnfixableFindingRecord.class).getIndexInfo())
+    assertThat(mongoTemplate.indexOps(CveFixRunRecord.class).getIndexInfo())
         .anySatisfy(
             index -> {
-              assertThat(index.getName()).isEqualTo("purl");
-              assertThat(index.isUnique()).isTrue();
+              assertThat(index.getName()).isEqualTo("startedAt");
             });
   }
 }

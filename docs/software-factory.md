@@ -1,159 +1,115 @@
 # Software Factory
 
-`software-factory/` is a Spring Boot service that runs coding agents against
-*this* repository — reviewing pull requests, patching CVEs, deploying merges and
-harvesting review feedback into guidance. It is a modular monolith: one JVM, four
-modules, each owning a Temporal task queue.
+`software-factory/` is a Temporal-backed modular monolith. Two containers run the same image:
+`software-factory` receives the signed GitHub webhook and owns tracker credentials, while
+`deployer` has no ingress and exclusively owns the Docker socket. Workflow pollers may exist in
+both containers; conditional activity beans determine where side effects can execute.
 
-This document is the architectural map. Operating it is covered by
-[runbooks/software-factory.md](runbooks/software-factory.md); the original design
-rationale for the code-review module is in
-[temporal-code-reviewer.md](temporal-code-reviewer.md).
+The administration console at `/admin/software-factory` reports the effective flag, workflow and
+activity pollers, trigger, and Temporal schedule for every module. Its browser calls go through the
+admin-role-protected backend. The backend alone holds `FACTORY_TRIGGER_TOKEN` and calls unrouted,
+token-protected factory endpoints over the compose network.
 
-## Shape
+## Modules and production defaults
 
-Two containers run the **same image**. What separates them is configuration, not
-code:
+| Module | Queue | Normal trigger | Production default | Manual admin action |
+| --- | --- | --- | --- | --- |
+| Code review | `code-review` | Pull-request webhook | On | None; status only |
+| Feedback | `review-feedback` | Pull-request close webhook | On (`FACTORY_FEEDBACK_ENABLED`) | Process a closed PR |
+| Vulnerability scan | `cve-fix` | Daily Temporal schedule | On (`FACTORY_CVEFIX_ENABLED`) | Scan now |
+| Deploy | `deploy` | Successful `Publish` workflow | Executor and automatic trigger off | Confirmed redeploy of the running SHA |
+| Linear filing | `linear` | Activity requested by another workflow | On (`FACTORY_LINEAR_ENABLED`) | None; it is an activity sink |
+| Platform backup | `platform-backup` | 02:00 Europe/London schedule | On (`FACTORY_PLATFORM_BACKUP_ENABLED`) | Dry run or real capture |
 
-```mermaid
-flowchart LR
-    gh[GitHub] -->|signed webhook| nginx[nginx]
-    nginx -->|POST /webhooks/github only| sf
+Application-level flag defaults remain false because the same image also runs as the differently
+privileged `deployer`. The defaults above are applied only to each owning production service in
+`docker-compose.prod.yml`. An explicit environment value of `false` still wins.
 
-    subgraph pi [Raspberry Pi]
-        sf[software-factory<br/>ingress, no docker.sock]
-        dep[deployer<br/>docker.sock, no ingress]
-        tq[(Temporal)]
-        mongo[(MongoDB<br/>software_factory)]
-        stack[Production compose stack]
+Temporal schedules are durable server state. A feature flag and its schedule can therefore
+disagree: the console reports both. A newly-created CVE or platform-backup schedule is active, but
+an operator's existing pause is preserved across restarts.
 
-        sf <--> tq
-        dep <--> tq
-        sf --> mongo
-        dep --> mongo
-        dep -->|docker compose| stack
-    end
-
-    sf -->|claude CLI| anthropic[Claude]
-    sf -->|comments, PRs, issues| gh
-    dep -->|issues, commit comments| gh
-```
-
-`software-factory` terminates untrusted internet traffic and therefore must not
-hold the Docker socket. `deployer` holds the socket and a read-write mount of the
-deploy directory, and has no ingress at all. Both register *workflow* pollers on
-every queue — classpath scanning is unconditional — but only `deployer` has an
-implementation of the side-effecting deploy activities, gated by
-`@ConditionalOnProperty(factory.deploy.enabled)`. That single annotation is what
-confines the socket.
-
-Every agent run is a Temporal activity shelling out to a pinned Claude Code
-binary baked into the image, in a fresh git workspace, with an explicit turn,
-timeout and tool budget.
-
-## The four modules
-
-| Module | Queue | Trigger | Output | Runbook |
-|--------|-------|---------|--------|---------|
-| `codereview` | `code-review` | PR opened/synchronised webhook | Review comment on the PR | [software-factory.md](runbooks/software-factory.md) |
-| `feedback` | `review-feedback` | PR merged, or `POST /api/feedback` | PR against `simonjamesrowe/agent-setup` adding distilled guidance | [software-factory.md](runbooks/software-factory.md) |
-| `cvefix` | `cve-fix` | Daily Temporal schedule (`cve-fix-daily`) | PR bumping vulnerable dependencies, driven to green CI | [cvefix.md](runbooks/cvefix.md) |
-| `deploy` | `deploy` | `Publish` workflow succeeded on `main` | Production deploy, or rollback + issue | [deploy.md](runbooks/deploy.md) |
-
-Three of the four are **off by default** (`FACTORY_FEEDBACK_ENABLED`,
-`FACTORY_CVEFIX_ENABLED`, `FACTORY_DEPLOY_ENABLED` /
-`FACTORY_DEPLOY_TRIGGER_ENABLED`). Merging a change to any of them does nothing
-until an operator opts in.
+## Module behavior
 
 ### Code review
 
-```mermaid
-sequenceDiagram
-    participant GH as GitHub
-    participant W as Webhook receiver
-    participant T as Temporal
-    participant A as Review activity
-    participant C as Claude Code
+An exact pull-request head SHA is cloned into a fresh workspace and reviewed read-only. The agent
+can publish review comments but cannot push, approve, merge, or trigger a manual admin review.
 
-    GH->>W: pull_request (HMAC signed)
-    W->>W: verify signature, filter event
-    W->>T: start CodeReviewWorkflow
-    W-->>GH: 202 Accepted
-    T->>A: clone repo at exact head SHA
-    A->>C: read-only review, budgeted turns
-    C-->>A: findings
-    A->>GH: post review comment
-```
+### Feedback
 
-The workflow reviews an exact commit SHA and is read-only: it does not push, fix,
-approve, block merges, or touch other repositories. Guards refuse changes that
-are pointless to review (over 250 changed files or 2 MiB of diff) rather than
-truncating them silently.
+An eligible closed PR is harvested into durable lessons. When useful lessons exist, the workflow
+first creates one Linear issue keyed by repository and pull-request number. It includes the source
+PR, evidence, proposed guidance, scope, and acceptance criteria. Guidance PRs reference that issue
+and are attached back to it. `FACTORY_FEEDBACK_ENABLED=false` disables both webhook and manual
+starts without affecting other modules.
 
-### Feedback loop
+### Vulnerability scan
 
-A merged PR's review conversation is harvested, distilled into durable "lessons",
-and proposed as a pull request against the `agent-setup` repository — so guidance
-that came out of a human correction ends up in the instructions future agents
-read. Harvest runs on a cheap model, distillation on a stronger one.
-
-### CVE fix
-
-A daily schedule reads findings from Dependency-Track (over the internal compose
-network, never the public hostname), asks the agent to bump the affected
-dependency, opens a PR, then **polls CI** and re-runs the agent up to a repair
-budget. The agent has no `Bash` tool and the image carries no Gradle, Node or
-Docker — CI is deliberately the only build environment.
+The daily or manual workflow reads all current Dependency-Track findings and files one consolidated
+Linear report for the repository. A repeated scan updates the same open issue with a complete
+snapshot. The module has no git workspace, fix agent, push, pull-request, or CI repair path. A
+future Linear-triggered remediation agent is deliberately out of scope.
 
 ### Deploy
 
-A merge to `main` deploys itself. The `Publish` workflow succeeding sends a
-`workflow_run` webhook, which signals a Temporal workflow on the fixed id
-`deploy-prod` carrying the head SHA. `deployer` then runs phases of
-`scripts/restart-prod.sh`:
+Automatic deployment remains opt-in through separate trigger and executor flags. The admin action
+does not enable arbitrary deployment: frontend and backend must report the same currently running
+40-character commit and the administrator must type `REDEPLOY <short-sha>`. The backend validates
+both immediately before signalling the existing fixed-id `deploy-prod` workflow.
 
-```mermaid
-flowchart LR
-    sync[sync-config] --> mon[maintenance-on] --> pull[pull] --> rec[recreate]
-    rec --> ver[verify] --> moff[maintenance-off] --> vpub[verify-public]
-    ver -.failure.-> rb[rollback + triage + GitHub issue]
-```
+### Linear filing
 
-`sync-config` decides which services a compose change affects *before* moving
-`HEAD`, so the deploy directory never ends up ahead of what is running. On
-failure the previous images are restored and a `Bash`-less Claude triage writes
-up what happened on a GitHub issue and a commit comment.
+This is an activity-only queue, not a standalone workflow or admin action. Producers use a stable
+fingerprint and the sink creates, comments on, suppresses, or files a regression according to the
+existing Linear issue state. Feedback can additionally attach guidance PR URLs idempotently.
 
-**The `deployer` never recreates itself.** After any merge touching
-`software-factory/`, update it by hand:
+### Platform backup
 
-```bash
-docker compose -f docker-compose.prod.yml up -d --no-deps deployer
-```
+The `deployer` executes `scripts/backup-platform.sh`; the public-facing factory and backend never
+receive Docker access. The schedule is active nightly at 02:00 Europe/London. Admin dry-run and
+real-run requests use Temporal and reject a conflicting scheduled or manual capture. Restore stays
+a host recovery operation documented in
+[platform-backup-restore.md](runbooks/platform-backup-restore.md).
 
-## Running it locally
+## Local operation
 
 ```bash
-docker compose up -d temporal
+docker compose up -d temporal mongodb
 ./gradlew :software-factory:bootRun
 ```
 
-- Webhook + internal API: <http://localhost:8090>
-- Health: <http://localhost:8091/actuator/health>
-- Temporal UI: <http://localhost:8233>
+- Factory API: `http://localhost:8090`
+- Factory management port: `http://localhost:8091/actuator/health`
+- Temporal UI: `http://localhost:8233`
 
-Only `POST /webhooks/github` is routed by nginx in production, with an
-exact-match `location =`. The internal `/api/reviews` and `/api/feedback`
-endpoints are unrouted *and* token-protected.
+Only the exact GitHub webhook route is exposed by production nginx. Every manual action route is
+both unrouted and protected by `X-Factory-Token`, and `FactoryPublicSurfaceTest` reads
+`config/nginx/nginx-proxy.conf` to keep that true.
 
-## Things that bite
+`GET /api/factory/status` is unrouted but **unauthenticated**, and it has to be: the backend asks
+both containers for it, and `deployer` deliberately holds no `FACTORY_TRIGGER_TOKEN`. Requiring one
+would make the deployer report itself permanently unreachable, disabling the deploy and
+platform-backup actions. `GET /api/factory/runs/{workflowId}` beside it does require the token,
+because a run's `detail` is free-text diagnostics rather than a boolean.
 
-- **A healthy container is not a working factory.** `software-factory` can be
-  `healthy` with no Temporal poller registered: webhooks return `202` and nothing
-  ever reviews. Check pollers on the task queue, not the healthcheck.
-- **Some setup can only be done by a human** with GitHub org admin — installing
-  the App, granting permissions, subscribing to `workflow_run`. Those are
-  tracked in
-  [software-factory-manual-actions.md](runbooks/software-factory-manual-actions.md).
-- When a PR gets no review comment at all, start from the
-  `code-review-triage` skill rather than guessing.
+## Diagnostic rule
+
+A healthy container is not proof that a module can execute. **Four** independent things have to
+agree, and the admin page presents them separately for exactly that reason:
+
+1. the configured flag in the owning container;
+2. the required Temporal pollers — workflow and activity counted separately, and `null` rather
+   than `0` when Temporal could not be asked, because "no poller" and "we do not know" call for
+   different actions. The `linear` queue is activity-only by design and is exempt from the
+   workflow-poller check;
+3. for `cvefix` and `platformbackup`, the schedule's existence and pause state;
+4. the module's own prerequisites — `ModulePrerequisites` reports, per module, an enabled flag
+   whose credential or host path is still unset. Four flags now default true while
+   `LINEAR_API_KEY`, `FACTORY_LINEAR_TEAM_KEY` and `DEPENDENCYTRACK_API_KEY` still default empty,
+   so "enabled but not usable" is the most likely state after a first deploy. It is also logged
+   once at startup, since an operator who has just flipped a flag reads container logs first.
+
+A module is `ready` only when all four agree, and the backend refuses a manual action whose module
+is not ready — a workflow started on a queue nothing polls does not fail, it sits in Temporal
+looking accepted until an activity timeout.

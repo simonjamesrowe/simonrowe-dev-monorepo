@@ -1,12 +1,12 @@
 package com.simonrowe.factory.feedback.api;
 
-import com.simonrowe.factory.codereview.config.CodeReviewProperties;
+import com.simonrowe.factory.admin.FactoryTokenAuthenticator;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
+import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.feedback.domain.FeedbackProgress;
 import com.simonrowe.factory.feedback.domain.FeedbackRequest;
+import com.simonrowe.factory.linear.config.LinearProperties;
 import jakarta.validation.Valid;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,24 +31,34 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/feedback")
 public class FeedbackController {
 
-  private final CodeReviewProperties properties;
+  private final FactoryTokenAuthenticator authenticator;
+  private final FeedbackProperties feedbackProperties;
   private final FeedbackWorkflowService workflowService;
   private final GitHubCredentials credentials;
+  private final LinearProperties linearProperties;
 
   public FeedbackController(
-      final CodeReviewProperties properties,
+      final FactoryTokenAuthenticator authenticator,
+      final FeedbackProperties feedbackProperties,
       final FeedbackWorkflowService workflowService,
-      final GitHubCredentials credentials) {
-    this.properties = properties;
+      final GitHubCredentials credentials,
+      final LinearProperties linearProperties) {
+    this.authenticator = authenticator;
+    this.feedbackProperties = feedbackProperties;
     this.workflowService = workflowService;
     this.credentials = credentials;
+    this.linearProperties = linearProperties;
   }
 
   @PostMapping
   public ResponseEntity<FeedbackAccepted> start(
       @RequestHeader(value = "X-Factory-Token", required = false) final String token,
       @Valid @RequestBody final ManualFeedbackRequest request) {
-    authenticate(token);
+    authenticator.authenticate(token);
+    if (!feedbackProperties.enabled()) {
+      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+          "Feedback processing is disabled");
+    }
     FeedbackAccepted accepted =
         workflowService.start(
             new FeedbackRequest(
@@ -56,7 +66,8 @@ public class FeedbackController {
                 request.repository(),
                 request.pullNumber(),
                 credentials.installationId(request.owner(), request.repository()),
-                request.dryRun()));
+                request.dryRun(),
+                linearProperties.enabled()));
     // started=false means the workflow id is not currently eligible to (re)start — either a
     // prior run is still in flight, or it already completed successfully and
     // ALLOW_DUPLICATE_FAILED_ONLY refuses to replace that. A 202 here would silently claim
@@ -69,21 +80,8 @@ public class FeedbackController {
   public FeedbackProgress progress(
       @RequestHeader(value = "X-Factory-Token", required = false) final String token,
       @PathVariable final String workflowId) {
-    authenticate(token);
+    authenticator.authenticate(token);
     return workflowService.progress(workflowId);
   }
 
-  private void authenticate(final String suppliedToken) {
-    String configured = properties.api().triggerToken();
-    if (configured == null || configured.isBlank()) {
-      throw new ResponseStatusException(
-          HttpStatus.SERVICE_UNAVAILABLE, "Manual feedback trigger is disabled");
-    }
-    byte[] expected = configured.getBytes(StandardCharsets.UTF_8);
-    byte[] supplied =
-        suppliedToken == null ? new byte[0] : suppliedToken.getBytes(StandardCharsets.UTF_8);
-    if (!MessageDigest.isEqual(expected, supplied)) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
-    }
-  }
 }

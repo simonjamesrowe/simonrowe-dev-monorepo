@@ -34,9 +34,8 @@ import org.springframework.stereotype.Component;
  *       and updating it afterwards. An update rewrites the action, spec and policy — the parts this
  *       code owns — but carries the server's current paused flag forward, because re-pausing a
  *       schedule the operator unpaused would silently stop the backup on every deploy.
- *   <li><strong>Created paused.</strong> Turning the feature flag on must not immediately start
- *       reading production datastores and writing to Drive; the operator unpauses after watching a
- *       manual {@code --dry-run}. See {@code docs/runbooks/platform-backup-restore.md}.
+ *   <li><strong>Created active.</strong> Enabling backup means the first nightly capture runs
+ *       without a second unpause step; an existing operator pause is still preserved.
  * </ul>
  *
  * <p>A calendar spec, not an interval: 02:00 Europe/London must stay 02:00 across a restart, and a
@@ -49,7 +48,7 @@ import org.springframework.stereotype.Component;
 public class PlatformBackupScheduleInitializer implements ApplicationRunner {
 
   /** Identifier of the schedule, as it appears in the Temporal UI. */
-  static final String SCHEDULE_ID = "platform-backup-nightly";
+  public static final String SCHEDULE_ID = "platform-backup-nightly";
 
   /** Base workflow id of each scheduled run; Temporal appends the scheduled time. */
   static final String WORKFLOW_ID = "platform-backup";
@@ -70,8 +69,8 @@ public class PlatformBackupScheduleInitializer implements ApplicationRunner {
   public void run(final ApplicationArguments args) {
     try {
       scheduleClient.createSchedule(
-          SCHEDULE_ID, schedule(true), ScheduleOptions.newBuilder().build());
-      LOG.info("Created Temporal schedule {} (paused; unpause after a dry run)", SCHEDULE_ID);
+          SCHEDULE_ID, schedule(false), ScheduleOptions.newBuilder().build());
+      LOG.info("Created active Temporal schedule {}", SCHEDULE_ID);
     } catch (ScheduleAlreadyRunningException alreadyRunning) {
       scheduleClient
           .getHandle(SCHEDULE_ID)

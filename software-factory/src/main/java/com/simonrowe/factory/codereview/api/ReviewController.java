@@ -1,12 +1,10 @@
 package com.simonrowe.factory.codereview.api;
 
-import com.simonrowe.factory.codereview.config.CodeReviewProperties;
+import com.simonrowe.factory.admin.FactoryTokenAuthenticator;
 import com.simonrowe.factory.codereview.domain.ReviewProgress;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
 import jakarta.validation.Valid;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,15 +27,15 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/reviews")
 public class ReviewController {
 
-  private final CodeReviewProperties properties;
+  private final FactoryTokenAuthenticator authenticator;
   private final ReviewWorkflowService workflowService;
   private final GitHubCredentials credentials;
 
   public ReviewController(
-      final CodeReviewProperties properties,
+      final FactoryTokenAuthenticator authenticator,
       final ReviewWorkflowService workflowService,
       final GitHubCredentials credentials) {
-    this.properties = properties;
+    this.authenticator = authenticator;
     this.workflowService = workflowService;
     this.credentials = credentials;
   }
@@ -46,7 +44,7 @@ public class ReviewController {
   public ResponseEntity<ReviewAccepted> start(
       @RequestHeader(value = "X-Factory-Token", required = false) final String token,
       @Valid @RequestBody final ManualReviewRequest request) {
-    authenticate(token);
+    authenticator.authenticate(token);
     ReviewAccepted accepted =
         workflowService.start(
             new ReviewRequest(
@@ -63,21 +61,8 @@ public class ReviewController {
   public ReviewProgress progress(
       @RequestHeader(value = "X-Factory-Token", required = false) final String token,
       @PathVariable final String workflowId) {
-    authenticate(token);
+    authenticator.authenticate(token);
     return workflowService.progress(workflowId);
   }
 
-  private void authenticate(final String suppliedToken) {
-    String configured = properties.api().triggerToken();
-    if (configured == null || configured.isBlank()) {
-      throw new ResponseStatusException(
-          HttpStatus.SERVICE_UNAVAILABLE, "Manual review trigger is disabled");
-    }
-    byte[] expected = configured.getBytes(StandardCharsets.UTF_8);
-    byte[] supplied =
-        suppliedToken == null ? new byte[0] : suppliedToken.getBytes(StandardCharsets.UTF_8);
-    if (!MessageDigest.isEqual(expected, supplied)) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
-    }
-  }
 }

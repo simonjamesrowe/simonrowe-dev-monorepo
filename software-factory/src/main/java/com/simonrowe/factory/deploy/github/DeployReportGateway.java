@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
  * --state all} on this repository had never returned a single issue, so that half of the report
  * was going somewhere nobody looks.
  *
- * <p>Modelled on {@code CveFixPrGateway}: same client, same API version header, same run-time
+ * <p>Uses the shared GitHub client, API version header, and run-time
  * installation-token resolution. Deliberately a separate class rather than an extension of it —
  * that gateway is about one long-lived pull request, and this one about an append-only stream of
  * reports, so the only thing they would share is HTTP plumbing.

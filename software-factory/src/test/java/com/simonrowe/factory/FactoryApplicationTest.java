@@ -52,11 +52,11 @@ class FactoryApplicationTest {
   }
 
   @Test
-  void startsWithEveryDeployFlagOffAndNothingThatCouldDeploy() {
+  void startsWithDeployExecutionOffButTheGuardedManualClientAvailable() {
     // The default shape, and the one this feature ships in. Merging must change nothing in
     // production until an operator opts in.
     assertThat(context.getBeanNamesForType(DeployActivitiesImpl.class)).isEmpty();
-    assertThat(context.getBeanNamesForType(DeployWorkflowService.class)).isEmpty();
+    assertThat(context.getBeanNamesForType(DeployWorkflowService.class)).hasSize(1);
 
     // And no deploy index is created. Same reason CveFixIndexInitializer is gated: an
     // unreachable Mongo must not fail this context and take the webhook receiver and the

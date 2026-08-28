@@ -16,6 +16,11 @@ import com.simonrowe.factory.feedback.domain.LessonConfidence;
 import com.simonrowe.factory.feedback.domain.LessonScope;
 import com.simonrowe.factory.feedback.domain.LessonSource;
 import com.simonrowe.factory.feedback.domain.ReviewConversation;
+import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.linear.domain.FiledIssue;
+import com.simonrowe.factory.linear.domain.FilingDecision;
+import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.client.WorkflowFailedException;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.testing.TestWorkflowEnvironment;
@@ -51,10 +56,19 @@ class ReviewFeedbackWorkflowTest {
   }
 
   private FeedbackResult run(final FakeActivities activities, final FeedbackRequest request) {
+    return run(activities, request, new FakeLinearActivities());
+  }
+
+  private FeedbackResult run(
+      final FakeActivities activities,
+      final FeedbackRequest request,
+      final FakeLinearActivities linear) {
     try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
       Worker worker = environment.newWorker(FeedbackTaskQueues.REVIEW_FEEDBACK);
       worker.registerWorkflowImplementationTypes(ReviewFeedbackWorkflowImpl.class);
       worker.registerActivitiesImplementations(activities);
+      Worker linearWorker = environment.newWorker(LinearTaskQueues.LINEAR);
+      linearWorker.registerActivitiesImplementations(linear);
       environment.start();
       ReviewFeedbackWorkflow workflow =
           environment
@@ -156,6 +170,72 @@ class ReviewFeedbackWorkflowTest {
         .isEqualTo(DistillationStatus.FAILED);
   }
 
+  @Test
+  void filesTheLinearIssueBeforeDistillingAndAttachesEveryProposal() {
+    // Order matters: the issue is the durable record of the lesson, and distillation is the
+    // expensive step that can fail. Filing second would lose the finding whenever it did.
+    FakeActivities activities =
+        new FakeActivities(
+            conversation(true),
+            List.of(lesson()),
+            new DistillationOutcome(
+                DistillationStatus.PROPOSED,
+                List.of("https://pr/feedback/1", "https://pr/feedback/2"),
+                null));
+    FakeLinearActivities linear = new FakeLinearActivities();
+
+    FeedbackResult result = run(activities, REQUEST, linear);
+
+    assertThat(result.distillationStatus()).isEqualTo(DistillationStatus.PROPOSED);
+    assertThat(linear.filings).hasSize(1);
+    assertThat(linear.attachedUrls)
+        .containsExactly("https://pr/feedback/1", "https://pr/feedback/2");
+  }
+
+  @Test
+  void keysTheFeedbackTicketOnTheSourcePullRequest() {
+    // One ticket per closed pull request: re-running the loop on the same PR must comment on the
+    // existing ticket rather than filing a second one, which the fingerprint key parts decide.
+    FakeLinearActivities linear = new FakeLinearActivities();
+
+    run(new FakeActivities(conversation(true), List.of(lesson()),
+        new DistillationOutcome(DistillationStatus.PROPOSED, List.of(), null)), REQUEST, linear);
+
+    assertThat(linear.filings.getFirst().producer()).isEqualTo("feedback");
+    assertThat(linear.filings.getFirst().keyParts())
+        .containsExactly("example", "project", "42");
+  }
+
+  @Test
+  void neverDistillsWhenTheTicketWasDeclined() {
+    // A suppressed filing means a human cancelled this ticket. Generating guidance pull requests
+    // anyway would reintroduce, as a PR, exactly the advice they declined as an issue.
+    FakeActivities activities =
+        new FakeActivities(conversation(true), List.of(lesson()), null);
+    FakeLinearActivities linear = new FakeLinearActivities(FilingDecision.SUPPRESSED);
+
+    FeedbackResult result = run(activities, REQUEST, linear);
+
+    assertThat(result.distillationStatus()).isEqualTo(DistillationStatus.NO_CHANGE);
+    assertThat(activities.distilled).isFalse();
+    assertThat(linear.attachedUrls).isEmpty();
+  }
+
+  @Test
+  void failsFastRatherThanStallingWhenTheSinkIsSwitchedOff() {
+    // With factory.linear.enabled false nothing polls the linear queue, so an unguarded schedule
+    // would hold the run open until the activity's scheduleToClose timeout instead of failing.
+    FakeActivities activities =
+        new FakeActivities(conversation(true), List.of(lesson()), null);
+
+    assertThatThrownBy(() -> run(
+        activities,
+        new FeedbackRequest("example", "project", 42, 999L, false, false)))
+        .isInstanceOf(WorkflowFailedException.class);
+
+    assertThat(activities.distilled).isFalse();
+  }
+
   private static final class FakeActivities implements FeedbackActivities {
     private final ReviewConversation conversation;
     private final List<Lesson> lessons;
@@ -203,7 +283,9 @@ class ReviewFeedbackWorkflowTest {
 
     @Override
     public DistillationOutcome distillAndPropose(
-        final FeedbackRequest request, final List<Lesson> lessonList) {
+        final FeedbackRequest request,
+        final List<Lesson> lessonList,
+        final String linearIssueUrl) {
       distilled = true;
       if (distillFailure != null) {
         throw distillFailure;
@@ -212,9 +294,46 @@ class ReviewFeedbackWorkflowTest {
     }
 
     @Override
+    public void recordLinearIssue(
+        final FeedbackRequest request,
+        final String issueIdentifier,
+        final String issueUrl) {
+      // The workflow test only needs this activity to complete; persistence is tested separately.
+    }
+
+    @Override
     public void recordDistillation(
         final FeedbackRequest request, final DistillationOutcome distillationOutcome) {
       recordedOutcomes.add(distillationOutcome);
+    }
+  }
+
+  private static final class FakeLinearActivities implements LinearActivities {
+    private final FilingDecision decision;
+    final List<String> attachedUrls = new ArrayList<>();
+    final List<IssueFiling> filings = new ArrayList<>();
+
+    FakeLinearActivities() {
+      this(FilingDecision.FILED_NEW);
+    }
+
+    FakeLinearActivities(final FilingDecision decision) {
+      this.decision = decision;
+    }
+
+    @Override
+    public FiledIssue fileIssue(final IssueFiling filing) {
+      filings.add(filing);
+      if (decision == FilingDecision.SUPPRESSED) {
+        return new FiledIssue(decision, null, null, null, "fp");
+      }
+      return new FiledIssue(
+          decision, "linear-id", "SIM-7", "https://linear/SIM-7", "fp");
+    }
+
+    @Override
+    public void attachUrl(final String issueId, final String url, final String title) {
+      attachedUrls.add(url);
     }
   }
 }
