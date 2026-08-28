@@ -18,8 +18,10 @@ public class V025AddContinuousLearningToProfile {
     Document profile = mongoTemplate.findOne(profileQuery, Document.class, "profiles");
     if (profile != null) {
       String desc = profile.getString("description");
-      if (desc != null && !desc.contains("what is relevant today might not be so relevant tomorrow")) {
-        desc = desc + "\n\nI never stand still. I'm constantly upgrading my skills because what is relevant today might not be so relevant tomorrow.";
+      if (desc != null
+          && !desc.contains("what is relevant today might not be so relevant tomorrow")) {
+        desc = desc + "\n\nI never stand still. I'm constantly upgrading my skills "
+            + "because what is relevant today might not be so relevant tomorrow.";
         mongoTemplate.updateFirst(
             profileQuery,
             new Update().set("description", desc).set("updatedAt", new Date()),

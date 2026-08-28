@@ -20,9 +20,11 @@ public class V024FixExperienceAndProfileDetails {
     Document profile = mongoTemplate.findOne(profileQuery, Document.class, "profiles");
     if (profile != null) {
       String desc = profile.getString("description");
-      if (desc != null && !desc.contains("Software Factory") && !desc.contains("software factories")) {
+      if (desc != null && !desc.contains("Software Factory")
+          && !desc.contains("software factories")) {
         desc = desc + "\n\nRecently, I've been heavily focused on exploring the capabilities of "
-            + "multiple autonomous agents and building **Software Factories** to revolutionize how we "
+            + "multiple autonomous agents and building **Software Factories** to revolutionize how "
+            + "we "
             + "approach complex development tasks.";
         mongoTemplate.updateFirst(
             profileQuery,
@@ -32,7 +34,8 @@ public class V024FixExperienceAndProfileDetails {
       }
     }
 
-    // 2. Global Logo & Short Description (Applying V023 changes again in case they were lost, and fixing the Global logo)
+    // 2. Global Logo & Short Description (Applying V023 changes again in case they
+    // were lost, and fixing the Global logo)
     Query globalQuery = new Query(Criteria.where("company").is("Global"));
     Document newImage = new Document("url", "/images/global-logo.png")
                                  .append("name", "Global Logo")
@@ -47,10 +50,15 @@ public class V024FixExperienceAndProfileDetails {
     if (macquarie != null) {
       String ld = macquarie.getString("longDescription");
       if (ld != null && !ld.contains("PARS")) {
-        ld = "Brought new technology and practices to the Risk Management Group by transitioning monolithic GE-type applications running on WebSphere to modern Tomcat applications with Spring.\n\n"
-             + "* Built the new JSP tag library for the Position Aggregation Reporting System (PARS)\n"
+        ld = "Brought new technology and practices to the Risk Management Group by transitioning "
+            + "monolithic GE-type applications running on WebSphere to modern Tomcat applications "
+            + "with Spring.\n\n"
+             + "* Built the new JSP tag library for the Position Aggregation Reporting System "
+             + "(PARS)\n"
              + "* Developed and maintained credit risk platforms\n"
-             + "* Modernized the frontend architecture by introducing and implementing jQuery across multiple projects\n\n" + ld;
+             + "* Modernized the frontend architecture by introducing and implementing jQuery "
+             + "across multiple projects\n\n"
+             + ld;
         mongoTemplate.updateFirst(macquarieQuery, new Update().set("longDescription", ld), "jobs");
       }
     }
@@ -61,10 +69,14 @@ public class V024FixExperienceAndProfileDetails {
     if (civica != null) {
       String ld = civica.getString("longDescription");
       if (ld != null && !ld.contains("[Authority]")) {
-        ld = "Full-stack developer working primarily on the [Authority](https://www.civica.com/en-au/product-pages/authority/) enterprise application, a comprehensive local government software suite.\n\n"
+        ld = "Full-stack developer working primarily on the "
+            + "[Authority](https://www.civica.com/en-au/product-pages/authority/) enterprise "
+            + "application, a comprehensive local government software suite.\n\n"
              + "* Focused heavily on building and maintaining the Rates module for local councils\n"
              + "* Developed new functionality within the Assets module\n"
-             + "* Gained broad, full-stack experience across Java, JEE, and numerous database platforms\n\n" + ld;
+             + "* Gained broad, full-stack experience across Java, JEE, and numerous database "
+             + "platforms\n\n"
+             + ld;
         mongoTemplate.updateFirst(civicaQuery, new Update().set("longDescription", ld), "jobs");
       }
     }
@@ -75,9 +87,13 @@ public class V024FixExperienceAndProfileDetails {
     if (wc != null) {
       String ld = wc.getString("longDescription");
       if (ld != null && !ld.contains("Watir")) {
-        ld = "Led a team building a self-service portal enabling customers to manage and pay their workers' compensation insurance premiums online.\n\n"
-             + "* Migrated the legacy Castor application from Oracle Forms to a cloud-native, modern Java Spring SPA (Single Page Application) architecture\n"
-             + "* Pioneered the use of UI-based end-to-end testing by introducing Watir and Cucumber into the testing lifecycle\n\n" + ld;
+        ld = "Led a team building a self-service portal enabling customers to manage and pay their "
+            + "workers' compensation insurance premiums online.\n\n"
+             + "* Migrated the legacy Castor application from Oracle Forms to a cloud-native, "
+             + "modern Java Spring SPA (Single Page Application) architecture\n"
+             + "* Pioneered the use of UI-based end-to-end testing by introducing Watir and "
+             + "Cucumber into the testing lifecycle\n\n"
+             + ld;
         mongoTemplate.updateFirst(wcQuery, new Update().set("longDescription", ld), "jobs");
       }
     }
@@ -88,10 +104,14 @@ public class V024FixExperienceAndProfileDetails {
     if (ump != null) {
       String ld = ump.getString("longDescription");
       if (ld != null && !ld.contains("UMPG Sync")) {
-        ld = "Senior Director driving cloud migration for business-critical applications, transitioning systems to 12-15 factor cloud-native apps.\n\n"
-             + "* Built and maintained [UMPG Sync](https://www.umpg.com) for sync licensing, handling high-value music placement in film, TV, and advertising\n"
+        ld = "Senior Director driving cloud migration for business-critical applications, "
+            + "transitioning systems to 12-15 factor cloud-native apps.\n\n"
+             + "* Built and maintained [UMPG Sync](https://www.umpg.com) for sync licensing, "
+             + "handling high-value music placement in film, TV, and advertising\n"
              + "* Developed UMPG Works, the core copyright management system\n"
-             + "* Started work on [UMPG Window](https://www.umpgwindow.com), completely rebuilding the royalty window and integrating a modern identity solution\n\n" + ld;
+             + "* Started work on [UMPG Window](https://www.umpgwindow.com), completely rebuilding "
+             + "the royalty window and integrating a modern identity solution\n\n"
+             + ld;
         mongoTemplate.updateFirst(umpQuery, new Update().set("longDescription", ld), "jobs");
       }
     }
@@ -102,9 +122,11 @@ public class V024FixExperienceAndProfileDetails {
     if (pivotal != null) {
       String ld = pivotal.getString("longDescription");
       if (ld != null && !ld.contains("technical pre-sales")) {
-        ld = "Technical pre-sales and Platform Architect aiding clients to become successful by building cloud-native apps utilizing the Spring ecosystem.\n\n"
+        ld = "Technical pre-sales and Platform Architect aiding clients to become successful by "
+            + "building cloud-native apps utilizing the Spring ecosystem.\n\n"
              + "* Troubleshooting complex issues on Cloud Foundry\n"
-             + "* Delivered Cloud-Native Developer workshops for Spring, Steeltoe, and .NET\n\n" + ld;
+             + "* Delivered Cloud-Native Developer workshops for Spring, Steeltoe, and .NET\n\n"
+             + ld;
         mongoTemplate.updateFirst(pivotalQuery, new Update().set("longDescription", ld), "jobs");
       }
     }
