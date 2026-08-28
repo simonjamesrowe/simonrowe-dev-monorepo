@@ -16,8 +16,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Tests the factory proxy client against a JDK {@link HttpServer} fake, following
@@ -34,6 +36,9 @@ class FactoryAdminClientTest {
   private static final String TOKEN = "trigger-token";
   private static final String SHA = "0123456789abcdef0123456789abcdef01234567";
   private static final String UNREACHABLE = "http://127.0.0.1:1";
+  private static final String REVIEW_ACCEPTED =
+      "{\"workflowId\":\"code-review-simonjamesrowe-simonrowe-dev-monorepo-130-uuid\","
+          + "\"started\":true}";
   private static final String FEEDBACK_ACCEPTED =
       "{\"workflowId\":\"review-feedback-42\",\"started\":true}";
 
@@ -86,6 +91,54 @@ class FactoryAdminClientTest {
 
     assertThat(module.missingPrerequisites()).containsExactly("Linear API key is not set");
     assertThat(module.ready()).isFalse();
+  }
+
+  @Test
+  void neverSendsExpectedHeadShaOnManualReview() throws IOException {
+    // Load-bearing, and the reason this action exists at all. The webhook builds its workflow id
+    // from the head SHA under REJECT_DUPLICATE, so the same commit can never be re-reviewed that
+    // way — not even after a failed review. Omitting the field makes the factory mint a UUID.
+    startFactory(Map.of("/api/reviews", json(202, REVIEW_ACCEPTED)));
+    startDeployer(Map.of());
+
+    client().startCodeReview("simonjamesrowe", "simonrowe-dev-monorepo", 130, true);
+
+    assertThat(bodiesSeen).hasSize(1);
+    assertThat(bodiesSeen.get(0))
+        .doesNotContain("expectedHeadSha")
+        .contains("\"pullNumber\":130")
+        .contains("\"publish\":true");
+  }
+
+  @Test
+  void carriesTheDryRunModeOnManualReview() throws IOException {
+    startFactory(Map.of("/api/reviews", json(202, REVIEW_ACCEPTED)));
+    startDeployer(Map.of());
+
+    FactoryRunAccepted accepted =
+        client().startCodeReview("simonjamesrowe", "simonrowe-dev-monorepo", 130, false);
+
+    assertThat(bodiesSeen.get(0)).contains("\"publish\":false");
+    // Spelled out because a dry run posts nothing at all, including failure notices — without
+    // saying so the operator has no way to know why the pull request stayed silent.
+    assertThat(accepted.detail())
+        .isEqualTo("Dry-run review accepted for pull request 130; it will post nothing to GitHub");
+  }
+
+  @Test
+  void reportsReviewThatDidNotStartAsConflict() throws IOException {
+    // ReviewController answers 202 either way, so `started` is the only signal that the workflow
+    // was refused. Passing that through as an acceptance would claim a review that never ran.
+    startFactory(
+        Map.of("/api/reviews",
+            json(202, "{\"workflowId\":\"code-review-x\",\"started\":false}")));
+    startDeployer(Map.of());
+
+    assertThatThrownBy(
+        () -> client().startCodeReview("simonjamesrowe", "simonrowe-dev-monorepo", 130, true))
+        .isInstanceOf(ResponseStatusException.class)
+        .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
   }
 
   @Test

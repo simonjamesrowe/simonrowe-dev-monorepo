@@ -177,9 +177,10 @@ class SecurityConfigTest extends AbstractIntegrationTest {
 
   @Test
   void softwareFactoryActionsRejectAnonymous() throws Exception {
-    // Every start is a POST, and each one spends something: a model call, a Linear ticket, a
-    // Google Drive archive, or a production deploy.
+    // Every start is a POST, and each one spends something: a model call, a public comment on a
+    // pull request, a Linear ticket, a Google Drive archive, or a production deploy.
     for (String path : new String[] {
+        "/api/admin/software-factory/reviews",
         "/api/admin/software-factory/vulnerability-scans",
         "/api/admin/software-factory/platform-backups",
         "/api/admin/software-factory/feedback",

@@ -832,12 +832,34 @@ exception there would drop the single most useful thing the page can say.
 
 | Action | Guard |
 | --- | --- |
+| Code review | pull-request number ≥ 1; module ready (i.e. a live `code-review` poller) |
 | Review feedback | pull-request number ≥ 1; module ready; `FACTORY_FEEDBACK_ENABLED` |
 | Scan now | module ready; `FACTORY_CVEFIX_ENABLED`; Linear reachable |
 | Dry run | module ready; no scheduled capture running |
 | Back up now | as above, plus a second confirming click in the UI |
 | Redeploy | see below |
-| Code review, Linear filing | status only, no manual action |
+| Linear filing | status only — a sink is not something you can run by itself |
+
+**Code review is the one that cannot be re-driven from GitHub**, which is why it has a manual
+trigger at all despite having no feature flag. The webhook builds its workflow id from the head
+SHA under `REJECT_DUPLICATE`, so the same commit can never be reviewed twice that way — not even
+after a review that failed, and not after one whose webhook never arrived because ingress was
+down. The console deliberately sends **no `expectedHeadSha`**, which makes
+`ReviewWorkflowService` mint a UUID instead, and that is the only thing that makes re-review
+possible. A test asserts the field stays absent.
+
+It offers two buttons, and the difference matters:
+
+- **Dry-run review** reviews and posts **nothing at all** — no findings, no verdict, and no
+  failure notice. It is the only safe way to check that Claude auth and the authenticated clone
+  path work without commenting on someone's branch. Its outcome is visible *only* in the run
+  progress on this page, which is what makes offering it reasonable; before run-following existed
+  it would have been a dead end.
+- **Review and comment** publishes as normal.
+
+Note the module has no enable flag — reviewing pull requests is the factory's original purpose and
+is always registered — so a missing `code-review` poller is the only way it breaks, and that is
+exactly the state an operator is in when reaching for this button.
 
 **Redeploy is the guarded one.** It can only redeploy the commit already running,
 and every check is repeated at the server:

@@ -82,6 +82,22 @@ async function request<T>(
 export const fetchSoftwareFactoryStatus = (getAccessToken: GetAccessToken) =>
   request<SoftwareFactoryStatus>(getAccessToken, '/status')
 
+/**
+ * Reviews a pull request on demand.
+ *
+ * A dry run reviews and posts nothing at all — not even a failure notice — so the console's run
+ * progress is the only place its outcome appears. That is safe to offer precisely because the
+ * page now follows runs; it would have been a dead end before.
+ */
+export const startCodeReview = (
+  getAccessToken: GetAccessToken,
+  pullNumber: number,
+  publish: boolean,
+) => request<FactoryRunAccepted>(getAccessToken, '/reviews', {
+  method: 'POST',
+  body: JSON.stringify({ pullNumber, publish }),
+})
+
 export const startFeedback = (getAccessToken: GetAccessToken, pullNumber: number) =>
   request<FactoryRunAccepted>(getAccessToken, '/feedback', {
     method: 'POST',

@@ -3,9 +3,11 @@ package com.simonrowe.factoryadmin;
 import java.util.Map;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Bounded HTTP adapter to the two unrouted factory containers.
@@ -57,6 +59,48 @@ public class FactoryAdminClient {
    */
   public FactoryInstanceStatus deployerStatus() {
     return deployer.get().uri(STATUS_PATH).retrieve().body(FactoryInstanceStatus.class);
+  }
+
+  /**
+   * Starts a code review by hand.
+   *
+   * <p><strong>No {@code expectedHeadSha} is sent, deliberately.</strong> The webhook path builds
+   * its workflow id from the head SHA under {@code REJECT_DUPLICATE}, so the same commit can never
+   * be reviewed twice that way — not even after a failed review. Omitting the SHA makes
+   * {@code ReviewWorkflowService} mint a UUID instead, which is the only thing that lets an
+   * operator re-review a commit whose first review died. That recovery is the whole point of this
+   * action, so the field must stay absent.
+   *
+   * @param owner the repository owner
+   * @param repository the repository
+   * @param pullNumber the pull request to review
+   * @param publish whether to post the review; false reviews and posts nothing at all
+   * @return the accepted run
+   */
+  public FactoryRunAccepted startCodeReview(
+      final String owner, final String repository, final int pullNumber, final boolean publish) {
+    ReviewAcceptedWire wire =
+        post(
+            "/api/reviews",
+            Map.of(
+                "owner", owner,
+                "repository", repository,
+                "pullNumber", pullNumber,
+                "publish", publish),
+            ReviewAcceptedWire.class);
+    if (!wire.started()) {
+      // Near-unreachable on this path, because the workflow id carries a fresh UUID every time.
+      // Reported rather than swallowed: a 202 here would claim a review that never started.
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "A review with that identity is already running");
+    }
+    return new FactoryRunAccepted(
+        wire.workflowId(),
+        null,
+        publish
+            ? "Review accepted for pull request " + pullNumber
+            : "Dry-run review accepted for pull request " + pullNumber
+                + "; it will post nothing to GitHub");
   }
 
   public FactoryRunAccepted startFeedback(
@@ -123,6 +167,10 @@ public class FactoryAdminClient {
 
   /** The shape shared by the vulnerability-scan and platform-backup endpoints. */
   record RunAcceptedWire(String workflowId, String runId, String detail) {
+  }
+
+  /** Code review reports acceptance as a flag, like feedback, and mints no run id of its own. */
+  record ReviewAcceptedWire(String workflowId, boolean started) {
   }
 
   /** Feedback reports acceptance as a flag and mints no run id of its own. */

@@ -45,6 +45,46 @@ class FactoryAdminControllerTest {
   }
 
   @Test
+  void acceptsCodeReviewForPullRequest() throws Exception {
+    when(service.startCodeReview(130, true))
+        .thenReturn(new FactoryRunAccepted("code-review-130-uuid", null, "accepted"));
+
+    mockMvc.perform(
+            post(BASE + "/reviews")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"pullNumber\":130,\"publish\":true}"))
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.workflowId").value("code-review-130-uuid"));
+  }
+
+  @Test
+  void defaultsAnOmittedPublishFlagToDryRun() throws Exception {
+    // Safer default: an absent flag reviews and posts nothing, rather than commenting publicly
+    // on a pull request because a field was left out of the request.
+    when(service.startCodeReview(anyInt(), anyBoolean()))
+        .thenReturn(new FactoryRunAccepted("code-review-130-uuid", null, "accepted"));
+
+    mockMvc.perform(
+            post(BASE + "/reviews")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"pullNumber\":130}"))
+        .andExpect(status().isAccepted());
+
+    verify(service).startCodeReview(130, false);
+  }
+
+  @Test
+  void rejectsCodeReviewWithNoPullRequest() throws Exception {
+    mockMvc.perform(
+            post(BASE + "/reviews")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"pullNumber\":0,\"publish\":true}"))
+        .andExpect(status().isBadRequest());
+
+    verify(service, never()).startCodeReview(anyInt(), anyBoolean());
+  }
+
+  @Test
   void acceptsVulnerabilityScan() throws Exception {
     when(service.startVulnerabilityScan())
         .thenReturn(new FactoryRunAccepted("cve-scan-manual-1", "run-1", "accepted"));

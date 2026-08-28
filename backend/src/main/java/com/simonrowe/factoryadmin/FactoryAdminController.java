@@ -33,6 +33,12 @@ public class FactoryAdminController {
     return service.progress(workflowId);
   }
 
+  @PostMapping("/reviews")
+  public ResponseEntity<FactoryRunAccepted> review(
+      @Valid @RequestBody final ReviewRequest request) {
+    return accepted(service.startCodeReview(request.pullNumber(), request.publish()));
+  }
+
   @PostMapping("/feedback")
   public ResponseEntity<FactoryRunAccepted> feedback(
       @Valid @RequestBody final FeedbackRequest request) {
@@ -59,6 +65,9 @@ public class FactoryAdminController {
   private static ResponseEntity<FactoryRunAccepted> accepted(
       final FactoryRunAccepted response) {
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+  }
+
+  public record ReviewRequest(@Min(1) int pullNumber, boolean publish) {
   }
 
   public record FeedbackRequest(@Min(1) int pullNumber) {

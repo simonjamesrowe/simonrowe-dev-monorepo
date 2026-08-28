@@ -239,6 +239,14 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     module's record throws on another's. Temporal's `executionStatus` and the workflow's `phase`
     are reported separately — a failed workflow cannot answer a query at all, and "it failed" is
     the most useful thing the page can say, so the query failing must not lose the status.
+  **Code review gained a manual trigger after all** (the original cut had it status-only): the
+  webhook builds its workflow id from the head SHA under `REJECT_DUPLICATE`, so the same commit
+  can never be re-reviewed from GitHub — not after a failed review, and not after one whose
+  webhook never arrived. The console sends **no `expectedHeadSha`**, which makes
+  `ReviewWorkflowService` mint a UUID instead; that omission is the entire mechanism and a test
+  pins it. The factory side needed no change at all. A **dry run posts nothing whatsoever** — no
+  findings, no verdict, no failure notice — so its outcome is visible only in this page's run
+  progress, which is what makes offering it reasonable.
   Also: the `deployer`'s status call deliberately sends no token; `deploy` and `platformbackup`
   are taken from the **deployer** and reported unavailable when it is unreachable, never from
   `software-factory`'s own (switched-off) view of them; and downstream statuses are translated

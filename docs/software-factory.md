@@ -14,7 +14,7 @@ token-protected factory endpoints over the compose network.
 
 | Module | Queue | Normal trigger | Production default | Manual admin action |
 | --- | --- | --- | --- | --- |
-| Code review | `code-review` | Pull-request webhook | On | None; status only |
+| Code review | `code-review` | Pull-request webhook | On | Dry-run or published review of a PR |
 | Feedback | `review-feedback` | Pull-request close webhook | On (`FACTORY_FEEDBACK_ENABLED`) | Process a closed PR |
 | Vulnerability scan | `cve-fix` | Daily Temporal schedule | On (`FACTORY_CVEFIX_ENABLED`) | Scan now |
 | Deploy | `deploy` | Successful `Publish` workflow | Executor and automatic trigger off | Confirmed redeploy of the running SHA |

@@ -7,6 +7,7 @@ import { SoftwareFactoryAdmin } from '../../src/pages/admin/SoftwareFactoryAdmin
 vi.mock('../../src/services/softwareFactoryApi', () => ({
   fetchSoftwareFactoryStatus: vi.fn(),
   fetchRunProgress: vi.fn(),
+  startCodeReview: vi.fn(),
   startFeedback: vi.fn(),
   startVulnerabilityScan: vi.fn(),
   startPlatformBackup: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('../../src/auth/useAuth', () => ({
 import {
   fetchRunProgress,
   fetchSoftwareFactoryStatus,
+  startCodeReview,
   startPlatformBackup,
   startVulnerabilityScan,
   type FactoryModuleStatus,
@@ -29,6 +31,7 @@ import { useAuth } from '../../src/auth/useAuth'
 
 const mockFetchStatus = vi.mocked(fetchSoftwareFactoryStatus)
 const mockFetchProgress = vi.mocked(fetchRunProgress)
+const mockStartReview = vi.mocked(startCodeReview)
 const mockStartScan = vi.mocked(startVulnerabilityScan)
 const mockStartBackup = vi.mocked(startPlatformBackup)
 const mockUseAuth = vi.mocked(useAuth)
@@ -123,6 +126,53 @@ describe('SoftwareFactoryAdmin', () => {
     render(<SoftwareFactoryAdmin />)
 
     expect(await screen.findByRole('button', { name: /Scan now/ })).toBeDisabled()
+  })
+
+  it('offers a code review trigger rather than status only', async () => {
+    // The webhook cannot replay a review — the workflow id embeds the head SHA under
+    // REJECT_DUPLICATE — so this is the only way to re-drive one that failed or never arrived.
+    // Linear stays status-only, because a sink is not something you can sensibly run by itself.
+    render(<SoftwareFactoryAdmin />)
+
+    expect(await screen.findByRole('button', { name: /Review and comment/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Dry-run review/ })).toBeInTheDocument()
+    expect(screen.getByLabelText(/Pull request to review/)).toBeInTheDocument()
+
+    const codereview = screen.getAllByRole('listitem')[0]
+    expect(codereview).toHaveTextContent('Review a PR')
+    expect(codereview).not.toHaveTextContent('Status only')
+  })
+
+  it('keeps both review buttons disabled until a pull request is named', async () => {
+    render(<SoftwareFactoryAdmin />)
+
+    expect(await screen.findByRole('button', { name: /Review and comment/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Dry-run review/ })).toBeDisabled()
+  })
+
+  it('publishes only on the explicit review button', async () => {
+    mockStartReview.mockResolvedValue({
+      workflowId: 'code-review-130-uuid', runId: null, detail: 'accepted',
+    })
+    render(<SoftwareFactoryAdmin />)
+
+    await userEvent.type(await screen.findByLabelText(/Pull request to review/), '130')
+    await userEvent.click(screen.getByRole('button', { name: /Dry-run review/ }))
+    expect(mockStartReview).toHaveBeenCalledWith(getAccessToken, 130, false)
+
+    await userEvent.click(screen.getByRole('button', { name: /Review and comment/ }))
+    expect(mockStartReview).toHaveBeenCalledWith(getAccessToken, 130, true)
+  }, 10000)
+
+  it('disables the review trigger when nothing polls the review queue', async () => {
+    mockFetchStatus.mockResolvedValue(status({
+      modules: [module('codereview', {
+        ready: false, diagnostic: 'Required Temporal poller is missing',
+      })],
+    }))
+    render(<SoftwareFactoryAdmin />)
+
+    expect(await screen.findByRole('button', { name: /Review and comment/ })).toBeDisabled()
   })
 
   it('starts a scan and then follows it to completion', async () => {

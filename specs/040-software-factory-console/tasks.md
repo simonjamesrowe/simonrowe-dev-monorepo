@@ -174,3 +174,19 @@ New tests added by this feature:
   plus five new cases in `SecurityConfigTest`.
 - `frontend`: `tests/services/softwareFactoryApi.test.ts`,
   `tests/admin/SoftwareFactoryAdmin.test.tsx`.
+
+## Follow-up added after review
+
+- [x] T051 Add a manual code-review trigger (`POST /api/admin/software-factory/reviews` →
+  the factory's existing token-protected `POST /api/reviews`), with dry-run and published modes,
+  in `backend/src/main/java/com/simonrowe/factoryadmin/` and
+  `frontend/src/pages/admin/SoftwareFactoryAdmin.tsx`
+
+  Requested once the reviewer went out of action: the webhook path cannot replay a review,
+  because its workflow id embeds the head SHA under `REJECT_DUPLICATE`. Reverses the original
+  US1 decision that code review needed status only. The factory side needed **no change** — both
+  `/api/reviews` endpoints and the `progress` query already existed, and the generic
+  `GET /api/factory/runs/{id}` already follows review runs because `CodeReviewWorkflow.progress`
+  shares the query name. Tests: 3 in `FactoryAdminClientTest` (chiefly that no `expectedHeadSha`
+  is ever sent), 4 in `FactoryAdminServiceTest`, 3 in `FactoryAdminControllerTest`, 1 more path in
+  `SecurityConfigTest`, 2 in `softwareFactoryApi.test.ts`, 4 in `SoftwareFactoryAdmin.test.tsx`.

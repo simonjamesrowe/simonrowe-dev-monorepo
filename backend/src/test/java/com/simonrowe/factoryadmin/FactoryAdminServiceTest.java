@@ -106,6 +106,55 @@ class FactoryAdminServiceTest {
   }
 
   @Test
+  void startsCodeReviewWhenTheModuleIsReady() {
+    when(client.factoryStatus()).thenReturn(instance("software-factory", ready("codereview")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+    when(client.startCodeReview("simonjamesrowe", "simonrowe-dev-monorepo", 130, true))
+        .thenReturn(new FactoryRunAccepted("code-review-130-uuid", null, "accepted"));
+
+    assertThat(service(SHA).startCodeReview(130, true).workflowId())
+        .isEqualTo("code-review-130-uuid");
+  }
+
+  @Test
+  void carriesTheReviewPublishFlagThrough() {
+    when(client.factoryStatus()).thenReturn(instance("software-factory", ready("codereview")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+    when(client.startCodeReview(anyString(), anyString(), anyInt(), anyBoolean()))
+        .thenReturn(new FactoryRunAccepted("code-review-130-uuid", null, "accepted"));
+
+    service(SHA).startCodeReview(130, false);
+
+    verify(client).startCodeReview("simonjamesrowe", "simonrowe-dev-monorepo", 130, false);
+  }
+
+  @Test
+  void rejectsNonPositivePullNumberForReview() {
+    assertThatThrownBy(() -> service(SHA).startCodeReview(0, true))
+        .isInstanceOf(ResponseStatusException.class)
+        .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+        .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+
+    verify(client, never()).startCodeReview(anyString(), anyString(), anyInt(), anyBoolean());
+  }
+
+  @Test
+  void refusesCodeReviewWhenNothingPollsTheReviewQueue() {
+    // Code review has no enable flag, so a missing poller is the only way this module breaks —
+    // and it is exactly the state an operator is in when reaching for the manual trigger.
+    when(client.factoryStatus())
+        .thenReturn(instance("software-factory", noPoller("codereview")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+
+    assertThatThrownBy(() -> service(SHA).startCodeReview(130, true))
+        .isInstanceOf(ResponseStatusException.class)
+        .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+        .isEqualTo(HttpStatus.PRECONDITION_FAILED);
+
+    verify(client, never()).startCodeReview(anyString(), anyString(), anyInt(), anyBoolean());
+  }
+
+  @Test
   void rejectsNonPositivePullNumberBeforeCallingTheFactory() {
     assertThatThrownBy(() -> service(SHA).startFeedback(0))
         .isInstanceOf(ResponseStatusException.class)
@@ -292,6 +341,12 @@ class FactoryAdminServiceTest {
   private static ModuleStatus ready(final String key) {
     return new ModuleStatus(
         key, key, true, key, 1, 1, "trigger", null, List.of(), true, null);
+  }
+
+  private static ModuleStatus noPoller(final String key) {
+    return new ModuleStatus(
+        key, key, true, key, 1, 0, "trigger", null, List.of(), false,
+        "Required Temporal poller is missing");
   }
 
   private static ModuleStatus disabled(final String key) {

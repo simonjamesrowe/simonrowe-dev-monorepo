@@ -102,6 +102,28 @@ public class FactoryAdminService {
         "Owning factory service is unreachable");
   }
 
+  /**
+   * Reviews a pull request on demand.
+   *
+   * <p>The only module whose automatic trigger is a webhook the factory cannot replay: a review
+   * that failed, or one whose webhook never arrived because ingress was down, cannot be re-driven
+   * from GitHub at all. This is the recovery path for both.
+   *
+   * @param pullNumber the pull request to review
+   * @param publish whether to post the review, or review and post nothing
+   * @return the accepted run
+   */
+  public FactoryRunAccepted startCodeReview(final int pullNumber, final boolean publish) {
+    if (pullNumber < 1) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "pullNumber must be positive");
+    }
+    requireReady(CODE_REVIEW);
+    return proxy(
+        () -> client.startCodeReview(
+            properties.owner(), properties.repository(), pullNumber, publish));
+  }
+
   public FactoryRunAccepted startFeedback(final int pullNumber) {
     if (pullNumber < 1) {
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,

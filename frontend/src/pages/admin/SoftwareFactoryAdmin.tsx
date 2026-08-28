@@ -7,6 +7,7 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  ScanSearch,
   ShieldAlert,
   XCircle,
 } from 'lucide-react'
@@ -16,6 +17,7 @@ import { FRONTEND_COMMIT } from '../../config/version'
 import {
   fetchRunProgress,
   fetchSoftwareFactoryStatus,
+  startCodeReview,
   startDeploy,
   startFeedback,
   startPlatformBackup,
@@ -101,6 +103,7 @@ export function SoftwareFactoryAdmin() {
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [run, setRun] = useState<ActiveRun | null>(null)
+  const [reviewPullNumber, setReviewPullNumber] = useState('')
   const [pullNumber, setPullNumber] = useState('')
   const [deployConfirmation, setDeployConfirmation] = useState('')
   const [confirmBackup, setConfirmBackup] = useState(false)
@@ -186,9 +189,53 @@ export function SoftwareFactoryAdmin() {
           <h2 id="factory-actions-title">Durable workflow starts</h2>
         </div>
 
+        <ActionPanel title="Code review" description="Re-review a pull request the webhook could not. A dry run reviews without posting anything; publishing comments on the pull request as the reviewer bot.">
+          <label className="factory-console__field">
+            Pull request to review
+            <input
+              min="1"
+              inputMode="numeric"
+              value={reviewPullNumber}
+              onChange={(event) => setReviewPullNumber(event.target.value)}
+            />
+          </label>
+          <div className="factory-console__button-row">
+            <button
+              className="admin-btn"
+              disabled={
+                !modules.get('codereview')?.ready || pending !== null
+                || Number(reviewPullNumber) < 1
+              }
+              onClick={() => void start('review-dry',
+                () => startCodeReview(getAccessToken, Number(reviewPullNumber), false))}
+              type="button"
+            >
+              {pending === 'review-dry'
+                ? <Loader2 className="factory-console__spin" size={16} />
+                : <ScanSearch size={16} />}
+              Dry-run review
+            </button>
+            <button
+              className="admin-btn admin-btn--primary"
+              disabled={
+                !modules.get('codereview')?.ready || pending !== null
+                || Number(reviewPullNumber) < 1
+              }
+              onClick={() => void start('review',
+                () => startCodeReview(getAccessToken, Number(reviewPullNumber), true))}
+              type="button"
+            >
+              {pending === 'review'
+                ? <Loader2 className="factory-console__spin" size={16} />
+                : <Play size={16} />}
+              Review and comment
+            </button>
+          </div>
+        </ActionPanel>
+
         <ActionPanel title="Review feedback" description="Harvest a closed pull request, file one Linear issue, then propose guidance changes.">
           <label className="factory-console__field">
-            Pull request number
+            Pull request to harvest
             <input min="1" inputMode="numeric" value={pullNumber} onChange={(event) => setPullNumber(event.target.value)} />
           </label>
           <button
@@ -367,7 +414,8 @@ function ActionPanel({
 }
 
 function actionFor(module: FactoryModuleStatus): string {
-  if (module.key === 'codereview' || module.key === 'linear') return 'Status only'
+  if (module.key === 'linear') return 'Status only'
+  if (module.key === 'codereview') return 'Review a PR'
   if (module.key === 'feedback') return 'Process PR'
   if (module.key === 'cvefix') return 'Scan now'
   if (module.key === 'deploy') return 'Guarded redeploy'

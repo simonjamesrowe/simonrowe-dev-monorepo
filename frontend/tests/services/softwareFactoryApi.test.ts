@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   fetchRunProgress,
   fetchSoftwareFactoryStatus,
+  startCodeReview,
   startDeploy,
   startFeedback,
   startPlatformBackup,
@@ -51,6 +52,28 @@ describe('softwareFactoryApi', () => {
 
     expect(String(fetchMock().mock.calls[0][0]))
       .toContain('/api/admin/software-factory/status')
+  })
+
+  it('sends the pull request and the publish flag to start a review', async () => {
+    fetchMock().mockResolvedValue(jsonResponse({ workflowId: 'code-review-130-uuid' }))
+
+    await startCodeReview(getAccessToken, 130, true)
+
+    const [url, init] = fetchMock().mock.calls[0]
+    expect(String(url)).toContain('/reviews')
+    expect(init?.method).toBe('POST')
+    expect(init?.body).toBe(JSON.stringify({ pullNumber: 130, publish: true }))
+  })
+
+  it('asks for a dry-run review without publishing', async () => {
+    // A dry run posts nothing to the pull request at all, so it is the safe way to check the
+    // reviewer works after an outage without commenting on someone's branch.
+    fetchMock().mockResolvedValue(jsonResponse({ workflowId: 'code-review-130-uuid' }))
+
+    await startCodeReview(getAccessToken, 130, false)
+
+    expect(fetchMock().mock.calls[0][1]?.body)
+      .toBe(JSON.stringify({ pullNumber: 130, publish: false }))
   })
 
   it('posts a pull request number to start feedback', async () => {
