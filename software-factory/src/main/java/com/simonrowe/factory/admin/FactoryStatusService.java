@@ -1,5 +1,12 @@
 package com.simonrowe.factory.admin;
 
+import static com.simonrowe.factory.admin.ModulePrerequisites.CODE_REVIEW;
+import static com.simonrowe.factory.admin.ModulePrerequisites.CVEFIX;
+import static com.simonrowe.factory.admin.ModulePrerequisites.DEPLOY;
+import static com.simonrowe.factory.admin.ModulePrerequisites.FEEDBACK;
+import static com.simonrowe.factory.admin.ModulePrerequisites.LINEAR;
+import static com.simonrowe.factory.admin.ModulePrerequisites.PLATFORM_BACKUP;
+
 import com.simonrowe.factory.admin.FactoryStatusResponse.ModuleStatus;
 import com.simonrowe.factory.admin.FactoryStatusResponse.ScheduleStatus;
 import com.simonrowe.factory.codereview.config.CodeReviewTaskQueues;
@@ -62,19 +69,19 @@ public class FactoryStatusService {
         role,
         Instant.now(),
         List.of(
-            module("codereview", "Code review", CodeReviewTaskQueues.REVIEWS,
+            module(CODE_REVIEW, "Code review", CodeReviewTaskQueues.REVIEWS,
                 "pull_request webhook", null, true),
-            module("feedback", "Feedback", FeedbackTaskQueues.REVIEW_FEEDBACK,
+            module(FEEDBACK, "Feedback", FeedbackTaskQueues.REVIEW_FEEDBACK,
                 "pull-request close and manual", null, true),
-            module("cvefix", "Vulnerability scan", CveFixTaskQueues.CVE_FIX,
+            module(CVEFIX, "Vulnerability scan", CveFixTaskQueues.CVE_FIX,
                 "daily schedule and manual", CveFixScheduleInitializer.SCHEDULE_ID, true),
-            module("deploy", "Deploy", DeployTaskQueues.DEPLOY,
+            module(DEPLOY, "Deploy", DeployTaskQueues.DEPLOY,
                 "Publish webhook and guarded manual", null, true),
-            module("linear", "Linear filing", LinearTaskQueues.LINEAR,
+            module(LINEAR, "Linear filing", LinearTaskQueues.LINEAR,
                 "upstream workflow", null, ACTIVITY_ONLY),
-            module("platformbackup", "Platform backup", PlatformBackupTaskQueues.PLATFORM_BACKUP,
-                "nightly schedule and manual", PlatformBackupScheduleInitializer.SCHEDULE_ID,
-                true)));
+            module(PLATFORM_BACKUP, "Platform backup",
+                PlatformBackupTaskQueues.PLATFORM_BACKUP, "nightly schedule and manual",
+                PlatformBackupScheduleInitializer.SCHEDULE_ID, true)));
   }
 
   private ModuleStatus module(

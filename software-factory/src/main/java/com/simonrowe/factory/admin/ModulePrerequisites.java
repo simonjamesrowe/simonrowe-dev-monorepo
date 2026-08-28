@@ -27,9 +27,22 @@ import org.springframework.stereotype.Component;
 @Component
 public class ModulePrerequisites {
 
+  /**
+   * The module keys, which are a wire contract: they appear in the status response, in the
+   * backend's aggregation and in the browser's discriminated union. Named constants rather than
+   * repeated literals because the backend matches modules <em>by this string</em> — a typo in one
+   * of them would not fail, it would silently report that module as unavailable.
+   */
+  public static final String CODE_REVIEW = "codereview";
+  public static final String FEEDBACK = "feedback";
+  public static final String CVEFIX = "cvefix";
+  public static final String DEPLOY = "deploy";
+  public static final String LINEAR = "linear";
+  public static final String PLATFORM_BACKUP = "platformbackup";
+
   /** Display order, and the only place module keys are enumerated. */
   public static final List<String> KEYS =
-      List.of("codereview", "feedback", "cvefix", "deploy", "linear", "platformbackup");
+      List.of(CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP);
 
   private static final Logger LOG = LoggerFactory.getLogger(ModulePrerequisites.class);
 
@@ -64,12 +77,12 @@ public class ModulePrerequisites {
    */
   public boolean configured(final String key) {
     return switch (key) {
-      case "codereview" -> true;
-      case "feedback" -> feedback.enabled();
-      case "cvefix" -> cvefix.enabled();
-      case "deploy" -> deploy.enabled() || deploy.triggerEnabled();
-      case "linear" -> linear.enabled();
-      case "platformbackup" -> platformBackup.enabled();
+      case CODE_REVIEW -> true;
+      case FEEDBACK -> feedback.enabled();
+      case CVEFIX -> cvefix.enabled();
+      case DEPLOY -> deploy.enabled() || deploy.triggerEnabled();
+      case LINEAR -> linear.enabled();
+      case PLATFORM_BACKUP -> platformBackup.enabled();
       default -> false;
     };
   }
@@ -90,7 +103,7 @@ public class ModulePrerequisites {
     }
     List<String> missing = new ArrayList<>();
     switch (key) {
-      case "feedback" -> {
+      case FEEDBACK -> {
         // Not merely a nicety: the workflow files the Linear issue *before* distilling, and
         // fails non-retryably with LINEAR_DISABLED when it cannot, so with the sink off the
         // whole feedback loop stops rather than degrading to PR-only.
@@ -98,7 +111,7 @@ public class ModulePrerequisites {
           missing.add("Linear filing is disabled, and feedback files its issue first");
         }
       }
-      case "cvefix" -> {
+      case CVEFIX -> {
         if (cvefix.dependencyTrack().apiKey().isBlank()) {
           missing.add("Dependency-Track API key is not set");
         }
@@ -106,7 +119,7 @@ public class ModulePrerequisites {
           missing.add("Linear filing is disabled, so findings have nowhere to go");
         }
       }
-      case "linear" -> {
+      case LINEAR -> {
         if (linear.apiKey().isBlank()) {
           missing.add("Linear API key is not set");
         }
@@ -114,8 +127,8 @@ public class ModulePrerequisites {
           missing.add("Linear team key is not set");
         }
       }
-      case "platformbackup" -> missing.addAll(script(platformBackup.script(), "backup"));
-      case "deploy" -> {
+      case PLATFORM_BACKUP -> missing.addAll(script(platformBackup.script(), "backup"));
+      case DEPLOY -> {
         if (deploy.enabled()) {
           missing.addAll(script(deploy.script(), "deploy"));
         }

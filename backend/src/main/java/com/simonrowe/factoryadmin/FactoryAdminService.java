@@ -16,11 +16,27 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class FactoryAdminService {
 
+  /**
+   * The module keys, which are the factory's wire contract rather than local names. Named
+   * constants because this class matches modules <em>by this string</em>: a typo would not fail,
+   * it would silently report that module as unavailable. Mirrored from
+   * {@code ModulePrerequisites.KEYS} rather than shared: {@code software-factory} is a separate
+   * Gradle module and neither depends on the other, deliberately. What keeps the two sides in
+   * step is {@code FactoryAdminClientTest}, which asserts this class's reading of a real factory
+   * status payload.
+   */
+  private static final String CODE_REVIEW = "codereview";
+  private static final String FEEDBACK = "feedback";
+  private static final String CVEFIX = "cvefix";
+  private static final String DEPLOY = "deploy";
+  private static final String LINEAR = "linear";
+  private static final String PLATFORM_BACKUP = "platformbackup";
+
   private static final List<String> ORDER =
-      List.of("codereview", "feedback", "cvefix", "deploy", "linear", "platformbackup");
+      List.of(CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP);
 
   /** Modules the deployer, not the factory, is the authority on. */
-  private static final List<String> DEPLOYER_OWNED = List.of("deploy", "platformbackup");
+  private static final List<String> DEPLOYER_OWNED = List.of(DEPLOY, PLATFORM_BACKUP);
 
   private static final String UNKNOWN_COMMIT = "unknown";
   private static final int SHORT_COMMIT = 7;
@@ -73,12 +89,12 @@ public class FactoryAdminService {
 
   private static FactoryInstanceStatus.ModuleStatus unavailable(final String key) {
     String displayName = switch (key) {
-      case "codereview" -> "Code review";
-      case "feedback" -> "Feedback";
-      case "cvefix" -> "Vulnerability scan";
-      case "deploy" -> "Deploy";
-      case "linear" -> "Linear filing";
-      case "platformbackup" -> "Platform backup";
+      case CODE_REVIEW -> "Code review";
+      case FEEDBACK -> "Feedback";
+      case CVEFIX -> "Vulnerability scan";
+      case DEPLOY -> "Deploy";
+      case LINEAR -> "Linear filing";
+      case PLATFORM_BACKUP -> "Platform backup";
       default -> key;
     };
     return new FactoryInstanceStatus.ModuleStatus(
@@ -91,18 +107,18 @@ public class FactoryAdminService {
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
           "pullNumber must be positive");
     }
-    requireReady("feedback");
+    requireReady(FEEDBACK);
     return proxy(
         () -> client.startFeedback(properties.owner(), properties.repository(), pullNumber));
   }
 
   public FactoryRunAccepted startVulnerabilityScan() {
-    requireReady("cvefix");
+    requireReady(CVEFIX);
     return proxy(client::startVulnerabilityScan);
   }
 
   public FactoryRunAccepted startPlatformBackup(final boolean dryRun) {
-    requireReady("platformbackup");
+    requireReady(PLATFORM_BACKUP);
     return proxy(() -> client.startPlatformBackup(dryRun));
   }
 
@@ -133,7 +149,7 @@ public class FactoryAdminService {
       throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
           "Confirmation phrase does not match the running commit");
     }
-    requireReady("deploy");
+    requireReady(DEPLOY);
     return proxy(() -> client.startDeploy(backendCommit));
   }
 
