@@ -76,7 +76,8 @@ public class FactoryAdminService {
           .forEach(module -> modules.put(module.key(), module));
     }
     if (deployer == null) {
-      DEPLOYER_OWNED.forEach(modules::remove);
+      DEPLOYER_OWNED.forEach(key -> modules.computeIfPresent(key,
+          (ignored, module) -> withoutOwnerConfirmation(module)));
     }
     List<FactoryInstanceStatus.ModuleStatus> ordered = new ArrayList<>();
     for (String key : ORDER) {
@@ -84,7 +85,47 @@ public class FactoryAdminService {
       ordered.add(module == null ? unavailable(key) : module);
     }
     return new FactoryAdminStatus(
-        Instant.now(), runningVersion.commit(), factory != null, deployer != null, ordered);
+        Instant.now(),
+        runningVersion.commit(),
+        properties.owner() + "/" + properties.repository(),
+        factory != null,
+        deployer != null,
+        ordered);
+  }
+
+  /**
+   * Keeps what Temporal knows when the owning container cannot be asked.
+   *
+   * <p>Starting any of these workflows needs only a Temporal client, so the question that decides
+   * whether a module can actually do work is not "is the deployer's HTTP endpoint up" — it is
+   * "does anything poll that queue for activities". Temporal answers that globally, and the
+   * reachable {@code software-factory} can read it for the deployer's queues just as well as the
+   * deployer can. Discarding those counts because an HTTP probe failed threw away the more
+   * reliable fact and reported a module as flatly unavailable when the page could say something
+   * true and specific instead.
+   *
+   * <p>What genuinely is unknown is the deployer's own enable flag, so {@code configured} becomes
+   * null rather than borrowing {@code software-factory}'s value for a module it does not own —
+   * that would render a confident "Off" that is about the wrong container.
+   */
+  private static FactoryInstanceStatus.ModuleStatus withoutOwnerConfirmation(
+      final FactoryInstanceStatus.ModuleStatus module) {
+    boolean pollersPresent = module.activityPollers() != null && module.activityPollers() > 0;
+    return new FactoryInstanceStatus.ModuleStatus(
+        module.key(),
+        module.displayName(),
+        null,
+        module.taskQueue(),
+        module.workflowPollers(),
+        module.activityPollers(),
+        module.trigger(),
+        module.schedule(),
+        module.missingPrerequisites(),
+        pollersPresent,
+        pollersPresent
+            ? "The deployer is unreachable, so its configuration is unconfirmed, but Temporal "
+                + "shows a live worker on this queue"
+            : "The deployer is unreachable and nothing is polling this queue");
   }
 
   private static FactoryInstanceStatus.ModuleStatus unavailable(final String key) {
@@ -93,12 +134,12 @@ public class FactoryAdminService {
       case FEEDBACK -> "Feedback";
       case CVEFIX -> "Vulnerability scan";
       case DEPLOY -> "Deploy";
-      case LINEAR -> "Linear filing";
+      case LINEAR -> "Issue tracking";
       case PLATFORM_BACKUP -> "Platform backup";
       default -> key;
     };
     return new FactoryInstanceStatus.ModuleStatus(
-        key, displayName, false, "unavailable", null, null, "Unavailable", null, List.of(), false,
+        key, displayName, null, "unavailable", null, null, "Unavailable", null, List.of(), false,
         "Owning factory service is unreachable");
   }
 

@@ -18,7 +18,7 @@ token-protected factory endpoints over the compose network.
 | Feedback | `review-feedback` | Pull-request close webhook | On (`FACTORY_FEEDBACK_ENABLED`) | Process a closed PR |
 | Vulnerability scan | `cve-fix` | Daily Temporal schedule | On (`FACTORY_CVEFIX_ENABLED`) | Scan now |
 | Deploy | `deploy` | Successful `Publish` workflow | Executor and automatic trigger off | Confirmed redeploy of the running SHA |
-| Linear filing | `linear` | Activity requested by another workflow | On (`FACTORY_LINEAR_ENABLED`) | None; it is an activity sink |
+| Issue tracking | `linear` | Activity requested by another workflow | On (`FACTORY_LINEAR_ENABLED`) | None; it is an activity sink |
 | Platform backup | `platform-backup` | 02:00 Europe/London schedule | On (`FACTORY_PLATFORM_BACKUP_ENABLED`) | Dry run or real capture |
 
 Application-level flag defaults remain false because the same image also runs as the differently
@@ -58,7 +58,7 @@ does not enable arbitrary deployment: frontend and backend must report the same 
 40-character commit and the administrator must type `REDEPLOY <short-sha>`. The backend validates
 both immediately before signalling the existing fixed-id `deploy-prod` workflow.
 
-### Linear filing
+### Issue tracking
 
 This is an activity-only queue, not a standalone workflow or admin action. Producers use a stable
 fingerprint and the sink creates, comments on, suppresses, or files a regression according to the

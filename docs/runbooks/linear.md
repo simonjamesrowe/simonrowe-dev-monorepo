@@ -1,5 +1,8 @@
 # Linear Issue Sink Runbook
 
+> The admin console calls this module **Issue tracking**; `linear` remains the task queue,
+> the flag prefix and the name used throughout this runbook.
+
 `linear` is a module inside the existing `software-factory` container. It adds
 no container, no port and no HTTP route — the internet-facing surface stays
 exactly `POST /webhooks/github`. What it adds is a **sink**: a Temporal task

@@ -14,6 +14,7 @@ import {
 
 import { useAuth } from '../../auth/useAuth'
 import { FRONTEND_COMMIT } from '../../config/version'
+import { parsePullNumber } from './pullRequestInput'
 import {
   fetchRunProgress,
   fetchSoftwareFactoryStatus,
@@ -25,11 +26,22 @@ import {
   type FactoryModuleStatus,
   type FactoryRunAccepted,
   type FactoryRunProgress,
+  type FactoryScheduleStatus,
   type SoftwareFactoryStatus,
 } from '../../services/softwareFactoryApi'
 
 const formatTime = (value: string | null) =>
   value ? new Date(value).toLocaleString() : 'Not recorded'
+
+/**
+ * A paused schedule has no next action time, and neither does one Temporal has not computed yet,
+ * so appending it unconditionally produced "Active · next Not recorded".
+ */
+function scheduleSummary(schedule: FactoryScheduleStatus): string {
+  if (!schedule.exists) return 'Absent'
+  const state = schedule.paused ? 'Paused' : 'Active'
+  return schedule.nextActionAt ? `${state} · next ${formatTime(schedule.nextActionAt)}` : state
+}
 
 /** Three seconds tracks a deploy phase change closely without hammering an unrouted API. */
 const POLL_INTERVAL_MS = 3000
@@ -130,6 +142,9 @@ export function SoftwareFactoryAdmin() {
   )
   const shortCommit = status?.backendCommit?.slice(0, 7) ?? 'unknown'
   const deployPhrase = `REDEPLOY ${shortCommit}`
+  const repository = status?.repository ?? 'the configured repository'
+  const reviewNumber = parsePullNumber(reviewPullNumber)
+  const feedbackNumber = parsePullNumber(pullNumber)
 
   const start = async (key: string, action: () => Promise<FactoryRunAccepted>) => {
     try {
@@ -193,21 +208,20 @@ export function SoftwareFactoryAdmin() {
           <label className="factory-console__field">
             Pull request to review
             <input
-              min="1"
-              inputMode="numeric"
+              placeholder="130 or a pull request URL"
               value={reviewPullNumber}
               onChange={(event) => setReviewPullNumber(event.target.value)}
             />
+            <PullRequestHint repository={repository} value={reviewPullNumber} parsed={reviewNumber} />
           </label>
           <div className="factory-console__button-row">
             <button
               className="admin-btn"
               disabled={
-                !modules.get('codereview')?.ready || pending !== null
-                || Number(reviewPullNumber) < 1
+                !modules.get('codereview')?.ready || pending !== null || reviewNumber === null
               }
               onClick={() => void start('review-dry',
-                () => startCodeReview(getAccessToken, Number(reviewPullNumber), false))}
+                () => startCodeReview(getAccessToken, reviewNumber as number, false))}
               type="button"
             >
               {pending === 'review-dry'
@@ -218,11 +232,10 @@ export function SoftwareFactoryAdmin() {
             <button
               className="admin-btn admin-btn--primary"
               disabled={
-                !modules.get('codereview')?.ready || pending !== null
-                || Number(reviewPullNumber) < 1
+                !modules.get('codereview')?.ready || pending !== null || reviewNumber === null
               }
               onClick={() => void start('review',
-                () => startCodeReview(getAccessToken, Number(reviewPullNumber), true))}
+                () => startCodeReview(getAccessToken, reviewNumber as number, true))}
               type="button"
             >
               {pending === 'review'
@@ -236,12 +249,20 @@ export function SoftwareFactoryAdmin() {
         <ActionPanel title="Review feedback" description="Harvest a closed pull request, file one Linear issue, then propose guidance changes.">
           <label className="factory-console__field">
             Pull request to harvest
-            <input min="1" inputMode="numeric" value={pullNumber} onChange={(event) => setPullNumber(event.target.value)} />
+            <input
+              placeholder="130 or a pull request URL"
+              value={pullNumber}
+              onChange={(event) => setPullNumber(event.target.value)}
+            />
+            <PullRequestHint repository={repository} value={pullNumber} parsed={feedbackNumber} />
           </label>
           <button
             className="admin-btn admin-btn--primary"
-            disabled={!modules.get('feedback')?.ready || pending !== null || Number(pullNumber) < 1}
-            onClick={() => void start('feedback', () => startFeedback(getAccessToken, Number(pullNumber)))}
+            disabled={
+              !modules.get('feedback')?.ready || pending !== null || feedbackNumber === null
+            }
+            onClick={() => void start('feedback',
+              () => startFeedback(getAccessToken, feedbackNumber as number))}
             type="button"
           >
             {pending === 'feedback' ? <Loader2 className="factory-console__spin" size={16} /> : <Play size={16} />}
@@ -307,6 +328,32 @@ export function SoftwareFactoryAdmin() {
   )
 }
 
+/**
+ * Says what the field wants, and confirms what it understood.
+ *
+ * Naming the repository matters as much as the format: the actions always target the
+ * server-configured repository, so an operator pasting a URL from a different one would
+ * otherwise get a review of an unrelated pull request that happens to share the number.
+ */
+function PullRequestHint(
+  { repository, value, parsed }: { repository: string; value: string; parsed: number | null },
+) {
+  if (value.trim() !== '' && parsed === null) {
+    return (
+      <span className="factory-console__hint factory-console__hint--bad">
+        Not a pull request number or URL
+      </span>
+    )
+  }
+  return (
+    <span className="factory-console__hint">
+      {parsed === null
+        ? `Number or pull request URL · ${repository}`
+        : `${repository}#${parsed}`}
+    </span>
+  )
+}
+
 function ServiceState({ label, reachable }: { label: string; reachable: boolean }) {
   return (
     <span className={`factory-console__service factory-console__service--${reachable ? 'up' : 'down'}`}>
@@ -359,7 +406,11 @@ function ModuleRow({ module, number, action }: { module: FactoryModuleStatus; nu
         <span className="factory-rail__number">{String(number).padStart(2, '0')}</span>
         <div><h2>{module.displayName}</h2><span>{module.taskQueue}</span></div>
       </div>
-      <Checkpoint label="Configured" good={module.configured} value={module.configured ? 'On' : 'Off'} />
+      <Checkpoint
+        label="Configured"
+        good={module.configured === true}
+        value={module.configured === null ? 'Unconfirmed' : module.configured ? 'On' : 'Off'}
+      />
       <Checkpoint
         label="Worker"
         good={module.ready}
@@ -368,9 +419,7 @@ function ModuleRow({ module, number, action }: { module: FactoryModuleStatus; nu
       <Checkpoint
         label={schedule ? 'Schedule' : 'Trigger'}
         good={schedule ? schedule.exists && schedule.paused === false : module.ready}
-        value={schedule
-          ? `${schedule.paused ? 'Paused' : 'Active'} · next ${formatTime(schedule.nextActionAt)}`
-          : module.trigger}
+        value={schedule ? scheduleSummary(schedule) : module.trigger}
       />
       <div className="factory-rail__action"><span>Manual</span><strong>{action}</strong></div>
       {module.missingPrerequisites?.length > 0 && (

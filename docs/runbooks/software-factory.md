@@ -778,6 +778,11 @@ maps them to fixed strings:
 Collapsing all of these into "unavailable" — which the first cut did — sent an
 operator looking for a down container when the answer was a flag.
 
+**The module is called "Issue tracking", not "Linear filing".** It is the single intake every
+producer files into — deploy failures, vulnerability findings and review feedback — so naming it
+after the tool described the vendor rather than the job. The task queue is still `linear`, and so
+are the flags and the runbook, because those are the implementation.
+
 ### Which container answers for which module
 
 Both containers run the same image, so `software-factory` reports *every* module
@@ -786,6 +791,15 @@ from its own configuration, including the two it does not own. The backend takes
 `software-factory`; if the deployer is unreachable those two are reported as
 unavailable rather than falling back to the factory's misleading view. A partial
 failure never blanks the page.
+
+**An unreachable deployer no longer erases what Temporal knows.** Starting any of these
+workflows needs only a Temporal client, so the question that decides whether a module can do work
+is not "is the deployer's HTTP endpoint up" but "does anything poll that queue for activities" —
+a global fact the reachable `software-factory` reads for the deployer's queues just as well as the
+deployer would. So when the deployer cannot be asked, the poller counts are kept and drive
+readiness, while `configured` becomes **null**, rendered "Unconfirmed": `software-factory`'s own
+deploy flag is about `software-factory`, and showing it as the deployer's would be a confident
+answer about the wrong container.
 
 ### Three statuses, never collapsed
 
@@ -838,7 +852,7 @@ exception there would drop the single most useful thing the page can say.
 | Dry run | module ready; no scheduled capture running |
 | Back up now | as above, plus a second confirming click in the UI |
 | Redeploy | see below |
-| Linear filing | status only — a sink is not something you can run by itself |
+| Issue tracking | status only — a sink is not something you can run by itself |
 
 **Code review is the one that cannot be re-driven from GitHub**, which is why it has a manual
 trigger at all despite having no feature flag. The webhook builds its workflow id from the head

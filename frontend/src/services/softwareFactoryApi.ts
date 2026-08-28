@@ -18,7 +18,8 @@ export interface FactoryScheduleStatus {
 export interface FactoryModuleStatus {
   key: 'codereview' | 'feedback' | 'cvefix' | 'deploy' | 'linear' | 'platformbackup'
   displayName: string
-  configured: boolean
+  /** null when the container that owns this module could not be asked for its flag. */
+  configured: boolean | null
   taskQueue: string
   workflowPollers: number | null
   activityPollers: number | null
@@ -32,6 +33,8 @@ export interface FactoryModuleStatus {
 export interface SoftwareFactoryStatus {
   fetchedAt: string
   backendCommit: string
+  /** The repository the pull-request actions target, fixed server-side. */
+  repository: string
   factoryReachable: boolean
   deployerReachable: boolean
   modules: FactoryModuleStatus[]

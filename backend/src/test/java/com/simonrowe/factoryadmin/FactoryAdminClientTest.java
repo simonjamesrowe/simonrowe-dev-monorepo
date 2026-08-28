@@ -313,7 +313,7 @@ class FactoryAdminClientTest {
 
   private static String statusBody(final String container) {
     return "{\"container\":\"" + container + "\",\"fetchedAt\":\"2026-08-28T09:00:00Z\","
-        + "\"modules\":[{\"key\":\"linear\",\"displayName\":\"Linear filing\","
+        + "\"modules\":[{\"key\":\"linear\",\"displayName\":\"Issue tracking\","
         + "\"configured\":true,\"taskQueue\":\"linear\",\"workflowPollers\":0,"
         + "\"activityPollers\":1,\"trigger\":\"upstream workflow\",\"schedule\":null,"
         + "\"missingPrerequisites\":[\"Linear API key is not set\"],\"ready\":false,"

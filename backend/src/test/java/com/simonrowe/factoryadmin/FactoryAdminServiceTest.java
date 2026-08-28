@@ -48,6 +48,18 @@ class FactoryAdminServiceTest {
     assertThat(status.modules()).allMatch(module -> !module.ready());
     assertThat(status.modules()).allMatch(
         module -> "Owning factory service is unreachable".equals(module.diagnostic()));
+    assertThat(status.modules()).allMatch(module -> module.configured() == null);
+  }
+
+  @Test
+  void reportsTheRepositoryItsPullRequestActionsOperateOn() {
+    // The browser never sends owner/repository — they are fixed server-side — so the console can
+    // only name the right repository if the status tells it. Same value the actions use.
+    when(client.factoryStatus()).thenReturn(instance("software-factory"));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+
+    assertThat(service(SHA).status().repository())
+        .isEqualTo("simonjamesrowe/simonrowe-dev-monorepo");
   }
 
   @Test
@@ -60,8 +72,39 @@ class FactoryAdminServiceTest {
 
     assertThat(status.factoryReachable()).isTrue();
     assertThat(module(status, "feedback").ready()).isTrue();
+    // The factory reported no deploy module of its own here, so there is nothing to fall back
+    // to and the module is genuinely unavailable.
     assertThat(module(status, "deploy").diagnostic())
         .isEqualTo("Owning factory service is unreachable");
+  }
+
+  @Test
+  void keepsTemporalsPollerTruthWhenTheDeployerCannotBeAsked() {
+    // Starting these workflows needs only a Temporal client, so "can it actually work" is
+    // answered by whether anything polls the queue — a global fact the reachable factory can
+    // read for the deployer's queues too. Throwing that away because an HTTP probe failed
+    // reported a flat "unavailable" when the page could say something true and specific.
+    when(client.factoryStatus())
+        .thenReturn(instance("software-factory", ready("deploy"), disabled("platformbackup")));
+    when(client.deployerStatus()).thenThrow(new ResourceAccessException("down"));
+
+    FactoryAdminStatus status = service(SHA).status();
+
+    ModuleStatus deploy = module(status, "deploy");
+    assertThat(deploy.activityPollers()).isEqualTo(1);
+    assertThat(deploy.ready()).isTrue();
+    assertThat(deploy.diagnostic()).contains("Temporal shows a live worker on this queue");
+  }
+
+  @Test
+  void neverBorrowsTheFactorysFlagForModuleItDoesNotOwn() {
+    // software-factory holds its own deploy flag, which is about software-factory. Rendering it
+    // as the deployer's would be a confident answer about the wrong container, so it goes null.
+    when(client.factoryStatus())
+        .thenReturn(instance("software-factory", disabled("deploy")));
+    when(client.deployerStatus()).thenThrow(new ResourceAccessException("down"));
+
+    assertThat(module(service(SHA).status(), "deploy").configured()).isNull();
   }
 
   @Test

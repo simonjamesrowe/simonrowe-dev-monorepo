@@ -77,7 +77,7 @@ public class FactoryStatusService {
                 "daily schedule and manual", CveFixScheduleInitializer.SCHEDULE_ID, true),
             module(DEPLOY, "Deploy", DeployTaskQueues.DEPLOY,
                 "Publish webhook and guarded manual", null, true),
-            module(LINEAR, "Linear filing", LinearTaskQueues.LINEAR,
+            module(LINEAR, "Issue tracking", LinearTaskQueues.LINEAR,
                 "upstream workflow", null, ACTIVITY_ONLY),
             module(PLATFORM_BACKUP, "Platform backup",
                 PlatformBackupTaskQueues.PLATFORM_BACKUP, "nightly schedule and manual",
@@ -91,7 +91,7 @@ public class FactoryStatusService {
       final String trigger,
       final String scheduleId,
       final boolean needsWorkflowPoller) {
-    boolean configured = prerequisites.configured(key);
+    Boolean configured = prerequisites.configured(key);
     Integer workflowPollers = pollers(queue, TaskQueueType.TASK_QUEUE_TYPE_WORKFLOW);
     Integer activityPollers = pollers(queue, TaskQueueType.TASK_QUEUE_TYPE_ACTIVITY);
     ScheduleStatus schedule = scheduleId == null ? null : schedule(scheduleId);

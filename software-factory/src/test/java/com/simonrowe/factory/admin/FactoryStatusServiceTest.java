@@ -85,6 +85,13 @@ class FactoryStatusServiceTest {
   }
 
   @Test
+  void namesTheModuleForWhatItDoesRatherThanTheVendor() {
+    // It is the intake every producer files into — deploy failures and vulnerability findings
+    // alike — so naming it after Linear described the tool rather than the job.
+    assertThat(module(service(queue -> BOTH), "linear").displayName()).isEqualTo("Issue tracking");
+  }
+
+  @Test
   void acceptsAnActivityOnlyLinearQueue() {
     // The linear queue has one activity poller and zero workflow pollers by design. Asserting a
     // workflow poller there would report the correct shape as broken forever.

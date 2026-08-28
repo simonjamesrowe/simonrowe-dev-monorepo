@@ -14,7 +14,7 @@ public record FactoryInstanceStatus(
   public record ModuleStatus(
       String key,
       String displayName,
-      boolean configured,
+      Boolean configured,
       String taskQueue,
       Integer workflowPollers,
       Integer activityPollers,

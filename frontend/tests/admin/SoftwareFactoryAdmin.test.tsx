@@ -64,6 +64,7 @@ function status(overrides: Partial<SoftwareFactoryStatus> = {}): SoftwareFactory
   return {
     fetchedAt: '2026-08-28T09:00:00Z',
     backendCommit: SHA,
+    repository: 'simonjamesrowe/simonrowe-dev-monorepo',
     factoryReachable: true,
     deployerReachable: true,
     modules: [
@@ -118,6 +119,23 @@ describe('SoftwareFactoryAdmin', () => {
     expect(await screen.findByText('Dependency-Track API key is not set')).toBeInTheDocument()
   })
 
+  it('says a deployer-owned flag is unconfirmed rather than guessing Off', async () => {
+    // Off would be a confident answer about the wrong container: it is software-factory's flag,
+    // not the deployer's. The poller count beside it is still real, and still decides readiness.
+    mockFetchStatus.mockResolvedValue(status({
+      modules: [module('deploy', {
+        configured: null,
+        ready: true,
+        diagnostic: 'The deployer is unreachable, so its configuration is unconfirmed, but '
+          + 'Temporal shows a live worker on this queue',
+      })],
+    }))
+
+    render(<SoftwareFactoryAdmin />)
+
+    expect(await screen.findByText('Unconfirmed')).toBeInTheDocument()
+  })
+
   it('disables an action whose module is not ready', async () => {
     mockFetchStatus.mockResolvedValue(status({
       modules: [module('cvefix', { ready: false, diagnostic: 'Disabled by configuration' })],
@@ -142,6 +160,46 @@ describe('SoftwareFactoryAdmin', () => {
     expect(codereview).toHaveTextContent('Review a PR')
     expect(codereview).not.toHaveTextContent('Status only')
   })
+
+  it('says what the field wants, and which repository it targets', async () => {
+    // "Is it the URL or the number?" is the first question the field provokes, and the actions
+    // always target the server-configured repository regardless of what a pasted URL says.
+    render(<SoftwareFactoryAdmin />)
+
+    // Both pull-request fields carry it, which is the point — neither should leave the format
+    // to guesswork.
+    expect(await screen.findAllByPlaceholderText('130 or a pull request URL')).toHaveLength(2)
+    expect(screen.getAllByText(/Number or pull request URL/)).toHaveLength(2)
+    expect(screen.getAllByText(/simonjamesrowe\/simonrowe-dev-monorepo/).length)
+      .toBeGreaterThanOrEqual(2)
+  })
+
+  it('accepts a pasted pull request URL and confirms what it read', async () => {
+    mockStartReview.mockResolvedValue({
+      workflowId: 'code-review-130-uuid', runId: null, detail: 'accepted',
+    })
+    render(<SoftwareFactoryAdmin />)
+
+    await userEvent.type(
+      await screen.findByLabelText(/Pull request to review/),
+      'https://github.com/simonjamesrowe/simonrowe-dev-monorepo/pull/130/files',
+    )
+
+    expect(screen.getByText('simonjamesrowe/simonrowe-dev-monorepo#130')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Dry-run review/ }))
+    expect(mockStartReview).toHaveBeenCalledWith(getAccessToken, 130, false)
+  }, 15000)
+
+  it('refuses input it cannot read rather than sending a wrong number', async () => {
+    render(<SoftwareFactoryAdmin />)
+
+    await userEvent.type(await screen.findByLabelText(/Pull request to review/), 'main')
+
+    expect(screen.getByText('Not a pull request number or URL')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Dry-run review/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Review and comment/ })).toBeDisabled()
+  }, 10000)
 
   it('keeps both review buttons disabled until a pull request is named', async () => {
     render(<SoftwareFactoryAdmin />)
