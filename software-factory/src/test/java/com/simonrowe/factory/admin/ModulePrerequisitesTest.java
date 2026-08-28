@@ -117,7 +117,7 @@ class ModulePrerequisitesTest {
   @Test
   void reportsAnUnsetBackupScriptPath() {
     assertThat(prerequisites(false, false, false, true, null).missingFor("platformbackup", true))
-        .containsExactly("The backup script path is not set");
+        .containsExactly("The platform backup script path is not set");
   }
 
   @Test
@@ -126,7 +126,7 @@ class ModulePrerequisitesTest {
     // existing when the deploy directory moved, invisible until the first real capture.
     assertThat(prerequisites(false, false, false, true, temp.resolve("gone.sh").toString())
         .missingFor("platformbackup", true))
-        .containsExactly("The backup script is not present at its configured path");
+        .containsExactly("The platform backup script is not present at its configured path");
   }
 
   @Test
@@ -151,7 +151,7 @@ class ModulePrerequisitesTest {
     // a path that stopped existing when the deploy directory moved to its own host path. So the
     // executing container reporting nothing here means it was configured, not that it defaulted.
     assertThat(deployPrerequisites(true, false, null).missingFor("deploy", true))
-        .containsExactly("The deploy script is not present at its configured path");
+        .containsExactly("The production deploy script is not present at its configured path");
 
     Path script = Files.writeString(temp.resolve("restart-prod.sh"), "#!/bin/sh\n");
     assertThat(deployPrerequisites(true, false, script.toString()).missingFor("deploy", true))

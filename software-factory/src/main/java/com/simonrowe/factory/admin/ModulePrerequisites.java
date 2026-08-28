@@ -44,25 +44,33 @@ public class ModulePrerequisites {
   public static final List<String> KEYS =
       List.of(CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP);
 
+  /**
+   * Human-readable names for the two host scripts, used only inside a diagnostic sentence. Kept
+   * distinct from the module keys on purpose: a key identifies a module on the wire, a label is
+   * prose, and reusing one for the other is how the two silently drift into meaning each other.
+   */
+  private static final String BACKUP_SCRIPT = "platform backup";
+  private static final String DEPLOY_SCRIPT = "production deploy";
+
   private static final Logger LOG = LoggerFactory.getLogger(ModulePrerequisites.class);
 
-  private final FeedbackProperties feedback;
-  private final CveFixProperties cvefix;
-  private final DeployProperties deploy;
-  private final LinearProperties linear;
-  private final PlatformBackupProperties platformBackup;
+  private final FeedbackProperties feedbackProperties;
+  private final CveFixProperties cvefixProperties;
+  private final DeployProperties deployProperties;
+  private final LinearProperties linearProperties;
+  private final PlatformBackupProperties platformBackupProperties;
 
   public ModulePrerequisites(
-      final FeedbackProperties feedback,
-      final CveFixProperties cvefix,
-      final DeployProperties deploy,
-      final LinearProperties linear,
-      final PlatformBackupProperties platformBackup) {
-    this.feedback = feedback;
-    this.cvefix = cvefix;
-    this.deploy = deploy;
-    this.linear = linear;
-    this.platformBackup = platformBackup;
+      final FeedbackProperties feedbackProperties,
+      final CveFixProperties cvefixProperties,
+      final DeployProperties deployProperties,
+      final LinearProperties linearProperties,
+      final PlatformBackupProperties platformBackupProperties) {
+    this.feedbackProperties = feedbackProperties;
+    this.cvefixProperties = cvefixProperties;
+    this.deployProperties = deployProperties;
+    this.linearProperties = linearProperties;
+    this.platformBackupProperties = platformBackupProperties;
   }
 
   /**
@@ -78,11 +86,11 @@ public class ModulePrerequisites {
   public boolean configured(final String key) {
     return switch (key) {
       case CODE_REVIEW -> true;
-      case FEEDBACK -> feedback.enabled();
-      case CVEFIX -> cvefix.enabled();
-      case DEPLOY -> deploy.enabled() || deploy.triggerEnabled();
-      case LINEAR -> linear.enabled();
-      case PLATFORM_BACKUP -> platformBackup.enabled();
+      case FEEDBACK -> feedbackProperties.enabled();
+      case CVEFIX -> cvefixProperties.enabled();
+      case DEPLOY -> deployProperties.enabled() || deployProperties.triggerEnabled();
+      case LINEAR -> linearProperties.enabled();
+      case PLATFORM_BACKUP -> platformBackupProperties.enabled();
       default -> false;
     };
   }
@@ -107,30 +115,31 @@ public class ModulePrerequisites {
         // Not merely a nicety: the workflow files the Linear issue *before* distilling, and
         // fails non-retryably with LINEAR_DISABLED when it cannot, so with the sink off the
         // whole feedback loop stops rather than degrading to PR-only.
-        if (!linear.enabled()) {
+        if (!linearProperties.enabled()) {
           missing.add("Linear filing is disabled, and feedback files its issue first");
         }
       }
       case CVEFIX -> {
-        if (cvefix.dependencyTrack().apiKey().isBlank()) {
+        if (cvefixProperties.dependencyTrack().apiKey().isBlank()) {
           missing.add("Dependency-Track API key is not set");
         }
-        if (!linear.enabled()) {
+        if (!linearProperties.enabled()) {
           missing.add("Linear filing is disabled, so findings have nowhere to go");
         }
       }
       case LINEAR -> {
-        if (linear.apiKey().isBlank()) {
+        if (linearProperties.apiKey().isBlank()) {
           missing.add("Linear API key is not set");
         }
-        if (linear.teamKey().isBlank()) {
+        if (linearProperties.teamKey().isBlank()) {
           missing.add("Linear team key is not set");
         }
       }
-      case PLATFORM_BACKUP -> missing.addAll(script(platformBackup.script(), "backup"));
+      case PLATFORM_BACKUP ->
+          missing.addAll(script(platformBackupProperties.script(), BACKUP_SCRIPT));
       case DEPLOY -> {
-        if (deploy.enabled()) {
-          missing.addAll(script(deploy.script(), "deploy"));
+        if (deployProperties.enabled()) {
+          missing.addAll(script(deployProperties.script(), DEPLOY_SCRIPT));
         }
       }
       default -> {
