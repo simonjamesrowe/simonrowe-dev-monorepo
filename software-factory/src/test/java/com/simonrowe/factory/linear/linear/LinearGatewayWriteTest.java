@@ -134,6 +134,24 @@ class LinearGatewayWriteTest {
   }
 
   @Test
+  void attachesAnArbitraryRelatedUrlWithItsOwnTitle() {
+    // The feedback loop attaches its guidance pull requests to the issue it filed, which is the
+    // link that makes a machine-filed ticket reviewable. The fingerprint attachment must keep its
+    // fixed title, so this is a separate entry point rather than a widened one.
+    byOperation.put(
+        "attachmentCreate",
+        "{\"data\":{\"attachmentCreate\":{\"success\":true,\"attachment\":{\"id\":\"a2\"}}}}");
+
+    gateway().attachUrl("i9", "https://github.com/o/r/pull/7", "Guidance pull request");
+
+    assertThat(bodies.get(bodies.size() - 1))
+        .contains("attachmentCreate")
+        .contains("https://github.com/o/r/pull/7")
+        .contains("Guidance pull request")
+        .contains("i9");
+  }
+
+  @Test
   void failsNonRetryablyWhenAttachFingerprintReportsUnsuccessful() {
     // The fingerprint attachment is the only thing that lets the sink find an issue again; a
     // silently swallowed failure here would file a duplicate ticket on every occurrence.

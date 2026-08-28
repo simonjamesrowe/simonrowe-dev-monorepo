@@ -6365,6 +6365,296 @@ a:hover {
    Data Operations
    ========================================================================= */
 
+/* =========================================================================
+   Software Factory — a compact production line, not a generic card dashboard
+   ========================================================================= */
+
+.factory-console {
+  max-width: 92rem;
+  margin: 0 auto;
+}
+
+.factory-console__header {
+  align-items: flex-start;
+}
+
+.factory-console__eyebrow,
+.factory-console__controls-heading > span {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--color-accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.factory-console__intro {
+  max-width: 44rem;
+  margin: 0.5rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.factory-console__service-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 1.5rem;
+  padding: 0.7rem 0;
+  border-block: 1px solid var(--color-border);
+}
+
+.factory-console__service {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.factory-console__service--up { color: #16a34a; }
+.factory-console__service--down { color: #dc2626; }
+.factory-console__commit {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.factory-rail {
+  border-block: 1px solid var(--color-border);
+}
+
+.factory-rail__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(14rem, 1.35fr) repeat(2, minmax(9rem, 0.8fr)) minmax(14rem, 1.2fr) minmax(8rem, 0.65fr);
+  gap: 1rem;
+  align-items: center;
+  min-height: 6.25rem;
+  padding: 1rem 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.factory-rail__row:last-child { border-bottom: 0; }
+.factory-rail__row::before {
+  content: '';
+  position: absolute;
+  left: 2.7rem;
+  bottom: -0.8rem;
+  width: 1px;
+  height: 1.55rem;
+  background: var(--color-border);
+  z-index: 1;
+}
+.factory-rail__row:last-child::before { display: none; }
+.factory-rail__row--fault { background: rgba(239, 68, 68, 0.025); }
+
+.factory-rail__identity {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.factory-rail__number {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-bg);
+  color: var(--color-accent);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  font-weight: 700;
+  z-index: 2;
+}
+
+.factory-rail__identity h2 {
+  margin: 0 0 0.2rem;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-size: 1rem;
+}
+
+.factory-rail__identity span,
+.factory-rail__checkpoint span,
+.factory-rail__action span {
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.factory-rail__checkpoint {
+  display: grid;
+  grid-template-columns: 1rem 1fr;
+  gap: 0.2rem 0.45rem;
+  align-items: center;
+  color: #16a34a;
+}
+
+.factory-rail__checkpoint strong {
+  grid-column: 2;
+  color: var(--color-text);
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.factory-rail__row--fault .factory-rail__checkpoint { color: #d97706; }
+.factory-rail__action { display: flex; flex-direction: column; gap: 0.22rem; }
+.factory-rail__action strong { color: var(--color-text); font-size: 0.76rem; }
+.factory-rail__diagnostic {
+  grid-column: 2 / -1;
+  margin: -0.35rem 0 0;
+  color: #b45309;
+  font-size: 0.72rem;
+}
+
+.factory-rail__prerequisites {
+  grid-column: 2 / -1;
+  margin: -0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: #b45309;
+  font-size: 0.72rem;
+}
+
+.factory-rail__prerequisites li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.factory-console__run {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: var(--color-text);
+}
+
+.factory-console__run p {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.factory-console__run code { font-size: 0.72rem; }
+.factory-console__run--running { border-left-color: var(--color-primary); }
+.factory-console__run--done { border-left-color: #16a34a; }
+.factory-console__run--failed { border-left-color: #dc2626; }
+
+.factory-console__controls {
+  margin-top: 2.5rem;
+}
+
+.factory-console__controls-heading h2 {
+  margin: 0 0 1rem;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+}
+
+.factory-action {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.75fr) minmax(18rem, 1.35fr) minmax(18rem, 1fr);
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.factory-action--danger {
+  /* The pull-back has to cover the border as well as the padding, or the stripe pushes this
+     row's content 3px right of every other row. */
+  margin-left: calc(-0.6rem - 3px);
+  padding-left: 0.6rem;
+  /* --color-rose is referenced in several places in this stylesheet but defined in none of
+     them, so it silently resolves to nothing and the stripe never paints. Fall back to the
+     theme's --error rather than defining --color-rose here, which would change the colour of
+     every .admin-btn--danger across the admin UI as a side effect of this panel. */
+  border-left: 3px solid var(--color-rose, var(--error));
+}
+.factory-action h3 { margin: 0; color: var(--color-text); font-size: 0.9rem; }
+.factory-action > p { margin: 0; color: var(--color-text-muted); font-size: 0.78rem; line-height: 1.5; }
+.factory-action__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.factory-console__button-row { display: flex; gap: 0.5rem; }
+.factory-console__field {
+  display: flex;
+  flex: 1 1 9rem;
+  min-width: 9rem;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.factory-console__field input {
+  min-width: 8rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-panel);
+  color: var(--color-text);
+  font: inherit;
+}
+.factory-console__hint {
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.factory-console__hint--bad { color: #b45309; }
+
+.factory-console__spin { animation: spin 1s linear infinite; }
+
+@media (max-width: 1280px) {
+  .factory-rail__row { grid-template-columns: minmax(13rem, 1.2fr) repeat(2, minmax(8rem, 0.8fr)); }
+  .factory-rail__action { grid-column: 3; }
+  .factory-rail__diagnostic { grid-column: 2 / -1; }
+  .factory-rail__prerequisites { grid-column: 2 / -1; }
+  .factory-action { grid-template-columns: 1fr 1.5fr; }
+  .factory-action__controls { grid-column: 1 / -1; justify-content: flex-end; }
+}
+
+@media (max-width: 700px) {
+  .factory-console__header { flex-direction: column; }
+  .factory-console__commit { width: 100%; margin-left: 0; }
+  .factory-rail__row { grid-template-columns: 1fr 1fr; gap: 0.8rem; padding: 1rem 0; }
+  .factory-rail__identity { grid-column: 1 / -1; }
+  .factory-rail__row::before { display: none; }
+  .factory-rail__action { grid-column: auto; }
+  .factory-rail__diagnostic { grid-column: 1 / -1; }
+  .factory-rail__prerequisites { grid-column: 1 / -1; }
+  .factory-action { grid-template-columns: 1fr; }
+  .factory-action__controls { grid-column: auto; flex-wrap: wrap; }
+}
+
 .data-ops__status {
   margin-bottom: 1.5rem;
 }

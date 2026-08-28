@@ -4,6 +4,7 @@ import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.linear.LinearApiException;
+import com.simonrowe.factory.linear.linear.LinearGateway;
 import com.simonrowe.factory.linear.service.IssueFiler;
 import io.temporal.failure.ApplicationFailure;
 import io.temporal.spring.boot.ActivityImpl;
@@ -26,14 +27,16 @@ import org.springframework.stereotype.Component;
 public class LinearActivitiesImpl implements LinearActivities {
 
   private final IssueFiler filer;
+  private final LinearGateway gateway;
 
   /**
    * Creates the activity implementation.
    *
    * @param filer the orchestration this activity is a thin shell over
    */
-  public LinearActivitiesImpl(final IssueFiler filer) {
+  public LinearActivitiesImpl(final IssueFiler filer, final LinearGateway gateway) {
     this.filer = filer;
+    this.gateway = gateway;
   }
 
   @Override
@@ -49,6 +52,23 @@ public class LinearActivitiesImpl implements LinearActivities {
       // unparseable Linear response) carry a wrapped IOException that a triager needs to see.
       throw ApplicationFailure.newNonRetryableFailureWithCause(
           exception.getMessage(), "LINEAR_API_ERROR", exception, filing.producer());
+    }
+  }
+
+  @Override
+  public void attachUrl(final String issueId, final String url, final String title) {
+    try {
+      boolean alreadyAttached = gateway.issuesForFingerprint(url).stream()
+          .anyMatch(issue -> issue.id().equals(issueId));
+      if (!alreadyAttached) {
+        gateway.attachUrl(issueId, url, title);
+      }
+    } catch (LinearApiException exception) {
+      if (exception.retryable()) {
+        throw exception;
+      }
+      throw ApplicationFailure.newNonRetryableFailureWithCause(
+          exception.getMessage(), "LINEAR_API_ERROR", exception, issueId, url);
     }
   }
 }

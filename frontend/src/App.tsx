@@ -47,6 +47,7 @@ const JobEditor = named(() => import('./pages/admin/JobEditor'), 'JobEditor')
 const JobsAdmin = named(() => import('./pages/admin/JobsAdmin'), 'JobsAdmin')
 const DashboardAdmin = named(() => import('./pages/admin/DashboardAdmin'), 'DashboardAdmin')
 const DataOperationsAdmin = named(() => import('./pages/admin/DataOperationsAdmin'), 'DataOperationsAdmin')
+const SoftwareFactoryAdmin = named(() => import('./pages/admin/SoftwareFactoryAdmin'), 'SoftwareFactoryAdmin')
 const MediaAdmin = named(() => import('./pages/admin/MediaAdmin'), 'MediaAdmin')
 const ProfileAdmin = named(() => import('./pages/admin/ProfileAdmin'), 'ProfileAdmin')
 const SkillGroupEditor = named(() => import('./pages/admin/SkillGroupEditor'), 'SkillGroupEditor')
@@ -197,6 +198,7 @@ function App() {
           <Route path="code-examples" element={<CodeExamplesAdmin />} />
           <Route path="code-examples/:id" element={<CodeExampleEditor />} />
           <Route path="data-operations" element={<DataOperationsAdmin />} />
+          <Route path="software-factory" element={<SoftwareFactoryAdmin />} />
           <Route path="aggregated-content" element={<AggregatedContentAdmin />} />
           <Route path="content-sources" element={<ContentSourcesAdmin />} />
         </Route>

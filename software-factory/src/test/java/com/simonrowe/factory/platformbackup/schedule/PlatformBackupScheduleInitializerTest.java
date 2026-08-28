@@ -123,15 +123,14 @@ class PlatformBackupScheduleInitializerTest {
   }
 
   /**
-   * Enabling the feature flag must not immediately start reading production datastores and writing
-   * to Drive. The operator unpauses after watching a manual dry run.
+   * A fresh enabled deployment protects the platform without a separate unpause step.
    */
   @Test
-  void createsTheSchedulePausedAndDoesNotTriggerImmediately() {
+  void createsTheScheduleActiveWithoutTriggeringImmediately() {
     initializer().run(null);
 
     Schedule schedule = createdSchedule();
-    assertThat(schedule.getState().isPaused()).isTrue();
+    assertThat(schedule.getState().isPaused()).isFalse();
     assertThat(optionsCaptor.getValue().isTriggerImmediately()).isFalse();
   }
 

@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.claude.ClaudeCliRunner;
+import com.simonrowe.factory.admin.FactoryTokenAuthenticator;
 import com.simonrowe.factory.codereview.agent.ProcessRunner;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
@@ -57,7 +58,7 @@ class DeployWorkerRegistrationTest {
     runner.run(
         context -> {
           assertThat(context).doesNotHaveBean(DeployActivitiesImpl.class);
-          assertThat(context).doesNotHaveBean(DeployWorkflowService.class);
+          assertThat(context).hasSingleBean(DeployWorkflowService.class);
           // And nothing touches Mongo either, for the reason CveFixIndexInitializer documents:
           // an unreachable Mongo must not fail the context and take the webhook receiver and the
           // code-review worker down with it.
@@ -84,29 +85,29 @@ class DeployWorkerRegistrationTest {
   }
 
   @Test
-  void theTriggerIsAbsentWhenItsOwnFlagIsOff() {
+  void theManualTriggerClientRemainsPresentWhenTheWebhookFlagIsOff() {
     // Separate from the executor flag on purpose: a broken deployer must be silenceable without
     // silencing code review, and the executor has to be enabled and rehearsed before the trigger.
     runner
         .withPropertyValues("factory.deploy.enabled=true")
-        .run(context -> assertThat(context).doesNotHaveBean(DeployWorkflowService.class));
+        .run(context -> assertThat(context).hasSingleBean(DeployWorkflowService.class));
   }
 
   @Test
-  void theTriggerIsPresentOnlyWhenItsOwnFlagIsTrue() {
+  void theTriggerClientIsAlsoPresentWhenTheWebhookFlagIsTrue() {
     runner
         .withPropertyValues("factory.deploy.trigger-enabled=true")
         .run(context -> assertThat(context).hasSingleBean(DeployWorkflowService.class));
   }
 
   @Test
-  void theDeployerShapeExecutesButNeverTriggers() {
+  void theDeployerShapeExecutesAndRetainsTheTokenGuardedClient() {
     runner
         .withPropertyValues("factory.deploy.enabled=true", "factory.deploy.trigger-enabled=false")
         .run(
             context -> {
               assertThat(context).hasSingleBean(DeployActivitiesImpl.class);
-              assertThat(context).doesNotHaveBean(DeployWorkflowService.class);
+              assertThat(context).hasSingleBean(DeployWorkflowService.class);
             });
   }
 
@@ -178,6 +179,12 @@ class DeployWorkerRegistrationTest {
           null,
           new CodeReviewProperties.Api(""),
           "https://temporal.test");
+    }
+
+    @Bean
+    FactoryTokenAuthenticator factoryTokenAuthenticator(
+        final CodeReviewProperties codeReviewProperties) {
+      return new FactoryTokenAuthenticator(codeReviewProperties);
     }
   }
 }

@@ -25,7 +25,11 @@ public interface FeedbackActivities {
       String workflowId, DistillationStatus initialStatus);
 
   @ActivityMethod
-  DistillationOutcome distillAndPropose(FeedbackRequest request, List<Lesson> lessons);
+  DistillationOutcome distillAndPropose(
+      FeedbackRequest request, List<Lesson> lessons, String linearIssueUrl);
+
+  @ActivityMethod
+  void recordLinearIssue(FeedbackRequest request, String issueIdentifier, String issueUrl);
 
   @ActivityMethod
   void recordDistillation(FeedbackRequest request, DistillationOutcome outcome);

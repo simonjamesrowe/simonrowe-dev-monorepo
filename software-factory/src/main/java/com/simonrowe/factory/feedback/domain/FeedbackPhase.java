@@ -10,6 +10,7 @@ public enum FeedbackPhase {
   FETCHING,
   HARVESTING,
   LOGGING,
+  FILING,
   DISTILLING,
   COMPLETED,
   NO_SIGNAL,

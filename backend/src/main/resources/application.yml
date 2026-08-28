@@ -471,3 +471,11 @@ platform:
     # A status page must not be able to hang on a restarting sibling container.
     timeout: 1s
     cache-ttl: 60s
+
+factory-admin:
+  factory-base-url: ${PLATFORM_FACTORY_URL:http://software-factory:8090}
+  deployer-base-url: ${PLATFORM_DEPLOYER_URL:http://deployer:8090}
+  trigger-token: ${FACTORY_TRIGGER_TOKEN:}
+  timeout: 2s
+  owner: simonjamesrowe
+  repository: simonrowe-dev-monorepo

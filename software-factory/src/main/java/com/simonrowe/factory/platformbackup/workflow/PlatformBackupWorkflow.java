@@ -2,6 +2,7 @@ package com.simonrowe.factory.platformbackup.workflow;
 
 import io.temporal.workflow.WorkflowInterface;
 import io.temporal.workflow.WorkflowMethod;
+import io.temporal.workflow.QueryMethod;
 
 /** Captures the platform datastores and uploads the archive to Google Drive. */
 @WorkflowInterface
@@ -15,4 +16,8 @@ public interface PlatformBackupWorkflow {
    */
   @WorkflowMethod
   String backup(boolean dryRun);
+
+  /** Current operator-facing progress. */
+  @QueryMethod
+  PlatformBackupProgress progress();
 }

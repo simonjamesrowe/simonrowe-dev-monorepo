@@ -214,10 +214,15 @@ public class LinearGateway {
    * @throws LinearApiException on any API fault, or when Linear reports the mutation unsuccessful
    */
   public void attachFingerprint(final String issueId, final String fingerprintUrl) {
+    attachUrl(issueId, fingerprintUrl, "factory fingerprint");
+  }
+
+  /** Attaches an arbitrary related URL to an issue. */
+  public void attachUrl(final String issueId, final String url, final String title) {
     ObjectNode input = objectMapper.createObjectNode();
     input.put(FIELD_ISSUE_ID, issueId);
-    input.put("url", fingerprintUrl);
-    input.put("title", "factory fingerprint");
+    input.put("url", url);
+    input.put("title", title);
     JsonNode result = execute(CREATE_ATTACHMENT, Map.of(VAR_INPUT, input)).path("attachmentCreate");
     if (!result.path(FIELD_SUCCESS).asBoolean(false)) {
       throw new LinearApiException("Linear attachmentCreate reported failure", false);

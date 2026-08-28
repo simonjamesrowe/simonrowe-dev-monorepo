@@ -259,6 +259,7 @@ services:
       JAVA_TOOL_OPTIONS: "-Xshare:off"
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
+      FACTORY_RUNTIME_ROLE: software-factory
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?set GITHUB_WEBHOOK_SECRET in .env}
       FACTORY_TRIGGER_TOKEN: ${FACTORY_TRIGGER_TOKEN:?set FACTORY_TRIGGER_TOKEN in .env}
       GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?set GITHUB_APP_CLIENT_ID in .env}
@@ -284,13 +285,12 @@ services:
       # The ceiling that refused PR #106 (98 files) at its old value of 80. Declared here so it
       # is tunable from .env without a rebuild, since it is the limit most likely to need it.
       FACTORY_MAX_CHANGED_FILES: ${FACTORY_MAX_CHANGED_FILES:-250}
-      FACTORY_FEEDBACK_ENABLED: ${FACTORY_FEEDBACK_ENABLED:-false}
+      FACTORY_FEEDBACK_ENABLED: ${FACTORY_FEEDBACK_ENABLED:-true}
       FACTORY_FEEDBACK_HARVEST_MODEL: ${FACTORY_FEEDBACK_HARVEST_MODEL:-haiku}
       FACTORY_FEEDBACK_DISTILL_MODEL: ${FACTORY_FEEDBACK_DISTILL_MODEL:-sonnet}
-      # Off by default. Turning it on registers the cve-fix worker and declares a
-      # paused-by-default 24-hour Temporal schedule; the operator unpauses it after a dry
-      # run. See docs/runbooks/cvefix.md for the rollout order.
-      FACTORY_CVEFIX_ENABLED: ${FACTORY_CVEFIX_ENABLED:-false}
+      # Issue-only scanning is on by default. It files one consolidated repository report in
+      # Linear and never edits dependencies, pushes a branch, opens a PR or polls CI.
+      FACTORY_CVEFIX_ENABLED: ${FACTORY_CVEFIX_ENABLED:-true}
       # The receiver half of auto-deploy: gates the `workflow_run` webhook branch and the
       # DeployWorkflowService client stub. It belongs HERE and not only on `deployer`,
       # because this is the container that terminates the signed webhook. Without this
@@ -310,10 +310,10 @@ services:
       # startup to Dependency-Track would be a regression.
       DEPENDENCYTRACK_BASE_URL: ${DEPENDENCYTRACK_BASE_URL:-http://dependencytrack-apiserver:8080}
       FACTORY_MONGODB_URI: mongodb://mongodb:27017/software_factory
-      # The issue sink. Off by default. Deliberately NOT set on `deployer`, which runs this
+      # The issue sink. On by default. Deliberately NOT set on `deployer`, which runs this
       # same image: that container holds /var/run/docker.sock and must hold as few other
       # credentials as possible. See docs/runbooks/linear.md.
-      FACTORY_LINEAR_ENABLED: ${FACTORY_LINEAR_ENABLED:-false}
+      FACTORY_LINEAR_ENABLED: ${FACTORY_LINEAR_ENABLED:-true}
       FACTORY_LINEAR_TEAM_KEY: ${FACTORY_LINEAR_TEAM_KEY:-}
       FACTORY_LINEAR_DRY_RUN: ${FACTORY_LINEAR_DRY_RUN:-false}
       LINEAR_API_KEY: ${LINEAR_API_KEY:-}
@@ -391,6 +391,7 @@ services:
       JAVA_TOOL_OPTIONS: "-Xshare:off"
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
+      FACTORY_RUNTIME_ROLE: deployer
       FACTORY_MONGODB_URI: mongodb://mongodb:27017/software_factory
       # MANDATORY, and the least obvious line in this service. Compose derives the project
       # name from the directory it runs in, and this container sees the deploy directory
@@ -469,21 +470,18 @@ services:
       # constitution 2.0.0 keeps host-level container access off the container that
       # terminates public traffic.
       #
-      # Off by default. Enabling registers PlatformBackupActivitiesImpl, which is the
-      # only thing that lets a container execute the capture. It does NOT start backing
-      # up: PlatformBackupScheduleInitializer creates the schedule paused, and an
-      # operator unpauses it after a manual --dry-run. Assert a live poller on the
+      # On by default. This registers PlatformBackupActivitiesImpl, which is the
+      # only thing that lets a container execute the capture. A fresh schedule is active;
+      # an existing operator pause remains preserved. Assert a live poller on the
       # `platform-backup` task queue afterwards - a healthy container with no poller
       # means the schedule fires and nothing runs. See
       # docs/runbooks/platform-backup-restore.md.
-      FACTORY_PLATFORM_BACKUP_ENABLED: ${FACTORY_PLATFORM_BACKUP_ENABLED:-false}
+      FACTORY_PLATFORM_BACKUP_ENABLED: ${FACTORY_PLATFORM_BACKUP_ENABLED:-true}
       # HOST paths, like FACTORY_DEPLOY_SCRIPT/_REPO_DIR above. /workspace/repo no
       # longer exists in this container: the deploy directory is mounted at its own
       # host path on both sides so that compose's relative bind mounts resolve
       # identically inside and out. These two were authored against the old mount and
-      # point at nothing, which is invisible today only because
-      # FACTORY_PLATFORM_BACKUP_ENABLED defaults to false - the first thing an
-      # operator does after enabling it would be to hit "script not found".
+      # point at nothing, so keep these host and container paths identical.
       FACTORY_PLATFORM_BACKUP_SCRIPT: ${DEPLOY_DIR:-/home/simonrowe/workspace/simonjamesrowe/simonrowe-dev-monorepo}/scripts/backup-platform.sh
       FACTORY_PLATFORM_BACKUP_REPO_DIR: ${DEPLOY_DIR:-/home/simonrowe/workspace/simonjamesrowe/simonrowe-dev-monorepo}
       # No variable whose name contains LINEAR here, on purpose - not the key and not

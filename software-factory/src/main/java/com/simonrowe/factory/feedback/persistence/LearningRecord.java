@@ -21,10 +21,37 @@ public record LearningRecord(
     Instant harvestedAt,
     String promptVersion,
     List<Lesson> lessons,
-    Distillation distillation) {
+    Distillation distillation,
+    String linearIssueIdentifier,
+    String linearIssueUrl) {
 
   public LearningRecord {
     lessons = lessons == null ? List.of() : List.copyOf(lessons);
+  }
+
+  /** Compatibility constructor for records created before Linear linkage. */
+  public LearningRecord(
+      final String id,
+      final String owner,
+      final String repository,
+      final int pullNumber,
+      final String prTitle,
+      final String prUrl,
+      final boolean merged,
+      final String workflowId,
+      final Instant harvestedAt,
+      final String promptVersion,
+      final List<Lesson> lessons,
+      final Distillation distillation) {
+    this(id, owner, repository, pullNumber, prTitle, prUrl, merged, workflowId, harvestedAt,
+        promptVersion, lessons, distillation, null, null);
+  }
+
+  /** Returns this durable learning record linked to its tracking issue. */
+  public LearningRecord withLinearIssue(final String issueIdentifier, final String issueUrl) {
+    return new LearningRecord(
+        id, owner, repository, pullNumber, prTitle, prUrl, merged, workflowId, harvestedAt,
+        promptVersion, lessons, distillation, issueIdentifier, issueUrl);
   }
 
   /** Deterministic id for upserts: one learning record per PR. */

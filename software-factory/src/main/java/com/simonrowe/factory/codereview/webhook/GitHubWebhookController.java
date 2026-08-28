@@ -14,6 +14,7 @@ import com.simonrowe.factory.feedback.api.FeedbackAccepted;
 import com.simonrowe.factory.feedback.api.FeedbackWorkflowService;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.feedback.domain.FeedbackRequest;
+import com.simonrowe.factory.linear.config.LinearProperties;
 import java.io.IOException;
 import java.util.Set;
 import org.springframework.beans.factory.ObjectProvider;
@@ -43,6 +44,7 @@ public class GitHubWebhookController {
   private final FeedbackWorkflowService feedbackWorkflowService;
   private final FeedbackProperties feedbackProperties;
   private final DeployProperties deployProperties;
+  private final LinearProperties linearProperties;
 
   /**
    * An {@link ObjectProvider} because {@code DeployWorkflowService} is gated on {@code
@@ -60,6 +62,7 @@ public class GitHubWebhookController {
       final FeedbackWorkflowService feedbackWorkflowService,
       final FeedbackProperties feedbackProperties,
       final DeployProperties deployProperties,
+      final LinearProperties linearProperties,
       final ObjectProvider<DeployWorkflowService> deployWorkflowService) {
     this.properties = properties;
     this.signatureVerifier = signatureVerifier;
@@ -68,6 +71,7 @@ public class GitHubWebhookController {
     this.feedbackWorkflowService = feedbackWorkflowService;
     this.feedbackProperties = feedbackProperties;
     this.deployProperties = deployProperties;
+    this.linearProperties = linearProperties;
     this.deployWorkflowService = deployWorkflowService;
   }
 
@@ -177,7 +181,8 @@ public class GitHubWebhookController {
     FeedbackAccepted accepted =
         feedbackWorkflowService.start(
             new FeedbackRequest(
-                owner, repository, pullNumber, installationIdOf(payload), false));
+                owner, repository, pullNumber, installationIdOf(payload), false,
+                linearProperties.enabled()));
     return ResponseEntity.accepted().body(accepted);
   }
 

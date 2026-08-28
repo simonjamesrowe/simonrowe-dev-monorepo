@@ -1,5 +1,8 @@
 # Linear Issue Sink Runbook
 
+> The admin console calls this module **Issue tracking**; `linear` remains the task queue,
+> the flag prefix and the name used throughout this runbook.
+
 `linear` is a module inside the existing `software-factory` container. It adds
 no container, no port and no HTTP route — the internet-facing surface stays
 exactly `POST /webhooks/github`. What it adds is a **sink**: a Temporal task
@@ -14,17 +17,28 @@ applies unchanged.
 ## What this is, and what it is not
 
 - **It is a sink, not a producer.** It has no trigger, schedule or webhook of
-  its own. Two existing modules file into it: a failed [deploy](deploy.md) and
-  an unfixable [CVE finding](cvefix.md).
+  its own. Three modules file into it: a failed [deploy](deploy.md), the
+  repository's [current vulnerabilities](cvefix.md), and a closed pull request's
+  [review feedback](software-factory.md#review-feedback-loop).
 - **It is not a work queue.** Nothing in the factory reads a Linear ticket back
   and acts on it — there is no "pick up this CVE issue and retry it"
   mechanism. The seam for that (`LinearProperties.producers`) exists; the
-  feature does not.
+  feature does not. That consuming flow is the stated next step for
+  vulnerabilities, and it is explicitly out of scope of
+  040-software-factory-console.
 - **Linear is truth; Mongo is the audit trail.** Identity and issue state are
   always read back from Linear itself via `attachmentsForURL`, never assumed
   from the local record. Closing or deleting a ticket by hand cannot leave the
   factory believing it is still open — the next occurrence looks the state up
   fresh.
+- **It is on by default now.** `FACTORY_LINEAR_ENABLED` defaults to `true` in
+  `docker-compose.prod.yml`, but `LINEAR_API_KEY` and `FACTORY_LINEAR_TEAM_KEY`
+  still default to empty — enabled with no credential is neither off nor
+  healthy. `ModulePrerequisites` reports exactly that state, per module, on
+  `GET /api/factory/status` and once in the logs at startup, so the
+  [admin console](software-factory.md#the-software-factory-admin-console) shows
+  "Enabled but not usable: Linear API key is not set" rather than a green tick
+  followed by a runtime failure.
 - **It is the factory's first activity-only Temporal task queue.** Every other
   queue (`code-review`, `review-feedback`, `cve-fix`, `deploy`) is named by a
   `@WorkflowImpl` and gets a worker because of that. `linear` has no
@@ -76,6 +90,27 @@ knowing before touching this table:
   rather than assumed — a naive "find the issue for this fingerprint" query
   would be ambiguous the moment a regression exists.
 
+### What each producer keys on
+
+The fingerprint is `sha256("v1:" + producer + ":" + keyParts)`, and the key parts
+decide what counts as "the same problem":
+
+| Producer | Key parts | One ticket per… |
+| --- | --- | --- |
+| `deploy` | failing phase + `DeployStatus` | kind of deploy failure |
+| `cvefix` | repository + the literal `current-vulnerabilities` | repository, forever |
+| `feedback` | owner + repository + pull-request number | closed pull request |
+
+**`cvefix` deliberately keys on nothing finding-specific.** It files *one*
+consolidated report listing every component Dependency-Track currently reports,
+rather than one ticket per CVE — which at any realistic finding count is an
+unreadable backlog nobody triages. The consequence to keep in mind: because the
+key never varies, a scan that finds a different set of vulnerabilities
+`COMMENTED_EXISTING` on the same long-lived ticket, and the comment carries the
+full current set. Closing that ticket as completed and then scanning again files
+a regression; cancelling it suppresses future scans entirely until someone
+reopens it.
+
 ## Human prerequisites
 
 Before the image ships with `FACTORY_LINEAR_ENABLED=true` anywhere:
@@ -86,7 +121,8 @@ Before the image ships with `FACTORY_LINEAR_ENABLED=true` anywhere:
    one, and the sink fails loudly and non-retryably rather than silently
    filing into the backlog (which would strand tickets outside the inbox the
    design assumes).
-2. Labels `factory:deploy` and `factory:cvefix` exist on that team.
+2. Labels `factory:deploy`, `factory:cvefix` and `factory:feedback` exist on
+   that team.
 3. A Linear API key is minted and added to the prod `.env` as `LINEAR_API_KEY`.
    **Use a narrowly-scoped key, not the one used for research.** The key used
    to verify this design carries **Read + Write + Create issues + Create

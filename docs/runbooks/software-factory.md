@@ -75,18 +75,41 @@ cleanup — dropping the `REVIEWER_*` keys, removing
 
 ## Entry points
 
-`software-factory` exposes four things, and only the first is reachable from the
-internet:
+Only the first of these is reachable from the internet:
 
 | Endpoint | Port | Auth | Routed by nginx |
 | --- | --- | --- | --- |
 | `POST /webhooks/github` | 8090 | HMAC-SHA256 over the raw body | yes, exact-match |
 | `POST /api/reviews` | 8090 | `X-Factory-Token` | no |
 | `GET /api/reviews/{workflowId}` | 8090 | `X-Factory-Token` | no |
+| `POST /api/feedback` | 8090 | `X-Factory-Token` | no |
+| `GET /api/feedback/{workflowId}` | 8090 | `X-Factory-Token` | no |
+| `POST /api/vulnerability-scans` | 8090 | `X-Factory-Token` | no |
+| `GET /api/vulnerability-scans/{workflowId}` | 8090 | `X-Factory-Token` | no |
+| `POST /api/platform-backups` | 8090 | `X-Factory-Token` | no |
+| `GET /api/platform-backups/current` | 8090 | `X-Factory-Token` | no |
+| `POST /api/deploys` | 8090 | `X-Factory-Token` | no |
+| `GET /api/deploys/current` | 8090 | `X-Factory-Token` | no |
+| `GET /api/factory/runs/{workflowId}` | 8090 | `X-Factory-Token` | no |
+| `GET /api/factory/status` | 8090 | **none** | no |
+| `GET /api/version` | 8090 | **none** | no |
 | `/actuator/{health,info,prometheus}` | 8091 | none | no |
 
 nginx uses `location = /webhooks/github` — an exact match, not a prefix — so no
-other path on this service is routable from outside. That is defence in depth,
+other path on this service is routable from outside.
+
+**The two unauthenticated reads are deliberate, and `/api/factory/status` is the
+one with a non-obvious reason.** The backend asks *both* `software-factory` and
+`deployer` for it, and the `deployer` holds no `FACTORY_TRIGGER_TOKEN` on
+purpose — it receives no webhook and no HTTP trigger, and handing the container
+that holds `/var/run/docker.sock` a credential that also authorises
+`/api/reviews` is exactly the confinement 036 established. Token-protecting the
+status endpoint would therefore make the deployer report itself permanently
+unreachable, which disables the deploy and platform-backup actions with no way
+to recover from configuration. What it returns is booleans, queue names, poller
+counts and schedule times: no credential, and no free text from a failing run.
+`GET /api/factory/runs/{workflowId}` *does* require the token for precisely that
+last reason — a run's `detail` is free-form diagnostic text. That is defence in depth,
 not the boundary: both `/api/reviews` endpoints check the trigger token
 themselves, because a proxy rule is a routing decision and not an authorisation
 one. `GET /api/reviews/{workflowId}` was unauthenticated until the merge; it is
@@ -717,3 +740,163 @@ it. This needs only `pull_requests: write`, already held — the check run is th
 `<!-- temporal-code-review-finding -->`, match no fingerprint, and are therefore replied to and
 resolved. That is the correct outcome for a pre-change artefact, and nothing is destroyed. Expect a
 burst of resolutions on any pull request that was open across the deploy.
+
+## The Software Factory admin console
+
+`/admin/software-factory` in the site's own admin area is the operator surface for
+the six modules. It reports state and starts the runs that are safe to start by
+hand; it deliberately **cannot** change a feature flag or pause a schedule.
+
+### How a browser reaches an unrouted API
+
+Three hops, and the middle one is the point:
+
+```
+browser  --Auth0 bearer-->  backend /api/admin/software-factory/*
+backend  --X-Factory-Token-->  software-factory:8090 (unrouted)
+backend  --no token-->  deployer:8090/api/factory/status (unrouted)
+```
+
+`/api/admin/**` already requires `ROLE_DEV_PORTAL_ADMIN`, so the new paths inherit
+the existing gate — `SecurityConfigTest` pins anonymous, wrong-role and admin for
+each of them. The factory token never leaves the backend: the browser holds only
+an Auth0 token, and `softwareFactoryApi.test.ts` asserts no header resembling
+`X-Factory-Token` is ever sent from the frontend.
+
+Downstream statuses are **translated, never forwarded**. The factory's own error
+bodies are written by a process holding credentials, so `FactoryAdminService`
+maps them to fixed strings:
+
+| Downstream | Browser sees | Why it is worth distinguishing |
+| --- | --- | --- |
+| 409 | 409 "That run is already in progress" | a second click, not an outage |
+| 503 | 503 "reports that module as disabled" | a flag, not an outage |
+| 401/403 | 502 "not authorised to call the Software Factory" | a token mismatch between containers |
+| other 4xx | 502 "rejected the request" | a bad request, not an outage |
+| 5xx or no answer | 503 "Software Factory is unavailable" | the genuine outage case |
+
+Collapsing all of these into "unavailable" — which the first cut did — sent an
+operator looking for a down container when the answer was a flag.
+
+**The module is called "Issue tracking", not "Linear filing".** It is the single intake every
+producer files into — deploy failures, vulnerability findings and review feedback — so naming it
+after the tool described the vendor rather than the job. The task queue is still `linear`, and so
+are the flags and the runbook, because those are the implementation.
+
+### Which container answers for which module
+
+Both containers run the same image, so `software-factory` reports *every* module
+from its own configuration, including the two it does not own. The backend takes
+`deploy` and `platformbackup` from the **deployer** and everything else from
+`software-factory`; if the deployer is unreachable those two are reported as
+unavailable rather than falling back to the factory's misleading view. A partial
+failure never blanks the page.
+
+**An unreachable deployer no longer erases what Temporal knows.** Starting any of these
+workflows needs only a Temporal client, so the question that decides whether a module can do work
+is not "is the deployer's HTTP endpoint up" but "does anything poll that queue for activities" —
+a global fact the reachable `software-factory` reads for the deployer's queues just as well as the
+deployer would. So when the deployer cannot be asked, the poller counts are kept and drive
+readiness, while `configured` becomes **null**, rendered "Unconfirmed": `software-factory`'s own
+deploy flag is about `software-factory`, and showing it as the deployer's would be a confident
+answer about the wrong container.
+
+### Three statuses, never collapsed
+
+Each module reports four independent things, because any one of them can be the
+answer:
+
+1. **Configured** — its enable flag in this container.
+2. **Worker** — live Temporal poller counts, workflow and activity separately.
+   `null` means Temporal could not be asked, which is not the same as zero.
+3. **Schedule** — exists, paused, next action. Only for `cvefix` and
+   `platformbackup`.
+4. **Missing prerequisites** — enabled but unusable, e.g. `FACTORY_LINEAR_ENABLED`
+   is true with no `LINEAR_API_KEY`. Logged once at startup by
+   `ModulePrerequisites` as well, since an operator who has just flipped a flag
+   reads container logs first.
+
+`ready` is the conjunction of all four, and an action is refused server-side when
+its module is not ready. Without that check the disabled button would be the only
+guard, and a workflow started on a queue nothing polls does not fail — it sits in
+Temporal looking accepted until an activity timeout.
+
+**The `linear` queue is activity-only by design**: one activity poller, zero
+workflow pollers. The status service exempts it, and a test pins that. Do not
+"fix" it to match the other five.
+
+### Following a run
+
+One endpoint follows every module: `GET /api/factory/runs/{workflowId}`. Every
+factory workflow exposes a query method named `progress` returning an object with
+`phase` and `detail`, so an **untyped** Temporal query serves all of them and a
+new module gets progress reporting for free. It is read as a `JsonNode`, not a
+narrow record — each module adds a third field of its own (`count`,
+`lessonCount`, `sha`, `dryRun`) and Temporal's Jackson converter does **not**
+disable `FAIL_ON_UNKNOWN_PROPERTIES`, so a typed read of one module's shape would
+throw on another's.
+
+Two facts are reported separately: Temporal's `executionStatus`, which is the only
+thing that can say a run stopped, and the workflow's self-reported `phase`, which
+is the only thing that can say where it got to. A failed workflow cannot answer a
+query at all, so it reports a status and a null phase — losing the status to an
+exception there would drop the single most useful thing the page can say.
+
+### Manual actions and their guards
+
+| Action | Guard |
+| --- | --- |
+| Code review | pull-request number ≥ 1; module ready (i.e. a live `code-review` poller) |
+| Review feedback | pull-request number ≥ 1; module ready; `FACTORY_FEEDBACK_ENABLED` |
+| Scan now | module ready; `FACTORY_CVEFIX_ENABLED`; Linear reachable |
+| Dry run | module ready; no scheduled capture running |
+| Back up now | as above, plus a second confirming click in the UI |
+| Redeploy | see below |
+| Issue tracking | status only — a sink is not something you can run by itself |
+
+**Code review is the one that cannot be re-driven from GitHub**, which is why it has a manual
+trigger at all despite having no feature flag. The webhook builds its workflow id from the head
+SHA under `REJECT_DUPLICATE`, so the same commit can never be reviewed twice that way — not even
+after a review that failed, and not after one whose webhook never arrived because ingress was
+down. The console deliberately sends **no `expectedHeadSha`**, which makes
+`ReviewWorkflowService` mint a UUID instead, and that is the only thing that makes re-review
+possible. A test asserts the field stays absent.
+
+It offers two buttons, and the difference matters:
+
+- **Dry-run review** reviews and posts **nothing at all** — no findings, no verdict, and no
+  failure notice. It is the only safe way to check that Claude auth and the authenticated clone
+  path work without commenting on someone's branch. Its outcome is visible *only* in the run
+  progress on this page, which is what makes offering it reasonable; before run-following existed
+  it would have been a dead end.
+- **Review and comment** publishes as normal.
+
+Note the module has no enable flag — reviewing pull requests is the factory's original purpose and
+is always registered — so a missing `code-review` poller is the only way it breaks, and that is
+exactly the state an operator is in when reaching for this button.
+
+**Redeploy is the guarded one.** It can only redeploy the commit already running,
+and every check is repeated at the server:
+
+- the backend's own commit and the loaded bundle's commit must be **equal** and
+  neither may be `unknown`;
+- the typed phrase must be exactly `REDEPLOY <short-sha>`;
+- the `deploy` module must be ready.
+
+The commit that reaches Temporal is **the backend's own**, never the one the
+browser sent — the browser's value is used solely to prove the two agree. A
+disagreement means a partial deploy, which is precisely when a redeploy must not
+be offered.
+
+### When the page says nothing is ready
+
+In order of likelihood:
+
+1. `deployerReachable: false` — the deployer is not running, or was never updated
+   (it never recreates itself: `docker compose -f docker-compose.prod.yml up -d
+   --no-deps deployer`).
+2. "Required Temporal poller is missing" — the container is healthy and polls
+   nothing. Confirm with `temporal task-queue describe --task-queue <queue>`.
+3. "Enabled but not usable: …" — the flag is on and a credential or host path is
+   not set. Fix `.env`, then recreate the owning container.
+4. "Temporal task queue status is unavailable" — Temporal itself, not the module.

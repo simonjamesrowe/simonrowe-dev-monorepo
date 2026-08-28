@@ -24,4 +24,8 @@ public interface LinearActivities {
    */
   @ActivityMethod
   FiledIssue fileIssue(IssueFiling filing);
+
+  /** Attaches a related URL, such as a guidance pull request, exactly once. */
+  @ActivityMethod
+  void attachUrl(String issueId, String url, String title);
 }

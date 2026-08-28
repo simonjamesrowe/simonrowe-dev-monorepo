@@ -117,16 +117,14 @@ docker exec -it simonrowe-dev-monorepo-deployer-1 \
     --type PlatformBackupWorkflow --input false
 ```
 
-## 2a. Enabling the nightly schedule (one-time)
+## 2a. Verifying the nightly schedule
 
-Deliberately a two-step rollout, matching the deploy and cve-fix flows.
+The production compose default enables the executor, and a new `platform-backup-nightly` schedule
+is active immediately. An existing operator pause remains preserved across restarts.
 
-1. Set `FACTORY_PLATFORM_BACKUP_ENABLED=true` in `.env` and redeploy the `deployer`.
-   This registers the activity and **creates the schedule paused** — nothing backs up
-   yet.
-2. Run a manual `--dry-run`, then a real capture, and confirm the archive appears.
-3. Unpause `platform-backup-nightly` in the Temporal UI.
-4. **Assert a live poller**, which is the step people skip:
+1. Redeploy the `deployer` and check the schedule state in the Software Factory admin page.
+2. Use the page's **Dry run**, then **Back up now**, and confirm the archive appears.
+3. **Assert a live poller**, which is the step people skip:
 
 ```bash
 docker exec simonrowe-dev-monorepo-temporal-1 \

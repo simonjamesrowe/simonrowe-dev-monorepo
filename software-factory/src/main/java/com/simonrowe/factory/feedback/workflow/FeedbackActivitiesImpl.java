@@ -101,7 +101,7 @@ public class FeedbackActivitiesImpl implements FeedbackActivities {
 
   @Override
   public DistillationOutcome distillAndPropose(
-      final FeedbackRequest request, final List<Lesson> lessons) {
+      final FeedbackRequest request, final List<Lesson> lessons, final String linearIssueUrl) {
     Consumer<String> heartbeat = detail -> Activity.getExecutionContext().heartbeat(detail);
     List<String> prUrls = new ArrayList<>();
     List<String> notes = new ArrayList<>();
@@ -111,7 +111,7 @@ public class FeedbackActivitiesImpl implements FeedbackActivities {
       // push 403) must not lose PRs already opened for earlier targets in this same call — carry
       // on to the remaining targets and record the failure as a note instead of propagating it.
       try {
-        distillOneTarget(request, target, heartbeat, prUrls, notes);
+        distillOneTarget(request, target, heartbeat, prUrls, notes, linearIssueUrl);
       } catch (RuntimeException exception) {
         anyTargetFailed = true;
         notes.add(target.slug() + ": failed (" + exception.getMessage() + ")");
@@ -127,12 +127,19 @@ public class FeedbackActivitiesImpl implements FeedbackActivities {
     return new DistillationOutcome(status, List.of(), String.join("; ", notes));
   }
 
+  /** Compatibility seam for direct unit tests and callers that do not create a tracking issue. */
+  DistillationOutcome distillAndPropose(
+      final FeedbackRequest request, final List<Lesson> lessons) {
+    return distillAndPropose(request, lessons, null);
+  }
+
   private void distillOneTarget(
       final FeedbackRequest request,
       final Target target,
       final Consumer<String> heartbeat,
       final List<String> prUrls,
-      final List<String> notes) {
+      final List<String> notes,
+      final String linearIssueUrl) {
     Long installationId = credentials.installationId(target.owner(), target.repository());
     try (RepositoryWorkspace workspace =
         workspaceFactory.create(target.owner(), target.repository(), installationId, heartbeat)) {
@@ -154,8 +161,25 @@ public class FeedbackActivitiesImpl implements FeedbackActivities {
       prUrls.add(
           prGateway.openProposal(
               target.owner(), target.repository(), branch, workspace.defaultBranch(),
-              proposal.prTitle(), proposal.prBody(), properties.skipLabel(), installationId));
+              proposal.prTitle(), linkedBody(proposal.prBody(), linearIssueUrl),
+              properties.skipLabel(), installationId));
     }
+  }
+
+  private static String linkedBody(final String body, final String linearIssueUrl) {
+    return linearIssueUrl == null || linearIssueUrl.isBlank()
+        ? body
+        : body + "\n\nLinear: " + linearIssueUrl;
+  }
+
+  @Override
+  public void recordLinearIssue(
+      final FeedbackRequest request, final String issueIdentifier, final String issueUrl) {
+    LearningRecord existing =
+        repository.findById(
+            LearningRecord.idFor(request.owner(), request.repository(), request.pullNumber()))
+            .orElseThrow(() -> new IllegalStateException("Learning record missing"));
+    repository.save(existing.withLinearIssue(issueIdentifier, issueUrl));
   }
 
   @Override
@@ -171,7 +195,8 @@ public class FeedbackActivitiesImpl implements FeedbackActivities {
             existing.prTitle(), existing.prUrl(), existing.merged(), existing.workflowId(),
             existing.harvestedAt(), existing.promptVersion(), existing.lessons(),
             new LearningRecord.Distillation(
-                outcome.status(), outcome.prUrls(), outcome.detail())));
+                outcome.status(), outcome.prUrls(), outcome.detail()),
+            existing.linearIssueIdentifier(), existing.linearIssueUrl()));
   }
 
   /** Package-private for testing: repos/paths to distill guidance into for this PR's lessons. */

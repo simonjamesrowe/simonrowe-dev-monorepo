@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
   Briefcase,
+  CircuitBoard,
   Code,
   Database,
   FileCode,
@@ -35,6 +36,7 @@ const navItems = [
   { path: '/admin/aggregated-content', label: 'News & Events', icon: <Newspaper size={18} /> },
   { path: '/admin/content-sources', label: 'Content Sources', icon: <Rss size={18} /> },
   { path: '/admin/data-operations', label: 'Data Ops', icon: <Database size={18} /> },
+  { path: '/admin/software-factory', label: 'Software Factory', icon: <CircuitBoard size={18} /> },
 ]
 
 export function AdminLayout() {

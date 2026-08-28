@@ -85,8 +85,14 @@ class GitHubWebhookControllerTest {
             feedbackWorkflowService,
             feedbackProperties,
             deployProperties,
+            linearProperties(),
             deployWorkflowServiceProvider(deployProperties.triggerEnabled()));
     return MockMvcBuilders.standaloneSetup(controller).build();
+  }
+
+  private static com.simonrowe.factory.linear.config.LinearProperties linearProperties() {
+    return new com.simonrowe.factory.linear.config.LinearProperties(
+        true, "key", null, "SIM", null, false, null, null);
   }
 
   /**

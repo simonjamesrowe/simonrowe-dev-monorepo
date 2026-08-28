@@ -30,7 +30,7 @@ fair amount of machinery:
 | **Guided tour** | A scripted walkthrough of the site, editable from the admin CMS |
 | **Search** | Full-text site search over Elasticsearch |
 | **Contact** | Contact form with reCAPTCHA and mail delivery |
-| **Admin CMS** | Auth0-protected `/admin` for blogs, jobs, skills, tags, profile, media, code examples, tour steps, content sources and data operations (backup, restore, re-embed) |
+| **Admin CMS** | Auth0-protected `/admin` for blogs, jobs, skills, tags, profile, media, code examples, tour steps, content sources, data operations (backup, restore, re-embed) and the Software Factory console |
 
 ### The software factory
 
@@ -39,12 +39,20 @@ against this repository, orchestrated by Temporal:
 
 - **Code review** — a signed GitHub webhook turns a pull request into a durable
   workflow that reviews an exact commit SHA and comments on the PR.
-- **Feedback loop** — review conversations on merged PRs are distilled into
-  guidance and proposed back as a PR to the agent instructions repo.
-- **CVE fix** — a daily schedule reads Dependency-Track findings, opens a PR
-  bumping the affected dependency, and drives CI to green.
+- **Feedback loop** — review conversations on closed PRs are distilled into a
+  Linear ticket and proposed back as a PR to the agent instructions repo.
+- **Vulnerability scan** — a daily schedule reads Dependency-Track findings and
+  files one consolidated Linear ticket for the repository. It changes no code;
+  a future flow will consume those tickets and propose the fixes.
 - **Deploy** — a merge to `main` deploys itself, with maintenance page,
   verification, rollback and automated triage on failure.
+- **Linear filing** — the shared sink the deploy, vulnerability and feedback
+  flows file into, filing each distinct problem exactly once.
+- **Platform backup** — a nightly capture of the Postgres and ClickHouse
+  databases behind Langfuse, Temporal and Dependency-Track.
+
+`/admin/software-factory` reports the configured, worker and schedule state of
+each module and starts the runs that are safe to start by hand.
 
 See [docs/software-factory.md](docs/software-factory.md).
 
@@ -55,7 +63,8 @@ See [docs/software-factory.md](docs/software-factory.md).
 ```text
 backend/            Spring Boot API — content, agents, chat, MCP, admin
 frontend/           React + Vite SPA (public site and /admin CMS)
-software-factory/   Temporal-backed agents: code review, cvefix, deploy, feedback
+software-factory/   Temporal-backed agents: code review, feedback, vulnerability
+                    scan, deploy, Linear filing, platform backup
 scripts/            Local dev, backup/restore, production operations, monitoring
 config/             nginx, checkstyle, Grafana Alloy, OTel, SearXNG, Temporal config
 docs/               Architecture, setup guides and production runbooks
@@ -94,7 +103,9 @@ project in `frontend/`. Shared JVM dependency versions live in
 | [Deploy](docs/runbooks/deploy.md) | Shipping to prod, or auto-deploy misbehaved |
 | [Software factory](docs/runbooks/software-factory.md) | The reviewer didn't review, or the factory needs recovery |
 | [Manual actions](docs/runbooks/software-factory-manual-actions.md) | Something needs GitHub org admin and can't be automated |
-| [CVE fix](docs/runbooks/cvefix.md) | The daily dependency-patching flow |
+| [Vulnerability scan](docs/runbooks/cvefix.md) | The daily Dependency-Track-to-Linear flow |
+| [Linear issue sink](docs/runbooks/linear.md) | A ticket was filed twice, or not at all |
+| [Platform backup and restore](docs/runbooks/platform-backup-restore.md) | Capturing or restoring the platform datastores |
 | [Production monitoring](docs/runbooks/prod-monitoring.md) | The watchdog, cold-start hazards, host defects, installing the cron monitor |
 | [Dependency-Track](docs/runbooks/dependency-track.md) | Vulnerability findings and SBOM ingestion |
 | [Static analysis](docs/runbooks/static-analysis.md) | SonarQube Cloud, coverage reports, quality gate |

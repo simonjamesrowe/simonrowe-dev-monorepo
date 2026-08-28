@@ -9,6 +9,11 @@ import com.simonrowe.factory.feedback.domain.FeedbackRequest;
 import com.simonrowe.factory.feedback.domain.FeedbackResult;
 import com.simonrowe.factory.feedback.domain.Lesson;
 import com.simonrowe.factory.feedback.domain.ReviewConversation;
+import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.linear.domain.FiledIssue;
+import com.simonrowe.factory.linear.domain.FilingDecision;
+import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.RetryOptions;
 import io.temporal.failure.ApplicationFailure;
@@ -64,6 +69,16 @@ public class ReviewFeedbackWorkflowImpl implements ReviewFeedbackWorkflow {
               .setRetryOptions(RetryOptions.newBuilder().setMaximumAttempts(1).build())
               .build());
 
+  private final LinearActivities linearActivities =
+      Workflow.newActivityStub(
+          LinearActivities.class,
+          ActivityOptions.newBuilder()
+              .setTaskQueue(LinearTaskQueues.LINEAR)
+              .setStartToCloseTimeout(Duration.ofSeconds(90))
+              .setScheduleToCloseTimeout(Duration.ofMinutes(2))
+              .setRetryOptions(NETWORK_RETRIES)
+              .build());
+
   private FeedbackProgress current = FeedbackProgress.accepted();
 
   @Override
@@ -94,12 +109,42 @@ public class ReviewFeedbackWorkflowImpl implements ReviewFeedbackWorkflow {
         return new FeedbackResult(workflowId, lessons.size(), initialStatus, List.of());
       }
 
+      if (!request.linearFilingEnabled()) {
+        throw ApplicationFailure.newNonRetryableFailure(
+            "Linear filing is disabled", "LINEAR_DISABLED");
+      }
+
+      current = new FeedbackProgress(
+          FeedbackPhase.FILING, "Creating the Linear feedback issue", lessons.size());
+      String runId = Workflow.getInfo().getRunId();
+      FiledIssue issue =
+          linearActivities.fileIssue(
+              new IssueFiling(
+                  "feedback",
+                  List.of(
+                      request.owner(), request.repository(), String.valueOf(request.pullNumber())),
+                  "Review feedback from " + request.repository() + "#" + request.pullNumber(),
+                  issueBody(request, conversation, lessons),
+                  "Feedback workflow " + runId + " reprocessed " + conversation.url(),
+                  runId,
+                  workflowId));
+      if (issue.decision() == FilingDecision.SUPPRESSED || issue.issueUrl() == null) {
+        DistillationOutcome suppressed = new DistillationOutcome(
+            DistillationStatus.NO_CHANGE, List.of(), "Linear issue is suppressed");
+        networkActivities.recordDistillation(request, suppressed);
+        current = new FeedbackProgress(FeedbackPhase.COMPLETED,
+            "Linear issue suppressed; no proposal created", lessons.size());
+        return new FeedbackResult(
+            workflowId, lessons.size(), suppressed.status(), List.of(), null);
+      }
+      networkActivities.recordLinearIssue(request, issue.issueIdentifier(), issue.issueUrl());
+
       current =
           new FeedbackProgress(
               FeedbackPhase.DISTILLING, "Proposing guidance changes", lessons.size());
       DistillationOutcome outcome;
       try {
-        outcome = agentActivities.distillAndPropose(request, lessons);
+        outcome = agentActivities.distillAndPropose(request, lessons, issue.issueUrl());
       } catch (RuntimeException exception) {
         // A distillation failure must still leave the Mongo review_learnings record at
         // DistillationStatus.FAILED, not at whatever initialStatus recordLearnings first wrote
@@ -108,6 +153,11 @@ public class ReviewFeedbackWorkflowImpl implements ReviewFeedbackWorkflow {
         // catch below still runs its own FeedbackProgress handling.
         recordDistillationFailure(request, exception);
         throw exception;
+      }
+      if (issue.issueId() != null) {
+        for (String prUrl : outcome.prUrls()) {
+          linearActivities.attachUrl(issue.issueId(), prUrl, "Guidance pull request");
+        }
       }
       networkActivities.recordDistillation(request, outcome);
       if (outcome.status() == DistillationStatus.FAILED) {
@@ -131,7 +181,8 @@ public class ReviewFeedbackWorkflowImpl implements ReviewFeedbackWorkflow {
       }
 
       current = new FeedbackProgress(FeedbackPhase.COMPLETED, "Completed", lessons.size());
-      return new FeedbackResult(workflowId, lessons.size(), outcome.status(), outcome.prUrls());
+      return new FeedbackResult(
+          workflowId, lessons.size(), outcome.status(), outcome.prUrls(), issue.issueUrl());
     } catch (RuntimeException exception) {
       current =
           new FeedbackProgress(
@@ -180,5 +231,35 @@ public class ReviewFeedbackWorkflowImpl implements ReviewFeedbackWorkflow {
       return exception.getClass().getSimpleName();
     }
     return message.length() > 240 ? message.substring(0, 240) : message;
+  }
+
+  private static String issueBody(
+      final FeedbackRequest request,
+      final ReviewConversation conversation,
+      final List<Lesson> lessons) {
+    StringBuilder body = new StringBuilder()
+        .append("Review feedback captured from [")
+        .append(request.owner()).append('/').append(request.repository()).append('#')
+        .append(request.pullNumber()).append("](").append(conversation.url()).append(").\n\n")
+        .append("## Source\n\n")
+        .append("- **Pull request:** ").append(conversation.title()).append("\n")
+        .append("- **Merged:** ").append(conversation.merged()).append("\n\n")
+        .append("## Proposed guidance and evidence\n\n");
+    for (Lesson lesson : lessons) {
+      body.append("### ").append(lesson.title()).append("\n\n")
+          .append(lesson.guidance()).append("\n\n")
+          .append("- **Scope:** ").append(lesson.scope().toJson()).append("\n")
+          .append("- **Source:** ").append(lesson.source().toJson()).append("\n")
+          .append("- **Evidence:**\n");
+      for (String evidence : lesson.evidence()) {
+        body.append("  - ").append(evidence).append('\n');
+      }
+      body.append('\n');
+    }
+    body.append("## Acceptance criteria\n\n")
+        .append("- The applicable agent guidance encodes every lesson above.\n")
+        .append("- Any guidance pull request references and is attached to this issue.\n")
+        .append("- Existing repository checks pass without unrelated source changes.\n");
+    return body.toString();
   }
 }
