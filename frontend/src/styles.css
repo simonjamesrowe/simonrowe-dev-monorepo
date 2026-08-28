@@ -6582,7 +6582,9 @@ a:hover {
 }
 
 .factory-action--danger {
-  margin-left: -0.6rem;
+  /* The pull-back has to cover the border as well as the padding, or the stripe pushes this
+     row's content 3px right of every other row. */
+  margin-left: calc(-0.6rem - 3px);
   padding-left: 0.6rem;
   /* --color-rose is referenced in several places in this stylesheet but defined in none of
      them, so it silently resolves to nothing and the stripe never paints. Fall back to the
@@ -6637,7 +6639,7 @@ a:hover {
   .factory-rail__diagnostic { grid-column: 2 / -1; }
   .factory-rail__prerequisites { grid-column: 2 / -1; }
   .factory-action { grid-template-columns: 1fr 1.5fr; }
-  .factory-action__controls { grid-column: 1 / -1; justify-content: flex-start; }
+  .factory-action__controls { grid-column: 1 / -1; justify-content: flex-end; }
 }
 
 @media (max-width: 700px) {
