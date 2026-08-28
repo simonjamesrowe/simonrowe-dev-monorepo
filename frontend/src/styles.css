@@ -6584,11 +6584,19 @@ a:hover {
 .factory-action--danger { border-left: 3px solid var(--color-rose); padding-left: 1rem; }
 .factory-action h3 { margin: 0; color: var(--color-text); font-size: 0.9rem; }
 .factory-action > p { margin: 0; color: var(--color-text-muted); font-size: 0.78rem; line-height: 1.5; }
-.factory-action__controls { display: flex; align-items: flex-end; justify-content: flex-end; gap: 0.6rem; }
+.factory-action__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  min-width: 0;
+}
 .factory-console__button-row { display: flex; gap: 0.5rem; }
 .factory-console__field {
   display: flex;
-  flex: 1;
+  flex: 1 1 9rem;
+  min-width: 9rem;
   flex-direction: column;
   gap: 0.3rem;
   color: var(--color-text-muted);
@@ -6606,7 +6614,7 @@ a:hover {
 }
 .factory-console__spin { animation: spin 1s linear infinite; }
 
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
   .factory-rail__row { grid-template-columns: minmax(13rem, 1.2fr) repeat(2, minmax(8rem, 0.8fr)); }
   .factory-rail__action { grid-column: 3; }
   .factory-rail__diagnostic { grid-column: 2 / -1; }

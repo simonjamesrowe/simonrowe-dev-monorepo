@@ -118,12 +118,33 @@ contains no internal credentials while the factory nginx surface is unchanged.
 - [x] T046 Run `./gradlew :software-factory:test` and resolve failures
 - [x] T047 Run the backend test/checkstyle/coverage workflow and resolve failures
 - [x] T048 Run frontend unit tests, lint, and production build and resolve failures
-- [ ] T049 Run browser-driven admin verification against the local environment and capture the final result
-  — **not done.** Deferred deliberately: the page's two upstreams are `software-factory:8090`
-  and `deployer:8090`, neither of which runs in the local stack, so a local pass would only
-  exercise the both-containers-unreachable path. That path is covered by
-  `FactoryAdminServiceTest.reportsAllSixModulesEvenWhenNeitherContainerAnswers` and
-  `SoftwareFactoryAdmin.test.tsx`. Verify on the Pi after deploy instead.
+- [x] T049 Run browser-driven admin verification against the local environment and capture the
+  final result — **done 2026-08-28**, against the restored production backup
+  (`backup-20260827-210001.zip`: 52 blogs, 1,454 media assets, 2,939 embeddings) and a locally
+  run `software-factory` on 8090. Verified live:
+  - both-unreachable and **partial**-failure paths (factory reachable, deployer down: `deploy`
+    and `platformbackup` correctly reported from the *deployer* as unavailable rather than from
+    the factory's own switched-off view);
+  - real Temporal poller counts, including `linear` at **0 workflow / N activity** — the
+    activity-only exemption holding against a real server;
+  - the `cve-fix-daily` schedule created **active**, rendered as "Active · next 29/08/2026,
+    01:00:00";
+  - `ModulePrerequisites` both in the startup log (two INFO, two WARN) and on the page as
+    per-module lists — `cvefix` configured with live pollers yet correctly **not ready**;
+  - the readiness gate disabling **Scan now** for that reason, and the code-review buttons
+    enabling only once a pull request number is entered;
+  - a dry-run review reaching `ReviewController.start` inside the factory — proving Auth0 →
+    admin role → backend proxy → `X-Factory-Token` end to end — and failing only on the GitHub
+    App PEM, which is absent locally;
+  - **both error translations**, seen for real: a token mismatch rendered "This server is not
+    authorised to call the Software Factory", and the PEM failure "Software Factory is
+    unavailable". Under the original collapse-everything behaviour both would have read
+    "unavailable", and the first would have sent an operator hunting a down container.
+
+  It also found a layout defect the unit tests could not: the code-review panel's field and
+  buttons overflowed their grid column and printed on top of the description. Fixed in the same
+  change, along with the rail's last column being clipped because the 1100px breakpoint ignores
+  the fixed 240px admin sidebar.
 - [x] T050 Re-run `git diff --check`, validate spec acceptance scenarios, and mark all tasks complete in `specs/040-software-factory-console/tasks.md`
 
 ## Dependencies & Execution Order
@@ -162,6 +183,7 @@ Run on 2026-08-28 against the final working tree:
 | `npm run lint` | 0 errors, 5 pre-existing `react-refresh` warnings |
 | `npm run build` | pass |
 | `git diff --check` | clean |
+| Browser pass against restored prod data | done — see T049 |
 
 New tests added by this feature:
 
