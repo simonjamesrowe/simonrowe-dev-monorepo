@@ -217,7 +217,7 @@ class GitHubCredentialsTest {
    * the 2026-08-11 drift was misdiagnosed, so the message is worth producing ourselves.
    */
   @Test
-  void refusesToMintWhenARequiredPermissionIsMissingAndNamesIt(@TempDir final Path directory)
+  void refusesToMintWhenRequiredPermissionIsMissingAndNamesIt(@TempDir final Path directory)
       throws Exception {
     KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
     Path privateKey = writePrivateKey(directory, keyPair);
