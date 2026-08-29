@@ -34,7 +34,13 @@ public final class ShortLinkSlugger {
 
   private static final Pattern COMBINING_MARKS = Pattern.compile("\\p{M}+");
   private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9]+");
-  private static final Pattern EDGE_SEPARATORS = Pattern.compile("^-+|-+$");
+  /**
+   * A run of hyphens at the start, or a run at the end. The non-capturing groups are for
+   * the reader, not the matcher: bare {@code ^-+|-+$} alternates across the whole
+   * expression exactly as intended, but it reads as though the anchors bind to the
+   * alternation rather than to each branch.
+   */
+  private static final Pattern EDGE_SEPARATORS = Pattern.compile("(?:^-+)|(?:-+$)");
 
   private static final SecureRandom RANDOM = new SecureRandom();
 

@@ -3,6 +3,7 @@ package com.simonrowe.shortlink;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.BlogRepository;
+import com.simonrowe.common.LogSafe;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -92,8 +93,11 @@ public class ShortLinkController {
     if (target.isEmpty()) {
       // An orphaned link: the content it pointed at has been deleted. Better a themed
       // not-found than a share card describing something that no longer exists.
+      // The slug reached us as a path variable. It matched a stored link, so it cannot
+      // actually carry a newline — but that is a property of the data, not of this method,
+      // and LogSafe is what the codebase uses to keep it that way.
       LOG.info("Short link '{}' points at missing {} {}",
-          slug, link.get().contentType(), link.get().contentId());
+          LogSafe.value(slug), link.get().contentType(), LogSafe.value(link.get().contentId()));
       return html(HttpStatus.NOT_FOUND, renderer.notFoundDocument());
     }
 

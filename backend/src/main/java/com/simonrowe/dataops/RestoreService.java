@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -172,6 +173,27 @@ public class RestoreService {
     }
   }
 
+  /**
+   * Index recreation to run after a collection is imported, keyed by collection.
+   *
+   * <p>A restore drops each collection, and a dropped collection takes its indexes with
+   * it. Every index here was created by a Mongock change unit that Mongock has already
+   * recorded as executed, so nothing else would ever put them back.
+   *
+   * <p>A map rather than a chain of {@code if (X.equals(name))} branches: the chain was
+   * four deep and had begun to dominate this method's cognitive complexity, and a lookup
+   * makes adding the fifth a one-line change in one obvious place.
+   *
+   * @return collection name to its post-import hook
+   */
+  private Map<String, Runnable> postImportIndexHooks() {
+    return Map.of(
+        FAVOURITES, this::ensureFavouriteIndexes,
+        ARTICLE_SUMMARIES, this::ensureArticleSummaryIndexes,
+        PLATFORM_RELEASES, this::ensurePlatformReleaseIndexes,
+        SHORT_LINKS, this::ensureShortLinkIndexes);
+  }
+
   void restoreCollections(final Path zipFile) throws IOException {
     List<String> allCollections = new ArrayList<>();
     allCollections.addAll(IMPORT_ORDER_INDEPENDENT);
@@ -205,18 +227,9 @@ public class RestoreService {
             docs.size(), collectionName);
       }
 
-      if (FAVOURITES.equals(collectionName)) {
-        ensureFavouriteIndexes();
-      }
-      if (ARTICLE_SUMMARIES.equals(collectionName)) {
-        ensureArticleSummaryIndexes();
-      }
-      if (PLATFORM_RELEASES.equals(collectionName)) {
-        ensurePlatformReleaseIndexes();
-      }
-      if (SHORT_LINKS.equals(collectionName)) {
-        ensureShortLinkIndexes();
-      }
+      postImportIndexHooks()
+          .getOrDefault(collectionName, () -> { })
+          .run();
 
       progress += progressPerCollection;
     }
