@@ -1,6 +1,9 @@
 package com.simonrowe.aggregation;
 
+import com.simonrowe.shortlink.ShortLinkContentType;
+import com.simonrowe.shortlink.ShortLinkService;
 import java.time.Instant;
+import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
@@ -15,9 +18,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class EventsController {
 
   private final AggregatedEventRepository eventRepository;
+  private final ShortLinkService shortLinkService;
 
-  public EventsController(final AggregatedEventRepository eventRepository) {
+  public EventsController(
+      final AggregatedEventRepository eventRepository,
+      final ShortLinkService shortLinkService
+  ) {
     this.eventRepository = eventRepository;
+    this.shortLinkService = shortLinkService;
   }
 
   @GetMapping
@@ -29,28 +37,32 @@ public class EventsController {
     var pageable = PageRequest.of(page, size);
     var now = Instant.now();
 
-    if (Boolean.TRUE.equals(upcoming)) {
-      return eventRepository
-          .findByVisibleTrueAndEventDateAfterOrderByEventDateAsc(now, pageable)
-          .map(EventResponse::from);
-    }
-
     if (Boolean.FALSE.equals(upcoming)) {
-      return eventRepository
-          .findByVisibleTrueAndEventDateBeforeOrderByEventDateDesc(now, pageable)
-          .map(EventResponse::from);
+      return withShortUrls(eventRepository
+          .findByVisibleTrueAndEventDateBeforeOrderByEventDateDesc(now, pageable));
     }
 
-    // Default: upcoming first (ascending), then past (descending) - return upcoming
-    return eventRepository
-        .findByVisibleTrueAndEventDateAfterOrderByEventDateAsc(now, pageable)
-        .map(EventResponse::from);
+    // Default and explicit upcoming=true are the same query: upcoming, ascending.
+    return withShortUrls(eventRepository
+        .findByVisibleTrueAndEventDateAfterOrderByEventDateAsc(now, pageable));
+  }
+
+  /**
+   * Resolves every share URL on the page in one query rather than one per event.
+   */
+  private Page<EventResponse> withShortUrls(final Page<AggregatedEvent> events) {
+    Map<String, String> shortUrls = shortLinkService.urlsFor(
+        ShortLinkContentType.EVENT,
+        events.getContent().stream().map(AggregatedEvent::id).toList());
+    return events.map(event -> EventResponse.from(event, shortUrls.get(event.id())));
   }
 
   @GetMapping("/{id}")
   public ResponseEntity<EventResponse> getEventById(@PathVariable final String id) {
     return eventRepository.findById(id)
-        .map(EventResponse::from)
+        .map(event -> EventResponse.from(
+            event,
+            shortLinkService.urlFor(ShortLinkContentType.EVENT, event.id()).orElse(null)))
         .map(ResponseEntity::ok)
         .orElse(ResponseEntity.notFound().build());
   }

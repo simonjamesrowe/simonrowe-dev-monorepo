@@ -2,6 +2,8 @@ package com.simonrowe.admin;
 
 import com.simonrowe.blog.BlogContentType;
 import com.simonrowe.common.LogSafe;
+import com.simonrowe.shortlink.ShortLinkContentType;
+import com.simonrowe.shortlink.ShortLinkService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -39,17 +41,20 @@ public class AdminBlogController {
   private final AdminTagRepository tagRepository;
   private final AdminSkillRepository skillRepository;
   private final com.simonrowe.events.ContentChangePublisher contentChangePublisher;
+  private final ShortLinkService shortLinkService;
 
   public AdminBlogController(
       final AdminBlogRepository blogRepository,
       final AdminTagRepository tagRepository,
       final AdminSkillRepository skillRepository,
-      final com.simonrowe.events.ContentChangePublisher contentChangePublisher
+      final com.simonrowe.events.ContentChangePublisher contentChangePublisher,
+      final ShortLinkService shortLinkService
   ) {
     this.blogRepository = blogRepository;
     this.tagRepository = tagRepository;
     this.skillRepository = skillRepository;
     this.contentChangePublisher = contentChangePublisher;
+    this.shortLinkService = shortLinkService;
   }
 
   @GetMapping
@@ -66,7 +71,19 @@ public class AdminBlogController {
     } else {
       blogs = blogRepository.findAll(pageRequest);
     }
-    return blogs.map(this::toDto);
+
+    // One query for the page, not one per row.
+    Map<String, Long> clickCounts = shortLinkService.clickCountsFor(
+        ShortLinkContentType.BLOG,
+        blogs.getContent().stream().map(Blog::id).toList());
+
+    return blogs.map(blog -> {
+      Map<String, Object> dto = toDto(blog);
+      // Null rather than 0 when the post has no link at all — "never shared" and "shared
+      // but never opened" are different facts and the column should not conflate them.
+      dto.put("clickCount", clickCounts.get(blog.id()));
+      return dto;
+    });
   }
 
   @PostMapping
@@ -95,6 +112,7 @@ public class AdminBlogController {
     );
 
     Blog saved = blogRepository.save(blog);
+    ensureShortLink(saved);
     LOG.info("Created blog: id={}, title={}, user={}",
         saved.id(), saved.title(), jwt.getSubject());
     contentChangePublisher.publishCreated(
@@ -138,6 +156,7 @@ public class AdminBlogController {
     );
 
     Blog saved = blogRepository.save(updated);
+    ensureShortLink(saved);
     LOG.info("Updated blog: id={}, user={}", LogSafe.value(id), jwt.getSubject());
     contentChangePublisher.publishUpdated(
         com.simonrowe.events.ContentChangeEvent.ContentType.BLOG, saved.id());
@@ -155,6 +174,30 @@ public class AdminBlogController {
     contentChangePublisher.publishDeleted(
         com.simonrowe.events.ContentChangeEvent.ContentType.BLOG, id);
     LOG.info("Deleted blog: id={}, user={}", LogSafe.value(id), jwt.getSubject());
+  }
+
+  /**
+   * Mints the post's share link if it has none.
+   *
+   * <p>Called on update as well as create, and idempotent, so it is a no-op for a post
+   * that already has one — a link someone has already pasted somewhere never changes,
+   * even when the title does. The update call exists so a post that predates this feature
+   * picks one up on its next edit without waiting for a backfill.
+   *
+   * <p>Minting is eager rather than hung off the existing {@code ContentChangePublisher}
+   * Kafka event because an asynchronous slug makes the Share control vanish from any
+   * listing rendered in the gap, and the frontend has no way to ask for one.
+   *
+   * <p>A failure here must not fail the save. The post simply renders with a null
+   * {@code shortUrl} and no Share control, which is a supported state.
+   */
+  private void ensureShortLink(final Blog blog) {
+    try {
+      shortLinkService.ensureFor(ShortLinkContentType.BLOG, blog.id(), blog.title());
+    } catch (RuntimeException e) {
+      LOG.warn("Could not mint a short link for blog {}: {}",
+          LogSafe.value(blog.id()), e.toString());
+    }
   }
 
   private Blog findById(final String id) {

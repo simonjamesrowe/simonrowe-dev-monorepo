@@ -12,7 +12,8 @@ public record BlogSummaryResponse(
     List<TagRef> tags,
     List<SkillRef> skills,
     String url,
-    BlogContentType contentType
+    BlogContentType contentType,
+    String shortUrl
 ) {
 
   public static BlogSummaryResponse fromEntity(final Blog blog) {
@@ -22,6 +23,27 @@ public record BlogSummaryResponse(
   public static BlogSummaryResponse fromEntity(
       final Blog blog,
       final String featuredImageUrl
+  ) {
+    return fromEntity(blog, featuredImageUrl, null);
+  }
+
+  /**
+   * Builds the summary with a resolved share URL.
+   *
+   * <p>{@code shortUrl} is the full absolute address, so the frontend never concatenates a
+   * base. It is <b>nullable</b> and the Share control is simply absent when it is null: an
+   * item created in the window before its link was minted has to render fine rather than
+   * hand out a broken URL.
+   *
+   * @param blog the post
+   * @param featuredImageUrl the resolved image variant
+   * @param shortUrl the absolute share URL, or null when the post has no link yet
+   * @return the response
+   */
+  public static BlogSummaryResponse fromEntity(
+      final Blog blog,
+      final String featuredImageUrl,
+      final String shortUrl
   ) {
     List<TagRef> tagRefs = blog.tags() == null
         ? List.of()
@@ -40,7 +62,8 @@ public record BlogSummaryResponse(
         tagRefs,
         skillRefs,
         "/blogs/" + blog.id(),
-        BlogContentType.orDefault(blog.contentType())
+        BlogContentType.orDefault(blog.contentType()),
+        shortUrl
     );
   }
 }

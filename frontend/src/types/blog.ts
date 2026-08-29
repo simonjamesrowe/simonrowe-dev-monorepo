@@ -26,6 +26,14 @@ export interface BlogSummary {
   tags: TagRef[]
   skills?: SkillRef[]
   contentType: BlogContentType
+  /**
+   * The full absolute share URL (`https://simonrowe.dev/s/{slug}`), ready to hand to a
+   * share sheet or the clipboard — never build one from parts here.
+   *
+   * Absent when the item has no link minted yet. The Share control is hidden in that case
+   * rather than offering a broken URL.
+   */
+  shortUrl?: string | null
 }
 
 export interface BlogDetail {
@@ -38,6 +46,8 @@ export interface BlogDetail {
   tags: TagRef[]
   skills?: SkillRef[]
   contentType: BlogContentType
+  /** See {@link BlogSummary.shortUrl}. */
+  shortUrl?: string | null
 }
 
 export type BlogNarrationState =

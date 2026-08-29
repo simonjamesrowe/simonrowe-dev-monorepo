@@ -23,6 +23,16 @@ export default defineConfig({
           if (req.method === 'GET') return '/index.html'
         },
       },
+      // Share links are served by the backend, not the SPA — mirrors the `location /s/`
+      // block in nginx.conf. Without this, /s/ 404s in local development.
+      //
+      // The trailing slash is load-bearing. Vite matches a string proxy key with
+      // `startsWith`, so a bare '/s' also captures '/src/**' — every module the dev
+      // server serves — and the whole SPA 404s with only a blank page to show for it.
+      '/s/': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
       '/uploads': {
         target: 'http://localhost:8080',
         changeOrigin: true,

@@ -270,6 +270,74 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   `FACTORY_RUNTIME_ROLE` (`software-factory` / `deployer`) is new, and is only how a container names
   itself in its status response. See `docs/runbooks/software-factory.md`,
   `docs/runbooks/cvefix.md`, `docs/runbooks/linear.md`, and `specs/040-software-factory-console/`.
+- 041-share-short-links: A Share control on blog posts, blog cards and news/event cards,
+  handing out `https://simonrowe.dev/s/<slug>` — a readable first-party address that
+  redirects, unfurls, and counts human clicks. One new collection, `short_links`, and one
+  new package, `com.simonrowe.shortlink`. Things that are load-bearing:
+  - **The slug IS the `_id`.** The redirect is a primary-key lookup, and slug uniqueness is
+    enforced by Mongo rather than by application code that hopes. `ensureFor` inserts and
+    catches `DuplicateKeyException`; there is deliberately **no read-then-write** check.
+    A duplicate key has two causes needing opposite responses — the slug is taken (retry
+    with a suffix) or a concurrent call already minted for *this* content (return theirs) —
+    told apart by re-reading the content index, never by parsing the error.
+  - **The unique `(contentType, contentId)` index is what makes "one link per item"
+    structural.** Created by `V029CreateShortLinksAndBackfill`, never by `@CompoundIndex`:
+    `auto-index-creation` is off. `V029` is the first change unit here that creates indexes
+    **and** writes data — deliberate, because unlike `platform_releases` a slug is not
+    derived self-healing data; nothing recreates a lost one with the same value.
+  - **`GET /s/{slug}` serves the same 200 OG document to EVERY client — never a 302.**
+    Crawlers follow redirects, so a redirect to the SPA lands them on a page with no
+    metadata and the link unfurls as the bare site title. User-Agent matching decides only
+    whether to *count* a click, where a miss costs an inflated statistic rather than a
+    broken preview. An unknown slug is a themed **404**, never a redirect to `/` — a typo
+    that lands somewhere plausible looks like a working link.
+  - **`og:image` must be absolute.** Crawlers drop a relative one silently, so the feature
+    looks broken with nothing in the logs. Three rules: `/uploads/…` gets `site.base-url`
+    prepended, an absolute URL passes through (news hotlinks the publisher's image), and
+    anything else falls back to `frontend/public/images/share-card.png` — the **frontend**
+    public dir, not the backend classpath, because production serves `/images/**` from the
+    frontend bundle while local dev proxies it to the backend.
+  - **`/s/**` is deliberately absent from `RateLimitInterceptor`'s allowlist in
+    `WebConfig`.** One paste into a busy Slack workspace is a burst of unfurl fetches from
+    one address range; a 429 there breaks the preview rather than throttling anyone. It is
+    also public only via `.anyRequest().permitAll()` — no matcher names it — so
+    `SecurityConfigTest` asserts it stays reachable, or a future tightening 401s every link
+    already pasted elsewhere. `SecurityConfig`'s global cache-control disable applies and is
+    correct here: a cached document would stop the counter incrementing.
+  - **`short_links` is in `BackupService.BACKUP_COLLECTIONS` and
+    `RestoreService.IMPORT_ORDER_INDEPENDENT`, and `RestoreService.ensureShortLinkIndexes()`
+    calls `V029.createIndexes` directly** — a restore drops indexes with the collection and
+    Mongock will not re-run a recorded unit. Not housekeeping: these slugs are in URLs
+    already pasted into other people's Slack channels.
+  - **`frontend/nginx.conf` gains `location /s/` and is bind-mounted from the deploy
+    directory in production**, so a new frontend image alone does not apply it. Verify with
+    `curl -i https://simonrowe.dev/s/<known-slug>` after deploy — getting the SPA's HTML
+    back means every shared link is unfurling as the bare site title. `vite.config.ts` needs
+    the matching `/s` proxy or the endpoint 404s locally.
+  - `shortUrl` is added to `BlogSummaryResponse`, `BlogDetailResponse`, `ArticleResponse`
+    and `EventResponse` as a **nullable** absolute URL via a *second* factory overload (the
+    one-arg forms have six callers between admin and favourites). Populated by one batched
+    `urlsFor` per listing — 24 news cards cost one extra query, not 24. Null means no link
+    yet and the Share control is simply absent, never broken.
+  - Frontend: `ShareButton` detects `navigator.share` → `clipboard.writeText` →
+    `execCommand` **at click time, not render time** — jsdom has neither of the first two,
+    so render-time detection would leave both shipping paths untested. `AbortError` from a
+    dismissed sheet is swallowed and does **not** fall through to copying.
+  - `NewsEventsPage` gains `?article=` / `?event=` deep links. The drawer was already
+    id-driven so it needed no new state; the real work is `deepLinkedArticles` /
+    `deepLinkedEvents`, fetched by id when the shared item has fallen off page one —
+    **without it the page loads and silently does nothing**, the failure mode most likely to
+    ship unnoticed. Both fetches are gated on `newsSettled`/`eventsSettled`, or every shared
+    link fetches by id even when the item is on page one. Cards now carry
+    `id={article.id}` / `id={event.id}` so the already-mounted `useScrollToHash` has
+    something to find.
+  - Four controls on a news card: under 30rem the labels collapse to icons rather than any
+    control being dropped.
+  - Admin: `GET /api/admin/short-links` (unpaged, sorted in the browser) at
+    `/admin/short-links`, plus a Clicks column in the blog list. A deleted item leaves an
+    **orphaned link with a null title** that stays visible — slugs are never reclaimed,
+    because reclaiming one would redirect an already-shared URL to different content.
+  See `specs/041-share-short-links/`.
 - 039-linear-issue-sink: A sixth `software-factory` module, `com.simonrowe.factory.linear` — a
   **sink** with no trigger, schedule or webhook of its own, on a new `linear` Temporal task queue.
   Files findings from `deploy` (failed deploys) and `cvefix` (unfixable CVE components) into

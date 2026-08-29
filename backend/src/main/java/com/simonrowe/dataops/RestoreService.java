@@ -14,6 +14,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
 import com.simonrowe.migration.changeunits.V022CreatePlatformReleaseIndexes;
+import com.simonrowe.migration.changeunits.V029CreateShortLinksAndBackfill;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -34,6 +35,7 @@ public class RestoreService {
   private static final String FAVOURITES = "favourites";
   private static final String ARTICLE_SUMMARIES = "article_summaries";
   private static final String PLATFORM_RELEASES = "platform_releases";
+  private static final String SHORT_LINKS = "short_links";
   private static final String FAVOURITES_UNIQUE_INDEX = "idx_type_content";
   private static final String FAVOURITES_LIST_INDEX = "idx_type_created";
 
@@ -47,7 +49,11 @@ public class RestoreService {
       // aggregated_articles, so they follow it here rather than in the ordered list.
       ARTICLE_SUMMARIES,
       // Releases reference nothing at all — the _id is a commit SHA — so order is free.
-      PLATFORM_RELEASES
+      PLATFORM_RELEASES,
+      // Short links hold no @DBRef and point at blogs, articles and events by plain id,
+      // so order is free here too. They must be restored: the slugs are in URLs already
+      // pasted elsewhere, and nothing recreates a lost one with the same value.
+      SHORT_LINKS
   );
 
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
@@ -208,6 +214,9 @@ public class RestoreService {
       if (PLATFORM_RELEASES.equals(collectionName)) {
         ensurePlatformReleaseIndexes();
       }
+      if (SHORT_LINKS.equals(collectionName)) {
+        ensureShortLinkIndexes();
+      }
 
       progress += progressPerCollection;
     }
@@ -267,6 +276,25 @@ public class RestoreService {
   void ensurePlatformReleaseIndexes() {
     V022CreatePlatformReleaseIndexes.createIndexes(mongoTemplate);
     LOG.info("Recreated platform release indexes after restore");
+  }
+
+  /**
+   * Recreates the short-link indexes after a restore, for the same reason
+   * {@link #ensureFavouriteIndexes()} exists: {@code dropCollection} takes the
+   * collection's indexes with it, and {@code V029} has already been recorded as
+   * executed, so Mongock will never put them back.
+   *
+   * <p>The unique {@code (contentType, contentId)} index is the one that matters. Without
+   * it a later re-save can mint a second slug for content that already has one, and both
+   * addresses then exist — one of them handed out to people who will keep using it.
+   *
+   * <p>Definitions live in {@code V029CreateShortLinksAndBackfill} and are called from
+   * there rather than restated, so the two cannot drift.
+   * Package-private so the round-trip test can exercise it directly.
+   */
+  void ensureShortLinkIndexes() {
+    V029CreateShortLinksAndBackfill.createIndexes(mongoTemplate);
+    LOG.info("Recreated short link indexes after restore");
   }
 
   /**

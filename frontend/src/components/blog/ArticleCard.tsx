@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 
 import { ListenButton } from '../narration/ListenButton'
+import { ShareButton } from '../common/ShareButton'
 import type { BlogSummary } from '../../types/blog'
 
 interface ArticleCardProps {
@@ -45,6 +46,8 @@ export function ArticleCard({ blog }: ArticleCardProps) {
             href={`/blogs/${blog.id}`}
             title={blog.title}
           />
+          {/* Absent, not disabled, when the post has no link minted yet. */}
+          {blog.shortUrl && <ShareButton title={blog.title} url={blog.shortUrl} />}
         </div>
       </div>
     </article>

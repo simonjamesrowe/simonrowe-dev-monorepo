@@ -20,6 +20,27 @@ export interface AdminBlog {
   updatedAt: string
   /** Never null from the API — the DTO coerces a missing stored value to `ENGINEERING`. */
   contentType: BlogContentType
+  /**
+   * Human opens of the post's share link.
+   *
+   * `null` means the post has no share link at all, which is a different fact from `0`
+   * ("shared, never opened") and the column shows them differently.
+   */
+  clickCount?: number | null
+}
+
+/** A row of the shared-links table. */
+export interface AdminShortLink {
+  slug: string
+  /** The full absolute URL, ready to copy. */
+  shortUrl: string
+  contentType: 'BLOG' | 'ARTICLE' | 'EVENT'
+  contentId: string
+  /** Null when the content has been deleted — an orphaned link, kept deliberately. */
+  title: string | null
+  clickCount: number
+  lastClickedAt: string | null
+  createdAt: string
 }
 
 export interface AdminJob {
@@ -224,6 +245,20 @@ export async function fetchAdminBlogs(
   const token = await getAccessToken()
   const response = await authFetch(`${ADMIN_URL}/blogs?page=${page}&size=${size}`, token)
   return handleResponse<PageResponse<AdminBlog>>(response)
+}
+
+/**
+ * Every share link with its click statistics.
+ *
+ * Unpaged: one row per piece of content, a few hundred at most, and the table is
+ * read-only, so it sorts in the browser.
+ */
+export async function fetchAdminShortLinks(
+  getAccessToken: GetAccessToken,
+): Promise<AdminShortLink[]> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/short-links`, token)
+  return handleResponse<AdminShortLink[]>(response)
 }
 
 export async function fetchAdminBlogById(

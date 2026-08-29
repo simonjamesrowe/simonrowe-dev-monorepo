@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 class BackupCollectionsTest {
 
   private static final String PLATFORM_RELEASES = "platform_releases";
+  private static final String SHORT_LINKS = "short_links";
 
   @SuppressWarnings("unchecked")
   private static Collection<String> readList(final Class<?> type, final String fieldName)
@@ -32,6 +33,21 @@ class BackupCollectionsTest {
   void platformReleasesAreRestored() throws ReflectiveOperationException {
     assertThat(readList(RestoreService.class, "IMPORT_ORDER_INDEPENDENT"))
         .contains(PLATFORM_RELEASES);
+  }
+
+  @Test
+  void shortLinksAreBackedUp() throws ReflectiveOperationException {
+    // Not "generated content" but worse to lose: these slugs are in URLs already pasted
+    // into other people's Slack channels, and nothing recreates a lost one with the same
+    // value, so a restore that dropped them would break links that exist in the wild.
+    assertThat(readList(BackupService.class, "BACKUP_COLLECTIONS"))
+        .contains(SHORT_LINKS);
+  }
+
+  @Test
+  void shortLinksAreRestored() throws ReflectiveOperationException {
+    assertThat(readList(RestoreService.class, "IMPORT_ORDER_INDEPENDENT"))
+        .contains(SHORT_LINKS);
   }
 
   @Test

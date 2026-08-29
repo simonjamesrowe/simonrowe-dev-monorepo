@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 
 import { ListenButton } from '../narration/ListenButton'
+import { ShareButton } from '../common/ShareButton'
 import type { BlogSummary } from '../../types/blog'
 
 interface FeaturedArticleProps {
@@ -40,6 +41,7 @@ export function FeaturedArticle({ blog }: FeaturedArticleProps) {
             href={`/blogs/${blog.id}`}
             title={blog.title}
           />
+          {blog.shortUrl && <ShareButton title={blog.title} url={blog.shortUrl} />}
         </div>
       </div>
     </article>

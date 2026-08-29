@@ -3,11 +3,15 @@ package com.simonrowe.blog;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 
 import com.simonrowe.media.MediaVariantResolver;
+import com.simonrowe.shortlink.ShortLinkContentType;
+import com.simonrowe.shortlink.ShortLinkService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,12 +30,16 @@ class BlogServiceTest {
   @Mock
   private MediaVariantResolver mediaVariantResolver;
 
+  @Mock
+  private ShortLinkService shortLinkService;
+
   @InjectMocks
   private BlogService blogService;
 
   @Test
   void listPublishedReturnsMappedSummaries() {
     stubResolverFallback();
+    stubShortUrls(Map.of("b-1", "https://simonrowe.dev/s/spring-boot-tips"));
     Blog blog = sampleBlog("b-1", "Spring Boot Tips", true);
     given(blogRepository.findByPublishedTrueOrderByCreatedDateDesc()).willReturn(List.of(blog));
 
@@ -42,6 +50,20 @@ class BlogServiceTest {
     assertThat(result.get(0).title()).isEqualTo("Spring Boot Tips");
     assertThat(result.get(0).tags()).isEmpty();
     assertThat(result.get(0).skills()).isEmpty();
+    assertThat(result.get(0).shortUrl())
+        .isEqualTo("https://simonrowe.dev/s/spring-boot-tips");
+  }
+
+  @Test
+  void listPublishedLeavesShortUrlNullForPostsWithNoLinkYet() {
+    // The Share control is hidden rather than broken. A post created in the window before
+    // its link was minted must still render.
+    stubResolverFallback();
+    stubShortUrls(Map.of());
+    given(blogRepository.findByPublishedTrueOrderByCreatedDateDesc())
+        .willReturn(List.of(sampleBlog("b-1", "Spring Boot Tips", true)));
+
+    assertThat(blogService.listPublished().get(0).shortUrl()).isNull();
   }
 
   @Test
@@ -49,12 +71,15 @@ class BlogServiceTest {
     stubResolverFallback();
     Blog blog = sampleBlog("b-2", "Kubernetes Deep Dive", true);
     given(blogRepository.findByIdAndPublishedTrue("b-2")).willReturn(Optional.of(blog));
+    given(shortLinkService.urlFor(ShortLinkContentType.BLOG, "b-2"))
+        .willReturn(Optional.of("https://simonrowe.dev/s/kubernetes-deep"));
 
     BlogDetailResponse result = blogService.getPublishedById("b-2");
 
     assertThat(result.id()).isEqualTo("b-2");
     assertThat(result.title()).isEqualTo("Kubernetes Deep Dive");
     assertThat(result.content()).isEqualTo("Full article content here.");
+    assertThat(result.shortUrl()).isEqualTo("https://simonrowe.dev/s/kubernetes-deep");
   }
 
   @Test
@@ -73,6 +98,7 @@ class BlogServiceTest {
   @Test
   void getLatestReturnsLimitedPublishedBlogs() {
     stubResolverFallback();
+    stubShortUrls(Map.of());
     List<Blog> blogs = List.of(
         sampleBlog("b-1", "Post 1", true),
         sampleBlog("b-2", "Post 2", true),
@@ -91,6 +117,7 @@ class BlogServiceTest {
   @Test
   void listPublishedWithTagsMapsTagNames() {
     stubResolverFallback();
+    stubShortUrls(Map.of());
     Tag tag = new Tag("t-1", "Kubernetes");
     Blog blog = new Blog("b-1", "Post", "Short", "Content", true, null,
         Instant.parse("2024-01-01T00:00:00Z"), Instant.parse("2024-01-01T00:00:00Z"),
@@ -117,6 +144,13 @@ class BlogServiceTest {
         List.of(),
         BlogContentType.ENGINEERING
     );
+  }
+
+  /**
+   * The share lookup is batched, so the service asks once per listing with every id.
+   */
+  private void stubShortUrls(final Map<String, String> urls) {
+    given(shortLinkService.urlsFor(eq(ShortLinkContentType.BLOG), any())).willReturn(urls);
   }
 
   private void stubResolverFallback() {
