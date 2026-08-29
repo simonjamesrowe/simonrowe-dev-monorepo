@@ -20,8 +20,11 @@ import org.springframework.web.bind.annotation.RequestHeader;
  * Serves {@code GET /s/{slug}} — the share link.
  *
  * <p>Deliberately outside {@code /api/}, so it is routed explicitly: {@code frontend/
- * nginx.conf} in production (bind-mounted from the deploy directory, so it does not ship
- * with the frontend image) and {@code vite.config.ts} in local development.
+ * nginx.conf} in production and {@code vite.config.ts} in local development. Miss either and
+ * this controller is never reached — the request falls through to the single-page app, which
+ * has no {@code /s/} route and renders its own 404. That is exactly how the route shipped, so
+ * {@code scripts/test/test-frontend-nginx-shipping.sh} now asserts both that the nginx block
+ * exists and that production cannot shadow it with a stale bind mount.
  *
  * <p>Three decisions worth not undoing:
  *

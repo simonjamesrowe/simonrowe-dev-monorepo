@@ -142,6 +142,57 @@ fast-forward followed by a refusal to recreate would leave the deploy directory
 ahead of what is running, and `monitor-prod.sh`'s next bare `up -d` would apply
 the held-back change within the minute.
 
+#### A decline does not clear itself — it wedges the checkout
+
+This is the part that cost ten days in production, from 2026-08-28. **Fix a
+decline when you see it; do not wait for the next merge to sort it out.**
+
+`sync-config` compares the **host checkout** against the target commit, not the
+previous target against the target. So once a decline leaves `HEAD` behind, the
+same difference is still there next time, and every subsequent merge declines for
+the identical reason. Meanwhile `SyncDecision.deployImagesAnyway()` is true for
+every decline, so each of those merges still pulls and recreates images. Images
+track `main`; `docker-compose.prod.yml`, `config/nginx/` and `scripts/` stay
+frozen at whatever commit the checkout stopped on.
+
+What actually happened: #130 added `FACTORY_RUNTIME_ROLE: deployer` to the
+`deployer` service. `deployer` is deliberately absent from
+`FACTORY_DEPLOY_RECREATABLE` — it must never recreate itself mid-deploy — so the
+change was held back, correctly. #131 and #132 were then held back too, for the
+same `deployer` difference, and #132's new `location /s/` never reached the host.
+Under the frontend's old nginx bind mount that made every share link on the site
+return the SPA's 404 while `api.simonrowe.dev/s/<slug>` served the right document.
+That mount is gone, so a frozen checkout no longer breaks SPA routing — but it
+still freezes the compose file, the proxy conf and the scripts.
+
+Recovering it is one command on the host, the one the phase already printed:
+
+```bash
+cd ~/workspace/simonjamesrowe/simonrowe-dev-monorepo
+docker compose -f docker-compose.prod.yml up -d <held-back services>
+```
+
+Then let the next merge fast-forward, or force the point with
+`git fetch --no-tags <repo-url> main && git merge --ff-only <sha>`. Note that
+fast-forwarding by hand also lands every *other* pending host-side change at once,
+and `monitor-prod.sh`'s next bare `up -d` applies them within the minute — so read
+`git log --oneline HEAD..FETCH_HEAD -- docker-compose.prod.yml config/ scripts/`
+first and know what you are turning on.
+
+**How to spot it without host access.** A commit comment from
+`simonrowe-software-factory[bot]` on a merge commit *is* the images-only signal: a
+fully-applied deploy posts nothing at all, because `DeployWorkflowImpl.finish`
+comments on success for exactly one status, `DEPLOYED_IMAGES_ONLY`.
+
+```bash
+gh api repos/simonjamesrowe/simonrowe-dev-monorepo/commits/<sha>/comments \
+  --jq '.[] | .created_at + "  " + .user.login'
+```
+
+Until 042 that comment rendered as the bare line "The site is up." — the notice
+naming the held-back services lived in `partialDeployComment`, which nothing
+called. `commitComment` now carries it.
+
 ### Nothing deploys at all, and there is no error anywhere
 
 In order of likelihood:
@@ -315,8 +366,9 @@ commands.
 
 1. Merge. Both flags default off, so production is unchanged.
 2. `git pull` on the Pi — the `deployer` service, the maintenance pages and the
-   nginx conf are all host-side. One-off: from here on the deployer fast-forwards
-   the directory itself.
+   proxy nginx conf are all host-side. One-off: from here on the deployer
+   fast-forwards the directory itself. (`frontend/nginx.conf` is *not* host-side;
+   since 042 it ships inside the frontend image.)
 3. `docker compose -f docker-compose.prod.yml up -d nginx deployer`, then prove
    the pages render by touching and removing the flag by hand — and confirm
    `console.simonrowe.dev` stays up while the flag is set.
