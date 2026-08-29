@@ -565,7 +565,8 @@ class ProfileMcpToolsTest {
         List.of(),
         List.of(),
         "/blogs/b-1",
-        BlogContentType.ENGINEERING
+        BlogContentType.ENGINEERING,
+        null
     );
   }
 }

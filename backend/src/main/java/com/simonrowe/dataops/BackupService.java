@@ -49,7 +49,11 @@ public class BackupService {
       // Release notes on /status are the same: one LLM call per release, and the backfill
       // of history is only baked into the image that produced it — a restore into a newer
       // image could not regenerate the older entries at all.
-      "platform_releases"
+      "platform_releases",
+      // Share slugs are already pasted into other people's Slack channels and LinkedIn
+      // posts. A restore that dropped them would break URLs that exist in the wild, and
+      // re-minting would produce different values — nothing recreates a lost slug.
+      "short_links"
   );
 
   private final MongoClient mongoClient;

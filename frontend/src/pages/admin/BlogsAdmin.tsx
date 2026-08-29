@@ -61,6 +61,7 @@ export function BlogsAdmin() {
           <tr>
             <th>Title</th>
             <th>Published</th>
+            <th>Clicks</th>
             <th>Created</th>
             <th>Actions</th>
           </tr>
@@ -76,6 +77,9 @@ export function BlogsAdmin() {
                   ? <CheckCircle size={18} className="icon-published" />
                   : <XCircle size={18} className="icon-draft" />}
               </td>
+              {/* An em dash rather than 0 when the post has no share link at all:
+                  "never shared" and "shared but never opened" are different facts. */}
+              <td>{blog.clickCount ?? '—'}</td>
               <td>{new Date(blog.createdAt).toLocaleDateString()}</td>
               <td>
                 <button className="admin-btn admin-btn--icon" onClick={() => navigate(`/admin/blogs/${blog.id}`)} title="Edit">

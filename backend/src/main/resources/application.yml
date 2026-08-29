@@ -7,6 +7,16 @@ cors:
 uploads:
   path: ${UPLOADS_PATH:backend/uploads/}
 
+# The public origin this site is reached on. Used to build absolute share URLs
+# (`{base-url}/s/{slug}`) and, more importantly, absolute Open Graph image URLs.
+#
+# It must never be blank: a relative `og:image` is dropped silently by every crawler,
+# which presents as "link previews don't work" with no error anywhere in the logs. The
+# production default is deliberate rather than a placeholder — a share link is for
+# sharing, so even a locally generated one should point at production.
+site:
+  base-url: ${SITE_BASE_URL:https://simonrowe.dev}
+
 mongock:
   enabled: ${MONGOCK_ENABLED:true}
   migration-scan-package:

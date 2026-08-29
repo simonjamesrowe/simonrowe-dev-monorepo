@@ -10691,3 +10691,142 @@ body[data-narration-bar] .app-layout__main {
     gap: 0.15rem;
   }
 }
+
+/*
+ * Share control.
+ *
+ * Sized to match .listen-button and .summary-button exactly, because on a news card all
+ * three sit in the same overlay cluster and a mismatched pill is immediately visible.
+ * Outline weight at rest: sharing is an offer, never a card's primary action.
+ */
+.share-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border-medium);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.share-button:hover {
+  transform: scale(1.05);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.share-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Confirmation, for the two seconds after a clipboard copy. */
+.share-button--copied {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.share-button--copied:hover {
+  transform: none;
+}
+
+/* News cards overlay their actions on a photo, so the control has to read against one —
+   the same treatment .listen-button--cold already gets there. */
+.feed__card-actions .share-button {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: transparent;
+  color: #fff;
+}
+
+.feed__card-actions .share-button:hover {
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+}
+
+.feed__card-actions .share-button--copied {
+  background: var(--color-primary);
+  color: var(--surface-container-lowest);
+}
+
+/*
+ * Four controls is one more than the row was designed for. Below this width the labels go
+ * and the pills become icons, which keeps the cluster on one line without dropping any
+ * control — a card that offers fewer actions on a phone than on a laptop is worse than a
+ * terse one.
+ */
+@media (max-width: 30rem) {
+  .feed__card-actions .listen-button span,
+  .feed__card-actions .summary-button span,
+  .feed__card-actions .share-button span {
+    display: none;
+  }
+
+  .feed__card-actions .listen-button,
+  .feed__card-actions .summary-button,
+  .feed__card-actions .share-button {
+    padding: 0.4rem;
+  }
+}
+
+/* The post header's own share control sits in a text column, not over an image. */
+.blog-detail__share {
+  margin-top: 0.75rem;
+}
+
+/*
+ * Timeline items now carry Share as well as the heart, so the absolute positioning moves
+ * from the heart itself up to a cluster — the same move .feed__card-actions made when the
+ * summary control joined the news cards. .feed__favourite--timeline is retained above for
+ * anything still using it directly.
+ */
+.feed__timeline-actions {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+@media (max-width: 30rem) {
+  .feed__timeline-actions .share-button span {
+    display: none;
+  }
+
+  .feed__timeline-actions .share-button {
+    padding: 0.4rem;
+  }
+}
+
+/* Sortable column headers in the admin tables. Looks like the header text it replaces,
+   so the table does not read as a row of buttons. */
+.admin-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-table__sort:hover {
+  color: var(--color-primary);
+}
+
+.admin-table__sort:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Calendar, ChevronDown, ExternalLink, Heart, MapPin } from 'lucide-react'
 
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { FavouriteButton } from '../components/common/FavouriteButton'
+import { ShareButton } from '../components/common/ShareButton'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { ListenButton } from '../components/narration/ListenButton'
 import { useNarrationAudio } from '../components/narration/useNarrationAudio'
@@ -14,8 +16,8 @@ import { useFavourites } from '../hooks/useFavourites'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useScrollToHash } from '../hooks/useScrollToHash'
 import { trackPageView } from '../services/analytics'
-import { fetchNews, fetchNewsSources } from '../services/newsApi'
-import { fetchEvents } from '../services/eventsApi'
+import { fetchNews, fetchNewsById, fetchNewsSources } from '../services/newsApi'
+import { fetchEvents, fetchEventsById } from '../services/eventsApi'
 import { getFavourites } from '../services/favouritesApi'
 import { API_BASE_URL } from '../config/api'
 import type { ArticleResponse, SourceSummary } from '../types/news'
@@ -65,6 +67,15 @@ export function NewsEventsPage() {
 
   const newsFavourites = useFavourites('news')
   const eventFavourites = useFavourites('events')
+
+  // Articles and events reached by a shared link but absent from the loaded page. Without
+  // these, opening a link to something that has since fallen off page one loads the page
+  // and then silently does nothing — the failure this feature is most likely to have.
+  const [deepLinkedArticles, setDeepLinkedArticles] = useState<ArticleResponse[]>([])
+  const [deepLinkedEvents, setDeepLinkedEvents] = useState<EventResponse[]>([])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const sharedArticleId = searchParams.get('article')
+  const sharedEventId = searchParams.get('event')
 
   const summaries = useArticleSummaries()
   // The article whose summary drawer is open, or null. Held as an id rather than the
@@ -242,11 +253,100 @@ export function NewsEventsPage() {
   }
 
   // Closing aborts any in-flight poll and unmounts the drawer — which unmounts the audio
-  // element with it, so playback stops without any extra handling.
+  // element with it, so playback stops without any extra handling. It also drops the
+  // ?article= parameter, so the drawer does not spring back open on a reload or a Back.
   const handleSummaryClose = () => {
     if (summaryArticleId) summaries.cancel(summaryArticleId)
     setSummaryArticleId(null)
+    if (sharedArticleId) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('article')
+      setSearchParams(next, { replace: true })
+    }
   }
+
+  /**
+   * Opens the drawer for an article arrived at from a shared link.
+   *
+   * <p>Runs once per id. `hasSummary` cannot be trusted yet on first paint — the ids set
+   * may still be loading — so this deliberately mirrors `handleSummaryOpen` rather than
+   * calling it: `loadSummary` is a plain read, and `requestSummary` would put a sign-in
+   * popup in front of someone who has just followed a link.
+   */
+  useEffect(() => {
+    if (!sharedArticleId) return
+    setSummaryArticleId(sharedArticleId)
+    void summaries.loadSummary(sharedArticleId)
+    // Intentionally keyed on the id alone: re-running when `summaries` changes identity
+    // would reopen a drawer the visitor has just closed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedArticleId])
+
+  /**
+   * Fetches a shared article that is not in the loaded page.
+   *
+   * <p>This is the case a shared link hits most often once a link is a few weeks old: page
+   * one holds 24 articles, and everything older has to be fetched by id or the page loads
+   * and quietly does nothing.
+   */
+  useEffect(() => {
+    // Gated on the list having settled: firing before it arrives would fetch by id on
+    // every shared link, including the common case where the article is on page one.
+    if (!sharedArticleId || !newsSettled) return
+    const alreadyLoaded = [...articles, ...favouriteArticles, ...deepLinkedArticles]
+      .some(a => a.id === sharedArticleId)
+    if (alreadyLoaded) return
+
+    let cancelled = false
+    fetchNewsById(sharedArticleId)
+      .then(article => {
+        if (!cancelled) setDeepLinkedArticles(previous => [...previous, article])
+      })
+      // A deleted or hidden article is not worth an error banner over the whole page —
+      // the drawer simply does not open, and the rest of the feed still works.
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [sharedArticleId, newsSettled, articles, favouriteArticles, deepLinkedArticles])
+
+  /**
+   * Same for a shared event. Events have no drawer, so this exists to put the card on the
+   * page for `useScrollToHash` to find.
+   */
+  useEffect(() => {
+    if (!sharedEventId || !eventsSettled) return
+    const alreadyLoaded = [...upcomingEvents, ...pastEvents, ...deepLinkedEvents]
+      .some(e => e.id === sharedEventId)
+    if (alreadyLoaded) return
+
+    let cancelled = false
+    fetchEventsById(sharedEventId)
+      .then(event => {
+        if (!cancelled) setDeepLinkedEvents(previous => [...previous, event])
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [sharedEventId, eventsSettled, upcomingEvents, pastEvents, deepLinkedEvents])
+
+  /**
+   * Scrolls a shared item into view once it is on the page.
+   *
+   * <p>`useScrollToHash` handles the `#news` / `#events` anchors, but a share link carries
+   * a query parameter rather than a hash, so this does the equivalent for the card itself.
+   */
+  useEffect(() => {
+    const targetId = sharedArticleId ?? sharedEventId
+    if (!targetId || loading) return
+    const element = document.getElementById(targetId)
+    // Feature-checked rather than assumed: scrollIntoView is absent in jsdom and in a
+    // handful of stripped-down clients, and a shared link must not die on a nicety.
+    if (typeof element?.scrollIntoView === 'function') {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [sharedArticleId, sharedEventId, loading, articles, deepLinkedArticles, deepLinkedEvents])
 
   if (loading) return <LoadingIndicator message="Loading news and events..." />
   if (error) {
@@ -291,16 +391,27 @@ export function NewsEventsPage() {
   // Looked up across both the loaded list and the favourites list, so the drawer survives
   // a switch into favourites-only mode while it is open.
   const summaryArticle = summaryArticleId
-    ? [...articles, ...favouriteArticles].find(a => a.id === summaryArticleId) ?? null
+    ? [...articles, ...favouriteArticles, ...deepLinkedArticles]
+        .find(a => a.id === summaryArticleId) ?? null
     : null
 
   const showEvents = sourceFilter === 'all' || sourceFilter === 'events'
   const featured = filtered.slice(0, 2)
   const grid = filtered.slice(2)
-  const timelineEvents = favouritesOnly
+  // A shared event has to have a card — unlike an article it has no drawer, so the card is
+  // the destination. The timeline shows only upcoming events, so one arrived at by link is
+  // appended whether it is upcoming, past, or off the loaded page entirely.
+  const withDeepLinkedEvents = (events: EventResponse[]) => {
+    const extra = deepLinkedEvents.filter(e => !events.some(loaded => loaded.id === e.id))
+    return extra.length > 0 ? [...events, ...extra] : events
+  }
+
+  const timelineEvents = withDeepLinkedEvents(favouritesOnly
     ? favouriteEvents.filter(e => eventFavourites.isFavourite(e.id))
-    : upcomingEvents
-  const allEvents = favouritesOnly ? timelineEvents : [...upcomingEvents, ...pastEvents]
+    : upcomingEvents)
+  const allEvents = favouritesOnly
+    ? timelineEvents
+    : withDeepLinkedEvents([...upcomingEvents, ...pastEvents])
 
   return (
     <div className="feed tour-news-events">
@@ -402,6 +513,9 @@ export function NewsEventsPage() {
                 <a
                   className={`feed__hero-card${i === 0 ? ' feed__hero-card--primary' : ' feed__hero-card--secondary'}`}
                   href={article.originalUrl}
+                  /* The card's own id, so a shared link can scroll to it. Only the #news
+                     and #events sections carried one before. */
+                  id={article.id}
                   key={article.id}
                   rel="noopener noreferrer"
                   target="_blank"
@@ -441,6 +555,12 @@ export function NewsEventsPage() {
                       label={article.title}
                       onClick={() => void newsFavourites.toggleFavourite(article.id)}
                     />
+                    {/* Fourth control on a card whose job is a headline and an image. The
+                        labels collapse to icons under 30rem rather than any of these being
+                        dropped — see .feed__card-actions in styles.css. */}
+                    {article.shortUrl && (
+                      <ShareButton title={article.title} url={article.shortUrl} />
+                    )}
                   </div>
                   <div className="feed__hero-overlay">
                     <span className="feed__source-badge">{article.sourceName}</span>
@@ -464,6 +584,7 @@ export function NewsEventsPage() {
                 <a
                   className="feed__card"
                   href={article.originalUrl}
+                  id={article.id}
                   key={article.id}
                   rel="noopener noreferrer"
                   target="_blank"
@@ -502,6 +623,12 @@ export function NewsEventsPage() {
                       label={article.title}
                       onClick={() => void newsFavourites.toggleFavourite(article.id)}
                     />
+                    {/* Fourth control on a card whose job is a headline and an image. The
+                        labels collapse to icons under 30rem rather than any of these being
+                        dropped — see .feed__card-actions in styles.css. */}
+                    {article.shortUrl && (
+                      <ShareButton title={article.title} url={article.shortUrl} />
+                    )}
                   </div>
                   <div className="feed__card-body">
                     <span className="feed__source-badge">{article.sourceName}</span>
@@ -556,18 +683,23 @@ export function NewsEventsPage() {
                     <a
                       className="feed__timeline-item"
                       href={event.originalUrl}
+                      id={event.id}
                       key={event.id}
                       rel="noopener noreferrer"
                       target="_blank"
                     >
                       <div className="feed__timeline-dot" />
                       <div className="feed__timeline-content">
-                        <FavouriteButton
-                          active={eventFavourites.isFavourite(event.id)}
-                          className="feed__favourite feed__favourite--timeline"
-                          label={event.title}
-                          onClick={() => void eventFavourites.toggleFavourite(event.id)}
-                        />
+                        <div className="feed__timeline-actions">
+                          {event.shortUrl && (
+                            <ShareButton title={event.title} url={event.shortUrl} />
+                          )}
+                          <FavouriteButton
+                            active={eventFavourites.isFavourite(event.id)}
+                            label={event.title}
+                            onClick={() => void eventFavourites.toggleFavourite(event.id)}
+                          />
+                        </div>
                         <span className="feed__source-badge">{event.sourceName}</span>
                         <h3 className="feed__timeline-title">{event.title}</h3>
                         <div className="feed__timeline-meta">

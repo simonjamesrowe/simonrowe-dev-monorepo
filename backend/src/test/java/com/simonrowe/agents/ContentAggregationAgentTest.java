@@ -29,6 +29,7 @@ import com.simonrowe.events.ContentChangePublisher;
 import com.simonrowe.media.BlogImageGenerationService;
 import com.simonrowe.media.ExternalImageDownloader;
 import com.simonrowe.media.MediaVariantResolver;
+import com.simonrowe.shortlink.ShortLinkService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -53,6 +54,7 @@ class ContentAggregationAgentTest {
   @Mock private BlogImageGenerationService blogImageGenerationService;
   @Mock private MediaVariantResolver mediaVariantResolver;
   @Mock private SourceNameResolver sourceNameResolver;
+  @Mock private ShortLinkService shortLinkService;
 
   private PromptRunner promptRunner;
   @SuppressWarnings("rawtypes")
@@ -88,7 +90,7 @@ class ContentAggregationAgentTest {
         sourceRepository, articleRepository,
         eventRepository, scraperFactory, htmlScraper, ai,
         changePublisher, imageDownloader, blogImageGenerationService,
-        mediaVariantResolver, sourceNameResolver);
+        mediaVariantResolver, sourceNameResolver, shortLinkService);
   }
 
   @Test

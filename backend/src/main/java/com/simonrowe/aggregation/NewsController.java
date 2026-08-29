@@ -1,7 +1,10 @@
 package com.simonrowe.aggregation;
 
+import com.simonrowe.shortlink.ShortLinkContentType;
+import com.simonrowe.shortlink.ShortLinkService;
 import com.simonrowe.summary.ArticleSummaryService;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,15 +31,18 @@ public class NewsController {
   private final AggregatedArticleRepository articleRepository;
   private final MongoTemplate mongoTemplate;
   private final ArticleSummaryService summaryService;
+  private final ShortLinkService shortLinkService;
 
   public NewsController(
       final AggregatedArticleRepository articleRepository,
       final MongoTemplate mongoTemplate,
-      final ArticleSummaryService summaryService
+      final ArticleSummaryService summaryService,
+      final ShortLinkService shortLinkService
   ) {
     this.articleRepository = articleRepository;
     this.mongoTemplate = mongoTemplate;
     this.summaryService = summaryService;
+    this.shortLinkService = shortLinkService;
   }
 
   @GetMapping
@@ -56,7 +62,15 @@ public class NewsController {
     }
     LOG.debug("Listing news articles: page={}, size={}, source={}, total={}",
         page, size, source, articles.getTotalElements());
-    return articles.map(ArticleResponse::from);
+
+    // One query for the whole page, not one per card. The page size is 24, so resolving
+    // per article would turn a single render into 24 extra round trips.
+    Map<String, String> shortUrls = shortLinkService.urlsFor(
+        ShortLinkContentType.ARTICLE,
+        articles.getContent().stream().map(AggregatedArticle::id).toList());
+
+    return articles.map(article ->
+        ArticleResponse.from(article, shortUrls.get(article.id())));
   }
 
   /**
@@ -112,7 +126,9 @@ public class NewsController {
   public ArticleResponse getById(@PathVariable final String id) {
     return articleRepository.findById(id)
         .filter(AggregatedArticle::visible)
-        .map(ArticleResponse::from)
+        .map(article -> ArticleResponse.from(
+            article,
+            shortLinkService.urlFor(ShortLinkContentType.ARTICLE, article.id()).orElse(null)))
         .orElseThrow(() -> new ResponseStatusException(
             HttpStatus.NOT_FOUND, "Article not found"));
   }

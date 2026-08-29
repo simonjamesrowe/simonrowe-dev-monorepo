@@ -11,6 +11,11 @@ export interface EventResponse {
   location: string | null
   fetchedAt: string
   visible: boolean
+  /**
+   * The full absolute share URL, ready to use. Absent when the event has no link minted
+   * yet — the Share control is hidden rather than broken.
+   */
+  shortUrl?: string | null
 }
 
 export interface EventPage {

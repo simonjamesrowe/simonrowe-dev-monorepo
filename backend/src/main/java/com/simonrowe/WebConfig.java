@@ -2,6 +2,7 @@ package com.simonrowe;
 
 import com.simonrowe.ratelimit.RateLimitConfig;
 import com.simonrowe.ratelimit.RateLimitInterceptor;
+import com.simonrowe.shortlink.ShortLinkProperties;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
@@ -19,7 +20,7 @@ import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
-@EnableConfigurationProperties(RateLimitConfig.class)
+@EnableConfigurationProperties({RateLimitConfig.class, ShortLinkProperties.class})
 public class WebConfig implements WebMvcConfigurer {
 
   @Value("${cors.allowed-origins:}")
@@ -57,6 +58,18 @@ public class WebConfig implements WebMvcConfigurer {
             .immutable());
   }
 
+  /**
+   * Registers rate limiting on an explicit allowlist rather than globally.
+   *
+   * <p>{@code /s/**} is deliberately absent. A single paste of a share link into a busy
+   * Slack workspace produces a burst of unfurl fetches from one address range before any
+   * human clicks it, and LinkedIn, WhatsApp and iMessage behave the same way. A 429 there
+   * does not throttle an abuser, it breaks the preview — which is the whole point of the
+   * endpoint. The path costs a primary-key lookup and a string build, with no model call
+   * and no external I/O, so there is nothing expensive to protect.
+   *
+   * @param registry the interceptor registry
+   */
   @Override
   public void addInterceptors(final InterceptorRegistry registry) {
     registry.addInterceptor(rateLimitInterceptor)

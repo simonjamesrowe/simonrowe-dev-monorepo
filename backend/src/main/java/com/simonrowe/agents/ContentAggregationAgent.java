@@ -18,6 +18,8 @@ import com.simonrowe.events.ContentChangePublisher;
 import com.simonrowe.media.BlogImageGenerationService;
 import com.simonrowe.media.ExternalImageDownloader;
 import com.simonrowe.media.MediaVariantResolver;
+import com.simonrowe.shortlink.ShortLinkContentType;
+import com.simonrowe.shortlink.ShortLinkService;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
@@ -66,6 +68,7 @@ public class ContentAggregationAgent {
   private final BlogImageGenerationService blogImageGenerationService;
   private final MediaVariantResolver mediaVariantResolver;
   private final SourceNameResolver sourceNameResolver;
+  private final ShortLinkService shortLinkService;
 
   public ContentAggregationAgent(
       final ContentSourceRepository sourceRepository,
@@ -78,7 +81,8 @@ public class ContentAggregationAgent {
       final ExternalImageDownloader imageDownloader,
       final BlogImageGenerationService blogImageGenerationService,
       final MediaVariantResolver mediaVariantResolver,
-      final SourceNameResolver sourceNameResolver) {
+      final SourceNameResolver sourceNameResolver,
+      final ShortLinkService shortLinkService) {
     this.sourceRepository = sourceRepository;
     this.articleRepository = articleRepository;
     this.eventRepository = eventRepository;
@@ -90,6 +94,7 @@ public class ContentAggregationAgent {
     this.blogImageGenerationService = blogImageGenerationService;
     this.mediaVariantResolver = mediaVariantResolver;
     this.sourceNameResolver = sourceNameResolver;
+    this.shortLinkService = shortLinkService;
   }
 
   @Action(description = "Import a single article or event from a URL")
@@ -273,6 +278,7 @@ public class ContentAggregationAgent {
             ? localImageUrl : content.imageUrl());
 
     AggregatedArticle saved = articleRepository.save(article);
+    ensureShortLink(ShortLinkContentType.ARTICLE, saved.id(), saved.title());
     changePublisher.publishCreated(
         ContentType.AGGREGATED_ARTICLE, saved.id());
     log.info("Saved article: {}", saved.title());
@@ -308,9 +314,32 @@ public class ContentAggregationAgent {
         eventDate, null, venue, location, Instant.now(), true);
 
     AggregatedEvent saved = eventRepository.save(event);
+    ensureShortLink(ShortLinkContentType.EVENT, saved.id(), saved.title());
     changePublisher.publishCreated(
         ContentType.AGGREGATED_EVENT, saved.id());
     log.info("Saved event: {}", saved.title());
+  }
+
+  /**
+   * Mints the share link for freshly ingested content.
+   *
+   * <p>Eager, and deliberately not hung off the {@code ContentChangePublisher} event
+   * published on the next line — an asynchronous slug would make the Share control vanish
+   * from any listing rendered before the consumer caught up, and the frontend has no way
+   * to ask for one. Idempotent, so a re-ingest of the same item changes nothing.
+   *
+   * <p>A failure must not fail the ingest: the item renders with a null
+   * {@code shortUrl} and no Share control until the next backfill picks it up.
+   */
+  private void ensureShortLink(
+      final ShortLinkContentType contentType,
+      final String contentId,
+      final String title) {
+    try {
+      shortLinkService.ensureFor(contentType, contentId, title);
+    } catch (RuntimeException e) {
+      log.warn("Could not mint a short link for {} {}: {}", contentType, contentId, e.toString());
+    }
   }
 
   ContentClassification classifyAndSummarize(

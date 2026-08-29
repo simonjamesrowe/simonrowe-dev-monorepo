@@ -12,7 +12,8 @@ public record BlogDetailResponse(
     Instant createdDate,
     List<TagRef> tags,
     List<SkillRef> skills,
-    BlogContentType contentType
+    BlogContentType contentType,
+    String shortUrl
 ) {
 
   public static BlogDetailResponse fromEntity(final Blog blog) {
@@ -22,6 +23,26 @@ public record BlogDetailResponse(
   public static BlogDetailResponse fromEntity(
       final Blog blog,
       final String featuredImageUrl
+  ) {
+    return fromEntity(blog, featuredImageUrl, null);
+  }
+
+  /**
+   * Builds the detail with a resolved share URL.
+   *
+   * <p>{@code shortUrl} is the full absolute address, so the frontend never concatenates a
+   * base, and is nullable — a post with no link yet renders with no Share control rather
+   * than a broken URL.
+   *
+   * @param blog the post
+   * @param featuredImageUrl the resolved image variant
+   * @param shortUrl the absolute share URL, or null when the post has no link yet
+   * @return the response
+   */
+  public static BlogDetailResponse fromEntity(
+      final Blog blog,
+      final String featuredImageUrl,
+      final String shortUrl
   ) {
     List<TagRef> tagRefs = blog.tags() == null
         ? List.of()
@@ -40,7 +61,8 @@ public record BlogDetailResponse(
         blog.createdDate(),
         tagRefs,
         skillRefs,
-        BlogContentType.orDefault(blog.contentType())
+        BlogContentType.orDefault(blog.contentType()),
+        shortUrl
     );
   }
 }

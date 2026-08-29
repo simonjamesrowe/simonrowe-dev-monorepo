@@ -206,4 +206,18 @@ class SecurityConfigTest extends AbstractIntegrationTest {
                 .authorities(ADMIN_AUTHORITY)))
         .andExpect(status().isOk());
   }
+
+  /**
+   * Share links rest on {@code .anyRequest().permitAll()} rather than on a matcher of
+   * their own, so nothing in {@code SecurityConfig} names {@code /s/**}. That makes it
+   * exactly the kind of thing a future tightening breaks by accident — and the breakage
+   * would be invisible, because it would only show up as links already pasted into other
+   * people's Slack channels returning 401.
+   */
+  @Test
+  void shortLinksAreReachableWithoutSession() throws Exception {
+    // 404 for an unknown slug, but crucially not 401.
+    mockMvc.perform(get("/s/no-such-slug"))
+        .andExpect(status().isNotFound());
+  }
 }

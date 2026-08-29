@@ -49,6 +49,7 @@ const DashboardAdmin = named(() => import('./pages/admin/DashboardAdmin'), 'Dash
 const DataOperationsAdmin = named(() => import('./pages/admin/DataOperationsAdmin'), 'DataOperationsAdmin')
 const SoftwareFactoryAdmin = named(() => import('./pages/admin/SoftwareFactoryAdmin'), 'SoftwareFactoryAdmin')
 const MediaAdmin = named(() => import('./pages/admin/MediaAdmin'), 'MediaAdmin')
+const ShortLinksAdmin = named(() => import('./pages/admin/ShortLinksAdmin'), 'ShortLinksAdmin')
 const ProfileAdmin = named(() => import('./pages/admin/ProfileAdmin'), 'ProfileAdmin')
 const SkillGroupEditor = named(() => import('./pages/admin/SkillGroupEditor'), 'SkillGroupEditor')
 const SkillsAdmin = named(() => import('./pages/admin/SkillsAdmin'), 'SkillsAdmin')
@@ -201,6 +202,7 @@ function App() {
           <Route path="software-factory" element={<SoftwareFactoryAdmin />} />
           <Route path="aggregated-content" element={<AggregatedContentAdmin />} />
           <Route path="content-sources" element={<ContentSourcesAdmin />} />
+          <Route path="short-links" element={<ShortLinksAdmin />} />
         </Route>
         <Route element={<PublicLayout><NotFoundPage /></PublicLayout>} path="*" />
       </Routes>

@@ -1,5 +1,6 @@
 import type { BlogDetail as BlogDetailType } from '../../types/blog'
 import { formatDate } from '../../utils/dateFormat'
+import { ShareButton } from '../common/ShareButton'
 import { BlogNarration } from './BlogNarration'
 import { MarkdownRenderer } from './MarkdownRenderer'
 
@@ -34,6 +35,13 @@ export function BlogDetail({ blog }: BlogDetailProps) {
           </time>
         </div>
         <BlogNarration blogId={blog.id} blogTitle={blog.title} />
+        {/* In the header, next to the title — where someone finishing the post looks.
+            Absent when the post has no share link yet, rather than offering a dead URL. */}
+        {blog.shortUrl && (
+          <div className="blog-detail__share">
+            <ShareButton title={blog.title} url={blog.shortUrl} />
+          </div>
+        )}
         {blog.tags.length > 0 && (
           <ul aria-label="Tags" className="blog-detail__tags">
             {blog.tags.map((tag) => (

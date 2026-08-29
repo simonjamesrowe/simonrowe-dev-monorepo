@@ -9,6 +9,7 @@ import {
   FileText,
   Image,
   LayoutDashboard,
+  Link2,
   LogOut,
   Menu,
   Newspaper,
@@ -35,6 +36,7 @@ const navItems = [
   { path: '/admin/media', label: 'Media', icon: <Image size={18} /> },
   { path: '/admin/aggregated-content', label: 'News & Events', icon: <Newspaper size={18} /> },
   { path: '/admin/content-sources', label: 'Content Sources', icon: <Rss size={18} /> },
+  { path: '/admin/short-links', label: 'Share Links', icon: <Link2 size={18} /> },
   { path: '/admin/data-operations', label: 'Data Ops', icon: <Database size={18} /> },
   { path: '/admin/software-factory', label: 'Software Factory', icon: <CircuitBoard size={18} /> },
 ]

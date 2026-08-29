@@ -1,0 +1,193 @@
+openapi: 3.1.0
+info:
+  title: Share short links
+  version: "1.0.0"
+  description: >
+    Two new endpoints plus a new nullable `shortUrl` field on four existing public
+    responses. There is deliberately no public write endpoint: slugs are minted eagerly
+    on save, on ingest and by a backfill change unit, so the Share control is pure
+    frontend with nothing to POST.
+
+paths:
+  /s/{slug}:
+    get:
+      operationId: resolveShortLink
+      summary: Resolve a share address
+      description: >
+        Returns an HTML document to EVERY client — no User-Agent branching on this path.
+        The document carries Open Graph and Twitter Card metadata, a canonical link, a
+        meta-refresh and a script redirect to the destination, and a visible plain anchor
+        for clients that act on neither.
+
+        Deliberately outside `/api/`, so nginx must route it explicitly (see
+        `frontend/nginx.conf` and `frontend/vite.config.ts`).
+
+        Public: `SecurityConfig` ends `.anyRequest().permitAll()`, and `SecurityConfigTest`
+        asserts this path stays reachable anonymously.
+
+        NOT registered on `RateLimitInterceptor`. One paste into a busy workspace can
+        produce a burst of unfurl fetches from one address range; 429-ing them breaks the
+        preview.
+
+        Increments the link's click count unless the User-Agent identifies a
+        link-preview service. The increment is fire-and-forget: a datastore failure must
+        never stop the redirect.
+      security: []
+      tags: [public]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9][a-z0-9-]{0,19}$'
+          example: exactly-once
+        - name: User-Agent
+          in: header
+          required: false
+          schema:
+            type: string
+          description: >
+            Matched against the unfurler list. A match suppresses the click increment
+            and nothing else — the response body is identical either way.
+      responses:
+        "200":
+          description: The share document. Always HTML, never a 3xx.
+          headers:
+            Cache-Control:
+              description: >
+                `no-cache, no-store, max-age=0, must-revalidate`, inherited from
+                `SecurityConfig`'s global cache-control disable. Correct here — a cached
+                document would stop the counter incrementing.
+              schema:
+                type: string
+          content:
+            text/html:
+              schema:
+                type: string
+              examples:
+                blog:
+                  summary: A blog share document
+                  value: |
+                    <!doctype html>
+                    <html lang="en">
+                    <head>
+                    <meta charset="utf-8">
+                    <title>Exactly-once semantics in Kafka</title>
+                    <meta property="og:type" content="article">
+                    <meta property="og:title" content="Exactly-once semantics in Kafka">
+                    <meta property="og:description" content="What the guarantee actually buys you.">
+                    <meta property="og:image" content="https://simonrowe.dev/uploads/kafka-large.png">
+                    <meta property="og:url" content="https://simonrowe.dev/blogs/68f3a1c94b2e7d5a0c1f9e83">
+                    <meta name="twitter:card" content="summary_large_image">
+                    <link rel="canonical" href="https://simonrowe.dev/blogs/68f3a1c94b2e7d5a0c1f9e83">
+                    <meta http-equiv="refresh" content="0;url=https://simonrowe.dev/blogs/68f3a1c94b2e7d5a0c1f9e83">
+                    <script>location.replace("https://simonrowe.dev/blogs/68f3a1c94b2e7d5a0c1f9e83")</script>
+                    </head>
+                    <body><a href="https://simonrowe.dev/blogs/68f3a1c94b2e7d5a0c1f9e83">Continue to Exactly-once semantics in Kafka</a></body>
+                    </html>
+        "404":
+          description: >
+            Unknown slug. A self-contained themed not-found page with all CSS inlined —
+            never a redirect to `/`, which would make a typo look like a working link.
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /api/admin/short-links:
+    get:
+      operationId: listShortLinks
+      summary: Every share address with its click statistics
+      description: >
+        Unpaged — one row per piece of content, in the low hundreds, and the table is
+        read-only so it sorts in the browser. Titles are joined from the three source
+        collections with three batched `findAllById` calls, not one per row.
+
+        Under `/api/admin/**`, already `hasRole(DEV_PORTAL_ADMIN)` in `SecurityConfig`;
+        no new matcher.
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: All share addresses.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminShortLink'
+        "401":
+          description: No token.
+        "403":
+          description: Token without the admin role.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ShortLinkContentType:
+      type: string
+      enum: [BLOG, ARTICLE, EVENT]
+      description: >
+        `ARTICLE` is distinct from narration's `ARTICLE_SUMMARY`: the link points at the
+        aggregated article, and the destination opens that article's summary panel.
+
+    AdminShortLink:
+      type: object
+      required: [slug, shortUrl, contentType, contentId, clickCount, createdAt]
+      properties:
+        slug:
+          type: string
+          example: exactly-once
+        shortUrl:
+          type: string
+          format: uri
+          example: https://simonrowe.dev/s/exactly-once
+        contentType:
+          $ref: '#/components/schemas/ShortLinkContentType'
+        contentId:
+          type: string
+          example: 68f3a1c94b2e7d5a0c1f9e83
+        title:
+          type: [string, "null"]
+          description: >
+            Joined from the source collection. Null when the content has been deleted —
+            an orphaned link, which this feature deliberately does not clean up.
+        clickCount:
+          type: integer
+          format: int64
+          minimum: 0
+        lastClickedAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    ShortUrlField:
+      description: >
+        Added to BlogSummaryResponse, BlogDetailResponse, ArticleResponse and
+        EventResponse. The FULL absolute URL, so the frontend never concatenates a base.
+
+        NULLABLE by design, and the Share control is simply absent when it is null: a
+        brand-new item whose link has not been minted yet must render fine rather than
+        hand out a broken URL.
+
+        Populated by ONE batched lookup per listing — 24 articles is one extra query, not
+        24.
+      type: [string, "null"]
+      format: uri
+      example: https://simonrowe.dev/s/exactly-once
+
+    AdminBlogClickCountField:
+      description: >
+        Added to the `/api/admin/blogs` list DTO alongside the existing keys. Zero for a
+        post whose link has never been opened; null only if the post has no link at all.
+      type: [integer, "null"]
+      format: int64
