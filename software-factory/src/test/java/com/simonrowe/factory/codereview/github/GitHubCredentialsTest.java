@@ -33,6 +33,12 @@ import org.junit.jupiter.api.io.TempDir;
 class GitHubCredentialsTest {
 
   private static final Instant NOW = Instant.parse("2026-07-26T12:00:00Z");
+
+  /** Everything the App asks for, granted — the posture prod must be in for the gate to work. */
+  private static final String FULL_GRANT =
+      """
+      {"checks":"write","contents":"write","issues":"write","metadata":"read",\
+      "pull_requests":"write"}""";
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Test
@@ -68,7 +74,8 @@ class GitHubCredentialsTest {
       // contents must be write, not read: the feedback loop's guidance-branch push 403s
       // otherwise, regardless of what the App's own settings allow.
       // checks must be write: the `Code Review` check run is the only review signal a merge
-      // ruleset can read, and without the grant this whole token request 422s.
+      // ruleset can read. It is asked for here because this installation grants it — see
+      // dropsAnUngrantedOptionalPermissionSoTheTokenStillMints for the case where it does not.
       assertThat(requestBody.get())
           .contains("\"checks\":\"write\"")
           .contains("\"contents\":\"write\"")
@@ -147,6 +154,166 @@ class GitHubCredentialsTest {
       credentials.commentToken(123L);
 
       assertThat(requests).hasValue(2);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  /**
+   * An optional permission the installation has not granted is dropped, not asked for.
+   *
+   * <p>This is the whole point of filtering. On 2026-08-28 an image requesting {@code checks:
+   * write} shipped before the App's Checks grant was accepted, and because GitHub 422s the entire
+   * token request over one over-reaching entry, <em>every</em> credentialed path went down at
+   * once — code review died in {@code LOADING_PULL_REQUEST}, before it could read a diff. Dropping
+   * the entry instead costs only the {@code Code Review} check run, whose absence blocks the merge
+   * on its own. Failing closed on one capability beats failing open on all of them.
+   */
+  @Test
+  void dropsAnUngrantedOptionalPermissionSoTheTokenStillMints(@TempDir final Path directory)
+      throws Exception {
+    KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    Path privateKey = writePrivateKey(directory, keyPair);
+    AtomicInteger requests = new AtomicInteger();
+    AtomicReference<String> authorization = new AtomicReference<>();
+    AtomicReference<String> requestBody = new AtomicReference<>();
+    HttpServer server =
+        tokenServer(
+            requests,
+            authorization,
+            requestBody,
+            """
+            {"contents":"write","issues":"write","metadata":"read","pull_requests":"write"}""");
+
+    try {
+      GitHubCredentials credentials =
+          new GitHubCredentials(
+              properties(
+                  "http://127.0.0.1:" + server.getAddress().getPort(),
+                  "",
+                  "Iv1.test-client",
+                  privateKey.toString()),
+              objectMapper,
+              HttpClient.newHttpClient(),
+              Clock.fixed(NOW, ZoneOffset.UTC));
+
+      assertThat(credentials.accessToken(123L)).isEqualTo("installation-token");
+
+      JsonNode permissions = objectMapper.readTree(requestBody.get()).path("permissions");
+      assertThat(permissions.has("checks")).isFalse();
+      assertThat(permissions.path("contents").asText()).isEqualTo("write");
+      assertThat(permissions.path("issues").asText()).isEqualTo("write");
+      assertThat(permissions.path("pull_requests").asText()).isEqualTo("write");
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  /**
+   * A missing required permission still refuses to mint, but says which one.
+   *
+   * <p>GitHub's own 422 says only "the permissions requested are not granted to this
+   * installation", naming nothing. Reading that as "it must be the permission I just added" is how
+   * the 2026-08-11 drift was misdiagnosed, so the message is worth producing ourselves.
+   */
+  @Test
+  void refusesToMintWhenRequiredPermissionIsMissingAndNamesIt(@TempDir final Path directory)
+      throws Exception {
+    KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    Path privateKey = writePrivateKey(directory, keyPair);
+    AtomicInteger requests = new AtomicInteger();
+    HttpServer server =
+        tokenServer(
+            requests,
+            new AtomicReference<>(),
+            new AtomicReference<>(),
+            """
+            {"checks":"write","contents":"read","metadata":"read","pull_requests":"write"}""");
+
+    try {
+      GitHubCredentials credentials =
+          new GitHubCredentials(
+              properties(
+                  "http://127.0.0.1:" + server.getAddress().getPort(),
+                  "",
+                  "Iv1.test-client",
+                  privateKey.toString()),
+              objectMapper,
+              HttpClient.newHttpClient(),
+              Clock.fixed(NOW, ZoneOffset.UTC));
+
+      ApplicationFailure failure =
+          (ApplicationFailure) catchThrowable(() -> credentials.accessToken(123L));
+
+      assertThat(failure).isNotNull();
+      assertThat(failure.isNonRetryable()).isTrue();
+      assertThat(failure.getType()).isEqualTo("GITHUB_PERMISSION_MISSING");
+      // `contents` is granted, but only at read — a level too low is as fatal as an absence, and
+      // is worse to leave to GitHub, because it 403s later instead of 422ing now.
+      assertThat(failure.getOriginalMessage())
+          .contains("contents:write")
+          .contains("issues:write");
+      // Refused before the mint, so no doomed token request was sent.
+      assertThat(requests).hasValue(0);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  /**
+   * An unreadable grant asks for the required permissions only.
+   *
+   * <p>Falling back to the full set would put the 2026-08-28 failure mode back on the table over
+   * nothing worse than a transient API blip. Dropping the optional ones costs one capability that
+   * fails closed, which is the cheaper wrong answer by a wide margin.
+   */
+  @Test
+  void asksForRequiredPermissionsOnlyWhenTheGrantCannotBeRead(@TempDir final Path directory)
+      throws Exception {
+    KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    Path privateKey = writePrivateKey(directory, keyPair);
+    AtomicInteger requests = new AtomicInteger();
+    AtomicReference<String> requestBody = new AtomicReference<>();
+    // Only the mint endpoint: the grant lookup finds no handler and so cannot be read.
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/app/installations/123/access_tokens",
+        exchange -> {
+          requests.incrementAndGet();
+          requestBody.set(
+              new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+          byte[] response =
+              """
+              {"token":"installation-token","expires_at":"2026-07-26T13:00:00Z"}
+              """
+                  .getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().add("Content-Type", "application/json");
+          exchange.sendResponseHeaders(201, response.length);
+          try (OutputStream output = exchange.getResponseBody()) {
+            output.write(response);
+          }
+        });
+    server.start();
+
+    try {
+      GitHubCredentials credentials =
+          new GitHubCredentials(
+              properties(
+                  "http://127.0.0.1:" + server.getAddress().getPort(),
+                  "",
+                  "Iv1.test-client",
+                  privateKey.toString()),
+              objectMapper,
+              HttpClient.newHttpClient(),
+              Clock.fixed(NOW, ZoneOffset.UTC));
+
+      assertThat(credentials.accessToken(123L)).isEqualTo("installation-token");
+
+      JsonNode permissions = objectMapper.readTree(requestBody.get()).path("permissions");
+      assertThat(permissions.has("checks")).isFalse();
+      assertThat(permissions.path("contents").asText()).isEqualTo("write");
+      assertThat(permissions.path("issues").asText()).isEqualTo("write");
+      assertThat(permissions.path("pull_requests").asText()).isEqualTo("write");
     } finally {
       server.stop(0);
     }
@@ -305,7 +472,34 @@ class GitHubCredentialsTest {
       final AtomicReference<String> authorization,
       final AtomicReference<String> requestBody)
       throws IOException {
+    return tokenServer(requests, authorization, requestBody, FULL_GRANT);
+  }
+
+  /**
+   * A fake with both endpoints a mint now touches: the grant lookup and the mint itself.
+   *
+   * <p>{@code grantedPermissions} is the installation's {@code permissions} object verbatim, so a
+   * test can describe a drift by leaving an entry out of it.
+   */
+  private static HttpServer tokenServer(
+      final AtomicInteger requests,
+      final AtomicReference<String> authorization,
+      final AtomicReference<String> requestBody,
+      final String grantedPermissions)
+      throws IOException {
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/app/installations/123",
+        exchange -> {
+          byte[] response =
+              ("{\"id\":123,\"permissions\":" + grantedPermissions + "}")
+                  .getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().add("Content-Type", "application/json");
+          exchange.sendResponseHeaders(200, response.length);
+          try (OutputStream output = exchange.getResponseBody()) {
+            output.write(response);
+          }
+        });
     server.createContext(
         "/app/installations/123/access_tokens",
         exchange -> {

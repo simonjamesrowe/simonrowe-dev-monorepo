@@ -20,13 +20,20 @@ import java.security.Signature;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -34,16 +41,46 @@ import org.springframework.stereotype.Component;
 @Component
 public class GitHubCredentials {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(GitHubCredentials.class);
+
   private static final String API_VERSION = "2026-03-10";
 
   /**
    * The only access level {@link #accessToken} ever asks for.
    *
-   * <p>A constant rather than four literals so that adding a fifth permission cannot quietly ask
-   * for a different level than the other four — every entry in this block is load-bearing, and
-   * GitHub 422s the whole token request if any one of them exceeds the installation's grant.
+   * <p>A constant rather than several literals so that adding a permission cannot quietly ask for
+   * a different level than the others.
    */
   private static final String WRITE = "write";
+
+  /**
+   * Permissions no credentialed path can work without, so a missing grant must refuse to mint.
+   *
+   * <p>{@code pull_requests} governs a pull request's reviews and comments, {@code contents} the
+   * feedback loop's guidance-branch push, {@code issues} the lifecycle comments. Silently dropping
+   * one of these would not fail the mint — it would 403 later, after a clean review, which is
+   * harder to diagnose than refusing up front and naming what is missing.
+   */
+  private static final Map<String, String> REQUIRED_PERMISSIONS =
+      Map.of("contents", WRITE, "issues", WRITE, "pull_requests", WRITE);
+
+  /**
+   * Permissions that buy one capability each, and whose absence must cost only that capability.
+   *
+   * <p>{@code checks} publishes the {@code Code Review} check run — the only review signal a merge
+   * ruleset can read. Losing it costs the merge gate, which then <em>blocks</em> for want of a
+   * required check: the safe direction. Asking for it when it has not been granted, by contrast,
+   * costs the entire token, and with it code review, the feedback loop, CVE fixes, deploy
+   * reporting and every credentialed clone at once — silently, because reporting that failure
+   * needs a token too. That asymmetry is the whole reason these are held apart from {@link
+   * #REQUIRED_PERMISSIONS} and filtered against the installation's real grant before the mint.
+   */
+  private static final Map<String, String> OPTIONAL_PERMISSIONS = Map.of("checks", WRITE);
+
+  /** Ranks GitHub's access levels, so a granted {@code write} satisfies a needed {@code read}. */
+  private static final Map<String, Integer> LEVEL_RANK =
+      Map.of("read", 1, "write", 2, "admin", 3);
+
   private static final java.time.Duration EXPIRY_MARGIN = java.time.Duration.ofMinutes(5);
 
   private final CodeReviewProperties properties;
@@ -189,35 +226,27 @@ public class GitHubCredentials {
       // are governed by the pull request permission, not the issue one. `contents` must be
       // write, not read: the feedback loop's `GuidanceWorkspaceFactory.commitAndPush` pushes
       // guidance branches, and a token minted with `contents:read` gets a 403 on every push.
-      // Requesting `contents: write` here does NOT get silently capped/narrowed to whatever the
-      // App's own settings allow — GitHub's access-tokens endpoint 422s the whole request if the
-      // requested permissions exceed what the installation was actually granted, and this method
-      // turns any non-2xx response into an IllegalStateException, so an un-bumped App permission
-      // fails token minting outright. This same token also serves the code-review path, which
-      // only reads content — that widening is deliberate, see the design spec's accepted-risk
-      // note on the internet-facing process holding a write-capable credential. Because both
-      // paths share this one method, the App's Contents permission must be bumped to read & write
-      // *before* deploying an image that requests it (see docs/runbooks/software-factory.md's
-      // rollout order) — otherwise every token mint 422s and both code-review and feedback fail.
+      // This same token also serves the code-review path, which only reads content — that
+      // widening is deliberate, see the design spec's accepted-risk note on the internet-facing
+      // process holding a write-capable credential.
       //
-      // `checks` must be write: the code-review path publishes its verdict as a `Code Review`
-      // check run (CheckRunGateway), which is the only review signal a merge ruleset can read.
-      // This permission carries the exact same rollout hazard as `contents` above and it is the
-      // reason it is called out twice: the App's Checks permission must be granted and the
-      // installation permission update accepted BEFORE deploying an image that requests it.
-      // Get that order wrong and every accessToken() mint 422s — taking down code review AND the
-      // feedback loop, silently, because the failure path needs a token too. Only commentToken()
-      // survives such a drift, because it deliberately sends no permissions block at all.
+      // Requesting a permission here does NOT get silently capped to what the installation
+      // holds: GitHub's access-tokens endpoint 422s the WHOLE request when any requested
+      // permission exceeds the grant. Because every credentialed path in the factory shares
+      // this one method, an over-reach by one line takes down code review, the feedback loop,
+      // CVE fixes, deploy reporting and every credentialed clone together — and does it
+      // silently, because reporting the failure needs a token too. That happened twice: once on
+      // 2026-08-11 with `contents` and again on 2026-08-28 with `checks`, both times because an
+      // image requesting a new permission shipped before the App's grant was bumped.
+      //
+      // So the block is no longer a fixed literal. It is filtered against the installation's
+      // actual grant first (`requestedPermissions`), which makes that rollout ordering
+      // survivable rather than fatal: an ungranted OPTIONAL permission costs only its own
+      // capability, and an ungranted REQUIRED one still refuses to mint but says which. Only
+      // commentToken() sends no block at all, so it stays immune either way.
       ObjectNode payload = objectMapper.createObjectNode();
       if (requestWritePermissions) {
-        ObjectNode permissions =
-            objectMapper
-                .createObjectNode()
-                .put("checks", WRITE)
-                .put("contents", WRITE)
-                .put("issues", WRITE)
-                .put("pull_requests", WRITE);
-        payload.set("permissions", permissions);
+        payload.set("permissions", requestedPermissions(installationId, now));
       }
       HttpRequest request =
           HttpRequest.newBuilder()
@@ -267,6 +296,133 @@ public class GitHubCredentials {
     } catch (IOException exception) {
       throw new IllegalStateException("GitHub App token request failed", exception);
     }
+  }
+
+  /**
+   * The permissions block to ask for: everything needed, minus optional permissions the
+   * installation has not actually granted.
+   *
+   * <p>Refuses to mint when a {@link #REQUIRED_PERMISSIONS} entry is missing, naming it — GitHub's
+   * own 422 says only "the permissions requested are not granted to this installation", which does
+   * not say which one, and reading it as the newest permission is how the 2026-08-11 incident was
+   * misdiagnosed for hours.
+   *
+   * <p>When the grant cannot be read at all, asks for the required permissions only. Sending the
+   * full set instead would restore the failure mode this method exists to remove, on nothing worse
+   * than a transient API blip; dropping the optional ones costs one capability that fails closed.
+   */
+  private ObjectNode requestedPermissions(final long installationId, final Instant now) {
+    Map<String, String> granted = grantedPermissions(installationId, now);
+    ObjectNode permissions = objectMapper.createObjectNode();
+
+    if (granted != null) {
+      List<String> missing = new ArrayList<>();
+      for (Map.Entry<String, String> required : REQUIRED_PERMISSIONS.entrySet()) {
+        if (!satisfies(granted.get(required.getKey()), required.getValue())) {
+          missing.add(required.getKey() + ":" + required.getValue());
+        }
+      }
+      if (!missing.isEmpty()) {
+        throw ApplicationFailure.newNonRetryableFailure(
+            "GitHub App installation "
+                + installationId
+                + " is missing required permissions "
+                + String.join(", ", sorted(missing))
+                + " — grant them on the App and accept the installation update",
+            "GITHUB_PERMISSION_MISSING");
+      }
+    }
+
+    for (String name : sorted(new ArrayList<>(REQUIRED_PERMISSIONS.keySet()))) {
+      permissions.put(name, REQUIRED_PERMISSIONS.get(name));
+    }
+    for (String name : sorted(new ArrayList<>(OPTIONAL_PERMISSIONS.keySet()))) {
+      String level = OPTIONAL_PERMISSIONS.get(name);
+      if (granted != null && satisfies(granted.get(name), level)) {
+        permissions.put(name, level);
+      } else {
+        // Not an error: the capability behind it degrades on its own, and saying so once per mint
+        // is what turns "code review stopped gating anything" into a one-line diagnosis.
+        LOGGER.warn(
+            "GitHub App installation {} does not grant {}:{}; continuing without it. "
+                + "The capability it backs is unavailable until the grant is accepted.",
+            installationId,
+            name,
+            level);
+      }
+    }
+    return permissions;
+  }
+
+  /**
+   * The installation's granted permissions, or null when they could not be read.
+   *
+   * <p>Deliberately not cached beyond the token it is minted for: a token lives about an hour, so
+   * this costs one extra call an hour, and caching it would mean a newly accepted grant stayed
+   * invisible until the next restart — the opposite of what an operator fixing a drift needs.
+   */
+  private Map<String, String> grantedPermissions(final long installationId, final Instant now) {
+    try {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(
+                  URI.create(
+                      properties.github().apiBaseUrl() + "/app/installations/" + installationId))
+              .timeout(properties.github().requestTimeout())
+              .header("Accept", "application/vnd.github+json")
+              .header("Authorization", "Bearer " + createAppJwt(now))
+              .header("X-GitHub-Api-Version", API_VERSION)
+              .header("User-Agent", "temporal-code-reviewer")
+              .GET()
+              .build();
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() < 200 || response.statusCode() >= 300) {
+        LOGGER.warn(
+            "GitHub App installation lookup for {} returned {}; requesting required "
+                + "permissions only",
+            installationId,
+            response.statusCode());
+        return null;
+      }
+      JsonNode permissions = objectMapper.readTree(response.body()).path("permissions");
+      if (!permissions.isObject()) {
+        LOGGER.warn(
+            "GitHub App installation {} reported no permissions block; requesting required "
+                + "permissions only",
+            installationId);
+        return null;
+      }
+      Map<String, String> granted = new LinkedHashMap<>();
+      for (Iterator<String> names = permissions.fieldNames(); names.hasNext(); ) {
+        String name = names.next();
+        granted.put(name, permissions.path(name).asText());
+      }
+      return granted;
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("GitHub App installation lookup interrupted", exception);
+    } catch (IOException exception) {
+      LOGGER.warn(
+          "GitHub App installation lookup for {} failed; requesting required permissions only",
+          installationId,
+          exception);
+      return null;
+    }
+  }
+
+  /** Whether a granted level covers a needed one. An unknown level covers nothing. */
+  private static boolean satisfies(final String grantedLevel, final String neededLevel) {
+    Integer granted = grantedLevel == null ? null : LEVEL_RANK.get(grantedLevel);
+    Integer needed = LEVEL_RANK.get(neededLevel);
+    return granted != null && needed != null && granted >= needed;
+  }
+
+  /** Stable ordering, so the request body and the failure message do not shuffle between runs. */
+  private static List<String> sorted(final List<String> values) {
+    List<String> copy = new ArrayList<>(values);
+    Collections.sort(copy);
+    return copy;
   }
 
   /** Keeps GitHub's explanation without letting a large error body into a comment or a log line. */
