@@ -8,7 +8,8 @@ The `cvefix` module is now an issue-only Dependency-Track scanner. It runs in
 Each scheduled or admin-triggered run:
 
 1. Reads every current finding for the configured Dependency-Track projects.
-2. Groups findings by component for a readable report.
+2. Groups findings by Dependency-Track project, then by component within it, for a readable
+   report.
 3. Creates or updates one Linear issue keyed as the repository's current vulnerability report.
 4. Stores the terminal scan result and Linear URL in `cve_fix_runs`.
 
@@ -40,7 +41,9 @@ failed scan, not a quiet gap in the report.
 When a scan comes back clean and the previous scan found something, the run posts one comment on
 the existing ticket noting the repository is now clean, and still ends `NO_FINDINGS` — it never
 creates a ticket for this and never closes one itself. Closing stays a human decision; until that
-happens, the ticket is still open and the next scan (clean or not) keeps commenting on it.
+happens, the ticket is still open, but a **second** consecutive clean scan stays silent — that is
+the whole point of the transition guard. Only the first clean scan after a dirty one comments; do
+not read a missing nightly comment as a fault.
 
 `cve_fix_runs.componentsSeen` now counts `(project, PURL)` pairs, so a component that shows up as
 a finding in two configured projects (for example a shared library flagged in both `backend` and
