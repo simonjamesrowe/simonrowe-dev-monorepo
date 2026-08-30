@@ -66,7 +66,10 @@ class CveFixWorkflowTest {
     verify(linear).fileIssue(filing.capture());
     assertThat(filing.getValue().keyParts())
         .containsExactly("simonjamesrowe/simonrowe-dev-monorepo", "current-vulnerabilities");
-    assertThat(filing.getValue().body()).contains("CVE-2026-1", "CVE-2026-2", PURL);
+    assertThat(filing.getValue().body())
+        .contains("CVE-2026-1", "CVE-2026-2", "CVE-2026-3", PURL, NPM_PURL)
+        .contains("## simonrowe-dev/backend")
+        .contains("## simonrowe-dev/frontend");
     verify(activities).recordRun(any());
   }
 

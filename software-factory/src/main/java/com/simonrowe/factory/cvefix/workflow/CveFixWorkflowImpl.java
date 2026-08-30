@@ -7,7 +7,6 @@ import com.simonrowe.factory.cvefix.domain.CveFixProgress;
 import com.simonrowe.factory.cvefix.domain.CveFixRequest;
 import com.simonrowe.factory.cvefix.domain.CveFixResult;
 import com.simonrowe.factory.cvefix.domain.CveFixStatus;
-import com.simonrowe.factory.cvefix.domain.Finding;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.FiledIssue;
@@ -81,7 +80,7 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
 
       current = new CveFixProgress(CveFixPhase.FILING,
           "Filing consolidated vulnerability report in Linear", componentsSeen);
-      String report = body(components, findingsSeen);
+      String report = CveReportRenderer.report(components, findingsSeen);
       outcomes.add(
           linear.fileIssue(
               new IssueFiling(
@@ -146,32 +145,6 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
 
   private static int count(final List<FiledIssue> outcomes, final FilingDecision decision) {
     return (int) outcomes.stream().filter(outcome -> outcome.decision() == decision).count();
-  }
-
-  private static String body(final List<ComponentFindings> components, final int findingsSeen) {
-    StringBuilder markdown = new StringBuilder()
-        .append("Dependency-Track currently reports **").append(findingsSeen)
-        .append(" finding(s)** across **").append(components.size())
-        .append(" component(s)**. This is the repository's consolidated vulnerability report.\n\n");
-    for (ComponentFindings component : components) {
-      markdown.append("## ").append(component.componentName()).append(" `")
-          .append(component.componentVersion()).append("`\n\n")
-          .append("- **Package:** `").append(component.purl()).append("`\n")
-          .append("- **Advisories:** ")
-          .append(String.join(", ", component.vulnerabilityIds())).append("\n\n");
-      for (Finding finding : component.findings()) {
-        markdown.append("- **").append(finding.vulnerabilityId()).append("** (")
-            .append(finding.severity()).append(")");
-        if (finding.recommendation() != null && !finding.recommendation().isBlank()) {
-          markdown.append(": ").append(finding.recommendation());
-        }
-        markdown.append('\n');
-      }
-      markdown.append('\n');
-    }
-    markdown.append("\nA future Linear-triggered repair agent will own remediation; this scan does "
-        + "not modify the repository.\n");
-    return markdown.toString();
   }
 
   private static String safeMessage(final RuntimeException exception) {
