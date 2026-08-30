@@ -7,10 +7,28 @@ import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRepository;
 import io.temporal.spring.boot.ActivityImpl;
 import java.util.List;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/** Reads findings and records scan outcomes; it has no repository mutation dependency. */
+/**
+ * Reads findings and records scan outcomes; it has no repository mutation dependency.
+ *
+ * <p>The {@code @ConditionalOnProperty} confines the {@code cve-fix} poller to the container
+ * holding {@code DEPENDENCYTRACK_API_KEY}. {@code software-factory} and {@code deployer} run the
+ * same image, and {@code @ActivityImpl} alone makes Temporal's Spring Boot starter create a worker
+ * for the queue, so without this both containers poll it. The deployer holds no Dependency-Track
+ * credential by design; when it won the task, {@code fetchFindings} called Dependency-Track with an
+ * empty key and the scan died with {@code RETRY_STATE_MAXIMUM_ATTEMPTS_REACHED} while the
+ * credential on the intended container was perfectly good. Nothing in that failure mentions
+ * authentication or names the wrong container.
+ *
+ * <p>Note the condition is evaluated by the component scanner, so declaring this class through an
+ * explicit {@code @Bean} method would register it unconditionally and silently ignore the
+ * annotation — the same trap {@code DeployActivitiesImpl} documents. {@code
+ * CveFixWorkerRegistrationTest} pins the behaviour by component-scanning for real.
+ */
 @Component
+@ConditionalOnProperty(name = "factory.cvefix.enabled", havingValue = "true")
 @ActivityImpl(taskQueues = CveFixTaskQueues.CVE_FIX)
 public class CveFixActivitiesImpl implements CveFixActivities {
 
