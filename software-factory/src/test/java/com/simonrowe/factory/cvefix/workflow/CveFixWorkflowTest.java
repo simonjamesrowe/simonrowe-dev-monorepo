@@ -30,12 +30,24 @@ import org.mockito.ArgumentCaptor;
 class CveFixWorkflowTest {
 
   private static final String PURL = "pkg:maven/org.example/lib@1.0.0";
+  private static final String NPM_PURL = "pkg:npm/widget@2.0.0";
   private static final List<ComponentFindings> COMPONENTS = List.of(
       new ComponentFindings(
-          PURL, "lib", "1.0.0", List.of("CVE-2026-1", "CVE-2026-2"),
+          "simonrowe-dev/backend", PURL, "lib", "1.0.0",
+          List.of("CVE-2026-1", "CVE-2026-2"),
           List.of(
-              new Finding(PURL, "lib", "1.0.0", "CVE-2026-1", "HIGH", "Upgrade"),
-              new Finding(PURL, "lib", "1.0.0", "CVE-2026-2", "MEDIUM", "Upgrade"))));
+              new Finding(
+                  "simonrowe-dev/backend", PURL, "lib", "1.0.0", "CVE-2026-1", "HIGH", "Upgrade"),
+              new Finding(
+                  "simonrowe-dev/backend", PURL, "lib", "1.0.0", "CVE-2026-2", "MEDIUM",
+                  "Upgrade"))),
+      new ComponentFindings(
+          "simonrowe-dev/frontend", NPM_PURL, "widget", "2.0.0",
+          List.of("CVE-2026-3"),
+          List.of(
+              new Finding(
+                  "simonrowe-dev/frontend", NPM_PURL, "widget", "2.0.0", "CVE-2026-3", "LOW",
+                  ""))));
 
   @Test
   void filesOneConsolidatedRepositoryIssueContainingAllFindings() {

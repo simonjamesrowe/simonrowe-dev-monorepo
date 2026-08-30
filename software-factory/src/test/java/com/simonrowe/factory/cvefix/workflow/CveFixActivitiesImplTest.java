@@ -47,6 +47,7 @@ class CveFixActivitiesImplTest {
   }
 
   private static Finding finding(final String purl, final String id) {
-    return new Finding(purl, purl, "1.0", id, "HIGH", "Upgrade the component");
+    return new Finding("simonrowe-dev/backend", purl, purl, "1.0", id, "HIGH",
+        "Upgrade the component");
   }
 }

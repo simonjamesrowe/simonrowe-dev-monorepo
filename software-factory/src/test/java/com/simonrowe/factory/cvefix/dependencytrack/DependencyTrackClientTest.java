@@ -82,6 +82,7 @@ class DependencyTrackClientTest {
     assertThat(findings.get(0).vulnerabilityId()).isEqualTo("CVE-1");
     assertThat(findings.get(0).purl()).isEqualTo("pkg:maven/com.foo/bar@1.0");
     assertThat(findings.get(0).recommendation()).isEqualTo("upgrade");
+    assertThat(findings.get(0).project()).isEqualTo("simonrowe-dev/backend");
     assertThat(seenApiKeys.get("/api/v1/project")).isEqualTo("test-key");
   }
 
@@ -131,12 +132,12 @@ class DependencyTrackClientTest {
   }
 
   @Test
-  void groupsFindingsByComponentWithSortedFingerprint() {
+  void groupsFindingsByComponentOrderedBySeverity() {
     List<Finding> findings =
         List.of(
-            new Finding("pkg:maven/a/b@1", "b", "1", "CVE-9", "HIGH", ""),
-            new Finding("pkg:maven/a/b@1", "b", "1", "CVE-1", "LOW", ""),
-            new Finding("pkg:npm/c@2", "c", "2", "CVE-5", "HIGH", ""));
+            new Finding("p", "pkg:maven/a/b@1", "b", "1", "CVE-9", "LOW", ""),
+            new Finding("p", "pkg:maven/a/b@1", "b", "1", "CVE-1", "HIGH", ""),
+            new Finding("p", "pkg:npm/c@2", "c", "2", "CVE-5", "HIGH", ""));
 
     List<ComponentFindings> grouped = ComponentFindings.group(findings);
 
@@ -144,6 +145,47 @@ class DependencyTrackClientTest {
     ComponentFindings first =
         grouped.stream().filter(g -> g.purl().equals("pkg:maven/a/b@1")).findFirst().orElseThrow();
     assertThat(first.vulnerabilityIds()).containsExactly("CVE-1", "CVE-9");
-    assertThat(first.fingerprint()).isEqualTo("pkg:maven/a/b@1|CVE-1,CVE-9");
+  }
+
+  @Test
+  void attributesEachFindingToItsDependencyTrackProject() {
+    responses.put(
+        "/api/v1/project",
+        """
+        [{"name":"simonrowe-dev/backend","uuid":"u1"},
+         {"name":"simonrowe-dev/frontend","uuid":"u2"}]
+        """);
+    responses.put(
+        "/api/v1/finding/project/u1",
+        """
+        [{"component":{"purl":"pkg:maven/com.foo/bar@1.0","name":"bar","version":"1.0"},
+          "vulnerability":{"vulnId":"CVE-1","severity":"HIGH"},
+          "analysis":{}}]
+        """);
+    responses.put(
+        "/api/v1/finding/project/u2",
+        """
+        [{"component":{"purl":"pkg:npm/left-pad@1.0.0","name":"left-pad","version":"1.0.0"},
+          "vulnerability":{"vulnId":"CVE-2","severity":"LOW"},
+          "analysis":{}}]
+        """);
+
+    List<Finding> findings = twoProjectClient().findings();
+
+    assertThat(findings)
+        .extracting(Finding::project, Finding::vulnerabilityId)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple("simonrowe-dev/backend", "CVE-1"),
+            org.assertj.core.groups.Tuple.tuple("simonrowe-dev/frontend", "CVE-2"));
+  }
+
+  private DependencyTrackClient twoProjectClient() {
+    CveFixProperties.DependencyTrack config =
+        new CveFixProperties.DependencyTrack(
+            "http://localhost:" + server.getAddress().getPort(),
+            "test-key",
+            List.of("simonrowe-dev/backend", "simonrowe-dev/frontend"),
+            Duration.ofSeconds(5));
+    return new DependencyTrackClient(config, new ObjectMapper());
   }
 }

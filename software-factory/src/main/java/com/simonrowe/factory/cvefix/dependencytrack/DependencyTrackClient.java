@@ -59,6 +59,7 @@ public class DependencyTrackClient {
         JsonNode vulnerability = finding.path("vulnerability");
         all.add(
             new Finding(
+                name,
                 component.path("purl").asText(""),
                 component.path("name").asText(""),
                 component.path("version").asText(""),
