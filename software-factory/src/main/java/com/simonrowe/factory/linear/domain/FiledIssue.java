@@ -3,17 +3,19 @@ package com.simonrowe.factory.linear.domain;
 /**
  * What the sink did.
  *
- * <p>For a {@code SUPPRESSED} occurrence the issue fields are <strong>always</strong> null, even
- * when Mongo still records the ticket this fingerprint last filed. That is deliberate and is
- * enforced in {@code IssueFiler}: a producer that reported the stored URL for a suppressed
- * occurrence would attribute a ticket to a run that filed nothing, and point a reader at a
- * declined issue containing none of this occurrence's detail.
+ * <p>For a {@code SUPPRESSED} or {@code SKIPPED_NO_ISSUE} occurrence the issue fields are
+ * <strong>always</strong> null, even when Mongo still records the ticket this fingerprint last
+ * filed. That is deliberate and is enforced in {@code IssueFiler}: a producer that reported the
+ * stored URL for either occurrence would attribute a ticket to a run that filed nothing, and point
+ * a reader at an issue containing none of this occurrence's detail — declined, for
+ * {@code SUPPRESSED}; untouched because a {@code commentOnly} filing must never create one, for
+ * {@code SKIPPED_NO_ISSUE}.
  *
  * @param decision the decision taken
- * @param issueId the Linear UUID used for follow-up attachments; null for a suppressed
- *     occurrence and for a dry run
- * @param issueIdentifier the issue concerned, e.g. {@code SIM-42}; null for a suppressed
- *     occurrence and for a dry run
+ * @param issueId the Linear UUID used for follow-up attachments; null for a suppressed or
+ *     skipped-no-issue occurrence and for a dry run
+ * @param issueIdentifier the issue concerned, e.g. {@code SIM-42}; null for a suppressed or
+ *     skipped-no-issue occurrence and for a dry run
  * @param issueUrl the issue's web URL, on the same terms
  * @param fingerprint the fingerprint, so a producer can record it alongside its own outcome
  */
