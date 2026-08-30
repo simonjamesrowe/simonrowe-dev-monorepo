@@ -84,7 +84,12 @@ public record ComponentFindings(
                 entry.getKey(),
                 worst.componentName(),
                 worst.componentVersion(),
-                sorted.stream().map(Finding::vulnerabilityId).toList(),
+                // distinct(), not a Set: preserves the severity-then-id order sorted() just
+                // established, and Dependency-Track can return the same (project, purl, vulnId)
+                // more than once, which would otherwise render "CVE-1, CVE-1" on the Advisories
+                // line. distinct() tolerates a null id (at most one survives), unlike
+                // List.copyOf.
+                sorted.stream().map(Finding::vulnerabilityId).distinct().toList(),
                 sorted));
       }
       components.sort(

@@ -111,6 +111,21 @@ class ComponentFindingsTest {
   }
 
   @Test
+  void deduplicatesRepeatedVulnerabilityIdsInGroupWhilePreservingBothFindings() {
+    // Dependency-Track can return the same (project, purl, vulnId) more than once. The
+    // Advisories summary line must not repeat it, but every finding row must still render.
+    List<ComponentFindings> grouped =
+        ComponentFindings.group(
+            List.of(
+                finding("p", "pkg:maven/a/b@1", "CVE-1", "HIGH"),
+                finding("p", "pkg:maven/a/b@1", "CVE-1", "HIGH")));
+
+    assertThat(grouped).hasSize(1);
+    assertThat(grouped.get(0).vulnerabilityIds()).containsExactly("CVE-1");
+    assertThat(grouped.get(0).findings()).hasSize(2);
+  }
+
+  @Test
   void toleratesNullVulnerabilityIdThroughGroup() {
     List<ComponentFindings> grouped =
         ComponentFindings.group(List.of(finding("p", "pkg:maven/a/b@1", null, "HIGH")));
