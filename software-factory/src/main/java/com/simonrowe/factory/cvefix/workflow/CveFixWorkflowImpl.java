@@ -74,8 +74,28 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       findingsSeen = components.stream().mapToInt(component -> component.findings().size()).sum();
       if (components.isEmpty()) {
         current = new CveFixProgress(CveFixPhase.COMPLETED, "No findings", 0);
+        String detail = "Dependency-Track reported no findings";
+        // Only on the transition. Commenting on every clean run would add a comment a night,
+        // forever, and the sink's replay guard cannot help: it keys on the occurrence id, which
+        // is this run's id and differs every night.
+        if (activities.previousScanFoundFindings(workflowId)) {
+          outcomes.add(
+              linear.fileIssue(
+                  new IssueFiling(
+                      "cvefix",
+                      List.of(
+                          "simonjamesrowe/simonrowe-dev-monorepo", "current-vulnerabilities"),
+                      "Current vulnerabilities in simonrowe-dev-monorepo",
+                      "",
+                      "No current vulnerabilities as of scan " + runId
+                          + ". Dependency-Track reports no findings.",
+                      runId,
+                      workflowId,
+                      true)));
+          detail = "Dependency-Track reported no findings; commented on the existing report";
+        }
         return finish(workflowId, runId, startedAt, CveFixStatus.NO_FINDINGS,
-            findingsSeen, componentsSeen, outcomes, "Dependency-Track reported no findings");
+            findingsSeen, componentsSeen, outcomes, detail);
       }
 
       current = new CveFixProgress(CveFixPhase.FILING,

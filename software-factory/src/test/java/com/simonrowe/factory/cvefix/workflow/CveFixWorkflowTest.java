@@ -74,12 +74,39 @@ class CveFixWorkflowTest {
   }
 
   @Test
-  void recordsNoFindingsWithoutCallingLinear() {
+  void commentsOnceWhenTheRepositoryHasJustBecomeClean() {
     CveFixActivities activities = mock(CveFixActivities.class);
     LinearActivities linear = mock(LinearActivities.class);
     when(activities.fetchFindings()).thenReturn(List.of());
+    when(activities.previousScanFoundFindings(any())).thenReturn(true);
+    when(linear.fileIssue(any())).thenReturn(
+        new FiledIssue(
+            FilingDecision.COMMENTED_EXISTING, "linear-id", "SIM-9", "https://linear/SIM-9",
+            "fp"));
 
-    CveFixResult result = run(activities, linear, true);
+    CveFixResult result = run(activities, linear, true, "just-clean");
+
+    assertThat(result.status()).isEqualTo(CveFixStatus.NO_FINDINGS);
+    ArgumentCaptor<IssueFiling> filing = ArgumentCaptor.forClass(IssueFiling.class);
+    verify(linear).fileIssue(filing.capture());
+    assertThat(filing.getValue().commentOnly()).isTrue();
+    assertThat(filing.getValue().keyParts())
+        .containsExactly("simonjamesrowe/simonrowe-dev-monorepo", "current-vulnerabilities");
+    assertThat(filing.getValue().occurrenceDetail())
+        .contains("No current vulnerabilities");
+    // Project-agnostic on purpose: an empty result cannot name the projects it covered.
+    assertThat(filing.getValue().occurrenceDetail())
+        .doesNotContain("simonrowe-dev/");
+  }
+
+  @Test
+  void staysSilentOnSecondConsecutiveCleanScan() {
+    CveFixActivities activities = mock(CveFixActivities.class);
+    LinearActivities linear = mock(LinearActivities.class);
+    when(activities.fetchFindings()).thenReturn(List.of());
+    when(activities.previousScanFoundFindings(any())).thenReturn(false);
+
+    CveFixResult result = run(activities, linear, true, "still-clean");
 
     assertThat(result.status()).isEqualTo(CveFixStatus.NO_FINDINGS);
     verify(linear, never()).fileIssue(any());
@@ -87,19 +114,27 @@ class CveFixWorkflowTest {
   }
 
   @Test
-  void failsVisiblyWhenLinearFilingIsDisabled() {
+  void doesNotCommentWhenLinearFilingIsDisabledAndTheScanIsClean() {
     CveFixActivities activities = mock(CveFixActivities.class);
     LinearActivities linear = mock(LinearActivities.class);
 
-    assertThatThrownBy(() -> run(activities, linear, false))
+    assertThatThrownBy(() -> run(activities, linear, false, "clean-no-linear"))
         .isInstanceOf(WorkflowFailedException.class);
-    verify(activities, never()).fetchFindings();
+    verify(linear, never()).fileIssue(any());
   }
 
   private static CveFixResult run(
       final CveFixActivities activities,
       final LinearActivities linear,
       final boolean linearEnabled) {
+    return run(activities, linear, linearEnabled, String.valueOf(linearEnabled));
+  }
+
+  private static CveFixResult run(
+      final CveFixActivities activities,
+      final LinearActivities linear,
+      final boolean linearEnabled,
+      final String idSuffix) {
     try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
       Worker workflowWorker = environment.newWorker(CveFixTaskQueues.CVE_FIX);
       workflowWorker.registerWorkflowImplementationTypes(CveFixWorkflowImpl.class);
@@ -111,7 +146,7 @@ class CveFixWorkflowTest {
           CveFixWorkflow.class,
           WorkflowOptions.newBuilder()
               .setTaskQueue(CveFixTaskQueues.CVE_FIX)
-              .setWorkflowId("test-cve-" + linearEnabled)
+              .setWorkflowId("test-cve-" + idSuffix)
               .build());
       return workflow.run(new CveFixRequest(false, null, 0, null, linearEnabled));
     }
