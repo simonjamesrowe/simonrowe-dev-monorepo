@@ -3,9 +3,11 @@ package com.simonrowe.factory.cvefix.workflow;
 import com.simonrowe.factory.cvefix.config.CveFixTaskQueues;
 import com.simonrowe.factory.cvefix.dependencytrack.DependencyTrackClient;
 import com.simonrowe.factory.cvefix.domain.ComponentFindings;
+import com.simonrowe.factory.cvefix.domain.CveFixStatus;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRepository;
 import io.temporal.spring.boot.ActivityImpl;
+import java.util.EnumSet;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -32,6 +34,14 @@ import org.springframework.stereotype.Component;
 @ActivityImpl(taskQueues = CveFixTaskQueues.CVE_FIX)
 public class CveFixActivitiesImpl implements CveFixActivities {
 
+  /**
+   * Statuses reached only after {@code fetchFindings} returns successfully, so a run that failed
+   * before or during that call is never treated as "the previous scan" — see
+   * {@link CveFixRunRepository#findFirstByIdNotAndStatusInOrderByStartedAtDesc}.
+   */
+  private static final EnumSet<CveFixStatus> OBSERVED_DEPENDENCY_TRACK =
+      EnumSet.of(CveFixStatus.COMPLETED, CveFixStatus.NO_FINDINGS);
+
   private final DependencyTrackClient dependencyTrackClient;
   private final CveFixRunRepository runRepository;
 
@@ -55,7 +65,8 @@ public class CveFixActivitiesImpl implements CveFixActivities {
   @Override
   public boolean previousScanFoundFindings(final String workflowId) {
     return runRepository
-        .findFirstByIdNotOrderByStartedAtDesc(CveFixRunRecord.idFor(workflowId))
+        .findFirstByIdNotAndStatusInOrderByStartedAtDesc(
+            CveFixRunRecord.idFor(workflowId), OBSERVED_DEPENDENCY_TRACK)
         .map(previous -> previous.findingsSeen() > 0)
         .orElse(false);
   }
