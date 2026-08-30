@@ -97,6 +97,20 @@ public class DeployReportRenderer {
    * <p>This is the in-context breadcrumb on the merge that broke production, and the one part of
    * the report that stayed on GitHub. It names the Linear ticket rather than repeating its body.
    *
+   * <p>It also carries {@link #partialDeployComment}, and that is not a tidy-up. {@code
+   * DeployWorkflowImpl.finish} posts a commit comment on success for exactly one status —
+   * {@code DEPLOYED_IMAGES_ONLY} — so the comment's whole reason to exist is saying which
+   * configuration did not get applied. But it called only this method, and with no triage and no
+   * Linear ticket on that path this rendered the bare {@code siteState} line and nothing else:
+   * "The site is up." {@code partialDeployComment} was reachable only from its own tests.
+   *
+   * <p>Production ran that way from 2026-08-28. {@code deployer} is deliberately outside the
+   * recreate allowlist, so the commit that changed its service definition (#130) held the
+   * fast-forward back — and, because the held-back comparison is against the checkout rather
+   * than the previous target, kept holding it back on every merge after it. Three consecutive
+   * deploys applied images against a frozen checkout, each reporting "The site is up." Under the
+   * frontend's old nginx bind mount that shipped a route to production that silently 404'd.
+   *
    * @param record the run
    * @param triage the diagnosis, or null when none was produced
    * @param linearIssueUrl the Linear issue this run filed, or null when nothing was filed
@@ -108,6 +122,10 @@ public class DeployReportRenderer {
       final String linearIssueUrl) {
     StringBuilder body = new StringBuilder();
     body.append(siteState(record)).append("\n\n");
+    String partial = partialDeployComment(record);
+    if (partial != null) {
+      body.append(partial);
+    }
     if (triage != null) {
       body.append("**").append(triage.headline()).append("**\n\n");
       if (!triage.suggestedNextStep().isBlank()) {
@@ -126,6 +144,11 @@ public class DeployReportRenderer {
    * <p>Posted on success, deliberately. "Deployed, but not all of it" must not be silent — that is
    * exactly the half-applied state this feature exists to make impossible to miss.
    *
+   * <p>Reached through {@link #commitComment}, which is the only method the deploy activity
+   * calls. Keep it that way: while this was a second public method nobody invoked, the notice
+   * it carries never once reached a commit — it covered every images-only deploy auto-deploy
+   * ever performed, from the feature going live to 2026-08-29.
+   *
    * @param record the run
    * @return markdown, or null when there is nothing worth saying
    */
@@ -137,9 +160,15 @@ public class DeployReportRenderer {
     StringBuilder body = new StringBuilder();
     body.append("### Deployed — images only\n\n");
     body.append(
+        // `frontend/nginx.conf` is deliberately NOT in this list any more: it ships inside the
+        // frontend image, so a frozen checkout no longer freezes the SPA's routing with it.
+        // It used to be bind-mounted, and naming a file here that is in fact live would send a
+        // reader looking in the wrong place.
         "The new images for this commit are running, but the host-side configuration was "
             + "**not** applied, so anything this commit changed in `docker-compose.prod.yml`, "
-            + "`config/nginx/`, `frontend/nginx.conf` or `scripts/` is not live.\n\n");
+            + "`config/nginx/` or `scripts/` is not live. Until this is resolved every later "
+            + "merge deploys images only too, because the held-back comparison is against this "
+            + "checkout rather than against the previous deploy.\n\n");
     body.append(configSyncSection(record));
     return body.toString();
   }

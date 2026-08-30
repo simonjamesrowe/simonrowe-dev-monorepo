@@ -211,6 +211,38 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 042-share-links-404: Every `https://simonrowe.dev/s/<slug>` returned the SPA's themed 404 from
+  the moment 041 shipped, for blogs and news/events alike, while
+  `curl https://api.simonrowe.dev/s/<slug>` served a perfect Open Graph document. Two independent
+  faults, and the second is the one to remember:
+  - **`docker-compose.prod.yml` bind-mounted `./frontend/nginx.conf` over
+    `/etc/nginx/conf.d/default.conf`, which `Dockerfile.frontend` already copies into the image.**
+    The mount wins, so the container ran the deploy checkout's copy of the file regardless of the
+    image CI had just built. The mount is **removed**; the image is now the only source. The
+    `nginx` proxy keeps its mount and must — it is stock `nginx:alpine` with no image of its own.
+    Diagnose this class of fault from the response headers alone: an `Etag`/`Last-Modified`/
+    `Accept-Ranges` triple on a path that should be proxied means nginx served a file from disk,
+    i.e. the request fell through to `location /`'s `try_files … /index.html`. Guarded by
+    `scripts/test/test-frontend-nginx-shipping.sh` (in the `run-tests.sh` suite, so it is inside
+    the required `Software Factory Build & Test` check).
+  - **The deploy directory had been frozen since #130, and three deploys said "The site is up."**
+    `deployer` is deliberately outside `FACTORY_DEPLOY_RECREATABLE`, so #130 — which added
+    `FACTORY_RUNTIME_ROLE: deployer` to that service — made `sync-config` return `held-back` and
+    leave `HEAD` alone. `SyncDecision.deployImagesAnyway()` is true for **every** decline, so the
+    deploy pulled and recreated images anyway. **A held-back checkout is self-perpetuating**: the
+    comparison is host-checkout vs. target, not previous-target vs. target, so `deployer` kept
+    differing and #131 and #132 were held back for the same reason. Images tracked `main`; every
+    host-side file (`docker-compose.prod.yml`, `config/nginx/`, `scripts/`) stayed at #129.
+    It was invisible because **`DeployReportRenderer.partialDeployComment` was dead code** —
+    referenced only from its own tests. `DeployWorkflowImpl.finish` posts a commit comment for
+    exactly one status, `DEPLOYED_IMAGES_ONLY`, and rendered it with `commitComment`, which with
+    no triage and no Linear URL emitted only its `siteState` line. `commitComment` now includes
+    `partialDeployComment`, and says that later merges will be held back too. Handy corollary
+    while triaging: a bot commit comment on a merge **is** the images-only signal, because a
+    fully-applied deploy posts nothing — `gh api repos/.../commits/<sha>/comments`.
+  Recovering a wedged checkout needs a human on the host, by design: run the
+  `manual-command=` the phase prints (`docker compose -f docker-compose.prod.yml up -d <held-back>`)
+  and then let the next deploy fast-forward. See `docs/runbooks/deploy.md`.
 - 040-software-factory-console: A `/admin/software-factory` page in the site's own admin area,
   four modules switched **on** by default, and the CVE flow rewritten from "open a repair PR" to
   "file one Linear ticket". Three things about it are load-bearing:
@@ -309,8 +341,10 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     calls `V029.createIndexes` directly** — a restore drops indexes with the collection and
     Mongock will not re-run a recorded unit. Not housekeeping: these slugs are in URLs
     already pasted into other people's Slack channels.
-  - **`frontend/nginx.conf` gains `location /s/` and is bind-mounted from the deploy
-    directory in production**, so a new frontend image alone does not apply it. Verify with
+  - **`frontend/nginx.conf` gains `location /s/`, and now ships inside the frontend image.**
+    It used to *also* be bind-mounted from the deploy directory, which shadowed the image's
+    copy — see the `042-share-links-404` entry, which is how this route spent its first
+    day live returning the SPA's 404 for every shared link. Still verify with
     `curl -i https://simonrowe.dev/s/<known-slug>` after deploy — getting the SPA's HTML
     back means every shared link is unfurling as the bare site title. `vite.config.ts` needs
     the matching `/s` proxy or the endpoint 404s locally.

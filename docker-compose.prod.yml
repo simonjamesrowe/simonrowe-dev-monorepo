@@ -747,8 +747,26 @@ services:
     # explicitly before `up -d`.
     pull_policy: missing
     restart: unless-stopped
-    volumes:
-      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    # NO volumes, and specifically no bind mount over /etc/nginx/conf.d/default.conf.
+    #
+    # Dockerfile.frontend already copies frontend/nginx.conf into the image, so the routing
+    # config and the bundle it routes for are built from one commit and ship together. This
+    # service used to ALSO bind-mount `./frontend/nginx.conf` over the same path, which
+    # silently won: the container ran whatever the deploy checkout's working tree happened
+    # to hold, regardless of the image CI had just built and verified.
+    #
+    # That shipped broken twice. PR #65 added `location = /mcp` and every POST to it returned
+    # 405 in production. PR #132 added `location /s/` and every share link - including ones
+    # already pasted into other people's Slack channels - fell through to the SPA and rendered
+    # its 404. Both times the image was right and the mount masked it, and both times the
+    # deploy reported success: a deploy whose sync-config phase declines still pulls and
+    # recreates images (SyncDecision.deployImagesAnyway), so the checkout can sit frozen
+    # while :latest keeps moving. The mount turned that into silently wrong routing.
+    #
+    # Unlike the `nginx` proxy below - stock nginx:alpine, no image of its own, so its conf
+    # HAS to come from a mount - this service builds an image, so the config belongs in it.
+    # A routing change now ships the way every other frontend change does: rebuild, pull,
+    # recreate. Guarded by scripts/test/test-frontend-nginx-shipping.sh.
     depends_on:
       backend:
         condition: service_healthy

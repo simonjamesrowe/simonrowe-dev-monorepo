@@ -303,4 +303,55 @@ class DeployReportRendererTest {
 
     assertThat(comment).doesNotContain("Full diagnosis");
   }
+
+  @Test
+  void theCommitCommentCarriesTheImagesOnlyNoticeAndNamesTheHeldBackService() {
+    // The regression test for a silent production incident, and the reason it is asserted on
+    // commitComment rather than on partialDeployComment.
+    //
+    // DeployWorkflowImpl.finish posts a commit comment on success for exactly ONE status,
+    // DEPLOYED_IMAGES_ONLY, and the activity renders it with commitComment - passing no triage
+    // and no Linear URL, because neither exists on a successful deploy. So this comment used to
+    // render as its bare siteState line, "The site is up.", which is indistinguishable from a
+    // deploy that applied everything. partialDeployComment held the actual explanation and was
+    // reachable only from the two tests above it.
+    //
+    // Production ran that way from 2026-08-28: `deployer` is deliberately outside the recreate
+    // allowlist, so the commit that changed its service definition held the fast-forward back
+    // and every merge after it was compared against the same frozen checkout and held back too.
+    // Three consecutive merges deployed images against pre-#130 host configuration, each
+    // announcing "The site is up."
+    SyncOutcome heldBack =
+        new SyncOutcome(
+            SyncDecision.HELD_BACK, null, SHA, List.of("deployer"), List.of("deployer"), null,
+            "docker compose -f docker-compose.prod.yml up -d deployer", "held back");
+
+    String comment =
+        renderer.commitComment(
+            record(DeployStatus.DEPLOYED_IMAGES_ONLY, false, null, false, heldBack), null, null);
+
+    assertThat(comment)
+        .as("an images-only deploy must say so on the commit, not just that the site is up")
+        .contains("Deployed — images only")
+        .contains("not** applied")
+        .contains("deployer")
+        .contains("HELD_BACK");
+    // The sting in the tail: without this the reader assumes the next merge recovers by itself.
+    assertThat(comment)
+        .as("a held-back checkout holds back every later merge too, and that must be said")
+        .contains("every later merge deploys images only");
+    // frontend/nginx.conf now ships inside the frontend image, so naming it as unapplied
+    // host-side config would point a reader at the one file that IS live.
+    assertThat(comment).doesNotContain("frontend/nginx.conf");
+  }
+
+  @Test
+  void fullyAppliedDeployAddsNoImagesOnlyNoticeToTheCommitComment() {
+    // The other half: DEPLOYED must stay quiet, or the notice means nothing.
+    String comment =
+        renderer.commitComment(
+            record(DeployStatus.DEPLOYED, false, null, false, applied()), null, null);
+
+    assertThat(comment).doesNotContain("images only").doesNotContain("Configuration was not");
+  }
 }
