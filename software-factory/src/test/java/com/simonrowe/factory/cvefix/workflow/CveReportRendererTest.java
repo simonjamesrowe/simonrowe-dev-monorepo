@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.simonrowe.factory.cvefix.domain.ComponentFindings;
 import com.simonrowe.factory.cvefix.domain.Finding;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -11,7 +12,9 @@ class CveReportRendererTest {
 
   private static ComponentFindings component(
       final String project, final String purl, final String name, final Finding... findings) {
-    return new ComponentFindings(project, purl, name, "1.0", List.of(), List.of(findings));
+    List<String> vulnerabilityIds =
+        Arrays.stream(findings).map(Finding::vulnerabilityId).toList();
+    return new ComponentFindings(project, purl, name, "1.0", vulnerabilityIds, List.of(findings));
   }
 
   private static Finding finding(final String id, final String severity, final String advice) {
@@ -124,5 +127,36 @@ class CveReportRendererTest {
             2);
 
     assertThat(report.split("## p", -1)).hasSize(2);
+  }
+
+  @Test
+  void advisoriesLineListsEveryVulnerabilityId() {
+    String report =
+        CveReportRenderer.report(
+            List.of(
+                component(
+                    "p",
+                    "pkg:maven/a/b@1.0",
+                    "b",
+                    finding("CVE-1", "HIGH", ""),
+                    finding("CVE-2", "MEDIUM", ""),
+                    finding("CVE-3", "LOW", ""))),
+            3);
+
+    assertThat(report).contains("- **Advisories:** CVE-1, CVE-2, CVE-3");
+  }
+
+  @Test
+  void rendersPlaceholderForNullVulnerabilityId() {
+    // Reachable on Temporal replay of a history written before every finding carried an id:
+    // ComponentFindings deliberately tolerates a null vulnerabilityId.
+    String report =
+        CveReportRenderer.report(
+            List.of(component("p", "pkg:maven/a/b@1.0", "b", finding(null, "HIGH", ""))), 1);
+
+    assertThat(report)
+        .contains("- **Advisories:** (unidentified advisory)")
+        .contains("- **(unidentified advisory)** (HIGH)")
+        .doesNotContain("null");
   }
 }

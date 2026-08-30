@@ -19,6 +19,12 @@ public final class CveReportRenderer {
   /** Heading used for a component whose project is absent, as on replay of older history. */
   private static final String UNKNOWN_PROJECT = "(unknown project)";
 
+  /**
+   * Placeholder for a finding whose vulnerability id is absent, as on replay of older history
+   * that {@link ComponentFindings} deliberately tolerates.
+   */
+  private static final String UNIDENTIFIED_ADVISORY = "(unidentified advisory)";
+
   private CveReportRenderer() {
   }
 
@@ -50,9 +56,9 @@ public final class CveReportRenderer {
           .append(component.componentVersion()).append("`\n\n")
           .append("- **Package:** `").append(component.purl()).append("`\n")
           .append("- **Advisories:** ")
-          .append(String.join(", ", component.vulnerabilityIds())).append("\n\n");
+          .append(joinedAdvisoryIds(component.vulnerabilityIds())).append("\n\n");
       for (Finding finding : component.findings()) {
-        markdown.append("- **").append(finding.vulnerabilityId()).append("** (")
+        markdown.append("- **").append(idOf(finding.vulnerabilityId())).append("** (")
             .append(finding.severity()).append(")");
         if (finding.recommendation() != null && !finding.recommendation().isBlank()) {
           markdown.append(": ").append(finding.recommendation());
@@ -86,5 +92,15 @@ public final class CveReportRenderer {
 
   private static String quoted(final List<String> projects) {
     return String.join(", ", projects.stream().map(name -> "`" + name + "`").toList());
+  }
+
+  private static String joinedAdvisoryIds(final List<String> vulnerabilityIds) {
+    return String.join(", ", vulnerabilityIds.stream().map(CveReportRenderer::idOf).toList());
+  }
+
+  private static String idOf(final String vulnerabilityId) {
+    return vulnerabilityId == null || vulnerabilityId.isBlank()
+        ? UNIDENTIFIED_ADVISORY
+        : vulnerabilityId;
   }
 }
