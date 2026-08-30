@@ -73,12 +73,17 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       componentsSeen = components.size();
       findingsSeen = components.stream().mapToInt(component -> component.findings().size()).sum();
       if (components.isEmpty()) {
-        current = new CveFixProgress(CveFixPhase.COMPLETED, "No findings", 0);
+        current = new CveFixProgress(CveFixPhase.FETCHING,
+            "Dependency-Track reported no findings; checking whether the repository was "
+                + "previously dirty",
+            0);
         String detail = "Dependency-Track reported no findings";
         // Only on the transition. Commenting on every clean run would add a comment a night,
         // forever, and the sink's replay guard cannot help: it keys on the occurrence id, which
         // is this run's id and differs every night.
         if (activities.previousScanFoundFindings(workflowId)) {
+          current = new CveFixProgress(CveFixPhase.FILING,
+              "Commenting on the existing report now that the repository is clean", 0);
           outcomes.add(
               linear.fileIssue(
                   new IssueFiling(
@@ -94,6 +99,7 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
                       true)));
           detail = "Dependency-Track reported no findings; commented on the existing report";
         }
+        current = new CveFixProgress(CveFixPhase.COMPLETED, detail, 0);
         return finish(workflowId, runId, startedAt, CveFixStatus.NO_FINDINGS,
             findingsSeen, componentsSeen, outcomes, detail);
       }
