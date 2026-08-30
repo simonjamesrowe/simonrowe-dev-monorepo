@@ -407,4 +407,60 @@ class IssueFilerTest {
 
     verify(gateway).addComment("i1", "Seen again: commit deadbeef at 12:00");
   }
+
+  @Test
+  void commentOnlyRegressionAgainstCompletedIssueReportsNoIssueEvenWhenTheRecordStillCarriesOne() {
+    // Reachable on the ordinary path, not a hypothetical: this fingerprint was filed as SIM-1
+    // long ago and SIM-1 was later completed. The stored record still carries SIM-1's id,
+    // identifier and URL, and the commentOnly short-circuit never mutates it before returning
+    // SKIPPED_NO_ISSUE — so `reported` must blank the issue fields on the way out, or a "the
+    // repository is clean" filing would come back holding a real, resolved issue URL.
+    String fingerprint = Fingerprint.of("cvefix", List.of("repo", "current-vulnerabilities"));
+    LinearIssueRecord filedThenCompleted =
+        LinearIssueRecord.first(
+                fingerprint, "cvefix", List.of("repo", "current-vulnerabilities"), NOW)
+            .withPendingAttachment("i1", "SIM-1", "https://linear.app/i/1")
+            .withAttachmentWritten()
+            .withDecision(
+                new LinearIssueDecision(
+                    NOW, FilingDecision.FILED_NEW, "run-0", "cve-scan-0", "x", false),
+                NOW,
+                IssueStateType.TRIAGE);
+    when(records.findById(fingerprint)).thenReturn(Optional.of(filedThenCompleted));
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.COMPLETED)));
+
+    FiledIssue filed = filer().file(statusUpdate());
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.SKIPPED_NO_ISSUE);
+    assertThat(filed.issueIdentifier()).isNull();
+    assertThat(filed.issueUrl()).isNull();
+    verify(gateway, never()).createIssue(anyString(), anyString(), anyInt(), anyString());
+    verify(gateway, never()).relateIssues(anyString(), anyString());
+
+    // Only what is RETURNED is blanked. The audit trail keeps the whole history.
+    ArgumentCaptor<LinearIssueRecord> saved = ArgumentCaptor.forClass(LinearIssueRecord.class);
+    verify(records).save(saved.capture());
+    assertThat(saved.getValue().issueIdentifier()).isEqualTo("SIM-1");
+    assertThat(saved.getValue().issueUrl()).isEqualTo("https://linear.app/i/1");
+  }
+
+  @Test
+  void commentOnlyDryRunReportsSkippedNoIssueInsteadOfFiledRegression() {
+    // A dry run must be a faithful preview: a real run of this same commentOnly filing would
+    // resolve to SKIPPED_NO_ISSUE (a completed issue carries the fingerprint), never to
+    // FILED_REGRESSION, and the dry-run branch must agree rather than short-circuiting before
+    // commentOnly is ever consulted.
+    properties = new LinearProperties(true, "k", null, "SIM", null, true, null, null);
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.COMPLETED)));
+
+    FiledIssue filed = filer().file(statusUpdate());
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.SKIPPED_NO_ISSUE);
+    assertThat(filed.issueIdentifier()).isNull();
+    verify(gateway, never()).createIssue(anyString(), anyString(), anyInt(), anyString());
+    verify(gateway, never()).relateIssues(anyString(), anyString());
+    verify(records).save(any(LinearIssueRecord.class));
+  }
 }
