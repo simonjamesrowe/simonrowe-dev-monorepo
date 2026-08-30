@@ -459,7 +459,12 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   outage stops all merging. **(3) `.github/rulesets/main.json`** requires four checks
   (`Backend`/`Frontend`/`Software Factory Build & Test` + `Code Review`), **zero** approvals
   (self-approval is forbidden, so requiring one deadlocks a solo maintainer permanently),
-  conversation resolution, linear history, and **no bypass actors**. Excluded on purpose:
+  conversation resolution and linear history. **Repository admins bypass every rule**
+  (`actor_id: 5`, `bypass_mode: always`) — added 2026-08-29, reversing 038's original
+  `bypass_actors: []`, because without it a `software-factory` outage stopped *all* merging and
+  the only recovery was hand-editing the required contexts in the GitHub UI under pressure. The
+  hatch is an escape hatch, not a merge strategy; every use lands in rule insights, which is now
+  the whole control. Excluded on purpose:
   `Static Analysis` (`continue-on-error: true`, so success is meaningless), `SonarCloud Code
   Analysis` (would make an intentionally advisory gate blocking with no legitimate escape hatch,
   and Constitution III bans manual overrides), `evaluate` (`paths:`-filtered, normally absent, and
@@ -471,7 +476,7 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     write` incident. `commentToken` survives only because it deliberately sends no block at all.
   - **Committing the ruleset does not apply it; apply it only after seeing a real `Code Review`
     check.** Applying it first makes that required check permanently absent, blocking *every* PR
-    including the one that would fix it, with no bypass actor to recover with.
+    including the one that would fix it. The admin bypass is now the recovery path.
   Also: `scripts/classify-change.sh` (+ `test-classify-change.sh`, auto-discovered by
   `run-tests.sh`) maps changed paths to `auto-merge`/`ux-review`/`manual`. **Rule 4 —
   unrecognised path ⇒ `manual`, never `auto-merge`** — so a new top-level directory defaults to

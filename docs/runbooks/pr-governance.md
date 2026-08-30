@@ -60,7 +60,7 @@ JSON carries no comments, so the reasoning lives here.
 | Linear history | required | |
 | Force pushes | blocked | |
 | Branch deletion | restricted | |
-| Bypass actors | **none** | A standing admin bypass would quietly make the whole gate optional. Escalation is editing the ruleset, which is visible in rule insights. |
+| Bypass actors | **Repository admin** (`actor_id: 5`, `bypass_mode: always`) | Added 2026-08-29, reversing 038's original `bypass_actors: []`. Without it a `software-factory` outage stops **all** merging with no recovery short of hand-editing the gate. Every use is visible in rule insights. |
 
 Repository settings, applied separately: `allow_auto_merge: true`, `allow_merge_commit: false`,
 `allow_rebase_merge: false` — making CLAUDE.md's long-standing squash-only claim actually true.
@@ -133,8 +133,8 @@ gh api --method PUT /repos/simonjamesrowe/simonrowe-dev-monorepo/rulesets/<id> \
 
 > **Step 5 following step 4 is not tidiness.** Applying the ruleset while nothing publishes a
 > `Code Review` check makes that required check permanently absent, blocking **every** pull request
-> — including the one that would fix it. With no bypass actors, recovery means hand-editing the
-> ruleset in the GitHub UI.
+> — including the one that would fix it. The repository-admin bypass is what makes that
+> recoverable without hand-editing the ruleset in the GitHub UI.
 
 ### 6. Repository settings, then the skills
 
@@ -152,32 +152,56 @@ Then update `simonjamesrowe/agent-setup` → `components/skills/` (the **source*
 ## Drift check
 
 ```bash
-diff <(gh api /repos/simonjamesrowe/simonrowe-dev-monorepo/rulesets/<id> \
-        --jq '{name,target,enforcement,conditions,rules}') \
-     <(jq '{name,target,enforcement,conditions,rules}' .github/rulesets/main.json)
+KEYS='{name,target,enforcement,bypass_actors,conditions,rules}'
+diff <(gh api /repos/simonjamesrowe/simonrowe-dev-monorepo/rulesets/<id> --jq "$KEYS" | jq -S .) \
+     <(jq -S "$KEYS" .github/rulesets/main.json)
 ```
 
 The ruleset is not unit-testable; this command is the substitute. Run it after any manual edit in
-the GitHub UI, including an emergency bypass.
+the GitHub UI.
+
+**`bypass_actors` is in that key list deliberately.** It was not until 2026-08-29, which meant the
+drift check could not see the single field most likely to be widened by hand — silently reporting
+"no drift" while someone had granted a standing bypass. `jq -S` sorts keys, so ordering differences
+never masquerade as drift.
+
+`dismissal_restriction` and `required_reviewers` are pinned in the committed file purely so this
+diff comes back **empty**. GitHub echoes them as empty defaults inside the `pull_request` rule
+whether or not you send them; leaving them out made the check report two lines of noise on a
+perfectly clean ruleset, which is how a drift check stops being read.
 
 ---
 
 ## Emergency bypass
 
-There are no bypass actors, by design.
+**Repository admins can bypass every rule** (`bypass_mode: always`), so an admin can merge past a
+broken gate and can push directly to `main`. That is a deliberate reversal of 038's original
+`bypass_actors: []`, taken on 2026-08-29.
+
+The original reasoning was sound and still applies as a *norm*: a standing bypass makes the gate
+optional for whoever holds it, and the discipline the gate buys is only worth what the holder
+declines to bypass. What changed is the assessment of the alternative. With no bypass actor, the
+recovery path for an absent `Code Review` check was hand-editing the required contexts in the GitHub
+UI and remembering to restore them — a fiddly, easy-to-forget manual step performed under pressure,
+on the one repository whose gate had just proven it could wedge itself.
+
+**So the bypass is an escape hatch, not a merge strategy.** Reach for it only after step 1:
 
 1. **Prefer fixing the signal.** A red `Code Review` usually means a real finding. An *absent* one
    means `software-factory` is not running — check for a live poller on the `code-review` task
    queue, not just the container healthcheck, since a container can be `healthy` with no poller
-   registered ([software-factory.md](software-factory.md)).
-2. If the reviewer genuinely cannot be restored, edit the ruleset in the GitHub UI to drop
-   `Code Review` from the required contexts, merge, then restore it from the committed file and
-   re-run the drift check. The edit is visible in the repository's rule-insights log — which is the
-   entire reason there is no standing bypass actor.
+   registered ([software-factory.md](software-factory.md)). The manual trigger on
+   `/admin/software-factory` re-reviews a commit the webhook can never repeat.
+2. Only if the reviewer genuinely cannot be restored, merge as an admin. **Every bypass is recorded
+   in the repository's rule-insights log** — that visibility is now the whole control, since the
+   act itself is no longer blocked. Say in the pull request that you bypassed, and why.
 
-**A reviewer outage stops all merging.** That is the accepted cost of making silence blocking, and
-it is the point: previously a failed review commonly posted nothing at all, so the signal that most
-needed to block a merge was the one that could not.
+Because the hatch exists, the drift check matters more, not less: a bypass leaves the committed
+ruleset and the live one identical, so nothing but rule insights will tell you it happened.
+
+**A reviewer outage no longer stops all merging** — an admin can get past it. It still stops
+*unattended* merging, which is the part that mattered: previously a failed review commonly posted
+nothing at all, so the signal that most needed to block a merge was the one that could not.
 
 ---
 
