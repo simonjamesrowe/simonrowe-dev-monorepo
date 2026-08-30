@@ -662,8 +662,8 @@ services:
       GOOGLE_CLOUD_TTS_API_KEY: ${GOOGLE_CLOUD_TTS_API_KEY:-}
       GOOGLE_CLOUD_TTS_OUTPUT_BUCKET: ${GOOGLE_CLOUD_TTS_OUTPUT_BUCKET:-}
       GOOGLE_CLOUD_TTS_LOCATION: ${GOOGLE_CLOUD_TTS_LOCATION:-global}
-      GOOGLE_CLOUD_TTS_LANGUAGE_CODE: ${GOOGLE_CLOUD_TTS_LANGUAGE_CODE:-en-GB}
-      GOOGLE_CLOUD_TTS_VOICE_NAME: ${GOOGLE_CLOUD_TTS_VOICE_NAME:-en-GB-Chirp3-HD-Charon}
+      GOOGLE_CLOUD_TTS_LANGUAGE_CODE: ${GOOGLE_CLOUD_TTS_LANGUAGE_CODE:-en-AU}
+      GOOGLE_CLOUD_TTS_VOICE_NAME: ${GOOGLE_CLOUD_TTS_VOICE_NAME:-en-AU-Chirp3-HD-Achird}
       # Self-hosted SearXNG web search (no API key). Points at the internal searxng container;
       # if searxng is down the tool degrades gracefully (returns "unavailable", never errors).
       SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}

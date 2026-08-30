@@ -208,8 +208,8 @@ narration:
   # leaves this blank and uses gcloud user ADC.
   api-key: ${GOOGLE_CLOUD_TTS_API_KEY:}
   location: ${GOOGLE_CLOUD_TTS_LOCATION:global}
-  voice-name: ${GOOGLE_CLOUD_TTS_VOICE_NAME:en-GB-Chirp3-HD-Charon}
-  language-code: ${GOOGLE_CLOUD_TTS_LANGUAGE_CODE:en-GB}
+  voice-name: ${GOOGLE_CLOUD_TTS_VOICE_NAME:en-AU-Chirp3-HD-Achird}
+  language-code: ${GOOGLE_CLOUD_TTS_LANGUAGE_CODE:en-AU}
   bucket: ${GOOGLE_CLOUD_TTS_OUTPUT_BUCKET:}
   max-blog-characters: ${NARRATION_MAX_BLOG_CHARACTERS:50000}
   monthly-character-limit: ${NARRATION_MONTHLY_CHARACTER_LIMIT:1000000}
