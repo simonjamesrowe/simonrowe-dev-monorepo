@@ -1,6 +1,7 @@
 package com.simonrowe.factory.cvefix.domain;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,7 +28,14 @@ public record ComponentFindings(
           .thenComparing(Finding::vulnerabilityId, Comparator.nullsLast(Comparator.naturalOrder()));
 
   public ComponentFindings {
-    vulnerabilityIds = vulnerabilityIds == null ? List.of() : List.copyOf(vulnerabilityIds);
+    // Not List.copyOf: it rejects null elements, but group() derives this list from
+    // Finding::vulnerabilityId, which Dependency-Track's own client only defaults to "" — a
+    // caller constructing this record directly (or replaying older workflow history) may still
+    // hand it a null id, and this constructor's contract is to tolerate whatever it is given.
+    vulnerabilityIds =
+        vulnerabilityIds == null
+            ? List.of()
+            : Collections.unmodifiableList(new ArrayList<>(vulnerabilityIds));
     findings = findings == null ? List.of() : findings.stream().sorted(BY_SEVERITY).toList();
   }
 

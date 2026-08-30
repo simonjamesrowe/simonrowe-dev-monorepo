@@ -109,4 +109,13 @@ class ComponentFindingsTest {
 
     assertThat(withNullSeverity.findings()).hasSize(1);
   }
+
+  @Test
+  void toleratesNullVulnerabilityIdThroughGroup() {
+    List<ComponentFindings> grouped =
+        ComponentFindings.group(List.of(finding("p", "pkg:maven/a/b@1", null, "HIGH")));
+
+    assertThat(grouped).hasSize(1);
+    assertThat(grouped.get(0).vulnerabilityIds()).containsExactly((String) null);
+  }
 }
