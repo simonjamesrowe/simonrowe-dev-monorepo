@@ -46,6 +46,33 @@ class CveFixRepositoriesTest {
   }
 
   @Test
+  void findsTheMostRecentRunExcludingTheOneNamed() {
+    runs.deleteAll();
+    runs.save(record("older", Instant.parse("2026-08-01T00:00:00Z"), 3));
+    runs.save(record("newer", Instant.parse("2026-08-02T00:00:00Z"), 0));
+    runs.save(record("current", Instant.parse("2026-08-03T00:00:00Z"), 0));
+
+    assertThat(runs.findFirstByIdNotOrderByStartedAtDesc("current"))
+        .hasValueSatisfying(found -> assertThat(found.id()).isEqualTo("newer"));
+    assertThat(runs.findFirstByIdNotOrderByStartedAtDesc("newer"))
+        .hasValueSatisfying(found -> assertThat(found.id()).isEqualTo("current"));
+  }
+
+  @Test
+  void findsNothingWhenTheOnlyRunIsTheOneExcluded() {
+    runs.deleteAll();
+    runs.save(record("only", Instant.parse("2026-08-01T00:00:00Z"), 1));
+
+    assertThat(runs.findFirstByIdNotOrderByStartedAtDesc("only")).isEmpty();
+  }
+
+  private static CveFixRunRecord record(
+      final String id, final Instant startedAt, final int findingsSeen) {
+    return new CveFixRunRecord(
+        id, id, startedAt, CveFixStatus.COMPLETED, findingsSeen, List.of(), null, 0, "detail");
+  }
+
+  @Test
   void indexInitializerCreatesTheRunHistoryIndex() {
     // CveFixIndexInitializer is an ApplicationRunner and is gated on the feature flag, so it
     // does not run inside this slice. Drive it directly — that also proves it is idempotent,

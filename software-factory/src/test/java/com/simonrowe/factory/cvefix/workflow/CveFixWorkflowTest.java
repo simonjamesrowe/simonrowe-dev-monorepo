@@ -129,6 +129,11 @@ class CveFixWorkflowTest {
         final com.simonrowe.factory.cvefix.persistence.CveFixRunRecord record) {
       delegate.recordRun(record);
     }
+
+    @Override
+    public boolean previousScanFoundFindings(final String workflowId) {
+      return delegate.previousScanFoundFindings(workflowId);
+    }
   }
 
   private record LinearActivitiesAdapter(LinearActivities delegate) implements LinearActivities {

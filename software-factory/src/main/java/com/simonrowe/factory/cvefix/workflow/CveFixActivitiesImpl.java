@@ -51,4 +51,12 @@ public class CveFixActivitiesImpl implements CveFixActivities {
   public void recordRun(final CveFixRunRecord record) {
     runRepository.save(record);
   }
+
+  @Override
+  public boolean previousScanFoundFindings(final String workflowId) {
+    return runRepository
+        .findFirstByIdNotOrderByStartedAtDesc(CveFixRunRecord.idFor(workflowId))
+        .map(previous -> previous.findingsSeen() > 0)
+        .orElse(false);
+  }
 }

@@ -46,6 +46,31 @@ class CveFixActivitiesImplTest {
     verify(runs).save(record);
   }
 
+  @Test
+  void previousScanFoundFindingsIsTrueWhenTheLastRunSawSomething() {
+    when(runs.findFirstByIdNotOrderByStartedAtDesc("wf-2"))
+        .thenReturn(java.util.Optional.of(
+            new CveFixRunRecord(
+                "wf-1", "wf-1", Instant.EPOCH, CveFixStatus.COMPLETED, 4,
+                List.of(), null, 0, "detail")));
+
+    assertThat(activities.previousScanFoundFindings("wf-2")).isTrue();
+  }
+
+  @Test
+  void previousScanFoundFindingsIsFalseWhenTheLastRunWasCleanOrThereWasNone() {
+    when(runs.findFirstByIdNotOrderByStartedAtDesc("wf-2"))
+        .thenReturn(java.util.Optional.of(
+            new CveFixRunRecord(
+                "wf-1", "wf-1", Instant.EPOCH, CveFixStatus.NO_FINDINGS, 0,
+                List.of(), null, 0, "detail")));
+    assertThat(activities.previousScanFoundFindings("wf-2")).isFalse();
+
+    when(runs.findFirstByIdNotOrderByStartedAtDesc("wf-3"))
+        .thenReturn(java.util.Optional.empty());
+    assertThat(activities.previousScanFoundFindings("wf-3")).isFalse();
+  }
+
   private static Finding finding(final String purl, final String id) {
     return new Finding("simonrowe-dev/backend", purl, purl, "1.0", id, "HIGH",
         "Upgrade the component");
