@@ -339,4 +339,72 @@ class IssueFilerTest {
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> filer().file(filing()))
         .isInstanceOf(LinearApiException.class);
   }
+
+  private static IssueFiling statusUpdate() {
+    return new IssueFiling(
+        "cvefix",
+        List.of("repo", "current-vulnerabilities"),
+        "Current vulnerabilities in repo",
+        "body that must never be used to create an issue",
+        "No current vulnerabilities as of scan run-9.",
+        "run-9",
+        "cve-scan-9",
+        true);
+  }
+
+  @Test
+  void commentOnlyFilingCreatesNothingWhenNoIssueCarriesTheFingerprint() {
+    when(gateway.issuesForFingerprint(anyString())).thenReturn(List.of());
+
+    FiledIssue filed = filer().file(statusUpdate());
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.SKIPPED_NO_ISSUE);
+    verify(gateway, never()).createIssue(anyString(), anyString(), anyInt(), anyString());
+    verify(gateway, never()).addComment(anyString(), anyString());
+  }
+
+  @Test
+  void commentOnlyFilingDoesNotFileRegressionAgainstCompletedIssue() {
+    // "Everything is clean" must never file a regression ticket. Without this arm the decider's
+    // FILED_REGRESSION outcome would create an issue whose body says there are no problems.
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.COMPLETED)));
+
+    FiledIssue filed = filer().file(statusUpdate());
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.SKIPPED_NO_ISSUE);
+    verify(gateway, never()).createIssue(anyString(), anyString(), anyInt(), anyString());
+    verify(gateway, never()).relateIssues(anyString(), anyString());
+  }
+
+  @Test
+  void commentOnlyFilingCommentsOnAnOpenIssueUsingTheProducersWordingVerbatim() {
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.STARTED)));
+
+    FiledIssue filed = filer().file(statusUpdate());
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.COMMENTED_EXISTING);
+    verify(gateway).addComment("i1", "No current vulnerabilities as of scan run-9.");
+    verify(gateway, never()).createIssue(anyString(), anyString(), anyInt(), anyString());
+  }
+
+  @Test
+  void commentOnlyFilingStaysQuietOnIssueHumanDeclined() {
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.CANCELED)));
+
+    assertThat(filer().file(statusUpdate()).decision()).isEqualTo(FilingDecision.SUPPRESSED);
+    verify(gateway, never()).addComment(anyString(), anyString());
+  }
+
+  @Test
+  void ordinaryFilingStillPrefixesItsCommentWithSeenAgain() {
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.STARTED)));
+
+    filer().file(filing());
+
+    verify(gateway).addComment("i1", "Seen again: commit deadbeef at 12:00");
+  }
 }

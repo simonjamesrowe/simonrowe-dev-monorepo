@@ -129,8 +129,16 @@ public class IssueFiler {
 
     LinearProperties.Producer policy = properties.producerFor(filing.producer());
     switch (outcome.decision()) {
-      case FILED_NEW ->
-          record = createAndAttach(record, filing, filing.body(), policy, fingerprintUrl, null);
+      case FILED_NEW -> {
+        if (filing.commentOnly()) {
+          log.info(
+              "Fingerprint {} has no open issue; a comment-only filing creates nothing",
+              fingerprint);
+          return finish(
+              record, FilingDecision.SKIPPED_NO_ISSUE, filing, now, observed, fingerprint);
+        }
+        record = createAndAttach(record, filing, filing.body(), policy, fingerprintUrl, null);
+      }
       case COMMENTED_EXISTING -> {
         gateway.addComment(outcome.subject().id(), occurrenceComment(filing));
         record =
@@ -142,15 +150,26 @@ public class IssueFiler {
               "Fingerprint {} was declined on {}; staying quiet",
               fingerprint,
               outcome.subject().identifier());
-      case FILED_REGRESSION ->
-          record =
-              createAndAttach(
-                  record,
-                  filing,
-                  regressionBody(filing, outcome.subject()),
-                  policy,
-                  fingerprintUrl,
-                  outcome.subject().id());
+      case FILED_REGRESSION -> {
+        if (filing.commentOnly()) {
+          // A status update must never file a regression: the "recurrence" here is the ABSENCE
+          // of the problem, and a new ticket saying everything is clean is worse than silence.
+          log.info(
+              "Fingerprint {} is completed on {}; a comment-only filing stays quiet",
+              fingerprint,
+              outcome.subject().identifier());
+          return finish(
+              record, FilingDecision.SKIPPED_NO_ISSUE, filing, now, observed, fingerprint);
+        }
+        record =
+            createAndAttach(
+                record,
+                filing,
+                regressionBody(filing, outcome.subject()),
+                policy,
+                fingerprintUrl,
+                outcome.subject().id());
+      }
       default -> throw new IllegalStateException("Unhandled decision " + outcome.decision());
     }
 
@@ -266,7 +285,11 @@ public class IssueFiler {
   }
 
   private static String occurrenceComment(final IssueFiling filing) {
-    return "Seen again: " + filing.occurrenceDetail();
+    // A status update is not a recurrence, so it must not be announced as one: "Seen again: no
+    // current vulnerabilities" says the opposite of what it means.
+    return filing.commentOnly()
+        ? filing.occurrenceDetail()
+        : "Seen again: " + filing.occurrenceDetail();
   }
 
   private static String regressionBody(final IssueFiling filing, final TrackedIssue predecessor) {

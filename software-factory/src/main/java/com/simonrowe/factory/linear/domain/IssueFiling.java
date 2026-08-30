@@ -12,6 +12,10 @@ import java.util.List;
  * @param occurrenceDetail one line naming this occurrence, used only when commenting
  * @param occurrenceId the producing workflow's run id, so an activity replay is recognised
  * @param workflowId the producing workflow's id, recorded in the audit trail
+ * @param commentOnly whether this is a status update about a known problem rather than a new
+ *     occurrence. When set, the sink NEVER creates an issue: it comments on an open one and
+ *     otherwise does nothing. It also uses {@code occurrenceDetail} as the comment verbatim,
+ *     without the {@code Seen again: } prefix, because a status update is not a recurrence.
  */
 public record IssueFiling(
     String producer,
@@ -20,9 +24,32 @@ public record IssueFiling(
     String body,
     String occurrenceDetail,
     String occurrenceId,
-    String workflowId) {
+    String workflowId,
+    boolean commentOnly) {
 
   public IssueFiling {
     keyParts = keyParts == null ? List.of() : List.copyOf(keyParts);
+  }
+
+  /**
+   * Files an ordinary occurrence, which may create an issue.
+   *
+   * @param producer the producer key
+   * @param keyParts the structured parts identifying the problem
+   * @param title the issue title
+   * @param body the issue description in Markdown
+   * @param occurrenceDetail one line naming this occurrence
+   * @param occurrenceId the producing workflow's run id
+   * @param workflowId the producing workflow's id
+   */
+  public IssueFiling(
+      final String producer,
+      final List<String> keyParts,
+      final String title,
+      final String body,
+      final String occurrenceDetail,
+      final String occurrenceId,
+      final String workflowId) {
+    this(producer, keyParts, title, body, occurrenceDetail, occurrenceId, workflowId, false);
   }
 }
