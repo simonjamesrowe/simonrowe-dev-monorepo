@@ -100,6 +100,82 @@ looks like it succeeded while the hostname simply does not resolve.
       See "Zero vulnerabilities on the dependency SBOMs" below — without this step the whole
       deployment looks healthy and reports nothing.
 
+## What `simonrowe-dev/backend` actually covers (runtimeClasspath only)
+
+`./gradlew cyclonedxBom` runs on the **root** project and, left unconfigured, resolves
+**every resolvable configuration of every Gradle module** — `checkstyle`,
+`compileClasspath`, `testCompileClasspath` and `testRuntimeClasspath` included. The root
+`build.gradle.kts` therefore pins it:
+
+```kotlin
+tasks.cyclonedxBom {
+    setIncludeConfigs(listOf("runtimeClasspath"))
+}
+```
+
+**This is load-bearing, and it is not tuning.** Without it the SBOM reported build- and
+test-time tooling as production vulnerabilities. SIM-9 is the worked example: of 19 backend
+findings, **6 were never in the deployed jar** —
+
+| Component | Really came from | Ships? |
+|:----------|:-----------------|:-------|
+| `commons-beanutils` 1.10.1 (1 HIGH) | Checkstyle's own tool classpath | no |
+| `plexus-utils` 3.3.0 (1 HIGH) | Checkstyle, via `plexus-component-metadata` | no |
+| `netty-codec` 4.1.135.Final (1 HIGH) | `testRuntimeClasspath`, Testcontainers' docker-java | no |
+| `commons-compress` 1.24.0 (2 MEDIUM) | `testCompileClasspath`/`testRuntimeClasspath`, same | no |
+
+Scoping to `runtimeClasspath` took the SBOM from 480 components to 352 and left **zero**
+entries tagged `cdx:maven:package:test=true`. Both modules are still covered — the task is
+on the root project, so `backend` and `software-factory` each contribute their own
+`runtimeClasspath`. That second point matters: `opentelemetry-api` was reported at both
+1.49.0 and 1.64.0 because `backend` already pinned 1.64.0 while `software-factory` still
+resolved the vulnerable 1.49.0 through `temporal-spring-boot-starter`. A fix applied to one
+module only leaves the finding alive with two versions listed.
+
+Diagnose a suspected phantom finding by checking which configuration actually carries the
+component before bumping anything:
+
+```bash
+./gradlew :backend:dependencyInsight --configuration runtimeClasspath \
+  --dependency commons-beanutils:commons-beanutils
+# "No dependencies matching given input were found" => it does not ship.
+```
+
+Build- and test-time dependencies are not going unwatched: the three container-image SBOMs
+that `publish.yml` generates with `anchore/sbom-action` cover what is actually installed in
+the shipped images.
+
+## Accepted finding: GHSA-8jxr-pr72-r468 on `mcp-core` (no upgrade path, not applicable)
+
+`io.modelcontextprotocol.sdk:mcp-core` sits at **0.18.3**, reached through
+`spring-ai-starter-mcp-server-webmvc`. GHSA-8jxr-pr72-r468 (HIGH, DNS rebinding) is fixed in
+**1.0.0**. Do not force that bump, and expect this finding to keep reappearing on every scan.
+
+**There is no upgrade path at this Spring AI version.** `mcp-core` has 1.x and 2.x releases,
+but the Spring transport module the backend actually depends on,
+`io.modelcontextprotocol.sdk:mcp-spring-webmvc`, **has never been released above 0.18.4** —
+and 0.18.4 is still affected. Forcing `mcp-core` to 1.0.1 would leave `mcp-spring-webmvc`
+0.18.x, compiled against the 0.18 core API, on the same classpath. Spring AI 1.1.8 is the
+current release; nothing upstream carries the fix yet.
+
+**It is also not applicable here**, on two independent grounds:
+
+1. The advisory itself names the exemption — *"Some default server configurations and
+   frameworks come with embedded `Origin` header validation. MCP servers built using those
+   are NOT vulnerable to this issue. For example: **Spring AI**."* The backend's MCP server
+   is `spring-ai-starter-mcp-server-webmvc`.
+2. The stated precondition is *"when the web server serving HTTP traffic to the MCP server
+   does not perform standard CORS checks"*. This one does: `WebConfig.corsConfigurationSource()`
+   registers an explicit origin allowlist against `/**` (so `/mcp` too), `SecurityConfig`
+   enables it with `.cors(Customizer.withDefaults())`, and production sets
+   `CORS_ALLOWED_ORIGINS: https://simonrowe.dev,https://www.simonrowe.dev` — an allowlist,
+   never `*`. The attack needs a victim's browser to reach the server cross-origin, which is
+   precisely what that blocks.
+
+Suppress it in Dependency-Track (Audit → the finding → analysis **NOT_AFFECTED**, with the
+reasoning above) rather than leaving it to be re-triaged every scan. Re-open the question
+when `mcp-spring-webmvc` ships a 1.x release, or when Spring AI moves to the 1.x MCP SDK.
+
 ## Zero vulnerabilities on the dependency SBOMs (out-of-the-box configuration)
 
 **Symptom.** All five projects import cleanly with sensible component counts, but only the

@@ -13,8 +13,6 @@ plugins {
 group = "com.simonrowe"
 version = "0.0.1-SNAPSHOT"
 
-ext["opentelemetry.version"] = "1.64.0"
-
 repositories {
     mavenCentral()
     maven { url = uri("https://repo.embabel.com/artifactory/embabel-releases") }
@@ -194,6 +192,18 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("boot
 }
 
 dependencies {
+    // ---------------------------------------------------------------------------
+    // Transitives NOT managed by the Spring Boot BOM, so a plain Gradle constraint
+    // is enough here — dependency-management only forces what the BOM declares.
+    // ---------------------------------------------------------------------------
+    constraints {
+        // GHSA-xx22-p4ch-683r — pulled in by kafka-clients via spring-kafka.
+        implementation("at.yawk.lz4:lz4-java:1.11.1")
+        // GHSA-6fmv-xxpf-w3cw — maven-artifact 3.6.1 requests the vulnerable 3.2.0,
+        // and reaches runtimeClasspath through mongock-runner-core.
+        implementation("org.codehaus.plexus:plexus-utils:3.6.1")
+    }
+
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.spring.boot.starter.validation)
@@ -227,7 +237,8 @@ dependencies {
     implementation(libs.google.http.client.apache.v5)
     implementation(libs.embabel.agent.starter)
     implementation(libs.embabel.agent.starter.openai)
-    implementation("org.jsoup:jsoup:1.18.3")
+    // 1.23.1 clears GHSA-pmhh-3w7g-xqp8.
+    implementation("org.jsoup:jsoup:1.23.1")
     implementation("com.rometools:rome:2.1.0")
     // Required for the <if>/<then>/<else> conditional in logback-spring.xml that picks
     // between plain-text and structured (JSON) console output. Version managed by the
