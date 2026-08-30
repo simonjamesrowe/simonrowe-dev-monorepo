@@ -87,6 +87,7 @@ class CveFixWorkflowTest {
     CveFixResult result = run(activities, linear, true, "just-clean");
 
     assertThat(result.status()).isEqualTo(CveFixStatus.NO_FINDINGS);
+    assertThat(result.updated()).isEqualTo(1);
     ArgumentCaptor<IssueFiling> filing = ArgumentCaptor.forClass(IssueFiling.class);
     verify(linear).fileIssue(filing.capture());
     assertThat(filing.getValue().commentOnly()).isTrue();

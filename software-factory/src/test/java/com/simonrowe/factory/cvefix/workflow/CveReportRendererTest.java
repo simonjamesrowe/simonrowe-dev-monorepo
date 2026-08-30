@@ -69,6 +69,27 @@ class CveReportRendererTest {
   }
 
   @Test
+  void headerDoesNotConfuseComponentCountWithProjectCount() {
+    // Deliberately 1 project / 2 components, so a header that swaps the two counts (both are
+    // plausible-looking ints in the same sentence) is caught here rather than by a fixture where
+    // the counts happen to be equal.
+    String report =
+        CveReportRenderer.report(
+            List.of(
+                component("simonrowe-dev/backend", "pkg:maven/a/b@1.0", "b",
+                    finding("CVE-1", "HIGH", "")),
+                component("simonrowe-dev/backend", "pkg:maven/a/c@1.0", "c",
+                    finding("CVE-2", "LOW", ""))),
+            2);
+
+    assertThat(report)
+        .contains("**2 component(s)**")
+        .contains("**1 project(s)**")
+        .doesNotContain("**2 project(s)**")
+        .doesNotContain("**1 component(s)**");
+  }
+
+  @Test
   void listsAdvisoriesMostSevereFirst() {
     String report =
         CveReportRenderer.report(
@@ -119,6 +140,9 @@ class CveReportRendererTest {
 
   @Test
   void emitsOneHeadingPerProjectNotOnePerComponent() {
+    // Counting exact "## p" lines, not a substring split: "## p" is also a substring of a
+    // component heading like "### p ..." for any component named "p", so a naive
+    // report.split("## p") would pass even if a heading were emitted per component.
     String report =
         CveReportRenderer.report(
             List.of(
@@ -126,7 +150,9 @@ class CveReportRendererTest {
                 component("p", "pkg:maven/a/c@1.0", "c", finding("CVE-2", "HIGH", ""))),
             2);
 
-    assertThat(report.split("## p", -1)).hasSize(2);
+    long projectHeadings =
+        Arrays.stream(report.split("\n")).filter(line -> line.equals("## p")).count();
+    assertThat(projectHeadings).isEqualTo(1);
   }
 
   @Test
