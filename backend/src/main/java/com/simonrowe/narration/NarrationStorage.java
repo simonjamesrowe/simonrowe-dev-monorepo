@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 public class NarrationStorage {
 
   private static final long MP3_BITS_PER_SECOND = 32_000L;
+  private static final String NARRATIONS_DIRECTORY = "narrations";
 
   private final Path uploadsPath;
 
@@ -27,7 +28,7 @@ public class NarrationStorage {
 
   public StoredNarration store(final String narrationId, final byte[] audio) {
     validateMp3(audio);
-    Path directory = uploadsPath.resolve("narrations").resolve(narrationId);
+    Path directory = uploadsPath.resolve(NARRATIONS_DIRECTORY).resolve(narrationId);
     Path workDirectory = directory.resolve(".work");
     Path partial = workDirectory.resolve("narration.mp3.part");
     Path target = directory.resolve("narration.mp3");
@@ -78,7 +79,7 @@ public class NarrationStorage {
 
   public void delete(final String narrationId) {
     try {
-      Files.deleteIfExists(uploadsPath.resolve("narrations")
+      Files.deleteIfExists(uploadsPath.resolve(NARRATIONS_DIRECTORY)
           .resolve(narrationId).resolve("narration.mp3"));
     } catch (IOException ignored) {
       // Cleanup is best effort; a later maintenance pass can remove orphaned files.
@@ -99,7 +100,7 @@ public class NarrationStorage {
    * @return the number of audio files removed
    */
   public int deleteAll() {
-    Path root = uploadsPath.resolve("narrations");
+    Path root = uploadsPath.resolve(NARRATIONS_DIRECTORY);
     if (!Files.isDirectory(root)) {
       return 0;
     }
