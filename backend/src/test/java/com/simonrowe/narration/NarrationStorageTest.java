@@ -59,6 +59,24 @@ class NarrationStorageTest {
     assertThat(uploads.resolve("narrations/orphan/narration.mp3")).doesNotExist();
   }
 
+  @Test
+  void deleteAllRemovesEveryAudioFileAndItsDirectoryAndIsIdempotent() {
+    NarrationStorage storage = new NarrationStorage(uploads.toString());
+    storage.store("narration-1", MP3);
+    storage.store("narration-2", MP3);
+
+    assertThat(storage.deleteAll()).isEqualTo(2);
+    assertThat(uploads.resolve("narrations")).doesNotExist();
+
+    // Replaying the purge finds nothing left to remove rather than failing.
+    assertThat(storage.deleteAll()).isZero();
+  }
+
+  @Test
+  void deleteAllTreatsMissingNarrationsDirectoryAsNothingToDo() {
+    assertThat(new NarrationStorage(uploads.toString()).deleteAll()).isZero();
+  }
+
   private static Narration narration(final String id) {
     return new Narration(id, NarrationContentType.BLOG, "blog-1", 10, "voice", "en-GB", "MP3",
         "narrations/" + id + ".mp3", Instant.now());

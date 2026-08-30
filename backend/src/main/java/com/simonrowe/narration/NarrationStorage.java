@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Comparator;
 import java.util.HexFormat;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 public class NarrationStorage {
 
   private static final long MP3_BITS_PER_SECOND = 32_000L;
+  private static final String NARRATIONS_DIRECTORY = "narrations";
 
   private final Path uploadsPath;
 
@@ -26,7 +28,7 @@ public class NarrationStorage {
 
   public StoredNarration store(final String narrationId, final byte[] audio) {
     validateMp3(audio);
-    Path directory = uploadsPath.resolve("narrations").resolve(narrationId);
+    Path directory = uploadsPath.resolve(NARRATIONS_DIRECTORY).resolve(narrationId);
     Path workDirectory = directory.resolve(".work");
     Path partial = workDirectory.resolve("narration.mp3.part");
     Path target = directory.resolve("narration.mp3");
@@ -77,11 +79,50 @@ public class NarrationStorage {
 
   public void delete(final String narrationId) {
     try {
-      Files.deleteIfExists(uploadsPath.resolve("narrations")
+      Files.deleteIfExists(uploadsPath.resolve(NARRATIONS_DIRECTORY)
           .resolve(narrationId).resolve("narration.mp3"));
     } catch (IOException ignored) {
       // Cleanup is best effort; a later maintenance pass can remove orphaned files.
     }
+  }
+
+  /**
+   * Removes every stored narration audio file and the directories holding them.
+   *
+   * <p>Used when a change to the voice or script format invalidates the whole corpus at
+   * once: the narration id is a fingerprint over those settings, so no existing file can
+   * ever be looked up again and each one is only consuming disk and backup space.
+   *
+   * <p>Best effort, in keeping with the rest of this class — a file that cannot be
+   * removed is skipped rather than failing the caller, because the caller is a Mongock
+   * change unit and a thrown exception there aborts application startup.
+   *
+   * @return the number of audio files removed
+   */
+  public int deleteAll() {
+    Path root = uploadsPath.resolve(NARRATIONS_DIRECTORY);
+    if (!Files.isDirectory(root)) {
+      return 0;
+    }
+    int removed = 0;
+    try (var paths = Files.walk(root)) {
+      // Deepest first, so a directory is only visited once its contents are gone.
+      for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+        boolean audioFile = Files.isRegularFile(path)
+            && path.getFileName().toString().endsWith(".mp3");
+        try {
+          Files.deleteIfExists(path);
+          if (audioFile) {
+            removed++;
+          }
+        } catch (IOException ignored) {
+          // Leave this entry, and the directories above it, in place.
+        }
+      }
+    } catch (IOException ignored) {
+      // The tree could not be walked; whatever was already removed stays removed.
+    }
+    return removed;
   }
 
   private Path resolvePublicPath(final String publicPath) {

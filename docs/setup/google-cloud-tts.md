@@ -191,8 +191,8 @@ GOOGLE_CLOUD_TTS_PROJECT_ID=YOUR_PROJECT_ID
 GOOGLE_CLOUD_TTS_PROJECT_NUMBER=YOUR_NUMERIC_PROJECT_NUMBER
 GOOGLE_CLOUD_TTS_OUTPUT_BUCKET=YOUR_GLOBALLY_UNIQUE_BUCKET_NAME
 GOOGLE_CLOUD_TTS_LOCATION=global
-GOOGLE_CLOUD_TTS_LANGUAGE_CODE=en-GB
-GOOGLE_CLOUD_TTS_VOICE_NAME=en-GB-Chirp3-HD-Charon
+GOOGLE_CLOUD_TTS_LANGUAGE_CODE=en-AU
+GOOGLE_CLOUD_TTS_VOICE_NAME=en-AU-Chirp3-HD-Achird
 NARRATION_MAX_BLOG_CHARACTERS=50000
 NARRATION_MONTHLY_CHARACTER_LIMIT=1000000
 NARRATION_POLL_INTERVAL=5s
@@ -262,8 +262,8 @@ NARRATION_ENABLED=true
 GOOGLE_CLOUD_TTS_API_KEY=YOUR_RESTRICTED_API_KEY
 GOOGLE_CLOUD_TTS_PROJECT_ID=YOUR_PROJECT_ID
 GOOGLE_CLOUD_TTS_LOCATION=global
-GOOGLE_CLOUD_TTS_LANGUAGE_CODE=en-GB
-GOOGLE_CLOUD_TTS_VOICE_NAME=en-GB-Chirp3-HD-Charon
+GOOGLE_CLOUD_TTS_LANGUAGE_CODE=en-AU
+GOOGLE_CLOUD_TTS_VOICE_NAME=en-AU-Chirp3-HD-Achird
 ```
 
 Restart only the backend, then request narration for one published blog:
@@ -322,8 +322,8 @@ GOOGLE_CLOUD_TTS_PROJECT_ID=YOUR_PROJECT_ID
 GOOGLE_CLOUD_TTS_PROJECT_NUMBER=YOUR_NUMERIC_PROJECT_NUMBER
 GOOGLE_CLOUD_TTS_OUTPUT_BUCKET=YOUR_GLOBALLY_UNIQUE_BUCKET_NAME
 GOOGLE_CLOUD_TTS_LOCATION=global
-GOOGLE_CLOUD_TTS_LANGUAGE_CODE=en-GB
-GOOGLE_CLOUD_TTS_VOICE_NAME=en-GB-Chirp3-HD-Charon
+GOOGLE_CLOUD_TTS_LANGUAGE_CODE=en-AU
+GOOGLE_CLOUD_TTS_VOICE_NAME=en-AU-Chirp3-HD-Achird
 NARRATION_MAX_BLOG_CHARACTERS=50000
 NARRATION_MONTHLY_CHARACTER_LIMIT=1000000
 NARRATION_POLL_INTERVAL=5s
@@ -352,6 +352,39 @@ docker compose -f docker-compose.prod.yml ps backend
 Then request narration for one published blog through the public site. Confirm that
 the player becomes ready, the resulting MP3 seeks correctly, and no credential path
 or Google response body appears in the public response or logs.
+
+## Changing the voice
+
+The narration voice is `GOOGLE_CLOUD_TTS_VOICE_NAME` plus `GOOGLE_CLOUD_TTS_LANGUAGE_CODE`,
+defaulting to `en-AU-Chirp3-HD-Achird` / `en-AU`. **Both must change together** — the
+synthesis request sends them as a pair, so an `en-AU-…` name under `en-GB` is an
+inconsistent request.
+
+List what is available for a locale (the Chirp3-HD roster is identical across locales, so
+the same voice name exists with a different accent):
+
+```bash
+curl -s "https://texttospeech.googleapis.com/v1/voices?languageCode=en-AU&key=$GOOGLE_CLOUD_TTS_API_KEY" \
+  | jq -r '.voices[] | "\(.name) \(.ssmlGender)"' | sort
+```
+
+**Changing the voice invalidates every existing narration.** A narration's `_id` is
+`NarrationScriptBuilder.fingerprint`, a SHA-256 over the script text, the voice name, the
+language code and the encoding — so after a voice change no stored MP3 can ever be looked
+up again, and each item re-synthesises on its next Listen, against the monthly character
+budget.
+
+The stale audio does not simply become invisible. `NarrationService.readyNarrations` — the
+bulk endpoint behind the Listen button on the `/blogs` and `/news-events` **listings** —
+matches only on `contentType` and `status: READY` and takes the newest row per
+`contentId`. It has no notion of the current voice, so old rows keep being served there
+indefinitely while detail pages generate audio in the new voice beside them.
+
+So a voice change owes a purge. `V030PurgeNarrationsForVoiceChange` is the worked example:
+it empties the `narrations` collection and calls `NarrationStorage.deleteAll()` to remove
+`uploads/narrations`, leaving the indexes in place. Note that deleting rows also resets
+`NarrationBudgetService`'s view of the current month's spend, which it derives by summing
+`scriptCharacterCount` over rows requested this calendar month.
 
 ## Disable, rollback, and rotate
 
