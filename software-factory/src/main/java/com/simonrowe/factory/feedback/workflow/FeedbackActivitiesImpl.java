@@ -27,10 +27,26 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/** Spring-managed activity adapter wiring harvesting, Mongo persistence, and distillation. */
+/**
+ * Spring-managed activity adapter wiring harvesting, Mongo persistence, and distillation.
+ *
+ * <p>The {@code @ConditionalOnProperty} confines the {@code review-feedback} poller to the
+ * container configured to run it. {@code software-factory} and {@code deployer} run the same image
+ * and {@code @ActivityImpl} alone makes Temporal's Spring Boot starter create a worker for the
+ * queue, so without this both poll it and whichever wins runs the task. The deployer sets neither
+ * {@code FACTORY_FEEDBACK_ENABLED} nor {@code LINEAR_API_KEY}, and this workflow files its Linear
+ * issue before distilling and fails non-retryably when it cannot — so a task landing there could
+ * only fail. Same failure shape as {@code CveFixActivitiesImpl} documents.
+ *
+ * <p>The condition is evaluated by the component scanner, so declaring this class through an
+ * explicit {@code @Bean} method would register it unconditionally and silently ignore the
+ * annotation. {@code FeedbackWorkerRegistrationTest} pins it by component-scanning for real.
+ */
 @Component
+@ConditionalOnProperty(name = "factory.feedback.enabled", havingValue = "true")
 @ActivityImpl(taskQueues = FeedbackTaskQueues.REVIEW_FEEDBACK)
 public class FeedbackActivitiesImpl implements FeedbackActivities {
 
