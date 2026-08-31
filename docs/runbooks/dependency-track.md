@@ -100,6 +100,13 @@ looks like it succeeded while the hostname simply does not resolve.
       See "Zero vulnerabilities on the dependency SBOMs" below — without this step the whole
       deployment looks healthy and reports nothing.
 
+- [ ] **Step 9: enable the Trivy analyzer.** Step 8 covers Maven/npm/Go; **nothing** covers the
+      container images' OS packages until this is done, and the symptom is `Risk Score 0` on a
+      project that is not clean. It cannot be deployed — it is runtime config in Postgres, so no
+      `DT_*` variable sets it and no deploy reconciles it. Procedure and expected finding counts
+      are in "OS packages: why a container project's `0` did not mean clean" below. Check
+      `df -h /` first: `trivy-server` caches a 1.27 GiB database.
+
 ## What `simonrowe-dev/backend` actually covers (runtimeClasspath only)
 
 `./gradlew cyclonedxBom` runs on the **root** project and, left unconfigured, resolves
@@ -142,8 +149,9 @@ component before bumping anything:
 ```
 
 Build- and test-time dependencies are not going unwatched: the three container-image SBOMs
-that `publish.yml` generates with `anchore/sbom-action` cover what is actually installed in
-the shipped images.
+that `publish.yml` generates with **trivy** (`aquasecurity/trivy-action`, since 2026-08-31 —
+see "OS packages" below for why it is not `anchore/sbom-action` any more) cover what is
+actually installed in the shipped images.
 
 ## Accepted finding: GHSA-8jxr-pr72-r468 on `mcp-core` (no upgrade path, not applicable)
 
@@ -245,13 +253,165 @@ Measured on the production Pi, 2026-07-30:
   components from 3 to 32. Per project: `backend` 0 → 13, `frontend` 0 → 36,
   `backend-image` 25 → 76, `reviewer-image` 24 → 64.
 
-**Still outstanding:** `simonrowe-dev/frontend-image` remains at 0. It contains only `pkg:apk/*`
-Alpine packages, and the `Alpine` OSV ecosystem is not in the mirrored list. Add `Alpine`
-(and `Ubuntu` for the two Ubuntu-based images) under **Add Ecosystem** if distro-aware findings
-are wanted there. Distro ecosystems are also the *accurate* source for OS packages: NVD CPE
-matching flags every CVE ever filed against `openssl 3.0.13` regardless of whether Canonical
-already backported the fix into `3.0.13-0ubuntu3`, so a good share of the 25 NVD openssl
-findings on `backend-image` are likely false positives.
+**This left the container images blind for a month.** Resolved by the Trivy analyzer — see the
+next section, which supersedes the "add `Alpine` under Add Ecosystem" advice that used to be
+here. Adding the distro OSV ecosystems is *not* the fix; the reasoning is below.
+
+## OS packages: why a container project's `0` did not mean "clean" (2026-08-31)
+
+`simonrowe-dev/frontend-image` read **Risk Score 0** while carrying **20 fixable Alpine
+findings, 2 of them HIGH**, on `openssl 3.5.7-r0` (fixed in `3.5.8-r0`). `backend-image`
+showed 25 findings on the single Ubuntu package NVD happened to match (`openssl`) where a
+distro-aware scan finds 242. Neither had an error anywhere.
+
+**The live configuration, read from the v5 API** (see "Reading the analyzer config" below):
+
+| Extension | State on 2026-08-31 | Can it match `pkg:apk/*` or `pkg:deb/*`? |
+|:---|:---|:---|
+| `osv` source | enabled; ecosystems `npm, Go, Maven, NuGet, PyPI` | no — no distro ecosystem mirrored |
+| `github` source | enabled, alias sync on | no — GHSA covers language ecosystems only |
+| `nvd` source | **disabled**; data frozen at 2026-08-25 | in principle, via CPE — in practice almost never |
+| `internal` analyzer | enabled | only against the above |
+| `trivy` analyzer | **disabled**, no server, `scanOs: false` | yes — this is the one that can |
+
+So nothing mirrored spoke the identifier the OS packages carry, and the projects reported
+`0` exactly as they would have if they were clean. Same silent, inverted failure as the
+CPE-vs-PURL problem in the section above — one layer down.
+
+**Why NVD "sort of" worked and that made it worse.** `openssl` and `perl` were the only two
+distro packages ever reported, because they are among the few whose Ubuntu *source* package
+name coincides with a real NVD `vendor:product` pair. And CPE matching cannot model
+Canonical's backports, so it flags every CVE ever filed against `openssl 3.0.13` regardless
+of whether the fix is already in `3.0.13-0ubuntu3`. Two packages, over-reported, standing in
+for the ~242 that were never looked at.
+
+**Why adding `Alpine`/`Ubuntu` to the OSV ecosystem list is NOT the fix.** OSV's distro
+records are keyed on the **source** package (their `purl` carries `arch=source`), while an
+SBOM lists **binary** packages. Measured on `backend-image`: 69 of 99 debs have a source name
+that differs from the binary name — `libssl3t64`→openssl, `libc6`→glibc,
+`libgnutls30`→gnutls28, `libsystemd0`→systemd — and 33 of those are vulnerable *only* via the
+source name (340 advisory rows). Name-only matching misses all of them, and mirroring three
+distro ecosystems is a large, permanent addition to a database already at 662k rows on a Pi.
+The Trivy analyzer resolves source packages properly, so it gets the whole set for none of
+that cost.
+
+**The chain, and the one thing that will silently break it.** Dependency-Track reads an OS
+package's source name from the `aquasecurity:trivy:SrcName` **component property**, and falls
+back to the purl's binary name when absent
+(`TrivyVulnAnalyzer.processOsPackage`, verified in 5.0.3). Only Trivy emits that property;
+syft records the same fact as an `upstream=` purl qualifier, which Dependency-Track does not
+read. Measured against one trivy server, same image, same 71 apk packages:
+
+```text
+trivy-generated SBOM -> 20 findings (2 HIGH)
+syft-generated  SBOM ->  0 findings   (correctly classed os-pkgs/alpine, matching nothing)
+```
+
+That is why `publish.yml` generates the three image SBOMs with **trivy**, not
+`anchore/sbom-action`. Reverting that one step turns OS coverage back off, and the symptom is
+`0`, not an error. The OS itself is resolved by a separate route that works with either tool:
+DT keys the blob on `<PkgType>-<distro>` from the purl qualifiers and matches it against the
+`operating-system` component (`alpine-3.24.1`, `ubuntu-24.04`), so do not "tidy" the
+`operating-system` component out of the BOM either.
+
+Bonus, not the point: trivy's SBOM has **1/14th** the components (72 vs syft's 1283 for the
+frontend image — 1211 of syft's were purl-less `type: file` entries no analyzer can use)
+while finding *more* real packages (601 vs 301 jars on `backend-image`).
+
+### Enabling it (one-time, and it is not reconcilable by deploy)
+
+The compose side (`trivy-server` + `trivy-cache` volume) ships in the repo. The
+Dependency-Track side is **runtime config in Postgres**, not deployment config — the Trivy
+analyzer reads it via `getRuntimeConfig`, so there is no `DT_*` environment variable that can
+set it and a deploy cannot reconcile it. It must be done once, by hand, after the deploy:
+
+1. **Administration → Secrets → Create**, name `TRIVY_TOKEN`, value = `TRIVY_SERVER_TOKEN`
+   from `.env` (default `dependency-track` if unset). The `apiToken` field is
+   `x-secret-ref: true` — it holds the *name* of a secret, not the value, the same way the
+   GitHub source's field holds `GH_TOKEN`.
+2. **Administration → Analyzers → Trivy**: tick **Enabled**, API URL
+   `http://trivy-server:4954`, API Token `TRIVY_TOKEN`, tick **Scan OS**, leave **Scan
+   Library** ticked. **Ignore Unfixed** is a judgement call — it drops 67 of
+   `software-factory-image`'s 94 findings (Ubuntu ships many advisories it will not fix) and
+   almost none of `backend-image`'s. Start with it **off** so the numbers below match, and
+   turn it on if the noise is not worth it.
+3. **Administration → Vulnerability Sources → Osv**: tick **Alias Synchronization Enabled**.
+   Unrelated to Trivy, one click, and it stops the same advisory being counted twice under
+   its GHSA and `GO-*` ids — `x/crypto` currently shows 9 `GITHUB` + 10 `OSV` findings for
+   the same set.
+4. Re-analyse, or the pages keep showing the old zeros (mirroring and config changes never
+   backfill on their own) — the `analyze` + `metrics/refresh` loop in the section above.
+
+**Expect the portfolio to get much noisier, and that is the correct outcome.** Trivy's own
+scan of the three images on 2026-08-31, which is roughly what should appear:
+
+| Project | OS findings | Language findings | Fix available |
+|:---|---:|---:|---:|
+| `frontend-image` | 20 (2 HIGH) | 0 | 20 of 20 |
+| `backend-image` | 242 (3 HIGH) | 5 (2 HIGH) | 228 of 247 |
+| `software-factory-image` | 94 (0 HIGH) | 8 (8 HIGH) | 35 of 102 |
+
+No CRITICALs anywhere. Note where the HIGHs actually sit: `software-factory-image`'s eight are
+all Go (`stdlib`), and its 94 OS findings are entirely MEDIUM/LOW — so "94 new findings" and
+"what to act on" are very different lists.
+
+Most of that is "the base images are behind", not per-CVE work: it is discharged by
+rebuilding on a current base, not by 300 individual triages. Do not read the jump from ~107
+to ~500 findings as a regression — the old number was the measurement failing, not the risk
+being low.
+
+### Not fixed here: Go pseudo-version false positives
+
+The `internal` analyzer reports **every** historical Go advisory whose fixed version is a
+pseudo-version (`0.0.0-20190125091013-…`) against current modules, because it compares
+`0.58.0` as *older* than `0.0.0-2019…`. Correct semver puts a prerelease below `0.0.0`, so
+this is a comparator defect. On 2026-08-31 that was 21 findings on
+`golang.org/x/net@v0.58.0` (OSV: **0**) and 19 on `x/crypto@v0.55.0` (OSV: **1**) — ~40 of
+`backend-image`'s 69 findings and 9 of `software-factory-image`'s 37, and most of why their
+risk scores read 325 and 190.
+
+No configuration works around it, and enabling Trivy does not remove them — it adds a second,
+correct opinion alongside the wrong one (trivy finds 1 gobinary finding on `backend-image`
+where `internal` finds 42). Wants an upstream issue. Until then, verify any `pkg:golang/*`
+finding before acting on it; the tell is a `0.0.0-` prefix on the fixed version:
+
+```bash
+curl -s https://api.osv.dev/v1/querybatch -d '{"queries":[
+  {"package":{"ecosystem":"Go","name":"golang.org/x/net"},"version":"0.58.0"}]}' | jq .
+```
+
+### Reading the analyzer config (v5 moved it)
+
+`/api/v1/configProperty` no longer carries any of it — it returns 45 rows with no `scanner`
+group at all, which reads as "nothing is configured" and is a trap. In 5.x:
+
+```bash
+# Lists: internal, oss-index, snyk, trivy, vuln-db / github, nvd, osv
+curl -s -H "Authorization: Bearer ${DT_TOKEN}" \
+  "https://dependency-track.simonrowe.dev/api/v2/extension-points/vuln-analyzer/extensions"
+# The actual on/off state and settings
+curl -s -H "Authorization: Bearer ${DT_TOKEN}" \
+  "https://dependency-track.simonrowe.dev/api/v2/extension-points/vuln-analyzer/extensions/trivy/config"
+curl -s -H "Authorization: Bearer ${DT_TOKEN}" \
+  "https://dependency-track.simonrowe.dev/api/v2/extension-points/vuln-data-source/extensions/osv/config"
+```
+
+`DT_TOKEN` here is **not** an API key: log in through Auth0 in a browser and read
+`sessionStorage.getItem('token')` (an opaque ~43-char string, not a JWT). Useful because the
+shared env's `DEPENDENCYTRACK_API_KEY` is currently the KEK, not a key. Note
+`/api/v1/user/self` reports `permissions: []` for an OIDC user even with full access — the
+permissions are on the `DEV_PORTAL_ADMIN` team.
+
+### Open question: who disabled NVD, and on purpose?
+
+The `nvd` source is `enabled: false` with its newest record `published`/`updated`
+**2026-08-25**, while OSV and GitHub refresh hourly. Nothing in git or this runbook records
+the change. It is not urgent — its CPE matching on distro packages is the false-positive
+engine described above, and Trivy replaces what it was contributing — but the frozen NVD rows
+are still matching, so the stale `openssl`/`perl` deb findings will linger until a
+re-analysis after Trivy is on. Note also that the feed URL it is configured with
+(`https://nvd.nist.gov/feeds`, "JSON 2.0 feed files") is the retired legacy feed format, so
+re-enabling it as configured may simply fail.
 
 ## The passwordless-role trap (fixed — do not undo it)
 
@@ -313,6 +473,16 @@ quotes (e.g. `openssl rand -base64 32`).
 - Auth is Dependency-Track's native OIDC against the existing Auth0 tenant, reusing the
   `DEV_PORTAL_ADMIN` role/claim that Langfuse already uses. See the Dependency-Track SSO
   section of `docs/auth0-setup.md` for the Auth0 side.
+- **`trivy-server`** (`aquasec/trivy:0.74.0`) is the third container: the only vulnerability
+  source in the stack that can match OS packages (`pkg:apk/*`, `pkg:deb/*`). No published
+  port and no nginx route — it is reachable only on the compose network, over Twirp on
+  `:4954`. Deliberately **not** a `depends_on` of the apiserver: an unreachable analyzer
+  fails one scan and retries, whereas a startup gate would fail the one container in the file
+  that is excluded from `FACTORY_DEPLOY_RECREATABLE`. Its `trivy-cache` volume holds a
+  1.27 GiB vulnerability DB that it refreshes in place hourly. Unlike the apiserver, its
+  `/healthz` is a true readiness signal: trivy loads the DB *before* binding the listener.
+  See "OS packages" above; enabling the analyzer is a one-time manual step, not deployable
+  config.
 
 ## The KEK gotcha (read this before touching the container)
 
@@ -519,6 +689,20 @@ enabling OSV took the `VULNERABILITY` table from 371k to 637k rows (see "Zero vu
 the dependency SBOMs" above). That part is bounded by what upstream publishes, unlike the metrics
 partitions below, but it is a one-off step change worth knowing about when reading the numbers.
 
+**`trivy-server` adds ~1.3 GB of its own, outside Postgres**, in the `trivy-cache` volume
+(`trivy.db` measured at 1.27 GiB on 0.74.0). Check the headroom **before** deploying it, and
+remember it lands on the same undifferentiated partition:
+
+```bash
+df -h /
+docker system df -v | grep -E "trivy-cache|VOLUME NAME"
+```
+
+It is a working cache, not data: deleting the volume costs one re-download, nothing else. The
+container refreshes it in place on a 1-hour ticker, so it does not grow unbounded — it is
+replaced. Note the *CI* side pulls a second, unrelated ~1 GB (trivy's Java DB, for jar
+identification), but that lives on GitHub's runners and never touches the Pi.
+
 Watch the `dtrack` row's `Size` column over time. One operator reported unbounded growth from
 ~50 GB to ~500 GB in a month on a large portfolio; this deployment only tracks five projects so
 growth should be far smaller, but it is not bounded by default and the disk is shared with
@@ -694,28 +878,38 @@ curl -X POST "https://dependency-track.simonrowe.dev/api/v1/bom" \
   -F "bom=@bom.json"
 ```
 
-For the container image SBOMs, generate with the same tool CI uses (`anchore/sbom-action`'s
-underlying `syft`) and upload with `projectName=simonrowe-dev/backend-image`,
-`simonrowe-dev/frontend-image`, or `simonrowe-dev/reviewer-image`:
+For the container image SBOMs, generate with **trivy** — the same tool CI uses, and not
+interchangeable with `syft` here: a syft SBOM lacks the `aquasecurity:trivy:SrcName`
+properties and silently yields **zero** OS findings (see "OS packages" above). Upload with
+`projectName=simonrowe-dev/backend-image`, `simonrowe-dev/frontend-image` or
+`simonrowe-dev/software-factory-image`:
 
 ```bash
 cd ..  # back to the repo root if you ran the frontend block above
-syft ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:latest -o cyclonedx-json > backend-image-bom.json
-curl -X POST "https://dependency-track.simonrowe.dev/api/v1/bom" \
-  -H "X-Api-Key: ${DEPENDENCYTRACK_API_KEY}" \
-  -F "autoCreate=true" \
-  -F "projectName=simonrowe-dev/backend-image" \
-  -F "projectVersion=main" \
-  -F "bom=@backend-image-bom.json"
 
-syft ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-reviewer:latest -o cyclonedx-json > reviewer-image-bom.json
-curl -X POST "https://dependency-track.simonrowe.dev/api/v1/bom" \
-  -H "X-Api-Key: ${DEPENDENCYTRACK_API_KEY}" \
-  -F "autoCreate=true" \
-  -F "projectName=simonrowe-dev/reviewer-image" \
-  -F "projectVersion=main" \
-  -F "bom=@reviewer-image-bom.json"
+# ghcr is not necessarily public, so authenticate. Any token with read:packages works.
+export TRIVY_USERNAME="$(gh api user --jq .login)" TRIVY_PASSWORD="$(gh auth token)"
+
+for svc in backend frontend software-factory; do
+  docker run --rm -v "$PWD:/out" -v trivy-cache:/root/.cache/trivy \
+    -e TRIVY_USERNAME -e TRIVY_PASSWORD aquasec/trivy:0.74.0 \
+    image --quiet --format cyclonedx --output "/out/${svc}-image-bom.json" \
+    "ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-${svc}:latest"
+
+  # Sanity-check before uploading: an empty BOM uploads fine and reads as "clean".
+  jq '[.components[]? | select(.purl)] | length' "${svc}-image-bom.json"
+
+  curl -X POST "https://dependency-track.simonrowe.dev/api/v1/bom" \
+    -H "X-Api-Key: ${DEPENDENCYTRACK_API_KEY}" \
+    -F "autoCreate=true" \
+    -F "projectName=simonrowe-dev/${svc}-image" \
+    -F "projectVersion=main" \
+    -F "bom=@${svc}-image-bom.json"
+done
 ```
+
+(The first run downloads trivy's Java DB, ~1GB, to identify jars — hence the named cache
+volume. Generating an SBOM needs no vulnerability DB.)
 
 (`${DEPENDENCYTRACK_API_KEY}` must be exported from the usual env store first — never paste the
 key inline into a command you might paste into a shared terminal or commit to a file.)
