@@ -26,7 +26,7 @@ class LinearIssueRepositoryTest {
   @DynamicPropertySource
   static void mongoUri(final DynamicPropertyRegistry registry) {
     registry.add(
-        "spring.data.mongodb.uri", () -> MONGO.getConnectionString() + "/software_factory_test");
+        "spring.mongodb.uri", () -> MONGO.getConnectionString() + "/software_factory_test");
   }
 
   @Autowired private LinearIssueRepository records;

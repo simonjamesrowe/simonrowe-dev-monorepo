@@ -15,7 +15,6 @@ version = "0.0.1-SNAPSHOT"
 
 repositories {
     mavenCentral()
-    maven { url = uri("https://repo.embabel.com/artifactory/embabel-releases") }
 }
 
 dependencyManagement {
@@ -213,12 +212,12 @@ dependencies {
         implementation("org.codehaus.plexus:plexus-utils:3.6.1")
     }
 
-    implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.webmvc)
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.data.mongodb)
     implementation(libs.spring.boot.starter.data.elasticsearch)
-    implementation(libs.spring.kafka)
+    implementation(libs.spring.boot.starter.kafka)
     implementation(libs.micrometer.registry.prometheus)
     implementation(libs.opentelemetry.spring.boot.starter)
     // Bridges the Micrometer Observation API (used by Spring AI's ChatClient/ChatModel to
@@ -236,7 +235,7 @@ dependencies {
     implementation(libs.spring.ai.advisors.vector.store)
     implementation(libs.spring.boot.starter.websocket)
     implementation(libs.bucket4j.core)
-    implementation(libs.spring.boot.starter.oauth2.resource.server)
+    implementation(libs.spring.boot.starter.security.oauth2.resource.server)
     implementation(libs.thumbnailator)
     implementation(libs.mongock.springboot.v3)
     implementation(libs.mongock.mongodb.springdata.v4)
@@ -257,10 +256,14 @@ dependencies {
     developmentOnly(libs.spring.boot.devtools)
 
     testImplementation(libs.spring.boot.starter.test)
+    // Boot 4 no longer implicitly auto-configures slice-test infrastructure; the
+    // @WebMvcTest / @DataMongoTest annotations moved into these per-technology starters.
+    testImplementation(libs.spring.boot.starter.webmvc.test)
+    testImplementation(libs.spring.boot.starter.data.mongodb.test)
     // TestObservationRegistry, for asserting on Micrometer observations without a tracer.
     // Version managed by the Spring Boot BOM.
     testImplementation("io.micrometer:micrometer-observation-test")
-    testImplementation(libs.spring.security.test)
+    testImplementation(libs.spring.boot.starter.security.test)
     testImplementation(libs.spring.kafka.test)
     testImplementation(platform(libs.testcontainers.bom))
     testImplementation(libs.testcontainers.junit.jupiter)

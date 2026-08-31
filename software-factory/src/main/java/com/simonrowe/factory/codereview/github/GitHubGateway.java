@@ -1,5 +1,6 @@
 package com.simonrowe.factory.codereview.github;
 
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -342,7 +343,7 @@ public class GitHubGateway {
       return response.body().isBlank()
           ? objectMapper.createObjectNode()
           : objectMapper.readTree(response.body());
-    } catch (IOException exception) {
+    } catch (JacksonException exception) {
       throw new IllegalStateException("GitHub response was not JSON", exception);
     }
   }

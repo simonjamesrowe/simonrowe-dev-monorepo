@@ -1,9 +1,9 @@
 package com.simonrowe.factory.claude;
 
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.codereview.agent.ProcessRunner;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -98,7 +98,7 @@ public class ClaudeCliRunner {
         throw new IllegalStateException("Claude returned no structured_output");
       }
       return structured;
-    } catch (IOException exception) {
+    } catch (JacksonException exception) {
       throw new IllegalStateException("Unable to parse Claude structured output", exception);
     }
   }
@@ -173,7 +173,7 @@ public class ClaudeCliRunner {
     JsonNode root;
     try {
       root = objectMapper.readTree(standardOutput);
-    } catch (IOException exception) {
+    } catch (JacksonException exception) {
       return sanitize(standardOutput, 800);
     }
     List<String> detail = new ArrayList<>();

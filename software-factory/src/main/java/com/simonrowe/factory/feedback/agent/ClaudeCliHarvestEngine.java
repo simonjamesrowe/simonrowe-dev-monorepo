@@ -1,6 +1,6 @@
 package com.simonrowe.factory.feedback.agent;
 
-import tools.jackson.core.JsonProcessingException;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.claude.ClaudeCliRunner;
@@ -74,7 +74,7 @@ public class ClaudeCliHarvestEngine implements HarvestEngine {
       LessonsEnvelope envelope;
       try {
         envelope = objectMapper.treeToValue(structured, LessonsEnvelope.class);
-      } catch (JsonProcessingException exception) {
+      } catch (JacksonException exception) {
         throw new IllegalStateException(
             "Harvest output did not match lessons schema", exception);
       }

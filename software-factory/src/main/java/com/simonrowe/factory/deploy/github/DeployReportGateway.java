@@ -1,5 +1,6 @@
 package com.simonrowe.factory.deploy.github;
 
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -116,7 +117,7 @@ public class DeployReportGateway {
       return response.body().isBlank()
           ? objectMapper.createObjectNode()
           : objectMapper.readTree(response.body());
-    } catch (IOException exception) {
+    } catch (JacksonException exception) {
       throw new IllegalStateException("GitHub response was not valid JSON", exception);
     }
   }

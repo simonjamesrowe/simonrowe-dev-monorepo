@@ -2,6 +2,7 @@ package com.simonrowe.factory.codereview.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
@@ -420,7 +421,7 @@ class GitHubGatewayTest {
   private JsonNode parse(final String json) {
     try {
       return objectMapper.readTree(json);
-    } catch (IOException exception) {
+    } catch (JacksonException exception) {
       throw new IllegalStateException(exception);
     }
   }

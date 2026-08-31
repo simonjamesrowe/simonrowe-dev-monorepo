@@ -1,6 +1,6 @@
 package com.simonrowe.factory.codereview.agent;
 
-import tools.jackson.core.JsonProcessingException;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.claude.ClaudeCliRunner;
@@ -70,7 +70,7 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
       ReviewReport raw;
       try {
         raw = objectMapper.treeToValue(structured, ReviewReport.class);
-      } catch (JsonProcessingException exception) {
+      } catch (JacksonException exception) {
         throw new IllegalStateException(
             "Claude structured output did not match schema", exception);
       }

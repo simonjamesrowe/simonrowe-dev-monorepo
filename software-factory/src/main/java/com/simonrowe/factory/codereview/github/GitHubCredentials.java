@@ -1,5 +1,6 @@
 package com.simonrowe.factory.codereview.github;
 
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -23,7 +24,6 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -394,8 +394,7 @@ public class GitHubCredentials {
         return null;
       }
       Map<String, String> granted = new LinkedHashMap<>();
-      for (Iterator<String> names = permissions.fieldNames(); names.hasNext(); ) {
-        String name = names.next();
+      for (String name : permissions.propertyNames()) {
         granted.put(name, permissions.path(name).asText());
       }
       return granted;
@@ -451,7 +450,7 @@ public class GitHubCredentials {
       signer.initSign(privateKey());
       signer.update(unsigned.getBytes(StandardCharsets.UTF_8));
       return unsigned + "." + base64Url(signer.sign());
-    } catch (GeneralSecurityException | IOException exception) {
+    } catch (GeneralSecurityException | JacksonException exception) {
       throw new IllegalStateException("Unable to sign GitHub App JWT", exception);
     }
   }
