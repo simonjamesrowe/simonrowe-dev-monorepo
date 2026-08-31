@@ -1,73 +1,113 @@
 package com.simonrowe.factory.cvefix.domain;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
- * Every finding against one component, so a single bump can clear several advisories.
+ * Every finding against one component in one Dependency-Track project, so a single bump can clear
+ * several advisories and the reader can tell which manifest to edit.
  *
- * <p>{@code vulnerabilityIds} is always sorted ascending and deduplicated by the compact
- * constructor, regardless of how the record is built — {@link #fingerprint()} depends on that
- * ordering, and any construction path is a fingerprint producer.
+ * <p>{@code findings} is always ordered most severe first, then by vulnerability id, by the
+ * compact constructor — so the ordering holds for every construction path, not only for
+ * {@link #group(List)}.
  */
 public record ComponentFindings(
+    String project,
     String purl,
     String componentName,
     String componentVersion,
     List<String> vulnerabilityIds,
     List<Finding> findings) {
 
+  private static final Comparator<Finding> BY_SEVERITY =
+      Comparator.comparingInt((Finding finding) -> Severity.rank(finding.severity()))
+          .thenComparing(Finding::vulnerabilityId, Comparator.nullsLast(Comparator.naturalOrder()));
+
   public ComponentFindings {
-    // Sorted here, not just by callers such as group(): fingerprint() and its Javadoc both
-    // claim "sorted vulnerability ids" as a property of the type. Task 5 constructs this record
-    // directly, so leaving the sort to a single caller would let an out-of-order construction
-    // produce a fingerprint that never matches the stored one — silently and permanently
-    // defeating the "don't re-attempt an unfixable CVE every night" suppression check.
+    // Not List.copyOf: it rejects null elements, but group() derives this list from
+    // Finding::vulnerabilityId, which Dependency-Track's own client only defaults to "" — a
+    // caller constructing this record directly (or replaying older workflow history) may still
+    // hand it a null id, and this constructor's contract is to tolerate whatever it is given.
     vulnerabilityIds =
         vulnerabilityIds == null
             ? List.of()
-            : vulnerabilityIds.stream().sorted().distinct().toList();
-    findings = findings == null ? List.of() : List.copyOf(findings);
+            : Collections.unmodifiableList(new ArrayList<>(vulnerabilityIds));
+    findings = findings == null ? List.of() : findings.stream().sorted(BY_SEVERITY).toList();
   }
 
   /**
-   * Groups findings by component PURL, returned sorted by PURL.
+   * Groups findings by {@code (project, purl)}.
    *
-   * <p>The order is the sort, not the input order: Dependency-Track's array order is not stable,
-   * so a run-to-run-stable prompt and a stable set of grouped components need an explicit sort.
-   * {@code LinkedHashMap} only keeps the intermediate grouping deterministic while it is built.
+   * <p>Ordering is explicit at all three levels, because Dependency-Track's array order is not
+   * stable and this list is rendered inside workflow code, where a run-to-run difference is a
+   * determinism hazard rather than a cosmetic one:
+   *
+   * <ul>
+   *   <li>Projects keep first-appearance order, which is the configured
+   *       {@code factory.cvefix.dependency-track.projects} order because
+   *       {@code DependencyTrackClient} iterates that list. Ordering projects by severity instead
+   *       would reshuffle the report's headings run to run and make every Linear comment look
+   *       like the whole report had changed.
+   *   <li>Components within a project lead with their most severe finding, then PURL. Severity
+   *       alone is not a total order — many components share {@code HIGH} — so PURL is the
+   *       tiebreak.
+   *   <li>Advisories within a component are ordered by the compact constructor above.
+   * </ul>
+   *
+   * @param findings every finding across every in-scope project, in any order
+   * @return the grouped components, ordered as described
    */
   public static List<ComponentFindings> group(final List<Finding> findings) {
-    Map<String, List<Finding>> byPurl =
-        findings.stream()
-            .collect(
-                Collectors.groupingBy(Finding::purl, LinkedHashMap::new, Collectors.toList()));
-    return byPurl.entrySet().stream()
-        .map(
-            entry -> {
-              Finding first = entry.getValue().get(0);
-              // Not sorted here: the compact constructor now sorts and dedupes
-              // vulnerabilityIds itself, so every ComponentFindings is sorted regardless of
-              // caller — sorting again here would be redundant.
-              List<String> ids =
-                  entry.getValue().stream().map(Finding::vulnerabilityId).toList();
-              return new ComponentFindings(
-                  entry.getKey(), first.componentName(), first.componentVersion(), ids,
-                  entry.getValue());
-            })
-        .sorted(Comparator.comparing(ComponentFindings::purl))
-        .toList();
+    Map<String, List<Finding>> byProject = new LinkedHashMap<>();
+    for (Finding finding : findings) {
+      byProject.computeIfAbsent(finding.project(), key -> new ArrayList<>()).add(finding);
+    }
+    List<ComponentFindings> grouped = new ArrayList<>();
+    for (Map.Entry<String, List<Finding>> project : byProject.entrySet()) {
+      Map<String, List<Finding>> byPurl = new LinkedHashMap<>();
+      for (Finding finding : project.getValue()) {
+        byPurl.computeIfAbsent(finding.purl(), key -> new ArrayList<>()).add(finding);
+      }
+      List<ComponentFindings> components = new ArrayList<>();
+      for (Map.Entry<String, List<Finding>> entry : byPurl.entrySet()) {
+        // Sort before reading componentName/version and the id list, so every derived value
+        // agrees with the order the constructor will settle on.
+        List<Finding> sorted = entry.getValue().stream().sorted(BY_SEVERITY).toList();
+        Finding worst = sorted.get(0);
+        components.add(
+            new ComponentFindings(
+                project.getKey(),
+                entry.getKey(),
+                worst.componentName(),
+                worst.componentVersion(),
+                // distinct(), not a Set: preserves the severity-then-id order sorted() just
+                // established, and Dependency-Track can return the same (project, purl, vulnId)
+                // more than once, which would otherwise render "CVE-1, CVE-1" on the Advisories
+                // line. distinct() tolerates a null id (at most one survives), unlike
+                // List.copyOf.
+                sorted.stream().map(Finding::vulnerabilityId).distinct().toList(),
+                sorted));
+      }
+      components.sort(
+          Comparator.comparingInt(ComponentFindings::worstSeverityRank)
+              .thenComparing(ComponentFindings::purl));
+      grouped.addAll(components);
+    }
+    return List.copyOf(grouped);
   }
 
   /**
-   * Suppression key: the PURL plus its sorted vulnerability ids. Sorting is essential —
-   * Dependency-Track's array order is not stable, and an unsorted key would make every run look
-   * like new information and defeat the suppression entirely.
+   * The rank of this component's most severe finding, for ordering components within a project.
+   *
+   * @return the best (lowest) severity rank present, or the unranked value when there are none
    */
-  public String fingerprint() {
-    return purl + "|" + String.join(",", vulnerabilityIds);
+  private int worstSeverityRank() {
+    return findings.isEmpty()
+        ? Severity.rank(null)
+        : Severity.rank(findings.get(0).severity());
   }
 }

@@ -6,7 +6,13 @@ import java.util.List;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-/** Persisted record of one CVE-fix run: what it saw, what it changed, and how it ended. */
+/**
+ * Persisted record of one CVE-fix run: what it saw, what it changed, and how it ended.
+ *
+ * <p>{@code componentsSeen} counts {@code (Dependency-Track project, PURL)} pairs, not distinct
+ * PURLs — one component present in two projects counts twice, because it is two entries in the
+ * report and potentially two manifests to edit.
+ */
 @Document(collection = "cve_fix_runs")
 public record CveFixRunRecord(
     @Id String id,

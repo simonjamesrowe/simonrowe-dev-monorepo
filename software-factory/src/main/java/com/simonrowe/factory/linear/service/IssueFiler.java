@@ -117,18 +117,22 @@ public class IssueFiler {
     List<TrackedIssue> carrying = gateway.issuesForFingerprint(fingerprintUrl);
     FilingDecider.Outcome outcome = decider.decide(carrying);
     IssueStateType observed = outcome.subject() == null ? null : outcome.subject().stateType();
+    // Resolved once, before the dry-run branch, so a preview reports the exact decision a real
+    // run would take: a commentOnly filing must never create an issue, and that includes the
+    // FILED_NEW/FILED_REGRESSION arms the decider would otherwise pick.
+    FilingDecision effective = commentOnlySafe(outcome.decision(), filing);
 
     if (properties.dryRun()) {
       log.info(
           "Dry run: would {} for fingerprint {} ({} issues carry it)",
-          outcome.decision(),
+          effective,
           fingerprint,
           carrying.size());
-      return finish(record, outcome.decision(), filing, now, observed, fingerprint);
+      return finish(record, effective, filing, now, observed, fingerprint);
     }
 
     LinearProperties.Producer policy = properties.producerFor(filing.producer());
-    switch (outcome.decision()) {
+    switch (effective) {
       case FILED_NEW ->
           record = createAndAttach(record, filing, filing.body(), policy, fingerprintUrl, null);
       case COMMENTED_EXISTING -> {
@@ -151,10 +155,40 @@ public class IssueFiler {
                   policy,
                   fingerprintUrl,
                   outcome.subject().id());
-      default -> throw new IllegalStateException("Unhandled decision " + outcome.decision());
+      case SKIPPED_NO_ISSUE ->
+          // A commentOnly filing that resolved to FILED_NEW or FILED_REGRESSION is deliberately
+          // reduced to this instead: no open issue exists to comment on, and creating one — or
+          // filing a "recurrence" whose actual content is the ABSENCE of the problem — would be
+          // worse than silence.
+          log.info(
+              "Fingerprint {} has no open issue to comment on; a comment-only filing does"
+                  + " nothing",
+              fingerprint);
+      default -> throw new IllegalStateException("Unhandled decision " + effective);
     }
 
-    return finish(record, outcome.decision(), filing, now, observed, fingerprint);
+    return finish(record, effective, filing, now, observed, fingerprint);
+  }
+
+  /**
+   * Maps a decision the decider actually took to the one the sink will honour, given whether the
+   * filing is a status update rather than a new occurrence.
+   *
+   * @param decided the decision {@link FilingDecider} reached
+   * @param filing the occurrence being filed
+   * @return {@code decided}, unless {@code filing} is {@code commentOnly} and {@code decided}
+   *     would create an issue ({@code FILED_NEW} or {@code FILED_REGRESSION}), in which case
+   *     {@code FilingDecision.SKIPPED_NO_ISSUE}
+   */
+  private static FilingDecision commentOnlySafe(
+      final FilingDecision decided, final IssueFiling filing) {
+    if (!filing.commentOnly()) {
+      return decided;
+    }
+    return switch (decided) {
+      case FILED_NEW, FILED_REGRESSION -> FilingDecision.SKIPPED_NO_ISSUE;
+      default -> decided;
+    };
   }
 
   private FiledIssue repairPendingAttachment(
@@ -236,11 +270,20 @@ public class IssueFiler {
    * occurrence's diagnosis. "We stayed quiet" and "here is the ticket" are different facts, so
    * only the first is reported. Mongo still holds the history.
    *
+   * <p><strong>A {@code SKIPPED_NO_ISSUE} occurrence reports no issue either, for the identical
+   * reason.</strong> It is reached only for a {@code commentOnly} filing whose fingerprint the
+   * decider resolved to {@code FILED_NEW} (nothing carries it) or {@code FILED_REGRESSION} (only
+   * a completed issue carries it) — in the regression case the stored record still carries that
+   * completed issue's id, identifier and URL from whenever it was originally filed, because the
+   * commentOnly short-circuit never mutates it. Reporting that back would hand a "the repository
+   * is clean" producer a real, resolved issue URL for a decision that touched nothing. Same fix
+   * as {@code SUPPRESSED}: clear the issue fields on the way out; Mongo still holds the history.
+   *
    * @param decision the decision taken
    * @param issueIdentifier the stored identifier, or null
    * @param issueUrl the stored URL, or null
    * @param fingerprint this problem's fingerprint
-   * @return the outcome, with the issue fields cleared for a suppressed occurrence
+   * @return the outcome, with the issue fields cleared for a suppressed or skipped occurrence
    */
   private static FiledIssue reported(
       final FilingDecision decision,
@@ -248,7 +291,7 @@ public class IssueFiler {
       final String issueIdentifier,
       final String issueUrl,
       final String fingerprint) {
-    if (decision == FilingDecision.SUPPRESSED) {
+    if (decision == FilingDecision.SUPPRESSED || decision == FilingDecision.SKIPPED_NO_ISSUE) {
       return new FiledIssue(decision, null, null, null, fingerprint);
     }
     return new FiledIssue(decision, issueId, issueIdentifier, issueUrl, fingerprint);
@@ -266,7 +309,11 @@ public class IssueFiler {
   }
 
   private static String occurrenceComment(final IssueFiling filing) {
-    return "Seen again: " + filing.occurrenceDetail();
+    // A status update is not a recurrence, so it must not be announced as one: "Seen again: no
+    // current vulnerabilities" says the opposite of what it means.
+    return filing.commentOnly()
+        ? filing.occurrenceDetail()
+        : "Seen again: " + filing.occurrenceDetail();
   }
 
   private static String regressionBody(final IssueFiling filing, final TrackedIssue predecessor) {

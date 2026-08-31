@@ -7,7 +7,6 @@ import com.simonrowe.factory.cvefix.domain.CveFixProgress;
 import com.simonrowe.factory.cvefix.domain.CveFixRequest;
 import com.simonrowe.factory.cvefix.domain.CveFixResult;
 import com.simonrowe.factory.cvefix.domain.CveFixStatus;
-import com.simonrowe.factory.cvefix.domain.Finding;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.FiledIssue;
@@ -74,14 +73,40 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       componentsSeen = components.size();
       findingsSeen = components.stream().mapToInt(component -> component.findings().size()).sum();
       if (components.isEmpty()) {
-        current = new CveFixProgress(CveFixPhase.COMPLETED, "No findings", 0);
+        current = new CveFixProgress(CveFixPhase.FETCHING,
+            "Dependency-Track reported no findings; checking whether the repository was "
+                + "previously dirty",
+            0);
+        String detail = "Dependency-Track reported no findings";
+        // Only on the transition. Commenting on every clean run would add a comment a night,
+        // forever, and the sink's replay guard cannot help: it keys on the occurrence id, which
+        // is this run's id and differs every night.
+        if (activities.previousScanFoundFindings(workflowId)) {
+          current = new CveFixProgress(CveFixPhase.FILING,
+              "Commenting on the existing report now that the repository is clean", 0);
+          outcomes.add(
+              linear.fileIssue(
+                  new IssueFiling(
+                      "cvefix",
+                      List.of(
+                          "simonjamesrowe/simonrowe-dev-monorepo", "current-vulnerabilities"),
+                      "Current vulnerabilities in simonrowe-dev-monorepo",
+                      "",
+                      "No current vulnerabilities as of scan " + runId
+                          + ". Dependency-Track reports no findings.",
+                      runId,
+                      workflowId,
+                      true)));
+          detail = "Dependency-Track reported no findings; commented on the existing report";
+        }
+        current = new CveFixProgress(CveFixPhase.COMPLETED, detail, 0);
         return finish(workflowId, runId, startedAt, CveFixStatus.NO_FINDINGS,
-            findingsSeen, componentsSeen, outcomes, "Dependency-Track reported no findings");
+            findingsSeen, componentsSeen, outcomes, detail);
       }
 
       current = new CveFixProgress(CveFixPhase.FILING,
           "Filing consolidated vulnerability report in Linear", componentsSeen);
-      String report = body(components, findingsSeen);
+      String report = CveReportRenderer.report(components, findingsSeen);
       outcomes.add(
           linear.fileIssue(
               new IssueFiling(
@@ -146,32 +171,6 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
 
   private static int count(final List<FiledIssue> outcomes, final FilingDecision decision) {
     return (int) outcomes.stream().filter(outcome -> outcome.decision() == decision).count();
-  }
-
-  private static String body(final List<ComponentFindings> components, final int findingsSeen) {
-    StringBuilder markdown = new StringBuilder()
-        .append("Dependency-Track currently reports **").append(findingsSeen)
-        .append(" finding(s)** across **").append(components.size())
-        .append(" component(s)**. This is the repository's consolidated vulnerability report.\n\n");
-    for (ComponentFindings component : components) {
-      markdown.append("## ").append(component.componentName()).append(" `")
-          .append(component.componentVersion()).append("`\n\n")
-          .append("- **Package:** `").append(component.purl()).append("`\n")
-          .append("- **Advisories:** ")
-          .append(String.join(", ", component.vulnerabilityIds())).append("\n\n");
-      for (Finding finding : component.findings()) {
-        markdown.append("- **").append(finding.vulnerabilityId()).append("** (")
-            .append(finding.severity()).append(")");
-        if (finding.recommendation() != null && !finding.recommendation().isBlank()) {
-          markdown.append(": ").append(finding.recommendation());
-        }
-        markdown.append('\n');
-      }
-      markdown.append('\n');
-    }
-    markdown.append("\nA future Linear-triggered repair agent will own remediation; this scan does "
-        + "not modify the repository.\n");
-    return markdown.toString();
   }
 
   private static String safeMessage(final RuntimeException exception) {

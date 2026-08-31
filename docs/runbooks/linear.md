@@ -66,6 +66,22 @@ precedence:
 | open (`triage`/`backlog`/`unstarted`/`started`, or an unrecognised type) | `COMMENTED_EXISTING` | comment naming the occurrence — commit, time, detail |
 | `canceled` **or** `duplicate` | `SUPPRESSED` | nothing |
 | `completed` | `FILED_REGRESSION` | new issue, same fingerprint URL, linked as a regression of the completed one |
+| nothing found, or only `completed`, **and the filing is `commentOnly`** | `SKIPPED_NO_ISSUE` | nothing — never creates an issue |
+
+**`commentOnly` is a per-filing flag on `IssueFiling`, not a per-decision one.** It means: this
+occurrence is a status update about a problem the producer already knows about, not a new
+occurrence to track. Set it and the sink never creates an issue under any circumstances — the two
+decisions that would otherwise create one (`FILED_NEW`, `FILED_REGRESSION`) are both downgraded to
+`SKIPPED_NO_ISSUE` instead, logged and otherwise a no-op. `COMMENTED_EXISTING` and `SUPPRESSED` are
+untouched by the flag: an open issue still gets the comment (using the producer's
+`occurrenceDetail` verbatim, without the `Seen again: ` prefix, since a status update is not a
+recurrence), and a declined issue still stays quiet. `FiledIssue` reports no issue id, identifier
+or URL for `SKIPPED_NO_ISSUE`, on the same grounds as `SUPPRESSED`: Mongo's audit trail may still
+point at an old, unrelated issue for this fingerprint, and handing that back to the producer would
+misattribute it. The repository's [CVE report](cvefix.md) is the only current caller: its
+dirty-to-clean transition comment sets `commentOnly` so that a newly-clean repository can never
+have a fresh "current vulnerabilities" issue filed in its name. The `deploy` producer leaves the
+flag unset, and its behaviour is unchanged.
 
 **Precedence is open > (canceled or duplicate) > completed.** Two things worth
 knowing before touching this table:

@@ -8,7 +8,8 @@ The `cvefix` module is now an issue-only Dependency-Track scanner. It runs in
 Each scheduled or admin-triggered run:
 
 1. Reads every current finding for the configured Dependency-Track projects.
-2. Groups findings by component for a readable report.
+2. Groups findings by Dependency-Track project, then by component within it, for a readable
+   report.
 3. Creates or updates one Linear issue keyed as the repository's current vulnerability report.
 4. Stores the terminal scan result and Linear URL in `cve_fix_runs`.
 
@@ -16,6 +17,37 @@ An existing open report receives a comment containing the complete current snaps
 report produces a regression issue under the shared Linear filing policy; a cancelled or duplicate
 report is suppressed. The scan never edits dependencies, launches a repair agent, creates a branch
 or pull request, or polls CI.
+
+## Report grouping and scope
+
+The report is grouped by Dependency-Track project, not just by component: a `##` heading per
+project, `###` per component underneath it. Components within a project lead with their most
+severe finding, and advisories within a component sort most severe first too. Project order
+follows `factory.cvefix.dependency-track.projects` — reordering that list reorders the report's
+headings, because the client iterates it in the order it is configured.
+
+Only `simonrowe-dev/backend` and `simonrowe-dev/frontend` are in scope today. CI also publishes
+SBOMs for `simonrowe-dev/backend-image`, `simonrowe-dev/frontend-image` and
+`simonrowe-dev/software-factory-image` to Dependency-Track, and nothing currently reads them.
+Adding them to the `projects` list is a configuration-only change, but their findings are image
+SBOMs carrying base-OS packages, which cannot be fixed from this repository — expect a noisier,
+less actionable report if they are added.
+
+A project with no current findings gets no heading at all. That can only mean the project is
+clean, never that it was silently skipped: `DependencyTrackClient.uuidFor` throws when a
+configured project name is absent from Dependency-Track, so a missing project surfaces as a
+failed scan, not a quiet gap in the report.
+
+When a scan comes back clean and the previous scan found something, the run posts one comment on
+the existing ticket noting the repository is now clean, and still ends `NO_FINDINGS` — it never
+creates a ticket for this and never closes one itself. Closing stays a human decision; until that
+happens, the ticket is still open, but a **second** consecutive clean scan stays silent — that is
+the whole point of the transition guard. Only the first clean scan after a dirty one comments; do
+not read a missing nightly comment as a fault.
+
+`cve_fix_runs.componentsSeen` now counts `(project, PURL)` pairs, so a component that shows up as
+a finding in two configured projects (for example a shared library flagged in both `backend` and
+`frontend`) counts twice.
 
 ## Required configuration
 

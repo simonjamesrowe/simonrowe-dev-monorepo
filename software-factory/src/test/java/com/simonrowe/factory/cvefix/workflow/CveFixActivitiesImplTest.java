@@ -12,6 +12,7 @@ import com.simonrowe.factory.cvefix.domain.Finding;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRepository;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -46,7 +47,49 @@ class CveFixActivitiesImplTest {
     verify(runs).save(record);
   }
 
+  private static final EnumSet<CveFixStatus> OBSERVED =
+      EnumSet.of(CveFixStatus.COMPLETED, CveFixStatus.NO_FINDINGS);
+
+  @Test
+  void previousScanFoundFindingsIsTrueWhenTheLastRunSawSomething() {
+    when(runs.findFirstByIdNotAndStatusInOrderByStartedAtDesc("wf-2", OBSERVED))
+        .thenReturn(java.util.Optional.of(
+            new CveFixRunRecord(
+                "wf-1", "wf-1", Instant.EPOCH, CveFixStatus.COMPLETED, 4,
+                List.of(), null, 0, "detail")));
+
+    assertThat(activities.previousScanFoundFindings("wf-2")).isTrue();
+  }
+
+  @Test
+  void previousScanFoundFindingsIsFalseWhenTheLastRunWasCleanOrThereWasNone() {
+    when(runs.findFirstByIdNotAndStatusInOrderByStartedAtDesc("wf-2", OBSERVED))
+        .thenReturn(java.util.Optional.of(
+            new CveFixRunRecord(
+                "wf-1", "wf-1", Instant.EPOCH, CveFixStatus.NO_FINDINGS, 0,
+                List.of(), null, 0, "detail")));
+    assertThat(activities.previousScanFoundFindings("wf-2")).isFalse();
+
+    when(runs.findFirstByIdNotAndStatusInOrderByStartedAtDesc("wf-3", OBSERVED))
+        .thenReturn(java.util.Optional.empty());
+    assertThat(activities.previousScanFoundFindings("wf-3")).isFalse();
+  }
+
+  @Test
+  void previousScanFoundFindingsIgnoresFailedRunAndFallsBackToTheLastObservedOne() {
+    // Regression test for the bug FIX 1 addresses: a FAILED row (Dependency-Track down) must
+    // never be read as "the previous scan was clean".
+    when(runs.findFirstByIdNotAndStatusInOrderByStartedAtDesc("wf-3", OBSERVED))
+        .thenReturn(java.util.Optional.of(
+            new CveFixRunRecord(
+                "wf-1", "wf-1", Instant.EPOCH, CveFixStatus.COMPLETED, 61,
+                List.of(), null, 0, "detail")));
+
+    assertThat(activities.previousScanFoundFindings("wf-3")).isTrue();
+  }
+
   private static Finding finding(final String purl, final String id) {
-    return new Finding(purl, purl, "1.0", id, "HIGH", "Upgrade the component");
+    return new Finding("simonrowe-dev/backend", purl, purl, "1.0", id, "HIGH",
+        "Upgrade the component");
   }
 }

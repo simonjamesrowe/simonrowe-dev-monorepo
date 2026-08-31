@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.simonrowe.factory.cvefix.domain.CveFixStatus;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,51 @@ class CveFixRepositoriesTest {
                 "https://github.com/o/r/pull/1", 2, null));
 
     assertThat(runs.findById("cve-fix-wf-1")).contains(saved);
+  }
+
+  private static final EnumSet<CveFixStatus> OBSERVED =
+      EnumSet.of(CveFixStatus.COMPLETED, CveFixStatus.NO_FINDINGS);
+
+  @Test
+  void findsTheMostRecentRunExcludingTheOneNamed() {
+    runs.deleteAll();
+    runs.save(record("older", Instant.parse("2026-08-01T00:00:00Z"), CveFixStatus.COMPLETED, 3));
+    runs.save(record("newer", Instant.parse("2026-08-02T00:00:00Z"), CveFixStatus.NO_FINDINGS, 0));
+    runs.save(
+        record("current", Instant.parse("2026-08-03T00:00:00Z"), CveFixStatus.NO_FINDINGS, 0));
+
+    assertThat(runs.findFirstByIdNotAndStatusInOrderByStartedAtDesc("current", OBSERVED))
+        .hasValueSatisfying(found -> assertThat(found.id()).isEqualTo("newer"));
+    assertThat(runs.findFirstByIdNotAndStatusInOrderByStartedAtDesc("newer", OBSERVED))
+        .hasValueSatisfying(found -> assertThat(found.id()).isEqualTo("current"));
+  }
+
+  @Test
+  void findsNothingWhenTheOnlyRunIsTheOneExcluded() {
+    runs.deleteAll();
+    runs.save(record("only", Instant.parse("2026-08-01T00:00:00Z"), CveFixStatus.COMPLETED, 1));
+
+    assertThat(runs.findFirstByIdNotAndStatusInOrderByStartedAtDesc("only", OBSERVED)).isEmpty();
+  }
+
+  @Test
+  void skipsFailedRunNewerThanTheLastRunThatObservedDependencyTrack() {
+    // Regression test: a FAILED row (Dependency-Track down, findingsSeen == 0) must not be
+    // mistaken for a clean previous scan, or the dirty-to-clean transition comment is lost for
+    // every night thereafter.
+    runs.deleteAll();
+    runs.save(record("dirty", Instant.parse("2026-08-01T00:00:00Z"), CveFixStatus.COMPLETED, 61));
+    runs.save(record("failed", Instant.parse("2026-08-02T00:00:00Z"), CveFixStatus.FAILED, 0));
+
+    assertThat(runs.findFirstByIdNotAndStatusInOrderByStartedAtDesc("current", OBSERVED))
+        .hasValueSatisfying(found -> assertThat(found.id()).isEqualTo("dirty"));
+  }
+
+  private static CveFixRunRecord record(
+      final String id, final Instant startedAt, final CveFixStatus status,
+      final int findingsSeen) {
+    return new CveFixRunRecord(
+        id, id, startedAt, status, findingsSeen, List.of(), null, 0, "detail");
   }
 
   @Test

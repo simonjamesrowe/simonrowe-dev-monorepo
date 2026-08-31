@@ -211,6 +211,29 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- cve-report-project-attribution: The nightly CVE scan's one consolidated Linear ticket is now
+  grouped by Dependency-Track project (`##` heading), most-severe-first within it, instead of one
+  flat component list where two projects sharing a component silently merged into one entry. Only
+  `simonrowe-dev/backend` and `simonrowe-dev/frontend` are in scope, while CI publishes three more
+  image-SBOM projects that nothing reads — deliberately out of scope, since their findings are
+  base-OS packages a manifest edit here cannot fix. A project with zero findings gets no heading at
+  all, and that can only mean it is clean: `DependencyTrackClient.uuidFor` throws for a configured
+  project absent from Dependency-Track, so a silently-skipped project is not a reachable state.
+  **The dirty-to-clean transition now posts exactly one comment** on the long-lived ticket, gated
+  on whether the *previous* scan found anything — never on every clean run, or a clean repository
+  would collect one comment a night forever, and the sink's own replay guard cannot help here
+  because it keys on the occurrence id (the run id), which differs every night. "Previous scan"
+  excludes runs that never reached Dependency-Track (`CveFixRunRepository
+  .findFirstByIdNotAndStatusInOrderByStartedAtDesc`, restricted to `COMPLETED`/`NO_FINDINGS`), so a
+  single operational blip — Dependency-Track sharing `langfuse-db`'s Postgres and going down on its
+  own — can't permanently swallow the transition by masquerading as a clean predecessor. This is
+  the one change outside `cvefix`: the shared Linear sink (`com.simonrowe.factory.linear`, also
+  used by `deploy` and `review-feedback`) gained `IssueFiling.commentOnly` and
+  `FilingDecision.SKIPPED_NO_ISSUE` — a `commentOnly` filing never creates an issue and reports no
+  issue reference when it finds nothing to comment on, so a newly-clean repository can never get a
+  fresh "current vulnerabilities" ticket filed in its own name. Additive only: other producers
+  leave the flag unset and are unaffected. See `docs/runbooks/cvefix.md` and
+  `docs/runbooks/linear.md`.
 - 042-share-links-404: Every `https://simonrowe.dev/s/<slug>` returned the SPA's themed 404 from
   the moment 041 shipped, for blogs and news/events alike, while
   `curl https://api.simonrowe.dev/s/<slug>` served a perfect Open Graph document. Two independent
