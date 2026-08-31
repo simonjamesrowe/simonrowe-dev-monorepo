@@ -155,8 +155,23 @@ every decline, so each of those merges still pulls and recreates images. Images
 track `main`; `docker-compose.prod.yml`, `config/nginx/` and `scripts/` stay
 frozen at whatever commit the checkout stopped on.
 
-What actually happened: #130 added `FACTORY_RUNTIME_ROLE: deployer` to the
-`deployer` service. `deployer` is deliberately absent from
+**Adding the new service to `FACTORY_DEPLOY_RECREATABLE` in the same commit does
+not prevent this.** It is the obvious precaution and it does not work, verified in
+production on 2026-08-31. The allowlist reaches `sync-config` as an environment
+variable on the **running deployer**, rendered from whichever compose file existed
+when that container was last created — so the list consulted is the *old* one, not
+the one arriving in the commit. #140 added `trivy-server` and added it to the
+allowlist in the same commit, and was still held back by `trivy-server`. #141 was
+held back for the same reason. `trivy-server` was never created at all, so the whole
+of #140 — Dependency-Track's ability to see OS packages — sat dead on the host for a
+day while the images tracked `main`.
+
+The consequence for recovery is that clearing the checkout is not enough: **the
+deployer must be recreated too**, or the next merge touching that service wedges
+again on the same stale list. See the three-step recovery below.
+
+What actually happened the first time: #130 added `FACTORY_RUNTIME_ROLE: deployer` to
+the `deployer` service. `deployer` is deliberately absent from
 `FACTORY_DEPLOY_RECREATABLE` — it must never recreate itself mid-deploy — so the
 change was held back, correctly. #131 and #132 were then held back too, for the
 same `deployer` difference, and #132's new `location /s/` never reached the host.
@@ -165,19 +180,63 @@ return the SPA's 404 while `api.simonrowe.dev/s/<slug>` served the right documen
 That mount is gone, so a frozen checkout no longer breaks SPA routing — but it
 still freezes the compose file, the proxy conf and the scripts.
 
-Recovering it is one command on the host, the one the phase already printed:
+#### Recovering a wedged checkout — three steps, in this order
+
+Read what you are about to turn on first. Fast-forwarding by hand lands every *other*
+pending host-side change at once, and `monitor-prod.sh`'s next bare `up -d` applies
+them within the minute:
 
 ```bash
 cd ~/workspace/simonjamesrowe/simonrowe-dev-monorepo
-docker compose -f docker-compose.prod.yml up -d <held-back services>
+git fetch origin main
+git log --oneline HEAD..origin/main -- docker-compose.prod.yml config/ scripts/
+docker exec <nginx> test -f /var/run/deploy-state/maintenance.on && echo "DEPLOY RUNNING - WAIT"
 ```
 
-Then let the next merge fast-forward, or force the point with
-`git fetch --no-tags <repo-url> main && git merge --ff-only <sha>`. Note that
-fast-forwarding by hand also lands every *other* pending host-side change at once,
-and `monitor-prod.sh`'s next bare `up -d` applies them within the minute — so read
-`git log --oneline HEAD..FETCH_HEAD -- docker-compose.prod.yml config/ scripts/`
-first and know what you are turning on.
+**1. Fast-forward the checkout — from inside the deployer, not as the host user.**
+
+```bash
+D=/home/simonrowe/workspace/simonjamesrowe/simonrowe-dev-monorepo
+docker exec simonrowe-dev-monorepo-deployer-1 git -C "$D" reset --hard origin/main
+```
+
+Running `git merge --ff-only origin/main` as `simonrowe` **fails halfway through**,
+and this runbook advised exactly that until 2026-08-31. The deploy directory has
+mixed ownership: dirs the deployer created are `10003:factory` mode 755, and the
+deployer is in the host user's group (`group_add [984 1000]`, where 1000 is
+`simonrowe`) so it can write the host user's files, but not the reverse. The merge
+dies on `cannot create directory ... Permission denied` *after* rewriting several
+files, leaving HEAD behind while `docker-compose.prod.yml` already holds the target
+content. That half-applied tree is worse than the wedge, because a dirty tree also
+trips `sync-config`'s `dirty-tree` fence and blocks automated deploys too.
+
+`reset --hard` rather than a merge: after a partial apply the tree already matches
+the target while HEAD does not, so a merge refuses on "local changes". It leaves
+untracked files alone, so `.env` survives — confirm that afterwards anyway.
+`sudo -u '#10003'` is not an option; this host's sudo rejects it as "unknown user".
+
+**2. Create or recreate the services that were held back.**
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --no-deps <held-back services>
+```
+
+**3. Recreate the deployer. This is the step that stops it recurring.**
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --no-deps deployer
+```
+
+Without it the deployer keeps the stale `FACTORY_DEPLOY_RECREATABLE` described
+above, and the next merge touching that service wedges again. **Never do this while
+`deploy-state/maintenance.on` is set** — it would SIGTERM the container running the
+deploy workflow. Afterwards, confirm the env actually changed rather than trusting
+the recreate:
+
+```bash
+docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' \
+  simonrowe-dev-monorepo-deployer-1 | grep FACTORY_DEPLOY_RECREATABLE
+```
 
 **How to spot it without host access.** A commit comment from
 `simonrowe-software-factory[bot]` on a merge commit *is* the images-only signal: a

@@ -281,8 +281,15 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   - **The DT-side toggles are runtime config in Postgres, not deployment config** — the analyzer
     reads them via `getRuntimeConfig`, so no `DT_*` env var can set them and **a deploy cannot
     reconcile them**. `apiToken` is `x-secret-ref: true`: it holds the *name* of a DT secret, not
-    the value. `trivy-server` is in `FACTORY_DEPLOY_RECREATABLE` from day one, or the very merge
-    adding it declines as `held-back` — the self-perpetuating wedge from #130.
+    the value. `trivy-server` was added to `FACTORY_DEPLOY_RECREATABLE` in the same commit, as a
+    precaution against the self-perpetuating wedge from #130 — **and that precaution does not
+    work**, verified in production on 2026-08-31. The allowlist reaches `sync-config` as an
+    environment variable on the **running deployer**, rendered from whichever compose file existed
+    when that container was last created, so the incoming commit's list is not the one consulted.
+    #140 was held back by `trivy-server` despite listing it, #141 was held back for the same
+    reason, and `trivy-server` was never created at all — meaning this entire fix sat dead on the
+    host for a day while the images tracked `main`. Only recreating the deployer clears it. See
+    "A decline does not clear itself" in `docs/runbooks/deploy.md`.
   - Its `--token` uses `:-` with a default, **deliberately not `:?`**: an unset required variable
     makes the whole compose file fail to interpolate, which both wedges `sync-config` and breaks
     `monitor-prod.sh`'s minutely `up -d`, taking the watchdog down. What it protects is not really
