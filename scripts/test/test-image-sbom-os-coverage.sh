@@ -131,9 +131,16 @@ check "no \`:?\` form of TRIVY_SERVER_TOKEN is present" \
 
 # The published port would put a scanner on the host's network for no reason;
 # nothing outside the compose network needs to reach it.
+# The second exit rule (a zero-indent top-level key) is not redundant. trivy-server is
+# currently the LAST service in the file, so the sibling-service rule alone never fires and
+# the block ran on into the `volumes:` section. That leaks one harmless line today, but it
+# is a vacuous-pass risk in a test whose whole job is to not silently pass: move
+# trivy-server, or add a service after it, and the negative `ports:` assertion below would
+# be reading a neighbour's configuration instead of this one's.
 TRIVY_BLOCK="$(awk '
   $0 == "  trivy-server:" { inside = 1; next }
   inside && /^  [a-zA-Z0-9_-]+:[[:space:]]*$/ { exit }
+  inside && /^[a-zA-Z0-9_-]+:/ { exit }
   inside && $0 ~ /^[[:space:]]*#/ { next }
   inside { print }
 ' "$COMPOSE_FILE")"
