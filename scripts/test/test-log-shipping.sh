@@ -47,6 +47,14 @@ check() {
 # Comment lines are dropped for the reason test-image-sbom-os-coverage.sh gives:
 # the comments here name what must NOT come back, so a scan over raw lines would
 # fail on its own rationale and teach the next person to delete the explanation.
+#
+# Captured ONCE into a variable, and every check below greps a here-string rather
+# than a pipeline. `uncommented file | grep -q pattern` looks equivalent and is
+# not: `grep -q` exits the moment it matches, which can close the pipe before the
+# upstream grep has finished writing. The upstream then dies of EPIPE, and with
+# `pipefail` set (line 25) the pipeline reports FAILURE even though the pattern
+# matched. It is a race, so it passes locally and fails on a loaded CI runner -
+# which is exactly what it did on the first run of this file.
 uncommented() {
   grep -vE '^[[:space:]]*#' "$1"
 }
@@ -64,6 +72,8 @@ if [[ ! -f "$COMPOSE_FILE" || ! -f "$ROTATION_SCRIPT" ]]; then
   exit 1
 fi
 
+COMPOSE_BODY="$(uncommented "$COMPOSE_FILE")"
+
 # ---------------------------------------------------------------------------
 echo "  Alloy's read cursors survive a recreate"
 # ---------------------------------------------------------------------------
@@ -74,18 +84,18 @@ echo "  Alloy's read cursors survive a recreate"
 # each time, with no error logged anywhere. The cost landed only as ingested
 # bytes, which is why it ran for a month unnoticed.
 check "alloy declares --storage.path" \
-  "uncommented '$COMPOSE_FILE' | grep -q -- '--storage.path=/var/lib/alloy/data'"
+  "grep -q -- '--storage.path=/var/lib/alloy/data' <<<\"\$COMPOSE_BODY\""
 check "a named volume backs that path" \
-  "uncommented '$COMPOSE_FILE' | grep -q 'alloy-data:/var/lib/alloy/data'"
+  "grep -q 'alloy-data:/var/lib/alloy/data' <<<\"\$COMPOSE_BODY\""
 check "the alloy-data volume is declared" \
-  "uncommented '$COMPOSE_FILE' | grep -qE '^  alloy-data:'"
+  "grep -qE '^  alloy-data:' <<<\"\$COMPOSE_BODY\""
 
 # The volume only reaches production if a deploy is allowed to recreate alloy.
 # FACTORY_DEPLOY_RECREATABLE is an allowlist; a compose change to a service
 # outside it makes sync-config decline as `held-back`, which freezes the deploy
 # directory and is self-perpetuating - the wedge that stranded #130 through #136.
 check "alloy is in the FACTORY_DEPLOY_RECREATABLE default" \
-  "uncommented '$COMPOSE_FILE' | grep 'FACTORY_DEPLOY_RECREATABLE' | grep -q 'alloy'"
+  "grep 'FACTORY_DEPLOY_RECREATABLE' <<<\"\$COMPOSE_BODY\" | grep -q 'alloy'"
 
 # ---------------------------------------------------------------------------
 echo "  rotation is NOT configured in the compose file"
@@ -97,7 +107,7 @@ echo "  rotation is NOT configured in the compose file"
 # apply it, then keep declining every deploy after. It belongs in daemon.json,
 # which is host config and changes no service hash.
 check "no logging: block in the compose file" \
-  "! uncommented '$COMPOSE_FILE' | grep -qE '^[[:space:]]+logging:'"
+  "! grep -qE '^[[:space:]]+logging:' <<<\"\$COMPOSE_BODY\""
 
 # ---------------------------------------------------------------------------
 echo "  the rotation script writes a valid daemon.json"
