@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-29
 
-**Status**: Draft
+**Status**: Draft (liveness requirement added 2026-08-31 after the Grafana Cloud ingest outage)
 
 **Input**: User description: "Is there a module within the software factory that allows for logs to
 be observed, and if there are actually issues then it will find them and raise a Linear ticket? For
@@ -24,7 +24,9 @@ reimplemented here.
 
 ## Scope
 
-**In scope**: container logs shipped to Grafana Cloud Loki by Alloy, at severity `ERROR` and `WARN`.
+**In scope**: container logs shipped to Grafana Cloud Loki by Alloy, at severity `ERROR` and
+`WARN`; and the health of that pipeline itself, to the extent needed for the module to know
+whether its own results mean anything.
 
 **Out of scope**, and deliberately so:
 
@@ -123,6 +125,37 @@ A dry run is how they get validated without filing a first round of tickets to c
 2. **Given** a real run started from the console, **When** it completes, **Then** it behaves exactly
    as a scheduled run.
 
+### User Story 5 - The module notices when it has been blinded (Priority: P1)
+
+Log shipping stops. Nothing reaches Loki. The next scan does not report "all clear" — it
+reports that it could not see, and files that as the problem.
+
+**Why this priority**: this is not hypothetical. Between roughly 10 and 31 August 2026 Grafana
+Cloud accepted no logs at all: the free-tier monthly allowance was spent, so the tenant's
+ingestion rate was set to `0 bytes/sec` and Alloy dropped every batch with a `429`. Throughout,
+`alloy` was `Up (healthy)` (its healthcheck is `alloy --version`, which passes while every batch
+is discarded) and the read credential kept working, so a Loki query returned
+`{"status":"success"}` with an empty body. A scan over that window would have found zero
+signatures and reported a healthy system with total confidence. **An observability module whose
+silent-failure mode is a clean bill of health is worse than no module**, because it converts an
+absence of evidence into evidence of absence and puts a green tick on it.
+
+**Independent Test**: point a scan at a window in which the stack is known to have been running
+and logging, with a Loki that returns no streams, and confirm the run reports a source-health
+failure and files it rather than reporting zero findings.
+
+**Acceptance Scenarios**:
+
+1. **Given** Loki returns zero lines for a window in which containers were running, **When** a
+   scan runs, **Then** it reports a source-health failure and does NOT report "no findings".
+2. **Given** a source-health failure, **When** the scan completes, **Then** one issue is filed
+   for it, deduplicated by the same fingerprint mechanism as any other finding.
+3. **Given** Loki returns lines normally, **When** a scan runs and finds no qualifying
+   signatures, **Then** it reports zero findings and files nothing — the ordinary clean case is
+   unchanged.
+4. **Given** a source-health failure, **When** the operator cancels the resulting issue, **Then**
+   later scans suppress it exactly as they suppress any other cancelled signature.
+
 ### Edge Cases
 
 - **Loki is unreachable or rejects the credentials.** The run fails visibly in run progress. No other
@@ -136,7 +169,11 @@ A dry run is how they get validated without filing a first round of tickets to c
 - **Linear filing is disabled.** The run completes and reports that nothing was filed. It does not
   stall waiting on a queue nothing polls.
 - **A scan finds nothing.** The run completes reporting zero findings. Nothing is filed, and no
-  "all clear" ticket is created.
+  "all clear" ticket is created. This outcome is only reachable once the source-health check has
+  passed; a scan that cannot confirm its source is alive reports a source-health failure instead.
+- **Loki answers successfully but holds nothing.** Distinct from unreachable, and the more
+  dangerous of the two: the query succeeds, so nothing errors. Treated as a source-health failure
+  whenever containers were running in the window, never as a clean result.
 
 ## Requirements *(mandatory)*
 
@@ -170,6 +207,18 @@ A dry run is how they get validated without filing a first round of tickets to c
 - **FR-015**: The system MUST report itself on the Software Factory status endpoint as a seventh
   module, including its missing prerequisites when it is enabled but cannot work.
 - **FR-016**: The system MUST persist a run record per Temporal run id for the console to follow.
+- **FR-017**: The system MUST verify, before interpreting an empty result as a clean one, that its
+  log source is alive for the scanned window — that lines exist for containers known to have been
+  running. "Cannot see" and "nothing is wrong" MUST be distinct, separately reported outcomes.
+- **FR-018**: The system MUST file a source-health failure through the same `linear` sink and the
+  same fingerprint mechanism as any other finding, so that it dedupes, suppresses on cancellation
+  and re-arms on reopen with no special-case handling.
+- **FR-019**: A source-health failure MUST NOT be reported as zero findings, and MUST NOT be
+  reported as a scan failure that loses the distinction — the run needs to say which of the two
+  happened, because they have different fixes.
+- **FR-020**: The system MUST report, in run progress, the number of log lines read and the number
+  of distinct containers they came from, so that a partially-blind scan is visible as such rather
+  than merely quiet.
 
 ### Non-Functional Requirements
 
@@ -209,6 +258,22 @@ These are the decisions that are load-bearing, with the reasoning that produced 
   connection-retry warnings while the stack boots, and post-deploy scans will see them. The minimum
   occurrence filter and the per-run cap bound the volume; cancellation makes each one permanently
   quiet. This is an accepted, one-time cost, not a defect.
+
+- **An empty read is not a clean read, and the module must be able to tell them apart.** This is
+  the one requirement drawn from a real outage rather than from design. Grafana Cloud stopped
+  accepting logs for three weeks in August 2026 while every health signal stayed green: the
+  container healthcheck passes on `alloy --version`, and ingest and query are separately gated so
+  the read credential kept returning `{"status":"success"}` over an empty store. Every layer
+  reported success and the data was gone. A module that reads Loki and files what it finds would
+  have filed nothing and been right by its own lights every night for three weeks. The check
+  belongs here rather than in `monitor-prod.sh` because this is the component whose correctness
+  depends on the source being alive — nothing else in the stack cares whether Loki has data.
+
+- **The source-health failure is filed as an ordinary finding, not as a new mechanism.** It goes
+  through the same `linear` sink with the same fingerprint shape, which means it inherits dedup,
+  cancel-to-suppress and reopen-to-re-arm for free. The alternative — a bespoke alert path — would
+  be a second way to file things, with its own suppression semantics to get wrong, for a category
+  of one.
 
 - **The signature function is the feature.** Everything else is plumbing around it. If it is too
   strict, every line looks new forever and the module is pure noise; if it is too loose, unrelated
@@ -252,8 +317,21 @@ These are the decisions that are load-bearing, with the reasoning that produced 
 - **SC-004**: A fault introduced by a deploy is filed within ten minutes of that deploy completing.
 - **SC-005**: No scan run can fail, delay or roll back a deploy.
 - **SC-006**: Every run reports its own truncation and cap losses; no run silently under-reports.
+- **SC-007**: A period in which no logs reach Loki produces a filed ticket, never a clean run. The
+  August 2026 outage, replayed, results in a ticket rather than three weeks of green.
+- **SC-008**: A genuinely quiet, healthy stack still produces zero tickets — the liveness check
+  must not convert normal quiet into a nightly false alarm.
 
 ## Open Questions
+
+- **What counts as proof of liveness is not yet settled**, and it is the one new question this
+  adds. Candidates: at least one line from at least N distinct containers in the window; or a
+  known always-chatty container (`backend` ships ~17 MB/day) having lines; or querying Alloy's own
+  `loki.write` component health over its HTTP port. The last is the most direct — it sees a `429`
+  or a `401` rather than inferring from absence — but couples the module to Alloy's internals and
+  needs a route to port 12345, which nothing has today. The first two are inference from silence
+  and need a threshold that does not fire on a genuinely quiet night. See
+  `docs/runbooks/log-shipping.md`.
 
 - **Production log fixtures are not yet available.** The signature rules in FR-003 must be validated
   against real `ERROR` and `WARN` lines from the running stack. Until those are sampled, the default

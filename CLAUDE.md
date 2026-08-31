@@ -211,6 +211,47 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- log-shipping-quota-exhaustion: Grafana Cloud Loki held **nothing for three weeks** in August
+  2026 while `alloy` reported `Up (healthy)` with `RestartCount: 0`, was tailing containers
+  correctly, and the read credential kept working. Every batch was rejected with
+  `status=429 ... ingestion rate limit exceeded for user 1539009 (limit: 0 bytes/sec)` — the
+  calendar-month free-tier allowance (50 GB) was spent, 55 GB used, and Grafana Cloud's free plan
+  responds by setting tenant ingest to **zero** for the rest of the period rather than throttling
+  or billing. Three things hid it: the healthcheck is `alloy --version`, which passes while every
+  batch is dropped; **ingest and query are separately gated**, so a query returned
+  `{"status":"success"}` with an empty body and read as "the stack is quiet" (the wrong-tenant
+  control test proves the *credential* is fine and says nothing about write); and nothing watches
+  for it. **The allowance resets by itself at 00:00 on the 1st — logs reappearing then is not
+  evidence anything was fixed.** Measured steady-state shipped volume is **~20 MB/day =
+  0.58 GB/month**, about 1% of the allowance, so spending it took ~100x amplification. Two
+  mechanisms supplied it:
+  - **Alloy's read cursors were ephemeral.** `loki.source.docker` keeps one cursor per container
+    in `--storage.path`, which had **no volume** and so resolved to the container's writable
+    layer. `alloy` is in `FACTORY_DEPLOY_RECREATABLE`, so **every deploy destroyed the cursors
+    and re-tailed every container from the start**, re-shipping the whole accumulated history of
+    the stack — then again on the next deploy. Nothing logged an error; the entire cost landed as
+    ingested bytes. Fixed with the `alloy-data` named volume.
+  - **No log rotation anywhere.** Every container is `json-file` with an **empty** options map
+    (`docker inspect ... LogConfig.Config` → `map[]`), there is no `logging:` block in the compose
+    file and `/etc/docker/daemon.json` did not exist, so logs grew unbounded for the life of a
+    container (mongodb: 250 MB after 67 hours). That is what made the re-read expensive rather
+    than merely wasteful. Fixed by `scripts/enable-docker-log-rotation.sh --apply`
+    (`max-size=20m`, `max-file=5`) — **host-side, and it needs a maintenance window**, since
+    `systemctl restart docker` cold-starts all 22 containers, and the cap applies at container
+    *creation* so existing containers stay uncapped until recreated.
+  **Rotation is deliberately NOT a `logging:` block in the compose file**, which is the tempting
+  version and wedges production: `logging:` changes a service's `config --hash`, `sync-config`
+  compares those against the nine-service `FACTORY_DEPLOY_RECREATABLE` allowlist, and rotation has
+  to cover all 22 — so it would decline as `held-back` and freeze the deploy directory
+  self-perpetuatingly, the #130-through-#136 wedge. `daemon.json` changes no service hash.
+  `scripts/test/test-log-shipping.sh` (in the `run-tests.sh` suite, so inside the required
+  `Software Factory Build & Test` check) asserts the volume, that `alloy` is in the recreate
+  allowlist, and that **no** `logging:` block comes back. Note `config/alloy/config.alloy` already
+  drops `kafka|mongodb|frontend|langfuse-db` from shipping — mongodb alone is 90 MB/day and never
+  reached Loki. **Still open: nothing detects that shipping has stopped**, and the `logwatch`
+  module in `specs/042-factory-log-watch/spec.md` would have reported this outage as *zero
+  findings — all clear*, since an empty query and a healthy system are indistinguishable to it as
+  specified. See `docs/runbooks/log-shipping.md`.
 - 043-dependency-track-os-packages: `simonrowe-dev/frontend-image` showed **Risk Score 0** while
   carrying 20 fixable Alpine findings (2 HIGH) on openssl, and `backend-image` showed 25 findings
   on the one Ubuntu package NVD happened to match where a distro-aware scan finds 242. Nothing was broken and nothing logged an error: **no enabled vulnerability

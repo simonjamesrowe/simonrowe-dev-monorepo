@@ -843,6 +843,10 @@ services:
     volumes:
       - ./config/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # --storage.path below. WITHOUT this volume it resolves to the container's
+      # writable layer, so every recreate destroys the read cursors - see the
+      # alloy-data comment in the volumes section.
+      - alloy-data:/var/lib/alloy/data
     env_file:
       - .env
     command:
@@ -1372,6 +1376,24 @@ volumes:
   langfuse-clickhouse-backups:
   langfuse-redis-data:
   langfuse-minio-data:
+  # Alloy's --storage.path, which holds loki.source.docker's positions.yml: one
+  # cursor (a unix timestamp) per container, marking how far its logs have been
+  # shipped.
+  #
+  # This volume is not an optimisation. Alloy is in FACTORY_DEPLOY_RECREATABLE, so
+  # every deploy recreates it, and monitor-prod.sh's minutely `up -d` can too.
+  # With the cursors in the container's writable layer they are destroyed each
+  # time, and loki.source.docker re-tails every container FROM THE START - so a
+  # deploy re-ships the whole accumulated history of the stack, and does it again
+  # on the next deploy. Nothing logs an error; the cost lands as ingested bytes.
+  #
+  # That is how a 0.58 GB/month workload spent the 50 GB Grafana Cloud free-tier
+  # logs allowance in August 2026. Once the allowance is gone the tenant's
+  # ingestion limit becomes 0 bytes/sec, Alloy 429s on every batch and drops it,
+  # and Loki holds NOTHING for the rest of the calendar month while both the
+  # container and its healthcheck stay green. See
+  # docs/runbooks/log-shipping.md.
+  alloy-data:
   # Dependency-Track's /data (HOME): Lucene indexes and analyzer working state.
   # Persisted so container recreation does not trigger a full index rebuild.
   dependencytrack-data:
