@@ -3,8 +3,8 @@ package com.simonrowe.factory.codereview.github;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.sun.net.httpserver.HttpServer;
 import io.temporal.failure.ApplicationFailure;

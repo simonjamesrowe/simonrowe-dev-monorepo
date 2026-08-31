@@ -3,7 +3,6 @@ package com.simonrowe;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -43,7 +42,7 @@ class NoHostProcessLaunchTest {
 
     try (Stream<Path> sources = Files.walk(MAIN_SOURCE)) {
       for (Path source : sources.filter(path -> path.toString().endsWith(".java")).toList()) {
-        String content = Files.readString(source, StandardCharsets.UTF_8);
+        String content = Files.readString(source);
         for (String forbidden : FORBIDDEN) {
           if (content.contains(forbidden)) {
             offenders.add(source + " uses " + forbidden);

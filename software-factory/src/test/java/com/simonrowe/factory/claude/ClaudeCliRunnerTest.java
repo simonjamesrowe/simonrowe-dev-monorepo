@@ -3,7 +3,7 @@ package com.simonrowe.factory.claude;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.codereview.agent.ProcessRunner;
 import java.nio.file.Path;
 import java.time.Duration;

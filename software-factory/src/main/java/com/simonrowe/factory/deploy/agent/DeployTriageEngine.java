@@ -1,6 +1,6 @@
 package com.simonrowe.factory.deploy.agent;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.simonrowe.factory.claude.ClaudeCliRunner;
 import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.deploy.workflow.DeployActivities;

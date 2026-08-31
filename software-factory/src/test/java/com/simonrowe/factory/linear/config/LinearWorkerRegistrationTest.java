@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.linear.linear.LinearGateway;
 import com.simonrowe.factory.linear.persistence.LinearIndexInitializer;
 import com.simonrowe.factory.linear.persistence.LinearIssueRepository;

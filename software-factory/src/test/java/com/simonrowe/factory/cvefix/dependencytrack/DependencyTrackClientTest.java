@@ -3,7 +3,7 @@ package com.simonrowe.factory.cvefix.dependencytrack;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.cvefix.config.CveFixProperties;
 import com.simonrowe.factory.cvefix.domain.ComponentFindings;
 import com.simonrowe.factory.cvefix.domain.Finding;

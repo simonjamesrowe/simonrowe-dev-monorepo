@@ -16,7 +16,6 @@ import io.temporal.activity.Activity;
 import io.temporal.spring.boot.ActivityImpl;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -317,7 +316,7 @@ public class DeployActivitiesImpl implements DeployActivities {
                 + MAX_EVIDENCE_BYTES
                 + " characters]\n"
                 + content.substring(content.length() - MAX_EVIDENCE_BYTES);
-    Files.writeString(path, bounded, StandardCharsets.UTF_8);
+    Files.writeString(path, bounded);
   }
 
   /**

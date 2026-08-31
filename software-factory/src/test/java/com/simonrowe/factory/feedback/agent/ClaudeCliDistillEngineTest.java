@@ -2,7 +2,7 @@ package com.simonrowe.factory.feedback.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.feedback.domain.Lesson;
 import com.simonrowe.factory.feedback.domain.LessonConfidence;
 import com.simonrowe.factory.feedback.domain.LessonScope;

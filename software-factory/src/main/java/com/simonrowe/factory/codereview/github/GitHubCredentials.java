@@ -1,8 +1,8 @@
 package com.simonrowe.factory.codereview.github;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import io.temporal.failure.ApplicationFailure;
 import java.io.IOException;
@@ -475,7 +475,7 @@ public class GitHubCredentials {
       throw ApplicationFailure.newNonRetryableFailure(
           "GitHub App private key file does not exist", "MISSING_GITHUB_APP_PRIVATE_KEY");
     }
-    try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8);
+    try (Reader reader = Files.newBufferedReader(path);
         PEMParser parser = new PEMParser(reader)) {
       Object pem = parser.readObject();
       JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
