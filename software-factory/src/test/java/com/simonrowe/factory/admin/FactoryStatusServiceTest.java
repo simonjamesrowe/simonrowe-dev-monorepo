@@ -10,6 +10,7 @@ import com.simonrowe.factory.cvefix.config.CveFixProperties;
 import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.linear.config.LinearProperties;
+import com.simonrowe.factory.logwatch.config.LogWatchProperties;
 import com.simonrowe.factory.platformbackup.config.PlatformBackupProperties;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -287,7 +288,8 @@ class FactoryStatusServiceTest {
             false, false, null, null, null, null, null, null, null, null, null, null, null, null,
             null, null, null),
         new LinearProperties(true, LINEAR_KEY, null, TEAM_KEY, null, false, null, null),
-        new PlatformBackupProperties(false, null, null, null));
+        new PlatformBackupProperties(false, null, null, null),
+        new LogWatchProperties(false, 0, 0, null, 0, 0, null, null));
   }
 
 }

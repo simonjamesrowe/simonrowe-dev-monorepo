@@ -6,6 +6,7 @@ import com.simonrowe.factory.cvefix.config.CveFixProperties;
 import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.linear.config.LinearProperties;
+import com.simonrowe.factory.logwatch.config.LogWatchProperties;
 import com.simonrowe.factory.platformbackup.config.PlatformBackupProperties;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -197,7 +198,8 @@ class ModulePrerequisitesTest {
         deployProperties(false, false, null),
         new LinearProperties(
             linear, linearApiKey, null, linearTeamKey, null, false, null, null),
-        new PlatformBackupProperties(backup, backupScript, null, null));
+        new PlatformBackupProperties(backup, backupScript, null, null),
+        new LogWatchProperties(false, 0, 0, null, 0, 0, null, null));
   }
 
   private ModulePrerequisites deployPrerequisites(
@@ -208,7 +210,8 @@ class ModulePrerequisitesTest {
             false, null, null, null, null, null, null, null, null, null, null),
         deployProperties(enabled, triggerEnabled, script),
         new LinearProperties(false, null, null, null, null, false, null, null),
-        new PlatformBackupProperties(false, null, null, null));
+        new PlatformBackupProperties(false, null, null, null),
+        new LogWatchProperties(false, 0, 0, null, 0, 0, null, null));
   }
 
   private static DeployProperties deployProperties(

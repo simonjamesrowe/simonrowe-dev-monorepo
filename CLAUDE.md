@@ -211,6 +211,55 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 042-factory-log-watch: A seventh Software Factory module, `com.simonrowe.factory.logwatch`, on a
+  new `logwatch` Temporal task queue. Reads `ERROR`/`WARN` container logs from Grafana Cloud Loki,
+  reduces each line to a signature invariant to timestamps, UUIDs, hex ids, paths, addresses and
+  numbers, drops signatures occurring fewer than twice, sorts most-severe-first, caps at five per
+  run, and files each one through the existing `linear` sink. Dedup, cancel-to-suppress and
+  reopen-to-re-arm are entirely the sink's — there is no logwatch-side state for them, deliberately.
+  Off by default; schedule created **active** (unlike cvefix's paused-by-default, because a
+  read-and-file scan cannot damage anything and a paused observability check is one nobody turns
+  on). Load-bearing bits:
+  - **An empty read is not a clean read, and the module says so.** Source health is established
+    *before* anything is interpreted, and an unusable source reports `SOURCE_UNHEALTHY`, never
+    `NO_FINDINGS` — separate enum values, so the distinction is structural rather than a log
+    message. This is drawn from the August 2026 outage rather than from design: Grafana Cloud
+    accepted nothing for three weeks while `alloy` stayed `Up (healthy)` (its healthcheck is
+    `alloy --version`, which passes while every batch is dropped) and reads kept returning
+    `{"status":"success"}` with an empty body, because **ingest and query are separately gated**.
+    A module without this check would have filed nothing and been self-consistently correct every
+    night. Two tiers: Alloy's component API on `:12345` (direct — it reports the actual `429`
+    text, which separates an exhausted quota from a rejected credential from a quiet stack), then
+    container-coverage inference. **Coverage is not applied to windows under an hour**, or a
+    five-minute post-deploy scan over an idle stack would file a ticket after every quiet deploy.
+  - **A source-health failure is filed as an ordinary finding** through the same sink, key parts
+    `["source-health", <status>]` — inheriting dedup and suppression with no new mechanism. Key
+    parts exclude the evidence string on purpose: a `429` whose byte counts differ every run stays
+    one ticket, while a quota problem and a credential problem stay separate.
+  - **`GRAFANA_CLOUD_LOKI_ENDPOINT` is the *push* URL and already contains `/loki/api/v1`.**
+    `LokiClient.queryBase()` strips the trailing `/push`; appending `/api/v1` to the raw value
+    gives `/loki/api/v1/api/v1/...` and a bare `404 page not found` with no JSON and no hint. Loki
+    timestamps are **nanoseconds** — a seconds value is accepted and silently returns empty for a
+    window fifty years wide in the wrong place, which is the exact shape this module must not read
+    as clean.
+  - **The credential is confined by one annotation**, `LogWatchActivitiesImpl`'s class-level
+    `@ConditionalOnProperty`, evaluated by the component scanner — declaring the class through an
+    explicit `@Bean` would register it unconditionally and silently ignore it. Both containers do
+    register a *workflow* poller on the queue (`@WorkflowImpl` scanning is unconditional); that is
+    harmless and must not be "fixed". `DeployerGrafanaCredentialTest` reads the compose file and
+    fails the build if any variable **containing** `GRAFANA` appears under `deployer`, because the
+    Java gate alone does not stop a future compose edit — same reasoning, and now a shared
+    `testsupport/ComposeFile` helper, as `DeployerLinearCredentialTest`.
+  - **The level word is part of the signature**, so `WARN slow query` and `ERROR slow query` are
+    two problems. A varying status code *does* collapse, deliberately: "the send failed with a
+    status" is one problem whose status varies, and the example line carries the real code.
+  - Fixtures are real production lines captured with `docker logs` on the Pi, **not** from Loki,
+    which held nothing while this was written. The signature rules and the occurrence thresholds
+    are therefore still estimates — dry-run and tune before trusting them.
+  **Not built yet, deliberately:** the `/admin/software-factory` console row and the
+  five-minutes-after-deploy trigger (FR-011). The module is complete and triggerable over
+  `POST /api/logwatch/scans`; both are follow-ups that change nothing inside it.
+  See `docs/runbooks/logwatch.md` and `specs/042-factory-log-watch/`.
 - log-shipping-quota-exhaustion: Grafana Cloud Loki held **nothing for three weeks** in August
   2026 while `alloy` reported `Up (healthy)` with `RestartCount: 0`, was tailing containers
   correctly, and the read credential kept working. Every batch was rejected with
