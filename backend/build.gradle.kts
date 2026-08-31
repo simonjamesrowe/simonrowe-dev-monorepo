@@ -189,6 +189,15 @@ tasks.test {
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
     runImage.set("paketobuildpacks/run-noble-base:latest")
+    // BP_JVM_VERSION is pinned, not left to the buildpack's default, because the
+    // consequence of getting it wrong is invisible until production. The JVM
+    // buildpack picks a JRE from its own default when nothing asks for one, and a
+    // default that lags the toolchain gives an image whose JRE cannot load our
+    // Java 25 bytecode — an UnsupportedClassVersionError at container start, long
+    // after CI has gone green and the image has been pushed.
+    //
+    // Keep this in step with the toolchain's languageVersion in the root build file.
+    environment.put("BP_JVM_VERSION", "25")
 }
 
 dependencies {
