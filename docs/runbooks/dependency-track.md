@@ -484,6 +484,16 @@ quotes (e.g. `openssl rand -base64 32`).
   See "OS packages" above; enabling the analyzer is a one-time manual step, not deployable
   config.
 
+  **Check the container exists at all before debugging a scan.** `trivy-server` was added by
+  #140 and then not created on the host for a day: the deploy was held back (see "A decline
+  does not clear itself" in `deploy.md`), so the images tracked `main` while the compose file
+  did not, and OS findings stayed at the pre-#140 numbers with nothing logging an error. The
+  symptom is identical to the analyzer being switched off.
+
+  ```bash
+  docker ps --filter name=trivy --format '{{.Names}} {{.Status}}'   # must be Up (healthy)
+  ```
+
 ## The KEK gotcha (read this before touching the container)
 
 Dependency-Track v5 encrypts secrets it stores in Postgres (OIDC client secrets, API keys, etc.)
