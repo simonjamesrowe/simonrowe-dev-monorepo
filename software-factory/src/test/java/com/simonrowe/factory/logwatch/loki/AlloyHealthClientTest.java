@@ -36,6 +36,11 @@ class AlloyHealthClientTest {
         "/api/v0/web/components",
         exchange -> {
           byte[] payload = body.get().getBytes(StandardCharsets.UTF_8);
+          // Connection: close, deliberately. Without it the JDK HttpClient pools the
+          // connection and can reuse one the server has just closed, which surfaces as
+          // "HTTP/1.1 header parser received no bytes" about one run in three - a flaky
+          // test that looks like a client bug and is not.
+          exchange.getResponseHeaders().add("Connection", "close");
           exchange.sendResponseHeaders(status.get(), payload.length);
           exchange.getResponseBody().write(payload);
           exchange.close();
