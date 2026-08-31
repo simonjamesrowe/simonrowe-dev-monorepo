@@ -211,6 +211,62 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 043-dependency-track-os-packages: `simonrowe-dev/frontend-image` showed **Risk Score 0** while
+  carrying 20 fixable Alpine findings (2 HIGH) on openssl, and `backend-image` showed 25 findings
+  on the one Ubuntu package NVD happened to match where a distro-aware scan finds 242. Nothing was broken and nothing logged an error: **no enabled vulnerability
+  source could match `pkg:apk/*` or `pkg:deb/*` at all**, so a container project's `0` meant
+  "unscannable", not "clean". Verified live: OSV mirrored only `npm, Go, Maven, NuGet, PyPI`; the
+  `nvd` source was **disabled** (its data frozen at 2026-08-25) and is what the only two distro
+  findings ever reported — `openssl` and `perl`, the rare packages whose Ubuntu *source* name
+  happens to be a real NVD `vendor:product` pair — over-reported, because CPE matching cannot
+  model Canonical's backports. Fixed with a `trivy-server` container plus a one-time analyzer
+  enable. Load-bearing details:
+  - **Adding `Alpine`/`Ubuntu` to the OSV ecosystem list is NOT the fix**, though it looks like the
+    cheap one. OSV's distro records are keyed on the **source** package (`purl` carries
+    `arch=source`) while an SBOM lists **binary** packages: 69 of 99 debs in `backend-image` have
+    a differing source name (`libssl3t64`→openssl, `libc6`→glibc), and 33 are vulnerable *only*
+    via that name. Name-only matching misses all of them, for a large permanent mirror on the Pi.
+  - **`publish.yml` generates the three image SBOMs with trivy, not `anchore/sbom-action`, and
+    that is the whole mechanism — not a tooling preference.** DT reads an OS package's source name
+    from the `aquasecurity:trivy:SrcName` **component property** and falls back to the purl's
+    binary name when absent (`TrivyVulnAnalyzer.processOsPackage`); only trivy emits it, and
+    syft's equivalent `upstream=` purl qualifier is never read. Measured against one trivy server,
+    same image: trivy SBOM **20** findings, syft SBOM **0**. Reverting that step turns OS coverage
+    off and the symptom is `0`, not an error. A new "assert the SBOMs are not empty" step guards
+    the adjacent failure, since an empty BOM uploads fine and also reads as clean.
+  - The OS is resolved by a *different* route that works with either tool: DT keys the scan blob
+    on `<PkgType>-<distro>` and matches it against the `operating-system` component, so
+    `alpine-3.24.1`/`ubuntu-24.04` line up. Don't tidy that component out of the BOM.
+  - **The DT-side toggles are runtime config in Postgres, not deployment config** — the analyzer
+    reads them via `getRuntimeConfig`, so no `DT_*` env var can set them and **a deploy cannot
+    reconcile them**. `apiToken` is `x-secret-ref: true`: it holds the *name* of a DT secret, not
+    the value. `trivy-server` is in `FACTORY_DEPLOY_RECREATABLE` from day one, or the very merge
+    adding it declines as `held-back` — the self-perpetuating wedge from #130.
+  - Its `--token` uses `:-` with a default, **deliberately not `:?`**: an unset required variable
+    makes the whole compose file fail to interpolate, which both wedges `sync-config` and breaks
+    `monitor-prod.sh`'s minutely `up -d`, taking the watchdog down. What it protects is not really
+    a secret (no ingress, public DB); DT just refuses to be configured without one.
+  - Expect the portfolio to go from ~107 findings to ~500. That is the measurement starting to
+    work, not a regression — 228 of `backend-image`'s 247 have fixes and are discharged by
+    rebuilding on a current base image, not by 300 triages.
+  - **These findings do not reach Linear**, and that is now a live gap rather than a moot one.
+    `cve-report-project-attribution` (below) scopes the nightly report to
+    `simonrowe-dev/backend` and `simonrowe-dev/frontend`, calling the three image projects out
+    of scope because "their findings are base-OS packages a manifest edit here cannot fix" —
+    true, and the reason they were also unmeasured. They are measured now, so the ~356 OS
+    findings live only in the Dependency-Track UI. Widening
+    `factory.cvefix.dependency-track.projects` (a list, defaulted in `CveFixProperties` rather
+    than set in compose) is the obvious follow-up, but the report renders per-component upgrade
+    advice that does not apply to a base image, so it needs a different presentation, not just
+    another project key.
+  - **Tracked, not fixed:** the `internal` analyzer reports every Go advisory whose fixed version
+    is a pseudo-version (`0.0.0-2019…`) against current modules, because it compares `0.58.0` as
+    *older*. 21 phantom findings on `x/net@v0.58.0` (OSV: 0), ~40 of `backend-image`'s 69, and
+    most of why the risk scores read 325/190. No config works around it and Trivy does not remove
+    them — it adds a correct second opinion beside the wrong one. Also open: who disabled `nvd`,
+    and why (undocumented, and its configured feed URL is the retired JSON 2.0 format).
+  See `docs/runbooks/dependency-track.md` ("OS packages: why a container project's `0` did not
+  mean clean").
 - cve-report-project-attribution: The nightly CVE scan's one consolidated Linear ticket is now
   grouped by Dependency-Track project (`##` heading), most-severe-first within it, instead of one
   flat component list where two projects sharing a component silently merged into one entry. Only

@@ -436,7 +436,12 @@ services:
       # langfuse-clickhouse carries a pinned image and a lazy-materialisation workaround,
       # recreating pinggy collides with its own still-live tunnel, and mongodb,
       # elasticsearch and kafka are the data. Widening this is a config change.
-      FACTORY_DEPLOY_RECREATABLE: ${FACTORY_DEPLOY_RECREATABLE:-backend,frontend,software-factory,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend}
+      # trivy-server is on this list from the day it was added, on purpose. It is
+      # stateless (its only state is a re-downloadable DB cache in a named volume) and
+      # holds no credential, so recreating it is safe - and leaving it off would make the
+      # very merge that introduces it decline as `held-back`, which is the
+      # self-perpetuating wedge that froze the deploy directory from #130 to #136.
+      FACTORY_DEPLOY_RECREATABLE: ${FACTORY_DEPLOY_RECREATABLE:-backend,frontend,software-factory,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend,trivy-server}
       # All three are the HOST path, not a container-private one, and the mount below puts
       # the deploy directory at that same path inside this container. See the volume for
       # why anything else cannot work.
@@ -1273,6 +1278,79 @@ services:
       retries: 5
       start_period: 30s
 
+  # The only vulnerability source in this stack that can speak `pkg:apk/*` and `pkg:deb/*`.
+  #
+  # WHY IT EXISTS. Dependency-Track's `internal` analyzer matches OS packages through NVD
+  # CPEs, and NVD names an Ubuntu/Alpine *source* package while an SBOM lists *binary*
+  # packages - so `libssl3t64` never matches an `openssl` advisory. Measured 2026-08-31:
+  # `frontend-image` reported Risk Score 0 while carrying 20 fixable Alpine findings (2
+  # HIGH) on openssl, and `backend-image` showed 25 findings on the one Ubuntu package NVD
+  # happened to match where a distro-aware scan finds 242. A
+  # container project's `0` meant "no source can match these coordinates", not "clean", and
+  # nothing anywhere said so. OSV's `Alpine`/`Ubuntu` ecosystems are only a partial answer
+  # (they are keyed on the source package too, and 69 of 99 debs here have a source name
+  # that differs from the binary name), which is why this is a Trivy server and not two
+  # more entries in the OSV ecosystem list. See docs/runbooks/dependency-track.md.
+  #
+  # NO INGRESS, NO ROUTE. It is reachable only on the compose network; nginx does not know
+  # it exists. It still runs with `--token` because Dependency-Track refuses to accept a
+  # Trivy analyzer configuration that has no API token ("No API token provided" -
+  # TrivyVulnAnalyzerFactory), so a token exists either way; giving the server the matching
+  # value makes it mean something rather than being ignored, and is cheap insurance against
+  # anything else on the bridge network.
+  #
+  # NOT a `depends_on` of dependencytrack-apiserver, deliberately. The analyzer degrades to
+  # "this one scan failed, retry later" when the server is unreachable, so gating the
+  # apiserver on it would trade a soft failure for a hard startup dependency - on the one
+  # container in this file that is NOT in FACTORY_DEPLOY_RECREATABLE (its KEK makes
+  # recreation risky), i.e. the worst possible place to add a new boot gate.
+  trivy-server:
+    image: aquasec/trivy:0.74.0
+    restart: unless-stopped
+    command:
+      - server
+      - --listen
+      - 0.0.0.0:4954
+      # DELIBERATELY `:-` WITH A DEFAULT, NOT `:?`. A required variable here would be a
+      # foot-gun out of all proportion to what it protects: an unset `:?` makes the WHOLE
+      # compose file fail to interpolate, which fails `sync-config`'s validation as
+      # `missing-variable` (wedging the deploy directory - and a held-back checkout is
+      # self-perpetuating) *and* breaks `monitor-prod.sh`'s bare `up -d` every minute,
+      # taking the self-healing watchdog down with it. What it would protect is not really
+      # a secret: this server has no ingress, holds only Aqua's public vulnerability DB,
+      # and the token exists because DependencyTrack's analyzer refuses to be configured
+      # without one, not because anything here is confidential. Override it in `.env` if
+      # you want; the value must simply match the Dependency-Track secret.
+      - --token
+      - ${TRIVY_SERVER_TOKEN:-dependency-track}
+    volumes:
+      # The vulnerability DB is 1.27GiB on disk (measured, 0.74.0) and is re-downloaded
+      # from scratch without this volume - on every container recreation, over the Pi's
+      # link. Budget the disk before deploying (`df -h /`); see "Disk and database size"
+      # in docs/runbooks/dependency-track.md.
+      - trivy-cache:/root/.cache/trivy
+    # Sized for the DB, not the process: a scan memory-maps the 1.27GiB database, so the
+    # idle footprint is a poor guide. NOT measured on the Pi yet - revisit once `docker
+    # stats` can report it, which today it cannot: this limit is inert until the kernel
+    # memory cgroup is enabled (scripts/enable-memory-cgroup.sh), like every other limit
+    # in this file.
+    mem_limit: 2g
+    mem_reservation: 256m
+    healthcheck:
+      # /healthz is a genuine READINESS probe, unusually for this stack: trivy downloads
+      # and loads the DB *before* it binds the listener (verified against 0.74.0 - the
+      # "Listening 0.0.0.0:4954" log line comes after "Artifact successfully downloaded"),
+      # so a 200 here means it can actually answer a scan. Contrast
+      # dependencytrack-apiserver, which reported healthy for 10 days with a dead API port.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:4954/healthz || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      # A cold start must cover the full 1.27GiB DB download; 7s on a laptop, minutes on
+      # the Pi. Free once warm - the first successful probe ends the start period early,
+      # and the volume above means only the very first boot pays it.
+      start_period: 900s
+
 volumes:
   mongodb-data:
   kafka-data:
@@ -1297,6 +1375,11 @@ volumes:
   # Dependency-Track's /data (HOME): Lucene indexes and analyzer working state.
   # Persisted so container recreation does not trigger a full index rebuild.
   dependencytrack-data:
+  # Trivy's vulnerability database - 1.27GiB, re-downloaded from mirror.gcr.io in full on
+  # any recreation without this volume. trivy-server refreshes it in place on a 1-hour
+  # ticker (hot-swapped, requests suspended for the swap), so nothing else needs to
+  # schedule an update.
+  trivy-cache:
   # Where the software factory clones pull-request branches. A named volume rather
   # than a host bind so contributor-authored code never lands on the host filesystem.
   software-factory-workspace:
