@@ -5,6 +5,7 @@ import static com.simonrowe.factory.admin.ModulePrerequisites.CVEFIX;
 import static com.simonrowe.factory.admin.ModulePrerequisites.DEPLOY;
 import static com.simonrowe.factory.admin.ModulePrerequisites.FEEDBACK;
 import static com.simonrowe.factory.admin.ModulePrerequisites.LINEAR;
+import static com.simonrowe.factory.admin.ModulePrerequisites.LOGWATCH;
 import static com.simonrowe.factory.admin.ModulePrerequisites.PLATFORM_BACKUP;
 
 import com.simonrowe.factory.admin.FactoryStatusResponse.ModuleStatus;
@@ -15,6 +16,8 @@ import com.simonrowe.factory.cvefix.schedule.CveFixScheduleInitializer;
 import com.simonrowe.factory.deploy.config.DeployTaskQueues;
 import com.simonrowe.factory.feedback.config.FeedbackTaskQueues;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.logwatch.config.LogWatchTaskQueues;
+import com.simonrowe.factory.logwatch.schedule.LogWatchScheduleInitializer;
 import com.simonrowe.factory.platformbackup.config.PlatformBackupTaskQueues;
 import com.simonrowe.factory.platformbackup.schedule.PlatformBackupScheduleInitializer;
 import io.temporal.api.enums.v1.TaskQueueType;
@@ -62,7 +65,7 @@ public class FactoryStatusService {
   /**
    * Describes every module from this container's point of view.
    *
-   * @return the status of all six modules as this JVM sees them
+   * @return the status of all seven modules as this JVM sees them
    */
   public FactoryStatusResponse status() {
     return new FactoryStatusResponse(
@@ -81,7 +84,9 @@ public class FactoryStatusService {
                 "upstream workflow", null, ACTIVITY_ONLY),
             module(PLATFORM_BACKUP, "Platform backup",
                 PlatformBackupTaskQueues.PLATFORM_BACKUP, "nightly schedule and manual",
-                PlatformBackupScheduleInitializer.SCHEDULE_ID, true)));
+                PlatformBackupScheduleInitializer.SCHEDULE_ID, true),
+            module(LOGWATCH, "Log watch", LogWatchTaskQueues.LOG_WATCH,
+                "daily schedule and manual", LogWatchScheduleInitializer.SCHEDULE_ID, true)));
   }
 
   private ModuleStatus module(

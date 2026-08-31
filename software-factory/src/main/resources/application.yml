@@ -33,6 +33,10 @@ spring:
         # @ActivityImpl is never registered: the container is healthy, the schedule fires, and
         # nothing ever runs.
         - com.simonrowe.factory.cvefix.workflow
+        # Same again for the logwatch queue. The activity gate is
+        # LogWatchActivitiesImpl's @ConditionalOnProperty on factory.logwatch.enabled,
+        # which is what keeps the Grafana read credential out of the `deployer` JVM.
+        - com.simonrowe.factory.logwatch.workflow
         # Same for the deploy queue. Note what this does NOT gate: classpath scanning for
         # @WorkflowImpl is unconditional (WorkersTemplate creates a worker for every task queue
         # a discovered class names), and both `software-factory` and `deployer` run this image —
@@ -263,6 +267,44 @@ factory:
       feedback:
         label: "factory:feedback"
         priority: 3
+      logwatch:
+        label: "factory:logwatch"
+        priority: 2
+  logwatch:
+    # Off by default like every other module. True on `software-factory` ONLY: `deployer` runs
+    # the same image and must stay false, which is what keeps the Grafana read credential out of
+    # the JVM holding the Docker socket.
+    enabled: ${FACTORY_LOGWATCH_ENABLED:false}
+    # Two, not one: a single occurrence of anything is noise at this volume. Provisional - the
+    # spec flags this and max-per-run as estimates until they have been checked against real
+    # production log lines, which needs Loki to have been ingesting for long enough to sample.
+    minimum-occurrences: ${FACTORY_LOGWATCH_MIN_OCCURRENCES:2}
+    # The cap is applied AFTER sorting most-severe-first, so what it drops is the least severe
+    # and least frequent. Every run reports how many it dropped; a truncated report that does not
+    # say so is the failure mode this guards.
+    max-per-run: ${FACTORY_LOGWATCH_MAX_PER_RUN:5}
+    default-window: ${FACTORY_LOGWATCH_WINDOW:24h}
+    line-budget: ${FACTORY_LOGWATCH_LINE_BUDGET:5000}
+    # The coverage floor for the fallback tier of the source-health check, used only when Alloy's
+    # component API cannot be reached. Steady-state shipping is ~20MB/day across ~18 containers,
+    # so three producing nothing over a full day means something is wrong with the pipeline
+    # rather than with the stack.
+    minimum-containers: ${FACTORY_LOGWATCH_MIN_CONTAINERS:3}
+    loki:
+      # NOTE this is the *push* URL and already contains /loki/api/v1. LokiClient strips the
+      # trailing /push to get the query base; appending /api/v1 to the raw value yields
+      # /loki/api/v1/api/v1/... and a bare `404 page not found` with no hint what is wrong.
+      endpoint: ${GRAFANA_CLOUD_LOKI_ENDPOINT:}
+      user: ${GRAFANA_CLOUD_LOKI_USER:}
+      api-key: ${GRAFANA_CLOUD_API_KEY:}
+      request-timeout: 30s
+    alloy:
+      # Alloy publishes no host port and nginx routes nothing to it; this works because both
+      # containers share the compose network. Best-effort: when it cannot be reached the health
+      # check falls back to inferring from container coverage, which is strictly less
+      # informative but never absent.
+      base-url: ${FACTORY_LOGWATCH_ALLOY_URL:http://alloy:12345}
+      request-timeout: 5s
   platform-backup:
     # Off by default, and true only on the `deployer` service. This flag registers
     # PlatformBackupActivitiesImpl, which is the only thing that lets a container execute the

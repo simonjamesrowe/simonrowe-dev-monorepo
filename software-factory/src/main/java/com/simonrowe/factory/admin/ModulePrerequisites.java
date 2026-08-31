@@ -4,6 +4,7 @@ import com.simonrowe.factory.cvefix.config.CveFixProperties;
 import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.linear.config.LinearProperties;
+import com.simonrowe.factory.logwatch.config.LogWatchProperties;
 import com.simonrowe.factory.platformbackup.config.PlatformBackupProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,10 +40,11 @@ public class ModulePrerequisites {
   public static final String DEPLOY = "deploy";
   public static final String LINEAR = "linear";
   public static final String PLATFORM_BACKUP = "platformbackup";
+  public static final String LOGWATCH = "logwatch";
 
   /** Display order, and the only place module keys are enumerated. */
   public static final List<String> KEYS =
-      List.of(CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP);
+      List.of(CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP, LOGWATCH);
 
   /**
    * Human-readable names for the two host scripts, used only inside a diagnostic sentence. Kept
@@ -59,18 +61,21 @@ public class ModulePrerequisites {
   private final DeployProperties deployProperties;
   private final LinearProperties linearProperties;
   private final PlatformBackupProperties platformBackupProperties;
+  private final LogWatchProperties logWatchProperties;
 
   public ModulePrerequisites(
       final FeedbackProperties feedbackProperties,
       final CveFixProperties cvefixProperties,
       final DeployProperties deployProperties,
       final LinearProperties linearProperties,
-      final PlatformBackupProperties platformBackupProperties) {
+      final PlatformBackupProperties platformBackupProperties,
+      final LogWatchProperties logWatchProperties) {
     this.feedbackProperties = feedbackProperties;
     this.cvefixProperties = cvefixProperties;
     this.deployProperties = deployProperties;
     this.linearProperties = linearProperties;
     this.platformBackupProperties = platformBackupProperties;
+    this.logWatchProperties = logWatchProperties;
   }
 
   /**
@@ -91,6 +96,7 @@ public class ModulePrerequisites {
       case DEPLOY -> deployProperties.enabled() || deployProperties.triggerEnabled();
       case LINEAR -> linearProperties.enabled();
       case PLATFORM_BACKUP -> platformBackupProperties.enabled();
+      case LOGWATCH -> logWatchProperties.enabled();
       default -> false;
     };
   }
@@ -109,45 +115,82 @@ public class ModulePrerequisites {
     if (!isConfigured) {
       return List.of();
     }
+    // One small method per module rather than one switch with a block per case. The switch had
+    // grown past Sonar's cognitive-complexity limit when logwatch was added, and the shape it was
+    // heading for - seven nested blocks of unrelated conditions - is unreadable well before it is
+    // uncheckable.
+    return switch (key) {
+      case FEEDBACK -> feedbackPrerequisites();
+      case CVEFIX -> cvefixPrerequisites();
+      case LINEAR -> linearPrerequisites();
+      case LOGWATCH -> logWatchPrerequisites();
+      case PLATFORM_BACKUP -> script(platformBackupProperties.script(), BACKUP_SCRIPT);
+      case DEPLOY -> deployPrerequisites();
+      // Code review needs no configuration beyond the GitHub App this container already
+      // refuses to start without.
+      default -> List.of();
+    };
+  }
+
+  /**
+   * Not merely a nicety: the workflow files the Linear issue <em>before</em> distilling, and fails
+   * non-retryably with {@code LINEAR_DISABLED} when it cannot, so with the sink off the whole
+   * feedback loop stops rather than degrading to PR-only.
+   */
+  private List<String> feedbackPrerequisites() {
+    return linearProperties.enabled()
+        ? List.of()
+        : List.of("Linear filing is disabled, and feedback files its issue first");
+  }
+
+  private List<String> cvefixPrerequisites() {
     List<String> missing = new ArrayList<>();
-    switch (key) {
-      case FEEDBACK -> {
-        // Not merely a nicety: the workflow files the Linear issue *before* distilling, and
-        // fails non-retryably with LINEAR_DISABLED when it cannot, so with the sink off the
-        // whole feedback loop stops rather than degrading to PR-only.
-        if (!linearProperties.enabled()) {
-          missing.add("Linear filing is disabled, and feedback files its issue first");
-        }
-      }
-      case CVEFIX -> {
-        if (cvefixProperties.dependencyTrack().apiKey().isBlank()) {
-          missing.add("Dependency-Track API key is not set");
-        }
-        if (!linearProperties.enabled()) {
-          missing.add("Linear filing is disabled, so findings have nowhere to go");
-        }
-      }
-      case LINEAR -> {
-        if (linearProperties.apiKey().isBlank()) {
-          missing.add("Linear API key is not set");
-        }
-        if (linearProperties.teamKey().isBlank()) {
-          missing.add("Linear team key is not set");
-        }
-      }
-      case PLATFORM_BACKUP ->
-          missing.addAll(script(platformBackupProperties.script(), BACKUP_SCRIPT));
-      case DEPLOY -> {
-        if (deployProperties.enabled()) {
-          missing.addAll(script(deployProperties.script(), DEPLOY_SCRIPT));
-        }
-      }
-      default -> {
-        // Code review needs no configuration beyond the GitHub App this container already
-        // refuses to start without.
-      }
+    if (cvefixProperties.dependencyTrack().apiKey().isBlank()) {
+      missing.add("Dependency-Track API key is not set");
+    }
+    if (!linearProperties.enabled()) {
+      missing.add("Linear filing is disabled, so findings have nowhere to go");
     }
     return List.copyOf(missing);
+  }
+
+  private List<String> linearPrerequisites() {
+    List<String> missing = new ArrayList<>();
+    if (linearProperties.apiKey().isBlank()) {
+      missing.add("Linear API key is not set");
+    }
+    if (linearProperties.teamKey().isBlank()) {
+      missing.add("Linear team key is not set");
+    }
+    return List.copyOf(missing);
+  }
+
+  /**
+   * Reported per variable rather than as one "Loki is not configured": an operator who has set two
+   * of the three needs to be told which one is missing, not that something is.
+   */
+  private List<String> logWatchPrerequisites() {
+    List<String> missing = new ArrayList<>();
+    if (logWatchProperties.loki().endpoint().isBlank()) {
+      missing.add("GRAFANA_CLOUD_LOKI_ENDPOINT is not set");
+    }
+    if (logWatchProperties.loki().user().isBlank()) {
+      missing.add("GRAFANA_CLOUD_LOKI_USER is not set");
+    }
+    if (logWatchProperties.loki().apiKey().isBlank()) {
+      missing.add("GRAFANA_CLOUD_API_KEY is not set");
+    }
+    if (!linearProperties.enabled()) {
+      missing.add("Linear filing is disabled, so findings have nowhere to go");
+    }
+    return List.copyOf(missing);
+  }
+
+  /** Only the executing container needs the script; a trigger-only container does not. */
+  private List<String> deployPrerequisites() {
+    return deployProperties.enabled()
+        ? script(deployProperties.script(), DEPLOY_SCRIPT)
+        : List.of();
   }
 
   /**

@@ -317,6 +317,23 @@ services:
       FACTORY_LINEAR_TEAM_KEY: ${FACTORY_LINEAR_TEAM_KEY:-}
       FACTORY_LINEAR_DRY_RUN: ${FACTORY_LINEAR_DRY_RUN:-false}
       LINEAR_API_KEY: ${LINEAR_API_KEY:-}
+      # Log watch. OFF by default: its signature rules and occurrence thresholds are estimates
+      # until they have been validated against real production log lines, and the first runs are
+      # expected to be loud because WARN is in scope and the stack emits connection-retry
+      # warnings while it boots. Turn it on, dry-run it, read what it *would* file, then let it
+      # file for real.
+      FACTORY_LOGWATCH_ENABLED: ${FACTORY_LOGWATCH_ENABLED:-false}
+      # Deliberately NOT set on `deployer`, which runs this same image: that container holds
+      # /var/run/docker.sock and must hold as few other credentials as possible. Enforced by
+      # DeployerGrafanaCredentialTest, which fails the build if any variable whose name contains
+      # GRAFANA appears under `deployer`. See docs/runbooks/log-shipping.md.
+      #
+      # This is the same read credential Alloy publishes with; the access policy carries both
+      # logs:write and logs:read. Note reads keep working while ingest is refused, so a working
+      # read proves nothing about the pipeline - which is what the source-health check is for.
+      GRAFANA_CLOUD_LOKI_ENDPOINT: ${GRAFANA_CLOUD_LOKI_ENDPOINT:-}
+      GRAFANA_CLOUD_LOKI_USER: ${GRAFANA_CLOUD_LOKI_USER:-}
+      GRAFANA_CLOUD_API_KEY: ${GRAFANA_CLOUD_API_KEY:-}
     volumes:
       - ${GITHUB_APP_PRIVATE_KEY_HOST_PATH:?set GITHUB_APP_PRIVATE_KEY_HOST_PATH in .env}:/run/secrets/github-app.pem:ro
       - software-factory-workspace:/workspace

@@ -1,0 +1,197 @@
+package com.simonrowe.factory.logwatch.signature;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+
+import com.simonrowe.factory.logwatch.domain.LogLine;
+import com.simonrowe.factory.logwatch.domain.LogSignature;
+import com.simonrowe.factory.logwatch.domain.Severity;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+/**
+ * The signature function carries the bulk of the test effort, because it is the feature.
+ *
+ * <p>Too strict and every line looks new forever, so the module is pure noise. Too loose and
+ * unrelated faults merge, so a real problem hides inside one an operator has already accepted.
+ *
+ * <p>Fixtures are real lines from the production stack, captured via {@code docker logs} on the
+ * Pi rather than from Loki, because Loki held nothing for the whole period this was written in.
+ */
+class SignatureExtractorTest {
+
+  private static final Instant T0 = Instant.parse("2026-08-31T10:00:00Z");
+
+  @Test
+  @DisplayName("lines differing only by timestamp collapse to one signature")
+  void timestampsAreInvariant() {
+    String first = "ts=2026-08-31T10:34:52.95190745Z level=error msg=\"dropping data\"";
+    String second = "ts=2026-08-31T11:41:02.00000001Z level=error msg=\"dropping data\"";
+
+    assertThat(SignatureExtractor.normalise(first))
+        .isEqualTo(SignatureExtractor.normalise(second));
+  }
+
+  @Test
+  @DisplayName("nginx's common-log timestamp is normalised too, not just ISO-8601")
+  void nginxTimestampsAreInvariant() {
+    String first = "- - [31/Aug/2026:11:18:38 +0000] \"GET /a\" 500";
+    String second = "- - [01/Sep/2026:03:02:01 +0000] \"GET /a\" 500";
+
+    assertThat(SignatureExtractor.normalise(first))
+        .isEqualTo(SignatureExtractor.normalise(second));
+  }
+
+  @Test
+  void uuidsAreInvariant() {
+    assertThat(SignatureExtractor.normalise("run 7f9817b7-1049-4b79-a568-4e85cd9c333f failed"))
+        .isEqualTo(
+            SignatureExtractor.normalise("run 11111111-2222-3333-4444-555555555555 failed"));
+  }
+
+  @Test
+  void numbersAndQuantitiesAreInvariant() {
+    assertThat(SignatureExtractor.normalise("ingest of 1311 lines totaling 457403 bytes"))
+        .isEqualTo(SignatureExtractor.normalise("ingest of 42 lines totaling 99 bytes"));
+    assertThat(SignatureExtractor.normalise("took 250ms"))
+        .isEqualTo(SignatureExtractor.normalise("took 1300ms"));
+  }
+
+  @Test
+  void pathsAndAddressesAreInvariant() {
+    assertThat(SignatureExtractor.normalise("cannot open \"/var/lib/alloy/data/positions.yml\""))
+        .isEqualTo(SignatureExtractor.normalise("cannot open \"/etc/docker/daemon.json\""));
+    assertThat(SignatureExtractor.normalise("upstream 172.18.0.14:8080 timed out"))
+        .isEqualTo(SignatureExtractor.normalise("upstream 10.0.0.2:9200 timed out"));
+  }
+
+  @Test
+  void hexIdentifiersAreInvariant() {
+    assertThat(SignatureExtractor.normalise("container 8e71fea3ee962ce288be exited"))
+        .isEqualTo(SignatureExtractor.normalise("container d7db3b46666d4ba161b1 exited"));
+  }
+
+  @Test
+  @DisplayName("terminal control codes do not split a token the later rules must still match")
+  void ansiCodesAreStripped() {
+    // Built from a real escape char rather than pasted, so the fixture survives an editor,
+    // a diff viewer or a copy-paste that would silently eat a raw control byte.
+    String esc = String.valueOf((char) 27);
+    String coloured = esc + "[31mERROR" + esc + "[0m at 2026-08-31T10:00:00Z";
+    String plain = "ERROR at 2026-08-31T11:00:00Z";
+
+    assertThat(SignatureExtractor.normalise(coloured))
+        .isEqualTo(SignatureExtractor.normalise(plain));
+  }
+
+  /**
+   * The other half of the contract, and the easier one to lose while loosening the rules above.
+   *
+   * <p>If these collapsed, a new exception would hide inside a signature an operator had already
+   * cancelled, and the module would report all-clear while the fault ran.
+   */
+  @Test
+  @DisplayName("genuinely different problems keep different signatures")
+  void differentProblemsDoNotMerge() {
+    String sendFailure = "level=error msg=\"final error sending batch\" status=429";
+    String connectionFailure = "level=error msg=\"connection refused\" status=429";
+
+    assertThat(SignatureExtractor.normalise(sendFailure))
+        .isNotEqualTo(SignatureExtractor.normalise(connectionFailure));
+  }
+
+  @Test
+  @DisplayName("a varying status code does collapse, and that is the intended trade")
+  void statusCodesCollapseIntoOneProblem() {
+    String quota = "level=error msg=\"final error sending batch\" status=429";
+    String auth = "level=error msg=\"final error sending batch\" status=401";
+
+    // Both are bare numbers, so they normalise together. Deliberate: "the send failed with a
+    // status" is one problem whose status varies, and the ticket body carries the real code in
+    // its example line. Splitting on it would file a fresh ticket for every status a flapping
+    // upstream returns.
+    assertThat(SignatureExtractor.normalise(quota)).isEqualTo(SignatureExtractor.normalise(auth));
+  }
+
+  @Test
+  @DisplayName("the level word is part of the signature, so a WARN turning ERROR is a new problem")
+  void severityWordSeparatesSignatures() {
+    assertThat(SignatureExtractor.normalise("WARN slow query 100ms"))
+        .isNotEqualTo(SignatureExtractor.normalise("ERROR slow query 100ms"));
+  }
+
+  @Test
+  void shortHexLikeWordsAreNotSwallowed() {
+    assertThat(SignatureExtractor.normalise("the feed is dead")).contains("feed");
+    assertThat(SignatureExtractor.normalise("decode failed")).contains("decode");
+  }
+
+  @Test
+  @DisplayName("grouping is per (container, signature) - one fault per place to look")
+  void groupsPerContainer() {
+    List<LogLine> lines =
+        List.of(
+            new LogLine("backend", T0, Severity.ERROR, "level=error msg=\"boom\" id=1"),
+            new LogLine(
+                "backend", T0.plusSeconds(60), Severity.ERROR, "level=error msg=\"boom\" id=2"),
+            new LogLine("nginx", T0, Severity.ERROR, "level=error msg=\"boom\" id=3"));
+
+    List<LogSignature> grouped = SignatureExtractor.group(lines);
+
+    assertThat(grouped).hasSize(2);
+    assertThat(grouped)
+        .extracting(LogSignature::container, LogSignature::occurrences)
+        .containsExactly(tuple("backend", 2), tuple("nginx", 1));
+  }
+
+  @Test
+  void groupTracksTimeRangeAndKeepsRealExample() {
+    // Both lines carry the same level, so they normalise together. The level word IS part of the
+    // signature - "ERROR slow query" and "WARN slow query" are deliberately two problems, because
+    // a message that has started erroring rather than warning is a change worth a separate ticket.
+    List<LogLine> lines =
+        List.of(
+            new LogLine("backend", T0.plusSeconds(600), Severity.WARN, "WARN slow query 900ms"),
+            new LogLine("backend", T0, Severity.WARN, "WARN slow query 100ms"));
+
+    LogSignature only = SignatureExtractor.group(lines).getFirst();
+
+    assertThat(only.firstSeen()).isEqualTo(T0);
+    assertThat(only.lastSeen()).isEqualTo(T0.plusSeconds(600));
+    assertThat(only.occurrences()).isEqualTo(2);
+    assertThat(only.exampleLine()).isEqualTo("WARN slow query 900ms");
+  }
+
+  @Test
+  @DisplayName("the highest severity in a group wins, whatever order the lines arrive in")
+  void severityEscalates() {
+    List<LogLine> warnFirst =
+        List.of(
+            new LogLine("backend", T0, Severity.WARN, "thing failed 1"),
+            new LogLine("backend", T0, Severity.ERROR, "thing failed 2"));
+
+    assertThat(SignatureExtractor.group(warnFirst).getFirst().severity())
+        .isEqualTo(Severity.ERROR);
+  }
+
+  @Test
+  @DisplayName("the cap drops the least severe and least frequent, never the worst")
+  void capOrderingIsMostSevereFirst() {
+    LogSignature manyWarns = new LogSignature("w", Severity.WARN, "c", 900, T0, T0, "w");
+    LogSignature oneError = new LogSignature("e", Severity.ERROR, "c", 1, T0, T0, "e");
+    LogSignature manyErrors = new LogSignature("e2", Severity.ERROR, "c", 50, T0, T0, "e2");
+
+    List<LogSignature> sorted = new ArrayList<>(List.of(manyWarns, oneError, manyErrors));
+    sorted.sort(LogSignature.MOST_SEVERE_FIRST);
+
+    assertThat(sorted).containsExactly(manyErrors, oneError, manyWarns);
+  }
+
+  @Test
+  void normaliseToleratesNull() {
+    assertThat(SignatureExtractor.normalise(null)).isEmpty();
+  }
+}

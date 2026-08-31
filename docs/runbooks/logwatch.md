@@ -1,0 +1,159 @@
+# Log watch
+
+The Software Factory's seventh module. Reads production container logs from Grafana Cloud Loki,
+groups them into distinct problems, and files each one into Linear.
+
+Related: [log-shipping.md](log-shipping.md) (the pipeline this depends on),
+[linear.md](linear.md) (the sink it files through),
+[software-factory.md](software-factory.md) (the container it runs in).
+
+## What it does
+
+| | |
+| --- | --- |
+| Task queue | `logwatch` |
+| Flag | `FACTORY_LOGWATCH_ENABLED`, **off by default** |
+| Schedule | `logwatch-daily`, every 24h, created **active** |
+| Manual | `POST /api/logwatch/scans` (token-protected, unrouted by nginx) |
+| Files into | Linear, via the existing `linear` sink, producer key `logwatch` |
+| Runs in | `software-factory` only — never `deployer` |
+
+It reads `ERROR` and `WARN` lines, reduces each to a signature invariant to timestamps, UUIDs,
+hex identifiers, paths, addresses and numbers, discards signatures occurring fewer than
+`minimum-occurrences` times, sorts most-severe-first, and files at most `max-per-run`.
+
+Deduplication, suppression and reopening are **entirely** the sink's: cancel a ticket and that
+signature goes quiet permanently; reopen it and reporting resumes. There is no logwatch-side
+state for this, deliberately — `linear_issues` is an audit trail, never the source of truth.
+
+## The part that matters most: it knows when it cannot see
+
+**An empty read is not a clean read.** Before interpreting anything, the scan establishes that its
+source is alive, and reports `SOURCE_UNHEALTHY` rather than `NO_FINDINGS` when it cannot.
+
+This is not defensive programming for its own sake. Between roughly 10 and 31 August 2026 Grafana
+Cloud accepted no logs at all — the free-tier monthly allowance was spent, so the tenant's
+ingestion rate was set to `0 bytes/sec` and Alloy dropped every batch with a `429`. Throughout:
+
+- `alloy` was `Up (healthy)`; its healthcheck is `alloy --version`, which passes while every batch
+  is discarded
+- the read credential kept working, because ingest and query are separately gated
+- a Loki query returned `{"status":"success"}` with an empty body
+
+**A module without this check would have filed nothing and been self-consistently correct every
+night for three weeks.** That is worse than having no module, because it puts a green tick on a
+blind spot.
+
+Two tiers, in order:
+
+1. **Alloy's component API** (`http://alloy:12345/api/v0/web/components`). Direct evidence — it
+   reports the actual `429` or `401`, which distinguishes an exhausted quota from a rejected
+   credential from a genuinely quiet stack. All three look identical from the query side.
+   Best-effort: Alloy publishes no host port, so this works only on the compose network, and any
+   failure falls through to tier 2 rather than failing the scan.
+2. **Container coverage.** If fewer than `minimum-containers` (default 3) produced any line over
+   the window, the source is judged `SILENT`. Inference from silence, so it is **not applied to
+   windows shorter than an hour** — a five-minute post-deploy window over an idle stack
+   legitimately contains nothing, and filing a ticket after every quiet deploy would teach an
+   operator to ignore exactly this signal.
+
+A source-health failure is filed as an **ordinary finding** through the same sink, with key parts
+`["source-health", <status>]`. It therefore dedupes, suppresses and re-arms like anything else,
+with no special-case handling. The key parts deliberately exclude the evidence string: a `429`
+whose byte counts differ every run must stay one recurring ticket, while a quota problem and a
+rejected credential stay separate ones.
+
+## Running a scan by hand
+
+```bash
+# Dry run: reads, groups, reports - creates and comments on NOTHING in Linear.
+curl -s -X POST http://software-factory:8080/api/logwatch/scans \
+  -H "X-Factory-Token: $FACTORY_TRIGGER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"dryRun": true}'
+
+# A specific window.
+curl -s -X POST http://software-factory:8080/api/logwatch/scans \
+  -H "X-Factory-Token: $FACTORY_TRIGGER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"windowStart":"2026-09-01T00:00:00Z","windowEnd":"2026-09-02T00:00:00Z"}'
+```
+
+A manual scan always gets a fresh workflow id, so re-scanning a window already scanned is never
+rejected as a duplicate. An operator asking for a re-scan means it, and a `409` there would be
+indistinguishable from the module being wedged.
+
+Follow it with `GET /api/logwatch/scans/{workflowId}`, or on the status endpoint.
+
+## Rolling it out
+
+Order matters, and step 3 is the one not to skip.
+
+1. **Check Loki is actually ingesting.** `docker logs <alloy> | grep 'status=4'` on the Pi should
+   be silent. If it shows `429 ... limit: 0 bytes/sec`, stop — see
+   [log-shipping.md](log-shipping.md). The module will work, but it will only ever tell you the
+   source is dead.
+2. Set `FACTORY_LOGWATCH_ENABLED=true`, deploy, and **assert a live poller**:
+   `temporal task-queue describe --task-queue logwatch`. A healthy container with no poller runs
+   nothing while the console still says enabled.
+3. **Dry-run it and read what it would have filed.** The signature rules and the occurrence
+   thresholds are estimates until they have been checked against real production lines. This is
+   the step the dry run exists for.
+4. Adjust `minimum-occurrences` / `max-per-run` from what you see.
+5. Let it file for real. Confirm one Linear issue per distinct problem, each with a fingerprint
+   attachment.
+6. Cancel the noise. Confirm the next scan neither re-files nor comments on a cancelled
+   signature.
+
+**Expect the first runs to be loud.** `WARN` is in scope and Elasticsearch, Kafka and MongoDB all
+emit connection-retry warnings while the stack boots. The occurrence filter and the per-run cap
+bound the volume; cancelling makes each one permanently quiet. This is an accepted one-time cost,
+not a defect. If it proves unreasonable, narrowing to `ERROR` is a one-line configuration change
+and an expected outcome rather than a failure of the design.
+
+## Gotchas
+
+- **`GRAFANA_CLOUD_LOKI_ENDPOINT` is the *push* URL and already contains `/loki/api/v1`.**
+  `LokiClient.queryBase()` strips the trailing `/push`. Appending `/api/v1/...` to the raw value
+  yields `/loki/api/v1/api/v1/...` and a bare `404 page not found` — plain text, no JSON, no hint.
+  The client says so in the error message for exactly this reason.
+- **Loki timestamps are nanoseconds.** A seconds value is accepted and silently returns an empty
+  result for a window about fifty years wide in the wrong place — an empty success, the one shape
+  this module must never misread as clean.
+- **Both containers register a *workflow* poller on the `logwatch` queue.** `@WorkflowImpl`
+  scanning is unconditional. Harmless — a workflow only schedules activities — and the same shape
+  as the `deploy` queue. Do not "fix" it. What confines the Grafana credential is
+  `LogWatchActivitiesImpl`'s class-level `@ConditionalOnProperty`, which is evaluated by the
+  **component scanner**: declaring that class through an explicit `@Bean` method would register it
+  unconditionally and silently ignore the annotation.
+- **The level word is part of the signature.** `WARN slow query` and `ERROR slow query` are two
+  problems, deliberately: a message that has started erroring rather than warning is a change
+  worth its own ticket.
+- **A varying status code collapses into one signature**, because bare numbers normalise. "The
+  send failed with a status" is one problem whose status varies; the example line on the ticket
+  carries the real code. Splitting on it would file a fresh ticket for every status a flapping
+  upstream returns.
+- **`Fingerprint.VERSION` must not be bumped.** It would orphan every ticket already filed by
+  `deploy` and `cvefix` as well as this module's.
+- **`logwatch_runs` keys on the Temporal run id, not the workflow id.** The scheduled workflow id
+  is stable, so keying on it would collapse all history into one document.
+
+## What it deliberately does not do
+
+- **Any remediation whatsoever.** It observes and files. It never restarts, redeploys, edits code
+  or opens a pull request.
+- **Container health, restart counts, exited containers.** `scripts/monitor-prod.sh` already
+  watches and remediates those every minute.
+- **HTTP probing of the public hostnames.**
+- **Application-level signals the backend already holds** — Langfuse guardrail scores, failed
+  narrations, stuck article summaries.
+
+## Not yet built
+
+- **The admin console row and the post-deploy trigger.** The module is complete and triggerable
+  over HTTP, but `/admin/software-factory` has no Log watch row yet, and nothing schedules a scan
+  five minutes after a successful deploy (FR-011). Both are follow-ups; neither changes the
+  module.
+- **Signature tuning against real fixtures.** The test fixtures are real production lines captured
+  with `docker logs` on the Pi, because Loki held nothing while this was written. They should be
+  replaced and extended from Loki once it has been ingesting for a while.
