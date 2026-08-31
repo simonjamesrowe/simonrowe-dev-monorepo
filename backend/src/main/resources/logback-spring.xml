@@ -3,25 +3,52 @@
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
     <!--
-      Single console appender for all environments. Output format is controlled by
-      Spring Boot's structured logging support (`logging.structured.format.console`):
+      Single console appender for all environments. The output FORMAT is chosen by
+      Spring Boot's structured logging property, `logging.structured.format.console`:
         - unset (local dev)  -> human-readable plain text
-        - `ecs` (prod)       -> one-line JSON per event for Loki ingestion
-      In prod this is enabled via LOGGING_STRUCTURED_FORMAT_CONSOLE in docker-compose.prod.yml.
+        - `ecs` (prod)       -> one-line JSON per event, which Alloy ships to Loki
+      Prod sets it via LOGGING_STRUCTURED_FORMAT_CONSOLE in docker-compose.prod.yml.
 
-      Spring Boot ships two mutually exclusive appender fragments for this - console-appender.xml
-      (plain PatternLayoutEncoder) and structured-console-appender.xml (StructuredLogEncoder) -
-      and normally chooses between them itself, but only when there's no custom logback-spring.xml.
-      Since this file exists, we have to pick explicitly; the <if> requires Janino (see build.gradle.kts).
+      Spring Boot ships two mutually exclusive appender fragments for this -
+      console-appender.xml (PatternLayoutEncoder) and structured-console-appender.xml
+      (StructuredLogEncoder). Boot picks between them itself ONLY when an application has
+      no logback configuration of its own. This file exists, so we have to pick, and the
+      selection below is deliberately written as property substitution rather than a
+      conditional. Two dead ends are worth recording, because both fail silently:
+
+        1. `<if condition="...">` (what this file used before Spring Boot 4) is DEPRECATED
+           AND IGNORED as of Logback 1.5.38, which Boot 4.1.1 manages. Neither <then> nor
+           <else> runs, no CONSOLE appender is ever created, and the application starts
+           perfectly and logs NOTHING. The only clue is one line in logback's own status
+           output: "Appender named [CONSOLE] could not be found."
+        2. Deleting this file entirely and letting Boot choose does not work either: with
+           no logback config, `logging.pattern.console` is honoured but
+           `logging.structured.format.console` is NOT, so prod silently drops back to
+           plain text and the JSON log pipeline breaks.
+
+      So: CONSOLE_LOG_STRUCTURED_FORMAT (defined by defaults.xml above, defaulting to the
+      empty string) is used to look up a filename prefix: CONSOLE_APPENDER_PREFIX_<value>.
+      A recognised structured format resolves to "structured-" and selects the structured
+      fragment; anything else (including the empty default) falls through the `:-` to the
+      empty string and selects the plain one. Nested substitution is a core Logback feature
+      and needs neither Janino nor a custom Condition class.
+
+      The `:-` empty default is doing real work and is not decoration: Logback REJECTS
+      `<property name="..." value=""/>` outright ("either the file attribute alone, or the
+      resource element alone, or both the name and value attributes must be set"), so the
+      plain case cannot be expressed as a declared property and has to come from the
+      substitution default instead.
+
+      Adding a new structured format means adding one more prefix property here.
     -->
-    <if condition='property("CONSOLE_LOG_STRUCTURED_FORMAT").equals("")'>
-        <then>
-            <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
-        </then>
-        <else>
-            <include resource="org/springframework/boot/logging/logback/structured-console-appender.xml"/>
-        </else>
-    </if>
+    <property name="CONSOLE_APPENDER_PREFIX_ecs" value="structured-"/>
+    <property name="CONSOLE_APPENDER_PREFIX_gelf" value="structured-"/>
+    <property name="CONSOLE_APPENDER_PREFIX_logstash" value="structured-"/>
+    <property name="CONSOLE_APPENDER_KIND"
+              value="${CONSOLE_APPENDER_PREFIX_${CONSOLE_LOG_STRUCTURED_FORMAT}:-}"/>
+
+    <include resource="org/springframework/boot/logging/logback/${CONSOLE_APPENDER_KIND}console-appender.xml"/>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
