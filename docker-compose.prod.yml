@@ -77,7 +77,19 @@ services:
       start_period: 180s
 
   elasticsearch:
-    image: elasticsearch:8.17.0
+    # Pinned to the SAME version as the client Spring Boot manages
+    # (elasticsearch-java 9.4.5). This moved from 8.17.0 with the Boot 4.1.1 upgrade,
+    # and it was not optional: a 9.x client refuses an 8.x server outright, failing
+    # every request with "status: 400 ... Expecting a response body, but none was sent".
+    #
+    # Upgrading this container is a one-way data operation — Elasticsearch will not
+    # start 9.x against a data directory it has already opened as 8.x and then
+    # downgraded. The indices here are derived: search documents are rebuilt from
+    # MongoDB by IndexService/SearchIndexSyncScheduler, and the content-embeddings
+    # vector index has its own capture in ElasticsearchBackupService. Take that
+    # embeddings backup BEFORE recreating this service — regenerating it costs real
+    # money in embedding calls.
+    image: elasticsearch:9.4.5
     # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
     # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
     # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker

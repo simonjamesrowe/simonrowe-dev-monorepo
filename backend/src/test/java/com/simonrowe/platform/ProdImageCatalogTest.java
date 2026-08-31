@@ -19,7 +19,7 @@ class ProdImageCatalogTest {
 
     assertThat(components)
         .contains(new PlatformComponent("mongodb", "mongo", "8", false))
-        .contains(new PlatformComponent("elasticsearch", "elasticsearch", "8.17.0", false))
+        .contains(new PlatformComponent("elasticsearch", "elasticsearch", "9.4.5", false))
         .contains(new PlatformComponent("langfuse", "langfuse/langfuse", "3.212.0", false));
   }
 

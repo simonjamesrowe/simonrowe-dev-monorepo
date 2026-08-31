@@ -48,10 +48,13 @@ jobs:
         ports:
           - 27017:27017
       elasticsearch:
-        # Must match the app's ES client (docker-compose uses 8.17.0). On 8.11.1 the
-        # cluster-health response lacks unassignedPrimaryShards, so the backend health
-        # indicator throws and /actuator/health never reports UP.
-        image: elasticsearch:8.17.0
+        # Must match the app's ES client major version. Spring Boot 4.1.1 manages
+        # elasticsearch-java 9.4.5, and a 9.x client against an 8.x server fails every
+        # request with "status: 400 ... Expecting a response body, but none was sent".
+        # Historic note from the 8.x days: on 8.11.1 the cluster-health response lacked
+        # unassignedPrimaryShards, so the backend health indicator threw and
+        # /actuator/health never reported UP.
+        image: elasticsearch:9.4.5
         env:
           discovery.type: single-node
           xpack.security.enabled: false

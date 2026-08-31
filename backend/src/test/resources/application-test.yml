@@ -16,15 +16,20 @@ spring:
   ai:
     openai:
       api-key: test-dummy-key
-    openai-sdk:
-      api-key: test-dummy-key
   autoconfigure:
+    # Three exclusions went with Spring AI 2.0's merge of the openai-sdk module into
+    # spring-ai-openai: the two OpenAiSdk* ones (those classes no longer exist) and
+    # OpenAiChatAutoConfiguration.
+    #
+    # That last one is the subtle one. Before the merge there were TWO OpenAI chat
+    # autoconfigurations, and this list excluded the non-SDK one to stop them colliding —
+    # so the SDK's chat model is what actually supplied the ChatModel bean in tests. After
+    # the merge there is exactly one, and excluding it leaves the context with NO ChatModel
+    # at all, which fails 356 tests at context startup. Keeping it enabled reproduces the
+    # pre-upgrade behaviour; the api-key above is a dummy and nothing calls out.
     exclude:
       - org.springframework.ai.vectorstore.elasticsearch.autoconfigure.ElasticsearchVectorStoreAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
-      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkEmbeddingAutoConfiguration
-      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkImageAutoConfiguration
       - com.embabel.agent.autoconfigure.models.openai.AgentOpenAiAutoConfiguration
       - com.embabel.agent.autoconfigure.platform.AgentPlatformAutoConfiguration
 management:

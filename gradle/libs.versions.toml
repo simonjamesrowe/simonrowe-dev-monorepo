@@ -9,8 +9,8 @@ cyclonedx = "3.4.1"
 sonarqube = "7.4.0.8496"
 openpdf = "2.0.3"
 commonmark = "0.24.0"
-springAi = "1.1.8"
-embabel = "1.0.0"
+springAi = "2.0.1"
+embabel = "1.5.1"
 bucket4j = "8.16.1"
 thumbnailator = "0.4.20"
 mongock = "5.5.1"
@@ -36,6 +36,7 @@ spring-boot-starter-kafka = { module = "org.springframework.boot:spring-boot-sta
 spring-kafka-test = { module = "org.springframework.kafka:spring-kafka-test" }
 micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
 micrometer-tracing-bridge-otel = { module = "io.micrometer:micrometer-tracing-bridge-otel" }
+spring-boot-micrometer-tracing-opentelemetry = { module = "org.springframework.boot:spring-boot-micrometer-tracing-opentelemetry" }
 opentelemetry-spring-boot-starter = { module = "io.opentelemetry.instrumentation:opentelemetry-spring-boot-starter", version.ref = "opentelemetryInstrumentation" }
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version = "2.0.5" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
@@ -46,10 +47,9 @@ openpdf = { module = "com.github.librepdf:openpdf", version.ref = "openpdf" }
 commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
 spring-ai-bom = { module = "org.springframework.ai:spring-ai-bom", version.ref = "springAi" }
 spring-ai-starter-model-openai = { module = "org.springframework.ai:spring-ai-starter-model-openai" }
-spring-ai-starter-model-openai-sdk = { module = "org.springframework.ai:spring-ai-starter-model-openai-sdk" }
 spring-ai-starter-mcp-server-webmvc = { module = "org.springframework.ai:spring-ai-starter-mcp-server-webmvc" }
 spring-ai-starter-vector-store-elasticsearch = { module = "org.springframework.ai:spring-ai-starter-vector-store-elasticsearch" }
-spring-ai-advisors-vector-store = { module = "org.springframework.ai:spring-ai-advisors-vector-store" }
+spring-ai-vector-store-advisor = { module = "org.springframework.ai:spring-ai-vector-store-advisor" }
 embabel-agent-starter = { module = "com.embabel.agent:embabel-agent-starter", version.ref = "embabel" }
 embabel-agent-starter-openai = { module = "com.embabel.agent:embabel-agent-starter-openai", version.ref = "embabel" }
 embabel-agent-test = { module = "com.embabel.agent:embabel-agent-test", version.ref = "embabel" }

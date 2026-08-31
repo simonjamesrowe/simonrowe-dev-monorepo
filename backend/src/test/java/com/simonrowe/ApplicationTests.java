@@ -40,7 +40,7 @@ class ApplicationTests {
 
   @Container
   static ElasticsearchContainer elasticsearch =
-      new ElasticsearchContainer("elasticsearch:8.17.0")
+      new ElasticsearchContainer("elasticsearch:9.4.5")
           .withEnv("xpack.security.enabled", "false");
 
   @DynamicPropertySource

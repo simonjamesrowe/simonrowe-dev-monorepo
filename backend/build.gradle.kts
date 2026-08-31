@@ -225,14 +225,23 @@ dependencies {
     // library instrumentation (HTTP, Mongo) produced spans and the chat generations never
     // reached Langfuse. See docs/runbooks/langfuse-observability.md.
     implementation(libs.micrometer.tracing.bridge.otel)
+    // Boot 4 split the tracing auto-configuration out of the monolithic autoconfigure jar.
+    // micrometer-tracing-bridge-otel above still supplies OtelTracer, but nothing creates the
+    // Tracer bean from it any more — that is OpenTelemetryTracingAutoConfiguration, which
+    // lives here, along with the OtlpTracingAutoConfiguration that reads
+    // management.opentelemetry.tracing.export.otlp.*. Without this module the context has no
+    // io.micrometer.tracing.Tracer at all and the Langfuse trace pipeline goes silent.
+    //
+    // The narrow module rather than spring-boot-starter-opentelemetry, which would also pull
+    // in micrometer-registry-otlp and put a second metrics registry beside the Prometheus one.
+    implementation(libs.spring.boot.micrometer.tracing.opentelemetry)
     implementation(libs.openpdf)
     implementation(libs.commonmark)
     implementation(libs.spring.boot.starter.mail)
     implementation(libs.spring.ai.starter.model.openai)
-    implementation(libs.spring.ai.starter.model.openai.sdk)
     implementation(libs.spring.ai.starter.mcp.server.webmvc)
     implementation(libs.spring.ai.starter.vector.store.elasticsearch)
-    implementation(libs.spring.ai.advisors.vector.store)
+    implementation(libs.spring.ai.vector.store.advisor)
     implementation(libs.spring.boot.starter.websocket)
     implementation(libs.bucket4j.core)
     implementation(libs.spring.boot.starter.security.oauth2.resource.server)
