@@ -24,9 +24,32 @@ version = "0.0.1-SNAPSHOT"
 // is exploitable in production". Build- and test-time dependencies are still
 // covered, separately and correctly, by the three container-image SBOMs that
 // publish.yml generates with anchore/sbom-action.
+//
+// CycloneDX 3.x split the old single `cyclonedxBom` task in two, so the shape of
+// this block changed even though its intent did not:
+//
+//   * `cyclonedxDirectBom` (CyclonedxDirectTask) is registered per project and is
+//     the only one carrying `includeConfigs`. It must be configured across ALL
+//     projects — the root plus both modules — because the aggregate reads each
+//     module's direct BOM, so filtering the root alone would leave `backend` and
+//     `software-factory` contributing every configuration they have.
+//   * `cyclonedxBom` (CyclonedxAggregateTask) merges those into the BOM we upload.
+//
+// The aggregate's output also moved to `build/reports/cyclonedx/`. It is pinned
+// back to `build/reports/bom.json` here rather than chased through CI, because
+// that exact path is what `publish.yml` hands to DependencyTrack/gh-upload-sbom
+// and what `ci.yml` archives — and a BOM that fails to upload is reported as a
+// `continue-on-error` step, so getting this wrong would go unnoticed.
 // ---------------------------------------------------------------------------
-tasks.cyclonedxBom {
-    setIncludeConfigs(listOf("runtimeClasspath"))
+allprojects {
+    tasks.withType<org.cyclonedx.gradle.CyclonedxDirectTask>().configureEach {
+        includeConfigs.set(listOf("runtimeClasspath"))
+    }
+}
+
+tasks.named<org.cyclonedx.gradle.CyclonedxAggregateTask>("cyclonedxBom") {
+    jsonOutput.set(layout.buildDirectory.file("reports/bom.json"))
+    xmlOutput.set(layout.buildDirectory.file("reports/bom.xml"))
 }
 
 // Static analysis for the whole monorepo — see docs/runbooks/static-analysis.md.
