@@ -3,7 +3,7 @@ package com.simonrowe.factory.logwatch.loki;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.logwatch.config.LogWatchProperties;
 import com.simonrowe.factory.logwatch.domain.LogLine;
 import com.simonrowe.factory.logwatch.domain.Severity;
