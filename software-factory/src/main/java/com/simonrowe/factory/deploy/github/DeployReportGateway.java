@@ -156,7 +156,7 @@ public class DeployReportGateway {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub request interrupted", exception);
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("GitHub request failed", exception);
     }
   }

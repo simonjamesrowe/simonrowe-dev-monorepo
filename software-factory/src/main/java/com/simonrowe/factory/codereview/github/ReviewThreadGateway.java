@@ -1,5 +1,6 @@
 package com.simonrowe.factory.codereview.github;
 
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -300,7 +301,7 @@ public class ReviewThreadGateway {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub GraphQL request interrupted", exception);
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("GitHub GraphQL request failed", exception);
     }
   }

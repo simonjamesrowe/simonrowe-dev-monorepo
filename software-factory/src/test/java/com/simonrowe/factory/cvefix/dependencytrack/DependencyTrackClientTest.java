@@ -118,6 +118,23 @@ class DependencyTrackClientTest {
   }
 
   @Test
+  void wrapsAnUnparseableBodyRatherThanLettingTheParseErrorEscape() {
+    // Dependency-Track answered 200 with something that is not JSON — an HTML error page from
+    // a proxy in front of it is the realistic case. The caller's contract is an
+    // IllegalStateException naming the request that failed.
+    //
+    // This became a live risk in the Jackson 3 migration: readTree used to throw a CHECKED
+    // IOException, which the catch here already covered alongside httpClient.send(). Jackson 3
+    // throws the UNCHECKED JacksonException, so unless that catch is widened the parse error
+    // skips the wrapping entirely and surfaces as an unrelated crash.
+    responses.put("/api/v1/project", "<html>502 Bad Gateway</html>");
+
+    assertThatThrownBy(() -> client().findings())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("/api/v1/project");
+  }
+
+  @Test
   void throwsWhenDependencyTrackReturnsAnError() {
     responses.put(
         "/api/v1/project",

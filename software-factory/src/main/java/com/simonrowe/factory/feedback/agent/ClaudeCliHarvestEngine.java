@@ -79,7 +79,7 @@ public class ClaudeCliHarvestEngine implements HarvestEngine {
             "Harvest output did not match lessons schema", exception);
       }
       return postProcess(envelope.lessons());
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("Unable to prepare harvest workspace", exception);
     } finally {
       if (workspace != null) {

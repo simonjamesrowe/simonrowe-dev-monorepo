@@ -1,5 +1,6 @@
 package com.simonrowe.factory.cvefix.dependencytrack;
 
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.cvefix.config.CveFixProperties;
@@ -100,7 +101,7 @@ public class DependencyTrackClient {
             "Dependency-Track GET " + path + " returned " + response.statusCode());
       }
       return objectMapper.readTree(response.body());
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("Dependency-Track GET " + path + " failed", exception);
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();

@@ -213,7 +213,7 @@ public class GitHubCredentials {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub App installation lookup interrupted", exception);
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("GitHub App installation lookup failed", exception);
     }
   }
@@ -293,7 +293,7 @@ public class GitHubCredentials {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub App token request interrupted", exception);
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("GitHub App token request failed", exception);
     }
   }
@@ -401,7 +401,7 @@ public class GitHubCredentials {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub App installation lookup interrupted", exception);
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       LOGGER.warn(
           "GitHub App installation lookup for {} failed; requesting required permissions only",
           installationId,
