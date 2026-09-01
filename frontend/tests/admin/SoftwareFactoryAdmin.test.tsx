@@ -11,6 +11,7 @@ vi.mock('../../src/services/softwareFactoryApi', () => ({
   startFeedback: vi.fn(),
   startVulnerabilityScan: vi.fn(),
   startPlatformBackup: vi.fn(),
+  startLogWatchScan: vi.fn(),
   startDeploy: vi.fn(),
 }))
 
@@ -22,6 +23,7 @@ import {
   fetchRunProgress,
   fetchSoftwareFactoryStatus,
   startCodeReview,
+  startLogWatchScan,
   startPlatformBackup,
   startVulnerabilityScan,
   type FactoryModuleStatus,
@@ -34,6 +36,7 @@ const mockFetchProgress = vi.mocked(fetchRunProgress)
 const mockStartReview = vi.mocked(startCodeReview)
 const mockStartScan = vi.mocked(startVulnerabilityScan)
 const mockStartBackup = vi.mocked(startPlatformBackup)
+const mockStartLogScan = vi.mocked(startLogWatchScan)
 const mockUseAuth = vi.mocked(useAuth)
 
 const getAccessToken = vi.fn().mockResolvedValue('test-token')
@@ -74,6 +77,7 @@ function status(overrides: Partial<SoftwareFactoryStatus> = {}): SoftwareFactory
       module('deploy'),
       module('linear'),
       module('platformbackup'),
+      module('logwatch'),
     ],
     ...overrides,
   }
@@ -86,13 +90,17 @@ describe('SoftwareFactoryAdmin', () => {
     mockFetchStatus.mockResolvedValue(status())
   })
 
-  it('lists every module', async () => {
+  it('lists every module the status reports', async () => {
+    // Derived from the fixture rather than hard-coded: the assertion is "one row per module the
+    // backend sent", and a literal count has to be edited every time a module is added, which
+    // makes a genuine regression look like routine maintenance.
+    const expected = status().modules.length
     render(<SoftwareFactoryAdmin />)
 
     await waitFor(() => expect(screen.getByRole('list', {
       name: 'Software Factory modules',
     })).toBeInTheDocument())
-    expect(screen.getAllByRole('listitem')).toHaveLength(6)
+    expect(screen.getAllByRole('listitem')).toHaveLength(expected)
   })
 
   it('reports each container reachability in text, not only colour', async () => {
@@ -308,6 +316,55 @@ describe('SoftwareFactoryAdmin', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Dry run' }))
 
     expect(mockStartBackup).toHaveBeenCalledWith(getAccessToken, true)
+  })
+
+  it('starts a dry log scan without filing anything', async () => {
+    mockStartLogScan.mockResolvedValue({
+      workflowId: 'logwatch-manual-1', runId: 'run-9', detail: 'Dry-run log scan accepted',
+    })
+    render(<SoftwareFactoryAdmin />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Dry run scan' }))
+
+    expect(mockStartLogScan).toHaveBeenCalledWith(getAccessToken, true)
+  })
+
+  it('starts a real log scan on a single click, like the vulnerability scan', async () => {
+    mockStartLogScan.mockResolvedValue({
+      workflowId: 'logwatch-manual-2', runId: 'run-10', detail: 'Log scan accepted',
+    })
+    render(<SoftwareFactoryAdmin />)
+
+    // No confirmation step, deliberately: filing a Linear ticket is reversible by cancelling it,
+    // unlike the platform backup's upload. It matches the CVE scan, which files the same way.
+    await userEvent.click(await screen.findByRole('button', { name: /Scan logs now/ }))
+
+    expect(mockStartLogScan).toHaveBeenCalledWith(getAccessToken, false)
+  })
+
+  it('disables both log-scan controls when log watch is not ready', async () => {
+    mockFetchStatus.mockResolvedValue(status({
+      modules: [
+        module('codereview'), module('feedback'), module('cvefix'), module('deploy'),
+        module('linear'), module('platformbackup'),
+        module('logwatch', { ready: false, missingPrerequisites: ['GRAFANA_CLOUD_API_KEY is not set'] }),
+      ],
+    }))
+    render(<SoftwareFactoryAdmin />)
+
+    expect(await screen.findByRole('button', { name: 'Dry run scan' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Scan logs now/ })).toBeDisabled()
+  })
+
+  it('labels the log-scan buttons distinctly from the other modules', async () => {
+    render(<SoftwareFactoryAdmin />)
+
+    // "Dry run" alone collides with platform backup and "Scan now" with the vulnerability scan.
+    // The accessible name is all a screen reader gets - the panel heading that separates them
+    // visually is not part of it - so each must be unique on its own.
+    await screen.findByRole('button', { name: 'Dry run scan' })
+    expect(screen.getAllByRole('button', { name: 'Dry run' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /^Scan now$/ })).toHaveLength(1)
   })
 
   it('keeps the redeploy button disabled until the phrase matches exactly', async () => {

@@ -56,6 +56,12 @@ public class FactoryAdminController {
     return accepted(service.startPlatformBackup(request.dryRun()));
   }
 
+  @PostMapping("/log-scans")
+  public ResponseEntity<FactoryRunAccepted> logScan(
+      @RequestBody final LogScanRequest request) {
+    return accepted(service.startLogWatchScan(request.dryRun()));
+  }
+
   @PostMapping("/deploys")
   public ResponseEntity<FactoryRunAccepted> deploy(
       @Valid @RequestBody final DeployRequest request) {
@@ -74,6 +80,9 @@ public class FactoryAdminController {
   }
 
   public record PlatformBackupRequest(boolean dryRun) {
+  }
+
+  public record LogScanRequest(boolean dryRun) {
   }
 
   public record DeployRequest(

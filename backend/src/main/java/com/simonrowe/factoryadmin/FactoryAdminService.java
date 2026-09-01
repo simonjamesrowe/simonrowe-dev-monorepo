@@ -31,9 +31,10 @@ public class FactoryAdminService {
   private static final String DEPLOY = "deploy";
   private static final String LINEAR = "linear";
   private static final String PLATFORM_BACKUP = "platformbackup";
+  private static final String LOGWATCH = "logwatch";
 
   private static final List<String> ORDER =
-      List.of(CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP);
+      List.of(CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP, LOGWATCH);
 
   /** Modules the deployer, not the factory, is the authority on. */
   private static final List<String> DEPLOYER_OWNED = List.of(DEPLOY, PLATFORM_BACKUP);
@@ -136,6 +137,7 @@ public class FactoryAdminService {
       case DEPLOY -> "Deploy";
       case LINEAR -> "Issue tracking";
       case PLATFORM_BACKUP -> "Platform backup";
+      case LOGWATCH -> "Log watch";
       default -> key;
     };
     return new FactoryInstanceStatus.ModuleStatus(
@@ -183,6 +185,22 @@ public class FactoryAdminService {
   public FactoryRunAccepted startPlatformBackup(final boolean dryRun) {
     requireReady(PLATFORM_BACKUP);
     return proxy(() -> client.startPlatformBackup(dryRun));
+  }
+
+  /**
+   * Scans production logs on demand.
+   *
+   * <p>A dry run reads and groups exactly as a real one does, and files nothing at all — so the
+   * console's run progress is the only place its outcome appears. That is what makes it the right
+   * way to check the signature rules and the occurrence thresholds against real log volume before
+   * letting the module file for the first time.
+   *
+   * @param dryRun whether to report what would be filed without creating anything in Linear
+   * @return the accepted scan
+   */
+  public FactoryRunAccepted startLogWatchScan(final boolean dryRun) {
+    requireReady(LOGWATCH);
+    return proxy(() -> client.startLogWatchScan(dryRun));
   }
 
   /**
