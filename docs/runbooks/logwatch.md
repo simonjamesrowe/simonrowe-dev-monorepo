@@ -15,7 +15,7 @@ Related: [log-shipping.md](log-shipping.md) (the pipeline this depends on),
 | Flag | `FACTORY_LOGWATCH_ENABLED`, **off by default** |
 | Schedule | `logwatch-daily`, every 24h, created **active** |
 | Post-deploy | Five minutes after a successful deploy, behind
-  `FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED` on the **deployer** |
+  `FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED` on **`software-factory`** |
 | Manual | **Log watch panel on `/admin/software-factory`**, or `POST /api/logwatch/scans` (token-protected, unrouted by nginx) |
 | Files into | Linear, via the existing `linear` sink, producer key `logwatch` |
 | Runs in | `software-factory` only — never `deployer` |
@@ -173,13 +173,21 @@ A successful deploy schedules a scan to start **five minutes later**, over the w
 completion to whenever it actually runs. Off by default, behind
 `FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED`.
 
-**Two flags, not one, and the split is the point.** `factory.logwatch.enabled` registers the
-activity that reads Loki and lives only on `software-factory`;
-`factory.deploy.log-watch-trigger-enabled` gates whether a deploy schedules a scan and lives only
-on `deployer`. A single flag would have put a Loki-querying activity poller inside the container
-holding the Docker socket. Starting a workflow needs nothing but a Temporal client, so the
-deployer schedules and never reads a log line. `DeployerGrafanaCredentialTest` asserts the
-deployer carries the trigger flag and **not** the module flag.
+**Two flags, and both live on `software-factory` — for different reasons.**
+
+- `factory.logwatch.enabled` registers the activity that reads Loki. It must never be on
+  `deployer`, which holds the Docker socket.
+- `factory.deploy.log-watch-trigger-enabled` gates whether a deploy schedules a scan. It is read
+  by `DeployWorkflowService` when it **builds the DeployRequest**, and that runs on
+  `software-factory` because that is the container terminating the signed webhook.
+
+**Putting the trigger flag on `deployer` is the obvious mistake and it makes the feature
+permanently inert** — the flag the code actually reads stays at its `false` default, so no scan is
+ever scheduled, with no error anywhere. It is the same mistake `FACTORY_DEPLOY_TRIGGER_ENABLED`
+made in 036, which is why that variable is documented in the compose file as deliberately absent
+from `deployer`. The deployer needs no copy: the workflow reads the value off the request.
+`DeployerGrafanaCredentialTest` asserts the deployer carries **neither** flag and that
+`software-factory` carries the trigger one.
 
 **It cannot fail, delay or roll back a deploy** (FR-012). Three mechanisms, all needed:
 
@@ -208,9 +216,9 @@ post-deploy scan would run and file nothing, silently. The deploy request's valu
 Do this **last**, after the module itself has been dry-run and tuned:
 
 ```bash
-# in the host .env, then recreate the deployer
+# in the host .env, then recreate software-factory - the container that reads it
 FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED=true
-docker compose -f docker-compose.prod.yml up -d --no-deps deployer
+docker compose -f docker-compose.prod.yml up -d --no-deps software-factory
 ```
 
 It is the trigger most likely to surprise you, because it runs over a window that always contains

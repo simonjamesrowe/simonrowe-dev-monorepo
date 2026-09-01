@@ -54,20 +54,39 @@ class DeployerGrafanaCredentialTest {
   }
 
   @Test
-  void theDeployerCarriesTheTriggerFlagButNotTheModuleFlag() throws IOException {
+  void theDeployerCarriesNeitherLogWatchFlag() throws IOException {
     List<String> deployerBlock =
         ComposeFile.serviceBlock(ComposeFile.lines(), DEPLOYER_SERVICE);
 
-    // Two flags, not one, and this is what the split is for: the deployer may *schedule* a scan
-    // (which needs only a Temporal client) but must never *run* one (which needs the Grafana
-    // credential). A single flag would have registered a Loki-querying activity poller inside the
-    // container holding the Docker socket.
-    assertThat(ComposeFile.declaredKeysContaining(deployerBlock, "LOG_WATCH_TRIGGER"))
-        .as("the deployer schedules the post-deploy scan, so it holds the trigger flag")
-        .isNotEmpty();
-    assertThat(ComposeFile.declaredKeysContaining(deployerBlock, "FACTORY_LOGWATCH_ENABLED"))
-        .as("but never the module flag, which is what registers the activity that reads Loki")
+    // Neither flag, for two different reasons.
+    //
+    // FACTORY_LOGWATCH_ENABLED would register the activity that reads Loki inside the container
+    // holding the Docker socket - the confinement this whole file exists for.
+    //
+    // FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED would simply do nothing here, and that is the
+    // more insidious of the two: DeployWorkflowService runs on `software-factory` and reads the
+    // flag there to build the DeployRequest, so setting it on the deployer leaves the real one
+    // at its `false` default and no scan is ever scheduled, with no error anywhere. This is the
+    // same mistake FACTORY_DEPLOY_TRIGGER_ENABLED made in 036, which is why that variable is
+    // documented in the compose file as deliberately absent from this service.
+    assertThat(ComposeFile.declaredKeysContaining(deployerBlock, "LOGWATCH"))
+        .as("the module flag registers a Loki-reading activity; never on the socket holder")
         .isEmpty();
+    assertThat(ComposeFile.declaredKeysContaining(deployerBlock, "LOG_WATCH"))
+        .as("the trigger flag is read where the DeployRequest is built, which is not here")
+        .isEmpty();
+  }
+
+  @Test
+  void softwareFactoryCarriesTheTriggerFlag() throws IOException {
+    List<String> factoryBlock =
+        ComposeFile.serviceBlock(ComposeFile.lines(), "software-factory");
+
+    // The mirror of the assertion above, and what stops it passing by the flag existing nowhere -
+    // which would look identical from the deployer's side and disable the feature entirely.
+    assertThat(ComposeFile.declaredKeysContaining(factoryBlock, "LOG_WATCH_TRIGGER"))
+        .as("DeployWorkflowService reads this here to build the DeployRequest")
+        .isNotEmpty();
   }
 
   @Test

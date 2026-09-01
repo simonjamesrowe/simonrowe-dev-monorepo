@@ -269,13 +269,17 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   `actionFor` in the console was also converted from an if-chain ending in a fallthrough to a
   total switch: the old form silently labelled any unrecognised module "Dry run / backup".
   **The post-deploy trigger completes the spec** (FR-011/FR-012): a successful deploy schedules a
-  scan five minutes later, over the window from deploy completion. **Two flags, not one** —
-  `factory.logwatch.enabled` registers the Loki-reading activity and lives only on
-  `software-factory`; `factory.deploy.log-watch-trigger-enabled` gates the scheduling and lives
-  only on `deployer`. A single flag would have put a Loki-querying poller inside the
-  socket-holding container; starting a workflow needs only a Temporal client, so the deployer
-  schedules and never reads a log line. `DeployerGrafanaCredentialTest` asserts the deployer
-  carries the trigger flag and **not** the module flag. **The Linear flag is passed through from
+  scan five minutes later, over the window from deploy completion. **Two flags, and both belong on
+  `software-factory`, for different reasons.** `factory.logwatch.enabled` registers the
+  Loki-reading activity and must never reach the socket-holding `deployer`;
+  `factory.deploy.log-watch-trigger-enabled` is read by `DeployWorkflowService` when it **builds
+  the DeployRequest**, and that runs on `software-factory` because that container terminates the
+  signed webhook. **Putting the trigger flag on `deployer` looks right and makes the feature
+  permanently inert** — the flag the code reads stays at its `false` default and no scan is ever
+  scheduled, with no error anywhere. That is exactly the `FACTORY_DEPLOY_TRIGGER_ENABLED` mistake
+  from 036 repeated one variable over; the reviewer caught it on #146 before merge.
+  `DeployerGrafanaCredentialTest` asserts the deployer carries **neither** flag and that
+  `software-factory` carries the trigger one. **The Linear flag is passed through from
   the deploy request rather than read on the deployer**, which holds no `FACTORY_LINEAR_ENABLED`
   by design — reading it locally resolves to `false`, so every post-deploy scan would run and
   file nothing, silently. It cannot fail a deploy: the flag is checked before scheduling (an
