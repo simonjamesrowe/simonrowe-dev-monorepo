@@ -256,9 +256,19 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   - Fixtures are real production lines captured with `docker logs` on the Pi, **not** from Loki,
     which held nothing while this was written. The signature rules and the occurrence thresholds
     are therefore still estimates — dry-run and tune before trusting them.
-  **Not built yet, deliberately:** the `/admin/software-factory` console row and the
-  five-minutes-after-deploy trigger (FR-011). The module is complete and triggerable over
-  `POST /api/logwatch/scans`; both are follow-ups that change nothing inside it.
+  **The admin console row shipped separately** — a Log watch panel on `/admin/software-factory`
+  with **Dry run scan** and **Scan logs now**, proxied through `POST /api/admin/software-factory/
+  log-scans`. Three things that were not obvious: `FactoryAdminService.ORDER` is the authoritative
+  module list on the backend side, so a module missing from it is dropped from the console
+  entirely no matter what the factory reports; `LogWatchScanAccepted`'s field had to be renamed
+  `message` → `detail` to match `CveScanAccepted`/`PlatformBackupAccepted`, because the backend
+  proxies all three through one `RunAcceptedWire` and a differently-named field deserialises as
+  null; and the button labels are "Dry run **scan**" / "Scan **logs** now" because a bare
+  "Dry run" collides with platform backup and "Scan now" with the vulnerability scan — the
+  accessible name is all a screen reader gets, and a test pins that each stays unique.
+  `actionFor` in the console was also converted from an if-chain ending in a fallthrough to a
+  total switch: the old form silently labelled any unrecognised module "Dry run / backup".
+  **Still not built:** the five-minutes-after-deploy trigger (FR-011).
   See `docs/runbooks/logwatch.md` and `specs/042-factory-log-watch/`.
 - log-shipping-quota-exhaustion: Grafana Cloud Loki held **nothing for three weeks** in August
   2026 while `alloy` reported `Up (healthy)` with `RestartCount: 0`, was tailing containers

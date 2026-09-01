@@ -14,7 +14,7 @@ Related: [log-shipping.md](log-shipping.md) (the pipeline this depends on),
 | Task queue | `logwatch` |
 | Flag | `FACTORY_LOGWATCH_ENABLED`, **off by default** |
 | Schedule | `logwatch-daily`, every 24h, created **active** |
-| Manual | `POST /api/logwatch/scans` (token-protected, unrouted by nginx) |
+| Manual | **Log watch panel on `/admin/software-factory`**, or `POST /api/logwatch/scans` (token-protected, unrouted by nginx) |
 | Files into | Linear, via the existing `linear` sink, producer key `logwatch` |
 | Runs in | `software-factory` only — never `deployer` |
 
@@ -65,15 +65,32 @@ rejected credential stay separate ones.
 
 ## Running a scan by hand
 
+**From the admin console** — `/admin/software-factory`, the **Log watch** panel:
+
+- **Dry run scan** — reads, groups and reports what it *would* file. Creates nothing.
+- **Scan logs now** — files for real. One click, no confirmation step, matching the vulnerability
+  scan: filing a Linear ticket is reversible by cancelling it, unlike the platform backup's
+  upload.
+
+Both are disabled unless the module reports `ready`, and the row shows why when it does not. Run
+progress appears in the console; a dry run reports there and nowhere else.
+
+The button labels are deliberately more specific than the panel needs — "Dry run" alone collides
+with the platform-backup control and "Scan now" with the vulnerability one, and the accessible
+name is all a screen reader gets.
+
+**Or directly against the factory** (port **8090**, not 8080 — the factory's HTTP
+server is the one nginx proxies `POST /webhooks/github` to):
+
 ```bash
 # Dry run: reads, groups, reports - creates and comments on NOTHING in Linear.
-curl -s -X POST http://software-factory:8080/api/logwatch/scans \
+curl -s -X POST http://software-factory:8090/api/logwatch/scans \
   -H "X-Factory-Token: $FACTORY_TRIGGER_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"dryRun": true}'
 
 # A specific window.
-curl -s -X POST http://software-factory:8080/api/logwatch/scans \
+curl -s -X POST http://software-factory:8090/api/logwatch/scans \
   -H "X-Factory-Token: $FACTORY_TRIGGER_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"windowStart":"2026-09-01T00:00:00Z","windowEnd":"2026-09-02T00:00:00Z"}'
@@ -150,10 +167,8 @@ and an expected outcome rather than a failure of the design.
 
 ## Not yet built
 
-- **The admin console row and the post-deploy trigger.** The module is complete and triggerable
-  over HTTP, but `/admin/software-factory` has no Log watch row yet, and nothing schedules a scan
-  five minutes after a successful deploy (FR-011). Both are follow-ups; neither changes the
-  module.
+- **The post-deploy trigger.** Nothing yet schedules a scan five minutes after a successful
+  deploy (FR-011). A follow-up; it changes nothing inside the module.
 - **Signature tuning against real fixtures.** The test fixtures are real production lines captured
   with `docker logs` on the Pi, because Loki held nothing while this was written. They should be
   replaced and extended from Loki once it has been ingesting for a while.

@@ -136,6 +136,12 @@ public class FactoryAdminClient {
     return new FactoryRunAccepted(wire.workflowId(), wire.runId(), wire.detail());
   }
 
+  public FactoryRunAccepted startLogWatchScan(final boolean dryRun) {
+    RunAcceptedWire wire =
+        post("/api/logwatch/scans", Map.of("dryRun", dryRun), RunAcceptedWire.class);
+    return new FactoryRunAccepted(wire.workflowId(), wire.runId(), wire.detail());
+  }
+
   public FactoryRunProgress progress(final String workflowId) {
     return factory
         .get()

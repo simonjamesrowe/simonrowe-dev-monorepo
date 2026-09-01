@@ -16,7 +16,14 @@ export interface FactoryScheduleStatus {
 }
 
 export interface FactoryModuleStatus {
-  key: 'codereview' | 'feedback' | 'cvefix' | 'deploy' | 'linear' | 'platformbackup'
+  key:
+    | 'codereview'
+    | 'feedback'
+    | 'cvefix'
+    | 'deploy'
+    | 'linear'
+    | 'platformbackup'
+    | 'logwatch'
   displayName: string
   /** null when the container that owns this module could not be asked for its flag. */
   configured: boolean | null
@@ -112,6 +119,20 @@ export const startVulnerabilityScan = (getAccessToken: GetAccessToken) =>
 
 export const startPlatformBackup = (getAccessToken: GetAccessToken, dryRun: boolean) =>
   request<FactoryRunAccepted>(getAccessToken, '/platform-backups', {
+    method: 'POST',
+    body: JSON.stringify({ dryRun }),
+  })
+
+/**
+ * Scans production logs on demand.
+ *
+ * A dry run reads and groups exactly as a real run does and files nothing at all, so run progress
+ * is the only place its outcome appears. That is what makes it the right way to check the
+ * signature rules and occurrence thresholds against real log volume before letting the module
+ * file for the first time.
+ */
+export const startLogWatchScan = (getAccessToken: GetAccessToken, dryRun: boolean) =>
+  request<FactoryRunAccepted>(getAccessToken, '/log-scans', {
     method: 'POST',
     body: JSON.stringify({ dryRun }),
   })

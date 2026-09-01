@@ -36,7 +36,7 @@ class FactoryAdminServiceTest {
   private final FactoryAdminClient client = mock(FactoryAdminClient.class);
 
   @Test
-  void reportsAllSixModulesEvenWhenNeitherContainerAnswers() {
+  void reportsEveryModuleEvenWhenNeitherContainerAnswers() {
     when(client.factoryStatus()).thenThrow(new ResourceAccessException("down"));
     when(client.deployerStatus()).thenThrow(new ResourceAccessException("down"));
 
@@ -44,7 +44,14 @@ class FactoryAdminServiceTest {
 
     assertThat(status.factoryReachable()).isFalse();
     assertThat(status.deployerReachable()).isFalse();
-    assertThat(status.modules()).hasSize(6);
+    // The point is that an unreachable container still yields a full, honest row per module -
+    // not a page that silently lists fewer. The count is asserted against the known keys rather
+    // than a literal, which would need editing every time a module is added and make a genuine
+    // regression look like routine maintenance.
+    assertThat(status.modules())
+        .extracting(FactoryInstanceStatus.ModuleStatus::key)
+        .containsExactly(
+            "codereview", "feedback", "cvefix", "deploy", "linear", "platformbackup", "logwatch");
     assertThat(status.modules()).allMatch(module -> !module.ready());
     assertThat(status.modules()).allMatch(
         module -> "Owning factory service is unreachable".equals(module.diagnostic()));
@@ -247,6 +254,32 @@ class FactoryAdminServiceTest {
     assertThat(service(SHA).startDeploy(SHA, CONFIRMATION).workflowId()).isEqualTo("deploy-prod");
 
     verify(client).startDeploy(SHA);
+  }
+
+  @Test
+  void startsLogScanAndPassesTheDryRunFlagThrough() {
+    when(client.factoryStatus()).thenReturn(instance("software-factory", ready("logwatch")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+    when(client.startLogWatchScan(anyBoolean()))
+        .thenReturn(new FactoryRunAccepted("logwatch-manual-1", "run-1", "accepted"));
+
+    assertThat(service(SHA).startLogWatchScan(true).workflowId()).isEqualTo("logwatch-manual-1");
+
+    // The flag is the whole difference between a scan that files Linear tickets and one that
+    // files nothing, so it must not be dropped or defaulted on the way through.
+    verify(client).startLogWatchScan(true);
+  }
+
+  @Test
+  void refusesLogScanWhenLogWatchIsNotReady() {
+    // Without this the workflow starts on a queue nothing polls: it does not fail, it sits in
+    // Temporal looking accepted until an activity timeout.
+    when(client.factoryStatus()).thenReturn(instance("software-factory", disabled("logwatch")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+
+    assertThatThrownBy(() -> service(SHA).startLogWatchScan(false))
+        .isInstanceOf(ResponseStatusException.class);
+    verify(client, never()).startLogWatchScan(anyBoolean());
   }
 
   @Test

@@ -8,6 +8,7 @@ import {
   Play,
   RefreshCw,
   ScanSearch,
+  ScrollText,
   ShieldAlert,
   XCircle,
 } from 'lucide-react'
@@ -21,6 +22,7 @@ import {
   startCodeReview,
   startDeploy,
   startFeedback,
+  startLogWatchScan,
   startPlatformBackup,
   startVulnerabilityScan,
   type FactoryModuleStatus,
@@ -279,6 +281,29 @@ export function SoftwareFactoryAdmin() {
           ><ShieldAlert size={16} /> Scan now</button>
         </ActionPanel>
 
+        {/*
+          Labels are deliberately more specific than the panel needs. "Dry run" alone collides
+          with the platform-backup control and "Scan now" with the vulnerability one, and the
+          accessible name is all a screen reader gets - the panel heading that disambiguates them
+          visually is not part of it.
+        */}
+        <ActionPanel title="Log watch" description="Scan production logs for recurring errors and file each distinct problem in Linear. A dry run reports what it would file and creates nothing.">
+          <div className="factory-console__button-row">
+            <button
+              className="admin-btn"
+              disabled={!modules.get('logwatch')?.ready || pending !== null}
+              onClick={() => void start('logwatch-dry', () => startLogWatchScan(getAccessToken, true))}
+              type="button"
+            >Dry run scan</button>
+            <button
+              className="admin-btn admin-btn--primary"
+              disabled={!modules.get('logwatch')?.ready || pending !== null}
+              onClick={() => void start('logwatch', () => startLogWatchScan(getAccessToken, false))}
+              type="button"
+            ><ScrollText size={16} /> Scan logs now</button>
+          </div>
+        </ActionPanel>
+
         <ActionPanel title="Platform backup" description="Dry runs exercise the capture plan. A real run uploads a new archive; restore remains a host operation.">
           <div className="factory-console__button-row">
             <button
@@ -462,11 +487,28 @@ function ActionPanel({
   )
 }
 
+/**
+ * The manual action offered for a module, in the summary table.
+ *
+ * A total switch rather than a chain ending in a fallthrough: the previous form returned
+ * "Dry run / backup" for anything it did not recognise, so a newly added module was silently
+ * mislabelled as a backup control rather than failing visibly.
+ */
 function actionFor(module: FactoryModuleStatus): string {
-  if (module.key === 'linear') return 'Status only'
-  if (module.key === 'codereview') return 'Review a PR'
-  if (module.key === 'feedback') return 'Process PR'
-  if (module.key === 'cvefix') return 'Scan now'
-  if (module.key === 'deploy') return 'Guarded redeploy'
-  return 'Dry run / backup'
+  switch (module.key) {
+    case 'linear':
+      return 'Status only'
+    case 'codereview':
+      return 'Review a PR'
+    case 'feedback':
+      return 'Process PR'
+    case 'cvefix':
+      return 'Scan now'
+    case 'deploy':
+      return 'Guarded redeploy'
+    case 'platformbackup':
+      return 'Dry run / backup'
+    case 'logwatch':
+      return 'Dry run / scan'
+  }
 }
