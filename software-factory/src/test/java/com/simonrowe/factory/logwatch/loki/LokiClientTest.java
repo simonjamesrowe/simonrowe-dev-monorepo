@@ -119,6 +119,25 @@ class LokiClientTest {
   }
 
   @Test
+  @DisplayName("a malformed body still surfaces as LokiException, not a raw parse error")
+  void wrapsAnUnparseableBodyInLokiException() {
+    // Loki answered 200 with something that is not JSON at all - a proxy error page is the
+    // realistic case. The module's whole contract is that it knows when it cannot see, and it
+    // signals that with LokiException; a raw parse error escaping instead would be reported as
+    // an unexpected crash rather than "the log source is unreadable".
+    //
+    // This is a real regression risk rather than a hypothetical. Under Jackson 2 readTree threw
+    // a checked IOException, which the catch here already covered. Jackson 3 throws the
+    // UNCHECKED JacksonException, so when this module was migrated the catch had to be widened
+    // to a multi-catch or this path would silently start throwing something else.
+    RESPONSES.put("/loki/api/v1/query_range", "<html>502 Bad Gateway</html>");
+
+    assertThatThrownBy(() -> client().linesIn(FROM, TO, 100))
+        .isInstanceOf(LokiException.class)
+        .hasMessageContaining("/loki/api/v1/query_range");
+  }
+
+  @Test
   @DisplayName("an endpoint without /push is left alone")
   void toleratesAnEndpointWithoutPush() {
     RESPONSES.put("/loki/api/v1/query_range", emptyResult());
