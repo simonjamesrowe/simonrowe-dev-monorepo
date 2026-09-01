@@ -22,6 +22,10 @@ import java.util.List;
  *     SDK and cannot inject properties — and because with the sink disabled nothing polls the
  *     {@code linear} queue, so scheduling the activity would stall the deploy until its
  *     schedule-to-close timeout.
+ * @param logWatchTriggerEnabled whether a successful deploy schedules a log scan five minutes
+ *     later. Carried here for the same reason as {@code linearFilingEnabled}, and read only on
+ *     the success path — a deploy that failed and rolled back schedules nothing, because the
+ *     window would describe the rollback rather than the change.
  */
 public record DeployRequest(
     String sha,
@@ -31,7 +35,8 @@ public record DeployRequest(
     boolean rollbackEnabled,
     List<String> services,
     boolean dryRun,
-    boolean linearFilingEnabled) {
+    boolean linearFilingEnabled,
+    boolean logWatchTriggerEnabled) {
 
   /** Trigger value for a deploy started by a GitHub {@code workflow_run} delivery. */
   public static final String TRIGGER_WEBHOOK = "workflow_run";

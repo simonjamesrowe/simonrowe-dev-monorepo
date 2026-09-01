@@ -93,7 +93,7 @@ class DeployReportGatewayTest {
     DeployProperties properties =
         new DeployProperties(
             true, false, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null);
+            null, null, null, false);
     GitHubCredentials credentials = new GitHubCredentials(codeReviewProperties, new ObjectMapper());
     return new DeployReportGateway(
         codeReviewProperties, properties, credentials, new ObjectMapper());

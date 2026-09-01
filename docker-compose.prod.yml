@@ -429,6 +429,11 @@ services:
       # assert a live poller on the `deploy` task queue afterwards: a container can be
       # healthy with no poller registered, in which case nothing ever deploys.
       FACTORY_DEPLOY_ENABLED: ${FACTORY_DEPLOY_ENABLED:-false}
+      # Schedules a log scan five minutes after a successful deploy. Deployer-side because this
+      # is the container that runs the deploy; the scan itself executes on `software-factory`,
+      # which is the only one holding the Grafana credential. Starting a workflow needs nothing
+      # but a Temporal client, so this container never reads a log line.
+      FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED: ${FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED:-false}
       # FACTORY_DEPLOY_TRIGGER_ENABLED IS DELIBERATELY ABSENT, and must stay absent. The
       # deployer must never start workflows - it is the executor, and the trigger belongs
       # on the container that receives the signed webhook. Absence achieves that on its

@@ -119,7 +119,7 @@ class DeployWorkflowServiceTest {
     return new DeployProperties(
         false, true, null, null, null, null, null, null, null, null,
         List.of("backend", "frontend", "software-factory"),
-        null, Boolean.TRUE, Boolean.TRUE, null, Duration.ofMinutes(30), null);
+        null, Boolean.TRUE, Boolean.TRUE, null, Duration.ofMinutes(30), null, false);
   }
 
   private void awaitCompletion() {

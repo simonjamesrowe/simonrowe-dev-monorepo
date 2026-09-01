@@ -6,6 +6,7 @@ import com.simonrowe.factory.deploy.domain.SyncOutcome;
 import com.simonrowe.factory.deploy.persistence.DeployRunRecord;
 import io.temporal.activity.ActivityInterface;
 import io.temporal.activity.ActivityMethod;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -134,6 +135,30 @@ public interface DeployActivities {
    */
   @ActivityMethod
   void recordRun(DeployRunRecord record);
+
+  /**
+   * Schedules a log scan to start five minutes after a successful deploy.
+   *
+   * <p>Starting a workflow needs only a Temporal client, so this runs on the {@code deployer}
+   * while the scan itself executes on {@code software-factory} — the container that holds the
+   * Grafana credential. The deployer never reads a log line.
+   *
+   * <p>Five minutes rather than immediately: a stack that has just been recreated is still
+   * settling, and scanning during that produces the boot-noise warnings rather than whatever the
+   * change actually broke.
+   *
+   * @param windowStart the moment the deploy completed; the scan covers from here to when it runs
+   * @param deployRunId the deploy's Temporal run id, used to build a unique, idempotent scan id
+   * @param linearFilingEnabled whether the scan may file. Passed through from the deploy request
+   *     rather than read here: this activity runs on the {@code deployer}, which holds no
+   *     {@code FACTORY_LINEAR_ENABLED} by design, so reading it locally would resolve to false and
+   *     every post-deploy scan would run and file nothing, silently. The deploy request's value
+   *     was resolved on {@code software-factory}, which does know.
+   * @return the scheduled scan's workflow id, for the deploy's own record
+   */
+  @ActivityMethod
+  String scheduleLogWatchScan(Instant windowStart, String deployRunId,
+      boolean linearFilingEnabled);
 
   /**
    * Deletes an evidence directory once the run has finished with it.

@@ -268,7 +268,22 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   accessible name is all a screen reader gets, and a test pins that each stays unique.
   `actionFor` in the console was also converted from an if-chain ending in a fallthrough to a
   total switch: the old form silently labelled any unrecognised module "Dry run / backup".
-  **Still not built:** the five-minutes-after-deploy trigger (FR-011).
+  **The post-deploy trigger completes the spec** (FR-011/FR-012): a successful deploy schedules a
+  scan five minutes later, over the window from deploy completion. **Two flags, not one** —
+  `factory.logwatch.enabled` registers the Loki-reading activity and lives only on
+  `software-factory`; `factory.deploy.log-watch-trigger-enabled` gates the scheduling and lives
+  only on `deployer`. A single flag would have put a Loki-querying poller inside the
+  socket-holding container; starting a workflow needs only a Temporal client, so the deployer
+  schedules and never reads a log line. `DeployerGrafanaCredentialTest` asserts the deployer
+  carries the trigger flag and **not** the module flag. **The Linear flag is passed through from
+  the deploy request rather than read on the deployer**, which holds no `FACTORY_LINEAR_ENABLED`
+  by design — reading it locally resolves to `false`, so every post-deploy scan would run and
+  file nothing, silently. It cannot fail a deploy: the flag is checked before scheduling (an
+  unguarded schedule on an unpolled queue stalls until schedule-to-close), it runs on the `fast`
+  stub, and every failure is appended to the deploy detail rather than rethrown. Only
+  `DEPLOYED`/`DEPLOYED_IMAGES_ONLY` schedule anything — a rollback's window would describe the
+  rollback rather than the change. `DeployProperties`' new flag is **last in the record** so
+  adding it appended to the eight positional test call sites rather than inserting into them.
   See `docs/runbooks/logwatch.md` and `specs/042-factory-log-watch/`.
 - log-shipping-quota-exhaustion: Grafana Cloud Loki held **nothing for three weeks** in August
   2026 while `alloy` reported `Up (healthy)` with `RestartCount: 0`, was tailing containers

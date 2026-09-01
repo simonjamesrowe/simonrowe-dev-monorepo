@@ -23,6 +23,16 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
+import com.simonrowe.factory.logwatch.config.LogWatchTaskQueues;
+import com.simonrowe.factory.logwatch.domain.LogWatchRequest;
+import com.simonrowe.factory.logwatch.domain.Trigger;
+import com.simonrowe.factory.logwatch.workflow.LogWatchWorkflow;
+import io.temporal.api.common.v1.WorkflowExecution;
+import io.temporal.api.enums.v1.WorkflowIdReusePolicy;
+import io.temporal.client.WorkflowClient;
+import io.temporal.client.WorkflowOptions;
+import java.time.Duration;
+import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -62,12 +72,22 @@ public class DeployActivitiesImpl implements DeployActivities {
   /** Bytes of any single evidence file. A crash-looping container must not fill the volume. */
   private static final int MAX_EVIDENCE_BYTES = 256 * 1024;
 
+  /**
+   * How long after a deploy the scan starts.
+   *
+   * <p>Not immediately: a stack that has just been recreated is still settling, and a
+   * scan during that window returns boot-noise warnings rather than whatever the change
+   * actually broke.
+   */
+  private static final Duration POST_DEPLOY_SCAN_DELAY = Duration.ofMinutes(5);
+
   private final DeployProperties properties;
   private final PhaseRunner phaseRunner;
   private final DeployRunRepository runs;
   private final TriageEngine triageEngine;
   private final DeployReportGateway reportGateway;
   private final DeployReportRenderer renderer;
+  private final WorkflowClient workflowClient;
 
   public DeployActivitiesImpl(
       final DeployProperties properties,
@@ -75,13 +95,52 @@ public class DeployActivitiesImpl implements DeployActivities {
       final DeployRunRepository runs,
       final TriageEngine triageEngine,
       final DeployReportGateway reportGateway,
-      final DeployReportRenderer renderer) {
+      final DeployReportRenderer renderer,
+      final WorkflowClient workflowClient) {
     this.properties = properties;
     this.phaseRunner = phaseRunner;
     this.runs = runs;
     this.triageEngine = triageEngine;
     this.reportGateway = reportGateway;
     this.renderer = renderer;
+    this.workflowClient = workflowClient;
+  }
+
+  @Override
+  public String scheduleLogWatchScan(
+      final Instant windowStart, final String deployRunId,
+      final boolean linearFilingEnabled) {
+    LogWatchWorkflow workflow =
+        workflowClient.newWorkflowStub(
+            LogWatchWorkflow.class,
+            WorkflowOptions.newBuilder()
+                .setTaskQueue(LogWatchTaskQueues.LOG_WATCH)
+                // Keyed on the deploy run, so an activity retry that already succeeded is
+                // rejected rather than scheduling a second scan for the same deploy.
+                .setWorkflowId("logwatch-postdeploy-" + deployRunId)
+                .setWorkflowIdReusePolicy(
+                    WorkflowIdReusePolicy.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE)
+                // Temporal holds the run for this long before starting it, so nothing here waits
+                // and the deploy workflow closes immediately. A timer inside the deploy would
+                // keep it open for five minutes past completion and make a finished deploy look
+                // unfinished on the console.
+                .setStartDelay(POST_DEPLOY_SCAN_DELAY)
+                .build());
+    WorkflowExecution execution =
+        WorkflowClient.start(
+            workflow::run,
+            new LogWatchRequest(
+                windowStart,
+                // Null end: the scan resolves it from its own clock when it actually runs, so
+                // the window reaches the moment of scanning rather than stopping five minutes
+                // earlier at the moment it was scheduled.
+                null,
+                Trigger.DEPLOY,
+                false,
+                linearFilingEnabled));
+    LOG.info("Scheduled post-deploy log scan {} for deploy run {}",
+        execution.getWorkflowId(), deployRunId);
+    return execution.getWorkflowId();
   }
 
   @Override

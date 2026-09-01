@@ -20,7 +20,7 @@ class DeployTriageEngineTest {
   private final DeployProperties properties =
       new DeployProperties(
           true, false, null, null, null, null, null, null, null, null, null, null, null, null,
-          null, null, null);
+          null, null, null, false);
   private final DeployTriageEngine engine = new DeployTriageEngine(properties, runner);
 
   // ---------------------------------------------------------------------------

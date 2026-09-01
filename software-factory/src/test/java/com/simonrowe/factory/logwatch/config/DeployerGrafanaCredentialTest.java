@@ -54,6 +54,23 @@ class DeployerGrafanaCredentialTest {
   }
 
   @Test
+  void theDeployerCarriesTheTriggerFlagButNotTheModuleFlag() throws IOException {
+    List<String> deployerBlock =
+        ComposeFile.serviceBlock(ComposeFile.lines(), DEPLOYER_SERVICE);
+
+    // Two flags, not one, and this is what the split is for: the deployer may *schedule* a scan
+    // (which needs only a Temporal client) but must never *run* one (which needs the Grafana
+    // credential). A single flag would have registered a Loki-querying activity poller inside the
+    // container holding the Docker socket.
+    assertThat(ComposeFile.declaredKeysContaining(deployerBlock, "LOG_WATCH_TRIGGER"))
+        .as("the deployer schedules the post-deploy scan, so it holds the trigger flag")
+        .isNotEmpty();
+    assertThat(ComposeFile.declaredKeysContaining(deployerBlock, "FACTORY_LOGWATCH_ENABLED"))
+        .as("but never the module flag, which is what registers the activity that reads Loki")
+        .isEmpty();
+  }
+
+  @Test
   void theScanActuallyFoundTheDeployerService() throws IOException {
     // Without this, a wrong path or a renamed service would make the assertions above pass
     // vacuously - by finding and reading nothing - while looking green.

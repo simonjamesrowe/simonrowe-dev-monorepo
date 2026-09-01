@@ -88,7 +88,8 @@ public class DeployWorkflowService {
             properties.rollbackEnabled(),
             properties.services(),
             false,
-            linearProperties.enabled());
+            linearProperties.enabled(),
+            properties.logWatchTriggerEnabled());
 
     BatchRequest batch = workflowClient.newSignalWithStartRequest();
     batch.add(workflow::run, request);

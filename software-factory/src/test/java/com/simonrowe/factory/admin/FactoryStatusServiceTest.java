@@ -286,7 +286,7 @@ class FactoryStatusServiceTest {
         new CveFixProperties(true, null, null, null, null, null, null, null, null, null, null),
         new DeployProperties(
             false, false, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null),
+            null, null, null, false),
         new LinearProperties(true, LINEAR_KEY, null, TEAM_KEY, null, false, null, null),
         new PlatformBackupProperties(false, null, null, null),
         new LogWatchProperties(false, 0, 0, null, 0, 0, null, null));

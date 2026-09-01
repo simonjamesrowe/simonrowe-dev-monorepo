@@ -30,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
+import io.temporal.client.WorkflowClient;
 
 class DeployActivitiesImplTest {
 
@@ -50,10 +51,11 @@ class DeployActivitiesImplTest {
     properties =
         new DeployProperties(
             true, false, null, null, null, null, null, null, null, null, null, null, null, null,
-            stateDir.toString(), Duration.ofMinutes(30), null);
+            stateDir.toString(), Duration.ofMinutes(30), null, false);
     activities =
         new DeployActivitiesImpl(
-            properties, phaseRunner, runs, triageEngine, reportGateway, renderer);
+            properties, phaseRunner, runs, triageEngine, reportGateway, renderer,
+            mock(WorkflowClient.class));
   }
 
   private static PhaseRunner.PhaseExecution execution(
