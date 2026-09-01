@@ -24,6 +24,14 @@ public class FactoryAdminClient {
   private static final String TOKEN_HEADER = "X-Factory-Token";
   private static final String STATUS_PATH = "/api/factory/status";
 
+  /**
+   * The request field three modules use to ask for a rehearsal rather than the real thing.
+   *
+   * <p>A constant because the factory reads this exact name on all three endpoints: a typo in one
+   * of them would not fail, it would silently run for real.
+   */
+  private static final String DRY_RUN = "dryRun";
+
   private final RestClient factory;
   private final RestClient deployer;
   private final String token;
@@ -112,7 +120,7 @@ public class FactoryAdminClient {
                 "owner", owner,
                 "repository", repository,
                 "pullNumber", pullNumber,
-                "dryRun", false),
+                DRY_RUN, false),
             FeedbackAcceptedWire.class);
     return new FactoryRunAccepted(
         wire.workflowId(), null, "Feedback run accepted for pull request " + pullNumber);
@@ -132,13 +140,13 @@ public class FactoryAdminClient {
 
   public FactoryRunAccepted startPlatformBackup(final boolean dryRun) {
     RunAcceptedWire wire =
-        post("/api/platform-backups", Map.of("dryRun", dryRun), RunAcceptedWire.class);
+        post("/api/platform-backups", Map.of(DRY_RUN, dryRun), RunAcceptedWire.class);
     return new FactoryRunAccepted(wire.workflowId(), wire.runId(), wire.detail());
   }
 
   public FactoryRunAccepted startLogWatchScan(final boolean dryRun) {
     RunAcceptedWire wire =
-        post("/api/logwatch/scans", Map.of("dryRun", dryRun), RunAcceptedWire.class);
+        post("/api/logwatch/scans", Map.of(DRY_RUN, dryRun), RunAcceptedWire.class);
     return new FactoryRunAccepted(wire.workflowId(), wire.runId(), wire.detail());
   }
 
