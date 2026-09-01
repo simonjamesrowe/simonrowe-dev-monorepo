@@ -57,13 +57,20 @@ class DeployWorkflowTest {
   private static DeployRequest request() {
     return new DeployRequest(
         SHA, DeployRequest.TRIGGER_WEBHOOK, 999L, true, true,
-        List.of("backend", "frontend", "software-factory"), false, false);
+        List.of("backend", "frontend", "software-factory"), false, false, false);
   }
 
   private static DeployRequest request(final boolean syncConfig, final boolean rollbackEnabled) {
     return new DeployRequest(
         SHA, DeployRequest.TRIGGER_WEBHOOK, 999L, syncConfig, rollbackEnabled,
-        List.of("backend"), false, false);
+        List.of("backend"), false, false, false);
+  }
+
+  /** The default request with the post-deploy log scan switched on. */
+  private static DeployRequest requestSchedulingLogScan() {
+    return new DeployRequest(
+        SHA, DeployRequest.TRIGGER_WEBHOOK, 999L, true, true,
+        List.of("backend", "frontend", "software-factory"), false, false, true);
   }
 
   /** The same request with the Linear issue sink switched on. */
@@ -75,7 +82,7 @@ class DeployWorkflowTest {
       final boolean syncConfig, final boolean rollbackEnabled) {
     return new DeployRequest(
         SHA, DeployRequest.TRIGGER_WEBHOOK, 999L, syncConfig, rollbackEnabled,
-        List.of("backend", "frontend", "software-factory"), false, true);
+        List.of("backend", "frontend", "software-factory"), false, true, false);
   }
 
   // ---------------------------------------------------------------------------
@@ -680,6 +687,81 @@ class DeployWorkflowTest {
    * is the stronger case, because then "nothing was filed" cannot be explained away by nothing
    * polling the queue.
    */
+  // ---------------------------------------------------------------------------
+  // Post-deploy log scan (FR-011, FR-012)
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void schedulesLogScanAfterSuccessfulDeploy() {
+    DeployActivities activities = activities();
+
+    Outcome outcome = execute(activities, requestSchedulingLogScan());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.DEPLOYED);
+    // The Linear flag is passed through from the deploy request, not read on the deployer, which
+    // holds no FACTORY_LINEAR_ENABLED - reading it there would resolve false and every
+    // post-deploy scan would run and file nothing, silently.
+    verify(activities).scheduleLogWatchScan(any(), any(), eq(false));
+  }
+
+  @Test
+  void schedulesLogScanEvenWhenOnlyImagesWereDeployed() {
+    DeployActivities activities = activities();
+    when(activities.syncConfig(any(), anyBoolean()))
+        .thenReturn(
+            new SyncOutcome(
+                SyncDecision.HELD_BACK, null, SHA, List.of("trivy-server"),
+                List.of("trivy-server"), null,
+                "docker compose -f docker-compose.prod.yml up -d trivy-server",
+                "a configuration change affects a service outside the recreate allowlist"));
+
+    Outcome outcome = execute(activities, requestSchedulingLogScan());
+
+    // A held-back config sync still put new images into production, so it is still a change
+    // worth watching.
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.DEPLOYED_IMAGES_ONLY);
+    verify(activities).scheduleLogWatchScan(any(), any(), anyBoolean());
+  }
+
+  @Test
+  void schedulesNoLogScanWhenDeployRolledBack() {
+    DeployActivities activities = activities();
+    failPhaseOnce(activities, DeployPhase.VERIFY, 1);
+
+    Outcome outcome = execute(activities, requestSchedulingLogScan());
+
+    // The window would describe the rollback rather than the change.
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.ROLLED_BACK);
+    verify(activities, never()).scheduleLogWatchScan(any(), any(), anyBoolean());
+  }
+
+  @Test
+  void schedulesNoLogScanWhenTheTriggerIsOff() {
+    DeployActivities activities = activities();
+
+    execute(activities, request());
+
+    // Not merely tidy: with log watch disabled nothing polls its queue, so an unguarded schedule
+    // would stall the deploy until schedule-to-close rather than failing in milliseconds.
+    verify(activities, never()).scheduleLogWatchScan(any(), any(), anyBoolean());
+  }
+
+  @Test
+  void failedScanScheduleNeverFailsTheDeploy() {
+    DeployActivities activities = activities();
+    when(activities.scheduleLogWatchScan(any(), any(), anyBoolean()))
+        .thenThrow(new IllegalStateException("logwatch queue is empty"));
+
+    Outcome outcome = execute(activities, requestSchedulingLogScan());
+
+    // FR-012 is absolute. A log scan has no business turning a deploy that already verified green
+    // into a failed one; losing the scan is a missed observation, failing the deploy is an
+    // outage.
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.DEPLOYED);
+    assertThat(outcome.result().detail()).contains("could not be scheduled");
+    assertThat(lastRecordedRun(activities).status()).isEqualTo(DeployStatus.DEPLOYED);
+  }
+
   private TestWorkflowEnvironment environment(
       final DeployActivities activities, final LinearActivities linear) {
     TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance();

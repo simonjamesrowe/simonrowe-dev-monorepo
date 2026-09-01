@@ -218,6 +218,6 @@ class ModulePrerequisitesTest {
       final boolean enabled, final boolean triggerEnabled, final String script) {
     return new DeployProperties(
         enabled, triggerEnabled, null, null, null, null, null, script, null, null, null, null,
-        null, null, null, null, null);
+        null, null, null, null, null, false);
   }
 }

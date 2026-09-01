@@ -184,6 +184,11 @@ factory:
     # internet traffic. `trigger-enabled` gates the workflow_run webhook branch and the client
     # stub; it is true only on `software-factory`.
     enabled: ${FACTORY_DEPLOY_ENABLED:false}
+    # Whether a successful deploy schedules a log scan five minutes later. Deployer-side, and
+    # deliberately separate from factory.logwatch.enabled: a single flag would have registered a
+    # Loki-querying activity poller inside the container holding the Docker socket. Same shape,
+    # and same reason, as factory.deploy.enabled against trigger-enabled.
+    log-watch-trigger-enabled: ${FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED:false}
     trigger-enabled: ${FACTORY_DEPLOY_TRIGGER_ENABLED:false}
     # The repository allowlist, and it is a set of exactly one. There is no shared allowlist to
     # reuse: factory.feedback.repos is feedback-only and factory.cvefix pins owner/repository as

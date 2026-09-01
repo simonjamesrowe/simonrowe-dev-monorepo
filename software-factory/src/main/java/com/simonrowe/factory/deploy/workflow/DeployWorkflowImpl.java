@@ -543,12 +543,62 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       }
     }
 
+    String scanDetail = scheduleLogWatchScan(request, status, detail);
+
     DeployRunRecord finalRecord =
         record(
             recordId, request, sha, startedAt, sync, status, rollbackTaken, rollbackStatus,
-            maintenancePageLeftUp, null, commentUrl, detail, false);
+            maintenancePageLeftUp, null, commentUrl, scanDetail, false);
     fast.recordRun(finalRecord);
-    return new DeployResult(status, sha, sync.decision(), null, detail);
+    return new DeployResult(status, sha, sync.decision(), null, scanDetail);
+  }
+
+  /**
+   * Schedules a log scan five minutes after a successful deploy, and can never affect the deploy.
+   *
+   * <p>FR-012 is absolute: this must not fail, delay or roll back a deploy that has already
+   * verified green. Three things enforce it, and all three are needed.
+   *
+   * <ol>
+   *   <li>The flag is checked before the activity is scheduled at all. With log watch disabled
+   *       nothing polls its queue, so an unguarded schedule would stall the deploy until
+   *       schedule-to-close rather than failing in milliseconds — the same reasoning as
+   *       {@code linearFilingEnabled}.
+   *   <li>It runs on the {@code fast} stub, so it is bounded by a short timeout and cannot hang.
+   *   <li>Every failure is caught and recorded in the deploy's own detail. A log scan has no
+   *       business turning a successful deploy into a failed one.
+   * </ol>
+   *
+   * <p>Only the success statuses schedule anything. {@code DEPLOYED_IMAGES_ONLY} counts: a
+   * held-back config sync still put new images into production, so it is still a change worth
+   * watching. A deploy that failed and rolled back schedules nothing — the window would describe
+   * the rollback rather than the change.
+   *
+   * @return the detail to record, with a note appended when scheduling was attempted
+   */
+  private String scheduleLogWatchScan(
+      final DeployRequest request, final DeployStatus status, final String detail) {
+    boolean succeeded =
+        status == DeployStatus.DEPLOYED || status == DeployStatus.DEPLOYED_IMAGES_ONLY;
+    if (!succeeded || !request.logWatchTriggerEnabled()) {
+      return detail;
+    }
+    try {
+      String scanId =
+          fast.scheduleLogWatchScan(
+              Instant.ofEpochMilli(Workflow.currentTimeMillis()),
+              Workflow.getInfo().getRunId(),
+              request.linearFilingEnabled());
+      return detail + "; log scan " + scanId + " scheduled in 5 minutes";
+    } catch (RuntimeException exception) {
+      // Recorded, never propagated. Losing the scan is a missed observation; failing the deploy
+      // over it would be a self-inflicted outage.
+      String cause =
+          exception.getMessage() == null || exception.getMessage().isBlank()
+              ? exception.getClass().getSimpleName()
+              : exception.getMessage();
+      return detail + "; post-deploy log scan could not be scheduled: " + cause;
+    }
   }
 
   private DeployRunRecord record(

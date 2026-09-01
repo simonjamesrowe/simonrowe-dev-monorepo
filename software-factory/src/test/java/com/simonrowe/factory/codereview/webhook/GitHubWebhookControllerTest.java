@@ -110,7 +110,7 @@ class GitHubWebhookControllerTest {
   private static DeployProperties deployProperties(final boolean triggerEnabled) {
     return new DeployProperties(
         false, triggerEnabled, "example", "project", "Publish", "main",
-        null, null, null, null, null, null, null, null, null, null, null);
+        null, null, null, null, null, null, null, null, null, null, null, false);
   }
 
   private static FeedbackProperties feedbackProperties(final boolean enabled) {

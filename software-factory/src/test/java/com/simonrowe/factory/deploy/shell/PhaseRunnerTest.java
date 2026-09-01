@@ -42,7 +42,7 @@ class PhaseRunnerTest {
           "https://github.com/simonjamesrowe/simonrowe-dev-monorepo.git",
           List.of("backend", "frontend"),
           List.of("backend", "nginx"),
-          null, null, "/var/run/deploy-state", Duration.ofMinutes(30), null);
+          null, null, "/var/run/deploy-state", Duration.ofMinutes(30), null, false);
 
   private final PhaseRunner runner = new PhaseRunner(processRunner, properties);
 

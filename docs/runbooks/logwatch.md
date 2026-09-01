@@ -14,6 +14,8 @@ Related: [log-shipping.md](log-shipping.md) (the pipeline this depends on),
 | Task queue | `logwatch` |
 | Flag | `FACTORY_LOGWATCH_ENABLED`, **off by default** |
 | Schedule | `logwatch-daily`, every 24h, created **active** |
+| Post-deploy | Five minutes after a successful deploy, behind
+  `FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED` on **`software-factory`** |
 | Manual | **Log watch panel on `/admin/software-factory`**, or `POST /api/logwatch/scans` (token-protected, unrouted by nginx) |
 | Files into | Linear, via the existing `linear` sink, producer key `logwatch` |
 | Runs in | `software-factory` only — never `deployer` |
@@ -165,10 +167,62 @@ and an expected outcome rather than a failure of the design.
 - **Application-level signals the backend already holds** — Langfuse guardrail scores, failed
   narrations, stuck article summaries.
 
-## Not yet built
+## The post-deploy scan
 
-- **The post-deploy trigger.** Nothing yet schedules a scan five minutes after a successful
-  deploy (FR-011). A follow-up; it changes nothing inside the module.
+A successful deploy schedules a scan to start **five minutes later**, over the window from deploy
+completion to whenever it actually runs. Off by default, behind
+`FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED`.
+
+**Two flags, and both live on `software-factory` — for different reasons.**
+
+- `factory.logwatch.enabled` registers the activity that reads Loki. It must never be on
+  `deployer`, which holds the Docker socket.
+- `factory.deploy.log-watch-trigger-enabled` gates whether a deploy schedules a scan. It is read
+  by `DeployWorkflowService` when it **builds the DeployRequest**, and that runs on
+  `software-factory` because that is the container terminating the signed webhook.
+
+**Putting the trigger flag on `deployer` is the obvious mistake and it makes the feature
+permanently inert** — the flag the code actually reads stays at its `false` default, so no scan is
+ever scheduled, with no error anywhere. It is the same mistake `FACTORY_DEPLOY_TRIGGER_ENABLED`
+made in 036, which is why that variable is documented in the compose file as deliberately absent
+from `deployer`. The deployer needs no copy: the workflow reads the value off the request.
+`DeployerGrafanaCredentialTest` asserts the deployer carries **neither** flag and that
+`software-factory` carries the trigger one.
+
+**It cannot fail, delay or roll back a deploy** (FR-012). Three mechanisms, all needed:
+
+1. The flag is checked before the activity is scheduled at all — with log watch off nothing polls
+   its queue, so an unguarded schedule would stall the deploy until schedule-to-close rather than
+   failing in milliseconds.
+2. It runs on the workflow's `fast` activity stub, so it is bounded by a short timeout.
+3. Every failure is caught and appended to the deploy's own detail, never rethrown.
+
+**Only success schedules anything.** `DEPLOYED_IMAGES_ONLY` counts — a held-back config sync still
+put new images into production. A deploy that failed and rolled back schedules nothing, because
+the window would describe the rollback rather than the change.
+
+Five minutes rather than immediately because a freshly recreated stack is still settling, and
+scanning during that returns boot-noise warnings rather than whatever the change actually broke.
+The scan's workflow id is `logwatch-postdeploy-<deploy run id>` under `REJECT_DUPLICATE`, so an
+activity retry that already succeeded cannot schedule a second scan for the same deploy.
+
+**The Linear flag is passed through from the deploy request**, not read on the deployer — which
+holds no `FACTORY_LINEAR_ENABLED` by design. Reading it locally would resolve to `false` and every
+post-deploy scan would run and file nothing, silently. The deploy request's value was resolved on
+`software-factory`, which does know.
+
+### Turning it on
+
+Do this **last**, after the module itself has been dry-run and tuned:
+
+```bash
+# in the host .env, then recreate software-factory - the container that reads it
+FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED=true
+docker compose -f docker-compose.prod.yml up -d --no-deps software-factory
+```
+
+It is the trigger most likely to surprise you, because it runs over a window that always contains
+a full stack boot.
 - **Signature tuning against real fixtures.** The test fixtures are real production lines captured
   with `docker logs` on the Pi, because Loki held nothing while this was written. They should be
   replaced and extended from Loki once it has been ingesting for a while.

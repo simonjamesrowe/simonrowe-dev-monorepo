@@ -43,7 +43,10 @@ public record DeployProperties(
     Boolean syncConfig,
     String stateDir,
     Duration phaseTimeout,
-    Agent agent) {
+    Agent agent,
+    // Last in the record on purpose: appended rather than inserted, so adding it did
+    // not force an edit into the middle of every positional call site in the tests.
+    boolean logWatchTriggerEnabled) {
 
   /**
    * The services the automation may recreate.

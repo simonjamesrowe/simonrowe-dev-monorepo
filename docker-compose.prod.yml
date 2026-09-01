@@ -298,6 +298,13 @@ services:
       # `env_file`, so setting it in .env alone is silently inert and the whole feature
       # does nothing with no error anywhere.
       FACTORY_DEPLOY_TRIGGER_ENABLED: ${FACTORY_DEPLOY_TRIGGER_ENABLED:-false}
+      # Whether a successful deploy schedules a log scan five minutes later. It belongs HERE, next
+      # to the trigger flag above and for the same reason: DeployWorkflowService runs in this
+      # container - it is the one that terminates the signed webhook - and reads this flag to build
+      # the DeployRequest. Setting it on `deployer` instead leaves it at the application.yml
+      # `false` default here, so no scan is ever scheduled however the deployer is configured. The
+      # deployer needs no copy: the workflow reads the value off the request.
+      FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED: ${FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED:-false}
       # Needs VIEW_PORTFOLIO *and* VIEW_VULNERABILITY. The existing `CI Upload` key is not
       # sufficient. Read by a Java activity, never by the agent: ClaudeCliRunner strips it
       # from the child process because it sits outside SAFE_SECRET_ENVIRONMENT, which is
