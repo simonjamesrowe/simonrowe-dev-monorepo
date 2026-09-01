@@ -1,7 +1,8 @@
 package com.simonrowe.factory.logwatch.loki;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.logwatch.config.LogWatchProperties;
 import com.simonrowe.factory.logwatch.domain.LogLine;
 import com.simonrowe.factory.logwatch.domain.Severity;
@@ -156,7 +157,10 @@ public class LokiClient {
                 + ": " + response.body());
       }
       return objectMapper.readTree(response.body());
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
+      // IOException is the HTTP send; JacksonException is readTree above. Jackson 3 throws
+      // unchecked, so without naming it here a malformed Loki body would escape as a raw
+      // parse error rather than the LokiException this module reports "I cannot see" with.
       throw new LokiException("Loki request failed: " + uri.getPath(), exception);
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();

@@ -89,7 +89,7 @@ tasks.jacocoTestReport {
 }
 
 dependencies {
-    implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.webmvc)
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.data.mongodb)
@@ -97,6 +97,10 @@ dependencies {
     implementation(libs.bouncycastle.pkix)
 
     testImplementation(libs.spring.boot.starter.test)
+    // Boot 4 no longer implicitly auto-configures slice-test infrastructure; the
+    // @WebMvcTest / @DataMongoTest annotations moved into these per-technology starters.
+    testImplementation(libs.spring.boot.starter.webmvc.test)
+    testImplementation(libs.spring.boot.starter.data.mongodb.test)
     testImplementation(libs.temporal.testing)
 
     testImplementation(platform(libs.testcontainers.bom))

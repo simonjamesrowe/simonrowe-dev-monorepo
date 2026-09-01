@@ -15,6 +15,6 @@ public final class SharedMongoContainer {
   }
 
   public static void configureProperties(final DynamicPropertyRegistry registry) {
-    registry.add("spring.data.mongodb.uri", MONGODB::getReplicaSetUrl);
+    registry.add("spring.mongodb.uri", MONGODB::getReplicaSetUrl);
   }
 }

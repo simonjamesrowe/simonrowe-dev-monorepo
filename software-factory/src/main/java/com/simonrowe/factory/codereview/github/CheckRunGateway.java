@@ -1,8 +1,9 @@
 package com.simonrowe.factory.codereview.github;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.CheckRunConclusion;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
@@ -259,7 +260,7 @@ public class CheckRunGateway {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub check run request interrupted", exception);
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("GitHub check run request failed", exception);
     }
   }

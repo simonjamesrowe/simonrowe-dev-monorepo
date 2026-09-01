@@ -3,8 +3,9 @@ package com.simonrowe.factory.codereview.github;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
@@ -219,7 +220,7 @@ class CheckRunGatewayTest {
   private JsonNode parse(final String json) {
     try {
       return objectMapper.readTree(json);
-    } catch (IOException exception) {
+    } catch (JacksonException exception) {
       throw new IllegalStateException(exception);
     }
   }

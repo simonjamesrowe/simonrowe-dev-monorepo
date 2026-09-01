@@ -15,7 +15,6 @@ version = "0.0.1-SNAPSHOT"
 
 repositories {
     mavenCentral()
-    maven { url = uri("https://repo.embabel.com/artifactory/embabel-releases") }
 }
 
 dependencyManagement {
@@ -189,6 +188,15 @@ tasks.test {
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
     runImage.set("paketobuildpacks/run-noble-base:latest")
+    // BP_JVM_VERSION is pinned, not left to the buildpack's default, because the
+    // consequence of getting it wrong is invisible until production. The JVM
+    // buildpack picks a JRE from its own default when nothing asks for one, and a
+    // default that lags the toolchain gives an image whose JRE cannot load our
+    // Java 25 bytecode — an UnsupportedClassVersionError at container start, long
+    // after CI has gone green and the image has been pushed.
+    //
+    // Keep this in step with the toolchain's languageVersion in the root build file.
+    environment.put("BP_JVM_VERSION", "25")
 }
 
 dependencies {
@@ -204,12 +212,12 @@ dependencies {
         implementation("org.codehaus.plexus:plexus-utils:3.6.1")
     }
 
-    implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.webmvc)
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.data.mongodb)
     implementation(libs.spring.boot.starter.data.elasticsearch)
-    implementation(libs.spring.kafka)
+    implementation(libs.spring.boot.starter.kafka)
     implementation(libs.micrometer.registry.prometheus)
     implementation(libs.opentelemetry.spring.boot.starter)
     // Bridges the Micrometer Observation API (used by Spring AI's ChatClient/ChatModel to
@@ -217,17 +225,26 @@ dependencies {
     // library instrumentation (HTTP, Mongo) produced spans and the chat generations never
     // reached Langfuse. See docs/runbooks/langfuse-observability.md.
     implementation(libs.micrometer.tracing.bridge.otel)
+    // Boot 4 split the tracing auto-configuration out of the monolithic autoconfigure jar.
+    // micrometer-tracing-bridge-otel above still supplies OtelTracer, but nothing creates the
+    // Tracer bean from it any more — that is OpenTelemetryTracingAutoConfiguration, which
+    // lives here, along with the OtlpTracingAutoConfiguration that reads
+    // management.opentelemetry.tracing.export.otlp.*. Without this module the context has no
+    // io.micrometer.tracing.Tracer at all and the Langfuse trace pipeline goes silent.
+    //
+    // The narrow module rather than spring-boot-starter-opentelemetry, which would also pull
+    // in micrometer-registry-otlp and put a second metrics registry beside the Prometheus one.
+    implementation(libs.spring.boot.micrometer.tracing.opentelemetry)
     implementation(libs.openpdf)
     implementation(libs.commonmark)
     implementation(libs.spring.boot.starter.mail)
     implementation(libs.spring.ai.starter.model.openai)
-    implementation(libs.spring.ai.starter.model.openai.sdk)
     implementation(libs.spring.ai.starter.mcp.server.webmvc)
     implementation(libs.spring.ai.starter.vector.store.elasticsearch)
-    implementation(libs.spring.ai.advisors.vector.store)
+    implementation(libs.spring.ai.vector.store.advisor)
     implementation(libs.spring.boot.starter.websocket)
     implementation(libs.bucket4j.core)
-    implementation(libs.spring.boot.starter.oauth2.resource.server)
+    implementation(libs.spring.boot.starter.security.oauth2.resource.server)
     implementation(libs.thumbnailator)
     implementation(libs.mongock.springboot.v3)
     implementation(libs.mongock.mongodb.springdata.v4)
@@ -240,18 +257,18 @@ dependencies {
     // 1.23.1 clears GHSA-pmhh-3w7g-xqp8.
     implementation("org.jsoup:jsoup:1.23.1")
     implementation("com.rometools:rome:2.1.0")
-    // Required for the <if>/<then>/<else> conditional in logback-spring.xml that picks
-    // between plain-text and structured (JSON) console output. Version managed by the
-    // Spring Boot BOM.
-    runtimeOnly("org.codehaus.janino:janino")
 
     developmentOnly(libs.spring.boot.devtools)
 
     testImplementation(libs.spring.boot.starter.test)
+    // Boot 4 no longer implicitly auto-configures slice-test infrastructure; the
+    // @WebMvcTest / @DataMongoTest annotations moved into these per-technology starters.
+    testImplementation(libs.spring.boot.starter.webmvc.test)
+    testImplementation(libs.spring.boot.starter.data.mongodb.test)
     // TestObservationRegistry, for asserting on Micrometer observations without a tracer.
     // Version managed by the Spring Boot BOM.
     testImplementation("io.micrometer:micrometer-observation-test")
-    testImplementation(libs.spring.security.test)
+    testImplementation(libs.spring.boot.starter.security.test)
     testImplementation(libs.spring.kafka.test)
     testImplementation(platform(libs.testcontainers.bom))
     testImplementation(libs.testcontainers.junit.jupiter)

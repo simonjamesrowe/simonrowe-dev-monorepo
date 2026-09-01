@@ -3,7 +3,7 @@ package com.simonrowe.factory.logwatch.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.admin.FactoryTokenAuthenticator;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.linear.config.LinearProperties;

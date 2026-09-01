@@ -3,7 +3,7 @@ package com.simonrowe.factory.cvefix.dependencytrack;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.cvefix.config.CveFixProperties;
 import com.simonrowe.factory.cvefix.domain.ComponentFindings;
 import com.simonrowe.factory.cvefix.domain.Finding;
@@ -115,6 +115,23 @@ class DependencyTrackClientTest {
     assertThatThrownBy(() -> client().findings())
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("simonrowe-dev/backend");
+  }
+
+  @Test
+  void wrapsAnUnparseableBodyRatherThanLettingTheParseErrorEscape() {
+    // Dependency-Track answered 200 with something that is not JSON — an HTML error page from
+    // a proxy in front of it is the realistic case. The caller's contract is an
+    // IllegalStateException naming the request that failed.
+    //
+    // This became a live risk in the Jackson 3 migration: readTree used to throw a CHECKED
+    // IOException, which the catch here already covered alongside httpClient.send(). Jackson 3
+    // throws the UNCHECKED JacksonException, so unless that catch is widened the parse error
+    // skips the wrapping entirely and surfaces as an unrelated crash.
+    responses.put("/api/v1/project", "<html>502 Bad Gateway</html>");
+
+    assertThatThrownBy(() -> client().findings())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("/api/v1/project");
   }
 
   @Test

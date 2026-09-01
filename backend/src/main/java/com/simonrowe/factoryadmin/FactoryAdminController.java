@@ -73,7 +73,22 @@ public class FactoryAdminController {
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
   }
 
-  public record ReviewRequest(@Min(1) int pullNumber, boolean publish) {
+  /**
+   * A review request. {@code publish} is boxed, and normalised here rather than left to
+   * Jackson: an absent flag must mean dry run — review the pull request and post nothing —
+   * and that is too important to depend on deserialization configuration.
+   *
+   * <p>It used to be a primitive, which Jackson 2 bound to {@code false} when the field was
+   * omitted. Jackson 3 enables {@code FAIL_ON_NULL_FOR_PRIMITIVES} by default, so the same
+   * body started returning 400 instead. {@code spring.jackson.deserialization
+   * .fail-on-null-for-primitives} restores the old behaviour for the application, but not for
+   * a standalone MockMvc test — and more to the point, "we do not comment publicly on someone's
+   * pull request unless asked to" should be readable in this file.
+   */
+  public record ReviewRequest(@Min(1) int pullNumber, Boolean publish) {
+    public ReviewRequest {
+      publish = publish != null && publish;
+    }
   }
 
   public record FeedbackRequest(@Min(1) int pullNumber) {

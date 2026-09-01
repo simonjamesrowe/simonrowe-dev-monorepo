@@ -8,7 +8,7 @@ import java.util.EnumSet;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.data.mongo.DataMongoTest;
+import org.springframework.boot.data.mongodb.test.autoconfigure.DataMongoTest;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -26,7 +26,7 @@ class CveFixRepositoriesTest {
   @DynamicPropertySource
   static void mongoUri(final DynamicPropertyRegistry registry) {
     registry.add(
-        "spring.data.mongodb.uri",
+        "spring.mongodb.uri",
         () -> MONGO.getConnectionString() + "/software_factory_test");
   }
 

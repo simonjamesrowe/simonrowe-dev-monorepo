@@ -5,7 +5,7 @@ import java.time.Duration;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
-import org.springframework.boot.http.client.ClientHttpRequestFactorySettings;
+import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -29,8 +29,8 @@ public class SearxngClient {
       @Value("${web-search.searxng.max-results:5}") final int maxResults) {
     this.baseUrl = baseUrl == null ? "" : baseUrl.trim();
     this.maxResults = maxResults;
-    final ClientHttpRequestFactorySettings settings =
-        ClientHttpRequestFactorySettings.defaults()
+    final HttpClientSettings settings =
+        HttpClientSettings.defaults()
             .withConnectTimeout(TIMEOUT)
             .withReadTimeout(TIMEOUT);
     this.restClient =

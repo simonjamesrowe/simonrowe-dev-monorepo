@@ -1,8 +1,9 @@
 package com.simonrowe.factory.deploy.github;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
 import com.simonrowe.factory.deploy.config.DeployProperties;
@@ -116,7 +117,7 @@ public class DeployReportGateway {
       return response.body().isBlank()
           ? objectMapper.createObjectNode()
           : objectMapper.readTree(response.body());
-    } catch (IOException exception) {
+    } catch (JacksonException exception) {
       throw new IllegalStateException("GitHub response was not valid JSON", exception);
     }
   }
@@ -155,7 +156,7 @@ public class DeployReportGateway {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub request interrupted", exception);
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("GitHub request failed", exception);
     }
   }

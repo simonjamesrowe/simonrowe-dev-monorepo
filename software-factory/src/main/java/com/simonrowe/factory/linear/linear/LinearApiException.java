@@ -1,5 +1,7 @@
 package com.simonrowe.factory.linear.linear;
 
+import java.io.Serial;
+
 /**
  * A Linear API fault, carrying whether retrying could help.
  *
@@ -8,6 +10,7 @@ package com.simonrowe.factory.linear.linear;
  */
 public class LinearApiException extends RuntimeException {
 
+  @Serial
   private static final long serialVersionUID = 1L;
 
   private final boolean retryable;

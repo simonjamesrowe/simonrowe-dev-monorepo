@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
@@ -40,7 +40,7 @@ class ApplicationTests {
 
   @Container
   static ElasticsearchContainer elasticsearch =
-      new ElasticsearchContainer("elasticsearch:8.17.0")
+      new ElasticsearchContainer("elasticsearch:9.4.5")
           .withEnv("xpack.security.enabled", "false");
 
   @DynamicPropertySource

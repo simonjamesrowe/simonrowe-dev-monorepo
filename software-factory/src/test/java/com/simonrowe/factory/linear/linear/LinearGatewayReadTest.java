@@ -3,7 +3,7 @@ package com.simonrowe.factory.linear.linear;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.linear.domain.IssueStateType;
 import com.simonrowe.factory.linear.domain.TrackedIssue;

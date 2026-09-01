@@ -211,6 +211,80 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- spring-boot-4-upgrade: Boot **3.5.16 → 4.1.1**, Java **21 → 25 LTS**, Gradle 9.7.1, Spring AI
+  **2.0.1**, Embabel **1.5.1**, Jackson 3, JUnit 6, Spring Kafka 4, Testcontainers 2,
+  Elasticsearch **9.4.5**, Mongock unchanged at 5.5.1. Backend 1160 tests and software-factory
+  582 both match the pre-upgrade baseline. Full detail in
+  `docs/runbooks/spring-boot-4-upgrade.md`; the parts that will bite again:
+  - **4.1.1, not the 4.0.x the OpenRewrite recipe pins.** `embabel-agent-platform-autoconfigure`
+    1.5.1 — the first Embabel line supporting Boot 4 at all — declares `spring-boot 4.1.0` and
+    `spring-ai 2.0.0`, and `spring-ai-starter-model-openai:2.0.1` declares Boot 4.1.1. There is
+    no Boot 4.0 configuration of this repo where both are on a supported release, and there is
+    no `UpgradeSpringBoot_4_1` recipe — you run the 4.0 one and hand-bump afterwards.
+  - **Mongock declares no Boot 4 support and works anyway.** Its POM upper-bounds Boot at
+    `[3.0.0-RC1, 4.0.0)` and there is no `mongock-springboot-v4`, but those bounds sit on
+    `provided`/`optional` deps that never reach our classpath. All 31 change units ran on Boot
+    4.1.1 in the real app. **A green suite proves nothing here** — `application-test.yml` sets
+    `mongock.enabled: false`, so the gate is running
+    `*V011SeedAndBackfillDanVegaBlogIntegrationTest` by name and *reading* the `APPLIED` lines.
+    A pass with no Mongock output means the override did not take.
+  - **Java 25, deliberately not 26.** 26 is a short-term release that goes end-of-support on
+    18 Sep 2026 and 27 is not an LTS either; the next LTS is 29, in Sep 2027. Three things move
+    with the toolchain and none fail at compile time: JaCoCo below 0.8.14 cannot read Java 25
+    bytecode (bare "Error while creating report"), `Dockerfile.software-factory` ran a 21-jre
+    that cannot load the bytecode at all, and `bootBuildImage` now pins `BP_JVM_VERSION` rather
+    than trusting the buildpack default — that one only fails at container start.
+  - **The recipe never touched `gradle/libs.versions.toml`.** Every version here is behind a
+    catalogue alias its `UpgradeDependencyVersion` / `MigrateToModularStarters` steps cannot see
+    through, so Boot itself, the modular starter renames, Testcontainers, Spring AI and Embabel
+    were all hand changes. Treat OpenRewrite as a **source-code** tool in this repo, not a
+    dependency one. Its YAML edits were also reverted (it re-indented comment blocks away from
+    what they document) and 13 cosmetic text-block conversions dropped, including two applied
+    change units and the guardrail classifier prompt. Use plugin **7.39.0**: 7.40/7.41 need
+    `rewrite-bom:8.91.0`, which Maven Central does not carry — the Code Genome migration
+    starting to bite.
+  - **Silently-ignored config is the theme of this upgrade.** Four separate instances, each
+    of which starts cleanly and does the wrong thing: `spring.data.mongodb.uri` moved to
+    `spring.mongodb.uri` (the old key is ignored and the driver falls back to
+    `localhost:27017` — `docker-compose.prod.yml` set the env-var form, so production would
+    have done exactly that); `spring.autoconfigure.exclude` entries naming classes deleted by
+    the Spring AI merge; the tracing keys, where `.endpoint` moves to
+    `management.opentelemetry.tracing.export.otlp` but `.export.enabled` moves to
+    `management.tracing.export.otlp` — genuinely two prefixes, not a mistake; and the logback
+    one below. **Verify property renames against the shipped jar's
+    `spring-configuration-metadata.json`, not a migration guide.**
+  - **Console logging died completely and no test could see it.** `logback-spring.xml` selected
+    its appender with an `<if condition="...">` attribute, which Logback 1.5.38 (Boot 4.1.1, up
+    from ~1.5.18) deprecated **and ignores** — no CONSOLE appender is created and the app logs
+    nothing at all. Deleting the file is not the fix either: with no logback config Boot honours
+    `logging.pattern.console` but **not** `logging.structured.format.console`, so prod loses its
+    JSON. Now pure property substitution, with the plain case coming from a `:-` default because
+    Logback rejects `<property value=""/>`. Janino is gone with the conditional. The Gradle
+    suite cannot cover any of this — `backend/src/test/resources/logback-test.xml` takes
+    precedence — so `scripts/test/test-backend-console-logging.sh` guards it instead.
+  - **Elasticsearch 8.17 → 9.4.5 is forced and operator-facing.** Boot 4.1.1 manages
+    `elasticsearch-java` 9.4.5 and a 9.x client refuses an 8.x server outright ("status: 400 ...
+    Expecting a response body, but none was sent"). Take the `content-embeddings` backup before
+    recreating that container: the search indices rebuild from Mongo, the vectors cost real
+    money. Keep the four pinned copies (both compose files, `evals.yml`, `ApplicationTests`) in
+    step; `ProdImageCatalogTest` asserts the compose tag.
+  - **Jackson 2 and 3 coexist and both are needed.** In Boot 4 `jackson-bom.version` means
+    Jackson **3** (Jackson 2 moved to `jackson-2-bom.version`), so the old SIM-9 override would
+    have pinned Jackson 3 to a version that does not exist; five of the six `ext[...]` overrides
+    were deleted because Boot now ships at or above them, and `commons-lang3` would actively
+    have downgraded. `jackson-annotations` keeps its `com.fasterxml` groupId. The Elasticsearch
+    client is still Jackson 2, so `ElasticsearchJsonpMapperConfig` builds its own mapper and
+    must re-add JSR-310 and ISO-8601 dates by hand. And Jackson 3 turns
+    `FAIL_ON_NULL_FOR_PRIMITIVES` **on** by default, so every request body omitting a primitive
+    began returning 400 — restored globally, plus `ReviewRequest.publish` boxed and normalised
+    in its own compact constructor, because "an omitted flag means post nothing" is a safety
+    property and its test runs standalone where the global setting does not apply.
+  - **Boot 4 split tracing auto-configuration out.** `micrometer-tracing-bridge-otel` still
+    supplies `OtelTracer` but nothing builds the `Tracer` bean from it;
+    `spring-boot-micrometer-tracing-opentelemetry` is now an explicit dependency. Without it the
+    Langfuse pipeline goes silent. The narrow module, not
+    `spring-boot-starter-opentelemetry`, which would stand a second metrics registry beside
+    Prometheus.
 - 042-factory-log-watch: A seventh Software Factory module, `com.simonrowe.factory.logwatch`, on a
   new `logwatch` Temporal task queue. Reads `ERROR`/`WARN` container logs from Grafana Cloud Loki,
   reduces each line to a signature invariant to timestamps, UUIDs, hex ids, paths, addresses and

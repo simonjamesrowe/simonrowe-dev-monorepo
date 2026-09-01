@@ -1,9 +1,10 @@
 package com.simonrowe.factory.codereview.github;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
@@ -342,7 +343,7 @@ public class GitHubGateway {
       return response.body().isBlank()
           ? objectMapper.createObjectNode()
           : objectMapper.readTree(response.body());
-    } catch (IOException exception) {
+    } catch (JacksonException exception) {
       throw new IllegalStateException("GitHub response was not JSON", exception);
     }
   }
@@ -374,7 +375,7 @@ public class GitHubGateway {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub request interrupted", exception);
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("GitHub request failed", exception);
     }
   }

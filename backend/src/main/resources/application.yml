@@ -45,11 +45,13 @@ management:
   tracing:
     sampling:
       probability: 1.0
-  otlp:
+  opentelemetry:
     tracing:
-      # Reuses the same collector endpoint as the OTel starter (Alloy gRPC :4317 in prod).
-      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
-      transport: grpc
+      export:
+        otlp:
+          # Reuses the same collector endpoint as the OTel starter (Alloy gRPC :4317 in prod).
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+          transport: grpc
 
 spring:
   application:
@@ -67,9 +69,12 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
-  data:
-    mongodb:
-      uri: mongodb://localhost:27017/simonrowe
+  # Boot 4 moved the Mongo CONNECTION settings out of spring.data.mongodb into their own
+  # spring.mongodb namespace (spring-boot-mongodb); spring.data.mongodb.* now carries only
+  # Spring Data specifics such as gridfs and repositories. The old key is not an error — it
+  # is silently ignored, and the client falls back to localhost:27017.
+  mongodb:
+    uri: ${SPRING_MONGODB_URI:mongodb://localhost:27017/simonrowe}
   elasticsearch:
     uris: http://localhost:9200
   kafka:
@@ -104,34 +109,49 @@ spring:
           auth: true
           starttls:
             enable: true
-  autoconfigure:
-    exclude:
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
-      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkEmbeddingAutoConfiguration
-      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkImageAutoConfiguration
+  # Jackson 3 turns FAIL_ON_NULL_FOR_PRIMITIVES ON by default; Jackson 2 had it off. Left at
+  # the new default, every request body that omits a primitive field starts returning 400
+  # where it used to bind the Java default — e.g. POST /api/factory/reviews with
+  # {"pullNumber":130} and no "publish", which is exactly how an omitted flag is meant to
+  # select the safe dry-run path. That is a silent breaking change to a published API, not an
+  # improvement, so the pre-upgrade behaviour is restored explicitly.
+  #
+  # Verified against jackson-databind 3.1.5:
+  #   DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES.enabledByDefault() == true
+  jackson:
+    deserialization:
+      fail-on-null-for-primitives: false
   ai:
+    # ONE openai namespace, where there used to be two. Spring AI 2.0 deleted the separate
+    # openai-sdk module and folded it into spring-ai-openai, which now drives every OpenAI
+    # model (chat, embedding, image) through the official openai-java SDK. So the
+    # spring.ai.openai-sdk tree is gone, and with it the two OpenAiSdk*AutoConfiguration
+    # exclusions and the OpenAiChatAutoConfiguration exclusion — that class is now the only
+    # chat autoconfiguration there is, and it has to run.
+    #
+    # Worth knowing when changing any of this: an autoconfigure.exclude entry naming a class
+    # that no longer exists is SILENTLY IGNORED, not an error. Leaving the old exclusions in
+    # place would have looked fine and quietly changed which beans got created.
+    #
+    # Spring AI 2.0 also flattened the `.options.` segment out of every model property, so
+    # e.g. spring.ai.openai.chat.options.model is now spring.ai.openai.chat.model.
     openai:
       api-key: ${OPENAI_API_KEY:not-set}
       embedding:
-        options:
-          model: text-embedding-3-small
+        model: text-embedding-3-small
       image:
-        options:
-          model: gpt-image-1
-    openai-sdk:
-      api-key: ${OPENAI_API_KEY:not-set}
+        model: gpt-image-1
       chat:
-        options:
-          # gpt-5.4-nano: newer generation than gpt-5-mini, cheaper per token
-          # ($0.20/$1.25 vs $0.25/$2.00 per 1M) and faster.
-          #
-          # Do NOT set reasoning-effort here. These defaults are merged into EVERY
-          # per-call OpenAiChatOptions, and reasoning_effort 400s twice over:
-          # OpenAI rejects function tools + reasoning_effort for gpt-5.4-nano on
-          # /v1/chat/completions (breaking the tool-enabled portfolio chat), and
-          # gpt-4o-mini (GuardrailAdvisor's classifier) rejects the argument
-          # outright, silently disabling the topic gate.
-          model: ${OPENAI_CHAT_MODEL:gpt-5.4-nano}
+        # gpt-5.4-nano: newer generation than gpt-5-mini, cheaper per token
+        # ($0.20/$1.25 vs $0.25/$2.00 per 1M) and faster.
+        #
+        # Do NOT set reasoning-effort here. These defaults are merged into EVERY
+        # per-call OpenAiChatOptions, and reasoning_effort 400s twice over:
+        # OpenAI rejects function tools + reasoning_effort for gpt-5.4-nano on
+        # /v1/chat/completions (breaking the tool-enabled portfolio chat), and
+        # gpt-4o-mini (GuardrailAdvisor's classifier) rejects the argument
+        # outright, silently disabling the topic gate.
+        model: ${OPENAI_CHAT_MODEL:gpt-5.4-nano}
     vectorstore:
       elasticsearch:
         index-name: content-embeddings

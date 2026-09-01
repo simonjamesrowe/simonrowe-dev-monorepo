@@ -2,7 +2,7 @@ package com.simonrowe.factory.logwatch.loki;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.logwatch.config.LogWatchProperties;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;

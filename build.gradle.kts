@@ -24,9 +24,32 @@ version = "0.0.1-SNAPSHOT"
 // is exploitable in production". Build- and test-time dependencies are still
 // covered, separately and correctly, by the three container-image SBOMs that
 // publish.yml generates with anchore/sbom-action.
+//
+// CycloneDX 3.x split the old single `cyclonedxBom` task in two, so the shape of
+// this block changed even though its intent did not:
+//
+//   * `cyclonedxDirectBom` (CyclonedxDirectTask) is registered per project and is
+//     the only one carrying `includeConfigs`. It must be configured across ALL
+//     projects — the root plus both modules — because the aggregate reads each
+//     module's direct BOM, so filtering the root alone would leave `backend` and
+//     `software-factory` contributing every configuration they have.
+//   * `cyclonedxBom` (CyclonedxAggregateTask) merges those into the BOM we upload.
+//
+// The aggregate's output also moved to `build/reports/cyclonedx/`. It is pinned
+// back to `build/reports/bom.json` here rather than chased through CI, because
+// that exact path is what `publish.yml` hands to DependencyTrack/gh-upload-sbom
+// and what `ci.yml` archives — and a BOM that fails to upload is reported as a
+// `continue-on-error` step, so getting this wrong would go unnoticed.
 // ---------------------------------------------------------------------------
-tasks.cyclonedxBom {
-    setIncludeConfigs(listOf("runtimeClasspath"))
+allprojects {
+    tasks.withType<org.cyclonedx.gradle.CyclonedxDirectTask>().configureEach {
+        includeConfigs.set(listOf("runtimeClasspath"))
+    }
+}
+
+tasks.named<org.cyclonedx.gradle.CyclonedxAggregateTask>("cyclonedxBom") {
+    jsonOutput.set(layout.buildDirectory.file("reports/bom.json"))
+    xmlOutput.set(layout.buildDirectory.file("reports/bom.xml"))
 }
 
 // Static analysis for the whole monorepo — see docs/runbooks/static-analysis.md.
@@ -110,42 +133,43 @@ subprojects {
     //
     // These live HERE, not in the module build files, because the SBOM uploaded to
     // Dependency-Track as `simonrowe-dev/backend` is produced by the ROOT
-    // `cyclonedxBom` task, which spans every configuration of every module. An
-    // override applied to `backend` alone leaves `software-factory` resolving the
-    // vulnerable version, and the finding survives with both versions listed —
-    // exactly what opentelemetry-api did before this change.
+    // `cyclonedxBom` task, which spans every module. An override applied to
+    // `backend` alone leaves `software-factory` resolving the vulnerable version,
+    // and the finding survives with both versions listed.
     //
     // They MUST be `ext[...]` property overrides, not Gradle `constraints`. The
     // io.spring.dependency-management plugin FORCES every version the Spring Boot
-    // BOM manages, which beats a constraint outright — commons-lang3 is the proof:
-    // embabel-common-util already requested the fixed 3.18.0 and the BOM silently
-    // dragged it back down to the vulnerable 3.17.0. Overriding the BOM's own
+    // BOM manages, which beats a constraint outright. Overriding the BOM's own
     // property is the only thing dependency-management honours.
     //
-    // Each value is the lowest released version that clears the advisory (the two
-    // exceptions are noted below). Drop an entry once the Spring Boot BOM ships
-    // that version or newer, or it will silently pin the dependency BELOW Boot.
+    // FIVE overrides were removed in the Boot 4.1.1 upgrade, because that BOM now
+    // ships at or above the version that cleared each advisory. Keeping them would
+    // have pinned those dependencies BELOW Boot, which is the exact failure the old
+    // comment here warned about:
+    //
+    //   commons-lang3   3.18.0 override vs Boot 4.1.1's 3.20.0 -> downgrade
+    //   httpclient5     5.6.4  == Boot 4.1.1's 5.6.4          -> redundant
+    //   httpcore5       5.4.3  == Boot 4.1.1's 5.4.3          -> redundant
+    //   log4j2          2.25.5 == Boot 4.1.1's 2.25.5         -> redundant
+    //   jackson-bom     2.21.5 vs Boot 4.1.1's 3.1.5          -> BROKEN
+    //
+    // The jackson one is the dangerous one and is worth spelling out: in Boot 4
+    // `jackson-bom.version` means JACKSON 3, and the Jackson 2 line moved to a
+    // separate `jackson-2-bom.version` (4.1.1 manages 3.1.5 and 2.21.5
+    // respectively). Carrying the old value forward would have pinned Jackson 3 to
+    // "2.21.5", a version that does not exist.
+    //
+    // Drop the remaining entry once the Boot BOM ships that version or newer.
     // -----------------------------------------------------------------------
 
-    // GHSA-rcgg-9c38-7xpx, fixed in 1.62.0. 1.64.0 was already pinned by backend
-    // before this change; kept so both modules stay on one OpenTelemetry version.
+    // GHSA-rcgg-9c38-7xpx, fixed in 1.62.0, which is exactly what Boot 4.1.1
+    // manages. Kept above it at 1.64.0 so both modules stay on one OpenTelemetry
+    // version alongside the separately-pinned opentelemetry-spring-boot-starter.
     ext["opentelemetry.version"] = "1.64.0"
-    // GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v, GHSA-mhm7-754m-9p8w (Boot: 2.21.4)
-    ext["jackson-bom.version"] = "2.21.5"
-    // GHSA-j288-q9x7-2f5v (Boot: 3.17.0)
-    ext["commons-lang3.version"] = "3.18.0"
-    // GHSA-hjcp-jmpx-g3qm, fixed in 5.6.3. 5.6.4 is the current 5.6 patch and needs
-    // httpcore5 5.4.x, which is what the line below pins.
-    ext["httpclient5.version"] = "5.6.4"
-    // GHSA-hf6x-8p5f-cgmf and GHSA-v3jc-474w-2wm6 — one property covers both
-    // httpcore5 and httpcore5-h2, which the BOM versions together (Boot: 5.3.6)
-    ext["httpcore5.version"] = "5.4.3"
-    // GHSA-qv9r-c865-cp47 (Boot: 2.24.3)
-    ext["log4j2.version"] = "2.25.5"
 
     java {
         toolchain {
-            languageVersion.set(JavaLanguageVersion.of(21))
+            languageVersion.set(JavaLanguageVersion.of(25))
         }
     }
 

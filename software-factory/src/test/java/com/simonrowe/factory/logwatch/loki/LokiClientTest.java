@@ -3,7 +3,7 @@ package com.simonrowe.factory.logwatch.loki;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.logwatch.config.LogWatchProperties;
 import com.simonrowe.factory.logwatch.domain.LogLine;
 import com.simonrowe.factory.logwatch.domain.Severity;
@@ -116,6 +116,25 @@ class LokiClientTest {
     // if a caller appended /api/v1 to the raw value, /loki/api/v1/api/v1/... Both return a bare
     // `404 page not found` with no JSON and no hint what is wrong.
     assertThat(SEEN_QUERIES).containsKey("/loki/api/v1/query_range");
+  }
+
+  @Test
+  @DisplayName("a malformed body still surfaces as LokiException, not a raw parse error")
+  void wrapsAnUnparseableBodyInLokiException() {
+    // Loki answered 200 with something that is not JSON at all - a proxy error page is the
+    // realistic case. The module's whole contract is that it knows when it cannot see, and it
+    // signals that with LokiException; a raw parse error escaping instead would be reported as
+    // an unexpected crash rather than "the log source is unreadable".
+    //
+    // This is a real regression risk rather than a hypothetical. Under Jackson 2 readTree threw
+    // a checked IOException, which the catch here already covered. Jackson 3 throws the
+    // UNCHECKED JacksonException, so when this module was migrated the catch had to be widened
+    // to a multi-catch or this path would silently start throwing something else.
+    RESPONSES.put("/loki/api/v1/query_range", "<html>502 Bad Gateway</html>");
+
+    assertThatThrownBy(() -> client().linesIn(FROM, TO, 100))
+        .isInstanceOf(LokiException.class)
+        .hasMessageContaining("/loki/api/v1/query_range");
   }
 
   @Test

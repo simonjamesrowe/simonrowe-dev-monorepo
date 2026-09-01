@@ -1,8 +1,9 @@
 package com.simonrowe.factory.codereview.github;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import io.temporal.failure.ApplicationFailure;
 import java.io.IOException;
@@ -23,7 +24,6 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -213,7 +213,7 @@ public class GitHubCredentials {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub App installation lookup interrupted", exception);
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("GitHub App installation lookup failed", exception);
     }
   }
@@ -293,7 +293,7 @@ public class GitHubCredentials {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub App token request interrupted", exception);
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("GitHub App token request failed", exception);
     }
   }
@@ -394,15 +394,14 @@ public class GitHubCredentials {
         return null;
       }
       Map<String, String> granted = new LinkedHashMap<>();
-      for (Iterator<String> names = permissions.fieldNames(); names.hasNext(); ) {
-        String name = names.next();
+      for (String name : permissions.propertyNames()) {
         granted.put(name, permissions.path(name).asText());
       }
       return granted;
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("GitHub App installation lookup interrupted", exception);
-    } catch (IOException exception) {
+    } catch (IOException | JacksonException exception) {
       LOGGER.warn(
           "GitHub App installation lookup for {} failed; requesting required permissions only",
           installationId,
@@ -451,7 +450,7 @@ public class GitHubCredentials {
       signer.initSign(privateKey());
       signer.update(unsigned.getBytes(StandardCharsets.UTF_8));
       return unsigned + "." + base64Url(signer.sign());
-    } catch (GeneralSecurityException | IOException exception) {
+    } catch (GeneralSecurityException | JacksonException exception) {
       throw new IllegalStateException("Unable to sign GitHub App JWT", exception);
     }
   }
@@ -475,7 +474,7 @@ public class GitHubCredentials {
       throw ApplicationFailure.newNonRetryableFailure(
           "GitHub App private key file does not exist", "MISSING_GITHUB_APP_PRIVATE_KEY");
     }
-    try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8);
+    try (Reader reader = Files.newBufferedReader(path);
         PEMParser parser = new PEMParser(reader)) {
       Object pem = parser.readObject();
       JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
