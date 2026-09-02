@@ -7410,17 +7410,86 @@ a:hover {
   padding: 0.15rem 0.4rem;
   border-radius: 0.25rem;
   font-size: 0.9em;
+  /* Inline code has no break opportunities, so one long identifier — a fully
+   * qualified class name, a purl, an advisory id — is a single unbreakable box.
+   * At a 390px viewport that pushed the whole document to 553px and gave every
+   * page a horizontal scrollbar, not just the paragraph containing it. */
+  overflow-wrap: anywhere;
 }
 
 .blog-detail__content pre code {
   background: none;
   padding: 0;
+  /* Code blocks scroll instead: `pre` already has `overflow-x: auto`, and
+   * wrapping a code listing mid-token changes what it appears to say. */
+  overflow-wrap: normal;
 }
 
 .blog-detail__content img {
   max-width: 100%;
   border-radius: 0.5rem;
   margin: 1.5rem 0;
+}
+
+/* Tables.
+ *
+ * remark-gfm produces a bare <table>, which browser defaults render as ragged
+ * text: 1px cell padding, no borders and no header treatment, so a comparison
+ * table reads as two columns of words jammed together. MarkdownRenderer wraps
+ * each table in .blog-detail__table-wrap, which is what carries the horizontal
+ * scroll — putting `overflow-x` on the table itself needs `display: block`,
+ * and that stops the cells sizing as a table at all. */
+.blog-detail__table-wrap {
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  border: 1px solid var(--border-faint);
+  border-radius: 0.5rem;
+  background: var(--surface-container);
+}
+
+.blog-detail__content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.blog-detail__content th,
+.blog-detail__content td {
+  padding: 0.65rem 0.9rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.blog-detail__content thead th {
+  background: var(--surface-container-high);
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border-medium);
+}
+
+/* The first column is almost always the row's label — usually a component or
+ * setting name, which must not wrap mid-identifier while the columns beside it
+ * carry prose. */
+.blog-detail__content tbody th:first-child,
+.blog-detail__content tbody td:first-child {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.blog-detail__content tbody tr:last-child th,
+.blog-detail__content tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.blog-detail__content tbody tr:nth-child(even) {
+  background: var(--surface-container-low);
+}
+
+.blog-detail__content table code {
+  white-space: nowrap;
 }
 
 .blog-detail__content blockquote {
@@ -7461,6 +7530,15 @@ a:hover {
 
   .blog-detail__content {
     font-size: 1rem;
+  }
+
+  .blog-detail__content table {
+    font-size: 0.875rem;
+  }
+
+  .blog-detail__content th,
+  .blog-detail__content td {
+    padding: 0.5rem 0.65rem;
   }
 
   .blog-narration {
