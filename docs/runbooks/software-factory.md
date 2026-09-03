@@ -564,6 +564,65 @@ Activity failures in Temporal, not the container state. This used to be invisibl
 to the `publish:false` dry run, which cloned anonymously; the dry run now
 resolves an installation id and so fails the same way.
 
+A third quiet failure, and the hardest of the three to read, is the `deployer`
+executing review Activities. Both containers run the same image, and
+`@WorkflowImpl` classpath scanning is unconditional, so **both register a
+code-review *workflow*-task poller** — that much is harmless and must not be
+"fixed", exactly as for the `deploy` queue. What is not harmless is a shared
+**activity** poller. `ReviewActivitiesImpl` was for a long time the only
+`@ActivityImpl` in the module with no `@ConditionalOnProperty`, so the `deployer`
+polled `code-review` too and Temporal handed it roughly half of every review's
+Activities. It holds no GitHub App credential by design, so its share died at
+`GitHubCredentials.mintInstallationToken`.
+
+Four things make this look like something it is not:
+
+- The reported failure is `GitHub App token request failed` wrapping a bare
+  `java.nio.channels.UnresolvedAddressException` — no App configuration means no
+  host to resolve. It reads as a DNS or network fault.
+- `getent hosts api.github.com` and `curl https://api.github.com` from **inside
+  `software-factory`** succeed throughout, which appears to contradict that.
+- The stack trace appears only in `docker logs ...-deployer-1`. The
+  `software-factory` log is clean, so looking only there finds nothing at all.
+- Routing is **per Activity, not per review**, so it is intermittent and the
+  phase moves: one run fails in `REVIEWING`, the next clears it and fails in
+  `PUBLISHING`. Restarting `software-factory` does not help.
+
+Diagnose it by comparing poller identities against container hostnames — two
+activity pollers on this queue is the fault:
+
+```bash
+docker run --rm --network simonrowe-dev-monorepo_default \
+  temporalio/admin-tools:1.31.2 temporal task-queue describe \
+  --address temporal:7233 --namespace default --task-queue code-review
+docker inspect -f '{{.Config.Hostname}}' simonrowe-dev-monorepo-software-factory-1
+docker inspect -f '{{.Config.Hostname}}' simonrowe-dev-monorepo-deployer-1
+```
+
+The gate is `factory.codereview.enabled`, pinned `"false"` on `deployer` in
+`docker-compose.prod.yml`. Note it **defaults to `true`**, the opposite of
+`factory.deploy.enabled`: that flag guards the Docker socket so opt-in is safe,
+whereas this one guards no credential and gates a check the merge ruleset
+*requires* — defaulting it off would turn one missing variable into "no pull
+request can merge", silently. So on `deployer` the variable must be **present and
+false**, not absent; `DeployerCodeReviewGateTest` asserts presence and value,
+where the Linear and Grafana compose tests assert absence.
+
+To unblock a pull request before the fix is deployed, take the deployer out of
+the queue for the length of one review — the review then has no other worker to
+land on:
+
+```bash
+docker stop simonrowe-dev-monorepo-deployer-1
+# trigger the review (see "Re-running a review"), wait for it to finish, then:
+docker start simonrowe-dev-monorepo-deployer-1
+```
+
+`monitor-prod.sh` runs `up -d` every minute, so trigger immediately after
+stopping. And remember the `deployer` **never recreates itself**: shipping the
+fix needs a hand-run
+`docker compose -f docker-compose.prod.yml up -d --no-deps deployer`.
+
 A separate quiet failure is the agent running out of turns. The Claude CLI in
 `-p --output-format json` mode reports why it stopped as JSON on **stdout** and
 leaves stderr empty, so a stderr-only error message is blank for every agent-side

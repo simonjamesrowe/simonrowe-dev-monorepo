@@ -448,6 +448,19 @@ services:
       # assert a live poller on the `deploy` task queue afterwards: a container can be
       # healthy with no poller registered, in which case nothing ever deploys.
       FACTORY_DEPLOY_ENABLED: ${FACTORY_DEPLOY_ENABLED:-false}
+      # The mirror image of the line above, and it must stay pinned rather than absent.
+      # ReviewActivitiesImpl defaults ON, so absence here would leave this container polling the
+      # code-review ACTIVITY queue - and it holds no GitHub App credential, so Temporal would keep
+      # handing it about half the review activities to fail. That is not a clean error: it
+      # surfaced as `GitHub App token request failed` wrapping a bare UnresolvedAddressException,
+      # which reads as flaky DNS, appears only in THIS container's log, and can fail one review in
+      # PUBLISHING and the next in REVIEWING because routing is per activity.
+      #
+      # A literal, not ${FACTORY_CODEREVIEW_ENABLED:-false}: this container runs `docker compose`
+      # against this very file and compose gives the process environment precedence over `.env`,
+      # so an interpolated form could be flipped by a stray variable - the trap the note below
+      # records for FACTORY_DEPLOY_TRIGGER_ENABLED.
+      FACTORY_CODEREVIEW_ENABLED: "false"
       # FACTORY_DEPLOY_TRIGGER_ENABLED IS DELIBERATELY ABSENT, and must stay absent. The
       # deployer must never start workflows - it is the executor, and the trigger belongs
       # on the container that receives the signed webhook. Absence achieves that on its
