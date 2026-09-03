@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Categorised Test Feed</title>
+    <link>https://example.com</link>
+    <description>A site-wide feed whose items carry category labels</description>
+    <item>
+      <title>Engineering Post</title>
+      <link>https://example.com/index/engineering-post</link>
+      <description>How we scaled the thing to a great many users.</description>
+      <category>Engineering</category>
+      <pubDate>Mon, 10 Mar 2025 09:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Company Post</title>
+      <link>https://example.com/index/company-post</link>
+      <description>An announcement about the company.</description>
+      <category>Company</category>
+      <pubDate>Tue, 11 Mar 2025 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Lowercase Engineering Post</title>
+      <link>https://example.com/index/lowercase-engineering-post</link>
+      <description>Category casing differs from the configured filter.</description>
+      <category>engineering</category>
+      <pubDate>Wed, 12 Mar 2025 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Multi Category Post</title>
+      <link>https://example.com/index/multi-category-post</link>
+      <description>Carries more than one category, one of which matches.</description>
+      <category>Research</category>
+      <category>Engineering</category>
+      <pubDate>Thu, 13 Mar 2025 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Uncategorised Post</title>
+      <link>https://example.com/index/uncategorised-post</link>
+      <description>Carries no category element at all.</description>
+      <pubDate>Fri, 14 Mar 2025 10:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

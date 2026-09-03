@@ -32,7 +32,7 @@ class V018SeedAndBackfillAi4JvmTest {
     return new ContentSource(
         "ai4jvm-1", "AI4JVM", "https://ai4jvm.com", null, null,
         ContentSource.SourceType.NEWS,
-        ContentSource.ScrapeStrategy.LINK_ROUNDUP, true, null, null);
+        ContentSource.ScrapeStrategy.LINK_ROUNDUP, true, null, null, null);
   }
 
   @Test

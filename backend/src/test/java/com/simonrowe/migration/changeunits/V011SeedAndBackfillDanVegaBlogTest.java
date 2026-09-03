@@ -35,7 +35,7 @@ class V011SeedAndBackfillDanVegaBlogTest {
     ContentSource saved = new ContentSource(
         "dv1", "Dan Vega", "https://www.danvega.dev/blog", null, null,
         ContentSource.SourceType.BLOG,
-        ContentSource.ScrapeStrategy.HTML_LISTING, true, null, null);
+        ContentSource.ScrapeStrategy.HTML_LISTING, true, null, null, null);
     when(sourceRepository.save(any())).thenReturn(saved);
 
     changeUnit.execution(sourceRepository, aggregationAgent);
@@ -54,7 +54,7 @@ class V011SeedAndBackfillDanVegaBlogTest {
     ContentSource existing = new ContentSource(
         "dv1", "Dan Vega", "https://www.danvega.dev/blog", null, null,
         ContentSource.SourceType.BLOG,
-        ContentSource.ScrapeStrategy.HTML_LISTING, true, null, null);
+        ContentSource.ScrapeStrategy.HTML_LISTING, true, null, null, null);
     when(sourceRepository.findByName("Dan Vega"))
         .thenReturn(Optional.of(existing));
 
@@ -71,7 +71,7 @@ class V011SeedAndBackfillDanVegaBlogTest {
     ContentSource saved = new ContentSource(
         "dv1", "Dan Vega", "https://www.danvega.dev/blog", null, null,
         ContentSource.SourceType.BLOG,
-        ContentSource.ScrapeStrategy.HTML_LISTING, true, null, null);
+        ContentSource.ScrapeStrategy.HTML_LISTING, true, null, null, null);
     when(sourceRepository.save(any())).thenReturn(saved);
     doThrow(new RuntimeException("LLM unavailable"))
         .when(aggregationAgent).backfillSource(any(), any());
