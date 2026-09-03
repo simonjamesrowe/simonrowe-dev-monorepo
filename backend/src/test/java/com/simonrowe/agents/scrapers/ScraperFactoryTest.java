@@ -41,12 +41,12 @@ class ScraperFactoryTest {
     List<ScrapedContent> expected = List.of(
         new ScrapedContent("Title", "https://example.com/a", "Body",
             Instant.now(), "Author", null, false));
-    when(rssScraper.scrape("https://example.com/feed.xml", false)).thenReturn(expected);
+    when(rssScraper.scrape("https://example.com/feed.xml", false, null)).thenReturn(expected);
 
     List<ScrapedContent> result = scraperFactory.scrape(source);
 
     assertThat(result).isSameAs(expected);
-    verify(rssScraper).scrape("https://example.com/feed.xml", false);
+    verify(rssScraper).scrape("https://example.com/feed.xml", false, null);
     verifyNoInteractions(sitemapHtmlScraper, lumaApiScraper, linkRoundupScraper);
   }
 
@@ -54,11 +54,25 @@ class ScraperFactoryTest {
   void scrape_delegatesToRssScraperWithIsEventTrueForEventsSourceType() {
     ContentSource source = contentSource(
         "https://example.com/events.xml", null, null, SourceType.EVENTS, ScrapeStrategy.RSS);
-    when(rssScraper.scrape("https://example.com/events.xml", true)).thenReturn(List.of());
+    when(rssScraper.scrape("https://example.com/events.xml", true, null)).thenReturn(List.of());
 
     scraperFactory.scrape(source);
 
-    verify(rssScraper).scrape("https://example.com/events.xml", true);
+    verify(rssScraper).scrape("https://example.com/events.xml", true, null);
+    verifyNoInteractions(sitemapHtmlScraper, lumaApiScraper, linkRoundupScraper);
+  }
+
+  @Test
+  void scrape_passesSourceCategoryFilterToRssScraper() {
+    ContentSource source = contentSource(
+        "https://openai.com/news/rss.xml", null, null,
+        SourceType.NEWS, ScrapeStrategy.RSS, "Engineering");
+    when(rssScraper.scrape("https://openai.com/news/rss.xml", false, "Engineering"))
+        .thenReturn(List.of());
+
+    scraperFactory.scrape(source);
+
+    verify(rssScraper).scrape("https://openai.com/news/rss.xml", false, "Engineering");
     verifyNoInteractions(sitemapHtmlScraper, lumaApiScraper, linkRoundupScraper);
   }
 
@@ -133,6 +147,16 @@ class ScraperFactoryTest {
       String sitemapUrl,
       SourceType sourceType,
       ScrapeStrategy scrapeStrategy) {
+    return contentSource(feedUrl, baseUrl, sitemapUrl, sourceType, scrapeStrategy, null);
+  }
+
+  private ContentSource contentSource(
+      String feedUrl,
+      String baseUrl,
+      String sitemapUrl,
+      SourceType sourceType,
+      ScrapeStrategy scrapeStrategy,
+      String categoryFilter) {
     return new ContentSource(
         "src-1",
         "Test Source",
@@ -143,6 +167,7 @@ class ScraperFactoryTest {
         scrapeStrategy,
         true,
         null,
-        null);
+        null,
+        categoryFilter);
   }
 }

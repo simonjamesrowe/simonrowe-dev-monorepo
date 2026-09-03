@@ -131,10 +131,13 @@ public class AdminAggregationController {
         ? (String) body.get("feedUrl") : source.feedUrl();
     String sitemapUrl = body.containsKey("sitemapUrl")
         ? (String) body.get("sitemapUrl") : source.sitemapUrl();
+    String categoryFilter = body.containsKey("categoryFilter")
+        ? (String) body.get("categoryFilter") : source.categoryFilter();
     ContentSource updated = new ContentSource(
         source.id(), source.name(), source.baseUrl(), feedUrl,
         sitemapUrl, source.sourceType(), source.scrapeStrategy(),
-        active, source.lastFetchedAt(), source.lastError());
+        active, source.lastFetchedAt(), source.lastError(),
+        categoryFilter);
     return sourceRepository.save(updated);
   }
 

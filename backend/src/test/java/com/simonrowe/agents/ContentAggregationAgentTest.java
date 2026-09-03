@@ -67,13 +67,13 @@ class ContentAggregationAgentTest {
           "src1", "Test Blog", "https://example.com",
           "https://example.com/feed", null,
           SourceType.BLOG, ScrapeStrategy.RSS,
-          true, null, null);
+          true, null, null, null);
 
   private static final ContentSource DAN_VEGA_SOURCE =
       new ContentSource(
           "src-dv", "Dan Vega", "https://www.danvega.dev/blog",
           null, null, SourceType.BLOG, ScrapeStrategy.HTML_LISTING,
-          true, null, null);
+          true, null, null, null);
 
   @SuppressWarnings("unchecked")
   @BeforeEach
@@ -102,6 +102,46 @@ class ContentAggregationAgentTest {
 
     verify(sourceRepository).findByActiveTrue();
     verify(scraperFactory, never()).scrape(any());
+  }
+
+  @Test
+  void runAggregation_preservesCategoryFilterWhenStampingLastFetchedAt() {
+    ContentSource filtered = new ContentSource(
+        "src-oai", "OpenAI Engineering", "https://openai.com/news/engineering/",
+        "https://openai.com/news/rss.xml", null,
+        SourceType.NEWS, ScrapeStrategy.RSS,
+        true, null, null, "Engineering");
+    when(sourceRepository.findByActiveTrue()).thenReturn(List.of(filtered));
+    when(scraperFactory.scrape(filtered)).thenReturn(List.of());
+
+    agent.runAggregation();
+
+    // The success branch rebuilds the source field-by-field to stamp lastFetchedAt.
+    // Losing the filter here would quietly turn one section into the whole feed on the
+    // very next scheduled run, with nothing logged.
+    ArgumentCaptor<ContentSource> captor = ArgumentCaptor.forClass(ContentSource.class);
+    verify(sourceRepository).save(captor.capture());
+    assertThat(captor.getValue().categoryFilter()).isEqualTo("Engineering");
+    assertThat(captor.getValue().lastFetchedAt()).isNotNull();
+  }
+
+  @Test
+  void runAggregation_preservesCategoryFilterWhenRecordingAnError() {
+    ContentSource filtered = new ContentSource(
+        "src-oai", "OpenAI Engineering", "https://openai.com/news/engineering/",
+        "https://openai.com/news/rss.xml", null,
+        SourceType.NEWS, ScrapeStrategy.RSS,
+        true, null, null, "Engineering");
+    when(sourceRepository.findByActiveTrue()).thenReturn(List.of(filtered));
+    when(scraperFactory.scrape(filtered))
+        .thenThrow(new RuntimeException("feed unreachable"));
+
+    agent.runAggregation();
+
+    ArgumentCaptor<ContentSource> captor = ArgumentCaptor.forClass(ContentSource.class);
+    verify(sourceRepository).save(captor.capture());
+    assertThat(captor.getValue().categoryFilter()).isEqualTo("Engineering");
+    assertThat(captor.getValue().lastError()).isEqualTo("feed unreachable");
   }
 
   @Test

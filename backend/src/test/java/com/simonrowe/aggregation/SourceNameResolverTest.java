@@ -21,7 +21,7 @@ class SourceNameResolverTest {
       String name, String baseUrl, ContentSource.SourceType type) {
     return new ContentSource(
         name.toLowerCase(), name, baseUrl, null, null, type,
-        ContentSource.ScrapeStrategy.HTML_LISTING, true, null, null);
+        ContentSource.ScrapeStrategy.HTML_LISTING, true, null, null, null);
   }
 
   @Test

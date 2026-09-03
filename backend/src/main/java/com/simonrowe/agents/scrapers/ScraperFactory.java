@@ -25,7 +25,7 @@ public class ScraperFactory {
   public List<ScrapedContent> scrape(ContentSource source) {
     boolean isEvent = source.sourceType() == ContentSource.SourceType.EVENTS;
     return switch (source.scrapeStrategy()) {
-      case RSS -> rssScraper.scrape(source.feedUrl(), isEvent);
+      case RSS -> rssScraper.scrape(source.feedUrl(), isEvent, source.categoryFilter());
       case SITEMAP_HTML -> sitemapHtmlScraper.scrape(source.sitemapUrl());
       case HTML -> sitemapHtmlScraper.scrapeEventsPage(source.baseUrl());
       case HTML_LISTING -> sitemapHtmlScraper.scrapeListingPage(source.baseUrl());

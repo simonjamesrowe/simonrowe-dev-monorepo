@@ -118,6 +118,92 @@ class RssScraperTest {
     assertThat(results).allMatch(c -> c.location() == null);
   }
 
+  @Test
+  void scrape_withNullCategoryFilterReturnsEveryEntry() {
+    List<ScrapedContent> results =
+        rssScraper.scrape(categorisedFeedUrl(), false, null);
+
+    assertThat(results).hasSize(5);
+  }
+
+  @Test
+  void scrape_withBlankCategoryFilterReturnsEveryEntry() {
+    List<ScrapedContent> results =
+        rssScraper.scrape(categorisedFeedUrl(), false, "   ");
+
+    assertThat(results).hasSize(5);
+  }
+
+  @Test
+  void scrape_withCategoryFilterKeepsOnlyMatchingEntries() {
+    List<ScrapedContent> results =
+        rssScraper.scrape(categorisedFeedUrl(), false, "Engineering");
+
+    assertThat(results)
+        .extracting(ScrapedContent::title)
+        .containsExactly(
+            "Engineering Post",
+            "Lowercase Engineering Post",
+            "Multi Category Post");
+  }
+
+  @Test
+  void scrape_categoryFilterIsCaseInsensitive() {
+    List<ScrapedContent> results =
+        rssScraper.scrape(categorisedFeedUrl(), false, "engineering");
+
+    assertThat(results)
+        .extracting(ScrapedContent::title)
+        .contains("Engineering Post", "Lowercase Engineering Post");
+  }
+
+  @Test
+  void scrape_categoryFilterKeepsEntryWhenAnyOfItsCategoriesMatch() {
+    List<ScrapedContent> results =
+        rssScraper.scrape(categorisedFeedUrl(), false, "Engineering");
+
+    assertThat(results)
+        .extracting(ScrapedContent::title)
+        .contains("Multi Category Post");
+  }
+
+  @Test
+  void scrape_categoryFilterDropsEntriesWithNoCategoryAtAll() {
+    List<ScrapedContent> results =
+        rssScraper.scrape(categorisedFeedUrl(), false, "Engineering");
+
+    assertThat(results)
+        .extracting(ScrapedContent::title)
+        .doesNotContain("Uncategorised Post", "Company Post");
+  }
+
+  @Test
+  void scrape_categoryFilterMatchingNothingReturnsEmptyList() {
+    List<ScrapedContent> results =
+        rssScraper.scrape(categorisedFeedUrl(), false, "Nonexistent Category");
+
+    assertThat(results).isEmpty();
+  }
+
+  @Test
+  void scrape_categoryFilterStillAppliesIsEventFlag() {
+    List<ScrapedContent> results =
+        rssScraper.scrape(categorisedFeedUrl(), true, "Engineering");
+
+    assertThat(results).isNotEmpty();
+    assertThat(results).allMatch(ScrapedContent::isEvent);
+  }
+
+  // Resolve the categorised test RSS XML file packaged under src/test/resources
+  private String categorisedFeedUrl() {
+    URL resource =
+        getClass().getClassLoader().getResource("test-feed-categories.xml");
+    assertThat(resource)
+        .as("test-feed-categories.xml must exist in src/test/resources")
+        .isNotNull();
+    return resource.toString();
+  }
+
   // Resolve the test RSS XML file packaged under src/test/resources
   private String testFeedUrl() {
     URL resource = getClass().getClassLoader().getResource("test-feed.xml");

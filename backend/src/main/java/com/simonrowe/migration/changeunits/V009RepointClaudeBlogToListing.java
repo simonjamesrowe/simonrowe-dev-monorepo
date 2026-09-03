@@ -46,7 +46,8 @@ public class V009RepointClaudeBlogToListing {
           ContentSource.ScrapeStrategy.HTML_LISTING,
           source.active(),
           null,
-          null));
+          null,
+          source.categoryFilter()));
       log.info("Repointed Claude Blog source to HTML_LISTING and reset lastFetchedAt");
     });
 

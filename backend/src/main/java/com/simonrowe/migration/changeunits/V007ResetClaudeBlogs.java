@@ -48,7 +48,7 @@ public class V007ResetClaudeBlogs {
           source.id(), source.name(), source.baseUrl(),
           source.feedUrl(), source.sitemapUrl(),
           source.sourceType(), source.scrapeStrategy(),
-          source.active(), null, null));
+          source.active(), null, null, source.categoryFilter()));
       log.info("Reset lastFetchedAt for Claude Blog source");
     });
   }

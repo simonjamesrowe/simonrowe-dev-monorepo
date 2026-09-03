@@ -55,6 +55,7 @@ public class V018SeedAndBackfillAi4Jvm {
         ContentSource.ScrapeStrategy.LINK_ROUNDUP,
         true,
         null,
+        null,
         null));
     log.info("Seeded AI4JVM content source");
 

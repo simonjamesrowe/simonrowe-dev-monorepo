@@ -124,7 +124,7 @@ public class ContentAggregationAgent {
         null, sourceName, normalizedUrl, null, null,
         ContentSource.SourceType.NEWS,
         ContentSource.ScrapeStrategy.HTML_LISTING,
-        false, null, null);
+        false, null, null, null);
 
     if (classification.isEvent() || content.isEvent()) {
       processEvent(manualSource, content, classification);
@@ -166,7 +166,7 @@ public class ContentAggregationAgent {
             source.id(), source.name(), source.baseUrl(),
             source.feedUrl(), source.sitemapUrl(),
             source.sourceType(), source.scrapeStrategy(),
-            source.active(), Instant.now(), null));
+            source.active(), Instant.now(), null, source.categoryFilter()));
       } catch (Exception e) {
         log.error("Failed to process source: {}", source.name(), e);
         sourceRepository.save(new ContentSource(
@@ -174,7 +174,7 @@ public class ContentAggregationAgent {
             source.feedUrl(), source.sitemapUrl(),
             source.sourceType(), source.scrapeStrategy(),
             source.active(), source.lastFetchedAt(),
-            e.getMessage()));
+            e.getMessage(), source.categoryFilter()));
       }
     }
     log.info("Content aggregation complete");

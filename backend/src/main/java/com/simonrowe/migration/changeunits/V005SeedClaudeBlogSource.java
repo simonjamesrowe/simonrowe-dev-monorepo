@@ -25,6 +25,7 @@ public class V005SeedClaudeBlogSource {
           ContentSource.ScrapeStrategy.SITEMAP_HTML,
           true,
           null,
+          null,
           null
       );
       contentSourceRepository.save(source);

@@ -50,6 +50,7 @@ public class V011SeedAndBackfillDanVegaBlog {
         ContentSource.ScrapeStrategy.HTML_LISTING,
         true,
         null,
+        null,
         null));
     log.info("Seeded Dan Vega content source");
 

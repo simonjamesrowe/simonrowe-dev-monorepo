@@ -115,6 +115,41 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void updateSourcePreservesCategoryFilterWhenNotSupplied() throws Exception {
+    sourceRepository.save(sampleSource("s-1", "OpenAI Engineering", true, "Engineering"));
+
+    String body = """
+        {"active": false}
+        """;
+
+    // A PUT that says nothing about the filter must not clear it. Dropping it here
+    // would silently widen the source from one section to the publisher's whole feed.
+    mockMvc.perform(put("/api/admin/content-sources/s-1")
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.active").value(false))
+        .andExpect(jsonPath("$.categoryFilter").value("Engineering"));
+  }
+
+  @Test
+  void updateSourceChangesCategoryFilterWhenSupplied() throws Exception {
+    sourceRepository.save(sampleSource("s-1", "OpenAI Engineering", true, "Engineering"));
+
+    String body = """
+        {"categoryFilter": "Research"}
+        """;
+
+    mockMvc.perform(put("/api/admin/content-sources/s-1")
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.categoryFilter").value("Research"));
+  }
+
+  @Test
   void updateSourceReturnsNotFoundForMissingId() throws Exception {
     String body = """
         {"active": false}
@@ -536,6 +571,12 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
   // --- Helpers ---
 
   private ContentSource sampleSource(final String id, final String name, final boolean active) {
+    return sampleSource(id, name, active, null);
+  }
+
+  private ContentSource sampleSource(
+      final String id, final String name, final boolean active,
+      final String categoryFilter) {
     return new ContentSource(
         id,
         name,
@@ -546,7 +587,8 @@ class AdminAggregationControllerTest extends AbstractIntegrationTest {
         ContentSource.ScrapeStrategy.RSS,
         active,
         null,
-        null);
+        null,
+        categoryFilter);
   }
 
   private AggregatedArticle sampleArticle(
