@@ -146,6 +146,58 @@ public class FactoryAdminService {
   }
 
   /**
+   * Builds the graph the console draws, from both containers.
+   *
+   * <p>Deploy and platform backup are taken from the deployer and reported {@code UNAVAILABLE}
+   * when it cannot be reached, never from software-factory's own switched-off view of them — the
+   * same split {@link #status()} makes, via the same {@link #DEPLOYER_OWNED} list. Unlike {@link
+   * #status()}, a factory that cannot be reached at all fails the whole call rather than returning
+   * a partial graph: every node's health depends on factory-reported state, so a half-drawn graph
+   * would be actively misleading rather than merely incomplete.
+   *
+   * @return the merged graph
+   */
+  public FactoryFlow flow() {
+    FactoryFlow factory = client.factoryFlow();
+    FactoryFlow deployer = safelyFlow(client::deployerFlow);
+    List<FactoryFlow.Node> merged = new ArrayList<>();
+    for (FactoryFlow.Node node : factory.nodes()) {
+      if (!DEPLOYER_OWNED.contains(node.key())) {
+        merged.add(node);
+      } else if (deployer == null) {
+        merged.add(new FactoryFlow.Node(
+            node.key(), node.kind(), node.band(), node.label(), null,
+            "UNAVAILABLE", "The deployer could not be reached"));
+      } else {
+        merged.add(fromDeployer(deployer, node));
+      }
+    }
+    return new FactoryFlow(factory.fetchedAt(), merged, factory.edges());
+  }
+
+  /**
+   * Looks a deployer-owned node up by key in the deployer's own response, falling back to the
+   * unavailable form when the deployer's graph did not report it.
+   */
+  private static FactoryFlow.Node fromDeployer(
+      final FactoryFlow deployer, final FactoryFlow.Node factoryNode) {
+    return deployer.nodes().stream()
+        .filter(candidate -> candidate.key().equals(factoryNode.key()))
+        .findFirst()
+        .orElse(new FactoryFlow.Node(
+            factoryNode.key(), factoryNode.kind(), factoryNode.band(), factoryNode.label(), null,
+            "UNAVAILABLE", "The deployer did not report this node"));
+  }
+
+  private static FactoryFlow safelyFlow(final FlowSupplier supplier) {
+    try {
+      return supplier.get();
+    } catch (RuntimeException exception) {
+      return null;
+    }
+  }
+
+  /**
    * Reviews a pull request on demand.
    *
    * <p>The only module whose automatic trigger is a webhook the factory cannot replay: a review
@@ -341,6 +393,11 @@ public class FactoryAdminService {
   @FunctionalInterface
   private interface StatusSupplier {
     FactoryInstanceStatus get();
+  }
+
+  @FunctionalInterface
+  private interface FlowSupplier {
+    FactoryFlow get();
   }
 
   @FunctionalInterface

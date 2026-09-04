@@ -28,6 +28,16 @@ public class FactoryAdminController {
     return service.status();
   }
 
+  /**
+   * Returns the factory flow graph.
+   *
+   * @return every node with its live figures, and every edge
+   */
+  @GetMapping("/flow")
+  public FactoryFlow flow() {
+    return service.flow();
+  }
+
   @GetMapping("/runs/{workflowId}")
   public FactoryRunProgress progress(@PathVariable final String workflowId) {
     return service.progress(workflowId);

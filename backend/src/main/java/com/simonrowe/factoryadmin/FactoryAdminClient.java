@@ -23,6 +23,7 @@ public class FactoryAdminClient {
 
   private static final String TOKEN_HEADER = "X-Factory-Token";
   private static final String STATUS_PATH = "/api/factory/status";
+  private static final String FLOW_PATH = "/api/factory/flow";
 
   /**
    * The request field three modules use to ask for a rehearsal rather than the real thing.
@@ -67,6 +68,36 @@ public class FactoryAdminClient {
    */
   public FactoryInstanceStatus deployerStatus() {
     return deployer.get().uri(STATUS_PATH).retrieve().body(FactoryInstanceStatus.class);
+  }
+
+  /**
+   * Reads the flow graph from the factory, without the token.
+   *
+   * <p>{@code /api/factory/flow} is unauthenticated, on the same terms as {@code
+   * /api/factory/status}: {@code FactoryTokenAuthenticator} is not a Spring Security filter, it is
+   * a plain component each protected controller calls for itself, and this endpoint returns node
+   * keys, integer counts and diagnostic strings — nothing more sensitive than {@code /status}
+   * already serves openly. Do not add the header back; see {@link #deployerFlow()} for why it
+   * matters that this one stays token-free too.
+   *
+   * @return the graph as software-factory sees it
+   */
+  public FactoryFlow factoryFlow() {
+    return factory.get().uri(FLOW_PATH).retrieve().body(FactoryFlow.class);
+  }
+
+  /**
+   * Reads the flow graph from the deployer, which is the authority on deploy and platform backup.
+   *
+   * <p>Sends no token, like {@link #deployerStatus()}: the deployer deliberately holds no {@code
+   * FACTORY_TRIGGER_TOKEN} (that credential also authorises {@code /api/reviews}, and this is the
+   * container holding the Docker socket), and the flow endpoint does not check one — so there is
+   * nothing to send and nothing gained by widening where the credential would need to travel.
+   *
+   * @return the graph as the deployer sees it
+   */
+  public FactoryFlow deployerFlow() {
+    return deployer.get().uri(FLOW_PATH).retrieve().body(FactoryFlow.class);
   }
 
   /**
