@@ -94,4 +94,31 @@ describe('FactoryNodeDrawer', () => {
     expect(screen.getByText('logwatch', { selector: 'dd' })).toBeInTheDocument()
     expect(screen.getByText(/GRAFANA_CLOUD_LOKI_ENDPOINT is not set/)).toBeInTheDocument()
   })
+
+  it('lists the recent runs it was given', () => {
+    render(<FactoryNodeDrawer node={node} module={null} onClose={vi.fn()}
+      detail={{ nodeKey: 'logwatch', items: [
+        { id: 'logwatch-2', title: 'logwatch-2', status: 'COMPLETED', at: null, url: null },
+      ] }} />)
+    expect(screen.getByText('logwatch-2')).toBeInTheDocument()
+  })
+
+  it('says so plainly when a node has no recent work', () => {
+    // An empty list and a list that failed to load must not look the same.
+    render(<FactoryNodeDrawer node={node} module={null} onClose={vi.fn()}
+      detail={{ nodeKey: 'logwatch', items: [] }} />)
+    expect(screen.getByText(/No runs in the last 30 days/i)).toBeInTheDocument()
+  })
+
+  it('says so plainly when the detail has not loaded', () => {
+    render(<FactoryNodeDrawer node={node} module={null} onClose={vi.fn()} detail={null} />)
+    expect(screen.getByText(/Loading/i)).toBeInTheDocument()
+  })
+
+  it('renders no recent-work section at all when no detail was requested', () => {
+    // Distinct from both other states: a caller that never asked for detail must not imply a
+    // load is in progress.
+    render(<FactoryNodeDrawer node={node} module={null} onClose={vi.fn()} />)
+    expect(screen.queryByText(/Recent runs/i)).not.toBeInTheDocument()
+  })
 })

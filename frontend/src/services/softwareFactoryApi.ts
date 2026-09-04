@@ -198,3 +198,27 @@ export interface FactoryFlow {
 
 export const fetchFactoryFlow = (getAccessToken: GetAccessToken) =>
   request<FactoryFlow>(getAccessToken, '/flow')
+
+export interface FactoryFlowDetailItem {
+  id: string
+  title: string
+  status: string
+  at: string | null
+  url: string | null
+}
+
+export interface FactoryFlowDetail {
+  nodeKey: string
+  items: FactoryFlowDetailItem[]
+}
+
+/**
+ * Reads one node's recent work, for its drawer.
+ *
+ * Empty and unreachable read identically here — both are `items: []` — because the backend
+ * already collapses "nothing to show" and "could not be read" into the same honest answer for
+ * deployer-owned nodes. The drawer distinguishes a genuinely empty list from a detail that has
+ * not loaded yet by `null` versus `[]`, not by anything this call reports.
+ */
+export const fetchFactoryFlowDetail = (getAccessToken: GetAccessToken, nodeKey: string) =>
+  request<FactoryFlowDetail>(getAccessToken, `/flow/${encodeURIComponent(nodeKey)}`)

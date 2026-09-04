@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { X } from 'lucide-react'
 
 import type {
-  FactoryFlowNode, FactoryModuleStatus, FactoryNodeHealth,
+  FactoryFlowDetail, FactoryFlowNode, FactoryModuleStatus, FactoryNodeHealth,
 } from '../../services/softwareFactoryApi'
 
 const HEALTH_LABELS: Record<FactoryNodeHealth, string> = {
@@ -42,10 +42,16 @@ const NODE_NOTES: Record<string, string> = {
 }
 
 export function FactoryNodeDrawer(
-  { node, module, onClose, children }: {
+  { node, module, onClose, detail, children }: {
     node: FactoryFlowNode | null
     module: FactoryModuleStatus | null
     onClose: () => void
+    /**
+     * The node's recent work. `null` means it has not loaded yet, distinct from an empty list
+     * that genuinely found no runs — the two must never read the same, or a failed fetch looks
+     * exactly like a quiet module.
+     */
+    detail?: FactoryFlowDetail | null
     children?: React.ReactNode
   },
 ) {
@@ -109,6 +115,31 @@ export function FactoryNodeDrawer(
             </div>
           )}
         </dl>
+      )}
+
+      {detail !== undefined && (
+        <div className="factory-drawer__runs">
+          <h3>Recent runs</h3>
+          {detail === null ? (
+            <p>Loading…</p>
+          ) : detail.items.length === 0 ? (
+            <p>No runs in the last 30 days.</p>
+          ) : (
+            <ol>
+              {detail.items.map((item) => (
+                <li key={item.id}>
+                  {item.url ? (
+                    <a href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
+                  ) : (
+                    <span>{item.title}</span>
+                  )}
+                  {' — '}
+                  <span className="factory-drawer__run-status">{item.status}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       )}
 
       {children}

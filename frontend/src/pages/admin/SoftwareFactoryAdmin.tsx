@@ -19,6 +19,7 @@ import { FactoryNodeDrawer } from './FactoryNodeDrawer'
 import { parsePullNumber } from './pullRequestInput'
 import {
   fetchFactoryFlow,
+  fetchFactoryFlowDetail,
   fetchRunProgress,
   fetchSoftwareFactoryStatus,
   startCodeReview,
@@ -28,6 +29,7 @@ import {
   startPlatformBackup,
   startVulnerabilityScan,
   type FactoryFlow,
+  type FactoryFlowDetail,
   type FactoryModuleStatus,
   type FactoryRunAccepted,
   type FactoryRunProgress,
@@ -127,6 +129,43 @@ function useRunProgress(
   }, [workflowId, terminal, getAccessToken, setRun])
 }
 
+/**
+ * Fetches the selected node's recent work whenever the selection changes.
+ *
+ * `null` while a fetch is in flight — including immediately after switching nodes — and stays
+ * `null` on failure too: a detail panel that cannot be read must not be mistaken for a node with
+ * genuinely nothing to show, which is exactly what {@link FactoryNodeDrawer} distinguishes `null`
+ * from an empty list to avoid. No node selected reports `undefined`, so a closed drawer is never
+ * drawn as "loading".
+ */
+function useFlowDetail(nodeKey: string | null): FactoryFlowDetail | null | undefined {
+  const { getAccessToken } = useAuth()
+  const [detail, setDetail] = useState<FactoryFlowDetail | null | undefined>(undefined)
+
+  useEffect(() => {
+    if (!nodeKey) {
+      setDetail(undefined)
+      return undefined
+    }
+    setDetail(null)
+    let cancelled = false
+    void (async () => {
+      try {
+        const result = await fetchFactoryFlowDetail(getAccessToken, nodeKey)
+        if (!cancelled) setDetail(result)
+      } catch {
+        // Leave it null: the drawer already renders "Loading…" for that, and there is nothing
+        // more specific to say about a detail panel that failed to load.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [nodeKey, getAccessToken])
+
+  return detail
+}
+
 export function SoftwareFactoryAdmin() {
   const { getAccessToken } = useAuth()
   const [status, setStatus] = useState<SoftwareFactoryStatus | null>(null)
@@ -143,6 +182,7 @@ export function SoftwareFactoryAdmin() {
   const [refreshMs, setRefreshMs] = useState<number | null>(null)
 
   useRunProgress(run, setRun)
+  const selectedNodeDetail = useFlowDetail(selectedNode)
 
   // A ref, not state: state would re-run the interval effect below and reset its timer on every
   // load, which would make a slow response push its own next tick out rather than being skipped.
@@ -418,6 +458,7 @@ export function SoftwareFactoryAdmin() {
         node={selectedFlowNode}
         module={selectedNode ? modules.get(selectedNode) ?? null : null}
         onClose={() => setSelectedNode(null)}
+        detail={selectedNodeDetail}
       >
         {selectedNode && actionPanelFor(selectedNode)}
       </FactoryNodeDrawer>

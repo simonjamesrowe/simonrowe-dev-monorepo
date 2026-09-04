@@ -101,6 +101,25 @@ public class FactoryAdminClient {
   }
 
   /**
+   * Reads one node's recent work from the factory, with the token.
+   *
+   * <p>Unlike {@link #factoryFlow()}, {@code GET /api/factory/flow/{nodeKey}} <strong>is</strong>
+   * token-protected: it carries pull request titles and Linear ticket subjects, the disclosure
+   * class {@code /api/factory/flow} deliberately stays free of. There is deliberately no {@code
+   * deployerFlowDetail} counterpart — see {@code FactoryAdminService#flowDetail} for why the
+   * deployer is never asked at all.
+   *
+   * @param nodeKey the node whose drawer is open
+   * @return that node's items, newest first, as software-factory sees them
+   */
+  public FactoryFlowDetail factoryFlowDetail(final String nodeKey) {
+    return factory.get().uri(FLOW_PATH + "/{nodeKey}", nodeKey)
+        .header(TOKEN_HEADER, token)
+        .retrieve()
+        .body(FactoryFlowDetail.class);
+  }
+
+  /**
    * Starts a code review by hand.
    *
    * <p><strong>No {@code expectedHeadSha} is sent, deliberately.</strong> The webhook path builds

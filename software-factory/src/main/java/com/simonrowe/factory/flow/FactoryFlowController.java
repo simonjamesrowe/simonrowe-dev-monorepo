@@ -23,6 +23,12 @@ import org.springframework.web.bind.annotation.RestController;
  * <strong>is</strong> token-protected. Do not "tidy" this class back to protected: that would
  * either break the deployer's half of the graph or require the exemption this endpoint exists
  * specifically to avoid.
+ *
+ * <p>That detail endpoint is deliberately {@link FactoryFlowDetailController}, a separate class,
+ * even though both share the {@code /api/factory/flow} base path. {@code
+ * FactoryTokenAuthenticator} is a plain component each protected controller calls for itself, not
+ * a Spring Security filter — so a {@code @GetMapping("/{nodeKey}")} added here would silently
+ * inherit this class's unauthenticated posture instead of gaining the check.
  */
 @RestController
 @RequestMapping("/api/factory/flow")

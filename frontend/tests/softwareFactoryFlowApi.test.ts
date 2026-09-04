@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchFactoryFlow } from '../src/services/softwareFactoryApi'
+import { fetchFactoryFlow, fetchFactoryFlowDetail } from '../src/services/softwareFactoryApi'
 
 afterEach(() => { vi.unstubAllGlobals() })
 
@@ -35,5 +35,36 @@ describe('fetchFactoryFlow', () => {
 
     await expect(fetchFactoryFlow(() => Promise.resolve('t')))
       .rejects.toThrow('The Software Factory is unreachable')
+  })
+})
+
+describe('fetchFactoryFlowDetail', () => {
+  it('sends the bearer token and requests the given node', async () => {
+    const body = {
+      nodeKey: 'logwatch',
+      items: [{ id: 'logwatch-1', title: 'logwatch-1', status: 'COMPLETED', at: null, url: null }],
+    }
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, json: () => Promise.resolve(body),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const detail = await fetchFactoryFlowDetail(() => Promise.resolve('token-abc'), 'logwatch')
+
+    expect(detail.items[0].id).toBe('logwatch-1')
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/admin/software-factory/flow/logwatch')
+    expect(options.headers.Authorization).toBe('Bearer token-abc')
+  })
+
+  it('url-encodes the node key', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, json: () => Promise.resolve({ nodeKey: 'a/b', items: [] }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchFactoryFlowDetail(() => Promise.resolve('t'), 'a/b')
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/flow/a%2Fb')
   })
 })

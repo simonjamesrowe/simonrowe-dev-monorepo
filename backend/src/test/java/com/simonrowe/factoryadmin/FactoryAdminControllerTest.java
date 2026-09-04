@@ -160,6 +160,18 @@ class FactoryAdminControllerTest {
   }
 
   @Test
+  void servesOneNodesFlowDetail() throws Exception {
+    when(service.flowDetail("logwatch")).thenReturn(
+        new FactoryFlowDetail("logwatch", List.of(
+            new FactoryFlowDetail.Item("logwatch-1", "logwatch-1", "COMPLETED", null, null))));
+
+    mockMvc.perform(get(BASE + "/flow/logwatch"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.nodeKey").value("logwatch"))
+        .andExpect(jsonPath("$.items[0].id").value("logwatch-1"));
+  }
+
+  @Test
   void servesRunProgress() throws Exception {
     when(service.progress("cve-scan-manual-1"))
         .thenReturn(new FactoryRunProgress(

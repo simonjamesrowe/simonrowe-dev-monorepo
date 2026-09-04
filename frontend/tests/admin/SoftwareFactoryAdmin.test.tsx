@@ -7,6 +7,7 @@ import { SoftwareFactoryAdmin } from '../../src/pages/admin/SoftwareFactoryAdmin
 vi.mock('../../src/services/softwareFactoryApi', () => ({
   fetchSoftwareFactoryStatus: vi.fn(),
   fetchFactoryFlow: vi.fn(),
+  fetchFactoryFlowDetail: vi.fn(),
   fetchRunProgress: vi.fn(),
   startCodeReview: vi.fn(),
   startFeedback: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('../../src/auth/useAuth', () => ({
 
 import {
   fetchFactoryFlow,
+  fetchFactoryFlowDetail,
   fetchRunProgress,
   fetchSoftwareFactoryStatus,
   startCodeReview,
@@ -37,6 +39,7 @@ import { useAuth } from '../../src/auth/useAuth'
 
 const mockFetchStatus = vi.mocked(fetchSoftwareFactoryStatus)
 const mockFetchFlow = vi.mocked(fetchFactoryFlow)
+const mockFetchFlowDetail = vi.mocked(fetchFactoryFlowDetail)
 const mockFetchProgress = vi.mocked(fetchRunProgress)
 const mockStartReview = vi.mocked(startCodeReview)
 const mockStartScan = vi.mocked(startVulnerabilityScan)
@@ -141,6 +144,7 @@ describe('SoftwareFactoryAdmin', () => {
     mockUseAuth.mockReturnValue({ getAccessToken } as unknown as ReturnType<typeof useAuth>)
     mockFetchStatus.mockResolvedValue(status())
     mockFetchFlow.mockResolvedValue(flow())
+    mockFetchFlowDetail.mockResolvedValue({ nodeKey: 'logwatch', items: [] })
   })
 
   it('replaces the module rail with the flow graph', async () => {
@@ -155,6 +159,31 @@ describe('SoftwareFactoryAdmin', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Log watch/ }))
     const drawer = screen.getByRole('dialog')
     expect(within(drawer).getByRole('button', { name: 'Scan logs now' })).toBeInTheDocument()
+  })
+
+  it('fetches the selected node\'s recent work and renders it in the drawer', async () => {
+    mockFetchFlowDetail.mockResolvedValue({
+      nodeKey: 'logwatch',
+      items: [{ id: 'logwatch-9', title: 'logwatch-9', status: 'COMPLETED', at: null, url: null }],
+    })
+    renderConsoleWithFlow()
+
+    const drawer = await openDrawer(/Log watch/)
+
+    expect(mockFetchFlowDetail).toHaveBeenCalledWith(getAccessToken, 'logwatch')
+    expect(await within(drawer).findByText('logwatch-9')).toBeInTheDocument()
+  })
+
+  it('shows the drawer as loading before the node\'s recent work arrives', async () => {
+    let resolveDetail: (value: { nodeKey: string; items: [] }) => void = () => {}
+    mockFetchFlowDetail.mockReturnValue(new Promise((resolve) => { resolveDetail = resolve }))
+    renderConsoleWithFlow()
+
+    const drawer = await openDrawer(/Log watch/)
+    expect(within(drawer).getByText(/Loading/i)).toBeInTheDocument()
+
+    await act(async () => resolveDetail({ nodeKey: 'logwatch', items: [] }))
+    expect(await within(drawer).findByText(/No runs in the last 30 days/i)).toBeInTheDocument()
   })
 
   it('reports each container reachability in text, not only colour', async () => {

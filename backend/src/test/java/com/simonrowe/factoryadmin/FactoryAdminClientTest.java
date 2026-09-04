@@ -83,6 +83,24 @@ class FactoryAdminClientTest {
   }
 
   @Test
+  void sendsTheTokenWhenReadingOneNodesDetail() throws IOException {
+    // Unlike /api/factory/flow, the per-node detail endpoint is token-protected: it carries pull
+    // request titles and Linear ticket subjects.
+    startFactory(Map.of("/api/factory/flow/logwatch", json(200,
+        "{\"nodeKey\":\"logwatch\",\"items\":["
+            + "{\"id\":\"logwatch-1\",\"title\":\"logwatch-1\",\"status\":\"COMPLETED\","
+            + "\"at\":null,\"url\":null}]}")));
+    startDeployer(Map.of());
+    FactoryAdminClient client = client();
+
+    FactoryFlowDetail detail = client.factoryFlowDetail("logwatch");
+
+    assertThat(detail.items()).extracting(FactoryFlowDetail.Item::id)
+        .containsExactly("logwatch-1");
+    assertThat(tokensSeen.get("factory:/api/factory/flow/logwatch")).isEqualTo(TOKEN);
+  }
+
+  @Test
   void readsTheModulePrerequisitesTheFactoryReports() throws IOException {
     startFactory(Map.of("/api/factory/status", json(200, statusBody("software-factory"))));
     startDeployer(Map.of());

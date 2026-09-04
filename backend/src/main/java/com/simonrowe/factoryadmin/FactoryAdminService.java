@@ -198,6 +198,33 @@ public class FactoryAdminService {
   }
 
   /**
+   * Looks up one node's recent work, for its drawer.
+   *
+   * <p>{@code deploy} and {@code platformbackup} are deployer-owned, exactly as in {@link
+   * #flow()}, but this method never calls the deployer for them at all — not even once, and not
+   * caught as a failure. The deployer deliberately holds no {@code FACTORY_TRIGGER_TOKEN}, and
+   * {@code GET /api/factory/flow/{nodeKey}} is token-protected there, so {@code
+   * FactoryTokenAuthenticator} would refuse every such request with a blank-token 503 regardless
+   * of what this method sent. An empty detail is the honest answer for those two keys, not a
+   * failure masquerading as one — the distinction {@code FlowDetail} exists to preserve, so a
+   * silently-empty list here must never be mistaken for "no runs".
+   *
+   * @param nodeKey the node whose drawer is open
+   * @return that node's items, newest first, or empty when the key is deployer-owned or the
+   *     factory could not be read
+   */
+  public FactoryFlowDetail flowDetail(final String nodeKey) {
+    if (DEPLOYER_OWNED.contains(nodeKey)) {
+      return FactoryFlowDetail.empty(nodeKey);
+    }
+    try {
+      return client.factoryFlowDetail(nodeKey);
+    } catch (RuntimeException exception) {
+      return FactoryFlowDetail.empty(nodeKey);
+    }
+  }
+
+  /**
    * Reviews a pull request on demand.
    *
    * <p>The only module whose automatic trigger is a webhook the factory cannot replay: a review
