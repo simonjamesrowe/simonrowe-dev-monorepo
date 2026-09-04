@@ -6544,7 +6544,7 @@ a:hover {
 
 .factory-flow__edge--fast { stroke-width: 1.5; }
 .factory-flow__edge--main { stroke-width: 2.5; }
-.factory-flow__edge--slow { stroke-width: 1.5; stroke-dasharray: 6 5; }
+.factory-flow__edge--slow { stroke-width: 3.5; stroke-dasharray: 6 5; }
 
 .factory-flow__canvas marker path { fill: var(--color-border); }
 

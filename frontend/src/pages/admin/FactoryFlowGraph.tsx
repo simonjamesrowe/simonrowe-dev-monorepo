@@ -1,5 +1,5 @@
 import type { FactoryFlow, FactoryFlowNode, FactoryNodeHealth } from '../../services/softwareFactoryApi'
-import { FACTORY_FLOW_ORDER, NODE_POSITIONS } from './factoryFlowLayout'
+import { FACTORY_FLOW_ORDER, NODE_POSITIONS, edgePath } from './factoryFlowLayout'
 
 const HEALTH_LABELS: Record<FactoryNodeHealth, string> = {
   READY: 'Ready',
@@ -54,13 +54,10 @@ export function FactoryFlowGraph(
           </marker>
         </defs>
         {flow.edges.map((edge) => (
-          <line
+          <path
             key={`${edge.from}-${edge.to}`}
             className={`factory-flow__edge factory-flow__edge--${edge.loop.toLowerCase()}`}
-            x1={NODE_POSITIONS[edge.from]?.x}
-            y1={NODE_POSITIONS[edge.from]?.y}
-            x2={NODE_POSITIONS[edge.to]?.x}
-            y2={NODE_POSITIONS[edge.to]?.y}
+            d={edgePath(edge, flow.edges)}
             markerEnd="url(#factory-flow-arrow)"
           />
         ))}
