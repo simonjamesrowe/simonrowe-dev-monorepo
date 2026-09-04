@@ -6425,117 +6425,6 @@ a:hover {
   letter-spacing: 0.08em;
 }
 
-.factory-rail {
-  border-block: 1px solid var(--color-border);
-}
-
-.factory-rail__row {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(14rem, 1.35fr) repeat(2, minmax(9rem, 0.8fr)) minmax(14rem, 1.2fr) minmax(8rem, 0.65fr);
-  gap: 1rem;
-  align-items: center;
-  min-height: 6.25rem;
-  padding: 1rem 0.25rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.factory-rail__row:last-child { border-bottom: 0; }
-.factory-rail__row::before {
-  content: '';
-  position: absolute;
-  left: 2.7rem;
-  bottom: -0.8rem;
-  width: 1px;
-  height: 1.55rem;
-  background: var(--color-border);
-  z-index: 1;
-}
-.factory-rail__row:last-child::before { display: none; }
-.factory-rail__row--fault { background: rgba(239, 68, 68, 0.025); }
-
-.factory-rail__identity {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-}
-
-.factory-rail__number {
-  display: grid;
-  place-items: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  flex: 0 0 auto;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-bg);
-  color: var(--color-accent);
-  font-family: var(--font-mono, monospace);
-  font-size: 0.7rem;
-  font-weight: 700;
-  z-index: 2;
-}
-
-.factory-rail__identity h2 {
-  margin: 0 0 0.2rem;
-  color: var(--color-text);
-  font-family: var(--font-heading);
-  font-size: 1rem;
-}
-
-.factory-rail__identity span,
-.factory-rail__checkpoint span,
-.factory-rail__action span {
-  color: var(--color-text-muted);
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.factory-rail__checkpoint {
-  display: grid;
-  grid-template-columns: 1rem 1fr;
-  gap: 0.2rem 0.45rem;
-  align-items: center;
-  color: #16a34a;
-}
-
-.factory-rail__checkpoint strong {
-  grid-column: 2;
-  color: var(--color-text);
-  font-size: 0.74rem;
-  font-weight: 500;
-  line-height: 1.35;
-}
-
-.factory-rail__row--fault .factory-rail__checkpoint { color: #d97706; }
-.factory-rail__action { display: flex; flex-direction: column; gap: 0.22rem; }
-.factory-rail__action strong { color: var(--color-text); font-size: 0.76rem; }
-.factory-rail__diagnostic {
-  grid-column: 2 / -1;
-  margin: -0.35rem 0 0;
-  color: #b45309;
-  font-size: 0.72rem;
-}
-
-.factory-rail__prerequisites {
-  grid-column: 2 / -1;
-  margin: -0.35rem 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  color: #b45309;
-  font-size: 0.72rem;
-}
-
-.factory-rail__prerequisites li {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
 .factory-console__run {
   display: flex;
   align-items: flex-start;
@@ -6738,11 +6627,143 @@ a:hover {
   .factory-flow__node { width: 100%; min-width: 0; }
 }
 
+/*
+ * Factory node drawer — same right-side slide-in as the Media Library drawer (`.drawer`), but its
+ * own BEM block: the Media Library drawer wants a backdrop and a click-outside-to-close overlay,
+ * where this one is a lighter-weight inspector that only ever coexists with the graph behind it.
+ */
+.factory-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(26rem, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.35rem 1.5rem;
+  background: var(--color-panel);
+  border-left: 1px solid var(--color-border);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
+  overflow-y: auto;
+  z-index: 100;
+  animation: slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.factory-drawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.factory-drawer__header h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+}
+
+.factory-drawer__health {
+  margin: -0.4rem 0 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.factory-drawer__health--ready { color: #16a34a; }
+.factory-drawer__health--degraded { color: #d97706; }
+.factory-drawer__health--disabled { color: var(--color-text-muted); }
+.factory-drawer__health--unavailable { color: #dc2626; }
+.factory-drawer__health--offline { color: #dc2626; }
+.factory-drawer__health--idle { color: var(--color-text-muted); }
+.factory-drawer__health--not_tracked { color: var(--color-text-muted); }
+
+.factory-drawer__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.factory-drawer__counts div { display: flex; flex-direction: column; gap: 0.15rem; }
+.factory-drawer__counts dt {
+  color: var(--color-text-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.factory-drawer__counts dd { margin: 0; color: var(--color-text); font-size: 0.95rem; font-weight: 600; }
+
+.factory-drawer__diagnostic {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border-left: 3px solid #d97706;
+  border-radius: 0.35rem;
+  background: rgba(217, 119, 6, 0.08);
+  color: var(--color-text);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.factory-drawer__note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.factory-drawer__module {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.factory-drawer__module div { display: flex; justify-content: space-between; gap: 1rem; }
+.factory-drawer__module dt { margin: 0; color: var(--color-text-muted); font-size: 0.76rem; }
+.factory-drawer__module dd {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* The action panel that moved in from the old module rail: one column, since the drawer is
+   narrower than the page-width row it used to occupy. */
+.factory-drawer .factory-action {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem 0 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.factory-drawer .factory-action--danger {
+  margin-left: 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--color-rose, var(--error));
+}
+
+.factory-drawer .factory-action__controls {
+  justify-content: flex-start;
+}
+
+@media (max-width: 700px) {
+  .factory-drawer { width: 100%; }
+}
+
 @media (max-width: 1280px) {
-  .factory-rail__row { grid-template-columns: minmax(13rem, 1.2fr) repeat(2, minmax(8rem, 0.8fr)); }
-  .factory-rail__action { grid-column: 3; }
-  .factory-rail__diagnostic { grid-column: 2 / -1; }
-  .factory-rail__prerequisites { grid-column: 2 / -1; }
   .factory-action { grid-template-columns: 1fr 1.5fr; }
   .factory-action__controls { grid-column: 1 / -1; justify-content: flex-end; }
 }
@@ -6750,12 +6771,6 @@ a:hover {
 @media (max-width: 700px) {
   .factory-console__header { flex-direction: column; }
   .factory-console__commit { width: 100%; margin-left: 0; }
-  .factory-rail__row { grid-template-columns: 1fr 1fr; gap: 0.8rem; padding: 1rem 0; }
-  .factory-rail__identity { grid-column: 1 / -1; }
-  .factory-rail__row::before { display: none; }
-  .factory-rail__action { grid-column: auto; }
-  .factory-rail__diagnostic { grid-column: 1 / -1; }
-  .factory-rail__prerequisites { grid-column: 1 / -1; }
   .factory-action { grid-template-columns: 1fr; }
   .factory-action__controls { grid-column: auto; flex-wrap: wrap; }
 }
