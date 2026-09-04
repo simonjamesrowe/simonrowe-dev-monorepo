@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -455,5 +455,28 @@ describe('SoftwareFactoryAdmin', () => {
 
     expect(within(drawer).getByText(/not yet running/i)).toBeInTheDocument()
     expect(within(drawer).queryByRole('button', { name: /Dry run/ })).not.toBeInTheDocument()
+  })
+
+  it('polls the flow at the chosen interval and stops when switched off', async () => {
+    // userEvent.click deadlocks under vi.useFakeTimers() in this environment even with
+    // advanceTimers configured (reproduced in isolation, independent of this component) -
+    // fireEvent.click is a plain, synchronous DOM dispatch and sidesteps that without weakening
+    // what this test proves: a leaked interval is invisible until it is hammering an endpoint,
+    // so "stops when switched off" is the assertion worth keeping.
+    renderConsoleWithFlow()
+    await screen.findByRole('button', { name: /Log watch/ })
+    const initial = mockFetchFlow.mock.calls.length
+
+    vi.useFakeTimers()
+
+    fireEvent.click(screen.getByRole('radio', { name: '15s' }))
+    await act(() => vi.advanceTimersByTimeAsync(15_000))
+    expect(mockFetchFlow.mock.calls.length).toBe(initial + 1)
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Off' }))
+    await act(() => vi.advanceTimersByTimeAsync(60_000))
+    expect(mockFetchFlow.mock.calls.length).toBe(initial + 1)
+
+    vi.useRealTimers()
   })
 })

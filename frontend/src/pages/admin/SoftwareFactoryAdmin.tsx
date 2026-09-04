@@ -40,6 +40,34 @@ const POLL_INTERVAL_MS = 3000
 /** Ten minutes of polling. A deploy that has not finished by then needs Temporal, not this page. */
 const MAX_POLLS = 200
 
+/** Off is the default: a console left open on a second monitor should not poll all day. */
+const REFRESH_OPTIONS: { label: string; ms: number | null }[] = [
+  { label: 'Off', ms: null },
+  { label: '15s', ms: 15_000 },
+  { label: '1m', ms: 60_000 },
+  { label: '5m', ms: 300_000 },
+]
+
+function RefreshInterval(
+  { value, onChange }: { value: number | null; onChange: (ms: number | null) => void },
+) {
+  return (
+    <fieldset className="factory-console__refresh" role="radiogroup" aria-label="Refresh interval">
+      {REFRESH_OPTIONS.map((option) => (
+        <label key={option.label}>
+          <input
+            type="radio"
+            name="factory-refresh"
+            checked={value === option.ms}
+            onChange={() => onChange(option.ms)}
+          />
+          {option.label}
+        </label>
+      ))}
+    </fieldset>
+  )
+}
+
 interface ActiveRun {
   key: string
   accepted: FactoryRunAccepted
@@ -112,11 +140,17 @@ export function SoftwareFactoryAdmin() {
   const [pullNumber, setPullNumber] = useState('')
   const [deployConfirmation, setDeployConfirmation] = useState('')
   const [confirmBackup, setConfirmBackup] = useState(false)
+  const [refreshMs, setRefreshMs] = useState<number | null>(null)
 
   useRunProgress(run, setRun)
 
+  // A ref, not state: state would re-run the interval effect below and reset its timer on every
+  // load, which would make a slow response push its own next tick out rather than being skipped.
+  const loadInFlight = useRef(false)
+
   const load = useCallback(async () => {
     try {
+      loadInFlight.current = true
       setLoading(true)
       setError(null)
       const [nextStatus, nextFlow] = await Promise.all([
@@ -129,10 +163,22 @@ export function SoftwareFactoryAdmin() {
       setError(reason instanceof Error ? reason.message : 'Could not load factory status')
     } finally {
       setLoading(false)
+      loadInFlight.current = false
     }
   }, [getAccessToken])
 
   useEffect(() => { void load() }, [load])
+
+  useEffect(() => {
+    if (refreshMs === null) return undefined
+    const timer = setInterval(() => {
+      // The interval is a floor on spacing, not a promise of one request per tick: a slow
+      // response must not queue a second request behind the first.
+      if (loadInFlight.current) return
+      void load()
+    }, refreshMs)
+    return () => clearInterval(timer)
+  }, [refreshMs, load])
 
   const modules = useMemo(
     () => new Map<string, FactoryModuleStatus>(status?.modules.map((module) => [module.key, module]) ?? []),
@@ -347,9 +393,12 @@ export function SoftwareFactoryAdmin() {
             Observe each automation boundary and start the workflows that are safe to run by hand.
           </p>
         </div>
-        <button className="admin-btn" disabled={loading} onClick={() => void load()} type="button">
-          <RefreshCw className={loading ? 'factory-console__spin' : ''} size={16} /> Refresh
-        </button>
+        <div className="factory-console__header-actions">
+          <RefreshInterval value={refreshMs} onChange={setRefreshMs} />
+          <button className="admin-btn" disabled={loading} onClick={() => void load()} type="button">
+            <RefreshCw className={loading ? 'factory-console__spin' : ''} size={16} /> Refresh
+          </button>
+        </div>
       </div>
 
       <div className="factory-console__service-strip" aria-label="Factory service reachability">
