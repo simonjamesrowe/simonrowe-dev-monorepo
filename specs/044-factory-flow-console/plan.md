@@ -672,6 +672,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.simonrowe.factory.codereview.github.GitHubCredentials;
 import com.simonrowe.factory.flow.domain.NodeCounts;
 import com.simonrowe.factory.linear.domain.IssueStateType;
 import com.simonrowe.factory.linear.persistence.LinearIssueRecord;
@@ -738,7 +739,8 @@ class ArtifactCountsReaderTest {
   }
 
   private ArtifactCountsReader reader() {
-    return new ArtifactCountsReader(repository, null, "simonjamesrowe", "simonrowe-dev-monorepo");
+    return new ArtifactCountsReader(
+        repository, mock(GitHubCredentials.class), "simonjamesrowe", "simonrowe-dev-monorepo");
   }
 
   private static LinearIssueRecord record(
@@ -846,14 +848,27 @@ Append to `ArtifactCountsReaderTest`:
 ```java
   @Test
   void returnsNullForGitHubBackedNodesWhenNoInstallationCanBeResolved() {
-    // The reviewer's App credentials are optional in a local run. A console that threw here
-    // would be unopenable on a developer machine, which is where it is most needed.
-    ArtifactCountsReader reader =
-        new ArtifactCountsReader(repository, null, "simonjamesrowe", "simonrowe-dev-monorepo");
+    // The reviewer's App credentials are configured but unusable in a local run. A console that
+    // threw here would be unopenable on a developer machine, which is where it is most needed.
+    GitHubCredentials credentials = mock(GitHubCredentials.class);
+    when(credentials.installationId("simonjamesrowe", "simonrowe-dev-monorepo")).thenReturn(null);
+    ArtifactCountsReader reader = new ArtifactCountsReader(
+        repository, credentials, "simonjamesrowe", "simonrowe-dev-monorepo");
 
     assertThat(reader.pullRequestCounts()).isNull();
     assertThat(reader.mainCounts()).isNull();
     assertThat(reader.agentSetupCounts()).isNull();
+  }
+
+  @Test
+  void returnsNullForGitHubBackedNodesWhenGitHubItselfFails() {
+    GitHubCredentials credentials = mock(GitHubCredentials.class);
+    when(credentials.installationId("simonjamesrowe", "simonrowe-dev-monorepo"))
+        .thenThrow(new RuntimeException("GitHub is unreachable"));
+    ArtifactCountsReader reader = new ArtifactCountsReader(
+        repository, credentials, "simonjamesrowe", "simonrowe-dev-monorepo");
+
+    assertThat(reader.pullRequestCounts()).isNull();
   }
 ```
 
@@ -892,9 +907,6 @@ Run it, watch it fail with "cannot find symbol: pullRequestCounts", then add to
   }
 
   private NodeCounts gitHubCount(final String path) {
-    if (credentials == null) {
-      return null;
-    }
     try {
       Long installation = credentials.installationId(owner, repository);
       if (installation == null) {
@@ -916,7 +928,7 @@ with `Authorization: Bearer <token>`, `Accept: application/vnd.github+json` and
 - [ ] **Step 6: Run the whole class and checkstyle**
 
 Run: `./gradlew :software-factory:test --tests '*ArtifactCountsReaderTest' :software-factory:checkstyleMain`
-Expected: PASS, 6 tests.
+Expected: PASS, 7 tests.
 
 - [ ] **Step 7: Commit**
 
