@@ -148,3 +148,53 @@ export const startDeploy = (
 
 export const fetchRunProgress = (getAccessToken: GetAccessToken, workflowId: string) =>
   request<FactoryRunProgress>(getAccessToken, `/runs/${encodeURIComponent(workflowId)}`)
+
+export type FactoryNodeKind = 'MODULE' | 'ARTIFACT'
+
+export type FactoryNodeBand = 'OBSERVE' | 'PLAN' | 'BUILD' | 'SHIP' | 'LEARN' | 'UTILITY'
+
+export type FactoryLoop = 'FAST' | 'MAIN' | 'SLOW'
+
+/**
+ * IDLE and OFFLINE are separate on purpose: "nothing to do" and "nothing is listening" send an
+ * operator to different places, and the build agent runs on a machine the server cannot reach.
+ *
+ * NOT_TRACKED is different again: this node has no owning module and no artifact source this
+ * container can read (currently only `production`), so reporting any other value here would be a
+ * false statement of health. Production's real state lives on the platform status page.
+ */
+export type FactoryNodeHealth =
+  | 'READY' | 'DEGRADED' | 'DISABLED' | 'UNAVAILABLE' | 'OFFLINE' | 'IDLE' | 'NOT_TRACKED'
+
+export interface FactoryNodeCounts {
+  inFlight: number
+  ok24h: number
+  failed24h: number
+}
+
+export interface FactoryFlowNode {
+  key: string
+  kind: FactoryNodeKind
+  band: FactoryNodeBand
+  label: string
+  /** null when the source could not be read, which is not the same as zero. */
+  counts: FactoryNodeCounts | null
+  health: FactoryNodeHealth
+  diagnostic: string | null
+}
+
+export interface FactoryFlowEdge {
+  from: string
+  to: string
+  label: string
+  loop: FactoryLoop
+}
+
+export interface FactoryFlow {
+  fetchedAt: string
+  nodes: FactoryFlowNode[]
+  edges: FactoryFlowEdge[]
+}
+
+export const fetchFactoryFlow = (getAccessToken: GetAccessToken) =>
+  request<FactoryFlow>(getAccessToken, '/flow')
