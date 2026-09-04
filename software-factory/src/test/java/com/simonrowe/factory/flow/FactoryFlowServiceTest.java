@@ -74,7 +74,10 @@ class FactoryFlowServiceTest {
     givenStatus();
     when(artifacts.linearCounts()).thenReturn(new NodeCounts(3, 0, 0));
 
-    assertThat(node(service().flow(), "build").health()).isEqualTo(NodeHealth.OFFLINE);
+    FlowNode build = node(service().flow(), "build");
+    assertThat(build.health()).isEqualTo(NodeHealth.OFFLINE);
+    // The waiting count must appear on the badge that says OFFLINE, not read as zero beside it.
+    assertThat(build.counts()).isEqualTo(new NodeCounts(3, 0, 0));
   }
 
   @Test
@@ -82,7 +85,32 @@ class FactoryFlowServiceTest {
     givenStatus();
     when(artifacts.linearCounts()).thenReturn(NodeCounts.NONE);
 
-    assertThat(node(service().flow(), "build").health()).isEqualTo(NodeHealth.IDLE);
+    FlowNode build = node(service().flow(), "build");
+    assertThat(build.health()).isEqualTo(NodeHealth.IDLE);
+    assertThat(build.counts()).isEqualTo(NodeCounts.NONE);
+  }
+
+  @Test
+  void reportsTheBuildNodeAsUnavailableWithNullCountsWhenLinearCannotBeRead() {
+    // A null must never render as a zero: an unreadable Linear is UNAVAILABLE, and the counts
+    // that would otherwise sit next to that badge must say "unknown", not "nothing waiting".
+    givenStatus();
+    when(artifacts.linearCounts()).thenReturn(null);
+
+    FlowNode build = node(service().flow(), "build");
+    assertThat(build.health()).isEqualTo(NodeHealth.UNAVAILABLE);
+    assertThat(build.counts()).isNull();
+  }
+
+  @Test
+  void reportsProductionAsNotTrackedRatherThanReady() {
+    // production has no owning module and no artifact source this container can read. Reporting
+    // it unconditionally READY would be a permanently green badge with nothing behind it.
+    givenStatus();
+
+    FlowNode production = node(service().flow(), "production");
+    assertThat(production.health()).isEqualTo(NodeHealth.NOT_TRACKED);
+    assertThat(production.counts()).isNull();
   }
 
   private FactoryFlowService service() {

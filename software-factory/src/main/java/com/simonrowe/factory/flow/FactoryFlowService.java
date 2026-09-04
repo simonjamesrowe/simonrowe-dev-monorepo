@@ -18,7 +18,12 @@ import org.springframework.stereotype.Service;
  *
  * <p>Health is resolved in a fixed precedence — disabled, then unavailable, then degraded —
  * because those three send an operator to a flag, a container and a prerequisite respectively,
- * and a single collapsed "not working" sends them to the wrong one.
+ * and a single collapsed "not working" sends them to the wrong one. A node with no owning module
+ * and no artifact source this container can read (only {@code production} today) resolves to
+ * {@link NodeHealth#NOT_TRACKED} with null counts rather than an unconditional {@link
+ * NodeHealth#READY} with zero counts — there is nothing to count here, as opposed to a count of
+ * zero, and a permanently green badge on a node called "Production" would be a false statement of
+ * health.
  */
 @Service
 public class FactoryFlowService {
@@ -65,27 +70,54 @@ public class FactoryFlowService {
       final NodeDescriptor descriptor,
       final Map<String, FactoryStatusResponse.ModuleStatus> modules,
       final NodeCounts linear) {
-    NodeCounts counts = countsFor(descriptor, linear);
+    boolean tracked = isTracked(descriptor);
+    NodeCounts counts = tracked ? countsFor(descriptor, linear) : null;
     FactoryStatusResponse.ModuleStatus module =
         descriptor.moduleKey() == null ? null : modules.get(descriptor.moduleKey());
-    NodeHealth health = health(descriptor, module, counts, linear);
+    NodeHealth health = health(descriptor, module, counts, linear, tracked);
     String diagnostic = module == null ? null : module.diagnostic();
     return new FlowNode(
         descriptor.key(), descriptor.kind(), descriptor.band(), descriptor.label(),
         counts, health, diagnostic);
   }
 
+  /**
+   * Whether this node has any source of live data at all.
+   *
+   * <p>{@code production} is the current node with none: no {@code moduleKey}, no {@code
+   * workflowType}, and none of the artifact keys {@link #countsFor} knows how to read. Every other
+   * artifact without a module — {@code pull-request}, {@code main}, {@code agent-setup} — has a
+   * GitHub-backed count, and {@code build} has Linear. This check and {@link #countsFor}'s switch
+   * must be kept in step: a key added to one without the other either throws away a real count or
+   * reports a source that does not exist.
+   */
+  private boolean isTracked(final NodeDescriptor descriptor) {
+    if (descriptor.workflowType() != null || descriptor.moduleKey() != null) {
+      return true;
+    }
+    return switch (descriptor.key()) {
+      case FactoryFlowTopology.BUILD, "pull-request", "main", "agent-setup" -> true;
+      default -> false;
+    };
+  }
+
   private NodeCounts countsFor(final NodeDescriptor descriptor, final NodeCounts linear) {
     if (descriptor.workflowType() != null) {
       return workflows.countsFor(descriptor.workflowType());
+    }
+    // The build agent runs on a machine this container cannot reach, so its counts are read
+    // entirely from the Linear backlog waiting for it — the same value health() below inspects,
+    // so a null Linear read renders as null counts here rather than a misleading zero.
+    if (FactoryFlowTopology.BUILD.equals(descriptor.key())) {
+      return linear;
     }
     return switch (descriptor.key()) {
       case FactoryFlowTopology.LINEAR_NODE -> linear;
       case "pull-request" -> artifacts.pullRequestCounts();
       case "main" -> artifacts.mainCounts();
       case "agent-setup" -> artifacts.agentSetupCounts();
-      // The build agent runs on a machine this container cannot reach, and production's state is
-      // already reported by the platform status endpoint the console renders separately.
+      // Unreachable: isTracked() returns false for every other key, and node() only calls this
+      // method when the node is tracked. Required by the switch's exhaustiveness, not by data.
       default -> NodeCounts.NONE;
     };
   }
@@ -94,7 +126,8 @@ public class FactoryFlowService {
       final NodeDescriptor descriptor,
       final FactoryStatusResponse.ModuleStatus module,
       final NodeCounts counts,
-      final NodeCounts linear) {
+      final NodeCounts linear,
+      final boolean tracked) {
     if (FactoryFlowTopology.BUILD.equals(descriptor.key())) {
       // Derived entirely from Linear: work waiting with nothing running means nothing is
       // listening. Nothing waiting means nothing to do. They are different facts.
@@ -102,6 +135,9 @@ public class FactoryFlowService {
         return NodeHealth.UNAVAILABLE;
       }
       return linear.inFlight() > 0 ? NodeHealth.OFFLINE : NodeHealth.IDLE;
+    }
+    if (!tracked) {
+      return NodeHealth.NOT_TRACKED;
     }
     if (module != null && Boolean.FALSE.equals(module.configured())) {
       return NodeHealth.DISABLED;
