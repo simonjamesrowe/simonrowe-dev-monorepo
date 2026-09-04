@@ -161,13 +161,25 @@ collection, which is materially more work. This is a spike, not a late discovery
 One new endpoint on `software-factory`:
 
 ```
-GET /api/factory/flow          (token-protected)
+GET /api/factory/flow          (unauthenticated, same terms as /api/factory/status)
 ```
 
-Token-protected rather than open. `GET /api/factory/status` is deliberately unauthenticated because
-it returns only booleans, queue names and poller counts; `/flow` carries Linear ticket titles and
-pull request subjects, so it belongs with `GET /api/factory/runs/{id}`, which is already
-token-protected for the same reason.
+**Revised 2026-09-04, during implementation.** The original design said token-protected, on the
+premise that `/flow` "carries Linear ticket titles and pull request subjects". That premise is
+wrong for this endpoint: it returns node keys and labels from a fixed topology, integer counts, and
+`diagnostic` strings of exactly the same kind `/api/factory/status` already serves openly from both
+containers. Titles and identifiers appear only at `GET /api/factory/flow/{nodeKey}`, which **is**
+token-protected.
+
+Leaving `/flow` open resolves a problem the token would otherwise create. Task 4 established that
+`FactoryTokenAuthenticator` is not a Spring Security filter at all — it is a plain `@Component`, and
+each protected controller calls `authenticate(token)` as the first line of its handler. The
+`deployer` deliberately holds no `FACTORY_TRIGGER_TOKEN`, and it is the authority on the `deploy`
+and `platformbackup` nodes. Token-protecting `/flow` would therefore have forced either a
+role-conditional authentication bypass, or handing the socket-holding container a credential that
+also authorises `/api/reviews` — the same trap documented on `FactoryStatusController`. Neither is
+worth paying for information the adjacent endpoint already gives away. Both endpoints are unrouted
+by nginx regardless; only `POST /webhooks/github` is routed.
 
 The backend proxies it at:
 

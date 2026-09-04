@@ -13,7 +13,7 @@
 - Spec: `specs/044-factory-flow-console/spec.md`. Every requirement there is in scope for this plan.
 - **Twelve nodes**: seven module nodes (`logwatch`, `cvefix`, `build`, `codereview`, `deploy`, `platformbackup`, `feedback`) and five artifact nodes (`linear`, `pull-request`, `main`, `production`, `agent-setup`). The `linear` *module* is not a node — its health renders as a badge on the `linear` artifact node.
 - **`platformbackup` has no edges.** It is attached to `production` visually but participates in no loop. A test asserts it has zero edges.
-- **`GET /api/factory/flow` is token-protected.** `GET /api/factory/status` stays unauthenticated and unmodified.
+- **`GET /api/factory/flow` is unauthenticated, on the same terms as `GET /api/factory/status`** (revised during Task 4 — see the spec's API section). `GET /api/factory/flow/{nodeKey}` in Task 10 **is** token-protected, because that is where titles and identifiers appear. `/api/factory/status` stays unauthenticated and unmodified.
 - **No module is edited.** This feature reads only. No new Mongo collection, no Mongock change unit.
 - Java is Google Java Style, enforced by Checkstyle; every public type and public method needs Javadoc. Run `../gradlew :software-factory:test :software-factory:checkstyleMain` before each commit.
 - Frontend is plain CSS with BEM naming in the single `styles.css`, CSS custom properties for theming.
@@ -1563,20 +1563,17 @@ In `FactoryAdminClient`, add a constant and two methods next to `factoryStatus()
   }
 ```
 
-**Before implementing, verify the deployer actually holds `FACTORY_TRIGGER_TOKEN`.** Run:
+**RESOLVED during Task 4 — no exemption is needed and none must be built.** `/api/factory/flow` is
+unauthenticated, so neither `factoryFlow()` nor `deployerFlow()` sends a token, exactly like the
+existing `deployerStatus()`. Drop `.header(TOKEN_HEADER, token)` from both methods above.
 
-```bash
-grep -n "FACTORY_TRIGGER_TOKEN" docker-compose.prod.yml
-```
-
-The deployer deliberately holds no trigger token — that is why `deployerStatus()` sends none. If
-the grep confirms the token is absent under `deployer`, then `deployerFlow()` **cannot** be
-token-protected on the deployer side. Resolve it this way: give `FactoryTokenAuthenticator` an
-exemption for `/api/factory/flow` **only when `factory.runtime-role` is `deployer`**, and record
-the reasoning in the class Javadoc. The deployer's flow response contains only its own two modules'
-counts, which is the same class of information `/api/factory/status` already serves openly from
-that container. Add a test in `software-factory` asserting the exemption applies only in the
-deployer role.
+The reasoning, for the Javadoc: `FactoryTokenAuthenticator` is not a Spring Security filter — it is
+a plain `@Component` and each protected controller calls `authenticate(token)` itself. The
+`deployer` deliberately holds no `FACTORY_TRIGGER_TOKEN` because that credential also authorises
+`/api/reviews`, and the deployer is the container holding the Docker socket. Token-protecting
+`/flow` would have forced either a role-conditional authentication bypass or handing that container
+the credential — to protect integer counts and diagnostics that `/api/factory/status` already
+serves openly from the same container.
 
 - [ ] **Step 5: Merge in the service**
 
