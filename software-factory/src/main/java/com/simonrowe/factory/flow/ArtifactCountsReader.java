@@ -1,19 +1,22 @@
 package com.simonrowe.factory.flow;
 
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
 import com.simonrowe.factory.flow.domain.NodeCounts;
 import com.simonrowe.factory.linear.persistence.LinearIssueRecord;
 import com.simonrowe.factory.linear.persistence.LinearIssueRepository;
+import java.io.IOException;
+import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
 /**
  * Live figures for the nodes that are artifacts rather than modules.
@@ -26,6 +29,10 @@ import org.springframework.web.client.RestClient;
  * <p>Every method returns null rather than zero on failure. "Nothing filed" and "could not be
  * read" render as IDLE and UNAVAILABLE respectively, and collapsing them would present a broken
  * source as a quiet one.
+ *
+ * <p>GitHub reads use plain {@link HttpClient} rather than Spring's {@code RestClient}, matching
+ * this module's other outbound HTTP classes — {@code GitHubGateway}, {@code GitHubCredentials},
+ * {@code LokiClient} and {@code DependencyTrackClient} — none of which use {@code RestClient}.
  */
 @Service
 public class ArtifactCountsReader {
@@ -40,33 +47,42 @@ public class ArtifactCountsReader {
 
   private final LinearIssueRepository issues;
   private final GitHubCredentials credentials;
+  private final ObjectMapper objectMapper;
+  private final String gitHubApiBaseUrl;
   private final String owner;
   private final String repository;
-  private final RestClient gitHub;
+  private final HttpClient httpClient;
 
   /**
    * Creates a reader scoped to one GitHub repository.
    *
    * @param issues the Linear filing audit trail
    * @param credentials the reviewer's GitHub App credentials, reused rather than duplicated
+   * @param objectMapper mapper used to parse GitHub's JSON responses
+   * @param gitHubApiBaseUrl the GitHub API base URL — the same configuration key {@code
+   *     GitHubGateway} and {@code GitHubCredentials} read, so an override of {@code
+   *     GITHUB_API_URL} applies here too
    * @param owner the GitHub owner both the reviewed repository and {@code agent-setup} live under
    * @param repository the reviewed repository's name
    */
   public ArtifactCountsReader(
       final LinearIssueRepository issues,
       final GitHubCredentials credentials,
+      final ObjectMapper objectMapper,
+      @Value("${factory.codereview.github.api-base-url:https://api.github.com}")
+          final String gitHubApiBaseUrl,
       @Value("${factory.github.owner:simonjamesrowe}") final String owner,
       @Value("${factory.github.repository:simonrowe-dev-monorepo}") final String repository) {
     this.issues = issues;
     this.credentials = credentials;
+    this.objectMapper = objectMapper;
+    this.gitHubApiBaseUrl = gitHubApiBaseUrl;
     this.owner = owner;
     this.repository = repository;
-    JdkClientHttpRequestFactory requestFactory =
-        new JdkClientHttpRequestFactory(
-            HttpClient.newBuilder().connectTimeout(GITHUB_TIMEOUT).build());
-    requestFactory.setReadTimeout(GITHUB_TIMEOUT);
-    this.gitHub =
-        RestClient.builder().baseUrl("https://api.github.com").requestFactory(requestFactory)
+    this.httpClient =
+        HttpClient.newBuilder()
+            .connectTimeout(GITHUB_TIMEOUT)
+            .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
   }
 
@@ -133,21 +149,44 @@ public class ArtifactCountsReader {
       if (installation == null) {
         return null;
       }
-      List<?> items = github(credentials.accessToken(installation), path);
-      return items == null ? null : new NodeCounts(items.size(), 0, 0);
+      JsonNode items = github(credentials.accessToken(installation), path);
+      return items.isArray() ? new NodeCounts(items.size(), 0, 0) : null;
     } catch (RuntimeException exception) {
       return null;
     }
   }
 
-  private List<?> github(final String token, final String path) {
-    return gitHub
-        .get()
-        .uri(path)
-        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-        .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", GITHUB_API_VERSION)
-        .retrieve()
-        .body(new ParameterizedTypeReference<List<Object>>() {});
+  /**
+   * Fetches a GitHub REST endpoint expected to return a JSON array, the same way {@code
+   * GitHubGateway.sendJson} does for the reviewer's own reads.
+   *
+   * @param token the bearer token to authenticate with
+   * @param path the request path, relative to {@link #gitHubApiBaseUrl}
+   * @return the parsed response body
+   */
+  private JsonNode github(final String token, final String path) {
+    try {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create(gitHubApiBaseUrl + path))
+              .timeout(GITHUB_TIMEOUT)
+              .header("Authorization", "Bearer " + token)
+              .header("Accept", "application/vnd.github+json")
+              .header("X-GitHub-Api-Version", GITHUB_API_VERSION)
+              .GET()
+              .build();
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() < 200 || response.statusCode() >= 300) {
+        throw new IllegalStateException(
+            "GitHub API returned " + response.statusCode() + " for GET " + path);
+      }
+      return objectMapper.readTree(response.body());
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("GitHub request interrupted", exception);
+    } catch (IOException | JacksonException exception) {
+      throw new IllegalStateException("GitHub request failed", exception);
+    }
   }
 }
