@@ -1,13 +1,28 @@
+import { useState } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { FactoryNodeDrawer } from '../src/pages/admin/FactoryNodeDrawer'
-import type { FactoryFlowNode } from '../src/services/softwareFactoryApi'
+import type { FactoryFlowNode, FactoryModuleStatus } from '../src/services/softwareFactoryApi'
 
 const node: FactoryFlowNode = {
   key: 'logwatch', kind: 'MODULE', band: 'OBSERVE', label: 'Log watch',
   counts: { inFlight: 1, ok24h: 2, failed24h: 0 }, health: 'DEGRADED',
   diagnostic: 'Enabled but not usable: GRAFANA_CLOUD_LOKI_ENDPOINT is unset',
+}
+
+const baseModule: FactoryModuleStatus = {
+  key: 'logwatch',
+  displayName: 'Log watch',
+  configured: true,
+  taskQueue: 'logwatch',
+  workflowPollers: 1,
+  activityPollers: 1,
+  trigger: 'manual',
+  schedule: null,
+  missingPrerequisites: [],
+  ready: true,
+  diagnostic: null,
 }
 
 describe('FactoryNodeDrawer', () => {
@@ -120,5 +135,140 @@ describe('FactoryNodeDrawer', () => {
     // load is in progress.
     render(<FactoryNodeDrawer node={node} module={null} onClose={vi.fn()} />)
     expect(screen.queryByText(/Recent runs/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the configured state and schedule summary, not just pollers', () => {
+    // "Configured" and "Schedule" previously lived in the module rail (On/Off/Unconfirmed,
+    // Active/Paused/Absent) and vanished when the rail was deleted. An operator cannot tell
+    // whether a schedule is paused, or when it next runs, from pollers and a task queue alone.
+    render(
+      <FactoryNodeDrawer
+        node={node}
+        module={{
+          ...baseModule,
+          configured: null,
+          schedule: {
+            scheduleId: 'logwatch-nightly',
+            exists: true,
+            paused: false,
+            overlapPolicy: 'SKIP',
+            previousActionAt: null,
+            nextActionAt: '2026-09-05T02:00:00Z',
+            runningActions: 0,
+            diagnostic: null,
+          },
+        }}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('Unconfirmed')).toBeInTheDocument()
+    expect(screen.getByText(/Active · next/)).toBeInTheDocument()
+  })
+
+  it('omits the "next" clause for a paused schedule with no next action', () => {
+    // A paused schedule has no next action, and neither does one Temporal has not computed yet.
+    // Appending it unconditionally produced "Active · next Not recorded".
+    render(
+      <FactoryNodeDrawer
+        node={node}
+        module={{
+          ...baseModule,
+          schedule: {
+            scheduleId: 'logwatch-nightly',
+            exists: true,
+            paused: true,
+            overlapPolicy: 'SKIP',
+            previousActionAt: null,
+            nextActionAt: null,
+            runningActions: 0,
+            diagnostic: null,
+          },
+        }}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('Paused')).toBeInTheDocument()
+    expect(screen.queryByText(/next/)).not.toBeInTheDocument()
+  })
+
+  it('renders the module diagnostic distinctly from missing prerequisites', () => {
+    // A module can be disabled by configuration with nothing missing to list — the old test for
+    // this used the same string for both fields, so it passed even when the diagnostic itself
+    // was never rendered.
+    render(
+      <FactoryNodeDrawer
+        node={node}
+        module={{
+          ...baseModule,
+          ready: false,
+          missingPrerequisites: [],
+          diagnostic: 'Required Temporal poller is missing',
+        }}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('Required Temporal poller is missing')).toBeInTheDocument()
+  })
+
+  it('moves focus into the drawer when it opens', () => {
+    render(
+      <>
+        <button type="button">Open</button>
+        <FactoryNodeDrawer node={node} module={null} onClose={vi.fn()} />
+      </>,
+    )
+    expect(screen.getByRole('heading', { name: 'Log watch' })).toHaveFocus()
+  })
+
+  it('restores focus to the triggering node button when the drawer closes', async () => {
+    // Otherwise a keyboard user who opened the drawer loses their place in the ring: focus falls
+    // back to the document body rather than back to the node they just activated.
+    function Harness() {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>Log watch</button>
+          <FactoryNodeDrawer
+            node={open ? node : null}
+            module={null}
+            onClose={() => setOpen(false)}
+          />
+        </>
+      )
+    }
+    render(<Harness />)
+
+    const trigger = screen.getByRole('button', { name: 'Log watch' })
+    await userEvent.click(trigger)
+    expect(screen.getByRole('heading', { name: 'Log watch' })).toHaveFocus()
+
+    await userEvent.click(screen.getByRole('button', { name: /close/i }))
+    expect(trigger).toHaveFocus()
+  })
+
+  it('traps Tab within the drawer while it is open', async () => {
+    // aria-modal="true" promises assistive technology that background content is inert; a
+    // keyboard user who could Tab out to the other eleven graph nodes would make that false.
+    render(
+      <>
+        <button type="button">Log watch</button>
+        <button type="button">Some other node</button>
+        <FactoryNodeDrawer node={node} module={null} onClose={vi.fn()}>
+          <button type="button">Scan logs now</button>
+        </FactoryNodeDrawer>
+      </>,
+    )
+
+    const closeButton = screen.getByRole('button', { name: /close/i })
+    const lastButton = screen.getByRole('button', { name: 'Scan logs now' })
+
+    lastButton.focus()
+    await userEvent.tab()
+    expect(closeButton).toHaveFocus()
+
+    await userEvent.tab({ shift: true })
+    expect(lastButton).toHaveFocus()
+
+    expect(screen.queryByRole('button', { name: 'Some other node' })).not.toHaveFocus()
   })
 })

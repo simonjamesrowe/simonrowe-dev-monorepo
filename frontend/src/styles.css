@@ -6405,8 +6405,7 @@ a:hover {
   cursor: pointer;
 }
 
-.factory-console__eyebrow,
-.factory-console__controls-heading > span {
+.factory-console__eyebrow {
   display: block;
   margin-bottom: 0.35rem;
   color: var(--color-accent);
@@ -6476,17 +6475,6 @@ a:hover {
 .factory-console__run--running { border-left-color: var(--color-primary); }
 .factory-console__run--done { border-left-color: #16a34a; }
 .factory-console__run--failed { border-left-color: #dc2626; }
-
-.factory-console__controls {
-  margin-top: 2.5rem;
-}
-
-.factory-console__controls-heading h2 {
-  margin: 0 0 1rem;
-  color: var(--color-text);
-  font-family: var(--font-heading);
-  font-size: 1.15rem;
-}
 
 .factory-action {
   display: grid;

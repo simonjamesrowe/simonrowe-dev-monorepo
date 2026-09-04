@@ -197,11 +197,14 @@ describe('SoftwareFactoryAdmin', () => {
 
   it('shows why an enabled module still cannot work', async () => {
     // Enabled with no credential is neither off nor healthy, and it was invisible before.
+    // The diagnostic and the missing-prerequisite are deliberately different strings here: a
+    // fixture that reuses the same text for both cannot tell whether the diagnostic itself is
+    // rendered, or only the (also-rendered) missing-prerequisites list.
     mockFetchStatus.mockResolvedValue(status({
       modules: [module('cvefix', {
         ready: false,
         missingPrerequisites: ['Dependency-Track API key is not set'],
-        diagnostic: 'Enabled but not usable: Dependency-Track API key is not set',
+        diagnostic: 'Enabled but not usable: no Dependency-Track credential is configured',
       })],
     }))
 
@@ -209,6 +212,9 @@ describe('SoftwareFactoryAdmin', () => {
     const drawer = await openDrawer(/Vulnerability scan/)
 
     expect(within(drawer).getByText('Dependency-Track API key is not set')).toBeInTheDocument()
+    expect(within(drawer).getByText(
+      'Enabled but not usable: no Dependency-Track credential is configured',
+    )).toBeInTheDocument()
   })
 
   it('disables an action whose module is not ready', async () => {

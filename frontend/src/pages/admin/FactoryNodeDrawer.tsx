@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 
 import type {
   FactoryFlowDetail, FactoryFlowNode, FactoryModuleStatus, FactoryNodeHealth,
+  FactoryScheduleStatus,
 } from '../../services/softwareFactoryApi'
 
 const HEALTH_LABELS: Record<FactoryNodeHealth, string> = {
@@ -41,6 +42,32 @@ const NODE_NOTES: Record<string, string> = {
     'Production state is reported by the platform status page rather than counted here.',
 }
 
+const formatTime = (value: string | null) =>
+  value ? new Date(value).toLocaleString() : 'Not recorded'
+
+/**
+ * A paused schedule has no next action time, and neither does one Temporal has not computed yet,
+ * so appending it unconditionally produced "Active · next Not recorded".
+ */
+function scheduleSummary(schedule: FactoryScheduleStatus): string {
+  if (!schedule.exists) return 'Absent'
+  const state = schedule.paused ? 'Paused' : 'Active'
+  return schedule.nextActionAt ? `${state} · next ${formatTime(schedule.nextActionAt)}` : state
+}
+
+/**
+ * Elements a keyboard user can land on. Deliberately excludes `[tabindex="-1"]`, which is exactly
+ * how the heading is made an initial-focus target without joining the Tab cycle.
+ */
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ')
+
 export function FactoryNodeDrawer(
   { node, module, onClose, detail, children }: {
     node: FactoryFlowNode | null
@@ -55,27 +82,79 @@ export function FactoryNodeDrawer(
     children?: React.ReactNode
   },
 ) {
+  const asideRef = useRef<HTMLElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+
+  // Escape closes, and Tab is trapped inside the drawer while it is open: `aria-modal="true"` is
+  // a promise to assistive technology that background content is inert, and a keyboard user who
+  // could still Tab out to the other eleven graph nodes would make that promise false.
   useEffect(() => {
     if (!node) return undefined
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const container = asideRef.current
+      if (!container) return
+      const focusable = Array.from(
+        container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      )
+      if (focusable.length === 0) {
+        event.preventDefault()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [node, onClose])
+
+  // Moves focus into the drawer whenever a (possibly different) node opens, having first
+  // remembered whatever had focus — the node button that was just activated, via the browser's
+  // own focus-follows-click — so it can be restored below.
+  useEffect(() => {
+    if (!node) return
+    previousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    headingRef.current?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only when the node identity changes, not on every prop tweak
+  }, [node?.key])
+
+  // Restores focus to the triggering node button exactly once, when the drawer actually closes —
+  // not on every node switch, which would otherwise fight the browser's own focus-follows-click.
+  const isOpen = node !== null
+  useEffect(() => {
+    if (!isOpen) return undefined
+    return () => {
+      previousFocusRef.current?.focus()
+    }
+  }, [isOpen])
 
   if (!node) return null
 
   const note = NODE_NOTES[node.key]
   return (
     <aside
+      ref={asideRef}
       className="factory-drawer"
       role="dialog"
       aria-modal="true"
       aria-labelledby="factory-drawer-title"
     >
       <header className="factory-drawer__header">
-        <h2 id="factory-drawer-title">{node.label}</h2>
+        <h2 id="factory-drawer-title" ref={headingRef} tabIndex={-1}>{node.label}</h2>
         <button className="admin-btn" type="button" onClick={onClose} aria-label="Close details">
           <X size={16} />
         </button>
@@ -99,22 +178,32 @@ export function FactoryNodeDrawer(
       {note && <p className="factory-drawer__note">{note}</p>}
 
       {module && (
-        <dl className="factory-drawer__module">
-          <div><dt>Task queue</dt><dd>{module.taskQueue}</dd></div>
-          <div><dt>Trigger</dt><dd>{module.trigger}</dd></div>
-          <div>
-            <dt>Pollers</dt>
-            <dd>
-              {module.workflowPollers ?? '?'} workflow / {module.activityPollers ?? '?'} activity
-            </dd>
-          </div>
-          {module.missingPrerequisites.length > 0 && (
+        <>
+          <dl className="factory-drawer__module">
             <div>
-              <dt>Missing</dt>
-              <dd>{module.missingPrerequisites.join('; ')}</dd>
+              <dt>Configured</dt>
+              <dd>{module.configured === null ? 'Unconfirmed' : module.configured ? 'On' : 'Off'}</dd>
             </div>
-          )}
-        </dl>
+            <div><dt>Task queue</dt><dd>{module.taskQueue}</dd></div>
+            <div><dt>Trigger</dt><dd>{module.trigger}</dd></div>
+            {module.schedule && (
+              <div><dt>Schedule</dt><dd>{scheduleSummary(module.schedule)}</dd></div>
+            )}
+            <div>
+              <dt>Pollers</dt>
+              <dd>
+                {module.workflowPollers ?? '?'} workflow / {module.activityPollers ?? '?'} activity
+              </dd>
+            </div>
+            {module.missingPrerequisites.length > 0 && (
+              <div>
+                <dt>Missing</dt>
+                <dd>{module.missingPrerequisites.join('; ')}</dd>
+              </div>
+            )}
+          </dl>
+          {module.diagnostic && <p className="factory-drawer__diagnostic">{module.diagnostic}</p>}
+        </>
       )}
 
       {detail !== undefined && (
