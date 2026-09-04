@@ -45,9 +45,16 @@ function hasReciprocal(edge: FactoryFlowEdge, edges: FactoryFlowEdge[]): boolean
  * directed edges. Detecting the reciprocal generically (rather than special-casing those two node
  * keys) means any future reciprocal pair gets the same treatment for free.
  *
- * Each side of a reciprocal pair bows to the opposite side of the straight line, chosen from the
- * node keys rather than array order, so which edge appears first in `edges` cannot flip which way
- * either one curves.
+ * The offset direction must come from something that does NOT flip when the edge's own direction
+ * flips, or the two sides of a reciprocal pair cancel out: negating (dx, dy) by swapping `from`
+ * and `to`, and then also flipping `sign` from `edge.from < edge.to`, cancel each other exactly —
+ * both edges land on the identical control point, i.e. the identical curve traced backwards,
+ * which renders as the original one-segment defect merely curved instead of straight. Fixed by
+ * computing the perpendicular from a canonical, unordered direction for the pair (the
+ * lexicographically smaller key to the larger one) so it is the same for both edges, and then
+ * choosing which side *this* edge's control point lands on based on whether `edge.from` is that
+ * canonical smaller key. That is independent of which of the two edges is being drawn, so the two
+ * sides are guaranteed to differ rather than merely likely to.
  */
 export function edgePath(edge: FactoryFlowEdge, edges: FactoryFlowEdge[]): string {
   const from = NODE_POSITIONS[edge.from]
@@ -58,12 +65,20 @@ export function edgePath(edge: FactoryFlowEdge, edges: FactoryFlowEdge[]): strin
     return `M ${from.x} ${from.y} L ${to.x} ${to.y}`
   }
 
-  const dx = to.x - from.x
-  const dy = to.y - from.y
+  const canonicalFromKey = edge.from < edge.to ? edge.from : edge.to
+  const canonicalToKey = edge.from < edge.to ? edge.to : edge.from
+  const canonicalFrom = NODE_POSITIONS[canonicalFromKey]
+  const canonicalTo = NODE_POSITIONS[canonicalToKey]
+
+  const dx = canonicalTo.x - canonicalFrom.x
+  const dy = canonicalTo.y - canonicalFrom.y
   const length = Math.hypot(dx, dy) || 1
-  const sign = edge.from < edge.to ? 1 : -1
-  const offsetX = (-dy / length) * RECIPROCAL_CURVE_OFFSET * sign
-  const offsetY = (dx / length) * RECIPROCAL_CURVE_OFFSET * sign
+  const perpX = -dy / length
+  const perpY = dx / length
+  const sign = edge.from === canonicalFromKey ? 1 : -1
+
+  const offsetX = perpX * RECIPROCAL_CURVE_OFFSET * sign
+  const offsetY = perpY * RECIPROCAL_CURVE_OFFSET * sign
   const controlX = (from.x + to.x) / 2 + offsetX
   const controlY = (from.y + to.y) / 2 + offsetY
 

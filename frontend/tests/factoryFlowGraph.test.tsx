@@ -75,11 +75,17 @@ describe('FactoryFlowGraph', () => {
       .toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('draws the two reciprocal fast-loop edges with distinguishable geometry', () => {
+  it('bows the two reciprocal fast-loop edges to opposite sides of the line between them', () => {
     // pull-request -> codereview and codereview -> pull-request share the same two fixed
     // endpoints. Two straight lines between the same points are geometrically identical with
     // the ends swapped, so they would render as a single segment instead of two directed edges
-    // for the fast loop.
+    // for the fast loop. A curve is not enough either: naively negating the direction vector
+    // when deriving the perpendicular offset, alongside a sign that also flips with direction,
+    // cancels out and produces the SAME control point for both edges — a curve traced backwards
+    // is pixel-identical to the curve traced forwards. So this test does not just check the `d`
+    // strings differ (that is true trivially, since the endpoints are textually swapped even
+    // when the curve itself coincides) — it extracts each curve's actual control point and
+    // requires them to land on opposite sides of the straight line joining the endpoints.
     const edges: FactoryFlowEdge[] = [
       { from: 'pull-request', to: 'codereview', label: 'push webhook', loop: 'FAST' },
       { from: 'codereview', to: 'pull-request', label: 'findings and check run', loop: 'FAST' },
@@ -92,9 +98,23 @@ describe('FactoryFlowGraph', () => {
       />,
     )
 
-    const paths = container.querySelectorAll('.factory-flow__edge')
+    const paths = Array.from(container.querySelectorAll('.factory-flow__edge'))
     expect(paths).toHaveLength(2)
-    const geometries = Array.from(paths).map((p) => p.getAttribute('d'))
-    expect(geometries[0]).not.toEqual(geometries[1])
+
+    const controlPoints = paths.map((p) => {
+      const d = p.getAttribute('d') ?? ''
+      const match = d.match(/Q ([-\d.]+) ([-\d.]+)/)
+      if (!match) throw new Error(`expected a curved path with a control point, got: ${d}`)
+      return { x: Number(match[1]), y: Number(match[2]) }
+    })
+
+    expect(controlPoints[0]).not.toEqual(controlPoints[1])
+
+    // pull-request and codereview are both at x=480 (NODE_POSITIONS), so the line between them
+    // is vertical: opposite sides of it means the control points' x coordinates straddle 480,
+    // one above and one below, never both on the same side and never sitting on the line itself.
+    const [a, b] = controlPoints
+    expect(Math.sign(a.x - 480)).not.toBe(0)
+    expect(Math.sign(a.x - 480)).toBe(-Math.sign(b.x - 480))
   })
 })
