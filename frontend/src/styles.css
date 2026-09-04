@@ -6633,6 +6633,111 @@ a:hover {
 
 .factory-console__spin { animation: spin 1s linear infinite; }
 
+.factory-flow {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1000 / 520;
+  margin-bottom: 1.5rem;
+}
+
+.factory-flow__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.factory-flow__edge {
+  stroke: var(--color-border);
+  fill: none;
+}
+
+.factory-flow__edge--fast { stroke-width: 1.5; }
+.factory-flow__edge--main { stroke-width: 2.5; }
+.factory-flow__edge--slow { stroke-width: 1.5; stroke-dasharray: 6 5; }
+
+.factory-flow__canvas marker path { fill: var(--color-border); }
+
+.factory-flow__nodes {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.factory-flow__node-slot {
+  position: absolute;
+  left: var(--factory-flow-x);
+  top: var(--factory-flow-y);
+  transform: translate(-50%, -50%);
+}
+
+.factory-flow__node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 7rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: center;
+}
+
+.factory-flow__node:hover { border-color: var(--border-strong); }
+.factory-flow__node[aria-pressed='true'] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
+}
+
+.factory-flow__node-label {
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.factory-flow__node-health {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.factory-flow__node-counts {
+  font-size: 0.62rem;
+  color: var(--color-text-muted);
+}
+
+/* Colour is never the only signal — the health word is always rendered as text above. */
+.factory-flow__node--ready .factory-flow__node-health { color: #16a34a; }
+.factory-flow__node--degraded .factory-flow__node-health { color: #d97706; }
+.factory-flow__node--disabled .factory-flow__node-health { color: var(--color-text-muted); }
+.factory-flow__node--unavailable .factory-flow__node-health { color: #dc2626; }
+.factory-flow__node--offline .factory-flow__node-health { color: #dc2626; }
+.factory-flow__node--idle .factory-flow__node-health { color: var(--color-text-muted); }
+.factory-flow__node--not_tracked .factory-flow__node-health { color: var(--color-text-muted); }
+
+.factory-flow__node--ready { border-color: #16a34a; }
+.factory-flow__node--degraded { border-color: #d97706; }
+.factory-flow__node--disabled { border-color: var(--color-border); }
+.factory-flow__node--unavailable { border-color: #dc2626; }
+.factory-flow__node--offline { border-color: #dc2626; }
+.factory-flow__node--idle { border-color: var(--color-border); }
+.factory-flow__node--not_tracked { border-color: var(--color-border); }
+
+@media (max-width: 50rem) {
+  .factory-flow { aspect-ratio: auto; }
+  .factory-flow__canvas { display: none; }
+  .factory-flow__nodes { display: flex; flex-direction: column; gap: 0.6rem; }
+  .factory-flow__node-slot { position: static; transform: none; }
+  .factory-flow__node { width: 100%; min-width: 0; }
+}
+
 @media (max-width: 1280px) {
   .factory-rail__row { grid-template-columns: minmax(13rem, 1.2fr) repeat(2, minmax(8rem, 0.8fr)); }
   .factory-rail__action { grid-column: 3; }
