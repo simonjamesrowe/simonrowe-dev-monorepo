@@ -19,6 +19,7 @@ public record TourStep(
     Instant createdAt,
     Instant updatedAt,
     @Indexed(unique = true, sparse = true) String legacyId,
-    String route
+    String route,
+    Integer autoAdvanceMs
 ) {
 }

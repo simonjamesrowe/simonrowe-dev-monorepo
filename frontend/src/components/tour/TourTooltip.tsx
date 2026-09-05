@@ -25,7 +25,20 @@ function calculatePosition(
   let top: number
   let left: number
 
-  switch (placement) {
+  let resolvedPlacement = placement
+  if (placement === 'top' && rect.top - tooltipRect.height - GAP < EDGE_PADDING) {
+    resolvedPlacement = 'bottom'
+  } else if (placement === 'bottom' && rect.bottom + tooltipRect.height + GAP
+      > viewportHeight - EDGE_PADDING) {
+    resolvedPlacement = 'top'
+  } else if (placement === 'left' && rect.left - tooltipRect.width - GAP < EDGE_PADDING) {
+    resolvedPlacement = 'right'
+  } else if (placement === 'right' && rect.right + tooltipRect.width + GAP
+      > viewportWidth - EDGE_PADDING) {
+    resolvedPlacement = 'left'
+  }
+
+  switch (resolvedPlacement) {
     case 'top':
       top = rect.top - tooltipRect.height - GAP
       left = rect.left + (rect.width - tooltipRect.width) / 2
@@ -59,7 +72,18 @@ function calculatePosition(
 }
 
 export function TourTooltip() {
-  const { steps, currentStepIndex, next, prev, exit, autoAdvancePaused, pauseAutoAdvance, resumeAutoAdvance } = useTour()
+  const {
+    steps,
+    currentStepIndex,
+    next,
+    prev,
+    exit,
+    autoAdvancePaused,
+    agentResponsePending,
+    targetReady,
+    pauseAutoAdvance,
+    resumeAutoAdvance,
+  } = useTour()
   const tooltipRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState<Position>({ top: 0, left: 0 })
 
@@ -90,11 +114,15 @@ export function TourTooltip() {
     // Allow DOM updates to settle before positioning
     const timer = requestAnimationFrame(updatePosition)
     return () => cancelAnimationFrame(timer)
-  }, [updatePosition])
+  }, [updatePosition, targetReady])
 
   useEffect(() => {
     window.addEventListener('resize', updatePosition)
-    return () => window.removeEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
   }, [updatePosition])
 
   if (!currentStep) {
@@ -154,8 +182,8 @@ export function TourTooltip() {
         </div>
       </div>
       <div
-        className={`tour-tooltip__progress-bar${autoAdvancePaused ? ' tour-tooltip__progress-bar--paused' : ''}`}
-        key={currentStepIndex}
+        className={`tour-tooltip__progress-bar${autoAdvancePaused || agentResponsePending ? ' tour-tooltip__progress-bar--paused' : ''}`}
+        key={`${currentStepIndex}-${agentResponsePending ? 'waiting' : 'ready'}`}
         style={{ '--auto-advance-duration': `${autoAdvanceMs}ms` } as React.CSSProperties}
       />
     </div>

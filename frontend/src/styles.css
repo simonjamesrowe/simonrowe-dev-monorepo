@@ -3751,15 +3751,33 @@ a:hover {
   position: fixed;
   inset: 0;
   z-index: 9998;
-  cursor: pointer;
+  pointer-events: none;
 }
 
-.tour-spotlight {
-  position: relative;
-  z-index: 9999;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
-  border-radius: 4px;
+.tour-overlay__shade {
+  position: fixed;
+  background: rgba(15, 23, 42, 0.68);
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.tour-overlay__focus {
+  position: fixed;
+  z-index: 1;
+  border: 2px solid var(--color-accent);
+  border-radius: 0.75rem;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.75), 0 12px 30px rgba(0, 0, 0, 0.28);
   pointer-events: none;
+}
+
+.tour-overlay__shade:not(:only-child) {
+  background: rgba(15, 23, 42, 0.64);
+}
+
+.tour-overlay__shade:only-child {
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(1px);
 }
 
 .tour-tooltip {
@@ -6248,10 +6266,20 @@ a:hover {
   gap: 1.5rem;
 }
 
+.blog-editor__four-col {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+}
+
 @media (max-width: 768px) {
   .blog-editor__top-row,
   .blog-editor__two-col,
   .blog-editor__three-col {
+    grid-template-columns: 1fr;
+  }
+
+  .blog-editor__four-col {
     grid-template-columns: 1fr;
   }
 }

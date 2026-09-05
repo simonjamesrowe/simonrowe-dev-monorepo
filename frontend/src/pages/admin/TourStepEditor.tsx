@@ -45,6 +45,7 @@ interface TourStepFormState {
   position: Position | ''
   order: number
   route: string
+  autoAdvanceSeconds: number | ''
 }
 
 const emptyForm = (): TourStepFormState => ({
@@ -55,6 +56,7 @@ const emptyForm = (): TourStepFormState => ({
   position: '',
   order: 0,
   route: '/',
+  autoAdvanceSeconds: 7,
 })
 
 const POSITIONS: Position[] = ['top', 'bottom', 'left', 'right', 'center']
@@ -91,6 +93,7 @@ export function TourStepEditor() {
         position: (data.position as Position) ?? '',
         order: data.order,
         route: data.route ?? '/',
+        autoAdvanceSeconds: data.autoAdvanceMs == null ? '' : data.autoAdvanceMs / 1000,
       })
       setEditorKey((k) => k + 1)
     } catch (err) {
@@ -121,6 +124,9 @@ export function TourStepEditor() {
         position: form.position || null,
         titleImage: form.titleImage || null,
         route: form.route || null,
+        autoAdvanceMs: form.autoAdvanceSeconds === ''
+          ? null
+          : Math.round(form.autoAdvanceSeconds * 1000),
       }
       if (isNew) {
         await createAdminTourStep(getAccessToken, payload)
@@ -201,7 +207,7 @@ export function TourStepEditor() {
           </div>
         </div>
 
-        <div className="blog-editor__section blog-editor__three-col">
+        <div className="blog-editor__section blog-editor__four-col">
           <div>
             <label className="blog-editor__section-label" htmlFor="position">Position</label>
             <select
@@ -229,6 +235,8 @@ export function TourStepEditor() {
               value={form.route}
             >
               <option value="/">/</option>
+              <option value="/profile">/profile</option>
+              <option value="/profile#contact">/profile#contact</option>
               <option value="/experience">/experience</option>
               <option value="/blogs">/blogs</option>
               <option value="/news-events">/news-events</option>
@@ -244,6 +252,26 @@ export function TourStepEditor() {
               onChange={(e) => { setForm((f) => ({ ...f, order: Number(e.target.value) })); setDirty(true) }}
               type="number"
               value={form.order}
+            />
+          </div>
+          <div>
+            <label className="blog-editor__section-label" htmlFor="autoAdvanceSeconds">
+              Auto-advance (seconds)
+            </label>
+            <input
+              className="admin-form__input admin-form__input--narrow"
+              id="autoAdvanceSeconds"
+              min={1}
+              max={120}
+              name="autoAdvanceSeconds"
+              onChange={(e) => {
+                const value = e.target.value
+                setForm((f) => ({ ...f, autoAdvanceSeconds: value === '' ? '' : Number(value) }))
+                setDirty(true)
+              }}
+              step={1}
+              type="number"
+              value={form.autoAdvanceSeconds}
             />
           </div>
         </div>

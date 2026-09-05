@@ -14,20 +14,25 @@ class TourSeedDefaultsTest {
     final List<TourStep> steps =
         TourStepSeeder.defaultTourSteps(Instant.parse("2026-06-28T00:00:00Z"));
 
-    assertThat(steps).hasSize(8);
+    assertThat(steps).hasSize(11);
     assertThat(steps).extracting(TourStep::selector)
         .containsExactly(
             ".tour-home-chat",
             ".tour-search",
-            ".top-nav__ask-ai",
-            ".tour-profile",
+            ".tour-currently",
+            ".tour-featured-writing",
             ".tour-contact",
-            ".tour-experience",
-            ".tour-blogs",
-            ".tour-news-events"
+            ".tour-profile-heading",
+            ".tour-contact-drawer",
+            ".tour-experience-highlight",
+            ".tour-blog-filters",
+            ".tour-news-filters",
+            ".tour-status-running"
     );
     assertThat(steps).extracting(TourStep::route)
         .containsExactly(
+            "/",
+            "/",
             "/",
             "/",
             "/",
@@ -35,8 +40,11 @@ class TourSeedDefaultsTest {
             "/profile#contact",
             "/experience",
             "/blogs",
-            "/news-events"
+            "/news-events",
+            "/status"
     );
+    assertThat(steps).extracting(TourStep::autoAdvanceMs)
+        .containsExactly(7000, 7000, 8000, 8000, 7000, 7000, 7000, 7000, 7000, 7000, 12000);
   }
 
   @Test

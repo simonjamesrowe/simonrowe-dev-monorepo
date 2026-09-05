@@ -139,6 +139,7 @@ export interface AdminTourStep {
   position: string | null
   order: number
   route: string | null
+  autoAdvanceMs: number | null
   createdAt: string
   updatedAt: string
 }

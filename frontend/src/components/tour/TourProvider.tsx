@@ -12,6 +12,9 @@ export interface TourState {
   steps: TourStep[]
   searchValue: string
   autoAdvancePaused: boolean
+  targetReady: boolean
+  targetSettled: boolean
+  agentResponsePending: boolean
 }
 
 export interface TourContextValue extends TourState {
@@ -22,6 +25,7 @@ export interface TourContextValue extends TourState {
   setSearchValue: (value: string) => void
   pauseAutoAdvance: () => void
   resumeAutoAdvance: () => void
+  setAgentResponsePending: (pending: boolean) => void
 }
 
 type TourAction =
@@ -32,6 +36,8 @@ type TourAction =
   | { type: 'SET_SEARCH_VALUE'; value: string }
   | { type: 'PAUSE_AUTO_ADVANCE' }
   | { type: 'RESUME_AUTO_ADVANCE' }
+  | { type: 'TARGET_STATUS'; ready: boolean; settled: boolean }
+  | { type: 'SET_AGENT_RESPONSE_PENDING'; pending: boolean }
 
 const initialState: TourState = {
   isActive: false,
@@ -39,22 +45,51 @@ const initialState: TourState = {
   steps: [],
   searchValue: '',
   autoAdvancePaused: false,
+  targetReady: false,
+  targetSettled: false,
+  agentResponsePending: false,
 }
 
 function tourReducer(state: TourState, action: TourAction): TourState {
   switch (action.type) {
     case 'START':
-      return { ...state, isActive: true, currentStepIndex: 0, steps: action.steps, searchValue: '', autoAdvancePaused: false }
+      return {
+        ...state,
+        isActive: true,
+        currentStepIndex: 0,
+        steps: action.steps,
+        searchValue: '',
+        autoAdvancePaused: false,
+        targetReady: false,
+        targetSettled: false,
+        agentResponsePending: false,
+      }
     case 'NEXT':
       if (state.currentStepIndex >= state.steps.length - 1) {
         return { ...initialState }
       }
-      return { ...state, currentStepIndex: state.currentStepIndex + 1, searchValue: '', autoAdvancePaused: false }
+      return {
+        ...state,
+        currentStepIndex: state.currentStepIndex + 1,
+        searchValue: '',
+        autoAdvancePaused: false,
+        targetReady: false,
+        targetSettled: false,
+        agentResponsePending: false,
+      }
     case 'PREV':
       if (state.currentStepIndex <= 0) {
         return state
       }
-      return { ...state, currentStepIndex: state.currentStepIndex - 1, searchValue: '', autoAdvancePaused: false }
+      return {
+        ...state,
+        currentStepIndex: state.currentStepIndex - 1,
+        searchValue: '',
+        autoAdvancePaused: false,
+        targetReady: false,
+        targetSettled: false,
+        agentResponsePending: false,
+      }
     case 'EXIT':
       return { ...initialState }
     case 'SET_SEARCH_VALUE':
@@ -63,6 +98,10 @@ function tourReducer(state: TourState, action: TourAction): TourState {
       return { ...state, autoAdvancePaused: true }
     case 'RESUME_AUTO_ADVANCE':
       return { ...state, autoAdvancePaused: false }
+    case 'TARGET_STATUS':
+      return { ...state, targetReady: action.ready, targetSettled: action.settled }
+    case 'SET_AGENT_RESPONSE_PENDING':
+      return { ...state, agentResponsePending: action.pending }
     default:
       return state
   }
@@ -149,6 +188,10 @@ export function TourProvider({ children }: TourProviderProps) {
     dispatch({ type: 'RESUME_AUTO_ADVANCE' })
   }, [])
 
+  const setAgentResponsePending = useCallback((pending: boolean) => {
+    dispatch({ type: 'SET_AGENT_RESPONSE_PENDING', pending })
+  }, [])
+
   // Responsive exit
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 768px)')
@@ -163,7 +206,7 @@ export function TourProvider({ children }: TourProviderProps) {
     }
   }, [exit])
 
-  // Scroll target element into view on step change (with polling for cross-page nav)
+  // Wait for lazy route content before anchoring the tour and starting the step timer.
   useEffect(() => {
     if (!state.isActive || state.steps.length === 0) {
       return
@@ -173,25 +216,53 @@ export function TourProvider({ children }: TourProviderProps) {
     if (!currentStep) {
       return
     }
+    const targetRoute = currentStep.route?.split('#')[0]
+    if (targetRoute && targetRoute !== location.pathname) {
+      return
+    }
 
-    let attempts = 0
-    const maxAttempts = 20 // 20 * 100ms = 2 seconds
-    const poll = setInterval(() => {
+    let resolved = false
+    let observer: MutationObserver | null = null
+    const resolveTarget = () => {
       const element = document.querySelector(currentStep.targetSelector)
       if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        clearInterval(poll)
-      } else if (++attempts >= maxAttempts) {
-        clearInterval(poll)
+        resolved = true
+        observer?.disconnect()
+        // A tour step needs one settled frame before its tooltip is positioned. Smooth
+        // scrolling leaves the tooltip anchored to the target's old coordinates while the
+        // page is still moving, which looks like the overlay has detached from its focus.
+        element.scrollIntoView({ behavior: 'auto', block: 'center' })
+        dispatch({ type: 'TARGET_STATUS', ready: true, settled: true })
       }
-    }, 100)
+    }
 
-    return () => clearInterval(poll)
-  }, [state.isActive, state.currentStepIndex, state.steps])
+    resolveTarget()
+    if (!resolved) {
+      observer = new MutationObserver(resolveTarget)
+      observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class'],
+        childList: true,
+        subtree: true,
+      })
+    }
+    const settleTimer = window.setTimeout(() => {
+      if (!resolved) {
+        observer?.disconnect()
+        dispatch({ type: 'TARGET_STATUS', ready: false, settled: true })
+      }
+    }, 5000)
+
+    return () => {
+      observer?.disconnect()
+      window.clearTimeout(settleTimer)
+    }
+  }, [state.isActive, state.currentStepIndex, state.steps, location.pathname])
 
   // Auto-advance timer
   useEffect(() => {
-    if (!state.isActive || state.autoAdvancePaused || state.steps.length === 0) {
+    if (!state.isActive || state.autoAdvancePaused || state.agentResponsePending
+        || !state.targetSettled || state.steps.length === 0) {
       return
     }
 
@@ -225,7 +296,17 @@ export function TourProvider({ children }: TourProviderProps) {
     return () => {
       clearAutoAdvanceTimer()
     }
-  }, [state.isActive, state.currentStepIndex, state.steps, state.autoAdvancePaused, location.pathname, navigate, clearAutoAdvanceTimer])
+  }, [
+    state.isActive,
+    state.currentStepIndex,
+    state.steps,
+    state.autoAdvancePaused,
+    state.agentResponsePending,
+    state.targetSettled,
+    location.pathname,
+    navigate,
+    clearAutoAdvanceTimer,
+  ])
 
   const contextValue: TourContextValue = {
     ...state,
@@ -236,6 +317,7 @@ export function TourProvider({ children }: TourProviderProps) {
     setSearchValue,
     pauseAutoAdvance,
     resumeAutoAdvance,
+    setAgentResponsePending,
   }
 
   return (

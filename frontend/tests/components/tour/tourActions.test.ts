@@ -3,11 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { STEP_ACTIONS, STEP_CLEANUP } from '../../../src/components/tour/tourActions'
 
 describe('tourActions', () => {
-  it('opens Ask AI with the Spring Boot and Kafka prompt', () => {
-    expect(STEP_ACTIONS['.top-nav__ask-ai']).toMatchObject({
-      type: 'openChat',
-      chatQuery: 'What Spring Boot and Kafka patterns does he use?',
-    })
+  it('does not open the navigation assistant during the guided tour', () => {
+    expect(STEP_ACTIONS['.top-nav__ask-ai']).toBeUndefined()
   })
 
   it('does not click or clean up the old homepage contact drawer for profile contact', () => {

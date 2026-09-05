@@ -26,6 +26,7 @@ const SUGGESTED_PROMPTS = [
 interface ChatPanelProps {
   initialQuery?: string
   onClose: () => void
+  onInitialResponse?: () => void
   profileImageUrl?: string
   visible?: boolean
 }
@@ -34,7 +35,13 @@ function formatTimestamp(): string {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = true }: ChatPanelProps) {
+export function ChatPanel({
+  initialQuery,
+  onClose,
+  onInitialResponse,
+  profileImageUrl,
+  visible = true,
+}: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessageModel[]>([])
   const [connected, setConnected] = useState(false)
   const [activeAssistant, setActiveAssistantState] = useState<ChatMessageModel | null>(null)
@@ -46,6 +53,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
   const initialQueryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const initialQuerySentRef = useRef(false)
   const activeAssistantRef = useRef<ChatMessageModel | null>(null)
+  const initialResponseReportedRef = useRef(false)
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length
   const limitReached = userMessageCount >= MAX_USER_MESSAGES
@@ -118,6 +126,7 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
     cancelledRef.current = false
     // A fresh session for this initialQuery; allow exactly one initial-query send.
     initialQuerySentRef.current = false
+    initialResponseReportedRef.current = false
 
     if (initialQuery) {
       setMessages([
@@ -162,6 +171,17 @@ export function ChatPanel({ initialQuery, onClose, profileImageUrl, visible = tr
       chatService.disconnect()
     }
   }, [initialQuery, onMessage, setActiveAssistant])
+
+  useEffect(() => {
+    if (!onInitialResponse || initialResponseReportedRef.current) return
+
+    const responseIsVisible = [activeAssistant, ...messages].some((message) =>
+      message?.role === 'assistant' && (message.blocks?.length ?? 0) > 0)
+    if (responseIsVisible) {
+      initialResponseReportedRef.current = true
+      onInitialResponse()
+    }
+  }, [activeAssistant, messages, onInitialResponse])
 
   useEffect(() => {
     if (visible && messagesEndRef.current) {

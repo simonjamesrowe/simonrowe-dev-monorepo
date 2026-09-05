@@ -23,7 +23,7 @@ const TABS: { value: BlogContentFilter; label: string }[] = [
  */
 export function BlogContentTabs({ active, onChange }: BlogContentTabsProps) {
   return (
-    <div aria-label="Filter posts by type" className="blog-content-tabs" role="tablist">
+    <div aria-label="Filter posts by type" className="blog-content-tabs tour-blog-filters" role="tablist">
       {TABS.map((tab) => (
         <button
           aria-selected={active === tab.value}
