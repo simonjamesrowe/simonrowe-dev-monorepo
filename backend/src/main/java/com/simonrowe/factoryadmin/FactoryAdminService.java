@@ -207,13 +207,23 @@ public class FactoryAdminService {
    * deploy of itself. Routing these two keys to the deployer (rather than reporting them empty
    * unconditionally) is what keeps this panel consistent with the counts panel in the same
    * drawer, which already reaches the deployer successfully via the unauthenticated {@link
-   * #flow()}. Every failure — deployer unreachable, read token unconfigured there, anything else
-   * — still collapses to an empty detail rather than an exception: a drawer that throws takes the
-   * whole page down for a detail panel, and an empty list is the honest answer when the source
-   * could not be read.
+   * #flow()}.
+   *
+   * <p>Every failure — deployer unreachable, read token unconfigured there, the factory call
+   * failing, anything else — still collapses to a result rather than an exception (a drawer that
+   * throws takes the whole page down for a detail panel), but it collapses to {@link
+   * FactoryFlowDetail#unavailable(String)}, not {@link FactoryFlowDetail#empty(String)}: those two
+   * mean different things to the operator, and flattening a failed read into "no runs in the last
+   * 30 days" is exactly the ambiguity this method exists to avoid, on the same terms as {@code
+   * FlowDetail}'s null-items convention in software-factory. A response that itself carries null
+   * {@code items} (software-factory's own artifact reader failing) is returned as-is rather than
+   * defaulted to an empty list here — only this method's own catch block mints {@code
+   * unavailable}.
    *
    * @param nodeKey the node whose drawer is open
-   * @return that node's items, newest first, or empty when the source could not be read
+   * @return that node's items, newest first; {@link FactoryFlowDetail#empty(String) empty} when
+   *     the read succeeded and found nothing; {@link FactoryFlowDetail#unavailable(String)
+   *     unavailable} when the source could not be read at all
    */
   public FactoryFlowDetail flowDetail(final String nodeKey) {
     try {
@@ -221,7 +231,7 @@ public class FactoryAdminService {
           ? client.deployerFlowDetail(nodeKey)
           : client.factoryFlowDetail(nodeKey);
     } catch (RuntimeException exception) {
-      return FactoryFlowDetail.empty(nodeKey);
+      return FactoryFlowDetail.unavailable(nodeKey);
     }
   }
 

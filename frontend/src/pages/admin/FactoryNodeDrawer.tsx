@@ -221,10 +221,11 @@ export function FactoryNodeDrawer(
           ) : detail === null ? (
             <p>Loading…</p>
           ) : detail.items === null ? (
-            // Distinct from an empty list: this node has its own reader (Linear, GitHub) and
-            // that reader itself could not be read, not "nothing open".
+            // Distinct from an empty list: this node's own source could not be read — an
+            // artifact reader (Linear, GitHub) failing, or, for `deploy`/`platformbackup`, the
+            // deployer itself being unreachable — not "nothing open".
             <p className="admin-error-banner">
-              <AlertCircle size={14} /> Not available — the source could not be read.
+              <AlertCircle size={14} /> Run history is not available from this console.
             </p>
           ) : detail.items.length === 0 ? (
             <p>No runs in the last 30 days.</p>

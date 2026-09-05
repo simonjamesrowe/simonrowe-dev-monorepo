@@ -164,7 +164,7 @@ describe('FactoryNodeDrawer', () => {
     expect(screen.getByText('(logwatch-2)')).toBeInTheDocument()
   })
 
-  it('says the source could not be read when an artifact reader failed', () => {
+  it('says run history is not available when an artifact reader failed', () => {
     // Null items is a different fact from an empty list: the source itself could not be read,
     // not "nothing open" — losing that distinction would misreport a broken Linear or GitHub
     // read as a quiet one.
@@ -174,7 +174,22 @@ describe('FactoryNodeDrawer', () => {
       onClose={vi.fn()}
       detail={{ nodeKey: 'linear', items: null }}
     />)
-    expect(screen.getByText(/could not be read/i)).toBeInTheDocument()
+    expect(screen.getByText(/not available from this console/i)).toBeInTheDocument()
+    expect(screen.queryByText(/No runs in the last 30 days/i)).not.toBeInTheDocument()
+  })
+
+  it('says run history is not available when the deployer could not be reached', () => {
+    // Same null-items shape, now for a deployer-owned node: `deploy`/`platformbackup` have no
+    // artifact reader of their own — this is the deployer container being unreachable rather
+    // than an unread Linear/GitHub source, so the copy must not claim a "source" was read at
+    // all, just that this console could not get the history.
+    render(<FactoryNodeDrawer
+      node={{ ...node, key: 'deploy', label: 'Deploy' }}
+      module={null}
+      onClose={vi.fn()}
+      detail={{ nodeKey: 'deploy', items: null }}
+    />)
+    expect(screen.getByText(/not available from this console/i)).toBeInTheDocument()
     expect(screen.queryByText(/No runs in the last 30 days/i)).not.toBeInTheDocument()
   })
 
