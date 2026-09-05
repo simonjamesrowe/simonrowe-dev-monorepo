@@ -77,14 +77,72 @@ class FactoryFlowDetailServiceTest {
     assertThat(service(stub).detail("logwatch").items()).isEmpty();
   }
 
+  @Test
+  void routesTheLinearNodeToArtifactCountsReader() {
+    ArtifactCountsReader counts = mock(ArtifactCountsReader.class);
+    when(counts.linearItems()).thenReturn(List.of(
+        new FlowDetail.Item("SIM-1", "openssl", "TRIAGE", null, "https://linear.app/sim-1")));
+
+    FlowDetail detail = service(mock(WorkflowServiceBlockingStub.class), counts).detail("linear");
+
+    assertThat(detail.items()).extracting(FlowDetail.Item::id).containsExactly("SIM-1");
+  }
+
+  @Test
+  void routesPullRequestMainAndAgentSetupToTheirOwnReaders() {
+    ArtifactCountsReader counts = mock(ArtifactCountsReader.class);
+    when(counts.pullRequestItems()).thenReturn(List.of(
+        new FlowDetail.Item("#7", "Fix flake", "open", null, "https://github.com/x/pull/7")));
+    when(counts.mainItems()).thenReturn(List.of(
+        new FlowDetail.Item("abcdef1", "fix: thing", "merged", null, "https://github.com/x")));
+    when(counts.agentSetupItems()).thenReturn(List.of());
+
+    FactoryFlowDetailService service = service(mock(WorkflowServiceBlockingStub.class), counts);
+
+    assertThat(service.detail("pull-request").items())
+        .extracting(FlowDetail.Item::id).containsExactly("#7");
+    assertThat(service.detail("main").items())
+        .extracting(FlowDetail.Item::id).containsExactly("abcdef1");
+    assertThat(service.detail("agent-setup").items()).isEmpty();
+  }
+
+  @Test
+  void surfacesNullArtifactReaderResultsAsNotAvailable() {
+    // The whole distinction this feature rests on: null means "could not read this source",
+    // empty means "read it and found nothing open". Collapsing the two here would misreport a
+    // broken Linear read as a quiet one.
+    ArtifactCountsReader counts = mock(ArtifactCountsReader.class);
+    when(counts.linearItems()).thenReturn(null);
+
+    FlowDetail detail = service(mock(WorkflowServiceBlockingStub.class), counts).detail("linear");
+
+    assertThat(detail.items()).isNull();
+  }
+
+  @Test
+  void reportsGenuinelyEmptyArtifactListsAsEmptyNotNull() {
+    ArtifactCountsReader counts = mock(ArtifactCountsReader.class);
+    when(counts.pullRequestItems()).thenReturn(List.of());
+
+    FlowDetail detail =
+        service(mock(WorkflowServiceBlockingStub.class), counts).detail("pull-request");
+
+    assertThat(detail.items()).isNotNull().isEmpty();
+  }
+
   private FactoryFlowDetailService service(final WorkflowServiceBlockingStub stub) {
+    return service(stub, mock(ArtifactCountsReader.class));
+  }
+
+  private FactoryFlowDetailService service(
+      final WorkflowServiceBlockingStub stub, final ArtifactCountsReader counts) {
     WorkflowServiceStubs stubs = mock(WorkflowServiceStubs.class);
     when(stubs.blockingStub()).thenReturn(stub);
     WorkflowClient client = mock(WorkflowClient.class);
     when(client.getWorkflowServiceStubs()).thenReturn(stubs);
     when(client.getOptions())
         .thenReturn(WorkflowClientOptions.newBuilder().setNamespace("default").build());
-    return new FactoryFlowDetailService(client);
+    return new FactoryFlowDetailService(client, counts);
   }
 
   private static WorkflowExecutionInfo execution(

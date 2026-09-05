@@ -7,7 +7,10 @@ import java.util.List;
  * The work behind one node, for its drawer.
  *
  * @param nodeKey the node this describes
- * @param items the work, newest first; empty when there is none or the source could not be read
+ * @param items the work, newest first; null when this node has its own reader (an artifact node)
+ *     and that reader could not read its source; empty when the source was read and genuinely
+ *     has nothing open or running. See {@code FactoryFlowDetailService} for which nodes carry a
+ *     reader that can produce null here.
  */
 public record FlowDetail(String nodeKey, List<Item> items) {
 
@@ -25,7 +28,14 @@ public record FlowDetail(String nodeKey, List<Item> items) {
   public record Item(String id, String title, String status, Instant at, String url) {
   }
 
-  /** Nothing to show. Used for artifact nodes with no list and for an unreadable source alike. */
+  /**
+   * Nothing to show — a node with no list of its own ({@code production}, {@code build}, an
+   * unrecognised key) or a module whose Temporal query could not be answered.
+   *
+   * <p>Deliberately not used when an artifact node's own reader fails: {@code
+   * FactoryFlowDetailService} builds a {@link FlowDetail} with null {@code items} for that case
+   * instead, so a broken Linear or GitHub read is never presented as a quiet one.
+   */
   public static FlowDetail empty(final String nodeKey) {
     return new FlowDetail(nodeKey, List.of());
   }
