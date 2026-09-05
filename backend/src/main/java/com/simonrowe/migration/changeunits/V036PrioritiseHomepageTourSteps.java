@@ -47,7 +47,8 @@ public class V036PrioritiseHomepageTourSteps {
     Map<String, TourStep> defaultsByLegacyId = byLegacyId(allSteps);
     TourStep homeContact = findHomepageContact(allSteps);
     if (homeContact == null) {
-      homeContact = tourStepRepository.save(defaultHomeContact());
+      homeContact = tourStepRepository.save(
+          withOrder(defaultHomeContact(), nextAvailableOrder(allSteps)));
       allSteps.add(homeContact);
     }
 
@@ -119,6 +120,10 @@ public class V036PrioritiseHomepageTourSteps {
         .filter(step -> HOME_CONTACT_LEGACY_ID.equals(step.legacyId()))
         .findFirst()
         .orElseThrow();
+  }
+
+  private int nextAvailableOrder(final List<TourStep> steps) {
+    return steps.stream().mapToInt(TourStep::order).max().orElse(0) + 1;
   }
 
   private void addDefault(
