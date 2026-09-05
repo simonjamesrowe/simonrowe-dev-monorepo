@@ -526,4 +526,57 @@ describe('SoftwareFactoryAdmin', () => {
 
     vi.useRealTimers()
   })
+
+  it('does not queue a second poll while the first is still in flight, and releases once it settles', async () => {
+    // Mutation-tested: replacing the guard with `if (false && loadInFlight.current) return`
+    // must fail this test - that is the entire reason the ref exists, and nothing else in this
+    // file would have caught it (verified by hand; see the task-9 fix report).
+    renderConsoleWithFlow()
+    await screen.findByRole('button', { name: /Log watch/ })
+    const initial = mockFetchFlow.mock.calls.length
+
+    let resolveFlow: (value: FactoryFlow) => void = () => {}
+    mockFetchFlow.mockImplementation(
+      () => new Promise<FactoryFlow>((resolve) => { resolveFlow = resolve }),
+    )
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('radio', { name: '15s' }))
+
+    // Two ticks elapse while the first request is still pending. Without the guard, the second
+    // tick would fire another request behind the first.
+    await act(() => vi.advanceTimersByTimeAsync(30_000))
+    expect(mockFetchFlow.mock.calls.length).toBe(initial + 1)
+
+    // Let the pending request settle, which is what releases the guard.
+    mockFetchFlow.mockResolvedValue(flow())
+    await act(async () => {
+      resolveFlow(flow())
+      // Two hops: one for Promise.all's own resolution, one for the `await` in `load` that is
+      // suspended on it.
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // A further tick now fetches again - the guard is a floor on spacing, not a permanent latch.
+    await act(() => vi.advanceTimersByTimeAsync(15_000))
+    expect(mockFetchFlow.mock.calls.length).toBe(initial + 2)
+
+    vi.useRealTimers()
+  })
+
+  it('stops polling once the console unmounts', async () => {
+    const { unmount } = render(<SoftwareFactoryAdmin />)
+    await screen.findByRole('button', { name: /Log watch/ })
+    const initial = mockFetchFlow.mock.calls.length
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('radio', { name: '15s' }))
+    unmount()
+
+    await act(() => vi.advanceTimersByTimeAsync(60_000))
+    expect(mockFetchFlow.mock.calls.length).toBe(initial)
+
+    vi.useRealTimers()
+  })
 })
