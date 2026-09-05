@@ -76,13 +76,23 @@ export function useTourNarration(
       setSpeaking(false)
       setFinished(true)
     }
+    // Audio that cannot play settles the step too. A missing or malformed file would
+    // otherwise leave `settled` false forever, and autoplay waits on it — so one broken
+    // narration would silently stop the tour advancing on that step for good. Settling here
+    // hands the step to the reading-time floor instead, which is the silent-step behaviour.
+    const onError = () => {
+      setSpeaking(false)
+      setFinished(true)
+    }
     audio.addEventListener('play', onPlay)
     audio.addEventListener('pause', onStop)
     audio.addEventListener('ended', onEnded)
+    audio.addEventListener('error', onError)
     return () => {
       audio.removeEventListener('play', onPlay)
       audio.removeEventListener('pause', onStop)
       audio.removeEventListener('ended', onEnded)
+      audio.removeEventListener('error', onError)
       stop(audio)
       audio.remove()
       audioRef.current = null
@@ -136,8 +146,19 @@ export function useTourNarration(
     audio.src = narrationMediaUrl(currentAudioUrl)
     audio.currentTime = 0
     // Autoplay is permitted here because starting the tour is itself a user gesture, but a
-    // rejected promise must stay silent rather than surface as an unhandled rejection.
-    void audio.play().catch(() => setSpeaking(false))
+    // rejection must stay silent rather than surface as an unhandled promise — and must settle
+    // the step, or a browser refusing to play would stall autoplay indefinitely.
+    //
+    // `play()` is only specified to return a promise since 2016 and older engines return
+    // nothing at all, so the result is checked rather than assumed. Calling `.catch` on
+    // `undefined` throws inside an effect, which would take the whole tour down.
+    const played = audio.play()
+    if (played && typeof played.catch === 'function') {
+      played.catch(() => {
+        setSpeaking(false)
+        setFinished(true)
+      })
+    }
 
     return () => {
       stop(audio)
