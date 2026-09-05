@@ -38,7 +38,7 @@ function isSurface(element: Element): boolean {
     && background !== ''
   const hasBackgroundImage = style.backgroundImage !== 'none' && style.backgroundImage !== ''
   const hasBorder = ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth']
-    .some((side) => parseFloat(style[side as 'borderTopWidth']) > 0)
+    .some((side) => Number.parseFloat(style[side as 'borderTopWidth']) > 0)
   const hasShadow = style.boxShadow !== 'none' && style.boxShadow !== ''
   return hasBackground || hasBackgroundImage || hasBorder || hasShadow
 }
