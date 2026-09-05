@@ -5,25 +5,7 @@ import { useChat } from '../../contexts/ChatContext'
 import { TourTooltip } from './TourTooltip'
 import { SearchSimulation } from './SearchSimulation'
 import { STEP_ACTIONS, STEP_CLEANUP } from './tourActions'
-
-interface FocusBounds {
-  top: number
-  right: number
-  bottom: number
-  left: number
-}
-
-const FOCUS_PADDING = 8
-
-function getFocusBounds(element: Element): FocusBounds {
-  const rect = element.getBoundingClientRect()
-  return {
-    top: Math.max(0, rect.top - FOCUS_PADDING),
-    right: Math.min(window.innerWidth, rect.right + FOCUS_PADDING),
-    bottom: Math.min(window.innerHeight, rect.bottom + FOCUS_PADDING),
-    left: Math.max(0, rect.left - FOCUS_PADDING),
-  }
-}
+import { getFocusBounds, type FocusBounds } from './tourFocusBounds'
 
 export function TourOverlay() {
   const {
@@ -49,8 +31,10 @@ export function TourOverlay() {
       return
     }
 
+    const element = targetReady
+      ? document.querySelector(currentStep.targetSelector)
+      : null
     const updateFocusBounds = () => {
-      const element = targetReady ? document.querySelector(currentStep.targetSelector) : null
       setFocusBounds(element ? getFocusBounds(element) : null)
     }
 
@@ -58,9 +42,28 @@ export function TourOverlay() {
     window.addEventListener('resize', updateFocusBounds)
     window.addEventListener('scroll', updateFocusBounds, true)
 
+    // A target can change shape while its step is open — most visibly the search step, whose
+    // autocomplete panel appears a moment after the query is typed. Without re-measuring, the
+    // spotlight keeps the size the target had when the step began and the results it exists to
+    // show are left in the dark.
+    let mutationObserver: MutationObserver | null = null
+    let resizeObserver: ResizeObserver | null = null
+    if (element) {
+      mutationObserver = new MutationObserver(updateFocusBounds)
+      mutationObserver.observe(element, { childList: true, subtree: true, attributes: true })
+      // Feature-detected rather than assumed: jsdom does not implement it, and losing it
+      // only costs a re-measure on resize, which must not take the overlay down.
+      if (typeof ResizeObserver === 'function') {
+        resizeObserver = new ResizeObserver(updateFocusBounds)
+        resizeObserver.observe(element)
+      }
+    }
+
     return () => {
       window.removeEventListener('resize', updateFocusBounds)
       window.removeEventListener('scroll', updateFocusBounds, true)
+      mutationObserver?.disconnect()
+      resizeObserver?.disconnect()
     }
   }, [isActive, steps, currentStepIndex, targetReady])
 
@@ -145,21 +148,40 @@ export function TourOverlay() {
       <div className="tour-overlay" data-testid="tour-overlay" onClick={exit} role="presentation">
         {focusBounds ? (
           <>
+            {/*
+              Four shades tiling the viewport around the focus box, with no gap and no
+              overlap. Both matter: the right-hand shade previously set only `left`, and a
+              fixed-position empty div with no `right` and no `width` shrinks to nothing, so
+              the whole band beside the focus stayed undimmed and read as a full-width
+              highlight. The side shades also used to run to the bottom of the viewport and
+              overlap the bottom shade, and two semi-transparent layers darken where they
+              meet — a visibly heavier strip down each edge.
+            */}
             <div
               className="tour-overlay__shade"
-              style={{ height: focusBounds.top, inset: '0 0 auto' }}
+              style={{ top: 0, right: 0, left: 0, height: focusBounds.top }}
             />
             <div
               className="tour-overlay__shade"
-              style={{ bottom: 0, left: 0, top: focusBounds.top, width: focusBounds.left }}
+              style={{
+                top: focusBounds.top,
+                left: 0,
+                width: focusBounds.left,
+                height: focusBounds.bottom - focusBounds.top,
+              }}
             />
             <div
               className="tour-overlay__shade"
-              style={{ bottom: 0, left: focusBounds.right, top: focusBounds.top }}
+              style={{
+                top: focusBounds.top,
+                left: focusBounds.right,
+                right: 0,
+                height: focusBounds.bottom - focusBounds.top,
+              }}
             />
             <div
               className="tour-overlay__shade"
-              style={{ inset: `${focusBounds.bottom}px 0 0` }}
+              style={{ top: focusBounds.bottom, right: 0, bottom: 0, left: 0 }}
             />
             <div
               aria-hidden="true"

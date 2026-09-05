@@ -1,7 +1,11 @@
 import { API_BASE_URL } from '../config/api'
 import type { ArticleSummaryResponse } from '../types/articleSummary'
 import type { BlogNarrationResponse } from '../types/blog'
-import type { NarrationAudioContentType, ReadyNarration } from '../types/narrationAudio'
+import type {
+  NarrationAudioContentType,
+  ReadyNarration,
+  ReadyNarrationContentType,
+} from '../types/narrationAudio'
 
 const READY_ENDPOINT = `${API_BASE_URL}/api/narrations/ready`
 
@@ -28,7 +32,7 @@ export type GetAccessToken = () => Promise<string>
  * failure here must never stop a listing rendering.
  */
 export async function fetchReadyNarrations(
-  contentType: NarrationAudioContentType,
+  contentType: ReadyNarrationContentType,
   signal?: AbortSignal,
 ): Promise<ReadyNarration[]> {
   const url = `${READY_ENDPOINT}?contentType=${encodeURIComponent(contentType)}`

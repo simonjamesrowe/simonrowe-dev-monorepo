@@ -40,8 +40,12 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
   // Sync tour search simulation into local query state
   useEffect(() => {
     if (isSearchTourStep) {
+      // The demonstration runs a real search, because showing the results is the point of
+      // the step. It types slowly enough for them to arrive — see `SearchSimulation`.
+      setSuggestionsOpen(false)
       setQuery(tourSearchValue)
     } else if (tourActive) {
+      abortRef.current?.abort()
       setQuery('')
       // The search tour drives the input programmatically. Leaving that step must close
       // every search affordance too; otherwise a focus suggestion or stale result panel
@@ -60,27 +64,29 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
     }
 
     setLoading(true)
+    let controller: AbortController | null = null
     timerRef.current = setTimeout(() => {
       abortRef.current?.abort()
-      const controller = new AbortController()
-      abortRef.current = controller
+      const requestController = new AbortController()
+      controller = requestController
+      abortRef.current = requestController
 
       const searchPromise = isBlogPage
-        ? blogSearch(query, controller.signal).then((blogs) => ({
+        ? blogSearch(query, requestController.signal).then((blogs) => ({
             blogs: blogs.map((b) => ({ name: b.title, image: b.image, url: b.url })),
           }))
-        : siteSearch(query, controller.signal)
+        : siteSearch(query, requestController.signal)
 
       searchPromise
         .then((data) => {
-          if (!controller.signal.aborted) {
+          if (!requestController.signal.aborted) {
             setResults(data)
             setOpen(true)
             setLoading(false)
           }
         })
         .catch(() => {
-          if (!controller.signal.aborted) {
+          if (!requestController.signal.aborted) {
             setLoading(false)
           }
         })
@@ -90,6 +96,7 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
       if (timerRef.current) {
         clearTimeout(timerRef.current)
       }
+      controller?.abort()
     }
   }, [query, isBlogPage])
 

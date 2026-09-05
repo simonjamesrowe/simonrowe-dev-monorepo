@@ -151,6 +151,18 @@ describe('StatusPage', () => {
     expect(names).toEqual(['backend', 'frontend', 'software-factory', 'deployer'])
   })
 
+  it('only exposes the status tour target after the running services have loaded', () => {
+    mockStatus.mockReturnValue({ status: null, loading: true, error: null, retry: vi.fn() })
+
+    const { container } = render(
+      <MemoryRouter>
+        <StatusPage />
+      </MemoryRouter>,
+    )
+
+    expect(container.querySelector('.tour-status-running')).toBeNull()
+  })
+
   it('shows an unreachable service as not reporting rather than hiding it', () => {
     renderPage()
 

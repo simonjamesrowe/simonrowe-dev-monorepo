@@ -1,6 +1,7 @@
 package com.simonrowe.admin;
 
 import com.simonrowe.common.LogSafe;
+import com.simonrowe.narration.TourNarrationSweep;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,12 +30,26 @@ public class AdminTourStepController {
   private static final Logger LOG =
       LoggerFactory.getLogger(AdminTourStepController.class);
 
+  /**
+   * Zero means "hold this step until the visitor chooses Next", and is a valid saved value.
+   *
+   * <p>It is not a duration and so is deliberately exempt from the range below. The tour reads
+   * any pause of zero or less as a hold; without this exemption the admin form would offer a
+   * setting the API rejects with a 400, and the feature could not be configured at all.
+   */
+  private static final int HOLD_STEP_MS = 0;
+  private static final int MIN_PAUSE_MS = 1000;
+  private static final int MAX_PAUSE_MS = 120_000;
+
   private final AdminTourStepRepository tourStepRepository;
+  private final TourNarrationSweep tourNarrationSweep;
 
   public AdminTourStepController(
-      final AdminTourStepRepository tourStepRepository
+      final AdminTourStepRepository tourStepRepository,
+      final TourNarrationSweep tourNarrationSweep
   ) {
     this.tourStepRepository = tourStepRepository;
+    this.tourNarrationSweep = tourNarrationSweep;
   }
 
   @GetMapping
@@ -69,6 +84,7 @@ public class AdminTourStepController {
     );
 
     TourStep saved = tourStepRepository.save(step);
+    tourNarrationSweep.refresh(saved.id());
     LOG.info("Created tour step: id={}, title={}, user={}",
         saved.id(), saved.title(), jwt.getSubject());
     return saved;
@@ -111,6 +127,8 @@ public class AdminTourStepController {
     );
 
     TourStep saved = tourStepRepository.save(updated);
+    // Re-word a step and its old audio must go with the old words, not linger a day.
+    tourNarrationSweep.refresh(saved.id());
     LOG.info("Updated tour step: id={}, user={}", LogSafe.value(id), jwt.getSubject());
     return saved;
   }
@@ -123,6 +141,7 @@ public class AdminTourStepController {
   ) {
     TourStep step = getById(id);
     tourStepRepository.delete(step);
+    tourNarrationSweep.discard(id);
     LOG.info("Deleted tour step: id={}, user={}", LogSafe.value(id), jwt.getSubject());
   }
 
@@ -175,9 +194,11 @@ public class AdminTourStepController {
     }
 
     Integer autoAdvanceMs = toNullableInt(body.get("autoAdvanceMs"));
-    if (autoAdvanceMs != null && (autoAdvanceMs < 1000 || autoAdvanceMs > 120000)) {
+    if (autoAdvanceMs != null && autoAdvanceMs != HOLD_STEP_MS
+        && (autoAdvanceMs < MIN_PAUSE_MS || autoAdvanceMs > MAX_PAUSE_MS)) {
       errors.add(new ValidationErrorResponse.FieldError(
-          "autoAdvanceMs", "Auto-advance must be between 1 and 120 seconds"));
+          "autoAdvanceMs",
+          "Auto-advance must be 0 to hold the step, or between 1 and 120 seconds"));
     }
 
     return errors;

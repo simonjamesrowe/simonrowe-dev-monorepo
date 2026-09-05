@@ -188,6 +188,41 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void createTourStepAcceptsZeroToHoldTheStep() throws Exception {
+    // Zero is not a short duration, it is "wait for the visitor". The admin form offers it and
+    // the tour honours it, so the API has to accept it or the setting cannot be configured.
+    mockMvc.perform(post("/api/admin/tour-steps")
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                    "title": "Welcome",
+                    "selector": ".banner",
+                    "order": 1,
+                    "autoAdvanceMs": 0
+                }
+                """))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.autoAdvanceMs").value(0));
+  }
+
+  @Test
+  void createTourStepRejectsNegativeAutoAdvance() throws Exception {
+    mockMvc.perform(post("/api/admin/tour-steps")
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                    "title": "Welcome",
+                    "selector": ".banner",
+                    "order": 1,
+                    "autoAdvanceMs": -1
+                }
+                """))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void deleteTourStepReturnsNoContent() throws Exception {
     final TourStep saved = adminTourStepRepository.save(
         sampleTourStep("Welcome", ".banner", 1)

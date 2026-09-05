@@ -1,13 +1,19 @@
 import { act, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { SearchSimulation } from '../../../src/components/tour/SearchSimulation'
+import {
+  CHAR_DELAY_MS,
+  RESULTS_DWELL_MS,
+  SearchSimulation,
+} from '../../../src/components/tour/SearchSimulation'
 
 const mockSetSearchValue = vi.fn()
+const mockSetStepActivityPending = vi.fn()
 
 vi.mock('../../../src/hooks/useTour', () => ({
   useTour: () => ({
     setSearchValue: mockSetSearchValue,
+    setStepActivityPending: mockSetStepActivityPending,
     isActive: true,
     currentStepIndex: 0,
     steps: [],
@@ -23,6 +29,7 @@ describe('SearchSimulation', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockSetSearchValue.mockReset()
+    mockSetStepActivityPending.mockReset()
   })
 
   afterEach(() => {
@@ -35,45 +42,46 @@ describe('SearchSimulation', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('types the first query character by character at 50ms intervals', async () => {
+  it('types the first query one character at a time', async () => {
     render(<SearchSimulation />)
 
-    // "spring boot" = 11 characters, each after 50ms
+    // "spring boot" = 11 characters, one per CHAR_DELAY_MS
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(50)
+      await vi.advanceTimersByTimeAsync(CHAR_DELAY_MS)
     })
     expect(mockSetSearchValue).toHaveBeenCalledWith('s')
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(50)
+      await vi.advanceTimersByTimeAsync(CHAR_DELAY_MS)
     })
     expect(mockSetSearchValue).toHaveBeenCalledWith('sp')
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(50 * 9)
+      await vi.advanceTimersByTimeAsync(CHAR_DELAY_MS * 9)
     })
     expect(mockSetSearchValue).toHaveBeenCalledWith('spring boot')
   })
 
-  it('pauses 1500ms between queries before typing the next one', async () => {
+  it('dwells on the results before typing the next query', async () => {
     render(<SearchSimulation />)
 
-    // Complete first query: "spring boot" = 11 chars * 50ms
+    // Complete first query: "spring boot" = 11 chars
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(50 * 11)
+      await vi.advanceTimersByTimeAsync(CHAR_DELAY_MS * 11)
     })
 
     const callCountAfterFirstQuery = mockSetSearchValue.mock.calls.length
 
-    // During the 1500ms pause, no new setSearchValue calls should be made
+    // The dwell exists so the real autocomplete results can arrive and be read; nothing
+    // more is typed during it.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(RESULTS_DWELL_MS - 600)
     })
     expect(mockSetSearchValue.mock.calls.length).toBe(callCountAfterFirstQuery)
 
     // After the pause, typing resumes: first char of second query = "s"
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(500 + 50)
+      await vi.advanceTimersByTimeAsync(600 + CHAR_DELAY_MS)
     })
     expect(mockSetSearchValue).toHaveBeenCalledWith('s')
   })
@@ -85,12 +93,10 @@ describe('SearchSimulation', () => {
     const query2 = 'spring boot kubernetes'
     const query3 = 'spring boot kubernetes jenkins'
 
-    // query1: 11 chars * 50ms + 1500ms pause
-    const query1Time = query1.length * 50 + 1500
-    // query2: 22 chars * 50ms + 1500ms pause
-    const query2Time = query2.length * 50 + 1500
-    // query3: 30 chars * 50ms (no pause after last query)
-    const query3Time = query3.length * 50
+    // Every query now dwells on its results, the last one included.
+    const query1Time = query1.length * CHAR_DELAY_MS + RESULTS_DWELL_MS
+    const query2Time = query2.length * CHAR_DELAY_MS + RESULTS_DWELL_MS
+    const query3Time = query3.length * CHAR_DELAY_MS + RESULTS_DWELL_MS
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(query1Time + query2Time + query3Time)
@@ -107,7 +113,7 @@ describe('SearchSimulation', () => {
     const { unmount } = render(<SearchSimulation />)
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(50 * 3)
+      await vi.advanceTimersByTimeAsync(CHAR_DELAY_MS * 3)
     })
 
     mockSetSearchValue.mockReset()
@@ -124,7 +130,7 @@ describe('SearchSimulation', () => {
 
     // Advance partway through first query
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(50 * 5)
+      await vi.advanceTimersByTimeAsync(CHAR_DELAY_MS * 5)
     })
 
     const callCountBeforeUnmount = mockSetSearchValue.mock.calls.length
