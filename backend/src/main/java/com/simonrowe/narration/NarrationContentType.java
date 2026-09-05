@@ -12,5 +12,6 @@ package com.simonrowe.narration;
  */
 public enum NarrationContentType {
   BLOG,
-  ARTICLE_SUMMARY
+  ARTICLE_SUMMARY,
+  TOUR_STEP
 }

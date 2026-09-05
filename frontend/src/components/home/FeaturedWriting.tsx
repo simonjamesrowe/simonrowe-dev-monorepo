@@ -63,7 +63,7 @@ export function FeaturedWriting({ blogs }: FeaturedWritingProps) {
 
   return (
     <section className="featured-writing tour-featured-writing" aria-labelledby="featured-writing-heading">
-      <div className="featured-writing__header">
+      <div className="featured-writing__header tour-featured-writing-header">
         <h2 className="featured-writing__heading" id="featured-writing-heading">
           Recent writing
         </h2>

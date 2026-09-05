@@ -56,7 +56,7 @@ const emptyForm = (): TourStepFormState => ({
   position: '',
   order: 0,
   route: '/',
-  autoAdvanceSeconds: 7,
+  autoAdvanceSeconds: '',
 })
 
 const POSITIONS: Position[] = ['top', 'bottom', 'left', 'right', 'center']
@@ -240,6 +240,7 @@ export function TourStepEditor() {
               <option value="/experience">/experience</option>
               <option value="/blogs">/blogs</option>
               <option value="/news-events">/news-events</option>
+              <option value="/status">/status</option>
             </select>
           </div>
           <div>
@@ -256,7 +257,7 @@ export function TourStepEditor() {
           </div>
           <div>
             <label className="blog-editor__section-label" htmlFor="autoAdvanceSeconds">
-              Auto-advance (seconds)
+              Auto-advance after (seconds)
             </label>
             <input
               className="admin-form__input admin-form__input--narrow"
@@ -273,6 +274,9 @@ export function TourStepEditor() {
               type="number"
               value={form.autoAdvanceSeconds}
             />
+            <p className="blog-editor__field-help">
+              Leave blank to wait for the visitor to choose Next.
+            </p>
           </div>
         </div>
 

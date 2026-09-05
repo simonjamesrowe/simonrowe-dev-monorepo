@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { Volume2, VolumeX } from 'lucide-react'
 
 import { useTour } from '../../hooks/useTour'
 import { calculatePosition, type Position } from './tourTooltipPosition'
-
-const DEFAULT_AUTO_ADVANCE_MS = 7000
 
 export function TourTooltip() {
   const {
@@ -16,6 +15,11 @@ export function TourTooltip() {
     autoAdvancePaused,
     agentResponsePending,
     targetReady,
+    targetStalled,
+    narrationSpeaking,
+    narrationAvailable,
+    narrationMuted,
+    toggleNarrationMuted,
     pauseAutoAdvance,
     resumeAutoAdvance,
   } = useTour()
@@ -25,14 +29,19 @@ export function TourTooltip() {
   const currentStep = steps[currentStepIndex]
   const isFirstStep = currentStepIndex === 0
   const isLastStep = currentStepIndex === steps.length - 1
-  const autoAdvanceMs = currentStep?.autoAdvanceMs ?? DEFAULT_AUTO_ADVANCE_MS
+  const autoAdvanceMs = currentStep?.autoAdvanceMs
+  // While a step waits for its target it shows a holding message rather than a wrong
+  // spotlight. Once the wait is clearly abnormal the controls come back so the visitor
+  // can move on, but the step never pretends the target arrived.
+  const isPreparing = targetReady === false
+  const isStalled = isPreparing && targetStalled
 
   const updatePosition = useCallback(() => {
     if (!currentStep || !tooltipRef.current) {
       return
     }
 
-    const element = document.querySelector(currentStep.targetSelector)
+    const element = targetReady ? document.querySelector(currentStep.targetSelector) : null
     if (element) {
       setPosition(calculatePosition(element, tooltipRef.current, currentStep.position))
     } else {
@@ -43,7 +52,7 @@ export function TourTooltip() {
         left: (window.innerWidth - tooltipRect.width) / 2,
       })
     }
-  }, [currentStep])
+  }, [currentStep, targetReady])
 
   useEffect(() => {
     // Allow DOM updates to settle before positioning
@@ -81,17 +90,40 @@ export function TourTooltip() {
             src={currentStep.titleImage}
           />
         )}
-        <h3 className="tour-tooltip__title">{currentStep.title}</h3>
+        <h3 className="tour-tooltip__title">
+          {isStalled
+            ? 'Still preparing this view'
+            : isPreparing
+              ? 'Preparing this view'
+              : currentStep.title}
+        </h3>
       </div>
       <div className="tour-tooltip__body">
-        <ReactMarkdown>{currentStep.description}</ReactMarkdown>
+        <ReactMarkdown>
+          {isStalled
+            ? `${currentStep.title} is taking longer than usual to load. You can move on and come back to it.`
+            : isPreparing
+              ? `Opening ${currentStep.title}…`
+              : currentStep.description}
+        </ReactMarkdown>
       </div>
       <div className="tour-tooltip__footer">
         <span className="tour-tooltip__progress">
           Step {currentStepIndex + 1} of {steps.length}
         </span>
         <div className="tour-tooltip__actions">
-          {!isFirstStep && (
+          {narrationAvailable && (
+            <button
+              aria-label={narrationMuted ? 'Turn on tour narration' : 'Turn off tour narration'}
+              aria-pressed={!narrationMuted}
+              className={`tour-tooltip__mute${narrationSpeaking ? ' tour-tooltip__mute--speaking' : ''}`}
+              onClick={toggleNarrationMuted}
+              type="button"
+            >
+              {narrationMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+          )}
+          {(!isPreparing || isStalled) && !isFirstStep && (
             <button
               className="tour-tooltip__btn tour-tooltip__btn--secondary"
               onClick={prev}
@@ -107,20 +139,24 @@ export function TourTooltip() {
           >
             Exit
           </button>
-          <button
-            className="tour-tooltip__btn tour-tooltip__btn--primary"
-            onClick={isLastStep ? exit : next}
-            type="button"
-          >
-            {isLastStep ? 'Finish' : 'Next'}
-          </button>
+          {(!isPreparing || isStalled) && (
+            <button
+              className="tour-tooltip__btn tour-tooltip__btn--primary"
+              onClick={isLastStep ? exit : next}
+              type="button"
+            >
+              {isLastStep ? 'Finish' : 'Next'}
+            </button>
+          )}
         </div>
       </div>
-      <div
-        className={`tour-tooltip__progress-bar${autoAdvancePaused || agentResponsePending ? ' tour-tooltip__progress-bar--paused' : ''}`}
-        key={`${currentStepIndex}-${agentResponsePending ? 'waiting' : 'ready'}`}
-        style={{ '--auto-advance-duration': `${autoAdvanceMs}ms` } as React.CSSProperties}
-      />
+      {!isPreparing && autoAdvanceMs != null && autoAdvanceMs > 0 && (
+        <div
+          className={`tour-tooltip__progress-bar${autoAdvancePaused || agentResponsePending ? ' tour-tooltip__progress-bar--paused' : ''}`}
+          key={`${currentStepIndex}-${agentResponsePending ? 'waiting' : 'ready'}`}
+          style={{ '--auto-advance-duration': `${autoAdvanceMs}ms` } as React.CSSProperties}
+        />
+      )}
     </div>
   )
 }

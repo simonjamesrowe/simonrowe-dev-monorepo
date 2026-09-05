@@ -1,10 +1,12 @@
-import { createContext, useCallback, useEffect, useReducer, useRef, type ReactNode } from 'react'
+import { createContext, useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { fetchTourSteps } from '../../services/tourApi'
 import type { TourStep } from '../../types/tour'
+import { useTourNarration } from './useTourNarration'
 
-const DEFAULT_AUTO_ADVANCE_MS = 7000
+// How long a step waits for its target before offering the visitor a way past it.
+const TARGET_STALL_MS = 6000
 
 export interface TourState {
   isActive: boolean
@@ -13,7 +15,7 @@ export interface TourState {
   searchValue: string
   autoAdvancePaused: boolean
   targetReady: boolean
-  targetSettled: boolean
+  targetStalled: boolean
   agentResponsePending: boolean
 }
 
@@ -26,6 +28,12 @@ export interface TourContextValue extends TourState {
   pauseAutoAdvance: () => void
   resumeAutoAdvance: () => void
   setAgentResponsePending: (pending: boolean) => void
+  /** True when the current step's audio is playing. */
+  narrationSpeaking: boolean
+  /** True when this tour has any spoken audio, so the mute control is worth showing. */
+  narrationAvailable: boolean
+  narrationMuted: boolean
+  toggleNarrationMuted: () => void
 }
 
 type TourAction =
@@ -36,7 +44,8 @@ type TourAction =
   | { type: 'SET_SEARCH_VALUE'; value: string }
   | { type: 'PAUSE_AUTO_ADVANCE' }
   | { type: 'RESUME_AUTO_ADVANCE' }
-  | { type: 'TARGET_STATUS'; ready: boolean; settled: boolean }
+  | { type: 'TARGET_STATUS'; ready: boolean }
+  | { type: 'TARGET_STALLED' }
   | { type: 'SET_AGENT_RESPONSE_PENDING'; pending: boolean }
 
 const initialState: TourState = {
@@ -46,7 +55,7 @@ const initialState: TourState = {
   searchValue: '',
   autoAdvancePaused: false,
   targetReady: false,
-  targetSettled: false,
+  targetStalled: false,
   agentResponsePending: false,
 }
 
@@ -61,7 +70,7 @@ function tourReducer(state: TourState, action: TourAction): TourState {
         searchValue: '',
         autoAdvancePaused: false,
         targetReady: false,
-        targetSettled: false,
+        targetStalled: false,
         agentResponsePending: false,
       }
     case 'NEXT':
@@ -74,7 +83,7 @@ function tourReducer(state: TourState, action: TourAction): TourState {
         searchValue: '',
         autoAdvancePaused: false,
         targetReady: false,
-        targetSettled: false,
+        targetStalled: false,
         agentResponsePending: false,
       }
     case 'PREV':
@@ -87,7 +96,7 @@ function tourReducer(state: TourState, action: TourAction): TourState {
         searchValue: '',
         autoAdvancePaused: false,
         targetReady: false,
-        targetSettled: false,
+        targetStalled: false,
         agentResponsePending: false,
       }
     case 'EXIT':
@@ -99,7 +108,9 @@ function tourReducer(state: TourState, action: TourAction): TourState {
     case 'RESUME_AUTO_ADVANCE':
       return { ...state, autoAdvancePaused: false }
     case 'TARGET_STATUS':
-      return { ...state, targetReady: action.ready, targetSettled: action.settled }
+      return { ...state, targetReady: action.ready, targetStalled: false }
+    case 'TARGET_STALLED':
+      return { ...state, targetStalled: true }
     case 'SET_AGENT_RESPONSE_PENDING':
       return { ...state, agentResponsePending: action.pending }
     default:
@@ -120,6 +131,8 @@ export function TourProvider({ children }: TourProviderProps) {
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoAdvanceStepRef = useRef<number>(-1)
   const lastAdvanceTimeRef = useRef<number>(0)
+  const [pageVisible, setPageVisible] = useState(() => document.visibilityState === 'visible')
+  const narration = useTourNarration(state.isActive, state.steps, state.currentStepIndex)
 
   const clearAutoAdvanceTimer = useCallback(() => {
     if (autoAdvanceTimerRef.current) {
@@ -206,7 +219,16 @@ export function TourProvider({ children }: TourProviderProps) {
     }
   }, [exit])
 
-  // Wait for lazy route content before anchoring the tour and starting the step timer.
+  // A visitor who switches tabs should never return to a tour that has moved on without them.
+  // The default tour is manual, but this also protects any future CMS step with autoplay enabled.
+  useEffect(() => {
+    const updatePageVisibility = () => setPageVisible(document.visibilityState === 'visible')
+    document.addEventListener('visibilitychange', updatePageVisibility)
+    return () => document.removeEventListener('visibilitychange', updatePageVisibility)
+  }, [])
+
+  // Wait for the real route target before showing a spotlight or starting an optional timer.
+  // A slow Raspberry Pi response is a normal state, not a reason to advance to the next step.
   useEffect(() => {
     if (!state.isActive || state.steps.length === 0) {
       return
@@ -223,46 +245,54 @@ export function TourProvider({ children }: TourProviderProps) {
 
     let resolved = false
     let observer: MutationObserver | null = null
+    let animationFrame: number | null = null
     const resolveTarget = () => {
       const element = document.querySelector(currentStep.targetSelector)
       if (element) {
         resolved = true
         observer?.disconnect()
-        // A tour step needs one settled frame before its tooltip is positioned. Smooth
-        // scrolling leaves the tooltip anchored to the target's old coordinates while the
-        // page is still moving, which looks like the overlay has detached from its focus.
         element.scrollIntoView({ behavior: 'auto', block: 'center' })
-        dispatch({ type: 'TARGET_STATUS', ready: true, settled: true })
+        // Let the route paint at its final scroll position before the overlay measures it.
+        animationFrame = requestAnimationFrame(() => {
+          dispatch({ type: 'TARGET_STATUS', ready: true })
+        })
       }
     }
 
     resolveTarget()
+    let stallTimer: number | null = null
     if (!resolved) {
       observer = new MutationObserver(resolveTarget)
       observer.observe(document.body, {
         attributes: true,
-        attributeFilter: ['class'],
         childList: true,
         subtree: true,
       })
+      // Keep waiting for the real target indefinitely, but stop holding the visitor hostage.
+      // A selector that never matches must never fake a spotlight or start a countdown; it
+      // only restores the controls so the tour can be continued or left behind.
+      stallTimer = window.setTimeout(() => {
+        if (!resolved) {
+          dispatch({ type: 'TARGET_STALLED' })
+        }
+      }, TARGET_STALL_MS)
     }
-    const settleTimer = window.setTimeout(() => {
-      if (!resolved) {
-        observer?.disconnect()
-        dispatch({ type: 'TARGET_STATUS', ready: false, settled: true })
-      }
-    }, 5000)
 
     return () => {
       observer?.disconnect()
-      window.clearTimeout(settleTimer)
+      if (stallTimer !== null) {
+        window.clearTimeout(stallTimer)
+      }
+      if (animationFrame !== null) {
+        cancelAnimationFrame(animationFrame)
+      }
     }
   }, [state.isActive, state.currentStepIndex, state.steps, location.pathname])
 
   // Auto-advance timer
   useEffect(() => {
-    if (!state.isActive || state.autoAdvancePaused || state.agentResponsePending
-        || !state.targetSettled || state.steps.length === 0) {
+    if (!state.isActive || state.autoAdvancePaused || state.agentResponsePending || !pageVisible
+        || !state.targetReady || state.steps.length === 0) {
       return
     }
 
@@ -271,7 +301,10 @@ export function TourProvider({ children }: TourProviderProps) {
       return
     }
 
-    const delayMs = currentStep.autoAdvanceMs ?? DEFAULT_AUTO_ADVANCE_MS
+    const delayMs = currentStep.autoAdvanceMs
+    if (delayMs == null || delayMs <= 0) {
+      return
+    }
     const stepAtSet = state.currentStepIndex
     autoAdvanceStepRef.current = stepAtSet
 
@@ -302,7 +335,8 @@ export function TourProvider({ children }: TourProviderProps) {
     state.steps,
     state.autoAdvancePaused,
     state.agentResponsePending,
-    state.targetSettled,
+    state.targetReady,
+    pageVisible,
     location.pathname,
     navigate,
     clearAutoAdvanceTimer,
@@ -318,6 +352,10 @@ export function TourProvider({ children }: TourProviderProps) {
     pauseAutoAdvance,
     resumeAutoAdvance,
     setAgentResponsePending,
+    narrationSpeaking: narration.speaking,
+    narrationAvailable: narration.available,
+    narrationMuted: narration.muted,
+    toggleNarrationMuted: narration.toggleMuted,
   }
 
   return (

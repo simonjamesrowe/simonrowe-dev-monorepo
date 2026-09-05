@@ -5,25 +5,7 @@ import { useChat } from '../../contexts/ChatContext'
 import { TourTooltip } from './TourTooltip'
 import { SearchSimulation } from './SearchSimulation'
 import { STEP_ACTIONS, STEP_CLEANUP } from './tourActions'
-
-interface FocusBounds {
-  top: number
-  right: number
-  bottom: number
-  left: number
-}
-
-const FOCUS_PADDING = 8
-
-function getFocusBounds(element: Element): FocusBounds {
-  const rect = element.getBoundingClientRect()
-  return {
-    top: Math.max(0, rect.top - FOCUS_PADDING),
-    right: Math.min(window.innerWidth, rect.right + FOCUS_PADDING),
-    bottom: Math.min(window.innerHeight, rect.bottom + FOCUS_PADDING),
-    left: Math.max(0, rect.left - FOCUS_PADDING),
-  }
-}
+import { getFocusBounds, type FocusBounds } from './tourFocusBounds'
 
 export function TourOverlay() {
   const {

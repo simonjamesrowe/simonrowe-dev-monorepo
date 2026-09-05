@@ -133,6 +133,66 @@ describe('TourTooltip', () => {
     expect(screen.getByText('Step 2 of 3')).toBeInTheDocument()
   })
 
+  it('does not show an autoplay progress bar for a manual step', () => {
+    mockUseTour.mockReturnValue({
+      steps: [stepOne],
+      currentStepIndex: 0,
+      next: mockNext,
+      prev: mockPrev,
+      exit: mockExit,
+      targetReady: true,
+      pauseAutoAdvance: vi.fn(),
+      resumeAutoAdvance: vi.fn(),
+    })
+
+    const { container } = render(<TourTooltip />)
+
+    expect(container.querySelector('.tour-tooltip__progress-bar')).toBeNull()
+  })
+
+  it('keeps the visitor informed while a route target is still loading', () => {
+    mockUseTour.mockReturnValue({
+      steps: [stepOne],
+      currentStepIndex: 0,
+      next: mockNext,
+      prev: mockPrev,
+      exit: mockExit,
+      targetReady: false,
+      pauseAutoAdvance: vi.fn(),
+      resumeAutoAdvance: vi.fn(),
+    })
+
+    render(<TourTooltip />)
+
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Preparing this view')
+    expect(screen.getByText('Opening About Section…')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exit' })).toBeInTheDocument()
+  })
+
+  it('lets the visitor move on when a target never arrives', () => {
+    mockUseTour.mockReturnValue({
+      steps: [stepOne, stepTwo, stepThree],
+      currentStepIndex: 1,
+      next: mockNext,
+      prev: mockPrev,
+      exit: mockExit,
+      targetReady: false,
+      targetStalled: true,
+      pauseAutoAdvance: vi.fn(),
+      resumeAutoAdvance: vi.fn(),
+    })
+
+    const { container } = render(<TourTooltip />)
+
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Still preparing this view')
+    expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exit' })).toBeInTheDocument()
+    // A stalled step must never start a countdown it cannot honour.
+    expect(container.querySelector('.tour-tooltip__progress-bar')).toBeNull()
+  })
+
   it('hides the Previous button on the first step', () => {
     mockUseTour.mockReturnValue({
       steps: [stepOne, stepTwo],

@@ -50,7 +50,7 @@ export function StatusPage() {
         </p>
       </header>
 
-      <section className="status-page__section tour-status-running">
+      <section className={`status-page__section${loading ? '' : ' tour-status-running'}`}>
         <h2 className="status-page__section-title">Running now</h2>
         {loading ? <LoadingIndicator /> : null}
         {error ? <ErrorMessage message={error} onRetry={retry} /> : null}

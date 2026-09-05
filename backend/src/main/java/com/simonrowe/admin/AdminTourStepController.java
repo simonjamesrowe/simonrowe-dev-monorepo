@@ -1,6 +1,7 @@
 package com.simonrowe.admin;
 
 import com.simonrowe.common.LogSafe;
+import com.simonrowe.narration.TourNarrationSweep;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,11 +31,14 @@ public class AdminTourStepController {
       LoggerFactory.getLogger(AdminTourStepController.class);
 
   private final AdminTourStepRepository tourStepRepository;
+  private final TourNarrationSweep tourNarrationSweep;
 
   public AdminTourStepController(
-      final AdminTourStepRepository tourStepRepository
+      final AdminTourStepRepository tourStepRepository,
+      final TourNarrationSweep tourNarrationSweep
   ) {
     this.tourStepRepository = tourStepRepository;
+    this.tourNarrationSweep = tourNarrationSweep;
   }
 
   @GetMapping
@@ -69,6 +73,7 @@ public class AdminTourStepController {
     );
 
     TourStep saved = tourStepRepository.save(step);
+    tourNarrationSweep.refresh(saved.id());
     LOG.info("Created tour step: id={}, title={}, user={}",
         saved.id(), saved.title(), jwt.getSubject());
     return saved;
@@ -111,6 +116,8 @@ public class AdminTourStepController {
     );
 
     TourStep saved = tourStepRepository.save(updated);
+    // Re-word a step and its old audio must go with the old words, not linger a day.
+    tourNarrationSweep.refresh(saved.id());
     LOG.info("Updated tour step: id={}, user={}", LogSafe.value(id), jwt.getSubject());
     return saved;
   }
@@ -123,6 +130,7 @@ public class AdminTourStepController {
   ) {
     TourStep step = getById(id);
     tourStepRepository.delete(step);
+    tourNarrationSweep.discard(id);
     LOG.info("Deleted tour step: id={}, user={}", LogSafe.value(id), jwt.getSubject());
   }
 

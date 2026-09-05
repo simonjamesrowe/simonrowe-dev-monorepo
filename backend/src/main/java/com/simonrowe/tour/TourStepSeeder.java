@@ -52,125 +52,118 @@ public class TourStepSeeder implements ApplicationRunner {
     return List.of(
         defaultTourStep(
             "default-home-chat",
-            "Start with the AI chat",
+            "Ask Simon anything",
             ".tour-home-chat",
-            "Ask about Simon's work, leadership, stack, and career history.",
+            "Ask about a platform decision, leadership challenge, or career chapter. "
+                + "Answers are grounded in the work across this site.",
             "bottom",
             1,
             "/",
-            7000,
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-site-search",
-            "Search the site",
+            "Search the evidence",
             ".tour-search",
-            "Search content or turn a search into an AI question.",
+            "Search posts, projects, and appearances — then turn a result into a "
+                + "deeper question.",
             "bottom",
             2,
             "/",
-            7000,
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-home-currently",
-            "See what Simon is doing now",
+            "The work happening now",
             ".tour-currently",
-            "The homepage opens with Simon's current role, remit, and where he is based.",
+            "Start with Simon's current remit, the teams he leads, and the transformation "
+                + "underway.",
             "bottom",
             3,
             "/",
-            8000,
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-home-writing",
-            "Browse recent writing",
-            ".tour-featured-writing",
-            "Recent engineering writing is collected here. Use the arrows to browse, "
-                + "or open the full blog.",
+            "Writing from the workbench",
+            ".tour-featured-writing-header",
+            "Explore practical thinking on AI-native delivery, platform engineering, "
+                + "and technical leadership.",
             "top",
             4,
             "/",
-            8000,
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-home-contact",
-            "Get in touch",
+            "Continue the conversation",
             ".tour-contact",
-            "The homepage closes with a direct route to start a conversation.",
+            "When there is a problem worth solving or an idea worth challenging, this is "
+                + "the direct route to Simon.",
             "bottom",
             5,
             "/",
-            7000,
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-profile",
-            "Read the profile",
+            "The story behind the work",
             ".tour-profile-heading",
-            "Explore Simon's biography, background, and professional summary.",
+            "See the path from hands-on engineering to leading teams through complex change.",
             "bottom",
             6,
             "/profile",
-            7000,
-            timestamp
-        ),
-        defaultTourStep(
-            "default-contact",
-            "Get in touch",
-            ".tour-contact-drawer",
-            "Use the Profile page contact section to send a message.",
-            "top",
-            7,
-            "/profile#contact",
-            7000,
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-experience",
-            "Explore experience",
+            "Trace the systems and outcomes",
             ".tour-experience-highlight",
-            "Review roles, teams, systems, and delivery experience.",
+            "Follow the roles, teams, systems, and delivery outcomes that shaped the work.",
             "top",
-            8,
+            7,
             "/experience",
-            7000,
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-blogs",
-            "Read the blog",
+            "Go from topic to evidence",
             ".tour-blog-filters",
-            "Browse writing about engineering, AI, architecture, and delivery.",
+            "Filter the writing by the engineering questions you want to investigate.",
             "bottom",
-            9,
+            8,
             "/blogs",
-            7000,
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-news-events",
-            "Find news and events",
+            "See the wider conversation",
             ".tour-news-filters",
-            "See recent appearances, articles, meetups, and events.",
+            "Find recent appearances, articles, meetups, and events beyond the blog.",
             "top",
-            10,
+            9,
             "/news-events",
-            7000,
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-platform-status",
-            "See the platform status",
+            "A portfolio that runs in public",
             ".tour-status-running",
-            "This live view shows the services running in production and the commit "
-                + "each was built from.",
+            "Finish with the live platform view: what is running, what shipped, and the "
+                + "build serving this site right now.",
             "bottom",
-            11,
+            10,
             "/status",
-            12000,
+            null,
             timestamp
         )
     );
