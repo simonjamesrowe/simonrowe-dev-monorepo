@@ -43,6 +43,11 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
       setQuery(tourSearchValue)
     } else if (tourActive) {
       setQuery('')
+      // The search tour drives the input programmatically. Leaving that step must close
+      // every search affordance too; otherwise a focus suggestion or stale result panel
+      // remains above the next tour stop after the visitor presses Next.
+      setOpen(false)
+      setSuggestionsOpen(false)
     }
   }, [isSearchTourStep, tourSearchValue, tourActive])
 
@@ -146,7 +151,13 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
         <input
           aria-label="Search or ask a question"
           className="site-search__input"
-          onFocus={() => setSuggestionsOpen(true)}
+          onFocus={() => {
+            // Tour typing is illustrative, not an invitation to select a prompt. Keeping
+            // this popover closed avoids carrying hover/focus text into the following step.
+            if (!isSearchTourStep) {
+              setSuggestionsOpen(true)
+            }
+          }}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}

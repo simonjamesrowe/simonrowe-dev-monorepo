@@ -2,64 +2,23 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 import { useTour } from '../../hooks/useTour'
+import { calculatePosition, type Position } from './tourTooltipPosition'
 
-interface Position {
-  top: number
-  left: number
-}
-
-const GAP = 12
-const EDGE_PADDING = 16
 const DEFAULT_AUTO_ADVANCE_MS = 7000
 
-function calculatePosition(
-  element: Element,
-  tooltip: HTMLElement,
-  placement: string
-): Position {
-  const rect = element.getBoundingClientRect()
-  const tooltipRect = tooltip.getBoundingClientRect()
-  const viewportWidth = window.innerWidth
-  const viewportHeight = window.innerHeight
-
-  let top: number
-  let left: number
-
-  switch (placement) {
-    case 'top':
-      top = rect.top - tooltipRect.height - GAP
-      left = rect.left + (rect.width - tooltipRect.width) / 2
-      break
-    case 'bottom':
-      top = rect.bottom + GAP
-      left = rect.left + (rect.width - tooltipRect.width) / 2
-      break
-    case 'left':
-      top = rect.top + (rect.height - tooltipRect.height) / 2
-      left = rect.left - tooltipRect.width - GAP
-      break
-    case 'right':
-      top = rect.top + (rect.height - tooltipRect.height) / 2
-      left = rect.right + GAP
-      break
-    case 'center':
-      top = rect.top + (rect.height - tooltipRect.height) / 2
-      left = rect.left + (rect.width - tooltipRect.width) / 2
-      break
-    default:
-      top = rect.bottom + GAP
-      left = rect.left + (rect.width - tooltipRect.width) / 2
-  }
-
-  // Viewport boundary clamping
-  left = Math.max(EDGE_PADDING, Math.min(left, viewportWidth - tooltipRect.width - EDGE_PADDING))
-  top = Math.max(EDGE_PADDING, Math.min(top, viewportHeight - tooltipRect.height - EDGE_PADDING))
-
-  return { top, left }
-}
-
 export function TourTooltip() {
-  const { steps, currentStepIndex, next, prev, exit, autoAdvancePaused, pauseAutoAdvance, resumeAutoAdvance } = useTour()
+  const {
+    steps,
+    currentStepIndex,
+    next,
+    prev,
+    exit,
+    autoAdvancePaused,
+    agentResponsePending,
+    targetReady,
+    pauseAutoAdvance,
+    resumeAutoAdvance,
+  } = useTour()
   const tooltipRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState<Position>({ top: 0, left: 0 })
 
@@ -90,11 +49,15 @@ export function TourTooltip() {
     // Allow DOM updates to settle before positioning
     const timer = requestAnimationFrame(updatePosition)
     return () => cancelAnimationFrame(timer)
-  }, [updatePosition])
+  }, [updatePosition, targetReady])
 
   useEffect(() => {
     window.addEventListener('resize', updatePosition)
-    return () => window.removeEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
   }, [updatePosition])
 
   if (!currentStep) {
@@ -154,8 +117,8 @@ export function TourTooltip() {
         </div>
       </div>
       <div
-        className={`tour-tooltip__progress-bar${autoAdvancePaused ? ' tour-tooltip__progress-bar--paused' : ''}`}
-        key={currentStepIndex}
+        className={`tour-tooltip__progress-bar${autoAdvancePaused || agentResponsePending ? ' tour-tooltip__progress-bar--paused' : ''}`}
+        key={`${currentStepIndex}-${agentResponsePending ? 'waiting' : 'ready'}`}
         style={{ '--auto-advance-duration': `${autoAdvanceMs}ms` } as React.CSSProperties}
       />
     </div>

@@ -100,7 +100,8 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
                     "description": "This is the welcome banner.",
                     "titleImage": "/images/tour/welcome.png",
                     "position": "bottom",
-                    "order": 1
+                    "order": 1,
+                    "autoAdvanceMs": 12000
                 }
                 """))
         .andExpect(status().isCreated())
@@ -109,7 +110,8 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.selector").value(".banner"))
         .andExpect(jsonPath("$.description").value("This is the welcome banner."))
         .andExpect(jsonPath("$.position").value("bottom"))
-        .andExpect(jsonPath("$.order").value(1));
+        .andExpect(jsonPath("$.order").value(1))
+        .andExpect(jsonPath("$.autoAdvanceMs").value(12000));
   }
 
   @Test
@@ -156,7 +158,8 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
                     "description": "Updated description.",
                     "titleImage": null,
                     "position": "top",
-                    "order": 2
+                    "order": 2,
+                    "autoAdvanceMs": 10000
                 }
                 """))
         .andExpect(status().isOk())
@@ -164,7 +167,24 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.title").value("Welcome Updated"))
         .andExpect(jsonPath("$.selector").value(".banner-updated"))
         .andExpect(jsonPath("$.position").value("top"))
-        .andExpect(jsonPath("$.order").value(2));
+        .andExpect(jsonPath("$.order").value(2))
+        .andExpect(jsonPath("$.autoAdvanceMs").value(10000));
+  }
+
+  @Test
+  void createTourStepRejectsAnOutOfRangeAutoAdvance() throws Exception {
+    mockMvc.perform(post("/api/admin/tour-steps")
+            .with(adminJwt().jwt(j -> j.subject("test-user")))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                    "title": "Welcome",
+                    "selector": ".banner",
+                    "order": 1,
+                    "autoAdvanceMs": 500
+                }
+                """))
+        .andExpect(status().isBadRequest());
   }
 
   @Test
@@ -229,7 +249,8 @@ class AdminTourStepControllerTest extends AbstractIntegrationTest {
         now,
         now,
         null,
-        "/"
+        "/",
+        null
     );
   }
 }

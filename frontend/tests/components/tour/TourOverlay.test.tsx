@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TourOverlay } from '../../../src/components/tour/TourOverlay'
 import type { TourStep } from '../../../src/types/tour'
 
 const mockExit = vi.fn()
+const mockSetAgentResponsePending = vi.fn()
 
 const defaultStep: TourStep = {
   id: 'step-1',
@@ -44,6 +45,7 @@ vi.mock('../../../src/components/tour/SearchSimulation', () => ({
 describe('TourOverlay', () => {
   beforeEach(() => {
     mockExit.mockReset()
+    mockSetAgentResponsePending.mockReset()
     mockUseTour.mockReturnValue({
       isActive: false,
       steps: [],
@@ -54,6 +56,8 @@ describe('TourOverlay', () => {
       prev: vi.fn(),
       searchValue: '',
       setSearchValue: vi.fn(),
+      targetReady: false,
+      setAgentResponsePending: mockSetAgentResponsePending,
     })
   })
 
@@ -137,6 +141,33 @@ describe('TourOverlay', () => {
     render(<TourOverlay />)
 
     expect(screen.getByTestId('search-simulation')).toBeInTheDocument()
+  })
+
+  it('cuts out the active target rather than dimming it', async () => {
+    const target = document.createElement('div')
+    target.className = 'about-section'
+    document.body.append(target)
+    vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 80, 200, 60))
+    mockUseTour.mockReturnValue({
+      isActive: true,
+      steps: [defaultStep],
+      currentStepIndex: 0,
+      exit: mockExit,
+      targetReady: true,
+      setAgentResponsePending: mockSetAgentResponsePending,
+    })
+
+    const { container } = render(<TourOverlay />)
+
+    await waitFor(() => {
+      expect(container.querySelector('.tour-overlay__focus')).toHaveStyle({
+        left: '32px',
+        top: '72px',
+        width: '216px',
+        height: '76px',
+      })
+    })
+    target.remove()
   })
 
   it('does not render SearchSimulation for non-search steps', () => {

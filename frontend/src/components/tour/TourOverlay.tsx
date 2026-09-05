@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { useTour } from '../../hooks/useTour'
 import { useChat } from '../../contexts/ChatContext'
@@ -6,18 +6,41 @@ import { TourTooltip } from './TourTooltip'
 import { SearchSimulation } from './SearchSimulation'
 import { STEP_ACTIONS, STEP_CLEANUP } from './tourActions'
 
+interface FocusBounds {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
+
+const FOCUS_PADDING = 8
+
+function getFocusBounds(element: Element): FocusBounds {
+  const rect = element.getBoundingClientRect()
+  return {
+    top: Math.max(0, rect.top - FOCUS_PADDING),
+    right: Math.min(window.innerWidth, rect.right + FOCUS_PADDING),
+    bottom: Math.min(window.innerHeight, rect.bottom + FOCUS_PADDING),
+    left: Math.max(0, rect.left - FOCUS_PADDING),
+  }
+}
+
 export function TourOverlay() {
-  const { isActive, steps, currentStepIndex, exit } = useTour()
-  const { closeChat, cancelRecaptcha, openChatBypassRecaptcha } = useChat()
-  const spotlightRef = useRef<Element | null>(null)
+  const {
+    isActive,
+    steps,
+    currentStepIndex,
+    exit,
+    targetReady,
+    setAgentResponsePending,
+  } = useTour()
+  const { closeChat, cancelRecaptcha, openChatBypassRecaptcha, tourChatAwaitingResponse } = useChat()
+  const [focusBounds, setFocusBounds] = useState<FocusBounds | null>(null)
   const prevStepRef = useRef<number>(-1)
 
   useEffect(() => {
     if (!isActive || steps.length === 0) {
-      if (spotlightRef.current) {
-        spotlightRef.current.classList.remove('tour-spotlight')
-        spotlightRef.current = null
-      }
+      setFocusBounds(null)
       return
     }
 
@@ -26,27 +49,32 @@ export function TourOverlay() {
       return
     }
 
-    // Remove spotlight from previous element
-    if (spotlightRef.current) {
-      spotlightRef.current.classList.remove('tour-spotlight')
+    const updateFocusBounds = () => {
+      const element = targetReady ? document.querySelector(currentStep.targetSelector) : null
+      setFocusBounds(element ? getFocusBounds(element) : null)
     }
 
-    // Apply spotlight to new element
-    const element = document.querySelector(currentStep.targetSelector)
-    if (element) {
-      element.classList.add('tour-spotlight')
-      spotlightRef.current = element
-    } else {
-      spotlightRef.current = null
-    }
+    updateFocusBounds()
+    window.addEventListener('resize', updateFocusBounds)
+    window.addEventListener('scroll', updateFocusBounds, true)
 
     return () => {
-      if (spotlightRef.current) {
-        spotlightRef.current.classList.remove('tour-spotlight')
-        spotlightRef.current = null
-      }
+      window.removeEventListener('resize', updateFocusBounds)
+      window.removeEventListener('scroll', updateFocusBounds, true)
     }
-  }, [isActive, steps, currentStepIndex])
+  }, [isActive, steps, currentStepIndex, targetReady])
+
+  useEffect(() => {
+    const isAiStep = steps[currentStepIndex]?.targetSelector === '.top-nav__ask-ai'
+    const waitingForResponse = isActive && isAiStep && tourChatAwaitingResponse
+    setAgentResponsePending?.(waitingForResponse)
+    if (!waitingForResponse) return
+
+    // A failed stream must not strand a visitor on the tour indefinitely. This gives the
+    // assistant a generous window, after which the normal per-step timer takes over.
+    const fallbackTimer = window.setTimeout(() => setAgentResponsePending?.(false), 45000)
+    return () => window.clearTimeout(fallbackTimer)
+  }, [isActive, steps, currentStepIndex, tourChatAwaitingResponse, setAgentResponsePending])
 
   // Execute step actions on enter & cleanup on leave
   useEffect(() => {
@@ -114,12 +142,40 @@ export function TourOverlay() {
 
   return (
     <>
-      <div
-        className="tour-overlay"
-        data-testid="tour-overlay"
-        onClick={exit}
-        role="presentation"
-      />
+      <div className="tour-overlay" data-testid="tour-overlay" onClick={exit} role="presentation">
+        {focusBounds ? (
+          <>
+            <div
+              className="tour-overlay__shade"
+              style={{ height: focusBounds.top, inset: '0 0 auto' }}
+            />
+            <div
+              className="tour-overlay__shade"
+              style={{ bottom: 0, left: 0, top: focusBounds.top, width: focusBounds.left }}
+            />
+            <div
+              className="tour-overlay__shade"
+              style={{ bottom: 0, left: focusBounds.right, top: focusBounds.top }}
+            />
+            <div
+              className="tour-overlay__shade"
+              style={{ inset: `${focusBounds.bottom}px 0 0` }}
+            />
+            <div
+              aria-hidden="true"
+              className="tour-overlay__focus"
+              style={{
+                height: focusBounds.bottom - focusBounds.top,
+                left: focusBounds.left,
+                top: focusBounds.top,
+                width: focusBounds.right - focusBounds.left,
+              }}
+            />
+          </>
+        ) : (
+          <div className="tour-overlay__shade" style={{ inset: 0 }} />
+        )}
+      </div>
       <TourTooltip />
       {isSearchStep && <SearchSimulation />}
     </>

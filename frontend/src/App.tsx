@@ -91,7 +91,16 @@ function GlobalDrawers() {
 }
 
 function ChatOverlay() {
-  const { chatOpen, chatQuery, showRecaptcha, closeChat, handleRecaptchaVerified, cancelRecaptcha } = useChat()
+  const {
+    chatOpen,
+    chatQuery,
+    showRecaptcha,
+    tourChatAwaitingResponse,
+    closeChat,
+    handleRecaptchaVerified,
+    cancelRecaptcha,
+    completeTourChatResponse,
+  } = useChat()
   const { profile } = useProfile()
 
   const profileImageUrl = profile?.profileImage?.url
@@ -107,6 +116,7 @@ function ChatOverlay() {
         <ChatPanel
           initialQuery={chatQuery ?? undefined}
           onClose={closeChat}
+          onInitialResponse={tourChatAwaitingResponse ? completeTourChatResponse : undefined}
           profileImageUrl={profileImageUrl}
           visible={chatOpen}
         />

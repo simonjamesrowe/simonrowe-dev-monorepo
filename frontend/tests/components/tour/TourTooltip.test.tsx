@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TourTooltip } from '../../../src/components/tour/TourTooltip'
+import { calculatePosition } from '../../../src/components/tour/tourTooltipPosition'
 import type { TourStep } from '../../../src/types/tour'
 
 const mockNext = vi.fn()
@@ -49,6 +50,32 @@ describe('TourTooltip', () => {
     mockNext.mockReset()
     mockPrev.mockReset()
     mockExit.mockReset()
+  })
+
+  it('flips a bottom tooltip above its target when it would leave the viewport', () => {
+    const element = document.createElement('div')
+    const tooltip = document.createElement('div')
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 500 })
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 })
+    vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(300, 440, 100, 40),
+    )
+    vi.spyOn(tooltip, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 240, 120),
+    )
+
+    expect(calculatePosition(element, tooltip, 'bottom')).toEqual({ top: 308, left: 230 })
+  })
+
+  it('keeps a centred tooltip inside viewport edges', () => {
+    const element = document.createElement('div')
+    const tooltip = document.createElement('div')
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 400 })
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 })
+    vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 40, 40))
+    vi.spyOn(tooltip, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 220, 160))
+
+    expect(calculatePosition(element, tooltip, 'center')).toEqual({ top: 16, left: 16 })
   })
 
   it('renders tooltip with title and description', () => {

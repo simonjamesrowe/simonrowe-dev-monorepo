@@ -55,7 +55,7 @@ export function ContactDrawer({
       <div
         aria-hidden={open ? undefined : 'true'}
         aria-label="Get in touch"
-        className={`contact-drawer${open ? ' contact-drawer--open' : ''}`}
+        className={`contact-drawer${open ? ' contact-drawer--open tour-contact-drawer' : ''}`}
         role="dialog"
       >
         <div className="contact-drawer__header">

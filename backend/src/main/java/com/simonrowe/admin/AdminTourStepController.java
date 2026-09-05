@@ -64,7 +64,8 @@ public class AdminTourStepController {
         (String) body.get("position"),
         toInt(body.get("order"), 0),
         now, now, null,
-        (String) body.get("route")
+        (String) body.get("route"),
+        toNullableInt(body.get("autoAdvanceMs"))
     );
 
     TourStep saved = tourStepRepository.save(step);
@@ -105,7 +106,8 @@ public class AdminTourStepController {
         existing.createdAt(),
         Instant.now(),
         existing.legacyId(),
-        (String) body.get("route")
+        (String) body.get("route"),
+        toNullableInt(body.get("autoAdvanceMs"))
     );
 
     TourStep saved = tourStepRepository.save(updated);
@@ -138,7 +140,7 @@ public class AdminTourStepController {
           existing.description(), existing.titleImage(),
           existing.position(), i + 1,
           existing.createdAt(), Instant.now(), existing.legacyId(),
-          existing.route()
+          existing.route(), existing.autoAdvanceMs()
       );
       tourStepRepository.save(reordered);
     }
@@ -172,6 +174,12 @@ public class AdminTourStepController {
           "order", "Order must be non-negative"));
     }
 
+    Integer autoAdvanceMs = toNullableInt(body.get("autoAdvanceMs"));
+    if (autoAdvanceMs != null && (autoAdvanceMs < 1000 || autoAdvanceMs > 120000)) {
+      errors.add(new ValidationErrorResponse.FieldError(
+          "autoAdvanceMs", "Auto-advance must be between 1 and 120 seconds"));
+    }
+
     return errors;
   }
 
@@ -180,6 +188,10 @@ public class AdminTourStepController {
       return num.intValue();
     }
     return defaultValue;
+  }
+
+  private Integer toNullableInt(final Object value) {
+    return value instanceof Number num ? num.intValue() : null;
   }
 
   private ResponseStatusException validationException(

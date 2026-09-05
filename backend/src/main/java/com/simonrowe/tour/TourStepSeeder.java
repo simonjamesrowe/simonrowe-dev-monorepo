@@ -39,21 +39,10 @@ public class TourStepSeeder implements ApplicationRunner {
           .findByLegacyId(defaultStep.legacyId())
           .or(() -> tourStepRepository.findByOrder(defaultStep.order()));
 
-      TourStep step = new TourStep(
-          existing.map(TourStep::id).orElse(null),
-          defaultStep.title(),
-          defaultStep.selector(),
-          defaultStep.description(),
-          defaultStep.titleImage(),
-          defaultStep.position(),
-          defaultStep.order(),
-          existing.map(TourStep::createdAt).orElse(timestamp),
-          timestamp,
-          defaultStep.legacyId(),
-          defaultStep.route()
-      );
-      tourStepRepository.save(step);
-      saved++;
+      if (existing.isEmpty()) {
+        tourStepRepository.save(defaultStep);
+        saved++;
+      }
     }
 
     return saved;
@@ -69,6 +58,7 @@ public class TourStepSeeder implements ApplicationRunner {
             "bottom",
             1,
             "/",
+            7000,
             timestamp
         ),
         defaultTourStep(
@@ -79,66 +69,108 @@ public class TourStepSeeder implements ApplicationRunner {
             "bottom",
             2,
             "/",
+            7000,
             timestamp
         ),
         defaultTourStep(
-            "default-ask-ai",
-            "Ask AI from anywhere",
-            ".top-nav__ask-ai",
-            "Open the assistant from the navigation bar on any public page.",
+            "default-home-currently",
+            "See what Simon is doing now",
+            ".tour-currently",
+            "The homepage opens with Simon's current role, remit, and where he is based.",
             "bottom",
             3,
             "/",
+            8000,
+            timestamp
+        ),
+        defaultTourStep(
+            "default-home-writing",
+            "Browse recent writing",
+            ".tour-featured-writing",
+            "Recent engineering writing is collected here. Use the arrows to browse, "
+                + "or open the full blog.",
+            "top",
+            4,
+            "/",
+            8000,
+            timestamp
+        ),
+        defaultTourStep(
+            "default-home-contact",
+            "Get in touch",
+            ".tour-contact",
+            "The homepage closes with a direct route to start a conversation.",
+            "bottom",
+            5,
+            "/",
+            7000,
             timestamp
         ),
         defaultTourStep(
             "default-profile",
             "Read the profile",
-            ".tour-profile",
+            ".tour-profile-heading",
             "Explore Simon's biography, background, and professional summary.",
             "bottom",
-            4,
+            6,
             "/profile",
+            7000,
             timestamp
         ),
         defaultTourStep(
             "default-contact",
             "Get in touch",
-            ".tour-contact",
+            ".tour-contact-drawer",
             "Use the Profile page contact section to send a message.",
             "top",
-            5,
+            7,
             "/profile#contact",
+            7000,
             timestamp
         ),
         defaultTourStep(
             "default-experience",
             "Explore experience",
-            ".tour-experience",
+            ".tour-experience-highlight",
             "Review roles, teams, systems, and delivery experience.",
             "top",
-            6,
+            8,
             "/experience",
+            7000,
             timestamp
         ),
         defaultTourStep(
             "default-blogs",
             "Read the blog",
-            ".tour-blogs",
+            ".tour-blog-filters",
             "Browse writing about engineering, AI, architecture, and delivery.",
-            "top",
-            7,
+            "bottom",
+            9,
             "/blogs",
+            7000,
             timestamp
         ),
         defaultTourStep(
             "default-news-events",
             "Find news and events",
-            ".tour-news-events",
+            ".tour-news-filters",
             "See recent appearances, articles, meetups, and events.",
             "top",
-            8,
+            10,
             "/news-events",
+            7000,
+            timestamp
+        ),
+        defaultTourStep(
+            "default-platform-status",
+            "See the platform status",
+            ".tour-status-running",
+            "This live view shows the services running in production and the commit "
+                + "each was built from.",
+            "bottom",
+            11,
+            "/status",
+            12000,
             timestamp
         )
     );
@@ -152,6 +184,7 @@ public class TourStepSeeder implements ApplicationRunner {
       final String position,
       final int order,
       final String route,
+      final Integer autoAdvanceMs,
       final Instant timestamp
   ) {
     return new TourStep(
@@ -165,7 +198,8 @@ public class TourStepSeeder implements ApplicationRunner {
         timestamp,
         timestamp,
         legacyId,
-        route
+        route,
+        autoAdvanceMs
     );
   }
 }

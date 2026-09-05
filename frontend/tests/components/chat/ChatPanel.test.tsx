@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ChatPanel } from '../../../src/components/chat/ChatPanel'
+import type { ChatResponse } from '../../../src/services/chatService'
 
 vi.mock('../../../src/services/chatService', () => ({
   connect: vi.fn(),
@@ -121,5 +122,26 @@ describe('ChatPanel', () => {
     render(<ChatPanel {...defaultProps} />)
 
     expect(screen.getByPlaceholderText('Type a message...')).toBeInTheDocument()
+  })
+
+  it('reports the first visible response for a seeded tour question', () => {
+    let onMessage: ((response: ChatResponse) => void) | undefined
+    vi.mocked(chatService.connect).mockImplementation((_sessionId, handler) => {
+      onMessage = handler
+    })
+    const onInitialResponse = vi.fn()
+
+    render(<ChatPanel {...defaultProps} onInitialResponse={onInitialResponse} />)
+
+    act(() => {
+      onMessage?.({
+        sessionId: 'test-session-uuid',
+        content: 'Simon uses Spring Boot.',
+        type: 'STREAM_CHUNK',
+        timestamp: '2026-09-04T12:00:00Z',
+      })
+    })
+
+    expect(onInitialResponse).toHaveBeenCalledTimes(1)
   })
 })
