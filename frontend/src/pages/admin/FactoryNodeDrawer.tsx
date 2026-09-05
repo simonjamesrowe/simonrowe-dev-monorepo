@@ -111,6 +111,31 @@ const DEFAULT_RUN_LIST_COPY: RunListCopy = {
 const runListCopy = (nodeKey: string): RunListCopy =>
   RUN_LIST_COPY[nodeKey] ?? DEFAULT_RUN_LIST_COPY
 
+/**
+ * The counts panel's row labels for one node. `build`'s `counts.inFlight` is the same Linear
+ * backlog `linearCounts()` returns for the `linear` node itself — see
+ * `FactoryFlowService.countsFor` — because the build agent runs on a machine this console cannot
+ * reach, so its only signal is the ticket queue waiting for it. "In flight" says work is running;
+ * build's entire point is that nothing is. `FactoryFlowGraph.countSummary` already solved this for
+ * the graph badge ("N waiting"); this brings the drawer into line with it. The 24h rows are
+ * suppressed for the same node: `ok24h`/`failed24h` there are tickets settled/never in a 24h
+ * window, not runs succeeding or failing, and reusing that wording implies a distinction ("succeeded"
+ * vs "failed") that does not exist for a ticket backlog.
+ */
+interface CountsLabels {
+  inFlight: string
+  show24h: boolean
+}
+
+const COUNTS_LABELS: Record<string, CountsLabels> = {
+  build: { inFlight: 'Waiting', show24h: false },
+}
+
+const DEFAULT_COUNTS_LABELS: CountsLabels = { inFlight: 'In flight', show24h: true }
+
+const countsLabelsFor = (nodeKey: string): CountsLabels =>
+  COUNTS_LABELS[nodeKey] ?? DEFAULT_COUNTS_LABELS
+
 const formatTime = (value: string | null) =>
   value ? new Date(value).toLocaleString() : 'Not recorded'
 
@@ -238,13 +263,21 @@ export function FactoryNodeDrawer(
         {HEALTH_LABELS[node.health]}
       </p>
 
-      {node.counts === null ? (
+      {node.counts == null ? (
+        // `== null` rather than `=== null`: if the backend record ever gained
+        // `@JsonInclude(NON_NULL)`, a null `counts` would arrive as `undefined` instead of JSON
+        // `null`, and a strict `=== null` check would fall through to the destructuring below and
+        // throw — degrading "could not read this" into a white screen instead of "counts unknown".
         <p className="factory-drawer__counts">Counts unknown — the source could not be read.</p>
       ) : (
         <dl className="factory-drawer__counts">
-          <div><dt>In flight</dt><dd>{node.counts.inFlight}</dd></div>
-          <div><dt>Succeeded (24h)</dt><dd>{node.counts.ok24h}</dd></div>
-          <div><dt>Failed (24h)</dt><dd>{node.counts.failed24h}</dd></div>
+          <div><dt>{countsLabelsFor(node.key).inFlight}</dt><dd>{node.counts.inFlight}</dd></div>
+          {countsLabelsFor(node.key).show24h && (
+            <>
+              <div><dt>Succeeded (24h)</dt><dd>{node.counts.ok24h}</dd></div>
+              <div><dt>Failed (24h)</dt><dd>{node.counts.failed24h}</dd></div>
+            </>
+          )}
         </dl>
       )}
 
@@ -256,7 +289,10 @@ export function FactoryNodeDrawer(
           <dl className="factory-drawer__module">
             <div>
               <dt>Configured</dt>
-              <dd>{module.configured === null ? 'Unconfirmed' : module.configured ? 'On' : 'Off'}</dd>
+              {/* `== null`: `configured` crosses the wire the same as `counts` above, and a
+                  strict `=== null` would silently read a future `undefined` as "Off" rather than
+                  "Unconfirmed" — wrong data rather than a crash, but the same hazard class. */}
+              <dd>{module.configured == null ? 'Unconfirmed' : module.configured ? 'On' : 'Off'}</dd>
             </div>
             <div><dt>Task queue</dt><dd>{module.taskQueue}</dd></div>
             <div><dt>Trigger</dt><dd>{module.trigger}</dd></div>

@@ -468,7 +468,7 @@ export function SoftwareFactoryAdmin() {
         besides the drawer closes both: it removes this whole subtree from focus and the
         accessibility tree while a drawer is open, with no change to the drawer itself.
       */}
-      <div className="factory-console__body" inert={selectedNode !== null}>
+      <div className="factory-console__body" inert={selectedFlowNode !== null}>
         <div className="admin-page__header factory-console__header">
           <div>
             <span className="factory-console__eyebrow">Temporal operations</span>

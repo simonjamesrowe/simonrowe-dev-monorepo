@@ -63,6 +63,24 @@ describe('FactoryNodeDrawer', () => {
     expect(screen.getByText(/not yet running/i)).toBeInTheDocument()
   })
 
+  it('labels the build node\'s count as waiting, never "In flight", and drops the 24h rows', () => {
+    // build's counts are the Linear backlog, not runs in progress: "In flight" implies work is
+    // running, and the two 24h rows carry no meaning for a ticket queue.
+    render(<FactoryNodeDrawer node={{ ...node, key: 'build', label: 'Build agent', health: 'IDLE' }}
+      module={null} onClose={vi.fn()} />)
+    expect(screen.getByText('Waiting')).toBeInTheDocument()
+    expect(screen.queryByText('In flight')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Succeeded \(24h\)/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Failed \(24h\)/)).not.toBeInTheDocument()
+  })
+
+  it('keeps "In flight" and the 24h rows for a module node', () => {
+    render(<FactoryNodeDrawer node={node} module={null} onClose={vi.fn()} />)
+    expect(screen.getByText('In flight')).toBeInTheDocument()
+    expect(screen.getByText('Succeeded (24h)')).toBeInTheDocument()
+    expect(screen.getByText('Failed (24h)')).toBeInTheDocument()
+  })
+
   it('closes on the close control', async () => {
     const onClose = vi.fn()
     render(<FactoryNodeDrawer node={node} module={null} onClose={onClose} />)

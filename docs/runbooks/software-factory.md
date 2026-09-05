@@ -1064,20 +1064,24 @@ matching every other outbound class in this module rather than introducing
 Several pairs of values look similar and are decided differently on purpose. Reading
 one as the other misreports a real fault as a quiet system, which is precisely the
 failure class `042-factory-log-watch`'s `SOURCE_UNHEALTHY`/`NO_FINDINGS` split
-guards against — this feature repeats that pattern three more times:
+guards against — this feature repeats that pattern four more times:
 
 | Pair | What each means | Decided by |
 | --- | --- | --- |
 | `NodeHealth.IDLE` vs `OFFLINE` | nothing to do, vs work waiting with nothing listening | `FactoryFlowService.health()`, for `build` |
 | `NodeHealth.NOT_TRACKED` vs `READY` | this container has no source of live data for the node at all, vs a real, live, healthy check | `FactoryFlowService.isTracked()` — only `production` is untracked today |
 | `NodeCounts` null vs `NodeCounts.NONE` (zeros) | the source could not be read, vs it was read and genuinely found nothing | every reader in `WorkflowCountsReader`/`ArtifactCountsReader` returns null on any `RuntimeException` rather than zero |
-| `FlowDetail.items` null vs an empty list | this node's own reader failed, vs the reader succeeded and found nothing open or running | `FactoryFlowDetailService`/`ArtifactCountsReader` for the four artifact readers; the backend's `FactoryFlowDetail.unavailable(...)` vs `.empty(...)` for the deployer-owned nodes |
+| `FlowDetail.items` null vs an empty list | this node's own reader failed, vs the reader succeeded and found nothing open or running | `ArtifactCountsReader` for the four artifact readers (`linear`, `pull-request`, `main`, `agent-setup`); `FactoryFlowDetailService.detail()`'s own `catch (RuntimeException)` for any module node whose Temporal query fails — a third producer, added by the Critical fix, that covers every module including `deploy`/`platformbackup`, with no separate `FlowDetail.unavailable(...)` method of its own; `FlowDetail.empty(...)` is reserved for nodes with no reader at all (`production`, `build`, an unrecognised key) |
 
 The frontend carries the same distinction through to the pixel: `FactoryNodeDrawer`
 renders "Counts unknown — the source could not be read" for null counts (never
-"0"), and for the run list renders a visible error banner for null `items`, distinct
-from the node-specific empty copy (`"No open tickets."`, `"No recent merges."`, …)
-for a genuinely empty list, distinct again from `"Loading…"` while the fetch is
+"0"), and for the run list renders a visible error banner for null `items`. That
+banner is itself per-node copy (`RunListCopy.unavailable`: `"Open tickets are not
+available from this console."`, `"Run history is not available from this
+console."`, …), not a single generic string, for the same reason the empty-state
+copy is node-specific (`"No open tickets."`, `"No recent merges."`, …) — a heading
+of "Open tickets" pairing with a sentence about "runs" is the exact noun mismatch
+this feature exists to avoid. Distinct again from `"Loading…"` while the fetch is
 still in flight. Getting any of these three states wrong reintroduces the exact bug
 Task 10's review caught: a deployer that could not be reached rendered
 byte-identical to a deployer with a quiet 30 days, directly under counts that
