@@ -164,32 +164,36 @@ describe('FactoryNodeDrawer', () => {
     expect(screen.getByText('(logwatch-2)')).toBeInTheDocument()
   })
 
-  it('says run history is not available when an artifact reader failed', () => {
+  it('says open tickets are not available when the linear artifact reader failed', () => {
     // Null items is a different fact from an empty list: the source itself could not be read,
     // not "nothing open" — losing that distinction would misreport a broken Linear or GitHub
-    // read as a quiet one.
+    // read as a quiet one. The copy is node-specific ("Open tickets"), not the generic "Run
+    // history", so it does not pair with a heading of "Open tickets" above it — the exact noun
+    // mismatch Task 12 fixed between the heading and the empty-state copy.
     render(<FactoryNodeDrawer
       node={{ ...node, key: 'linear', label: 'Linear' }}
       module={null}
       onClose={vi.fn()}
       detail={{ nodeKey: 'linear', items: null }}
     />)
-    expect(screen.getByText(/not available from this console/i)).toBeInTheDocument()
+    expect(screen.getByText('Open tickets are not available from this console.')).toBeInTheDocument()
     expect(screen.queryByText(/No runs in the last 30 days/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Run history is not available/i)).not.toBeInTheDocument()
   })
 
   it('says run history is not available when the deployer could not be reached', () => {
     // Same null-items shape, now for a deployer-owned node: `deploy`/`platformbackup` have no
     // artifact reader of their own — this is the deployer container being unreachable rather
     // than an unread Linear/GitHub source, so the copy must not claim a "source" was read at
-    // all, just that this console could not get the history.
+    // all, just that this console could not get the history. `deploy` is a module node with no
+    // entry of its own in the copy lookup, so it keeps the generic "Run history" wording.
     render(<FactoryNodeDrawer
       node={{ ...node, key: 'deploy', label: 'Deploy' }}
       module={null}
       onClose={vi.fn()}
       detail={{ nodeKey: 'deploy', items: null }}
     />)
-    expect(screen.getByText(/not available from this console/i)).toBeInTheDocument()
+    expect(screen.getByText('Run history is not available from this console.')).toBeInTheDocument()
     expect(screen.queryByText(/No runs in the last 30 days/i)).not.toBeInTheDocument()
   })
 
@@ -234,6 +238,41 @@ describe('FactoryNodeDrawer', () => {
       onClose={vi.fn()} detail={{ nodeKey: 'logwatch', items: [] }} />)
     expect(screen.getByRole('heading', { name: 'Recent runs' })).toBeInTheDocument()
     expect(screen.getByText('No runs in the last 30 days.')).toBeInTheDocument()
+  })
+
+  it('does not claim a 30-day run window for the production node', () => {
+    // production has no Temporal workflow and no artifact reader: its FlowDetail is always
+    // FlowDetail.empty(), never a "runs" list bounded by a 30-day retention window. The module
+    // default would state a window and a noun ("runs") that never applied here.
+    render(<FactoryNodeDrawer node={{ ...node, key: 'production', label: 'Production' }}
+      module={null} onClose={vi.fn()} detail={{ nodeKey: 'production', items: [] }} />)
+    expect(screen.getByRole('heading', { name: 'Recent activity' })).toBeInTheDocument()
+    expect(screen.getByText('Production has no activity of its own here — see the platform status page.')).toBeInTheDocument()
+    expect(screen.queryByText(/No runs in the last 30 days/i)).not.toBeInTheDocument()
+  })
+
+  it('does not claim a 30-day run window for the build node', () => {
+    // build runs on a machine this console cannot reach and has no Temporal workflow of its
+    // own; its counts (rendered above) are the real signal, not a "runs" list.
+    render(<FactoryNodeDrawer node={{ ...node, key: 'build', label: 'Build agent' }}
+      module={null} onClose={vi.fn()} detail={{ nodeKey: 'build', items: [] }} />)
+    expect(screen.getByRole('heading', { name: 'Recent activity' })).toBeInTheDocument()
+    expect(screen.getByText(/counts above/i)).toBeInTheDocument()
+    expect(screen.queryByText(/No runs in the last 30 days/i)).not.toBeInTheDocument()
+  })
+
+  it('renders when an item started, not just its status', () => {
+    // FlowDetail.Item.at is populated by every reader but was never rendered — commits, pull
+    // requests and Linear tickets showed no date at all, and spec.md's drawer requirement names
+    // "started" explicitly.
+    render(<FactoryNodeDrawer node={node} module={null} onClose={vi.fn()}
+      detail={{ nodeKey: 'logwatch', items: [
+        {
+          id: 'logwatch-2', title: 'logwatch-2', status: 'COMPLETED',
+          at: '2026-09-04T20:14:00Z', url: null,
+        },
+      ] }} />)
+    expect(screen.getByText(new Date('2026-09-04T20:14:00Z').toLocaleString())).toBeInTheDocument()
   })
 
   it('renders each item as a link whose accessible name stays unique across a title collision', () => {

@@ -6374,6 +6374,12 @@ a:hover {
   margin: 0 auto;
 }
 
+/* A plain layout passthrough, purely so `inert` has a single subtree to apply to that excludes
+   the drawer — no spacing or sizing of its own beyond its children's existing rules. */
+.factory-console__body {
+  display: contents;
+}
+
 .factory-console__header {
   align-items: flex-start;
 }
@@ -6772,6 +6778,11 @@ a:hover {
   color: var(--color-text-muted);
   font-size: 0.78rem;
   font-weight: 600;
+}
+
+.factory-drawer__run-time {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
 }
 
 .factory-drawer__runs .admin-error-banner {

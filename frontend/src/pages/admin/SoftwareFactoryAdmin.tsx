@@ -145,19 +145,34 @@ interface FlowDetailState {
   error: string | null
 }
 
-/** Fetches the selected node's recent work whenever the selection changes. */
-function useFlowDetail(nodeKey: string | null): FlowDetailState {
+/**
+ * Fetches the selected node's recent work whenever the selection changes, and again on every
+ * `refreshToken` tick — the same tick the page's own flow/status refresh runs on, not a second
+ * polling policy of its own. Without this, the run list under an open drawer froze at the moment
+ * it was opened while the counts panel above it (driven by `flow`, which the refresh interval
+ * does update) kept moving — exactly the primary use case for the refresh control, watching a
+ * deploy's run list update while it is in progress.
+ */
+function useFlowDetail(nodeKey: string | null, refreshToken: number): FlowDetailState {
   const { getAccessToken } = useAuth()
   const [detail, setDetail] = useState<FactoryFlowDetail | null | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
+  const previousNodeKey = useRef<string | null>(null)
 
   useEffect(() => {
     if (!nodeKey) {
+      previousNodeKey.current = null
       setDetail(undefined)
       setError(null)
       return undefined
     }
-    setDetail(null)
+    // Only show the loading state on a genuine node switch, not on a refresh-triggered re-fetch
+    // of the same node — that must not flash "Loading…" over an already-rendered run list, the
+    // same convention the top-level status/flow refresh already follows for `flow`.
+    if (previousNodeKey.current !== nodeKey) {
+      setDetail(null)
+    }
+    previousNodeKey.current = nodeKey
     setError(null)
     let cancelled = false
     void (async () => {
@@ -173,7 +188,7 @@ function useFlowDetail(nodeKey: string | null): FlowDetailState {
     return () => {
       cancelled = true
     }
-  }, [nodeKey, getAccessToken])
+  }, [nodeKey, getAccessToken, refreshToken])
 
   return { detail, error }
 }
@@ -192,9 +207,16 @@ export function SoftwareFactoryAdmin() {
   const [deployConfirmation, setDeployConfirmation] = useState('')
   const [confirmBackup, setConfirmBackup] = useState(false)
   const [refreshMs, setRefreshMs] = useState<number | null>(null)
+  // Bumped once every time `load()` completes — the initial load, a manual action's own reload,
+  // and every refresh-interval tick alike — so the open drawer's run list rides the SAME tick
+  // rather than a second timer of its own. A plain counter, not the flow/status themselves: those
+  // already drive the counts panel, and reusing them as a dependency would also re-fetch detail
+  // on every unrelated `flow`/`status` change (e.g. a manual action's optimistic update).
+  const [flowTick, setFlowTick] = useState(0)
 
   useRunProgress(run, setRun)
-  const { detail: selectedNodeDetail, error: selectedNodeDetailError } = useFlowDetail(selectedNode)
+  const { detail: selectedNodeDetail, error: selectedNodeDetailError } =
+    useFlowDetail(selectedNode, flowTick)
 
   // A ref, not state: state would re-run the interval effect below and reset its timer on every
   // load, which would make a slow response push its own next tick out rather than being skipped.
@@ -216,6 +238,7 @@ export function SoftwareFactoryAdmin() {
     } finally {
       setLoading(false)
       loadInFlight.current = false
+      setFlowTick((tick) => tick + 1)
     }
   }, [getAccessToken])
 
@@ -437,34 +460,45 @@ export function SoftwareFactoryAdmin() {
 
   return (
     <div className="admin-page factory-console">
-      <div className="admin-page__header factory-console__header">
-        <div>
-          <span className="factory-console__eyebrow">Temporal operations</span>
-          <h1 className="admin-page__title">Software Factory</h1>
-          <p className="factory-console__intro">
-            Observe each automation boundary and start the workflows that are safe to run by hand.
-          </p>
+      {/*
+        `aria-modal="true"` on the drawer is honest for the keyboard Tab trap, but thin for a
+        screen reader's own virtual cursor, which does not go through Tab and can still browse
+        into "inert" background content — and a sighted keyboard user who clicks into that
+        background and then Tabs can escape the trap the same way. `inert` on the page content
+        besides the drawer closes both: it removes this whole subtree from focus and the
+        accessibility tree while a drawer is open, with no change to the drawer itself.
+      */}
+      <div className="factory-console__body" inert={selectedNode !== null}>
+        <div className="admin-page__header factory-console__header">
+          <div>
+            <span className="factory-console__eyebrow">Temporal operations</span>
+            <h1 className="admin-page__title">Software Factory</h1>
+            <p className="factory-console__intro">
+              Observe each automation boundary and start the workflows that are safe to run by
+              hand.
+            </p>
+          </div>
+          <div className="factory-console__header-actions">
+            <RefreshInterval value={refreshMs} onChange={setRefreshMs} />
+            <button className="admin-btn" disabled={loading} onClick={() => void load()} type="button">
+              <RefreshCw className={loading ? 'factory-console__spin' : ''} size={16} /> Refresh
+            </button>
+          </div>
         </div>
-        <div className="factory-console__header-actions">
-          <RefreshInterval value={refreshMs} onChange={setRefreshMs} />
-          <button className="admin-btn" disabled={loading} onClick={() => void load()} type="button">
-            <RefreshCw className={loading ? 'factory-console__spin' : ''} size={16} /> Refresh
-          </button>
+
+        <div className="factory-console__service-strip" aria-label="Factory service reachability">
+          <ServiceState label="Factory" reachable={status?.factoryReachable ?? false} />
+          <ServiceState label="Deployer" reachable={status?.deployerReachable ?? false} />
+          <span className="factory-console__commit">production {shortCommit}</span>
         </div>
+
+        {error && <div className="admin-error-banner"><AlertCircle size={16} /> {error}</div>}
+        {run && <RunBanner run={run} />}
+
+        {flow && (
+          <FactoryFlowGraph flow={flow} selected={selectedNode} onSelect={setSelectedNode} />
+        )}
       </div>
-
-      <div className="factory-console__service-strip" aria-label="Factory service reachability">
-        <ServiceState label="Factory" reachable={status?.factoryReachable ?? false} />
-        <ServiceState label="Deployer" reachable={status?.deployerReachable ?? false} />
-        <span className="factory-console__commit">production {shortCommit}</span>
-      </div>
-
-      {error && <div className="admin-error-banner"><AlertCircle size={16} /> {error}</div>}
-      {run && <RunBanner run={run} />}
-
-      {flow && (
-        <FactoryFlowGraph flow={flow} selected={selectedNode} onSelect={setSelectedNode} />
-      )}
 
       <FactoryNodeDrawer
         node={selectedFlowNode}

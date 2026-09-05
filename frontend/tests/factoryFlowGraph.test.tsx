@@ -25,11 +25,31 @@ describe('FactoryFlowGraph', () => {
   it('orders the buttons along the main loop, not by band', () => {
     // Tab order is the only traversal a keyboard user gets. Following the ring is what makes the
     // diagram legible without sight of the SVG.
-    render(<FactoryFlowGraph flow={flow(FACTORY_FLOW_ORDER.map((k) => node(k, { label: k })))}
+    //
+    // The fixture is deliberately built in REVERSE of FACTORY_FLOW_ORDER, not in the same order
+    // as the assertion: a component that simply echoed `flow.nodes` verbatim (ignoring the order
+    // constant entirely) would previously have passed this test by coincidence, since the fixture
+    // and the expectation were built from the identical `.map()` call.
+    const shuffled = [...FACTORY_FLOW_ORDER].reverse()
+    render(<FactoryFlowGraph flow={flow(shuffled.map((k) => node(k, { label: k })))}
       selected={null} onSelect={vi.fn()} />)
 
     const labels = screen.getAllByRole('button').map((b) => b.getAttribute('data-node-key'))
     expect(labels).toEqual(FACTORY_FLOW_ORDER)
+  })
+
+  it('appends a node FACTORY_FLOW_ORDER does not name rather than dropping it', () => {
+    // An eighth module added on the Java side without a matching frontend entry must still be
+    // reachable: the Java topology test already fails the build for the reverse omission, and
+    // silently filtering an unknown key out here would move the identical failure mode one layer
+    // up the stack with every existing test still green (both build their fixture FROM
+    // FACTORY_FLOW_ORDER, so neither could ever see a node missing from it).
+    render(<FactoryFlowGraph
+      flow={flow([...FACTORY_FLOW_ORDER.map((k) => node(k)), node('new-module', { label: 'New module' })])}
+      selected={null} onSelect={vi.fn()} />)
+
+    expect(screen.getByRole('button', { name: /New module/ })).toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(FACTORY_FLOW_ORDER.length + 1)
   })
 
   it('hides the decorative svg from assistive technology', () => {
@@ -47,6 +67,20 @@ describe('FactoryFlowGraph', () => {
 
     const names = screen.getAllByRole('button').map((b) => b.textContent?.trim())
     expect(new Set(names).size).toBe(names.length)
+  })
+
+  it('describes the build node\'s count as waiting tickets, not "in flight"', () => {
+    // build's counts are the Linear backlog waiting for it, read verbatim from the same
+    // NodeCounts the linear node itself shows. The generic "in flight" wording would say things
+    // are RUNNING on a node whose entire point is that nothing is - visible on every normal page
+    // load where any ticket is open.
+    render(<FactoryFlowGraph
+      flow={flow([node('build', { label: 'Build agent', health: 'OFFLINE',
+        counts: { inFlight: 7, ok24h: 0, failed24h: 0 } })])}
+      selected={null} onSelect={vi.fn()} />)
+
+    expect(screen.getByRole('button', { name: /7 waiting/ })).toBeInTheDocument()
+    expect(screen.queryByText(/in flight/)).not.toBeInTheDocument()
   })
 
   it('reports a null count as unknown rather than as zero', () => {

@@ -212,13 +212,13 @@ export interface FactoryFlowDetail {
   /**
    * The work behind this node, newest first.
    *
-   * For a module (or a node with no list of its own, like `production`/`build`) an unreachable
-   * source and a genuinely empty one both report `[]` — the backend already collapses "nothing
-   * to show" and "could not be read" into the same honest answer there. An artifact node with
-   * its own reader (`linear`, `pull-request`, `main`, `agent-setup`) is different: this is
-   * `null` when that reader itself failed, distinct from `[]` when it read successfully and
-   * found nothing open. Losing that distinction would misreport a broken Linear or GitHub read
-   * as a quiet one.
+   * Only a node with no list of its own at all (`production`/`build`, or an unrecognised key)
+   * reports `[]` unconditionally — there is genuinely nothing this console could ever list there.
+   * Every other node distinguishes "could not read this" from "read it and found nothing": a
+   * module's Temporal query failing, an artifact node's own reader (`linear`, `pull-request`,
+   * `main`, `agent-setup`) failing, and — for `deploy`/`platformbackup` — the deployer itself
+   * being unreachable, all report `null` here rather than `[]`. Losing that distinction would
+   * misreport a broken read as a quiet one.
    */
   items: FactoryFlowDetailItem[] | null
 }

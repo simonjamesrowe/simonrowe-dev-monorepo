@@ -42,10 +42,17 @@ const NODE_NOTES: Record<string, string> = {
     'Production state is reported by the platform status page rather than counted here.',
 }
 
-/** The heading and empty-state copy for a node's recent-work list. */
+/** The heading, empty-state and unavailable-state copy for a node's recent-work list. */
 interface RunListCopy {
   heading: string
   empty: string
+  /**
+   * Shown when {@code detail.items} is null - the source could not be read - rather than the
+   * generic "Run history is not available from this console.", so a node whose heading is
+   * "Open tickets" does not pair it with a sentence about "runs", the same noun mismatch Task 12
+   * fixed between the heading and empty-state copy.
+   */
+  unavailable: string
 }
 
 /**
@@ -59,15 +66,46 @@ interface RunListCopy {
  * `actionPanelFor` is a total switch and this is a total lookup with a safe module default.
  */
 const RUN_LIST_COPY: Record<string, RunListCopy> = {
-  linear: { heading: 'Open tickets', empty: 'No open tickets.' },
-  'pull-request': { heading: 'Open pull requests', empty: 'No open pull requests.' },
-  main: { heading: 'Recent merges', empty: 'No recent merges.' },
-  'agent-setup': { heading: 'Open pull requests', empty: 'No open pull requests.' },
+  linear: {
+    heading: 'Open tickets',
+    empty: 'No open tickets.',
+    unavailable: 'Open tickets are not available from this console.',
+  },
+  'pull-request': {
+    heading: 'Open pull requests',
+    empty: 'No open pull requests.',
+    unavailable: 'Open pull requests are not available from this console.',
+  },
+  main: {
+    heading: 'Recent merges',
+    empty: 'No recent merges.',
+    unavailable: 'Recent merges are not available from this console.',
+  },
+  'agent-setup': {
+    heading: 'Open pull requests',
+    empty: 'No open pull requests.',
+    unavailable: 'Open pull requests are not available from this console.',
+  },
+  // production and build have no run list of their own — no Temporal workflow, no artifact
+  // reader — so their FlowDetail is always FlowDetail.empty(), never a "runs" list bounded by a
+  // 30-day retention window. Falling through to the module default stated a window and a noun
+  // ("runs") that never applied to either, on every normal page load.
+  production: {
+    heading: 'Recent activity',
+    empty: 'Production has no activity of its own here — see the platform status page.',
+    unavailable: 'Activity is not available from this console.',
+  },
+  build: {
+    heading: 'Recent activity',
+    empty: 'The build agent has no run history here — its waiting work is the counts above.',
+    unavailable: 'Activity is not available from this console.',
+  },
 }
 
 const DEFAULT_RUN_LIST_COPY: RunListCopy = {
   heading: 'Recent runs',
   empty: 'No runs in the last 30 days.',
+  unavailable: 'Run history is not available from this console.',
 }
 
 const runListCopy = (nodeKey: string): RunListCopy =>
@@ -251,12 +289,15 @@ export function FactoryNodeDrawer(
             </p>
           ) : detail === null ? (
             <p>Loading…</p>
-          ) : detail.items === null ? (
+          ) : detail.items == null ? (
             // Distinct from an empty list: this node's own source could not be read — an
             // artifact reader (Linear, GitHub) failing, or, for `deploy`/`platformbackup`, the
-            // deployer itself being unreachable — not "nothing open".
+            // deployer itself being unreachable — not "nothing open". `== null` rather than
+            // `=== null`: if the backend ever gained `@JsonInclude(NON_NULL)`, this would arrive
+            // as `undefined` instead, and a strict check would fall through to the `.length`
+            // read below and throw.
             <p className="admin-error-banner">
-              <AlertCircle size={14} /> Run history is not available from this console.
+              <AlertCircle size={14} /> {runListCopy(node.key).unavailable}
             </p>
           ) : detail.items.length === 0 ? (
             <p>{runListCopy(node.key).empty}</p>
@@ -280,6 +321,12 @@ export function FactoryNodeDrawer(
                     )}
                     {' — '}
                     <span className="factory-drawer__run-status">{item.status}</span>
+                    {item.at && (
+                      <>
+                        {' · '}
+                        <span className="factory-drawer__run-time">{formatTime(item.at)}</span>
+                      </>
+                    )}
                   </li>
                 )
               })}

@@ -198,6 +198,23 @@ describe('SoftwareFactoryAdmin', () => {
     expect(within(drawer).queryByText(/^Loading/i)).not.toBeInTheDocument()
   })
 
+  it('marks the page content inert while a drawer is open, and live again once it closes', async () => {
+    // aria-modal="true" on the drawer is honest for the keyboard Tab trap, but a screen reader's
+    // own virtual cursor does not go through Tab and can still browse into the background, and a
+    // sighted keyboard user who clicks into that background can Tab their way back out of the
+    // trap. `inert` on the rest of the page closes both residuals in one attribute.
+    const { container } = render(<SoftwareFactoryAdmin />)
+    await screen.findByRole('button', { name: /Log watch/ })
+    const body = container.querySelector('.factory-console__body')
+    expect(body).not.toHaveAttribute('inert')
+
+    const drawer = await openDrawer(/Log watch/)
+    expect(body).toHaveAttribute('inert')
+
+    await userEvent.click(within(drawer).getByRole('button', { name: /close/i }))
+    expect(body).not.toHaveAttribute('inert')
+  })
+
   it('reports each container reachability in text, not only colour', async () => {
     mockFetchStatus.mockResolvedValue(status({ deployerReachable: false }))
 
@@ -561,6 +578,27 @@ describe('SoftwareFactoryAdmin', () => {
     // A further tick now fetches again - the guard is a floor on spacing, not a permanent latch.
     await act(() => vi.advanceTimersByTimeAsync(15_000))
     expect(mockFetchFlow.mock.calls.length).toBe(initial + 2)
+
+    vi.useRealTimers()
+  })
+
+  it('re-fetches an open drawer\'s run list on the same tick as the flow refresh', async () => {
+    // Previously useFlowDetail depended only on [nodeKey, getAccessToken], so during a deploy
+    // with the drawer open the counts above (driven by `flow`, which DOES refresh) kept moving
+    // while the run list underneath froze at the moment the drawer was opened - the primary use
+    // case the refresh control exists for. Riding the same tick as `load()`, not a second timer.
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Log watch/)
+    const initialDetailCalls = mockFetchFlowDetail.mock.calls.length
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('radio', { name: '15s' }))
+    await act(() => vi.advanceTimersByTimeAsync(15_000))
+
+    expect(mockFetchFlowDetail.mock.calls.length).toBe(initialDetailCalls + 1)
+    // A refresh-triggered re-fetch of the SAME node must not flash "Loading…" over an
+    // already-rendered run list.
+    expect(within(drawer).queryByText(/^Loading/i)).not.toBeInTheDocument()
 
     vi.useRealTimers()
   })

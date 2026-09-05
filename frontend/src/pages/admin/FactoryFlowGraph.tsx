@@ -16,11 +16,38 @@ const HEALTH_LABELS: Record<FactoryNodeHealth, string> = {
 const VIEWBOX_WIDTH = 1000
 const VIEWBOX_HEIGHT = 520
 
+/**
+ * The build node's `counts` is the same Linear backlog `NodeCounts` the `linear` node itself
+ * shows — see `FactoryFlowService.countsFor` — because the build agent runs on a machine this
+ * console cannot reach, so its only signal is the ticket queue waiting for it. Reusing the
+ * generic "in flight" wording there says "7 things are running" on a node whose entire point is
+ * that nothing is: build's `inFlight` is open tickets waiting, not runs in progress.
+ */
+const BUILD_NODE_KEY = 'build'
+
 /** A missing count is not a zero count, and the two must not read the same. */
 function countSummary(node: FactoryFlowNode): string {
-  if (node.counts === null) return 'counts unknown'
+  // `== null` rather than `=== null`: if the backend record ever gained
+  // `@JsonInclude(NON_NULL)`, a null counts would arrive as `undefined` instead of JSON `null`,
+  // and a strict `=== null` check would fall through into the destructuring two lines down and
+  // throw — degrading "could not read this" into a white screen instead of "counts unknown".
+  if (node.counts == null) return 'counts unknown'
   const { inFlight, ok24h, failed24h } = node.counts
+  if (node.key === BUILD_NODE_KEY) {
+    return `${inFlight} waiting`
+  }
   return `${inFlight} in flight, ${ok24h} ok, ${failed24h} failed in 24h`
+}
+
+/**
+ * Nodes with no fixed layout position — an unknown key {@link FACTORY_FLOW_ORDER} does not name,
+ * or one present there but missing from {@link NODE_POSITIONS} — still need a distinct spot to
+ * render at. Defaulting every one of them to the literal origin would stack an undrawn second
+ * node exactly on top of the first, hiding one behind the other; spreading them along the top
+ * edge by index keeps each one visible and individually clickable instead.
+ */
+function fallbackPosition(index: number): { x: number; y: number } {
+  return { x: 40 + ((index * 80) % (VIEWBOX_WIDTH - 80)), y: 20 }
 }
 
 export function FactoryFlowGraph(
@@ -31,6 +58,12 @@ export function FactoryFlowGraph(
   const ordered = FACTORY_FLOW_ORDER
     .map((key) => byKey.get(key))
     .filter((node): node is FactoryFlowNode => node !== undefined)
+  // A node the factory reports that FACTORY_FLOW_ORDER does not name (an eighth module added on
+  // the Java side without a matching frontend entry) is appended rather than dropped: the Java
+  // topology test already fails the build for this case, and silently filtering it out here would
+  // move the exact same failure mode one layer up the stack, invisible with every test green.
+  const undrawn = flow.nodes.filter((node) => !FACTORY_FLOW_ORDER.includes(node.key))
+  const rendered = [...ordered, ...undrawn]
 
   return (
     <div className="factory-flow">
@@ -63,15 +96,15 @@ export function FactoryFlowGraph(
         ))}
       </svg>
       <ul className="factory-flow__nodes">
-        {ordered.map((node) => {
-          const position = NODE_POSITIONS[node.key]
+        {rendered.map((node, index) => {
+          const position = NODE_POSITIONS[node.key] ?? fallbackPosition(index)
           return (
             <li
               key={node.key}
               className="factory-flow__node-slot"
               style={{
-                '--factory-flow-x': `${((position?.x ?? 0) / VIEWBOX_WIDTH) * 100}%`,
-                '--factory-flow-y': `${((position?.y ?? 0) / VIEWBOX_HEIGHT) * 100}%`,
+                '--factory-flow-x': `${(position.x / VIEWBOX_WIDTH) * 100}%`,
+                '--factory-flow-y': `${(position.y / VIEWBOX_HEIGHT) * 100}%`,
               } as React.CSSProperties}
             >
               <button
