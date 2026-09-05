@@ -227,9 +227,13 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     `FactoryFlowTopologyTest.leavesPlatformBackupOffTheRing` — it has nothing downstream inside
     this factory, and drawing it on a loop would assert a feedback path that does not exist.
     `FactoryFlowTopologyTest` pins the exact twelve node keys and the topology's internal wiring,
-    but **nothing automatically cross-checks `NODES` against `ModulePrerequisites.KEYS`** — Task 1
-    caught a real module/node mismatch by a reviewer reading both lists side by side, not by an
-    assertion, so a future module still needs a human to remember to draw it.
+    and `moduleKeysOnNodesMatchModulePrerequisitesExactly` now cross-checks `NODES` against
+    `ModulePrerequisites.KEYS` in both directions — a key in `ModulePrerequisites.KEYS` carried
+    by no node means a module was added without being drawn into the graph, a node `moduleKey`
+    matching no real key means a typo that would leave that node's health permanently unknown,
+    and both failure messages name the offending keys. At Task 1, before this test existed, a
+    real module/node mismatch like this was caught only by a reviewer reading both lists side by
+    side; a future module now fails the build on its own if it is forgotten.
   - **Several state pairs are decided separately on purpose and must never collapse**: `IDLE`
     (nothing to do) vs `OFFLINE` (work waiting, nothing listening) for the `build` node;
     `NOT_TRACKED` (no source of live data at all — only `production` today, which is reported by

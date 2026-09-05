@@ -998,13 +998,18 @@ The twelve nodes are six modules (`logwatch`, `cvefix`, `codereview`, `deploy`,
 `FactoryFlowTopologyTest` also pins the exact twelve node keys
 (`pinsTheTwelveNodes`) and checks the topology's own internal consistency — every
 edge references a node that exists, every node has a band, the main loop's
-edges are all present. Read that as a narrower guarantee than it sounds: nothing in
-the module today automatically cross-checks `NODES` against
-`ModulePrerequisites.KEYS`, so adding a seventh module and forgetting to add its
-`NodeDescriptor` will not itself fail a build — it was caught at Task 1 by a
-reviewer reading the two lists side by side, not by an assertion. If you add a
-module, add its node and edges in the same change and expect a human, not a test,
-to notice if you forget.
+edges are all present. `moduleKeysOnNodesMatchModulePrerequisitesExactly` closes
+what used to be a gap here: it diffs every node's `moduleKey` against
+`ModulePrerequisites.KEYS` in both directions, because the two mistakes look
+nothing alike — a key in `ModulePrerequisites.KEYS` carried by no node means a
+module was added without being drawn into the graph, and a node `moduleKey`
+matching no real key means a typo, which would silently leave that node's health
+permanently unknown rather than throwing anywhere. Both failure messages name the
+offending keys, so the assertion doubles as instructions for what to add and
+where. At Task 1 of 044, before this test existed, exactly this kind of mismatch
+was caught only by a reviewer reading the two lists side by side; add a module's
+node and edges in the same change as its `ModulePrerequisites` entry, and the
+build now fails on its own if you forget either half.
 
 ### Two nodes with no source this container can read
 
