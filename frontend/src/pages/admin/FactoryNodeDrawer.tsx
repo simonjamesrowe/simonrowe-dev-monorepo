@@ -42,7 +42,39 @@ const NODE_NOTES: Record<string, string> = {
     'Production state is reported by the platform status page rather than counted here.',
 }
 
+/** The heading and empty-state copy for a node's recent-work list. */
+interface RunListCopy {
+  heading: string
+  empty: string
+}
+
+/**
+ * Module nodes list Temporal workflow executions, bounded by the namespace's 30-day retention —
+ * "Recent runs" and "in the last 30 days" are both literally true there. The four artifact nodes
+ * below have their own reader with no such window and nothing that is a "run": a ticket, a pull
+ * request, a commit. Reusing the module wording for them stated a window that was never applied,
+ * about a kind of thing that does not exist on that node — text that reads as data and is simply
+ * wrong. A lookup keyed by node, not a second if-chain in the JSX: the console already had one
+ * silent-fallthrough bug from an if-chain ending in a default (the old `actionFor`), which is why
+ * `actionPanelFor` is a total switch and this is a total lookup with a safe module default.
+ */
+const RUN_LIST_COPY: Record<string, RunListCopy> = {
+  linear: { heading: 'Open tickets', empty: 'No open tickets.' },
+  'pull-request': { heading: 'Open pull requests', empty: 'No open pull requests.' },
+  main: { heading: 'Recent merges', empty: 'No recent merges.' },
+  'agent-setup': { heading: 'Open pull requests', empty: 'No open pull requests.' },
+}
+
+const DEFAULT_RUN_LIST_COPY: RunListCopy = {
+  heading: 'Recent runs',
+  empty: 'No runs in the last 30 days.',
+}
+
+const runListCopy = (nodeKey: string): RunListCopy =>
+  RUN_LIST_COPY[nodeKey] ?? DEFAULT_RUN_LIST_COPY
+
 const formatTime = (value: string | null) =>
+
   value ? new Date(value).toLocaleString() : 'Not recorded'
 
 /**
@@ -213,7 +245,7 @@ export function FactoryNodeDrawer(
 
       {detail !== undefined && (
         <div className="factory-drawer__runs">
-          <h3>Recent runs</h3>
+          <h3>{runListCopy(node.key).heading}</h3>
           {detailError ? (
             <p className="admin-error-banner">
               <AlertCircle size={14} /> {detailError}
@@ -228,7 +260,7 @@ export function FactoryNodeDrawer(
               <AlertCircle size={14} /> Run history is not available from this console.
             </p>
           ) : detail.items.length === 0 ? (
-            <p>No runs in the last 30 days.</p>
+            <p>{runListCopy(node.key).empty}</p>
           ) : (
             <ol>
               {detail.items.map((item) => {

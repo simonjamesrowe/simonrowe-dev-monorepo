@@ -193,6 +193,49 @@ describe('FactoryNodeDrawer', () => {
     expect(screen.queryByText(/No runs in the last 30 days/i)).not.toBeInTheDocument()
   })
 
+  it('says "No open tickets" for the Linear node rather than the module wording', () => {
+    // linearItems() applies no 30-day window and returns tickets, not runs — the module copy
+    // ("No runs in the last 30 days") would state a window that was never applied, about a
+    // kind of thing that does not exist on this node.
+    render(<FactoryNodeDrawer node={{ ...node, key: 'linear', label: 'Linear' }} module={null}
+      onClose={vi.fn()} detail={{ nodeKey: 'linear', items: [] }} />)
+    expect(screen.getByRole('heading', { name: 'Open tickets' })).toBeInTheDocument()
+    expect(screen.getByText('No open tickets.')).toBeInTheDocument()
+    expect(screen.queryByText(/No runs in the last 30 days/i)).not.toBeInTheDocument()
+  })
+
+  it('says "No open pull requests" for the pull-request node', () => {
+    render(<FactoryNodeDrawer node={{ ...node, key: 'pull-request', label: 'Pull request' }}
+      module={null} onClose={vi.fn()} detail={{ nodeKey: 'pull-request', items: [] }} />)
+    expect(screen.getByRole('heading', { name: 'Open pull requests' })).toBeInTheDocument()
+    expect(screen.getByText('No open pull requests.')).toBeInTheDocument()
+  })
+
+  it('says "No open pull requests" for the agent-setup node too', () => {
+    // Same wording as pull-request — both list open GitHub pull requests, just on different
+    // repositories — but wired through its own node key rather than inherited by accident.
+    render(<FactoryNodeDrawer node={{ ...node, key: 'agent-setup', label: 'agent-setup' }}
+      module={null} onClose={vi.fn()} detail={{ nodeKey: 'agent-setup', items: [] }} />)
+    expect(screen.getByRole('heading', { name: 'Open pull requests' })).toBeInTheDocument()
+    expect(screen.getByText('No open pull requests.')).toBeInTheDocument()
+  })
+
+  it('says "No recent merges" for the main node', () => {
+    render(<FactoryNodeDrawer node={{ ...node, key: 'main', label: 'main' }} module={null}
+      onClose={vi.fn()} detail={{ nodeKey: 'main', items: [] }} />)
+    expect(screen.getByRole('heading', { name: 'Recent merges' })).toBeInTheDocument()
+    expect(screen.getByText('No recent merges.')).toBeInTheDocument()
+  })
+
+  it('keeps the module wording for a module node', () => {
+    // logwatch has no entry in the copy lookup, so it must fall through to the module default
+    // rather than losing the heading entirely.
+    render(<FactoryNodeDrawer node={node} module={null}
+      onClose={vi.fn()} detail={{ nodeKey: 'logwatch', items: [] }} />)
+    expect(screen.getByRole('heading', { name: 'Recent runs' })).toBeInTheDocument()
+    expect(screen.getByText('No runs in the last 30 days.')).toBeInTheDocument()
+  })
+
   it('renders each item as a link whose accessible name stays unique across a title collision', () => {
     // Two open tickets can share a title; only the id inside the link tells them apart, and it
     // must be inside the anchor to be part of the accessible name at all.
