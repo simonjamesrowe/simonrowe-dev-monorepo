@@ -74,7 +74,6 @@ const runListCopy = (nodeKey: string): RunListCopy =>
   RUN_LIST_COPY[nodeKey] ?? DEFAULT_RUN_LIST_COPY
 
 const formatTime = (value: string | null) =>
-
   value ? new Date(value).toLocaleString() : 'Not recorded'
 
 /**

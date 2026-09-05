@@ -2,11 +2,14 @@ package com.simonrowe.factory.flow;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.simonrowe.factory.admin.ModulePrerequisites;
 import com.simonrowe.factory.flow.domain.Band;
 import com.simonrowe.factory.flow.domain.NodeDescriptor;
 import com.simonrowe.factory.flow.domain.NodeKind;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
@@ -27,6 +30,33 @@ class FactoryFlowTopologyTest {
     NodeDescriptor linear = node("linear");
     assertThat(linear.kind()).isEqualTo(NodeKind.ARTIFACT);
     assertThat(linear.moduleKey()).isEqualTo("linear");
+  }
+
+  @Test
+  void moduleKeysOnNodesMatchModulePrerequisitesExactly() {
+    // The guarantee the spec names: adding an eighth module without drawing it must fail the
+    // build, and a typo in a node's moduleKey must be equally loud, since it would silently
+    // render that node's health as permanently unknown rather than throwing anywhere.
+    Set<String> drawnModuleKeys = FactoryFlowTopology.NODES.stream()
+        .map(NodeDescriptor::moduleKey)
+        .filter(Objects::nonNull)
+        .collect(Collectors.toSet());
+    Set<String> authoritativeKeys = Set.copyOf(ModulePrerequisites.KEYS);
+
+    Set<String> undrawn = new TreeSet<>(authoritativeKeys);
+    undrawn.removeAll(drawnModuleKeys);
+    Set<String> unknown = new TreeSet<>(drawnModuleKeys);
+    unknown.removeAll(authoritativeKeys);
+
+    assertThat(undrawn)
+        .as("module key(s) %s are in ModulePrerequisites.KEYS but no node in "
+            + "FactoryFlowTopology.NODES carries them as a moduleKey - a module was added "
+            + "without being drawn into the graph", undrawn)
+        .isEmpty();
+    assertThat(unknown)
+        .as("node moduleKey(s) %s do not match any key in ModulePrerequisites.KEYS - likely "
+            + "a typo, which would leave that node's health permanently unknown", unknown)
+        .isEmpty();
   }
 
   @Test
