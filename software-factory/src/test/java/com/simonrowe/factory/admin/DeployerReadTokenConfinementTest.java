@@ -57,4 +57,29 @@ class DeployerReadTokenConfinementTest {
     assertThat(ComposeFile.declaredKeysContaining(factoryBlock, "FACTORY_READ_TOKEN"))
         .isNotEmpty();
   }
+
+  @Test
+  void bothFactoryReadTokenOccurrencesUseTheOptionalInterpolationForm() throws IOException {
+    // This exact mistake was made once already during implementation: `:?` on a variable absent
+    // from the prod .env fails interpolation for the WHOLE compose file, which wedges sync-config
+    // AND takes down monitor-prod.sh's minutely `up -d` - the self-healing watchdog. Assert both
+    // the deployer's and software-factory's lines use `:-`, and that neither ever uses `:?`.
+    List<String> occurrences = ComposeFile.lines().stream()
+        .filter(line -> line.contains("FACTORY_READ_TOKEN:"))
+        .filter(line -> !line.trim().startsWith("#"))
+        .toList();
+
+    assertThat(occurrences)
+        .as("expected exactly two FACTORY_READ_TOKEN assignment lines (deployer, software-factory)")
+        .hasSize(2);
+    assertThat(occurrences)
+        .as("every FACTORY_READ_TOKEN assignment must use the optional ${FACTORY_READ_TOKEN:-} "
+            + "form, or an unset variable fails interpolation for the whole compose file: %s",
+            occurrences)
+        .allMatch(line -> line.contains("${FACTORY_READ_TOKEN:-}"));
+    assertThat(occurrences)
+        .as("no FACTORY_READ_TOKEN assignment may use the required ${FACTORY_READ_TOKEN:?} form: "
+            + "%s", occurrences)
+        .noneMatch(line -> line.contains(":?"));
+  }
 }

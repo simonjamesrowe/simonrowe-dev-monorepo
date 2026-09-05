@@ -30,11 +30,12 @@ public record FlowDetail(String nodeKey, List<Item> items) {
 
   /**
    * Nothing to show — a node with no list of its own ({@code production}, {@code build}, an
-   * unrecognised key) or a module whose Temporal query could not be answered.
+   * unrecognised key). These are the only cases that genuinely mean "there is nothing here".
    *
-   * <p>Deliberately not used when an artifact node's own reader fails: {@code
-   * FactoryFlowDetailService} builds a {@link FlowDetail} with null {@code items} for that case
-   * instead, so a broken Linear or GitHub read is never presented as a quiet one.
+   * <p>Deliberately not used when a module's Temporal query fails or an artifact node's own
+   * reader fails: {@code FactoryFlowDetailService} builds a {@link FlowDetail} with null {@code
+   * items} for both of those cases instead, so an unreadable source is never presented as a quiet
+   * one.
    */
   public static FlowDetail empty(final String nodeKey) {
     return new FlowDetail(nodeKey, List.of());

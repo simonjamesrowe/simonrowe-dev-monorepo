@@ -70,11 +70,14 @@ class FactoryFlowDetailServiceTest {
   }
 
   @Test
-  void returnsAnEmptyDetailWhenTemporalCannotBeReached() {
+  void returnsNullItemsWhenTemporalCannotBeReached() {
+    // Distinct from returnsAnEmptyDetailForAnUnknownNodeKey: an unreadable Temporal must render
+    // as "could not read this", never as "nothing running" - the exact self-contradicting drawer
+    // already fixed once for the deployer, now on the module path.
     WorkflowServiceBlockingStub stub = mock(WorkflowServiceBlockingStub.class);
     when(stub.listWorkflowExecutions(any())).thenThrow(new RuntimeException("unavailable"));
 
-    assertThat(service(stub).detail("logwatch").items()).isEmpty();
+    assertThat(service(stub).detail("logwatch").items()).isNull();
   }
 
   @Test

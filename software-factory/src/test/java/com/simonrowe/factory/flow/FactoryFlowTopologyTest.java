@@ -3,9 +3,15 @@ package com.simonrowe.factory.flow;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.simonrowe.factory.admin.ModulePrerequisites;
+import com.simonrowe.factory.codereview.workflow.CodeReviewWorkflow;
+import com.simonrowe.factory.cvefix.workflow.CveFixWorkflow;
+import com.simonrowe.factory.deploy.workflow.DeployWorkflow;
+import com.simonrowe.factory.feedback.workflow.ReviewFeedbackWorkflow;
 import com.simonrowe.factory.flow.domain.Band;
 import com.simonrowe.factory.flow.domain.NodeDescriptor;
 import com.simonrowe.factory.flow.domain.NodeKind;
+import com.simonrowe.factory.logwatch.workflow.LogWatchWorkflow;
+import com.simonrowe.factory.platformbackup.workflow.PlatformBackupWorkflow;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -56,6 +62,43 @@ class FactoryFlowTopologyTest {
     assertThat(unknown)
         .as("node moduleKey(s) %s do not match any key in ModulePrerequisites.KEYS - likely "
             + "a typo, which would leave that node's health permanently unknown", unknown)
+        .isEmpty();
+  }
+
+  @Test
+  void workflowTypesOnNodesMatchTheRealWorkflowInterfacesExactly() {
+    // NodeDescriptor.workflowType() is a hand-typed literal, checked against no @WorkflowInterface
+    // anywhere else. A rename leaves this string stale: WorkflowCountsReader's visibility query
+    // then matches nothing, Temporal answers count: 0 with no exception, and the node reports
+    // READY with all-zero counts forever while the module keeps running - silent success with a
+    // false answer, worse than every other unreadable-source path here, which throws. Referencing
+    // the interfaces directly (not their names as further literals) means a rename breaks
+    // compilation instead of merely failing this assertion.
+    Set<String> expected = Set.of(
+        CodeReviewWorkflow.class.getSimpleName(),
+        ReviewFeedbackWorkflow.class.getSimpleName(),
+        CveFixWorkflow.class.getSimpleName(),
+        DeployWorkflow.class.getSimpleName(),
+        PlatformBackupWorkflow.class.getSimpleName(),
+        LogWatchWorkflow.class.getSimpleName());
+    Set<String> drawnWorkflowTypes = FactoryFlowTopology.NODES.stream()
+        .map(NodeDescriptor::workflowType)
+        .filter(Objects::nonNull)
+        .collect(Collectors.toSet());
+
+    Set<String> undrawn = new TreeSet<>(expected);
+    undrawn.removeAll(drawnWorkflowTypes);
+    Set<String> unknown = new TreeSet<>(drawnWorkflowTypes);
+    unknown.removeAll(expected);
+
+    assertThat(undrawn)
+        .as("workflow interface simple name(s) %s have no node in FactoryFlowTopology.NODES "
+            + "carrying them as workflowType", undrawn)
+        .isEmpty();
+    assertThat(unknown)
+        .as("node workflowType(s) %s do not match any real @WorkflowInterface simple name - "
+            + "likely a stale rename, which would leave that node's Temporal query matching "
+            + "nothing and READY with all-zero counts forever", unknown)
         .isEmpty();
   }
 

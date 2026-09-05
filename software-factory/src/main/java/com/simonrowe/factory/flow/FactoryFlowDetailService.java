@@ -20,17 +20,23 @@ import org.springframework.stereotype.Service;
  *
  * <p>Unlike {@link WorkflowCountsReader}, which counts every module in one shot per status band,
  * this reads only the one node an operator actually opened — a drawer that listed every module's
- * runs would be worse than useless. A module's Temporal query failing, an unknown node key, and a
- * node with no {@link NodeDescriptor#workflowType()} and no artifact reader either (only {@code
- * production} and {@code build} today) all resolve to {@link FlowDetail#empty(String)} rather
- * than an exception: a drawer that throws takes the whole page down for a detail panel.
+ * runs would be worse than useless. An unknown node key, and a node with no {@link
+ * NodeDescriptor#workflowType()} and no artifact reader either (only {@code production} and
+ * {@code build} today), resolve to {@link FlowDetail#empty(String)} rather than an exception: a
+ * drawer that throws takes the whole page down for a detail panel. Those genuinely mean "there is
+ * nothing here" — a workflow type this service never queries.
+ *
+ * <p>A module's Temporal query failing is different again: it is answered with a {@link
+ * FlowDetail} whose {@link FlowDetail#items()} is null, the same "could not read this" signal the
+ * four artifact readers use, rather than collapsed to {@link FlowDetail#empty(String)} — a busy
+ * module with an unreadable Temporal must never render as a quiet one.
  *
  * <p>The four artifact nodes with their own reader — {@code linear}, {@code pull-request},
- * {@code main} and {@code agent-setup} — are different: {@link ArtifactCountsReader} returns null
- * when its source could not be read, and that null is passed straight through as {@link
- * FlowDetail#items()} rather than collapsed to {@link FlowDetail#empty(String)}. Losing that
- * distinction would misreport a broken Linear or GitHub read as a node with genuinely nothing
- * open.
+ * {@code main} and {@code agent-setup} — carry the identical distinction one layer down: {@link
+ * ArtifactCountsReader} returns null when its source could not be read, and that null is passed
+ * straight through as {@link FlowDetail#items()} rather than collapsed to {@link
+ * FlowDetail#empty(String)}. Losing that distinction would misreport a broken Linear or GitHub
+ * read as a node with genuinely nothing open.
  */
 @Service
 public class FactoryFlowDetailService {
@@ -101,7 +107,9 @@ public class FactoryFlowDetailService {
           .map(execution -> item(descriptor.get(), execution))
           .collect(Collectors.toList()));
     } catch (RuntimeException exception) {
-      return FlowDetail.empty(nodeKey);
+      // Null, not FlowDetail.empty(nodeKey): an unreadable Temporal is "could not read this",
+      // never "nothing running" — the same distinction the artifact readers make one layer down.
+      return new FlowDetail(nodeKey, null);
     }
   }
 
