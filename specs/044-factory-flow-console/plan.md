@@ -2641,9 +2641,20 @@ git commit -m "feat: list a factory node's recent work in its drawer"
 Cover: what the twelve nodes are; that the topology is code in `FactoryFlowTopology` and adding a
 module without adding it to the graph fails `FactoryFlowTopologyTest`; that counts come from
 Temporal visibility rather than any collection, which is why `codereview` is countable at all;
-that `/api/factory/flow` is token-protected while `/api/factory/status` is not, and why; the
-deployer exemption resolved in Task 5 Step 4; that `IDLE` and `OFFLINE` are different facts; and
-that `platformbackup` has no edges by design.
+that **`GET /api/factory/flow` is deliberately unauthenticated** on the same terms as
+`/api/factory/status` while **`GET /api/factory/flow/{nodeKey}` is protected** — and that the
+detail endpoint uses a **second, read-only token** (`FACTORY_READ_TOKEN`, checked by
+`authenticateRead`), never `FACTORY_TRIGGER_TOKEN`, because nine controllers accept the trigger
+token and granting it to the deployer would expose the deploy-start endpoint on the container
+holding the Docker socket; that `FACTORY_READ_TOKEN` uses a `:-` default in compose **on purpose**,
+because a `:?` on a variable absent from the production `.env` fails interpolation for the whole
+file and would wedge `sync-config` and `monitor-prod.sh` together; that `IDLE` and `OFFLINE` are
+different facts, as are `NOT_TRACKED` and `READY`; and that `platformbackup` has no edges by
+design.
+
+**Operator action to state explicitly**: `FACTORY_READ_TOKEN` must be added to the production
+`.env` before the `deploy` and `platformbackup` drawers can show run history. Until then those two
+panels render "not available", which is correct rather than broken.
 
 - [ ] **Step 2: Add a `044-factory-flow-console` entry to CLAUDE.md's Recent Changes**
 
@@ -2679,3 +2690,108 @@ git commit -m "docs: document the factory flow console"
       still offers "Dry run scan" and "Scan logs now"; the window narrower than 50rem drops the SVG
       and stacks the buttons; the `build` node reads Idle or Offline, not an error.
 - [ ] Open the pull request with the `pr-review-loop` skill. Do not improvise the review loop.
+
+
+---
+
+### Task 12: Artifact node detail lists
+
+Closes the gap Task 10's review found: `spec.md` promises artifact drawers list "open Linear
+tickets by state; open pull requests with their three signals; recent merges to `main`", and today
+every artifact node falls through to an empty detail. Clicking `Linear` shows a number, not which
+tickets.
+
+**Files:**
+- Modify: `software-factory/src/main/java/com/simonrowe/factory/flow/FactoryFlowDetailService.java`
+- Modify: `software-factory/src/main/java/com/simonrowe/factory/flow/ArtifactCountsReader.java`
+  (add list-returning siblings to the counting methods)
+- Modify: `software-factory/src/main/java/com/simonrowe/factory/flow/FlowDetail.java` (Javadoc only)
+- Test: `software-factory/src/test/java/com/simonrowe/factory/flow/FactoryFlowDetailServiceTest.java`
+- Test: `software-factory/src/test/java/com/simonrowe/factory/flow/ArtifactCountsReaderTest.java`
+- Modify: `frontend/src/pages/admin/FactoryNodeDrawer.tsx` (render `url` as a link)
+- Test: `frontend/tests/factoryNodeDrawer.test.tsx`
+
+**Interfaces:**
+- Consumes: `FlowDetail.Item(String id, String title, String status, Instant at, String url)` —
+  already the right shape, do not change it. `LinearIssueRepository`, and `ArtifactCountsReader`'s
+  `java.net.http.HttpClient` + configurable `apiBaseUrl` established in Task 3's fix round.
+- Produces: nothing later tasks depend on.
+
+**Which nodes gain a list, and from where:**
+
+| Node | Source | `id` | `title` | `status` | `url` |
+| --- | --- | --- | --- | --- | --- |
+| `linear` | `linear_issues` collection | `issueIdentifier` | `keyParts` joined with " · " | `lastKnownStateType` | `issueUrl` |
+| `pull-request` | GitHub `GET /repos/{o}/{r}/pulls?state=open` | `#<number>` | PR title | mergeable/draft state | `html_url` |
+| `main` | GitHub `GET /repos/{o}/{r}/commits?sha=main` | short sha | commit subject first line | `"merged"` | `html_url` |
+| `agent-setup` | GitHub, `agent-setup` repo, open PRs | `#<number>` | PR title | state | `html_url` |
+| `production`, `build` | none | — | — | — | — |
+
+**`linear` titles come from `keyParts`, not the Linear API.** That is deliberate and matters: the
+counting side already reads the collection rather than the API so the console keeps working with
+no `LINEAR_API_KEY`, and calling the API here would reintroduce exactly that dependency for a
+drawer. `keyParts` is the structured description the fingerprint was computed from — for logwatch
+a signature, for cvefix a component purl — so it is already the most useful one-line summary
+available, and it is stored precisely because it is readable.
+
+- [ ] **Step 1: Write the failing Linear list test**
+
+Add to `ArtifactCountsReaderTest`. Save two `LinearIssueRecord`s — one with an open
+`lastKnownStateType`, one `COMPLETED` — and assert `linearItems()` returns only the open one,
+newest `lastSeenAt` first, with `id` = `issueIdentifier`, `title` = the joined `keyParts`, and
+`url` = `issueUrl`. Add a second test asserting an unknown state type is **included**, since
+`IssueStateType.UNKNOWN.open()` is true so that Linear adding a state cannot silently hide a
+ticket — the same rule the counting side already follows.
+
+- [ ] **Step 2: Run it, confirm it fails on the missing method, not a fixture error**
+
+`./gradlew :software-factory:test --tests '*ArtifactCountsReaderTest' --console=plain`
+
+- [ ] **Step 3: Implement `linearItems()`**
+
+Mirror `linearCounts()`: same repository read, same open/closed rule via `IssueStateType.open()`,
+**same null-on-failure contract** — return null when the read throws, never an empty list, because
+the drawer must keep telling "could not read" apart from "nothing open". Cap at 20 items; a drawer
+is not a backlog view.
+
+- [ ] **Step 4: Write the failing GitHub list tests, then implement**
+
+Add `pullRequestItems()`, `mainItems()` and `agentSetupItems()` beside the existing count methods,
+reusing the same `HttpClient`, the same configured `apiBaseUrl` and the same bounded timeouts.
+Test them with the module's `com.sun.net.httpserver.HttpServer` pattern on an **ephemeral port**
+(`new InetSocketAddress("127.0.0.1", 0)`), as `GitHubCredentialsTest` and Task 3's fix round do —
+serve a canned JSON array and assert the parsed items. No real network call. Same null-on-failure
+contract, same 20-item cap.
+
+Do **not** add pagination: `ArtifactCountsReader`'s single-page `per_page=100` read is a recorded
+deferred minor, and a 20-item drawer cannot need a second page.
+
+- [ ] **Step 5: Route the artifact nodes in `FactoryFlowDetailService`**
+
+Extend the existing dispatch so artifact keys reach these readers instead of falling through to
+`FlowDetail.empty`. Keep `production` and `build` returning empty — `production`'s real state lives
+on the platform status page and `build` has no agent yet.
+
+**A null from any reader must surface as the "not available" state Task 10 added, not as an empty
+list.** Add a test for that; it is the whole distinction this feature is built around, and it is
+the one most easily lost when adding a second source to a method that already has one.
+
+Also correct `FlowDetail.empty`'s Javadoc, which currently says it is "used for artifact nodes with
+no list and for an unreadable source alike" — that conflation is no longer true and would mislead.
+
+- [ ] **Step 6: Render `url` as a link in the drawer**
+
+`FlowDetail.Item.url` has been carried since Task 10 and is not yet rendered. Make the item title a
+link when `url` is present and plain text when it is null. Add `rel="noopener noreferrer"` and
+`target="_blank"`. Each link's accessible name must remain unique within the drawer — the console
+has already had to fix one accessible-name collision, and a list of "#123" links is exactly where
+another would appear.
+
+- [ ] **Step 7: Verify and commit**
+
+```
+./gradlew :software-factory:test :software-factory:checkstyleMain :software-factory:checkstyleTest --console=plain
+cd frontend && npm test && npm run lint
+```
+
+Commit: `feat: list an artifact node's open work in its drawer`
