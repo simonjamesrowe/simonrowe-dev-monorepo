@@ -96,6 +96,9 @@ class ArtifactCountsReaderTest {
     assertThat(reader.pullRequestCounts()).isNull();
     assertThat(reader.mainCounts()).isNull();
     assertThat(reader.agentSetupCounts()).isNull();
+    assertThat(reader.pullRequestItems()).isNull();
+    assertThat(reader.mainItems()).isNull();
+    assertThat(reader.agentSetupItems()).isNull();
   }
 
   @Test
@@ -106,6 +109,201 @@ class ArtifactCountsReaderTest {
     ArtifactCountsReader reader = reader(credentials, UNUSED_GITHUB_BASE_URL);
 
     assertThat(reader.pullRequestCounts()).isNull();
+    assertThat(reader.pullRequestItems()).isNull();
+  }
+
+  @Test
+  void listsOpenLinearIssuesNewestFirstAsReadableItems() {
+    Instant older = Instant.now().minusSeconds(3600);
+    Instant newer = Instant.now();
+    when(repository.findAll()).thenReturn(List.of(
+        linearRecord("SIM-1", List.of("openssl", "CVE-2026-1"), "https://linear.app/sim-1",
+            IssueStateType.TRIAGE, older),
+        linearRecord("SIM-2", List.of("slow query"), "https://linear.app/sim-2",
+            IssueStateType.STARTED, newer),
+        linearRecord("SIM-3", List.of("already fixed"), "https://linear.app/sim-3",
+            IssueStateType.COMPLETED, newer)));
+
+    List<FlowDetail.Item> items = reader().linearItems();
+
+    // Only the two open tickets, newest lastSeenAt first — the completed one is excluded.
+    assertThat(items).extracting(FlowDetail.Item::id).containsExactly("SIM-2", "SIM-1");
+    assertThat(items.get(0).title()).isEqualTo("slow query");
+    assertThat(items.get(1).title()).isEqualTo("openssl · CVE-2026-1");
+    assertThat(items.get(0).url()).isEqualTo("https://linear.app/sim-2");
+  }
+
+  @Test
+  void treatsAnUnknownLinearStateAsOpenInItemsToo() {
+    // Same reasoning as linearCounts(): if Linear adds a state type, the safe failure is to keep
+    // listing the ticket, not to quietly drop it from view.
+    when(repository.findAll()).thenReturn(List.of(
+        linearRecord("SIM-9", List.of("k"), "https://linear.app/sim-9",
+            IssueStateType.UNKNOWN, Instant.now())));
+
+    assertThat(reader().linearItems())
+        .extracting(FlowDetail.Item::id).containsExactly("SIM-9");
+  }
+
+  @Test
+  void returnsNullLinearItemsWhenTheCollectionCannotBeRead() {
+    when(repository.findAll()).thenThrow(new RuntimeException("mongo down"));
+
+    assertThat(reader().linearItems()).isNull();
+  }
+
+  @Test
+  void listsOpenPullRequestsFromGitHubsJsonArrayResponseAsReadableItems() throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/repos/simonjamesrowe/simonrowe-dev-monorepo/pulls",
+        exchange -> {
+          byte[] body = ("[{\"number\":7,\"title\":\"Fix flake\",\"draft\":false,"
+              + "\"mergeable\":true,\"html_url\":\"https://github.com/x/pull/7\"},"
+              + "{\"number\":8,\"title\":\"WIP\",\"draft\":true,"
+              + "\"html_url\":\"https://github.com/x/pull/8\"}]")
+              .getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().add("Content-Type", "application/json");
+          exchange.sendResponseHeaders(200, body.length);
+          try (OutputStream output = exchange.getResponseBody()) {
+            output.write(body);
+          }
+        });
+    server.start();
+
+    try {
+      GitHubCredentials credentials = mock(GitHubCredentials.class);
+      when(credentials.installationId("simonjamesrowe", "simonrowe-dev-monorepo"))
+          .thenReturn(123L);
+      when(credentials.accessToken(123L)).thenReturn("test-token");
+      ArtifactCountsReader reader =
+          reader(credentials, "http://127.0.0.1:" + server.getAddress().getPort());
+
+      List<FlowDetail.Item> items = reader.pullRequestItems();
+
+      assertThat(items).hasSize(2);
+      assertThat(items.get(0).id()).isEqualTo("#7");
+      assertThat(items.get(0).title()).isEqualTo("Fix flake");
+      assertThat(items.get(0).status()).isEqualTo("mergeable");
+      assertThat(items.get(0).url()).isEqualTo("https://github.com/x/pull/7");
+      assertThat(items.get(1).status()).isEqualTo("draft");
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void listsRecentMergesToMainFromGitHubsJsonArrayResponse() throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/repos/simonjamesrowe/simonrowe-dev-monorepo/commits",
+        exchange -> {
+          byte[] body = ("[{\"sha\":\"abcdef1234567890\",\"html_url\":"
+              + "\"https://github.com/x/commit/abcdef1234567890\",\"commit\":{\"message\":"
+              + "\"fix: patch the thing\\n\\nlonger body\",\"committer\":{\"date\":"
+              + "\"2026-09-01T12:00:00Z\"}}}]").getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().add("Content-Type", "application/json");
+          exchange.sendResponseHeaders(200, body.length);
+          try (OutputStream output = exchange.getResponseBody()) {
+            output.write(body);
+          }
+        });
+    server.start();
+
+    try {
+      GitHubCredentials credentials = mock(GitHubCredentials.class);
+      when(credentials.installationId("simonjamesrowe", "simonrowe-dev-monorepo"))
+          .thenReturn(123L);
+      when(credentials.accessToken(123L)).thenReturn("test-token");
+      ArtifactCountsReader reader =
+          reader(credentials, "http://127.0.0.1:" + server.getAddress().getPort());
+
+      List<FlowDetail.Item> items = reader.mainItems();
+
+      assertThat(items).hasSize(1);
+      assertThat(items.get(0).id()).isEqualTo("abcdef1");
+      assertThat(items.get(0).title()).isEqualTo("fix: patch the thing");
+      assertThat(items.get(0).status()).isEqualTo("merged");
+      assertThat(items.get(0).url()).isEqualTo("https://github.com/x/commit/abcdef1234567890");
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void listsOpenAgentSetupPullRequestsFromTheirOwnRepository() throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/repos/simonjamesrowe/agent-setup/pulls",
+        exchange -> {
+          byte[] body = ("[{\"number\":3,\"title\":\"Teach the reviewer a new lesson\","
+              + "\"html_url\":\"https://github.com/x/agent-setup/pull/3\"}]")
+              .getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().add("Content-Type", "application/json");
+          exchange.sendResponseHeaders(200, body.length);
+          try (OutputStream output = exchange.getResponseBody()) {
+            output.write(body);
+          }
+        });
+    server.start();
+
+    try {
+      GitHubCredentials credentials = mock(GitHubCredentials.class);
+      when(credentials.installationId("simonjamesrowe", "simonrowe-dev-monorepo"))
+          .thenReturn(123L);
+      when(credentials.accessToken(123L)).thenReturn("test-token");
+      ArtifactCountsReader reader =
+          reader(credentials, "http://127.0.0.1:" + server.getAddress().getPort());
+
+      List<FlowDetail.Item> items = reader.agentSetupItems();
+
+      assertThat(items).hasSize(1);
+      assertThat(items.get(0).id()).isEqualTo("#3");
+      assertThat(items.get(0).title()).isEqualTo("Teach the reviewer a new lesson");
+      assertThat(items.get(0).url())
+          .isEqualTo("https://github.com/x/agent-setup/pull/3");
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void capsGitHubBackedItemListsAtTwenty() throws IOException {
+    StringBuilder json = new StringBuilder("[");
+    for (int i = 0; i < 25; i++) {
+      if (i > 0) {
+        json.append(',');
+      }
+      json.append("{\"number\":").append(i).append(",\"title\":\"pr-").append(i)
+          .append("\",\"html_url\":\"https://github.com/x/pull/").append(i).append("\"}");
+    }
+    json.append(']');
+    byte[] body = json.toString().getBytes(StandardCharsets.UTF_8);
+
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/repos/simonjamesrowe/simonrowe-dev-monorepo/pulls",
+        exchange -> {
+          exchange.getResponseHeaders().add("Content-Type", "application/json");
+          exchange.sendResponseHeaders(200, body.length);
+          try (OutputStream output = exchange.getResponseBody()) {
+            output.write(body);
+          }
+        });
+    server.start();
+
+    try {
+      GitHubCredentials credentials = mock(GitHubCredentials.class);
+      when(credentials.installationId("simonjamesrowe", "simonrowe-dev-monorepo"))
+          .thenReturn(123L);
+      when(credentials.accessToken(123L)).thenReturn("test-token");
+      ArtifactCountsReader reader =
+          reader(credentials, "http://127.0.0.1:" + server.getAddress().getPort());
+
+      assertThat(reader.pullRequestItems()).hasSize(20);
+    } finally {
+      server.stop(0);
+    }
   }
 
   /**
@@ -171,5 +369,13 @@ class ArtifactCountsReaderTest {
     return new LinearIssueRecord(
         id, "logwatch", "v1", List.of("k"), "iss", "SIM-1", "https://linear.app/x",
         false, lastSeen, lastSeen, 1, state, List.of());
+  }
+
+  private static LinearIssueRecord linearRecord(
+      final String issueIdentifier, final List<String> keyParts, final String issueUrl,
+      final IssueStateType state, final Instant lastSeen) {
+    return new LinearIssueRecord(
+        issueIdentifier, "logwatch", "v1", keyParts, "issue-" + issueIdentifier, issueIdentifier,
+        issueUrl, false, lastSeen, lastSeen, 1, state, List.of());
   }
 }
