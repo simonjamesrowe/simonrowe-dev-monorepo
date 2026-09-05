@@ -155,7 +155,10 @@ public class ArtifactCountsReader {
   }
 
   private static FlowDetail.Item linearItem(final LinearIssueRecord record) {
-    String title = String.join(" · ", record.keyParts());
+    String joined = String.join(" · ", record.keyParts());
+    // keyParts is normalised to an empty (never null) list, but not guaranteed non-empty: a
+    // future producer filing with no key parts would otherwise put a blank row in the drawer.
+    String title = joined.isBlank() ? record.issueIdentifier() : joined;
     String status = record.lastKnownStateType() == null
         ? IssueStateType.UNKNOWN.name()
         : record.lastKnownStateType().name();

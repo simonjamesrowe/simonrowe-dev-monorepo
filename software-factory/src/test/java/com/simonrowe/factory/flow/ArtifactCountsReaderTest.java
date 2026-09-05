@@ -146,6 +146,18 @@ class ArtifactCountsReaderTest {
   }
 
   @Test
+  void fallsBackToTheIssueIdentifierWhenKeyPartsIsBlank() {
+    // keyParts is normalised to an empty (never null) list by the record, but not guaranteed
+    // non-empty — a future producer filing with no key parts must not put a blank row in the
+    // drawer.
+    when(repository.findAll()).thenReturn(List.of(
+        linearRecord("SIM-4", List.of(), "https://linear.app/sim-4",
+            IssueStateType.TRIAGE, Instant.now())));
+
+    assertThat(reader().linearItems().get(0).title()).isEqualTo("SIM-4");
+  }
+
+  @Test
   void returnsNullLinearItemsWhenTheCollectionCannotBeRead() {
     when(repository.findAll()).thenThrow(new RuntimeException("mongo down"));
 
