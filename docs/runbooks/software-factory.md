@@ -959,3 +959,241 @@ In order of likelihood:
 3. "Enabled but not usable: …" — the flag is on and a credential or host path is
    not set. Fix `.env`, then recreate the owning container.
 4. "Temporal task queue status is unavailable" — Temporal itself, not the module.
+
+## Factory flow console
+
+`/admin/software-factory` also renders the factory as a twelve-node loop diagram —
+"Factory Flow" — replacing the seven module cards the console shipped with originally.
+Where the cards told you a module's own state, the diagram tells you what a module
+passes to the next one, which is the question the cards could never answer: whether
+the loop as a whole is actually turning.
+
+### The topology is code, not data
+
+`com.simonrowe.factory.flow.FactoryFlowTopology` is the whole shape: a fixed
+`List<NodeDescriptor>` of twelve nodes and a fixed `List<FlowEdge>`, each edge tagged
+with which of three loops it belongs to (`FAST` — pull request against code review,
+minutes; `MAIN` — Linear to build to merge to deploy to production and back to
+Linear, hours; `SLOW` — a closed review reshaping the agents through `agent-setup`,
+days). It is deliberately not configuration: the topology is a property of which
+modules exist and what they exchange, so it changes only when the code does.
+
+The twelve nodes are six modules (`logwatch`, `cvefix`, `codereview`, `deploy`,
+`feedback`, `platformbackup`) and six artifacts (`linear`, `build`, `pull-request`,
+`main`, `production`, `agent-setup`). Two things about that split are easy to miss:
+
+- **`linear` is an artifact, not a module box.** The `linear` sink is the factory's
+  only activity-only task queue — nothing flows *through* it, so drawing it as a
+  seventh box beside the six workflow-backed modules would misrepresent it. Instead
+  `NodeDescriptor.moduleKey` lets an artifact node carry a module's health as a badge:
+  the `linear` artifact node's badge is the `linear` module's own configured/poller
+  state, exactly as `FactoryStatusService` already computes it for every other
+  module.
+- **`platformbackup` sits off the ring, on `Band.UTILITY`, and is on no edge at all.**
+  `FactoryFlowTopologyTest.leavesPlatformBackupOffTheRing` and
+  `givesEveryNodeAnEdgeExceptPlatformBackup` pin this. It is a nightly capture with
+  nothing downstream of it inside this factory — drawing it on a loop would assert a
+  feedback path that does not exist.
+
+`FactoryFlowTopologyTest` also pins the exact twelve node keys
+(`pinsTheTwelveNodes`) and checks the topology's own internal consistency — every
+edge references a node that exists, every node has a band, the main loop's
+edges are all present. Read that as a narrower guarantee than it sounds: nothing in
+the module today automatically cross-checks `NODES` against
+`ModulePrerequisites.KEYS`, so adding a seventh module and forgetting to add its
+`NodeDescriptor` will not itself fail a build — it was caught at Task 1 by a
+reviewer reading the two lists side by side, not by an assertion. If you add a
+module, add its node and edges in the same change and expect a human, not a test,
+to notice if you forget.
+
+### Two nodes with no source this container can read
+
+Two nodes resolve to `NodeHealth.NOT_TRACKED` or a Linear-derived approximation
+rather than a live poller check, and both are deliberate, documented gaps rather
+than bugs:
+
+- **`production`** has no owning module and no artifact reader — `FactoryFlowService`
+  reports it `NOT_TRACKED` with null counts rather than an unconditional `READY`
+  with zeros. Its real state is `GET /api/platform/status`, which this graph does
+  not duplicate; an unconditionally green badge on the node called "Production"
+  would be a false statement of health, most misleading during exactly the incident
+  someone opened this page to diagnose.
+- **`build`** is declared but unstaffed: the build agent (see
+  `specs/045-build-agent/`) runs on a developer machine this server cannot reach, so
+  its health is derived entirely from the Linear backlog waiting for it — `OFFLINE`
+  when something is waiting and nothing has picked it up, `IDLE` when nothing is
+  waiting, `UNAVAILABLE` when Linear itself could not be read. **Known limitation,
+  recorded rather than silently accepted**: today that check keys off *any* open
+  Linear issue, not specifically `factory:build`-labelled work, and there is no
+  agent-liveness check at all — an unrelated open CVE ticket shows `build` as
+  `OFFLINE` even though nothing is actually waiting for the build agent. Do not read
+  this as finished 045 semantics; `LinearIssueRecord` does not yet carry the finer
+  data a real fix needs.
+
+### Counts come from Temporal visibility, not a collection
+
+No module gained persistence for this feature. `WorkflowCountsReader` runs one
+`CountWorkflowExecutions` visibility query per status band per workflow type —
+running now (unbounded by time: a deploy started 26 hours ago and still running is
+exactly the run an operator opened this page for), completed in the last 24 hours,
+failed in the last 24 hours — against the workflow interface's simple name
+(`DeployWorkflow`, `CveFixWorkflow`, `LogWatchWorkflow`, `ReviewFeedbackWorkflow`,
+`PlatformBackupWorkflow`, `CodeReviewWorkflow`). This is why `codereview` is
+countable at all: it is the one module with no run collection of its own anywhere in
+Mongo, and Temporal's own visibility store answers for it exactly as well as for the
+other five.
+
+The drawer's recent-work list is the same idea at the level of one node:
+`FactoryFlowDetailService` runs one `ListWorkflowExecutions` query, capped at ten,
+only for the node whose drawer is actually open — a drawer that fetched every
+module's history to render one panel would be worse than useless. The four artifact
+nodes with their own reader (`linear`, `pull-request`, `main`, `agent-setup`) are
+listed instead by `ArtifactCountsReader`, capped at twenty, from the `linear_issues`
+collection (Linear tickets) and GitHub's REST API (open pull requests, recent
+commits to `main`) — reusing `GitHubCredentials`/plain `java.net.http.HttpClient`,
+matching every other outbound class in this module rather than introducing
+`RestClient`.
+
+### States that must never be collapsed
+
+Several pairs of values look similar and are decided differently on purpose. Reading
+one as the other misreports a real fault as a quiet system, which is precisely the
+failure class `042-factory-log-watch`'s `SOURCE_UNHEALTHY`/`NO_FINDINGS` split
+guards against — this feature repeats that pattern three more times:
+
+| Pair | What each means | Decided by |
+| --- | --- | --- |
+| `NodeHealth.IDLE` vs `OFFLINE` | nothing to do, vs work waiting with nothing listening | `FactoryFlowService.health()`, for `build` |
+| `NodeHealth.NOT_TRACKED` vs `READY` | this container has no source of live data for the node at all, vs a real, live, healthy check | `FactoryFlowService.isTracked()` — only `production` is untracked today |
+| `NodeCounts` null vs `NodeCounts.NONE` (zeros) | the source could not be read, vs it was read and genuinely found nothing | every reader in `WorkflowCountsReader`/`ArtifactCountsReader` returns null on any `RuntimeException` rather than zero |
+| `FlowDetail.items` null vs an empty list | this node's own reader failed, vs the reader succeeded and found nothing open or running | `FactoryFlowDetailService`/`ArtifactCountsReader` for the four artifact readers; the backend's `FactoryFlowDetail.unavailable(...)` vs `.empty(...)` for the deployer-owned nodes |
+
+The frontend carries the same distinction through to the pixel: `FactoryNodeDrawer`
+renders "Counts unknown — the source could not be read" for null counts (never
+"0"), and for the run list renders a visible error banner for null `items`, distinct
+from the node-specific empty copy (`"No open tickets."`, `"No recent merges."`, …)
+for a genuinely empty list, distinct again from `"Loading…"` while the fetch is
+still in flight. Getting any of these three states wrong reintroduces the exact bug
+Task 10's review caught: a deployer that could not be reached rendered
+byte-identical to a deployer with a quiet 30 days, directly under counts that
+proved it was not quiet at all.
+
+### `GET /api/factory/flow` is unauthenticated; `GET /api/factory/flow/{nodeKey}` is not
+
+`GET /api/factory/flow` (proxied at `GET /api/admin/software-factory/flow`, behind
+the existing `ROLE_DEV_PORTAL_ADMIN` gate) is **deliberately unauthenticated at the
+factory**, on the same terms as `GET /api/factory/status`: it returns node keys and
+labels from the fixed topology above, integer counts, and `diagnostic` strings of
+exactly the same kind `/api/factory/status` already serves openly from both
+containers. No credential, no ticket title, no pull request subject. Both endpoints
+are unrouted by nginx regardless — only `POST /webhooks/github` is routed — so this
+is not exposing anything to the internet, only to the backend that already reads
+`/status` the same way.
+
+That posture was a mid-implementation reversal: the original spec said
+token-protected, on the premise that `/flow` carries Linear ticket titles and pull
+request subjects. That premise was wrong for this endpoint and right for a
+different one — `GET /api/factory/flow/{nodeKey}`, served by a **separate class**,
+`FactoryFlowDetailController`, which **is** token-protected, because it is the one
+that actually carries `FlowDetail.Item#title()` (a ticket subject, a pull request
+title, a commit message). `FactoryTokenAuthenticator` is a plain `@Component`, not a
+Spring Security filter — each protected controller calls it as the first line of
+its own handler — so a `@GetMapping("/{nodeKey}")` added to the unauthenticated
+`FactoryFlowController` instead would have silently inherited its unauthenticated
+posture rather than gaining a check. That is why the detail endpoint lives in its
+own controller class even though both share the `/api/factory/flow` base path.
+
+Token-protecting `/flow` itself would have forced a worse choice. The `deploy` and
+`platformbackup` nodes are deployer-owned, and the deployer deliberately holds no
+`FACTORY_TRIGGER_TOKEN` — it receives no webhook and no HTTP trigger, so it never
+needed one before this feature. Requiring the trigger token on `/flow` would have
+meant either a role-conditional authentication bypass, or handing the socket-holding
+`deployer` a credential that also authorises every other trigger-protected
+endpoint — the same trap `FactoryStatusController`'s Javadoc documents for
+`/api/factory/status`. Seven controllers call plain `authenticate()` with the
+trigger token today: `ReviewController`, `DeployController`, `CveScanController`,
+`PlatformBackupController`, `LogWatchController`, `FeedbackController` and
+`FactoryRunController` — including the endpoint that starts a deploy. Granting the
+deployer that token to answer one read-only graph query would have exposed all
+seven on the one container holding `/var/run/docker.sock`.
+
+### `FACTORY_READ_TOKEN`: the deployer's second, narrower credential
+
+The actual fix is a **second token**, `FACTORY_READ_TOKEN`, checked by
+`FactoryTokenAuthenticator.authenticateRead` — never `.authenticate`, and never the
+trigger token — and accepted by exactly one endpoint,
+`GET /api/factory/flow/{nodeKey}`. `deployer` in `docker-compose.prod.yml` declares
+`FACTORY_READ_TOKEN` and continues to declare no `FACTORY_TRIGGER_TOKEN` at all.
+This is what lets the backend read `deploy` and `platformbackup`'s recent-run detail
+from the deployer truthfully (`FactoryAdminService.flowDetail` routes those two node
+keys to `client.deployerFlowDetail`, over this token), without ever handing the
+deployer anything that could start a deploy, a code review or a platform backup of
+its own. `DeployerReadTokenConfinementTest` reads the compose file directly and
+fails the build if `deployer`'s block declares anything containing the fragment
+`TRIGGER_TOKEN`, or if it is missing `FACTORY_READ_TOKEN` — the same
+compose-parsing pattern as `DeployerLinearCredentialTest` and
+`DeployerGrafanaCredentialTest`.
+
+**`FACTORY_READ_TOKEN` uses `${FACTORY_READ_TOKEN:-}` in compose — a `:-` empty
+default, deliberately not `:?`.** `FACTORY_TRIGGER_TOKEN` on `software-factory` does
+use `:?`, but that variable has existed in the production `.env` since the trigger
+token shipped; `FACTORY_READ_TOKEN` does not exist there yet as this feature lands.
+A `:?` on a variable absent from `.env` fails interpolation for the **whole compose
+file**, not just the one line — which would wedge `sync-config`'s validation as
+`missing-variable` and break `monitor-prod.sh`'s minutely `up -d`, taking the
+self-healing watchdog down with the rest of the stack. `trivy-server`'s `--token`
+argument established this exact precedent already
+(`${TRIVY_SERVER_TOKEN:-dependency-track}`, with the identical reasoning in its own
+comment): a required-looking value that is not really a secret is safer defaulted
+than required. With the value unset, `authenticateRead` fails closed with `503` and
+exactly one drawer panel degrades to "not available" — a far better failure than an
+un-interpolatable compose file.
+
+**Operator action required**: `FACTORY_READ_TOKEN` must be added to the production
+`.env` (`~/workspace/simonjamesrowe/env`) before the `deploy` and `platformbackup`
+drawers can show real run history. Until an operator does that, both panels render
+"Run history is not available from this console" — which is the correct,
+distinguished-from-empty state this whole feature exists to produce, not a fault to
+chase.
+
+### Accessibility structure
+
+The diagram is hand-laid-out SVG on a fixed 1000×520 grid (`factoryFlowLayout.ts`),
+deliberately not a graph library or a force layout — the topology is fixed and
+known, and nodes that shift position between renders defeat the point of a diagram
+you are meant to learn to read at a glance. But an SVG is not itself navigable, so:
+
+- Every node **also** renders as a real `<button>` (`FactoryFlowGraph.tsx`), in DOM
+  order following the main loop (`FACTORY_FLOW_ORDER`: `linear, build, pull-request,
+  codereview, main, deploy, production, logwatch, cvefix, feedback, agent-setup,
+  platformbackup`) rather than band order — the ring is the thing being
+  communicated, and a keyboard or screen-reader user who cannot see the SVG gets it
+  only from this sequence.
+- The SVG itself carries `aria-hidden="true"` and is layered as decoration over
+  those buttons.
+- Below a **50rem** viewport the SVG is dropped entirely
+  (`.factory-flow__canvas { display: none; }`) and the buttons stack as a plain
+  column — the mobile layout, for free, rather than a second implementation.
+- The drawer (`FactoryNodeDrawer.tsx`) traps Tab inside itself while open, moves
+  focus to its heading on open, and restores focus to the triggering node button on
+  close — `aria-modal="true"` is a promise to assistive technology that background
+  content is inert, and a keyboard user who could still Tab out to the other eleven
+  nodes would make that promise false.
+
+### A reciprocal-edge bug that a green suite did not catch
+
+Worth remembering next time this diagram's geometry changes: the fast loop's two
+reciprocal edges (`pull-request → codereview` "push webhook" and
+`codereview → pull-request` "findings and check run") connect the same two points in
+opposite directions. Drawn as straight lines they are geometrically identical with
+the endpoints swapped, so they rendered as one visible segment instead of two — the
+innermost of the three loops the diagram exists to show read as a single edge. This
+survived a full implementation-and-review round because the regression test that
+should have caught it compared the two edges' SVG `d` strings for inequality, which
+is trivially true whenever two endpoints are textually swapped — it proved nothing
+about whether the curves were actually distinct on screen. The real defect (both
+directions computing the identical control point through a double sign flip that
+cancelled itself) was only found by a reviewer hand-computing the control points.
+The lesson generalises beyond this one bug: **a diagram's geometry needs an eye on
+it, not just a green suite** — a test that stringifies SVG path data can pass while
+the picture is still wrong.
