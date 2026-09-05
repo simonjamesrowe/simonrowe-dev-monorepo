@@ -52,8 +52,20 @@ function isSelfContained(element: Element): boolean {
   return SELF_CONTAINED.has(element.tagName)
 }
 
+/**
+ * The rects of a node's own text runs, each clamped to the node's box.
+ *
+ * A range reports where text *would* be laid out, not what is on screen. A screen-reader-only
+ * label is the case that matters: it is typically a 1x1 clipped box holding a full sentence, so
+ * its range rect is as wide as the sentence and would widen the spotlight around something
+ * nobody can see. Clamping to the containing element covers that along with `overflow: hidden`,
+ * `text-indent` and `font-size: 0` in one rule, rather than sniffing for each trick in turn —
+ * and note the containing element passing `isVisible` does not rule any of them out, since a
+ * clipped 1x1 box is visible by every measure that function applies.
+ */
 function textRects(node: Element): DOMRect[] {
   const rects: DOMRect[] = []
+  const bounds = node.getBoundingClientRect()
   for (const child of Array.from(node.childNodes)) {
     if (child.nodeType !== Node.TEXT_NODE || !child.textContent?.trim()) {
       continue
@@ -67,8 +79,12 @@ function textRects(node: Element): DOMRect[] {
       continue
     }
     const rect = range.getBoundingClientRect()
-    if (rect.width > 0 && rect.height > 0) {
-      rects.push(rect)
+    const left = Math.max(rect.left, bounds.left)
+    const right = Math.min(rect.right, bounds.right)
+    const top = Math.max(rect.top, bounds.top)
+    const bottom = Math.min(rect.bottom, bounds.bottom)
+    if (right > left && bottom > top) {
+      rects.push(new DOMRect(left, top, right - left, bottom - top))
     }
   }
   return rects

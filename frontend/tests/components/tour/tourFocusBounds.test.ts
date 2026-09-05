@@ -6,22 +6,48 @@ import { getFocusBounds } from '../../../src/components/tour/tourFocusBounds'
  * jsdom gives every element a zero-sized rect, so each test stubs the geometry it needs.
  * `rects` maps a marker attribute to the box that element should report.
  */
+function rect(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    left, top, width, height, right: left + width, bottom: top + height,
+    x: left, y: top, toJSON: () => ({}),
+  } as DOMRect
+}
+
 function stubGeometry(rects: Record<string, [number, number, number, number]>) {
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: Element,
   ) {
     const key = this.getAttribute('data-rect')
     const [left, top, width, height] = key && rects[key] ? rects[key] : [0, 0, 0, 0]
-    return {
-      left, top, width, height, right: left + width, bottom: top + height,
-      x: left, y: top, toJSON: () => ({}),
-    } as DOMRect
+    return rect(left, top, width, height)
   })
+}
+
+/**
+ * jsdom's Range has no `getBoundingClientRect`, so text measurement is stubbed by mapping a
+ * text node's content to the box it should report.
+ */
+function stubTextGeometry(byText: Record<string, [number, number, number, number]>) {
+  // Assigned rather than spied on: the method does not exist here, so `vi.spyOn` throws.
+  Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+    configurable: true,
+    writable: true,
+    value(this: Range) {
+      const key = this.toString().trim()
+      const [left, top, width, height] = byText[key] ?? [0, 0, 0, 0]
+      return rect(left, top, width, height)
+    },
+  })
+}
+
+function clearTextGeometry() {
+  delete (Range.prototype as { getBoundingClientRect?: unknown }).getBoundingClientRect
 }
 
 describe('getFocusBounds', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    clearTextGeometry()
   })
 
   it('hugs the visible content of a band far wider than what it displays', () => {
@@ -78,6 +104,29 @@ describe('getFocusBounds', () => {
     expect(bounds.right).toBe(308)
     expect(bounds.top).toBe(92)
     expect(bounds.bottom).toBe(158)
+  })
+
+  it('ignores a screen-reader-only label that is clipped out of sight', () => {
+    document.body.innerHTML = `
+      <div data-rect="target">
+        <span data-rect="srOnly">A long label only a screen reader hears</span>
+        <span data-rect="visible">Filter</span>
+      </div>`
+    stubGeometry({
+      target: [100, 100, 900, 40],
+      srOnly: [100, 100, 1, 1],      // clipped to 1x1, as sr-only markup is
+      visible: [100, 110, 60, 20],
+    })
+    stubTextGeometry({
+      // The range reports where the sentence WOULD lay out, ignoring the clip.
+      'A long label only a screen reader hears': [100, 100, 800, 20],
+      Filter: [100, 110, 60, 20],
+    })
+
+    const bounds = getFocusBounds(document.querySelector('[data-rect="target"]')!)
+
+    // The spotlight hugs "Filter", not the 800px the hidden sentence would have occupied.
+    expect(bounds.right).toBe(168)
   })
 
   it('falls back to the element box when it holds no measurable content', () => {
