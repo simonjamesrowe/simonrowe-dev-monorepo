@@ -12,11 +12,11 @@ import org.springframework.web.client.RestClientException;
 
 /**
  * {@code deploy} and {@code platformbackup} are deployer-owned, exactly as in {@link
- * FactoryAdminServiceFlowTest}, but for node detail the deployer is never asked at all: it
- * deliberately holds no {@code FACTORY_TRIGGER_TOKEN} and the per-node endpoint is
- * token-protected, so every request there would be refused with a blank-token 503 regardless of
- * what was sent. An empty detail is the correct, honest answer for those two keys — never a
- * silently-swallowed failure indistinguishable from "no runs".
+ * FactoryAdminServiceFlowTest}. The deployer holds a read-only {@code FACTORY_READ_TOKEN} — never
+ * the trigger token — so it is asked directly for these two keys' detail rather than the request
+ * being short-circuited: unlike the trigger-token-gated actions, this one call the deployer can
+ * genuinely answer. Every failure still collapses to an empty detail, never an exception — a
+ * drawer that throws takes the whole page down for a detail panel.
  */
 class FactoryAdminServiceFlowDetailTest {
 
@@ -32,16 +32,24 @@ class FactoryAdminServiceFlowDetailTest {
 
     assertThat(detail.items()).extracting(FactoryFlowDetail.Item::id)
         .containsExactly("logwatch-1");
+    verify(client, never()).deployerFlowDetail("logwatch");
   }
 
   @Test
-  void neverAsksAnyContainerForTheDeployerOwnedNodesDetail() {
-    // Not "asks and swallows the failure" — never asked in the first place, because the deployer
-    // structurally cannot answer this call.
+  void asksTheDeployerForTheDeployerOwnedNodesDetail() {
+    // Not software-factory's own switched-off view of them, and not short-circuited to empty
+    // either: the deployer holds the read token and can answer this one call truthfully.
+    when(client.deployerFlowDetail("deploy")).thenReturn(
+        new FactoryFlowDetail("deploy", List.of(
+            new FactoryFlowDetail.Item("deploy-prod", "deploy-prod", "COMPLETED", null, null))));
+    when(client.deployerFlowDetail("platformbackup")).thenReturn(
+        FactoryFlowDetail.empty("platformbackup"));
+
     FactoryFlowDetail deploy = service().flowDetail("deploy");
     FactoryFlowDetail backup = service().flowDetail("platformbackup");
 
-    assertThat(deploy.items()).isEmpty();
+    assertThat(deploy.items()).extracting(FactoryFlowDetail.Item::id)
+        .containsExactly("deploy-prod");
     assertThat(backup.items()).isEmpty();
     verify(client, never()).factoryFlowDetail("deploy");
     verify(client, never()).factoryFlowDetail("platformbackup");
@@ -53,6 +61,16 @@ class FactoryAdminServiceFlowDetailTest {
         .thenThrow(new RestClientException("connection refused"));
 
     assertThat(service().flowDetail("logwatch").items()).isEmpty();
+  }
+
+  @Test
+  void returnsAnEmptyDetailWhenTheDeployerCannotBeReached() {
+    // Includes both a genuine outage and an unconfigured read token on that container: either
+    // way RestClient throws for a non-2xx response, and this must degrade, never propagate.
+    when(client.deployerFlowDetail("deploy"))
+        .thenThrow(new RestClientException("connection refused"));
+
+    assertThat(service().flowDetail("deploy").items()).isEmpty();
   }
 
   private FactoryAdminService service() {

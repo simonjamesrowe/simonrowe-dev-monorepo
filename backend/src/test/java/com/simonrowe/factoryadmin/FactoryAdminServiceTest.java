@@ -397,7 +397,7 @@ class FactoryAdminServiceTest {
 
   private static FactoryAdminProperties properties() {
     return new FactoryAdminProperties(
-        null, null, "trigger-token", Duration.ofSeconds(2), null, null);
+        null, null, "trigger-token", "read-token", Duration.ofSeconds(2), null, null);
   }
 
   private static RunningVersion runningVersion(final String commit) {

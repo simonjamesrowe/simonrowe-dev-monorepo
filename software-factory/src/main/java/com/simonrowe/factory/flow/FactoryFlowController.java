@@ -29,6 +29,12 @@ import org.springframework.web.bind.annotation.RestController;
  * FactoryTokenAuthenticator} is a plain component each protected controller calls for itself, not
  * a Spring Security filter — so a {@code @GetMapping("/{nodeKey}")} added here would silently
  * inherit this class's unauthenticated posture instead of gaining the check.
+ *
+ * <p>The deployer now holds a second, narrower credential, {@code FACTORY_READ_TOKEN}, checked
+ * only by {@link FactoryFlowDetailController}'s {@code authenticateRead} — never {@code
+ * FACTORY_TRIGGER_TOKEN}, and never checked here. That grant is what lets the backend read {@code
+ * deploy} and {@code platformbackup}'s detail from the deployer truthfully, without handing it
+ * the credential that starts a deploy.
  */
 @RestController
 @RequestMapping("/api/factory/flow")

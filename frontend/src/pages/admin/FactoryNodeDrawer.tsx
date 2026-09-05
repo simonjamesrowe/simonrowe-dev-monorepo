@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { X } from 'lucide-react'
+import { AlertCircle, X } from 'lucide-react'
 
 import type {
   FactoryFlowDetail, FactoryFlowNode, FactoryModuleStatus, FactoryNodeHealth,
@@ -69,7 +69,7 @@ const FOCUSABLE_SELECTOR = [
 ].join(', ')
 
 export function FactoryNodeDrawer(
-  { node, module, onClose, detail, children }: {
+  { node, module, onClose, detail, detailError, children }: {
     node: FactoryFlowNode | null
     module: FactoryModuleStatus | null
     onClose: () => void
@@ -79,6 +79,11 @@ export function FactoryNodeDrawer(
      * exactly like a quiet module.
      */
     detail?: FactoryFlowDetail | null
+    /**
+     * Set when the fetch behind `detail` failed. Takes precedence over `detail === null`: a
+     * detail panel that could not be read must show an error, not a permanent, silent spinner.
+     */
+    detailError?: string | null
     children?: React.ReactNode
   },
 ) {
@@ -209,7 +214,11 @@ export function FactoryNodeDrawer(
       {detail !== undefined && (
         <div className="factory-drawer__runs">
           <h3>Recent runs</h3>
-          {detail === null ? (
+          {detailError ? (
+            <p className="admin-error-banner">
+              <AlertCircle size={14} /> {detailError}
+            </p>
+          ) : detail === null ? (
             <p>Loading…</p>
           ) : detail.items.length === 0 ? (
             <p>No runs in the last 30 days.</p>
@@ -222,6 +231,8 @@ export function FactoryNodeDrawer(
                   ) : (
                     <span>{item.title}</span>
                   )}
+                  {' '}
+                  <span className="factory-drawer__run-id">({item.id})</span>
                   {' — '}
                   <span className="factory-drawer__run-status">{item.status}</span>
                 </li>

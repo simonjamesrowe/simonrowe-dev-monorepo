@@ -201,24 +201,25 @@ public class FactoryAdminService {
    * Looks up one node's recent work, for its drawer.
    *
    * <p>{@code deploy} and {@code platformbackup} are deployer-owned, exactly as in {@link
-   * #flow()}, but this method never calls the deployer for them at all — not even once, and not
-   * caught as a failure. The deployer deliberately holds no {@code FACTORY_TRIGGER_TOKEN}, and
-   * {@code GET /api/factory/flow/{nodeKey}} is token-protected there, so {@code
-   * FactoryTokenAuthenticator} would refuse every such request with a blank-token 503 regardless
-   * of what this method sent. An empty detail is the honest answer for those two keys, not a
-   * failure masquerading as one — the distinction {@code FlowDetail} exists to preserve, so a
-   * silently-empty list here must never be mistaken for "no runs".
+   * #flow()}, and — unlike an earlier version of this method — the deployer genuinely is asked
+   * for them: it holds a separate, read-only {@code FACTORY_READ_TOKEN} that authorises only
+   * {@code GET /api/factory/flow/{nodeKey}}, never the trigger token that would let it start a
+   * deploy of itself. Routing these two keys to the deployer (rather than reporting them empty
+   * unconditionally) is what keeps this panel consistent with the counts panel in the same
+   * drawer, which already reaches the deployer successfully via the unauthenticated {@link
+   * #flow()}. Every failure — deployer unreachable, read token unconfigured there, anything else
+   * — still collapses to an empty detail rather than an exception: a drawer that throws takes the
+   * whole page down for a detail panel, and an empty list is the honest answer when the source
+   * could not be read.
    *
    * @param nodeKey the node whose drawer is open
-   * @return that node's items, newest first, or empty when the key is deployer-owned or the
-   *     factory could not be read
+   * @return that node's items, newest first, or empty when the source could not be read
    */
   public FactoryFlowDetail flowDetail(final String nodeKey) {
-    if (DEPLOYER_OWNED.contains(nodeKey)) {
-      return FactoryFlowDetail.empty(nodeKey);
-    }
     try {
-      return client.factoryFlowDetail(nodeKey);
+      return DEPLOYER_OWNED.contains(nodeKey)
+          ? client.deployerFlowDetail(nodeKey)
+          : client.factoryFlowDetail(nodeKey);
     } catch (RuntimeException exception) {
       return FactoryFlowDetail.empty(nodeKey);
     }

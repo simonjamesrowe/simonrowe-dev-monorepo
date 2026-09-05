@@ -186,6 +186,18 @@ describe('SoftwareFactoryAdmin', () => {
     expect(await within(drawer).findByText(/No runs in the last 30 days/i)).toBeInTheDocument()
   })
 
+  it('shows an error, not a permanent spinner, when the recent-work fetch is rejected', async () => {
+    // A failed fetch must render as a failure: leaving the drawer on "Loading…" forever would
+    // be indistinguishable from a fetch that is merely slow.
+    mockFetchFlowDetail.mockRejectedValue(new Error('Request failed (500).'))
+    renderConsoleWithFlow()
+
+    const drawer = await openDrawer(/Log watch/)
+
+    expect(await within(drawer).findByText('Request failed (500).')).toBeInTheDocument()
+    expect(within(drawer).queryByText(/^Loading/i)).not.toBeInTheDocument()
+  })
+
   it('reports each container reachability in text, not only colour', async () => {
     mockFetchStatus.mockResolvedValue(status({ deployerReachable: false }))
 

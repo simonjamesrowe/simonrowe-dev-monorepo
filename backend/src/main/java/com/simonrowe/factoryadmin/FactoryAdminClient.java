@@ -36,11 +36,13 @@ public class FactoryAdminClient {
   private final RestClient factory;
   private final RestClient deployer;
   private final String token;
+  private final String readToken;
 
   public FactoryAdminClient(final FactoryAdminProperties properties) {
     this.factory = client(properties.factoryBaseUrl(), properties);
     this.deployer = client(properties.deployerBaseUrl(), properties);
     this.token = properties.triggerToken();
+    this.readToken = properties.readToken();
   }
 
   private static RestClient client(
@@ -101,20 +103,40 @@ public class FactoryAdminClient {
   }
 
   /**
-   * Reads one node's recent work from the factory, with the token.
+   * Reads one node's recent work from the factory, with the read token.
    *
    * <p>Unlike {@link #factoryFlow()}, {@code GET /api/factory/flow/{nodeKey}} <strong>is</strong>
    * token-protected: it carries pull request titles and Linear ticket subjects, the disclosure
-   * class {@code /api/factory/flow} deliberately stays free of. There is deliberately no {@code
-   * deployerFlowDetail} counterpart — see {@code FactoryAdminService#flowDetail} for why the
-   * deployer is never asked at all.
+   * class {@code /api/factory/flow} deliberately stays free of. Sends the separate
+   * <strong>read</strong> token, never the trigger token — the endpoint checks {@code
+   * authenticateRead}, not {@code authenticate}, and sending the wrong one would simply be
+   * refused.
    *
    * @param nodeKey the node whose drawer is open
    * @return that node's items, newest first, as software-factory sees them
    */
   public FactoryFlowDetail factoryFlowDetail(final String nodeKey) {
     return factory.get().uri(FLOW_PATH + "/{nodeKey}", nodeKey)
-        .header(TOKEN_HEADER, token)
+        .header(TOKEN_HEADER, readToken)
+        .retrieve()
+        .body(FactoryFlowDetail.class);
+  }
+
+  /**
+   * Reads one node's recent work from the deployer, which is the authority on {@code deploy} and
+   * {@code platformbackup}.
+   *
+   * <p>Sends the read token, unlike {@link #deployerStatus()} and {@link #deployerFlow()}: the
+   * deployer is granted {@code FACTORY_READ_TOKEN} specifically so this one call can be answered
+   * truthfully, while it still holds no {@code FACTORY_TRIGGER_TOKEN} at all — the credential
+   * that would let it start a deploy of itself.
+   *
+   * @param nodeKey the node whose drawer is open
+   * @return that node's items, newest first, as the deployer sees them
+   */
+  public FactoryFlowDetail deployerFlowDetail(final String nodeKey) {
+    return deployer.get().uri(FLOW_PATH + "/{nodeKey}", nodeKey)
+        .header(TOKEN_HEADER, readToken)
         .retrieve()
         .body(FactoryFlowDetail.class);
   }

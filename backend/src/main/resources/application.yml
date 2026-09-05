@@ -506,6 +506,10 @@ factory-admin:
   factory-base-url: ${PLATFORM_FACTORY_URL:http://software-factory:8090}
   deployer-base-url: ${PLATFORM_DEPLOYER_URL:http://deployer:8090}
   trigger-token: ${FACTORY_TRIGGER_TOKEN:}
+  # Narrower credential, checked only by GET /api/factory/flow/{nodeKey}. The deployer holds this
+  # one so the backend can read deploy/platformbackup detail from it truthfully, without the
+  # backend needing the deployer's absent trigger token (which it does not have either).
+  read-token: ${FACTORY_READ_TOKEN:}
   timeout: 2s
   owner: simonjamesrowe
   repository: simonrowe-dev-monorepo

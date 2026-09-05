@@ -15,7 +15,9 @@ public record FlowDetail(String nodeKey, List<Item> items) {
    * One piece of work.
    *
    * @param id the workflow id, pull request number or Linear identifier
-   * @param title what it is
+   * @param title a human-readable label — for a workflow run, the module's name plus its start
+   *     time, deliberately not a repeat of {@code id}: two runs of the same module must be
+   *     distinguishable by more than comparing hashes
    * @param status its state, already normalised to a word an operator reads
    * @param at when it started or was last seen, or null
    * @param url somewhere to open it, or null

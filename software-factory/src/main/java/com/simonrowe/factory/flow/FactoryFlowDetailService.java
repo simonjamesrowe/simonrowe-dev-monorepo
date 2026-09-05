@@ -6,7 +6,11 @@ import io.temporal.api.workflow.v1.WorkflowExecutionInfo;
 import io.temporal.api.workflowservice.v1.ListWorkflowExecutionsRequest;
 import io.temporal.client.WorkflowClient;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +30,14 @@ public class FactoryFlowDetailService {
   /** Ten is the whole drawer, not a page: an operator wants a glance, not a browsing history. */
   private static final int MAX_ITEMS = 10;
 
+  /**
+   * Renders a run's start time for the title. UTC, not the server's zone: this JVM's host zone
+   * is an operational detail, not a fact about the run, and Temporal itself always reports in
+   * UTC.
+   */
+  private static final DateTimeFormatter TITLE_TIME =
+      DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.ENGLISH).withZone(ZoneOffset.UTC);
+
   private final WorkflowClient client;
 
   public FactoryFlowDetailService(final WorkflowClient client) {
@@ -40,8 +52,8 @@ public class FactoryFlowDetailService {
    *     source could not be read
    */
   public FlowDetail detail(final String nodeKey) {
-    String workflowType = workflowTypeFor(nodeKey);
-    if (workflowType == null) {
+    Optional<NodeDescriptor> descriptor = descriptorFor(nodeKey);
+    if (descriptor.isEmpty()) {
       return FlowDetail.empty(nodeKey);
     }
     try {
@@ -51,29 +63,44 @@ public class FactoryFlowDetailService {
           .listWorkflowExecutions(
               ListWorkflowExecutionsRequest.newBuilder()
                   .setNamespace(client.getOptions().getNamespace())
-                  .setQuery("WorkflowType = '" + workflowType + "' ORDER BY StartTime DESC")
+                  .setQuery("WorkflowType = '" + descriptor.get().workflowType()
+                      + "' ORDER BY StartTime DESC")
                   .setPageSize(MAX_ITEMS)
                   .build())
           .getExecutionsList();
-      return new FlowDetail(nodeKey, executions.stream().map(this::item).collect(
-          Collectors.toList()));
+      return new FlowDetail(nodeKey, executions.stream()
+          .map(execution -> item(descriptor.get(), execution))
+          .collect(Collectors.toList()));
     } catch (RuntimeException exception) {
       return FlowDetail.empty(nodeKey);
     }
   }
 
-  private static String workflowTypeFor(final String nodeKey) {
+  /**
+   * Finds the node's descriptor, only when it has a workflow type to query.
+   *
+   * <p>An unknown key and a known artifact node with no {@code workflowType} are handled
+   * identically here on purpose: both mean there is no Temporal query this method can run.
+   */
+  private static Optional<NodeDescriptor> descriptorFor(final String nodeKey) {
     return FactoryFlowTopology.NODES.stream()
-        .filter(descriptor -> descriptor.key().equals(nodeKey))
-        .findFirst()
-        .map(NodeDescriptor::workflowType)
-        .orElse(null);
+        .filter(candidate -> candidate.key().equals(nodeKey))
+        .filter(candidate -> candidate.workflowType() != null)
+        .findFirst();
   }
 
-  private FlowDetail.Item item(final WorkflowExecutionInfo execution) {
+  /**
+   * Builds a human-readable item, rather than repeating the raw workflow id as the title: two
+   * runs of the same module are otherwise distinguishable only by comparing hashes. The id
+   * itself is still carried as {@link FlowDetail.Item#id()}, so nothing is lost — the title is
+   * the node's label plus the start time, which is what actually tells two rows apart.
+   */
+  private FlowDetail.Item item(
+      final NodeDescriptor descriptor, final WorkflowExecutionInfo execution) {
     String id = execution.getExecution().getWorkflowId();
-    return new FlowDetail.Item(
-        id, id, execution.getStatus().name(), toInstant(execution.getStartTime()), null);
+    Instant startTime = toInstant(execution.getStartTime());
+    String title = descriptor.label() + " · " + TITLE_TIME.format(startTime);
+    return new FlowDetail.Item(id, title, execution.getStatus().name(), startTime, null);
   }
 
   private static Instant toInstant(final Timestamp timestamp) {

@@ -137,6 +137,33 @@ describe('FactoryNodeDrawer', () => {
     expect(screen.queryByText(/Recent runs/i)).not.toBeInTheDocument()
   })
 
+  it('shows an error rather than a permanent spinner when the fetch behind detail failed', () => {
+    // A failed fetch must not be indistinguishable from one still loading: both a network
+    // error and a genuinely empty list would otherwise render nothing more specific than
+    // "Loading…" forever.
+    render(<FactoryNodeDrawer
+      node={node}
+      module={null}
+      onClose={vi.fn()}
+      detail={null}
+      detailError="Could not load recent runs"
+    />)
+    expect(screen.getByText('Could not load recent runs')).toBeInTheDocument()
+    expect(screen.queryByText(/^Loading/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the id alongside a human-readable title', () => {
+    render(<FactoryNodeDrawer node={node} module={null} onClose={vi.fn()}
+      detail={{ nodeKey: 'logwatch', items: [
+        {
+          id: 'logwatch-2', title: 'Log watch · 4 Sep, 20:14', status: 'COMPLETED',
+          at: null, url: null,
+        },
+      ] }} />)
+    expect(screen.getByText('Log watch · 4 Sep, 20:14')).toBeInTheDocument()
+    expect(screen.getByText('(logwatch-2)')).toBeInTheDocument()
+  })
+
   it('shows the configured state and schedule summary, not just pollers', () => {
     // "Configured" and "Schedule" previously lived in the module rail (On/Off/Unconfirmed,
     // Active/Paused/Absent) and vanished when the rail was deleted. An operator cannot tell

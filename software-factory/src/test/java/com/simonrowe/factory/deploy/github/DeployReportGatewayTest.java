@@ -88,7 +88,7 @@ class DeployReportGatewayTest {
                 "",
                 Duration.ofSeconds(5)),
             null,
-            new CodeReviewProperties.Api(""),
+            new CodeReviewProperties.Api("", null),
             "https://temporal.test");
     DeployProperties properties =
         new DeployProperties(

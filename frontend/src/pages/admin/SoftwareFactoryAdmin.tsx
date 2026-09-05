@@ -129,33 +129,45 @@ function useRunProgress(
   }, [workflowId, terminal, getAccessToken, setRun])
 }
 
-/**
- * Fetches the selected node's recent work whenever the selection changes.
- *
- * `null` while a fetch is in flight — including immediately after switching nodes — and stays
- * `null` on failure too: a detail panel that cannot be read must not be mistaken for a node with
- * genuinely nothing to show, which is exactly what {@link FactoryNodeDrawer} distinguishes `null`
- * from an empty list to avoid. No node selected reports `undefined`, so a closed drawer is never
- * drawn as "loading".
- */
-function useFlowDetail(nodeKey: string | null): FactoryFlowDetail | null | undefined {
+interface FlowDetailState {
+  /**
+   * `null` while a fetch is in flight — including immediately after switching nodes.
+   * `undefined` means no node is selected, so a closed drawer is never drawn as "loading".
+   */
+  detail: FactoryFlowDetail | null | undefined
+  /**
+   * Set on a failed fetch, alongside {@link detail} staying `null`. Distinct from both other
+   * states on purpose, following the same pattern as this page's own top-level `error`: a
+   * detail panel that cannot be read must render as a failure, not as a permanent, silent
+   * spinner indistinguishable from one still in flight, and not as the empty-list copy either —
+   * that would misreport a broken fetch as a node with genuinely nothing to show.
+   */
+  error: string | null
+}
+
+/** Fetches the selected node's recent work whenever the selection changes. */
+function useFlowDetail(nodeKey: string | null): FlowDetailState {
   const { getAccessToken } = useAuth()
   const [detail, setDetail] = useState<FactoryFlowDetail | null | undefined>(undefined)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!nodeKey) {
       setDetail(undefined)
+      setError(null)
       return undefined
     }
     setDetail(null)
+    setError(null)
     let cancelled = false
     void (async () => {
       try {
         const result = await fetchFactoryFlowDetail(getAccessToken, nodeKey)
         if (!cancelled) setDetail(result)
-      } catch {
-        // Leave it null: the drawer already renders "Loading…" for that, and there is nothing
-        // more specific to say about a detail panel that failed to load.
+      } catch (reason) {
+        if (!cancelled) {
+          setError(reason instanceof Error ? reason.message : 'Could not load recent runs')
+        }
       }
     })()
     return () => {
@@ -163,7 +175,7 @@ function useFlowDetail(nodeKey: string | null): FactoryFlowDetail | null | undef
     }
   }, [nodeKey, getAccessToken])
 
-  return detail
+  return { detail, error }
 }
 
 export function SoftwareFactoryAdmin() {
@@ -182,7 +194,7 @@ export function SoftwareFactoryAdmin() {
   const [refreshMs, setRefreshMs] = useState<number | null>(null)
 
   useRunProgress(run, setRun)
-  const selectedNodeDetail = useFlowDetail(selectedNode)
+  const { detail: selectedNodeDetail, error: selectedNodeDetailError } = useFlowDetail(selectedNode)
 
   // A ref, not state: state would re-run the interval effect below and reset its timer on every
   // load, which would make a slow response push its own next tick out rather than being skipped.
@@ -459,6 +471,7 @@ export function SoftwareFactoryAdmin() {
         module={selectedNode ? modules.get(selectedNode) ?? null : null}
         onClose={() => setSelectedNode(null)}
         detail={selectedNodeDetail}
+        detailError={selectedNodeDetailError}
       >
         {selectedNode && actionPanelFor(selectedNode)}
       </FactoryNodeDrawer>

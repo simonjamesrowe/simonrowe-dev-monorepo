@@ -43,7 +43,7 @@ class LogWatchControllerTest {
             new CodeReviewProperties.Github(
                 "https://api.github.com", "", "secret", "", "", Duration.ofSeconds(30)),
             null,
-            new CodeReviewProperties.Api(TOKEN),
+            new CodeReviewProperties.Api(TOKEN, null),
             "https://temporal.test");
     return new LogWatchController(
         new FactoryTokenAuthenticator(codeReview),

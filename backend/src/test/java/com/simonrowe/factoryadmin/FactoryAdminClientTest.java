@@ -34,6 +34,7 @@ import org.springframework.web.server.ResponseStatusException;
 class FactoryAdminClientTest {
 
   private static final String TOKEN = "trigger-token";
+  private static final String READ_TOKEN = "read-token";
   private static final String SHA = "0123456789abcdef0123456789abcdef01234567";
   private static final String UNREACHABLE = "http://127.0.0.1:1";
   private static final String REVIEW_ACCEPTED =
@@ -83,9 +84,10 @@ class FactoryAdminClientTest {
   }
 
   @Test
-  void sendsTheTokenWhenReadingOneNodesDetail() throws IOException {
+  void sendsTheReadTokenNotTheTriggerTokenWhenReadingOneNodesDetail() throws IOException {
     // Unlike /api/factory/flow, the per-node detail endpoint is token-protected: it carries pull
-    // request titles and Linear ticket subjects.
+    // request titles and Linear ticket subjects. It checks the narrower read token, never the
+    // trigger token that starts a deploy.
     startFactory(Map.of("/api/factory/flow/logwatch", json(200,
         "{\"nodeKey\":\"logwatch\",\"items\":["
             + "{\"id\":\"logwatch-1\",\"title\":\"logwatch-1\",\"status\":\"COMPLETED\","
@@ -97,7 +99,42 @@ class FactoryAdminClientTest {
 
     assertThat(detail.items()).extracting(FactoryFlowDetail.Item::id)
         .containsExactly("logwatch-1");
-    assertThat(tokensSeen.get("factory:/api/factory/flow/logwatch")).isEqualTo(TOKEN);
+    assertThat(tokensSeen.get("factory:/api/factory/flow/logwatch")).isEqualTo(READ_TOKEN);
+  }
+
+  @Test
+  void sendsTheReadTokenToTheDeployerForItsOwnedNodesDetail() throws IOException {
+    // deploy and platformbackup are deployer-owned, and the deployer holds the read token —
+    // never the trigger token — so this is the one call the backend makes to the deployer with a
+    // credential attached at all.
+    startFactory(Map.of());
+    startDeployer(Map.of("/api/factory/flow/deploy", json(200,
+        "{\"nodeKey\":\"deploy\",\"items\":["
+            + "{\"id\":\"deploy-prod\",\"title\":\"deploy-prod\",\"status\":\"COMPLETED\","
+            + "\"at\":null,\"url\":null}]}")));
+    FactoryAdminClient client = client();
+
+    FactoryFlowDetail detail = client.deployerFlowDetail("deploy");
+
+    assertThat(detail.items()).extracting(FactoryFlowDetail.Item::id)
+        .containsExactly("deploy-prod");
+    assertThat(tokensSeen.get("deployer:/api/factory/flow/deploy")).isEqualTo(READ_TOKEN);
+  }
+
+  @Test
+  void deployerFlowDetailFailsRatherThanSilentlyReturningEmptyOnA503() throws IOException {
+    // The state on every machine until an operator sets FACTORY_READ_TOKEN in .env:
+    // docker-compose.prod.yml defaults it to empty rather than requiring it (a `:?` there would
+    // fail the WHOLE compose file to interpolate), so FactoryTokenAuthenticator#authenticateRead
+    // fails closed with 503 - "Manual factory actions are disabled". This client must surface
+    // that as an exception rather than swallow it; FactoryAdminService is what collapses it to
+    // an empty detail (see FactoryAdminServiceFlowDetailTest), not this layer.
+    startFactory(Map.of());
+    startDeployer(Map.of("/api/factory/flow/deploy",
+        json(503, "{\"message\":\"Manual factory actions are disabled\"}")));
+
+    assertThatThrownBy(() -> client().deployerFlowDetail("deploy"))
+        .isInstanceOf(RestClientException.class);
   }
 
   @Test
@@ -264,7 +301,7 @@ class FactoryAdminClientTest {
     FactoryAdminClient client =
         new FactoryAdminClient(
             new FactoryAdminProperties(
-                UNREACHABLE, UNREACHABLE, TOKEN, Duration.ofMillis(200), null, null));
+                UNREACHABLE, UNREACHABLE, TOKEN, READ_TOKEN, Duration.ofMillis(200), null, null));
 
     assertThatThrownBy(client::factoryStatus).isInstanceOf(RestClientException.class);
   }
@@ -272,7 +309,8 @@ class FactoryAdminClientTest {
   private FactoryAdminClient client() {
     return new FactoryAdminClient(
         new FactoryAdminProperties(
-            baseUrl(factory), baseUrl(deployer), TOKEN, Duration.ofSeconds(2), null, null));
+            baseUrl(factory), baseUrl(deployer), TOKEN, READ_TOKEN, Duration.ofSeconds(2),
+            null, null));
   }
 
   private void startFactory(final Map<String, Response> routes) throws IOException {
