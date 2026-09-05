@@ -3884,13 +3884,12 @@ a:hover {
   background: rgba(8, 145, 178, 0.06);
 }
 
-.tour-tooltip__mute {
+.tour-tooltip__toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 2rem;
   height: 2rem;
-  margin-right: auto;
   border: 1px solid var(--color-accent);
   border-radius: 999px;
   background: transparent;
@@ -3898,12 +3897,22 @@ a:hover {
   cursor: pointer;
 }
 
-.tour-tooltip__mute:hover {
+/* Playback controls sit together on the left, away from the navigation buttons. */
+.tour-tooltip__toggle--first {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.tour-tooltip__toggle + .tour-tooltip__btn {
+  margin-left: auto;
+}
+
+.tour-tooltip__toggle:hover {
   background: rgba(8, 145, 178, 0.06);
 }
 
 /* A quiet pulse while a step is being read aloud, so the control explains itself. */
-.tour-tooltip__mute--speaking {
+.tour-tooltip__toggle--speaking {
   animation: tour-tooltip-speaking 1.6s ease-in-out infinite;
 }
 
@@ -3913,7 +3922,7 @@ a:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tour-tooltip__mute--speaking {
+  .tour-tooltip__toggle--speaking {
     animation: none;
   }
 }

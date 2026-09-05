@@ -89,7 +89,7 @@ public class TourStepSeeder implements ApplicationRunner {
         defaultTourStep(
             "default-home-writing",
             "Writing from the workbench",
-            ".tour-featured-writing-header",
+            ".tour-featured-writing",
             "Explore practical thinking on AI-native delivery, platform engineering, "
                 + "and technical leadership.",
             "top",
@@ -99,24 +99,12 @@ public class TourStepSeeder implements ApplicationRunner {
             timestamp
         ),
         defaultTourStep(
-            "default-home-contact",
-            "Continue the conversation",
-            ".tour-contact",
-            "When there is a problem worth solving or an idea worth challenging, this is "
-                + "the direct route to Simon.",
-            "bottom",
-            5,
-            "/",
-            null,
-            timestamp
-        ),
-        defaultTourStep(
             "default-profile",
             "The story behind the work",
-            ".tour-profile-heading",
+            ".tour-about",
             "See the path from hands-on engineering to leading teams through complex change.",
             "bottom",
-            6,
+            5,
             "/profile",
             null,
             timestamp
@@ -127,7 +115,7 @@ public class TourStepSeeder implements ApplicationRunner {
             ".tour-experience-highlight",
             "Follow the roles, teams, systems, and delivery outcomes that shaped the work.",
             "top",
-            7,
+            6,
             "/experience",
             null,
             timestamp
@@ -135,10 +123,10 @@ public class TourStepSeeder implements ApplicationRunner {
         defaultTourStep(
             "default-blogs",
             "Go from topic to evidence",
-            ".tour-blog-filters",
+            ".tour-blogs",
             "Filter the writing by the engineering questions you want to investigate.",
             "bottom",
-            8,
+            7,
             "/blogs",
             null,
             timestamp
@@ -146,11 +134,23 @@ public class TourStepSeeder implements ApplicationRunner {
         defaultTourStep(
             "default-news-events",
             "See the wider conversation",
-            ".tour-news-filters",
+            ".tour-news-events",
             "Find recent appearances, articles, meetups, and events beyond the blog.",
             "top",
-            9,
+            8,
             "/news-events",
+            null,
+            timestamp
+        ),
+        defaultTourStep(
+            "default-mcp-tools",
+            "Plug your own agent in",
+            ".tour-mcp-tools",
+            "This site is also a Model Context Protocol server. These are the tools it "
+                + "exposes — run them here, or connect your own agent and call them directly.",
+            "top",
+            9,
+            "/mcp",
             null,
             timestamp
         ),

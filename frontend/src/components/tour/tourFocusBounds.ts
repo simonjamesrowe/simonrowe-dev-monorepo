@@ -8,6 +8,18 @@ export interface FocusBounds {
 const FOCUS_PADDING = 8
 
 /**
+ * The most of the viewport a spotlight may occupy vertically.
+ *
+ * Some tour targets are whole page sections — the news feed is over 7,000px tall — and a
+ * spotlight that reaches every edge is indistinguishable from no spotlight at all. A tall
+ * target is therefore shown from its top down to this fraction of the screen: the filters and
+ * the first rows of content are lit, and the dimming below makes it read as a highlight rather
+ * than a page that simply un-dimmed. `TourProvider` scrolls tall targets to their top for the
+ * same reason, so what is lit is the start of the section and not an arbitrary middle slice.
+ */
+const MAX_VIEWPORT_FRACTION = 0.8
+
+/**
  * A tour target's layout box is routinely far wider than anything a visitor can see in it:
  * a full-bleed band, or a flex row holding two centred buttons, both measure the width of
  * the page. Spotlighting that box leaves a large undimmed area that reads as a white block
@@ -90,36 +102,69 @@ function textRects(node: Element): DOMRect[] {
   return rects
 }
 
-function collectContentRects(root: Element): DOMRect[] {
-  const rects: DOMRect[] = [...textRects(root)]
+/**
+ * Content found inside a target, split by whether it is allowed to leave the target's box.
+ *
+ * `contained` is ordinary in-flow content and is clamped to the target, so the spotlight can
+ * only ever tighten. `escaping` is out-of-flow content — an absolutely positioned dropdown,
+ * popover or menu anchored to the target — which is deliberately *not* clamped: the search
+ * step's whole purpose is to show its autocomplete results, and those render in a panel that
+ * overflows the input it belongs to. Clamping them away lit the input and dimmed the results.
+ */
+interface ContentRects {
+  contained: DOMRect[]
+  escaping: DOMRect[]
+}
+
+function isOutOfFlow(element: Element): boolean {
+  const position = window.getComputedStyle(element).position
+  return position === 'absolute' || position === 'fixed'
+}
+
+function collectContentRects(root: Element): ContentRects {
+  const contained: DOMRect[] = [...textRects(root)]
+  const escaping: DOMRect[] = []
   for (const child of Array.from(root.children)) {
     if (!isVisible(child)) {
       continue
     }
-    if (isSelfContained(child) || isSurface(child)) {
-      rects.push(child.getBoundingClientRect())
+    if (isOutOfFlow(child)) {
+      escaping.push(child.getBoundingClientRect())
       continue
     }
-    rects.push(...collectContentRects(child))
+    if (isSelfContained(child) || isSurface(child)) {
+      contained.push(child.getBoundingClientRect())
+      continue
+    }
+    const nested = collectContentRects(child)
+    contained.push(...nested.contained)
+    escaping.push(...nested.escaping)
   }
-  return rects
+  return { contained, escaping }
 }
 
 export function getFocusBounds(element: Element): FocusBounds {
   const rect = element.getBoundingClientRect()
-  const contentRects = collectContentRects(element)
+  const { contained, escaping } = collectContentRects(element)
 
   let top = rect.top
   let right = rect.right
   let bottom = rect.bottom
   let left = rect.left
 
-  if (contentRects.length > 0) {
+  if (contained.length > 0) {
     // Hug the content, but never escape the element the tour step actually names.
-    top = Math.max(rect.top, Math.min(...contentRects.map((r) => r.top)))
-    right = Math.min(rect.right, Math.max(...contentRects.map((r) => r.right)))
-    bottom = Math.min(rect.bottom, Math.max(...contentRects.map((r) => r.bottom)))
-    left = Math.max(rect.left, Math.min(...contentRects.map((r) => r.left)))
+    top = Math.max(rect.top, Math.min(...contained.map((r) => r.top)))
+    right = Math.min(rect.right, Math.max(...contained.map((r) => r.right)))
+    bottom = Math.min(rect.bottom, Math.max(...contained.map((r) => r.bottom)))
+    left = Math.max(rect.left, Math.min(...contained.map((r) => r.left)))
+  }
+
+  for (const escaped of escaping) {
+    top = Math.min(top, escaped.top)
+    right = Math.max(right, escaped.right)
+    bottom = Math.max(bottom, escaped.bottom)
+    left = Math.min(left, escaped.left)
   }
 
   // A degenerate union (everything clipped or collapsed) is worse than the plain box.
@@ -130,10 +175,16 @@ export function getFocusBounds(element: Element): FocusBounds {
     left = rect.left
   }
 
-  return {
+  const padded = {
     top: Math.max(0, top - FOCUS_PADDING),
     right: Math.min(window.innerWidth, right + FOCUS_PADDING),
     bottom: Math.min(window.innerHeight, bottom + FOCUS_PADDING),
     left: Math.max(0, left - FOCUS_PADDING),
   }
+
+  const maxHeight = window.innerHeight * MAX_VIEWPORT_FRACTION
+  if (padded.bottom - padded.top > maxHeight) {
+    padded.bottom = padded.top + maxHeight
+  }
+  return padded
 }

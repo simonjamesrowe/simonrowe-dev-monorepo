@@ -40,11 +40,8 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
   // Sync tour search simulation into local query state
   useEffect(() => {
     if (isSearchTourStep) {
-      // The tour is a visual demonstration. It must not issue real searches or leave a
-      // slow response capable of reopening the search popover after the visitor moves on.
-      abortRef.current?.abort()
-      setResults(null)
-      setOpen(false)
+      // The demonstration runs a real search, because showing the results is the point of
+      // the step. It types slowly enough for them to arrive — see `SearchSimulation`.
       setSuggestionsOpen(false)
       setQuery(tourSearchValue)
     } else if (tourActive) {
@@ -59,13 +56,6 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
   }, [isSearchTourStep, tourSearchValue, tourActive])
 
   useEffect(() => {
-    if (isSearchTourStep) {
-      setResults(null)
-      setOpen(false)
-      setLoading(false)
-      return
-    }
-
     if (query.length < MIN_QUERY_LENGTH) {
       setResults(null)
       setOpen(false)
@@ -108,7 +98,7 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
       }
       controller?.abort()
     }
-  }, [query, isBlogPage, isSearchTourStep])
+  }, [query, isBlogPage])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

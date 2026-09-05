@@ -20,12 +20,12 @@ class TourSeedDefaultsTest {
             ".tour-home-chat",
             ".tour-search",
             ".tour-currently",
-            ".tour-featured-writing-header",
-            ".tour-contact",
-            ".tour-profile-heading",
+            ".tour-featured-writing",
+            ".tour-about",
             ".tour-experience-highlight",
-            ".tour-blog-filters",
-            ".tour-news-filters",
+            ".tour-blogs",
+            ".tour-news-events",
+            ".tour-mcp-tools",
             ".tour-status-running"
     );
     assertThat(steps).extracting(TourStep::route)
@@ -34,11 +34,11 @@ class TourSeedDefaultsTest {
             "/",
             "/",
             "/",
-            "/",
             "/profile",
             "/experience",
             "/blogs",
             "/news-events",
+            "/mcp",
             "/status"
     );
     assertThat(steps).extracting(TourStep::autoAdvanceMs)

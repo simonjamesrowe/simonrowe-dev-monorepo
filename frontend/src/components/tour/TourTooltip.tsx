@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Volume2, VolumeX } from 'lucide-react'
+import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
 
 import { useTour } from '../../hooks/useTour'
 import { calculatePosition, type Position } from './tourTooltipPosition'
@@ -13,13 +13,15 @@ export function TourTooltip() {
     prev,
     exit,
     autoAdvancePaused,
-    agentResponsePending,
     targetReady,
     targetStalled,
     narrationSpeaking,
     narrationAvailable,
     narrationMuted,
     toggleNarrationMuted,
+    autoplayPaused,
+    toggleAutoplay,
+    advanceCountdownMs,
     pauseAutoAdvance,
     resumeAutoAdvance,
   } = useTour()
@@ -29,7 +31,10 @@ export function TourTooltip() {
   const currentStep = steps[currentStepIndex]
   const isFirstStep = currentStepIndex === 0
   const isLastStep = currentStepIndex === steps.length - 1
-  const autoAdvanceMs = currentStep?.autoAdvanceMs
+  // The bar reflects the pause actually scheduled, which is only known once the step has
+  // finished presenting itself — so it appears as a cue that the tour is about to move on,
+  // rather than running as a deadline the whole time the step is open.
+  const isAdvancing = advanceCountdownMs != null && advanceCountdownMs > 0
   // While a step waits for its target it shows a holding message rather than a wrong
   // spotlight. Once the wait is clearly abnormal the controls come back so the visitor
   // can move on, but the step never pretends the target arrived.
@@ -112,11 +117,20 @@ export function TourTooltip() {
           Step {currentStepIndex + 1} of {steps.length}
         </span>
         <div className="tour-tooltip__actions">
+          <button
+            aria-label={autoplayPaused ? 'Play the tour automatically' : 'Stop the tour advancing'}
+            aria-pressed={!autoplayPaused}
+            className="tour-tooltip__toggle tour-tooltip__toggle--first"
+            onClick={toggleAutoplay}
+            type="button"
+          >
+            {autoplayPaused ? <Play size={16} /> : <Pause size={16} />}
+          </button>
           {narrationAvailable && (
             <button
               aria-label={narrationMuted ? 'Turn on tour narration' : 'Turn off tour narration'}
               aria-pressed={!narrationMuted}
-              className={`tour-tooltip__mute${narrationSpeaking ? ' tour-tooltip__mute--speaking' : ''}`}
+              className={`tour-tooltip__toggle${narrationSpeaking ? ' tour-tooltip__toggle--speaking' : ''}`}
               onClick={toggleNarrationMuted}
               type="button"
             >
@@ -150,11 +164,11 @@ export function TourTooltip() {
           )}
         </div>
       </div>
-      {!isPreparing && autoAdvanceMs != null && autoAdvanceMs > 0 && (
+      {!isPreparing && isAdvancing && (
         <div
-          className={`tour-tooltip__progress-bar${autoAdvancePaused || agentResponsePending ? ' tour-tooltip__progress-bar--paused' : ''}`}
-          key={`${currentStepIndex}-${agentResponsePending ? 'waiting' : 'ready'}`}
-          style={{ '--auto-advance-duration': `${autoAdvanceMs}ms` } as React.CSSProperties}
+          className={`tour-tooltip__progress-bar${autoAdvancePaused ? ' tour-tooltip__progress-bar--paused' : ''}`}
+          key={`${currentStepIndex}-${advanceCountdownMs}`}
+          style={{ '--auto-advance-duration': `${advanceCountdownMs}ms` } as React.CSSProperties}
         />
       )}
     </div>

@@ -95,7 +95,6 @@ class V038RefineGuidedTourTest extends AbstractIntegrationTest {
             "default-site-search",
             "default-home-currently",
             "default-home-writing",
-            null,
             "default-profile",
             "default-experience",
             "default-blogs",
@@ -103,15 +102,34 @@ class V038RefineGuidedTourTest extends AbstractIntegrationTest {
             "default-platform-status",
             "operator-step",
             null);
-    assertThat(saved.subList(0, 10))
+    assertThat(saved.subList(0, 9))
         .allSatisfy(step -> assertThat(step.autoAdvanceMs()).isNull());
     assertThat(saved.get(0).title()).isEqualTo("Ask Simon anything");
-    assertThat(saved.get(3).selector()).isEqualTo(".tour-featured-writing-header");
-    assertThat(saved.get(4).title()).isEqualTo("Continue the conversation");
-    assertThat(saved.get(9).title()).isEqualTo("A portfolio that runs in public");
-    assertThat(saved.get(10).title()).isEqualTo("A custom stop");
-    assertThat(saved.get(10).autoAdvanceMs()).isEqualTo(5000);
-    assertThat(saved.get(11).title()).isEqualTo("A legacy-free custom stop");
+    // The writing and profile stops cover their whole section, not just a heading.
+    assertThat(saved.get(3).selector()).isEqualTo(".tour-featured-writing");
+    assertThat(saved.get(4).selector()).isEqualTo(".tour-about");
+    assertThat(saved.get(8).title()).isEqualTo("A portfolio that runs in public");
+    // Operator-authored stops survive untouched, including the one with no legacy id.
+    assertThat(saved.get(9).title()).isEqualTo("A custom stop");
+    assertThat(saved.get(9).autoAdvanceMs()).isEqualTo(5000);
+    assertThat(saved.get(10).title()).isEqualTo("A legacy-free custom stop");
+    // Both contact stops are gone: the profile drawer one and the homepage call to action.
+    assertThat(saved).extracting(TourStep::selector)
+        .doesNotContain(".tour-contact", ".tour-contact-drawer");
+  }
+
+  @Test
+  void preservesAnOperatorEditedHomepageContactStop() {
+    Instant timestamp = Instant.parse("2026-09-05T00:00:00Z");
+    tourStepRepository.save(step(
+        "default-home-contact", "Come and say hello", ".tour-contact",
+        "An operator-authored call to action.", "bottom", "/", 1, null, timestamp));
+
+    changeUnit.execution(tourStepRepository);
+
+    // Removing a stop is right for the default wording and wrong for someone's own.
+    assertThat(tourStepRepository.findByLegacyId("default-home-contact"))
+        .hasValueSatisfying(step -> assertThat(step.title()).isEqualTo("Come and say hello"));
   }
 
   @Test

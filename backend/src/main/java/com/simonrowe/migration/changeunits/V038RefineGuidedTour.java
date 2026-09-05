@@ -17,27 +17,35 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Refines the default guided tour into a visitor-controlled, homepage-first story. It updates
- * only untouched seeded steps, removes the redundant profile contact stop, and preserves every
- * operator-authored change. The migration is idempotent because revised steps no longer match
- * their former default values and the resulting order is stable.
+ * Refines the default guided tour into a visitor-controlled, homepage-first story.
+ *
+ * <p>Three things happen: the two contact stops are removed, the remaining seeded steps are
+ * rewritten to the current defaults, and the survivors are renumbered into a gap-free sequence.
+ *
+ * <p><strong>Only steps still matching their previous seeded defaults are touched.</strong>
+ * Every field is compared before a step is rewritten or deleted, so an operator who edited a
+ * step in the admin CMS keeps their wording — and keeps the step, even one this migration would
+ * otherwise remove. That is deliberate: silently deleting someone's edited content is worse than
+ * leaving a stop in the tour that the default no longer has.
+ *
+ * <p>Idempotent by construction: a revised step no longer matches the previous default it was
+ * matched on, a removed step is no longer present, and the resulting order is already sequential.
  */
 @ChangeUnit(id = "refine-guided-tour", order = "038", author = "simonrowe")
 public class V038RefineGuidedTour {
 
   private static final Logger LOG = LoggerFactory.getLogger(V038RefineGuidedTour.class);
-  private static final String REDUNDANT_CONTACT_ID = "default-contact";
   private static final String HOMEPAGE_CONTACT_SELECTOR = ".tour-contact";
   private static final List<String> DEFAULT_ORDER = List.of(
       "default-home-chat",
       "default-site-search",
       "default-home-currently",
       "default-home-writing",
-      "default-home-contact",
       "default-profile",
       "default-experience",
       "default-blogs",
       "default-news-events",
+      "default-mcp-tools",
       "default-platform-status");
   private static final Map<String, PreviousDefault> PREVIOUS_DEFAULTS = Map.ofEntries(
       Map.entry("default-home-chat", new PreviousDefault(
@@ -55,10 +63,6 @@ public class V038RefineGuidedTour {
           "Recent engineering writing is collected here. Use the arrows to browse, "
               + "or open the full blog.",
           "top", "/", 8000)),
-      Map.entry("default-home-contact", new PreviousDefault(
-          "Get in touch", ".tour-contact",
-          "The homepage closes with a direct route to start a conversation.",
-          "bottom", "/", 7000)),
       Map.entry("default-profile", new PreviousDefault(
           "Read the profile", ".tour-profile-heading",
           "Explore Simon's biography, background, and professional summary.",
@@ -79,11 +83,24 @@ public class V038RefineGuidedTour {
           "This live view shows the services running in production and the commit "
               + "each was built from.",
           "bottom", "/status", 12000)));
-  private static final PreviousDefault REDUNDANT_CONTACT_DEFAULT = new PreviousDefault(
-      "Get in touch", ".tour-contact-drawer",
-      "Use the Profile page contact section to send a message.",
-      "top", "/profile#contact", 7000);
-  private static final PreviousDefault UNTAGGED_HOMEPAGE_CONTACT_DEFAULT = new PreviousDefault(
+  /**
+   * The two contact stops this migration removes, and the previous default each must still
+   * match to be removable.
+   *
+   * <p>The homepage stop appears in two shapes because it predates being given a
+   * {@code legacyId}: the seeded {@code default-home-contact}, and an untagged step on the same
+   * route and selector carrying the original wording. Both are the same stop to a visitor.
+   */
+  private static final Map<String, PreviousDefault> REMOVED_BY_LEGACY_ID = Map.of(
+      "default-contact", new PreviousDefault(
+          "Get in touch", ".tour-contact-drawer",
+          "Use the Profile page contact section to send a message.",
+          "top", "/profile#contact", 7000),
+      "default-home-contact", new PreviousDefault(
+          "Get in touch", HOMEPAGE_CONTACT_SELECTOR,
+          "The homepage closes with a direct route to start a conversation.",
+          "bottom", "/", 7000));
+  private static final PreviousDefault UNTAGGED_HOMEPAGE_CONTACT = new PreviousDefault(
       "Get In Touch", HOMEPAGE_CONTACT_SELECTOR,
       "Interested in working together or just want to say hello? Hit the button to send me "
           + "a message directly.",
@@ -97,13 +114,14 @@ public class V038RefineGuidedTour {
       return;
     }
 
-    int removed = removeRedundantDefaultContact(tourStepRepository, existing);
+    int removed = removeRetiredContactSteps(tourStepRepository, existing);
     Map<String, TourStep> revisedDefaults = TourStepSeeder.defaultTourSteps(Instant.now()).stream()
         .collect(Collectors.toMap(TourStep::legacyId, step -> step));
+    Instant timestamp = Instant.now();
     List<TourStep> revised = new ArrayList<>();
     int updated = 0;
     for (TourStep step : existing) {
-      TourStep replacement = replacementFor(step, revisedDefaults, Instant.now());
+      TourStep replacement = replacementFor(step, revisedDefaults, timestamp);
       revised.add(replacement);
       if (replacement != step) {
         updated++;
@@ -111,10 +129,10 @@ public class V038RefineGuidedTour {
     }
 
     List<TourStep> ordered = orderedSteps(revised);
-    if (updated > 0 || !hasSequentialOrder(ordered)) {
+    if (updated > 0 || removed > 0 || !hasSequentialOrder(ordered)) {
       saveInStableOrder(tourStepRepository, ordered);
     }
-    LOG.info("Refined {} seeded tour steps and removed {} redundant tour step", updated, removed);
+    LOG.info("Refined {} seeded tour steps and removed {} contact step(s)", updated, removed);
   }
 
   @RollbackExecution
@@ -122,18 +140,33 @@ public class V038RefineGuidedTour {
     // Tour copy and sequence are a product decision; preserve changes made by operators afterwards.
   }
 
-  private int removeRedundantDefaultContact(
+  /**
+   * Deletes the contact stops, but only where they still carry their seeded wording.
+   *
+   * @param tourStepRepository the repository
+   * @param steps the current steps, mutated to drop whatever is deleted
+   * @return how many were removed
+   */
+  private int removeRetiredContactSteps(
       final AdminTourStepRepository tourStepRepository,
       final List<TourStep> steps
   ) {
+    int removed = 0;
     for (TourStep step : List.copyOf(steps)) {
-      if (REDUNDANT_CONTACT_ID.equals(step.legacyId()) && REDUNDANT_CONTACT_DEFAULT.matches(step)) {
+      PreviousDefault retired = step.legacyId() == null
+          ? untaggedHomepageContactDefault(step)
+          : REMOVED_BY_LEGACY_ID.get(step.legacyId());
+      if (retired != null && retired.matches(step)) {
         tourStepRepository.delete(step);
         steps.remove(step);
-        return 1;
+        removed++;
       }
     }
-    return 0;
+    return removed;
+  }
+
+  private PreviousDefault untaggedHomepageContactDefault(final TourStep step) {
+    return isHomepageContact(step) ? UNTAGGED_HOMEPAGE_CONTACT : null;
   }
 
   private TourStep replacementFor(
@@ -143,7 +176,7 @@ public class V038RefineGuidedTour {
   ) {
     String legacyId = step.legacyId();
     if (legacyId == null) {
-      return replacementForUntaggedHomepageContact(step, revisedDefaults, timestamp);
+      return step;
     }
     PreviousDefault previous = PREVIOUS_DEFAULTS.get(legacyId);
     TourStep revised = revisedDefaults.get(legacyId);
@@ -156,34 +189,19 @@ public class V038RefineGuidedTour {
         revised.route(), revised.autoAdvanceMs());
   }
 
-  private TourStep replacementForUntaggedHomepageContact(
-      final TourStep step,
-      final Map<String, TourStep> revisedDefaults,
-      final Instant timestamp
-  ) {
-    if (!isHomepageContact(step) || !UNTAGGED_HOMEPAGE_CONTACT_DEFAULT.matches(step)) {
-      return step;
-    }
-    TourStep revised = revisedDefaults.get("default-home-contact");
-    return new TourStep(
-        step.id(), revised.title(), revised.selector(), revised.description(), step.titleImage(),
-        revised.position(), step.order(), step.createdAt(), timestamp, step.legacyId(),
-        revised.route(), revised.autoAdvanceMs());
-  }
-
+  /**
+   * Puts the survivors back into the default narrative order.
+   *
+   * <p>Anything not in {@link #DEFAULT_ORDER} — an operator's own step, or a default they edited
+   * enough that it was left alone — keeps its relative position and is appended after the known
+   * ones rather than dropped.
+   */
   private List<TourStep> orderedSteps(final List<TourStep> steps) {
     Map<String, TourStep> byLegacyId = steps.stream()
         .filter(step -> step.legacyId() != null)
         .collect(Collectors.toMap(TourStep::legacyId, step -> step, (left, right) -> left));
     List<TourStep> ordered = new ArrayList<>();
-    for (String legacyId : DEFAULT_ORDER.subList(0, 4)) {
-      TourStep step = byLegacyId.get(legacyId);
-      if (step != null) {
-        ordered.add(step);
-      }
-    }
-    steps.stream().filter(this::isHomepageContact).findFirst().ifPresent(ordered::add);
-    for (String legacyId : DEFAULT_ORDER.subList(5, DEFAULT_ORDER.size())) {
+    for (String legacyId : DEFAULT_ORDER) {
       TourStep step = byLegacyId.get(legacyId);
       if (step != null) {
         ordered.add(step);

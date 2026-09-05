@@ -240,6 +240,7 @@ export function TourStepEditor() {
               <option value="/experience">/experience</option>
               <option value="/blogs">/blogs</option>
               <option value="/news-events">/news-events</option>
+              <option value="/mcp">/mcp</option>
               <option value="/status">/status</option>
             </select>
           </div>
@@ -257,12 +258,12 @@ export function TourStepEditor() {
           </div>
           <div>
             <label className="blog-editor__section-label" htmlFor="autoAdvanceSeconds">
-              Auto-advance after (seconds)
+              Pause before advancing (seconds)
             </label>
             <input
               className="admin-form__input admin-form__input--narrow"
               id="autoAdvanceSeconds"
-              min={1}
+              min={0}
               max={120}
               name="autoAdvanceSeconds"
               onChange={(e) => {
@@ -275,7 +276,9 @@ export function TourStepEditor() {
               value={form.autoAdvanceSeconds}
             />
             <p className="blog-editor__field-help">
-              Leave blank to wait for the visitor to choose Next.
+              The tour moves on once this step has finished presenting itself — its narration
+              spoken, any demonstration played out — then waits this long. Leave blank for the
+              default pause, or set 0 to hold here until the visitor chooses Next.
             </p>
           </div>
         </div>

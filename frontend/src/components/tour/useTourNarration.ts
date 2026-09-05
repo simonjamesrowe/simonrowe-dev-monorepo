@@ -3,25 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchReadyNarrations } from '../../services/narrationApi'
 import type { TourStep } from '../../types/tour'
 import { narrationMediaUrl } from '../narration/narrationMedia'
-
-const MUTE_PREFERENCE_KEY = 'tour.narration.muted'
-
-function readMutePreference(): boolean {
-  try {
-    return window.localStorage.getItem(MUTE_PREFERENCE_KEY) === 'true'
-  } catch {
-    // Private browsing and blocked storage must not stop the tour narrating.
-    return false
-  }
-}
-
-function writeMutePreference(muted: boolean): void {
-  try {
-    window.localStorage.setItem(MUTE_PREFERENCE_KEY, String(muted))
-  } catch {
-    // A preference that cannot be saved is not worth failing a click over.
-  }
-}
+import { readNarrationMuted, writeNarrationMuted } from './tourPreferences'
 
 /**
  * Pauses only a player that is actually running.
@@ -39,6 +21,15 @@ function stop(audio: HTMLAudioElement): void {
 export interface TourNarration {
   /** True when the current step has audio and it is playing. */
   speaking: boolean
+  /**
+   * True when this step has nothing left to say — its audio finished, or there is none to
+   * play because the step has no narration or the visitor muted it.
+   *
+   * This is what autoplay waits on. It is deliberately true rather than false in the silent
+   * cases: a step with no audio must not stall an auto-advancing tour forever. The reading
+   * floor in `TourProvider` is what stops those steps flying past.
+   */
+  settled: boolean
   /** True when any step of this tour has audio, so the control is worth rendering. */
   available: boolean
   muted: boolean
@@ -66,7 +57,8 @@ export function useTourNarration(
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [audioByStepId, setAudioByStepId] = useState<Record<string, string>>({})
   const [speaking, setSpeaking] = useState(false)
-  const [muted, setMuted] = useState(readMutePreference)
+  const [finished, setFinished] = useState(false)
+  const [muted, setMuted] = useState(readNarrationMuted)
 
   // One audio element for the life of the provider, in the document so other players see it.
   useEffect(() => {
@@ -77,13 +69,20 @@ export function useTourNarration(
     audioRef.current = audio
     const onPlay = () => setSpeaking(true)
     const onStop = () => setSpeaking(false)
+    // Only `ended` settles a step. A `pause` does not: pausing is how leaving a step and
+    // muting both present, and treating either as "finished speaking" would advance the tour
+    // off a step the visitor just silenced.
+    const onEnded = () => {
+      setSpeaking(false)
+      setFinished(true)
+    }
     audio.addEventListener('play', onPlay)
     audio.addEventListener('pause', onStop)
-    audio.addEventListener('ended', onStop)
+    audio.addEventListener('ended', onEnded)
     return () => {
       audio.removeEventListener('play', onPlay)
       audio.removeEventListener('pause', onStop)
-      audio.removeEventListener('ended', onStop)
+      audio.removeEventListener('ended', onEnded)
       stop(audio)
       audio.remove()
       audioRef.current = null
@@ -110,6 +109,12 @@ export function useTourNarration(
 
   const currentStepId = isActive ? steps[currentStepIndex]?.id : undefined
   const currentAudioUrl = currentStepId ? audioByStepId[currentStepId] : undefined
+
+  // Each step starts unspoken. Without this the previous step's `ended` would carry over and
+  // settle the new one before a word of it had played.
+  useEffect(() => {
+    setFinished(false)
+  }, [currentStepId])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -142,13 +147,14 @@ export function useTourNarration(
   const toggleMuted = useCallback(() => {
     setMuted((previous) => {
       const next = !previous
-      writeMutePreference(next)
+      writeNarrationMuted(next)
       return next
     })
   }, [])
 
   return {
     speaking,
+    settled: muted || !currentAudioUrl || finished,
     available: Object.keys(audioByStepId).length > 0,
     muted,
     toggleMuted,

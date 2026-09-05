@@ -2,7 +2,6 @@ package com.simonrowe.migration.changeunits;
 
 import com.simonrowe.admin.AdminTourStepRepository;
 import com.simonrowe.admin.TourStep;
-import com.simonrowe.tour.TourStepSeeder;
 import io.mongock.api.annotations.ChangeUnit;
 import io.mongock.api.annotations.Execution;
 import io.mongock.api.annotations.RollbackExecution;
@@ -115,11 +114,31 @@ public class V036PrioritiseHomepageTourSteps {
         .orElse(null);
   }
 
+  /**
+   * The homepage contact step exactly as this change unit introduced it.
+   *
+   * <p>Written out in full rather than read back from {@code TourStepSeeder}. An applied change
+   * unit is a historical record: reading the *current* defaults made this migration's behaviour
+   * depend on whatever the tour happens to look like today, and it threw outright once that step
+   * was retired from the defaults — taking application startup with it wherever Mongock had not
+   * already recorded this unit as run. A later unit removes this step again; that is a separate,
+   * deliberate step forward rather than a reason for this one to change.
+   */
   private TourStep defaultHomeContact() {
-    return TourStepSeeder.defaultTourSteps(Instant.now()).stream()
-        .filter(step -> HOME_CONTACT_LEGACY_ID.equals(step.legacyId()))
-        .findFirst()
-        .orElseThrow();
+    Instant timestamp = Instant.now();
+    return new TourStep(
+        null,
+        "Get in touch",
+        ".tour-contact",
+        "The homepage closes with a direct route to start a conversation.",
+        null,
+        "bottom",
+        0,
+        timestamp,
+        timestamp,
+        HOME_CONTACT_LEGACY_ID,
+        "/",
+        7000);
   }
 
   private int nextAvailableOrder(final List<TourStep> steps) {
