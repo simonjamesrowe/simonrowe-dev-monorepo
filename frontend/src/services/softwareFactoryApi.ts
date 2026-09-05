@@ -209,16 +209,27 @@ export interface FactoryFlowDetailItem {
 
 export interface FactoryFlowDetail {
   nodeKey: string
-  items: FactoryFlowDetailItem[]
+  /**
+   * The work behind this node, newest first.
+   *
+   * For a module (or a node with no list of its own, like `production`/`build`) an unreachable
+   * source and a genuinely empty one both report `[]` — the backend already collapses "nothing
+   * to show" and "could not be read" into the same honest answer there. An artifact node with
+   * its own reader (`linear`, `pull-request`, `main`, `agent-setup`) is different: this is
+   * `null` when that reader itself failed, distinct from `[]` when it read successfully and
+   * found nothing open. Losing that distinction would misreport a broken Linear or GitHub read
+   * as a quiet one.
+   */
+  items: FactoryFlowDetailItem[] | null
 }
 
 /**
  * Reads one node's recent work, for its drawer.
  *
- * Empty and unreachable read identically here — both are `items: []` — because the backend
- * already collapses "nothing to show" and "could not be read" into the same honest answer for
- * deployer-owned nodes. The drawer distinguishes a genuinely empty list from a detail that has
- * not loaded yet by `null` versus `[]`, not by anything this call reports.
+ * See {@link FactoryFlowDetail.items} for what `null` versus `[]` means in the response body.
+ * Separately, the drawer distinguishes a detail that has not loaded yet from one that has, by
+ * `null` versus a `FactoryFlowDetail` object — that is a fact about this call's own lifecycle,
+ * not about anything the response body reports.
  */
 export const fetchFactoryFlowDetail = (getAccessToken: GetAccessToken, nodeKey: string) =>
   request<FactoryFlowDetail>(getAccessToken, `/flow/${encodeURIComponent(nodeKey)}`)

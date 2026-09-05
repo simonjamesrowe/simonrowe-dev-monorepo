@@ -220,23 +220,37 @@ export function FactoryNodeDrawer(
             </p>
           ) : detail === null ? (
             <p>Loading…</p>
+          ) : detail.items === null ? (
+            // Distinct from an empty list: this node has its own reader (Linear, GitHub) and
+            // that reader itself could not be read, not "nothing open".
+            <p className="admin-error-banner">
+              <AlertCircle size={14} /> Not available — the source could not be read.
+            </p>
           ) : detail.items.length === 0 ? (
             <p>No runs in the last 30 days.</p>
           ) : (
             <ol>
-              {detail.items.map((item) => (
-                <li key={item.id}>
-                  {item.url ? (
-                    <a href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
-                  ) : (
-                    <span>{item.title}</span>
-                  )}
-                  {' '}
-                  <span className="factory-drawer__run-id">({item.id})</span>
-                  {' — '}
-                  <span className="factory-drawer__run-status">{item.status}</span>
-                </li>
-              ))}
+              {detail.items.map((item) => {
+                // The id is rendered inside the link, not just alongside it, so the accessible
+                // name of two items sharing a title (two pull requests both called "Fix typo")
+                // still differs — an id span outside the anchor is invisible to a screen reader.
+                const label = (
+                  <>
+                    {item.title} <span className="factory-drawer__run-id">({item.id})</span>
+                  </>
+                )
+                return (
+                  <li key={item.id}>
+                    {item.url ? (
+                      <a href={item.url} target="_blank" rel="noopener noreferrer">{label}</a>
+                    ) : (
+                      <span>{label}</span>
+                    )}
+                    {' — '}
+                    <span className="factory-drawer__run-status">{item.status}</span>
+                  </li>
+                )
+              })}
             </ol>
           )}
         </div>

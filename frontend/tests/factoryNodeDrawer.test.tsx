@@ -164,6 +164,47 @@ describe('FactoryNodeDrawer', () => {
     expect(screen.getByText('(logwatch-2)')).toBeInTheDocument()
   })
 
+  it('says the source could not be read when an artifact reader failed', () => {
+    // Null items is a different fact from an empty list: the source itself could not be read,
+    // not "nothing open" — losing that distinction would misreport a broken Linear or GitHub
+    // read as a quiet one.
+    render(<FactoryNodeDrawer
+      node={{ ...node, key: 'linear', label: 'Linear' }}
+      module={null}
+      onClose={vi.fn()}
+      detail={{ nodeKey: 'linear', items: null }}
+    />)
+    expect(screen.getByText(/could not be read/i)).toBeInTheDocument()
+    expect(screen.queryByText(/No runs in the last 30 days/i)).not.toBeInTheDocument()
+  })
+
+  it('renders each item as a link whose accessible name stays unique across a title collision', () => {
+    // Two open tickets can share a title; only the id inside the link tells them apart, and it
+    // must be inside the anchor to be part of the accessible name at all.
+    render(<FactoryNodeDrawer
+      node={{ ...node, key: 'linear', label: 'Linear' }}
+      module={null}
+      onClose={vi.fn()}
+      detail={{ nodeKey: 'linear', items: [
+        {
+          id: 'SIM-1', title: 'openssl', status: 'TRIAGE', at: null,
+          url: 'https://linear.app/sim-1',
+        },
+        {
+          id: 'SIM-2', title: 'openssl', status: 'STARTED', at: null,
+          url: 'https://linear.app/sim-2',
+        },
+      ] }}
+    />)
+    const links = screen.getAllByRole('link', { name: /openssl/i })
+    expect(links).toHaveLength(2)
+    expect(links[0]).toHaveAccessibleName('openssl (SIM-1)')
+    expect(links[1]).toHaveAccessibleName('openssl (SIM-2)')
+    expect(links[0]).toHaveAttribute('href', 'https://linear.app/sim-1')
+    expect(links[0]).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(links[0]).toHaveAttribute('target', '_blank')
+  })
+
   it('shows the configured state and schedule summary, not just pollers', () => {
     // "Configured" and "Schedule" previously lived in the module rail (On/Off/Unconfirmed,
     // Active/Paused/Absent) and vanished when the rail was deleted. An operator cannot tell
