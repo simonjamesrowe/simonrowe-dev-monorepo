@@ -246,11 +246,16 @@ export function TourProvider({ children }: TourProviderProps) {
     let resolved = false
     let observer: MutationObserver | null = null
     let animationFrame: number | null = null
+    let stallTimer: number | null = null
     const resolveTarget = () => {
       const element = document.querySelector(currentStep.targetSelector)
       if (element) {
         resolved = true
         observer?.disconnect()
+        if (stallTimer !== null) {
+          window.clearTimeout(stallTimer)
+          stallTimer = null
+        }
         element.scrollIntoView({ behavior: 'auto', block: 'center' })
         // Let the route paint at its final scroll position before the overlay measures it.
         animationFrame = requestAnimationFrame(() => {
@@ -260,7 +265,6 @@ export function TourProvider({ children }: TourProviderProps) {
     }
 
     resolveTarget()
-    let stallTimer: number | null = null
     if (!resolved) {
       observer = new MutationObserver(resolveTarget)
       observer.observe(document.body, {
@@ -271,6 +275,8 @@ export function TourProvider({ children }: TourProviderProps) {
       // Keep waiting for the real target indefinitely, but stop holding the visitor hostage.
       // A selector that never matches must never fake a spotlight or start a countdown; it
       // only restores the controls so the tour can be continued or left behind.
+      // `resolved` is re-checked inside the callback as well as the timer being cancelled on
+      // resolution: a timer that has already fired cannot be cancelled, only ignored.
       stallTimer = window.setTimeout(() => {
         if (!resolved) {
           dispatch({ type: 'TARGET_STALLED' })
