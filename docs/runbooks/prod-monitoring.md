@@ -18,13 +18,14 @@ It runs three layers, cheapest first, and stops after the first one that acts.
 
 | Layer | Question | Remedy |
 | --- | --- | --- |
-| 1. Site | Does `https://www.simonrowe.dev` answer? | After 3 consecutive failures, `docker compose up -d` to reconcile the whole stack |
+| 1. Site | Does `https://www.simonrowe.dev` answer? | After 3 consecutive failures, restart `pinggy` (see below), then `docker compose up -d` to reconcile the whole stack |
 | 2. Container health | Does every container report `running` + `healthy`? | After 3 consecutive ticks `unhealthy`, restart **that** service. Containers in `created`/`exited` trigger a stack reconcile instead |
 | 3. Endpoint | Does each public hostname actually serve? | After 3 consecutive bad responses, restart the single service behind it |
 
 Backoff: the whole-stack path allows 3 reconciles per 10 minutes; each service
-allows 2 restarts per 30 minutes. On exhaustion it logs `CRIT ... Needs a human.`
-and stops trying — grep for `CRIT` when something has been down a while.
+(including `pinggy`) allows 2 restarts per 30 minutes. On exhaustion it logs
+`CRIT ... Needs a human.` and stops trying — grep for `CRIT` when something has
+been down a while.
 
 ### Why layer 2 has to exist
 
@@ -32,6 +33,65 @@ and stops trying — grep for `CRIT` when something has been down a while.
 fires when the process *exits*. A container whose healthcheck fails forever is
 left running, untouched, indefinitely. Nothing in Docker or Compose closes that
 gap, so the cron job is the only thing that does.
+
+### Why layer 1 restarts `pinggy` specifically (2026-09-06 outage)
+
+All six public hostnames — `www`, `api`, `console`, `langfuse`, `temporal`,
+`dependency-track` — go through one path: Cloudflare → the `pinggy` tunnel →
+`nginx`. On 2026-09-06 every one of them was dark for about four hours while
+`docker compose ps` reported `pinggy: Up (healthy)` and `nginx: Up (healthy)` —
+**zero unhealthy containers** — because the fault was inside the tunnel client,
+not visible to Docker at all:
+
+- `a.pinggy.io` resolves an IPv6 address (`2a01:7e01::f03c:95ff:fefb:3443`)
+  *first*, and this host has no IPv6 default route (`ip -6 route` shows only
+  `fe80::/64` link-local; `curl -6` to any IPv6 target fails outright).
+- pinggy dialled it anyway, got
+  `Error: Tunnel disconnected before establishment: Could not connect: Resource
+  temporarily unavailable` (`EAGAIN`) on every attempt, and retried forever —
+  645 failed connects and 47,420 `Reconnecting to Pinggy` log lines over the
+  four hours.
+- A raw TCP connect to the same edge on IPv4 port 443 succeeded immediately. A
+  plain `docker restart pinggy` (which forces a fresh DNS resolution, and
+  happened to pick IPv4) brought the whole site back with **no other change**.
+
+Two structural reasons this lasted four hours instead of one minute:
+
+1. **The healthcheck cannot see it.** `pinggy`'s healthcheck is
+   `test: ["CMD-SHELL", "kill -0 1"]` — it only proves PID 1 exists, which stays
+   true throughout an infinite reconnect loop. There is no known replacement
+   healthcheck for the `pinggy/pinggy` image verified to work, so this is
+   deliberately left as-is; layer 1 is the detector instead.
+2. **The existing remediation could not fix it.** Layer 1's only action was
+   `docker compose up -d`, which — per its own comment — is "a no-op for
+   services that are already healthy". `pinggy` was running and reporting
+   healthy, so the reconcile did nothing to it, every single minute, for four
+   hours, while layer 3 restarted `frontend`/`backend`/`langfuse` instead (the
+   services that own the failing hostnames) until `SERVICE_MAX_RESTARTS`
+   backoff gave up — none of which can fix an ingress fault.
+
+The fix has two parts:
+
+- `scripts/monitor-prod.sh` layer 1 now calls `svc_restart "pinggy" ...` (a
+  plain `docker compose restart`, honouring pinggy's own per-service backoff)
+  **before** the whole-stack reconcile, whenever the site check fails. This is
+  additive: the whole-stack `up -d` still runs afterwards, because a
+  `created`/`exited` container is a separate, equally real failure mode that
+  only `up -d` can fix.
+- `docker-compose.prod.yml`'s `pinggy` service sets
+  `sysctls: [net.ipv6.conf.all.disable_ipv6=1]`, so the container's resolver
+  should only ever see the IPv4 address in the first place. **This is verified
+  reasoning, not a fix observed working in production** — the 2026-09-06 outage
+  was cleared by a restart before this sysctl existed. If IPv6 ever becomes
+  reachable from this host, revisit rather than assume this still holds.
+
+`sysctls:` only applies at container *creation*, not `docker compose restart`,
+so `pinggy` was also added to `FACTORY_DEPLOY_RECREATABLE` — otherwise this
+very change would sit inert in the compose file. See the comment beside that
+variable in `docker-compose.prod.yml`: the deployer only picks up an allowlist
+change on its own recreation, so this fix needs one manual
+`docker compose -f docker-compose.prod.yml up -d pinggy` after the deploy that
+ships it.
 
 ### Testing a change to the watchdog
 
