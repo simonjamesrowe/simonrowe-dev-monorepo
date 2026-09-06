@@ -277,6 +277,8 @@ class LogWatchWorkflowTest {
   }
 
   private static LogSignature signature(final String text) {
-    return new LogSignature(text, Severity.ERROR, "backend", 4, FROM, TO, "raw " + text);
+    return new LogSignature(
+        text, Severity.ERROR, "backend", 4, FROM, TO, "raw " + text,
+        "logger:" + text, List.of(new LogSignature.Variant(text, 4, "raw " + text)), 1);
   }
 }

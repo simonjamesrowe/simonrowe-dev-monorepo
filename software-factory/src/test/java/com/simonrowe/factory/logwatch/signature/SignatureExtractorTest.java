@@ -166,23 +166,20 @@ class SignatureExtractorTest {
   }
 
   @Test
-  @DisplayName("the highest severity in a group wins, whatever order the lines arrive in")
-  void severityEscalates() {
-    List<LogLine> warnFirst =
-        List.of(
-            new LogLine("backend", T0, Severity.WARN, "thing failed 1"),
-            new LogLine("backend", T0, Severity.ERROR, "thing failed 2"));
-
-    assertThat(SignatureExtractor.group(warnFirst).getFirst().severity())
-        .isEqualTo(Severity.ERROR);
-  }
-
-  @Test
   @DisplayName("the cap drops the least severe and least frequent, never the worst")
   void capOrderingIsMostSevereFirst() {
-    LogSignature manyWarns = new LogSignature("w", Severity.WARN, "c", 900, T0, T0, "w");
-    LogSignature oneError = new LogSignature("e", Severity.ERROR, "c", 1, T0, T0, "e");
-    LogSignature manyErrors = new LogSignature("e2", Severity.ERROR, "c", 50, T0, T0, "e2");
+    LogSignature manyWarns =
+        new LogSignature(
+            "w", Severity.WARN, "c", 900, T0, T0, "w",
+            "logger:w", List.of(new LogSignature.Variant("w", 900, "w")), 1);
+    LogSignature oneError =
+        new LogSignature(
+            "e", Severity.ERROR, "c", 1, T0, T0, "e",
+            "logger:e", List.of(new LogSignature.Variant("e", 1, "e")), 1);
+    LogSignature manyErrors =
+        new LogSignature(
+            "e2", Severity.ERROR, "c", 50, T0, T0, "e2",
+            "logger:e2", List.of(new LogSignature.Variant("e2", 50, "e2")), 1);
 
     List<LogSignature> sorted = new ArrayList<>(List.of(manyWarns, oneError, manyErrors));
     sorted.sort(LogSignature.MOST_SEVERE_FIRST);
@@ -193,5 +190,105 @@ class SignatureExtractorTest {
   @Test
   void normaliseToleratesNull() {
     assertThat(SignatureExtractor.normalise(null)).isEmpty();
+  }
+
+  private static LogLine line(final String container, final Severity severity, final String raw) {
+    return new LogLine(container, T0, severity, raw);
+  }
+
+  @Test
+  @DisplayName("SIM-13/24/25: three phrasings from one logger become one group")
+  void oneLoggerIsOneGroup() {
+    String prefix =
+        "{\"@timestamp\":\"2026-09-05T08:18:45.175457758Z\",\"log\":{\"level\":\"ERROR\","
+            + "\"logger\":\"com.embabel.agent.spi.validation.DefaultAgentValidationManager\"},"
+            + "\"message\":\"";
+    List<LogSignature> grouped =
+        SignatureExtractor.group(
+            List.of(
+                line("backend", Severity.ERROR, prefix + "Validation failed with 1 errors:\"}"),
+                line("backend", Severity.ERROR, prefix
+                    + "- MISSING_GOALS: Agent 'ContentAggregation' must have one goal\"}"),
+                line("backend", Severity.ERROR, prefix
+                    + "- MISSING_GOALS: Agent 'WeeklyDigest' must have one goal\"}")));
+
+    assertThat(grouped).hasSize(1);
+    assertThat(grouped.getFirst().occurrences()).isEqualTo(3);
+    assertThat(grouped.getFirst().sourceKey())
+        .isEqualTo("logger:com.embabel.agent.spi.validation.DefaultAgentValidationManager");
+    assertThat(grouped.getFirst().distinctVariants()).isEqualTo(3);
+    assertThat(grouped.getFirst().variants()).hasSize(3);
+  }
+
+  @Test
+  @DisplayName("SIM-16/23: one Alloy component with two different error payloads is one group")
+  void oneAlloyComponentIsOneGroup() {
+    String prefix =
+        "ts=2026-09-03T05:59:25.342351851Z level=error msg=\"final error sending batch\" "
+            + "component_id=loki.write.grafana_cloud error=\"";
+    List<LogSignature> grouped =
+        SignatureExtractor.group(
+            List.of(
+                line("alloy", Severity.ERROR, prefix + "dial tcp: server misbehaving\""),
+                line("alloy", Severity.ERROR, prefix + "server returned HTTP status 400\"")));
+
+    assertThat(grouped).hasSize(1);
+    assertThat(grouped.getFirst().sourceKey()).isEqualTo("logger:loki.write.grafana_cloud");
+    assertThat(grouped.getFirst().distinctVariants()).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("a line with no identifiable source still groups on its normalised text")
+  void unrecognisedFormatFallsBackToTheSignature() {
+    String raw = "ERROR: Elasticsearch did not exit normally - check the logs at /var/log/es.log";
+    List<LogSignature> grouped =
+        SignatureExtractor.group(List.of(line("elasticsearch", Severity.ERROR, raw)));
+
+    assertThat(grouped).hasSize(1);
+    assertThat(grouped.getFirst().sourceKey())
+        .isEqualTo("line:" + SignatureExtractor.normalise(raw));
+  }
+
+  @Test
+  @DisplayName("severity is part of the group key, so WARN and ERROR never merge")
+  void severitySplitsGroups() {
+    String raw = "{\"log\":{\"logger\":\"com.example.Thing\"},\"message\":\"slow query\"}";
+    List<LogSignature> grouped =
+        SignatureExtractor.group(
+            List.of(line("backend", Severity.ERROR, raw), line("backend", Severity.WARN, raw)));
+
+    assertThat(grouped).hasSize(2);
+  }
+
+  @Test
+  @DisplayName("the same source in two containers stays two problems")
+  void containerStillSplitsGroups() {
+    String raw = "{\"log\":{\"logger\":\"com.example.Thing\"},\"message\":\"boom\"}";
+    List<LogSignature> grouped =
+        SignatureExtractor.group(
+            List.of(line("backend", Severity.ERROR, raw), line("deployer", Severity.ERROR, raw)));
+
+    assertThat(grouped).hasSize(2);
+  }
+
+  @Test
+  @DisplayName("variants are most-frequent-first and capped, with the true total kept")
+  void variantsAreOrderedAndCapped() {
+    String prefix = "{\"log\":{\"logger\":\"com.example.Chatty\"},\"message\":\"variant ";
+    List<LogLine> lines = new ArrayList<>();
+    for (int i = 0; i < 8; i++) {
+      lines.add(line("backend", Severity.ERROR, prefix + (char) ('a' + i) + "\"}"));
+    }
+    // Make one variant clearly dominant so the ordering assertion is not a tie-break.
+    lines.add(line("backend", Severity.ERROR, prefix + "a\"}"));
+    lines.add(line("backend", Severity.ERROR, prefix + "a\"}"));
+
+    LogSignature only = SignatureExtractor.group(lines).getFirst();
+
+    assertThat(only.distinctVariants()).isEqualTo(8);
+    assertThat(only.variants()).hasSize(LogSignature.MAX_VARIANTS);
+    assertThat(only.variants().getFirst().occurrences()).isEqualTo(3);
+    assertThat(only.variants().getFirst().signature()).contains("variant a");
+    assertThat(only.signature()).isEqualTo(only.variants().getFirst().signature());
   }
 }

@@ -3,6 +3,7 @@ package com.simonrowe.factory.logwatch.signature;
 import com.simonrowe.factory.logwatch.domain.LogLine;
 import com.simonrowe.factory.logwatch.domain.LogSignature;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,22 +79,39 @@ public final class SignatureExtractor {
   }
 
   /**
-   * Groups lines by signature, keeping one example and the observed time range of each group.
+   * Groups lines by the code that emitted them, keeping one example, the observed time range, and
+   * the distinct message templates seen.
    *
-   * <p>Grouping is per {@code (container, signature)}: the same normalised text from two different
-   * containers is two problems with two different places to look, and merging them would hide one
-   * inside the other. Insertion order is preserved so the result is deterministic for a given
-   * input, which matters because the caller's cap decides what is dropped.
+   * <p>Grouping is per {@code (container, severity, discriminatedSource)}.
+   *
+   * <p><strong>Container</strong>: the same fault in two containers is two places to look.
+   *
+   * <p><strong>Severity</strong>: {@code WARN slow query} and {@code ERROR slow query} are two
+   * problems, as {@code docs/runbooks/logwatch.md} records. It used to be implicit, since the
+   * level word sits inside the normalised text of most formats, and is now explicit — so a format
+   * that logs its level out of band cannot merge them by accident.
+   *
+   * <p><strong>Source</strong>: {@link SourceKeyExtractor} where it can identify the emitting
+   * code, and the normalised whole line where it cannot, prefixed to keep the two spaces disjoint.
+   * Falling back to the line is exactly the behaviour that shipped before 046, so an unrecognised
+   * format is no worse off than it was.
+   *
+   * <p>Insertion order is preserved so the result is deterministic for a given input, which
+   * matters because the caller's cap decides what is dropped.
    *
    * @param lines the severity-classified lines in the window
-   * @return one signature per distinct {@code (container, signature)} pair
+   * @return one entry per distinct {@code (container, severity, source)} triple
    */
   public static List<LogSignature> group(final List<LogLine> lines) {
     Map<String, Accumulator> byKey = new LinkedHashMap<>();
     for (LogLine line : lines) {
       String signature = normalise(line.raw());
-      String key = line.container() + "\u0000" + signature;
-      byKey.computeIfAbsent(key, ignored -> new Accumulator(signature, line)).add(line);
+      String sourceKey =
+          SourceKeyExtractor.sourceKeyOf(line.raw())
+              .map(key -> "logger:" + key)
+              .orElse("line:" + signature);
+      String key = line.container() + "\u0000" + line.severity() + "\u0000" + sourceKey;
+      byKey.computeIfAbsent(key, ignored -> new Accumulator(sourceKey, line)).add(line, signature);
     }
     List<LogSignature> grouped = new ArrayList<>(byKey.size());
     for (Accumulator accumulator : byKey.values()) {
@@ -108,27 +126,23 @@ public final class SignatureExtractor {
   /** Mutable while grouping; converted to the immutable {@link LogSignature} at the end. */
   private static final class Accumulator {
 
-    private final String signature;
+    private final String sourceKey;
     private final LogLine first;
-    private com.simonrowe.factory.logwatch.domain.Severity severity;
+    private final Map<String, VariantAccumulator> variants = new LinkedHashMap<>();
     private java.time.Instant firstSeen;
     private java.time.Instant lastSeen;
     private int occurrences;
 
-    private Accumulator(final String signature, final LogLine first) {
-      this.signature = signature;
+    private Accumulator(final String sourceKey, final LogLine first) {
+      this.sourceKey = sourceKey;
       this.first = first;
-      this.severity = first.severity();
       this.firstSeen = first.timestamp();
       this.lastSeen = first.timestamp();
     }
 
-    private void add(final LogLine line) {
+    private void add(final LogLine line, final String signature) {
       occurrences++;
-      // Severity's declaration order is most-severe-first, so the smaller ordinal wins.
-      if (line.severity().compareTo(severity) < 0) {
-        severity = line.severity();
-      }
+      variants.computeIfAbsent(signature, key -> new VariantAccumulator(key, line.raw())).count++;
       if (line.timestamp().isBefore(firstSeen)) {
         firstSeen = line.timestamp();
       }
@@ -138,8 +152,45 @@ public final class SignatureExtractor {
     }
 
     private LogSignature toSignature() {
+      // Most frequent first, ties broken on the signature text, so the list - and therefore the
+      // title, which is built from the leader - is deterministic for a given input.
+      List<LogSignature.Variant> ordered =
+          variants.values().stream()
+              .map(VariantAccumulator::toVariant)
+              .sorted(
+                  Comparator.comparingInt(LogSignature.Variant::occurrences)
+                      .reversed()
+                      .thenComparing(LogSignature.Variant::signature))
+              .toList();
+      LogSignature.Variant leader = ordered.getFirst();
       return new LogSignature(
-          signature, severity, first.container(), occurrences, firstSeen, lastSeen, first.raw());
+          leader.signature(),
+          first.severity(),
+          first.container(),
+          occurrences,
+          firstSeen,
+          lastSeen,
+          leader.exampleLine(),
+          sourceKey,
+          ordered.stream().limit(LogSignature.MAX_VARIANTS).toList(),
+          ordered.size());
+    }
+  }
+
+  /** One distinct message template, while grouping. */
+  private static final class VariantAccumulator {
+
+    private final String signature;
+    private final String exampleLine;
+    private int count;
+
+    private VariantAccumulator(final String signature, final String exampleLine) {
+      this.signature = signature;
+      this.exampleLine = exampleLine;
+    }
+
+    private LogSignature.Variant toVariant() {
+      return new LogSignature.Variant(signature, count, exampleLine);
     }
   }
 }
