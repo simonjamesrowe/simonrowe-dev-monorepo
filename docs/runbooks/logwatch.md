@@ -28,6 +28,60 @@ Deduplication, suppression and reopening are **entirely** the sink's: cancel a t
 signature goes quiet permanently; reopen it and reporting resumes. There is no logwatch-side
 state for this, deliberately — `linear_issues` is an audit trail, never the source of truth.
 
+## Grouping: what makes two lines the same problem
+
+Before 046, grouping was `(container, whole-normalised-line)`. `SignatureExtractor.normalise`
+masks timestamps, UUIDs, hex identifiers, paths, addresses and numbers, but not free text inside
+a message — so `Agent 'ContentAggregation' must have…` and `Agent 'WeeklyDigest' must have…`
+fingerprinted differently and filed two Linear tickets for one backend startup failure. Sixteen
+tickets in Triage on 2026-09-06 were roughly eleven distinct problems, most visibly
+SIM-13/SIM-24/SIM-25 (one Embabel validation failure, phrased three ways) and SIM-16/SIM-23 (one
+Alloy log-shipping failure with two different `error=` payloads).
+
+The key is now `(container, severity, discriminatedSource)`, computed by
+`SignatureExtractor.group`. Severity is part of the key rather than relying on the level word
+sitting inside the normalised text, so a format that logs its level out of band can't merge
+`WARN` and `ERROR` by accident. The source is `SourceKeyExtractor.sourceKeyOf`, which identifies
+the code that emitted the line across six formats, tried in order:
+
+1. ECS JSON — `log.logger`
+2. Temporal's zap JSON — the literal `msg` field
+3. Alloy logfmt — `component_id`
+4. Spring Boot's console layout — the logger before ` : `
+5. a bare Java exception head — the fully-qualified class name
+6. anything else — empty
+
+**An unrecognised format falls back to the normalised whole line** — `line:<normalisedLine>`
+instead of `logger:<source>` — which is exactly the pre-046 grouping behaviour, so a line
+`SourceKeyExtractor` cannot parse is no worse off than before this change. The `logger:`/`line:`
+prefix is load-bearing: without it, a source key whose text happened to equal some other line's
+normalised form would silently merge two unrelated groups.
+
+The distinct message templates within a group are carried as **variants** (`LogSignature.variants`),
+most-frequent-first, and listed in the ticket body capped at `LogSignature.MAX_VARIANTS` (5) —
+`LogSignature.distinctVariants` always reports the true, uncapped count, so a group with more
+variants than the cap shows never silently looks smaller than it is.
+
+Two deliberate limits:
+
+- **SIM-11 versus SIM-13** — one incident, two different pieces of emitting code
+  (`org.springframework.boot.SpringApplication` versus the Embabel validator) — stay two tickets.
+  A source key cannot know two loggers belong to the same incident; merging on incident would
+  need a different, much fuzzier mechanism. Pinned by a regression test in
+  `SourceKeyExtractorTest` (`oneIncidentFromTwoLoggersStaysTwoSources`), so a future
+  "improvement" that merges them fails the build instead of shipping.
+- **SIM-19 versus SIM-20** — `MailHealthIndicator` and `HealthEndpointSupport` — describe one
+  incident from two loggers and likewise stay two tickets, for the same reason. Recorded in
+  `specs/046-linear-dedup-grouping/spec.md` as deliberately not addressed, rather than pinned by
+  its own test — the mechanism is identical to SIM-11/SIM-13, so one regression test already
+  covers it.
+
+**Changing this key orphaned every pre-046 logwatch fingerprint.** The first scan after deploy
+re-files each live problem once under its new grouping, and any pre-046 cancellation of a ticket
+stopped suppressing anything — the old fingerprint it suppressed is never computed again.
+`Fingerprint.VERSION` was deliberately not bumped: that would additionally have orphaned `deploy`
+and `cvefix`, which have no duplicate-ticket problem to fix.
+
 ## The part that matters most: it knows when it cannot see
 
 **An empty read is not a clean read.** Before interpreting anything, the scan establishes that its

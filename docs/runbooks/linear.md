@@ -66,22 +66,58 @@ precedence:
 | open (`triage`/`backlog`/`unstarted`/`started`, or an unrecognised type) | `COMMENTED_EXISTING` | comment naming the occurrence — commit, time, detail |
 | `canceled` **or** `duplicate` | `SUPPRESSED` | nothing |
 | `completed` | `FILED_REGRESSION` | new issue, same fingerprint URL, linked as a regression of the completed one |
-| nothing found, or only `completed`, **and the filing is `commentOnly`** | `SKIPPED_NO_ISSUE` | nothing — never creates an issue |
+| nothing found, or only `completed`, **and the filing's mode cannot create (`STATUS_UPDATE`)** | `SKIPPED_NO_ISSUE` | nothing — never creates an issue |
 
-**`commentOnly` is a per-filing flag on `IssueFiling`, not a per-decision one.** It means: this
-occurrence is a status update about a problem the producer already knows about, not a new
-occurrence to track. Set it and the sink never creates an issue under any circumstances — the two
-decisions that would otherwise create one (`FILED_NEW`, `FILED_REGRESSION`) are both downgraded to
-`SKIPPED_NO_ISSUE` instead, logged and otherwise a no-op. `COMMENTED_EXISTING` and `SUPPRESSED` are
-untouched by the flag: an open issue still gets the comment (using the producer's
-`occurrenceDetail` verbatim, without the `Seen again: ` prefix, since a status update is not a
-recurrence), and a declined issue still stays quiet. `FiledIssue` reports no issue id, identifier
-or URL for `SKIPPED_NO_ISSUE`, on the same grounds as `SUPPRESSED`: Mongo's audit trail may still
-point at an old, unrelated issue for this fingerprint, and handing that back to the producer would
-misattribute it. The repository's [CVE report](cvefix.md) is the only current caller: its
-dirty-to-clean transition comment sets `commentOnly` so that a newly-clean repository can never
-have a fresh "current vulnerabilities" issue filed in its name. The `deploy` producer leaves the
-flag unset, and its behaviour is unchanged.
+`FilingDecider` computes exactly this table and nothing more — it is pure, I/O-free, and
+knows nothing about modes. What actually happens to a `COMMENTED_EXISTING`/`FILED_REGRESSION`
+decision is decided one layer up, in `IssueFiler`, by the producer's `FilingMode`.
+
+### Filing modes
+
+**`FilingMode` is a per-filing property of `IssueFiling`** (`mode`), replacing the earlier
+`commentOnly` boolean — one axis rather than several booleans that can contradict each other
+(`commentOnly` plus a hypothetical `refreshBody` plus a hypothetical `rolling` has no sensible
+answer for "comment only, and also rewrite the body, and also reopen").
+
+| Mode | On an open issue carrying the fingerprint | On a completed one | Used by |
+| --- | --- | --- | --- |
+| `OCCURRENCE` | add a `Seen again:` comment | file a new linked ticket | `deploy`, `review-feedback` |
+| `REFRESH` | rewrite the description to current state; post no comment | file a new linked ticket | `logwatch` |
+| `ROLLING` | rewrite the description to current state; post no comment | reopen it into Triage and rewrite its description | `cvefix` (findings report) |
+| `STATUS_UPDATE` | add the occurrence detail verbatim as a comment | do nothing | `cvefix` (clean transition) |
+
+`STATUS_UPDATE` is today's `commentOnly` under a new name, with identical behaviour: it never
+creates an issue, and its comment omits the `Seen again: ` prefix because a status update is not
+a recurrence. `FiledIssue` reports no issue id, identifier or URL for `SKIPPED_NO_ISSUE`, on the
+same grounds as `SUPPRESSED`: Mongo's audit trail may still point at an old, unrelated issue for
+this fingerprint, and handing that back to the producer would misattribute it.
+
+Rewriting a description (`REFRESH`, `ROLLING`) and reopening a completed issue (`ROLLING` only)
+are new decisions, `UPDATED_EXISTING` and `REOPENED_EXISTING`, kept distinct from
+`COMMENTED_EXISTING`/`FILED_REGRESSION` so the audit trail in `linear_issues` and the Software
+Factory console can tell "we commented" from "we rewrote the ticket" from "we reopened a closed
+ticket" — three materially different acts. `LinearGateway.updateIssue(issueId, description,
+stateId)` is what performs the rewrite (and, when a state id is given, the reopen).
+
+Three facts worth knowing before relying on any of this:
+
+- **`REFRESH` and `ROLLING` post no comment.** A problem recurring after its ticket has been
+  moved out of Triage now produces **no Linear notification at all** — nothing appears in the
+  ticket, and nothing appears anywhere else either. The occurrence history is not lost; it is
+  still in `linear_issues.decisions`, the same capped log described in
+  [Reading `linear_issues`](#reading-linear_issues) below. It is simply not surfaced.
+- **`ROLLING` reopens a completed issue into Triage**, never into whatever state it was in
+  before completion — Linear does not record that. Reopening anywhere else risks landing the
+  ticket in a state nobody is watching.
+- **Cancelling a ticket still suppresses its fingerprint in every mode.** The decline gesture —
+  `SUPPRESSED`, permanent until a human reopens the ticket — is unchanged by any of this; modes
+  only change what happens on an *open* or *completed* issue, never on a cancelled one.
+
+`cvefix` is the only producer using two different modes today: `ROLLING` for the findings
+report (so closing it once does not cause the next scan to file a second, parallel report
+beside it — that literally happened once, SIM-10 filed beside the completed SIM-9, before
+`ROLLING` existed), and `STATUS_UPDATE` for the dirty-to-clean transition comment. `deploy` and
+`review-feedback` use `OCCURRENCE`, unchanged from before this work. `logwatch` uses `REFRESH`.
 
 **Precedence is open > (canceled or duplicate) > completed.** Two things worth
 knowing before touching this table:

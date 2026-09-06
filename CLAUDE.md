@@ -211,6 +211,64 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 046-linear-dedup-grouping: The `linear` sink's deduplication was never broken — the bug was one
+  layer up. `logwatch`'s fingerprint key was `(container, whole-normalised-line)`, and
+  `SignatureExtractor.normalise` masks timestamps, UUIDs, numbers, paths and addresses but **not
+  free text inside a message**, so any varying prose forked a new fingerprint and a new Linear
+  ticket. Live on 2026-09-06: SIM-13/SIM-24/SIM-25 were one backend startup failure phrased three
+  ways (`Validation failed with 1 errors:` / `Agent 'ContentAggregation'…` /
+  `Agent 'WeeklyDigest'…`), and SIM-16/SIM-23 were one Alloy log-shipping failure with two
+  different `error=` payloads. Sixteen tickets in Triage were roughly eleven distinct problems.
+  Fixed with a new `SourceKeyExtractor`, identifying the emitting code across six log formats;
+  `SignatureExtractor.group` now keys on `(container, severity, discriminatedSource)`, and the
+  distinct message templates within a group are carried as capped, always-truthfully-counted
+  variants. Load-bearing bits:
+  - **`SourceKeyExtractor`'s Temporal handler reads the literal `msg` field, not
+    `logging-call-at`.** The latter carries a source line number, so a Temporal upgrade that
+    shifts the emitting file by one line would fork every ticket that handler files.
+  - **The `logger:`/`line:` prefix on the discriminated source key is load-bearing.** Without it,
+    a source key whose text happened to equal some other line's normalised form would silently
+    merge two unrelated groups.
+  - **FR-009**: `CveFixWorkflowImpl`'s outcome counters had to move in the same commit. It counted
+    `COMMENTED_EXISTING` to report "updated"; once `cvefix` files its findings report as `ROLLING`
+    (see below) the sink returns `UPDATED_EXISTING` instead, so the old counter would report zero
+    updates on a run that did exactly what it was asked — a correct run and a wrong number, with
+    no error anywhere. Now `updated = COMMENTED_EXISTING + UPDATED_EXISTING` and
+    `regressed = FILED_REGRESSION + REOPENED_EXISTING`.
+  - **The one-time re-file was chosen over migrating fingerprints.** Changing the key parts
+    orphaned every pre-046 logwatch fingerprint — rewriting each open ticket's attachment URL, or
+    dual-reading old and new fingerprints for a grace period, is throwaway code that has to be
+    exactly right, guarding only a one-time cost of one noisy morning. `Fingerprint.VERSION` was
+    deliberately **not** bumped: that would additionally have orphaned `deploy` and `cvefix`,
+    which have no duplicate-ticket problem to fix. The fourteen logwatch tickets (SIM-11 through
+    SIM-21, SIM-23 through SIM-25) were cancelled by hand ahead of the deploy, each with a comment
+    recording that this was a regrouping and not a decline — a cancelled ticket suppresses its
+    fingerprint under the old code, so the nightly scan stayed quiet in the interval. SIM-10
+    (`cvefix`) and SIM-22 (`review-feedback`) were deliberately left alone: their fingerprints are
+    not orphaned, so cancelling them would have been real, lasting suppression — `cvefix` would
+    have stopped reporting vulnerabilities until SIM-10 was reopened.
+  - **`IssueFiling.commentOnly` became a `FilingMode` enum**: `OCCURRENCE` (today's behaviour —
+    `deploy`, `review-feedback`), `REFRESH` (rewrite the description, post no comment —
+    `logwatch`), `ROLLING` (as `REFRESH`, plus reopen a completed issue into Triage instead of
+    filing a linked replacement — `cvefix`'s findings report, after closing it once caused the
+    next scan to file SIM-10 beside the completed SIM-9), `STATUS_UPDATE` (comment verbatim, never
+    create — `cvefix`'s clean transition, unchanged from the old `commentOnly` flag).
+    **`REFRESH` posts no comment**, so a problem recurring after its ticket has been moved out of
+    Triage now produces no Linear notification at all — the history stays in
+    `linear_issues.decisions`, just not surfaced. `FilingDecider` is unchanged and still pure; the
+    mode-to-action mapping lives one layer up, in `IssueFiler`.
+  - **The `factory:logwatch` and `factory:feedback` labels did not exist in Linear** and were
+    created by hand on 2026-09-06 — that absence is why all fourteen logwatch tickets were
+    unlabelled, and why SIM-21 was `logwatch` filing a ticket about its own missing label.
+    `LinearGateway.teamContext()` caches labels **positively for the process lifetime**, so
+    `software-factory` needs restarting before a newly created label is picked up.
+  - Two deliberate limits: SIM-11 vs SIM-13 (one incident, two loggers — a source key cannot know
+    two loggers belong to one incident) and SIM-19 vs SIM-20 (`MailHealthIndicator` and
+    `HealthEndpointSupport`, one incident, two loggers). Only the first is pinned by a regression
+    test (`SourceKeyExtractorTest`) — the mechanism is identical, so a future "improvement" that
+    merges loggers by incident fails the build regardless of which pair it targets.
+  See `docs/runbooks/logwatch.md` ("Grouping: what makes two lines the same problem") and
+  `docs/runbooks/linear.md` ("Filing modes"), plus `specs/046-linear-dedup-grouping/spec.md`.
 - 044-factory-flow-console: `/admin/software-factory` replaces its seven module cards with a
   twelve-node loop diagram, `com.simonrowe.factory.flow`. **No module gained persistence** — every
   count and drawer list is read live from Temporal visibility (`WorkflowCountsReader`,
