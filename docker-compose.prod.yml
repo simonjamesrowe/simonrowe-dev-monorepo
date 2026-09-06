@@ -510,13 +510,30 @@ services:
       # it. The absentees are absent for concrete reasons - recreating
       # dependencytrack-apiserver crash-loops it unless its KEK comes from env,
       # langfuse-clickhouse carries a pinned image and a lazy-materialisation workaround,
-      # recreating pinggy collides with its own still-live tunnel, and mongodb,
-      # elasticsearch and kafka are the data. Widening this is a config change.
+      # and mongodb, elasticsearch and kafka are the data. Widening this is a config change.
       # trivy-server is on this list from the day it was added, on purpose. It is
       # stateless (its only state is a re-downloadable DB cache in a named volume) and
       # holds no credential, so recreating it is safe - and leaving it off would make the
       # very merge that introduces it decline as `held-back`, which is the
       # self-perpetuating wedge that froze the deploy directory from #130 to #136.
+      # pinggy is DELIBERATELY NOT on this list, and the "recreating pinggy collides with
+      # its own still-live tunnel" caution above is kept because nobody has disproved it.
+      # It is tempting to add it: `sysctls:` applies at container *creation*, not on
+      # `docker compose restart`, so the IPv6 fix below only takes effect when something
+      # recreates pinggy. But pinggy is the single point of ingress for every public
+      # hostname, and one PINGGY_TOKEN admits one active tunnel (see the `+force` note in
+      # CLAUDE.md). If a recreate can ever race its own outgoing session, putting pinggy
+      # here converts a manual step into an unattended, automated outage of the whole site.
+      #
+      # The asymmetry decides it: leaving pinggy off costs one manual
+      # `docker compose -f docker-compose.prod.yml up -d pinggy` after this merges - which
+      # this change needs anyway, because the allowlist is read from the RUNNING deployer
+      # ("A decline does not clear itself", docs/runbooks/deploy.md) and so would not have
+      # applied to this deploy regardless. Adding it risks the site.
+      #
+      # To settle it properly: recreate pinggy by hand while watching its log for
+      # "A tunnel with the same token is already active". If a clean recreate reconnects,
+      # add pinggy here and cite that observation.
       FACTORY_DEPLOY_RECREATABLE: ${FACTORY_DEPLOY_RECREATABLE:-backend,frontend,software-factory,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend,trivy-server}
       # All three are the HOST path, not a container-private one, and the mount below puts
       # the deploy directory at that same path inside this container. See the volume for
@@ -892,6 +909,33 @@ services:
   pinggy:
     image: pinggy/pinggy
     restart: unless-stopped
+    # Outage 2026-09-06: a.pinggy.io resolves an IPv6 address first
+    # (2a01:7e01::f03c:95ff:fefb:3443) and this host has no IPv6 default route -
+    # `ip -6 route` shows only `fe80::/64` link-local, and `curl -6` to any IPv6
+    # target fails outright. pinggy dialled it anyway, got
+    # `Error: Tunnel disconnected before establishment: Could not connect:
+    # Resource temporarily unavailable` (EAGAIN) on every attempt, and retried
+    # forever (645 failed connects, 47,420 "Reconnecting" log lines over ~4
+    # hours) while every public hostname - www, api, console, langfuse,
+    # temporal, dependency-track, all behind this one tunnel - was dark. A raw
+    # TCP connect to the same edge on IPv4 port 443 succeeded immediately, and a
+    # plain `docker restart pinggy` (forcing fresh DNS resolution, which then
+    # happened to pick IPv4) brought the whole site back with no other change.
+    #
+    # Disabling IPv6 in this container's network namespace removes AAAA from
+    # what `getaddrinfo` can return under `AI_ADDRCONFIG` (the default for a
+    # client with no local IPv6 configured), so pinggy's own resolver should
+    # only ever see the IPv4 address and dial that.
+    #
+    # Honesty check: this is verified reasoning, not a fix proven in
+    # production. The 2026-09-06 outage was cleared by a restart before this
+    # sysctl existed, so nobody has watched IPv6 come back and get refused by
+    # this setting - only watched a plain restart pick IPv4 by luck of
+    # re-resolving. If a.pinggy.io's IPv6 route ever becomes reachable from
+    # this host (e.g. an eventual IPv6 default route), the reasoning above no
+    # longer holds and this should be revisited rather than assumed correct.
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
     command:
       - --token
       - ${PINGGY_TOKEN}
@@ -901,6 +945,15 @@ services:
       nginx:
         condition: service_healthy
     healthcheck:
+      # Cannot see a dead tunnel: this only proves PID 1 exists. A hung/looping
+      # pinggy process (see the 2026-09-06 outage above) reports `healthy`
+      # forever. A real replacement probe was deliberately not written here -
+      # there is no way to verify one against the pinggy/pinggy image from this
+      # workspace, and a guessed healthcheck that fails permanently would be
+      # worse than none (Docker never restarts an `unhealthy` container either -
+      # see docs/runbooks/prod-monitoring.md). `monitor-prod.sh` layer 1 is the
+      # detector instead: it restarts pinggy whenever the public site check
+      # fails, regardless of what this healthcheck reports.
       test: ["CMD-SHELL", "kill -0 1"]
       interval: 10s
       timeout: 5s

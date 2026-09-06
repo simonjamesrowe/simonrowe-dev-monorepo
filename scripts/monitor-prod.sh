@@ -6,7 +6,8 @@ set -euo pipefail
 #
 # It runs three independent layers, cheapest first:
 #
-#   1. SITE   - the public site is reachable. If not, reconcile the whole stack.
+#   1. SITE   - the public site is reachable. If not, restart pinggy (every public
+#               hostname is behind that one tunnel) and reconcile the whole stack.
 #   2. HEALTH - every container reports a healthy/running Docker state. If a
 #               container is `unhealthy`, restart just that container.
 #   3. ENDPOINT - each public hostname actually serves. If one is down while the
@@ -22,6 +23,13 @@ set -euo pipefail
 # Dependency-Track was 502ing for 10 days with nobody notified. Layer 3 is the
 # backstop for the same class of failure in a service whose healthcheck is
 # passing but which is not actually serving through nginx.
+#
+# Layer 1's pinggy restart exists for the identical reason, one container over:
+# on 2026-09-06 pinggy dialled an IPv6 route the Pi does not have, got EAGAIN and
+# retried forever while reporting `healthy` (its healthcheck, `kill -0 1`, only
+# proves PID 1 exists). `docker compose up -d` does not touch a container that is
+# already `Up`, so the whole-stack reconcile alone ran unremediated for 4 hours.
+# See the layer-1 code below for the full account.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -311,11 +319,40 @@ if [[ "$site_up" == false ]]; then
     exit 1
   fi
 
-  # Reconcile the whole stack rather than just bouncing pinggy: an interrupted
+  # Restart pinggy FIRST, before the whole-stack reconcile below. Every public
+  # hostname (www, api, console, langfuse, temporal, dependency-track) is behind
+  # the tunnel, so "the site is unreachable" is at least as likely to be an
+  # ingress fault as a container fault - and `docker compose up -d` is
+  # structurally incapable of fixing a container that is already `Up`: it only
+  # starts non-running containers, in dependency order, which is a no-op for a
+  # tunnel client that is running and simply stuck.
+  #
+  # This is not hypothetical - it is exactly what took the whole site down for
+  # ~4 hours on 2026-09-06. pinggy's DNS (`a.pinggy.io`) returns an IPv6 address
+  # first, the Pi has no IPv6 default route (only `fe80::/64` link-local), and
+  # dialling it failed with `EAGAIN` ("Resource temporarily unavailable") and
+  # retried forever - 645 failed connects and 47,420 reconnect attempts logged.
+  # Throughout, `docker compose ps` reported pinggy `Up (healthy)`, because its
+  # healthcheck is `kill -0 1`: it proves PID 1 exists and nothing about whether
+  # the tunnel behind it is alive. This watchdog correctly detected the outage
+  # every single minute for 4 hours and could not fix it, because the only
+  # remediation this layer ran was the `up -d` below - a plain `docker restart`
+  # is what actually cleared it, by forcing a fresh DNS resolution that happened
+  # to pick IPv4.
+  #
+  # `svc_restart` is reused (rather than a bare `docker compose restart pinggy`)
+  # so this inherits pinggy's own per-service failure counter, its backoff
+  # window, and the run_cmd/DRY_RUN plumbing - so a pinggy restart that does not
+  # hold cannot turn into a restart-every-tick loop.
+  svc_restart "pinggy" "site unreachable ($failure_count consecutive failures)" || true
+
+  # Also reconcile the whole stack, unconditionally: an interrupted
   # `docker compose up` can leave nginx/frontend/backend/pinggy stuck in `Created`
   # (never started), which a plain `restart` cannot fix since there is no running
   # process to restart. `up -d` starts any non-running container, in dependency
-  # order, and is a no-op for services that are already healthy.
+  # order, and is a no-op for services that are already healthy - which is
+  # exactly the pinggy shape above, and why that gets its own restart rather
+  # than relying on this step to cover it too.
   log "ERROR" "Reconciling compose stack ($failure_count consecutive failures)"
   if run_cmd docker compose -f "$COMPOSE_FILE" up -d; then
     # nginx now defers upstream DNS resolution to request time (see the resolver
