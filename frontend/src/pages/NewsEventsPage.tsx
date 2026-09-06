@@ -416,7 +416,7 @@ export function NewsEventsPage() {
   return (
     <div className="feed tour-news-events">
       {/* View modes, kept apart from sources so "Events" doesn't read as a publisher. */}
-      <div className="feed__modes">
+      <div className="feed__modes tour-news-filters">
         {allEvents.length > 0 && (
           <button
             className={`feed__pill feed__pill--events${sourceFilter === 'events' ? ' feed__pill--active' : ''}`}

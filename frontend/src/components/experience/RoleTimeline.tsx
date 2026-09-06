@@ -101,7 +101,7 @@ export function RoleTimeline({ onJobClick }: RoleTimelineProps) {
         const cardContent = (
           <div className="role-timeline__card-wrap">
             <div
-              className="role-timeline__card"
+              className={`role-timeline__card${index === 0 ? ' tour-experience-highlight' : ''}`}
               role="button"
               tabIndex={0}
               onClick={() => onJobClick?.(job.id)}

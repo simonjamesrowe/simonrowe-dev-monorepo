@@ -65,7 +65,15 @@ export function McpPage({ client }: McpPageProps) {
 
       <ConnectInstructions />
 
-      <section className="mcp-page__tools" aria-labelledby="mcp-tools-heading">
+      {/*
+        The tour anchor waits for the tools to arrive. Tagging the section while it is still
+        connecting would spotlight a loading indicator and then leave the highlight sized to
+        it as the real cards push the section open.
+      */}
+      <section
+        aria-labelledby="mcp-tools-heading"
+        className={`mcp-page__tools${loading ? '' : ' tour-mcp-tools'}`}
+      >
         <h2 className="mcp-page__section-title" id="mcp-tools-heading">
           Available tools
         </h2>

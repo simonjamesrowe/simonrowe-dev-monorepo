@@ -39,21 +39,10 @@ public class TourStepSeeder implements ApplicationRunner {
           .findByLegacyId(defaultStep.legacyId())
           .or(() -> tourStepRepository.findByOrder(defaultStep.order()));
 
-      TourStep step = new TourStep(
-          existing.map(TourStep::id).orElse(null),
-          defaultStep.title(),
-          defaultStep.selector(),
-          defaultStep.description(),
-          defaultStep.titleImage(),
-          defaultStep.position(),
-          defaultStep.order(),
-          existing.map(TourStep::createdAt).orElse(timestamp),
-          timestamp,
-          defaultStep.legacyId(),
-          defaultStep.route()
-      );
-      tourStepRepository.save(step);
-      saved++;
+      if (existing.isEmpty()) {
+        tourStepRepository.save(defaultStep);
+        saved++;
+      }
     }
 
     return saved;
@@ -63,82 +52,118 @@ public class TourStepSeeder implements ApplicationRunner {
     return List.of(
         defaultTourStep(
             "default-home-chat",
-            "Start with the AI chat",
+            "Ask Simon anything",
             ".tour-home-chat",
-            "Ask about Simon's work, leadership, stack, and career history.",
+            "Ask about a platform decision, leadership challenge, or career chapter. "
+                + "Answers are grounded in the work across this site.",
             "bottom",
             1,
             "/",
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-site-search",
-            "Search the site",
+            "Search the evidence",
             ".tour-search",
-            "Search content or turn a search into an AI question.",
+            "Search posts, projects, and appearances — then turn a result into a "
+                + "deeper question.",
             "bottom",
             2,
             "/",
+            null,
             timestamp
         ),
         defaultTourStep(
-            "default-ask-ai",
-            "Ask AI from anywhere",
-            ".top-nav__ask-ai",
-            "Open the assistant from the navigation bar on any public page.",
+            "default-home-currently",
+            "The work happening now",
+            ".tour-currently",
+            "Start with Simon's current remit, the teams he leads, and the transformation "
+                + "underway.",
             "bottom",
             3,
             "/",
+            null,
+            timestamp
+        ),
+        defaultTourStep(
+            "default-home-writing",
+            "Writing from the workbench",
+            ".tour-featured-writing",
+            "Explore practical thinking on AI-native delivery, platform engineering, "
+                + "and technical leadership.",
+            "top",
+            4,
+            "/",
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-profile",
-            "Read the profile",
-            ".tour-profile",
-            "Explore Simon's biography, background, and professional summary.",
+            "The story behind the work",
+            ".tour-about",
+            "See the path from hands-on engineering to leading teams through complex change.",
             "bottom",
-            4,
-            "/profile",
-            timestamp
-        ),
-        defaultTourStep(
-            "default-contact",
-            "Get in touch",
-            ".tour-contact",
-            "Use the Profile page contact section to send a message.",
-            "top",
             5,
-            "/profile#contact",
+            "/profile",
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-experience",
-            "Explore experience",
-            ".tour-experience",
-            "Review roles, teams, systems, and delivery experience.",
+            "Trace the systems and outcomes",
+            ".tour-experience-highlight",
+            "Follow the roles, teams, systems, and delivery outcomes that shaped the work.",
             "top",
             6,
             "/experience",
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-blogs",
-            "Read the blog",
+            "Go from topic to evidence",
             ".tour-blogs",
-            "Browse writing about engineering, AI, architecture, and delivery.",
-            "top",
+            "Filter the writing by the engineering questions you want to investigate.",
+            "bottom",
             7,
             "/blogs",
+            null,
             timestamp
         ),
         defaultTourStep(
             "default-news-events",
-            "Find news and events",
+            "See the wider conversation",
             ".tour-news-events",
-            "See recent appearances, articles, meetups, and events.",
+            "Find recent appearances, articles, meetups, and events beyond the blog.",
             "top",
             8,
             "/news-events",
+            null,
+            timestamp
+        ),
+        defaultTourStep(
+            "default-mcp-tools",
+            "Plug your own agent in",
+            ".tour-mcp-tools",
+            "This site is also a Model Context Protocol server. These are the tools it "
+                + "exposes — run them here, or connect your own agent and call them directly.",
+            "top",
+            9,
+            "/mcp",
+            null,
+            timestamp
+        ),
+        defaultTourStep(
+            "default-platform-status",
+            "A portfolio that runs in public",
+            ".tour-status-running",
+            "Finish with the live platform view: what is running, what shipped, and the "
+                + "build serving this site right now.",
+            "bottom",
+            10,
+            "/status",
+            null,
             timestamp
         )
     );
@@ -152,6 +177,7 @@ public class TourStepSeeder implements ApplicationRunner {
       final String position,
       final int order,
       final String route,
+      final Integer autoAdvanceMs,
       final Instant timestamp
   ) {
     return new TourStep(
@@ -165,7 +191,8 @@ public class TourStepSeeder implements ApplicationRunner {
         timestamp,
         timestamp,
         legacyId,
-        route
+        route,
+        autoAdvanceMs
     );
   }
 }

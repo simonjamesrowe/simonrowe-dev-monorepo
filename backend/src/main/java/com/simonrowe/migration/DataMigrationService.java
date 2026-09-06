@@ -519,7 +519,8 @@ public class DataMigrationService implements ApplicationRunner {
             toInstant(doc.get("createdAt")),
             toInstant(doc.get("updatedAt")),
             legacyId,
-            getString(doc, "route")
+            getString(doc, "route"),
+            getNullableInt(doc, "autoAdvanceMs")
         );
         tourStepRepository.save(updated);
       } else {
@@ -534,7 +535,8 @@ public class DataMigrationService implements ApplicationRunner {
             toInstant(doc.get("createdAt")),
             toInstant(doc.get("updatedAt")),
             legacyId,
-            getString(doc, "route")
+            getString(doc, "route"),
+            getNullableInt(doc, "autoAdvanceMs")
         );
         tourStepRepository.save(step);
       }
@@ -655,6 +657,11 @@ public class DataMigrationService implements ApplicationRunner {
       }
     }
     return 0;
+  }
+
+  private Integer getNullableInt(final Document doc, final String key) {
+    Object value = doc.get(key);
+    return value instanceof Number number ? number.intValue() : null;
   }
 
   private boolean getBoolean(final Document doc, final String key) {

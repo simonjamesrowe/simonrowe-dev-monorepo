@@ -1,79 +1,52 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
 
 import { useTour } from '../../hooks/useTour'
-
-interface Position {
-  top: number
-  left: number
-}
-
-const GAP = 12
-const EDGE_PADDING = 16
-const DEFAULT_AUTO_ADVANCE_MS = 7000
-
-function calculatePosition(
-  element: Element,
-  tooltip: HTMLElement,
-  placement: string
-): Position {
-  const rect = element.getBoundingClientRect()
-  const tooltipRect = tooltip.getBoundingClientRect()
-  const viewportWidth = window.innerWidth
-  const viewportHeight = window.innerHeight
-
-  let top: number
-  let left: number
-
-  switch (placement) {
-    case 'top':
-      top = rect.top - tooltipRect.height - GAP
-      left = rect.left + (rect.width - tooltipRect.width) / 2
-      break
-    case 'bottom':
-      top = rect.bottom + GAP
-      left = rect.left + (rect.width - tooltipRect.width) / 2
-      break
-    case 'left':
-      top = rect.top + (rect.height - tooltipRect.height) / 2
-      left = rect.left - tooltipRect.width - GAP
-      break
-    case 'right':
-      top = rect.top + (rect.height - tooltipRect.height) / 2
-      left = rect.right + GAP
-      break
-    case 'center':
-      top = rect.top + (rect.height - tooltipRect.height) / 2
-      left = rect.left + (rect.width - tooltipRect.width) / 2
-      break
-    default:
-      top = rect.bottom + GAP
-      left = rect.left + (rect.width - tooltipRect.width) / 2
-  }
-
-  // Viewport boundary clamping
-  left = Math.max(EDGE_PADDING, Math.min(left, viewportWidth - tooltipRect.width - EDGE_PADDING))
-  top = Math.max(EDGE_PADDING, Math.min(top, viewportHeight - tooltipRect.height - EDGE_PADDING))
-
-  return { top, left }
-}
+import { calculatePosition, type Position } from './tourTooltipPosition'
 
 export function TourTooltip() {
-  const { steps, currentStepIndex, next, prev, exit, autoAdvancePaused, pauseAutoAdvance, resumeAutoAdvance } = useTour()
+  const {
+    steps,
+    currentStepIndex,
+    next,
+    prev,
+    exit,
+    autoAdvancePaused,
+    targetReady,
+    targetStalled,
+    narrationSpeaking,
+    narrationAvailable,
+    narrationMuted,
+    toggleNarrationMuted,
+    autoplayPaused,
+    toggleAutoplay,
+    advanceCountdownMs,
+    pauseAutoAdvance,
+    resumeAutoAdvance,
+  } = useTour()
   const tooltipRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState<Position>({ top: 0, left: 0 })
 
   const currentStep = steps[currentStepIndex]
   const isFirstStep = currentStepIndex === 0
   const isLastStep = currentStepIndex === steps.length - 1
-  const autoAdvanceMs = currentStep?.autoAdvanceMs ?? DEFAULT_AUTO_ADVANCE_MS
+  // The bar reflects the pause actually scheduled, which is only known once the step has
+  // finished presenting itself — so it appears as a cue that the tour is about to move on,
+  // rather than running as a deadline the whole time the step is open.
+  const isAdvancing = advanceCountdownMs != null && advanceCountdownMs > 0
+  // While a step waits for its target it shows a holding message rather than a wrong
+  // spotlight. Once the wait is clearly abnormal the controls come back so the visitor
+  // can move on, but the step never pretends the target arrived.
+  const isPreparing = targetReady === false
+  const isStalled = isPreparing && targetStalled
 
   const updatePosition = useCallback(() => {
     if (!currentStep || !tooltipRef.current) {
       return
     }
 
-    const element = document.querySelector(currentStep.targetSelector)
+    const element = targetReady ? document.querySelector(currentStep.targetSelector) : null
     if (element) {
       setPosition(calculatePosition(element, tooltipRef.current, currentStep.position))
     } else {
@@ -84,17 +57,21 @@ export function TourTooltip() {
         left: (window.innerWidth - tooltipRect.width) / 2,
       })
     }
-  }, [currentStep])
+  }, [currentStep, targetReady])
 
   useEffect(() => {
     // Allow DOM updates to settle before positioning
     const timer = requestAnimationFrame(updatePosition)
     return () => cancelAnimationFrame(timer)
-  }, [updatePosition])
+  }, [updatePosition, targetReady])
 
   useEffect(() => {
     window.addEventListener('resize', updatePosition)
-    return () => window.removeEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
   }, [updatePosition])
 
   if (!currentStep) {
@@ -118,17 +95,49 @@ export function TourTooltip() {
             src={currentStep.titleImage}
           />
         )}
-        <h3 className="tour-tooltip__title">{currentStep.title}</h3>
+        <h3 className="tour-tooltip__title">
+          {isStalled
+            ? 'Still preparing this view'
+            : isPreparing
+              ? 'Preparing this view'
+              : currentStep.title}
+        </h3>
       </div>
       <div className="tour-tooltip__body">
-        <ReactMarkdown>{currentStep.description}</ReactMarkdown>
+        <ReactMarkdown>
+          {isStalled
+            ? `${currentStep.title} is taking longer than usual to load. You can move on and come back to it.`
+            : isPreparing
+              ? `Opening ${currentStep.title}…`
+              : currentStep.description}
+        </ReactMarkdown>
       </div>
       <div className="tour-tooltip__footer">
         <span className="tour-tooltip__progress">
           Step {currentStepIndex + 1} of {steps.length}
         </span>
         <div className="tour-tooltip__actions">
-          {!isFirstStep && (
+          <button
+            aria-label={autoplayPaused ? 'Play the tour automatically' : 'Stop the tour advancing'}
+            aria-pressed={!autoplayPaused}
+            className="tour-tooltip__toggle tour-tooltip__toggle--first"
+            onClick={toggleAutoplay}
+            type="button"
+          >
+            {autoplayPaused ? <Play size={16} /> : <Pause size={16} />}
+          </button>
+          {narrationAvailable && (
+            <button
+              aria-label={narrationMuted ? 'Turn on tour narration' : 'Turn off tour narration'}
+              aria-pressed={!narrationMuted}
+              className={`tour-tooltip__toggle${narrationSpeaking ? ' tour-tooltip__toggle--speaking' : ''}`}
+              onClick={toggleNarrationMuted}
+              type="button"
+            >
+              {narrationMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+          )}
+          {(!isPreparing || isStalled) && !isFirstStep && (
             <button
               className="tour-tooltip__btn tour-tooltip__btn--secondary"
               onClick={prev}
@@ -144,20 +153,24 @@ export function TourTooltip() {
           >
             Exit
           </button>
-          <button
-            className="tour-tooltip__btn tour-tooltip__btn--primary"
-            onClick={isLastStep ? exit : next}
-            type="button"
-          >
-            {isLastStep ? 'Finish' : 'Next'}
-          </button>
+          {(!isPreparing || isStalled) && (
+            <button
+              className="tour-tooltip__btn tour-tooltip__btn--primary"
+              onClick={isLastStep ? exit : next}
+              type="button"
+            >
+              {isLastStep ? 'Finish' : 'Next'}
+            </button>
+          )}
         </div>
       </div>
-      <div
-        className={`tour-tooltip__progress-bar${autoAdvancePaused ? ' tour-tooltip__progress-bar--paused' : ''}`}
-        key={currentStepIndex}
-        style={{ '--auto-advance-duration': `${autoAdvanceMs}ms` } as React.CSSProperties}
-      />
+      {!isPreparing && isAdvancing && (
+        <div
+          className={`tour-tooltip__progress-bar${autoAdvancePaused ? ' tour-tooltip__progress-bar--paused' : ''}`}
+          key={`${currentStepIndex}-${advanceCountdownMs}`}
+          style={{ '--auto-advance-duration': `${advanceCountdownMs}ms` } as React.CSSProperties}
+        />
+      )}
     </div>
   )
 }

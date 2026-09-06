@@ -5,8 +5,20 @@
  * single narration endpoint. These describe what the player holds.
  */
 
-/** The two kinds of content that can have narration audio today. */
+/** The two kinds of content the docked player and its generation chain handle. */
 export type NarrationAudioContentType = 'BLOG' | 'ARTICLE_SUMMARY'
+
+/**
+ * What the bulk `GET /api/narrations/ready` read accepts.
+ *
+ * Wider than `NarrationAudioContentType` on purpose. Guided-tour steps have ready audio but no
+ * per-item status endpoint and no client-driven generation chain — they are rendered server-side
+ * by `TourNarrationSweep`, because a public POST that triggers text-to-speech would expose the
+ * shared monthly budget. Widening `NarrationAudioContentType` instead would let `TOUR_STEP` reach
+ * `fetchNarrationStatus`, whose two-way branch would silently request it from the news summary
+ * path.
+ */
+export type ReadyNarrationContentType = NarrationAudioContentType | 'TOUR_STEP'
 
 /**
  * One item that is playable right now, as `GET /api/narrations/ready` returns it.

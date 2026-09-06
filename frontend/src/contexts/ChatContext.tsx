@@ -6,11 +6,13 @@ interface ChatContextValue {
   chatQuery: string | null
   recaptchaVerified: boolean
   showRecaptcha: boolean
+  tourChatAwaitingResponse: boolean
   openChat: (query?: string) => void
   closeChat: () => void
   handleRecaptchaVerified: () => void
   cancelRecaptcha: () => void
   openChatBypassRecaptcha: (query?: string) => void
+  completeTourChatResponse: () => void
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -20,6 +22,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [chatQuery, setChatQuery] = useState<string | null>(null)
   const [recaptchaVerified, setRecaptchaVerified] = useState(false)
   const [showRecaptcha, setShowRecaptcha] = useState(false)
+  const [tourChatAwaitingResponse, setTourChatAwaitingResponse] = useState(false)
 
   const openChat = useCallback((query?: string) => {
     setChatQuery(query ?? null)
@@ -33,6 +36,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const closeChat = useCallback(() => {
     setChatOpen(false)
     setChatQuery(null)
+    setTourChatAwaitingResponse(false)
   }, [])
 
   const handleRecaptchaVerified = useCallback(() => {
@@ -44,6 +48,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const cancelRecaptcha = useCallback(() => {
     setShowRecaptcha(false)
     setChatQuery(null)
+    setTourChatAwaitingResponse(false)
   }, [])
 
   /** Opens chat bypassing reCAPTCHA — for use by the site tour only */
@@ -52,6 +57,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setShowRecaptcha(false)
     setChatQuery(query ?? null)
     setChatOpen(true)
+    setTourChatAwaitingResponse(true)
+  }, [])
+
+  const completeTourChatResponse = useCallback(() => {
+    setTourChatAwaitingResponse(false)
   }, [])
 
   return (
@@ -60,11 +70,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       chatQuery,
       recaptchaVerified,
       showRecaptcha,
+      tourChatAwaitingResponse,
       openChat,
       closeChat,
       handleRecaptchaVerified,
       cancelRecaptcha,
       openChatBypassRecaptcha,
+      completeTourChatResponse,
     }}>
       {children}
     </ChatContext.Provider>

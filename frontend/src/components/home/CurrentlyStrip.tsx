@@ -37,7 +37,7 @@ export function CurrentlyStrip({ jobs }: CurrentlyStripProps) {
   const summary = currentJob.shortDescription?.trim()
 
   return (
-    <section className="currently-strip" aria-labelledby="currently-strip-heading">
+    <section className="currently-strip tour-currently" aria-labelledby="currently-strip-heading">
       <div className="currently-strip__inner">
         <h2 className="currently-strip__heading" id="currently-strip-heading">
           Currently

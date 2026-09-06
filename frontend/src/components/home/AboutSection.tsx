@@ -37,7 +37,7 @@ export function AboutSection({ profile, onContact }: AboutSectionProps) {
           />
         </div>
         <div className="about-section__text-panel">
-          <h2 className="about-section__heading headline-lg">
+          <h2 className="about-section__heading headline-lg tour-profile-heading">
             About <span className="about-section__accent">{profile.firstName}</span>
           </h2>
           <div className="about-section__description body-lg">

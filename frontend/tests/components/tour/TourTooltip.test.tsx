@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TourTooltip } from '../../../src/components/tour/TourTooltip'
+import { calculatePosition } from '../../../src/components/tour/tourTooltipPosition'
 import type { TourStep } from '../../../src/types/tour'
 
 const mockNext = vi.fn()
@@ -49,6 +50,32 @@ describe('TourTooltip', () => {
     mockNext.mockReset()
     mockPrev.mockReset()
     mockExit.mockReset()
+  })
+
+  it('flips a bottom tooltip above its target when it would leave the viewport', () => {
+    const element = document.createElement('div')
+    const tooltip = document.createElement('div')
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 500 })
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 })
+    vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(300, 440, 100, 40),
+    )
+    vi.spyOn(tooltip, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 240, 120),
+    )
+
+    expect(calculatePosition(element, tooltip, 'bottom')).toEqual({ top: 308, left: 230 })
+  })
+
+  it('keeps a centred tooltip inside viewport edges', () => {
+    const element = document.createElement('div')
+    const tooltip = document.createElement('div')
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 400 })
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 })
+    vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 40, 40))
+    vi.spyOn(tooltip, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 220, 160))
+
+    expect(calculatePosition(element, tooltip, 'center')).toEqual({ top: 16, left: 16 })
   })
 
   it('renders tooltip with title and description', () => {
@@ -104,6 +131,66 @@ describe('TourTooltip', () => {
     render(<TourTooltip />)
 
     expect(screen.getByText('Step 2 of 3')).toBeInTheDocument()
+  })
+
+  it('does not show an autoplay progress bar for a manual step', () => {
+    mockUseTour.mockReturnValue({
+      steps: [stepOne],
+      currentStepIndex: 0,
+      next: mockNext,
+      prev: mockPrev,
+      exit: mockExit,
+      targetReady: true,
+      pauseAutoAdvance: vi.fn(),
+      resumeAutoAdvance: vi.fn(),
+    })
+
+    const { container } = render(<TourTooltip />)
+
+    expect(container.querySelector('.tour-tooltip__progress-bar')).toBeNull()
+  })
+
+  it('keeps the visitor informed while a route target is still loading', () => {
+    mockUseTour.mockReturnValue({
+      steps: [stepOne],
+      currentStepIndex: 0,
+      next: mockNext,
+      prev: mockPrev,
+      exit: mockExit,
+      targetReady: false,
+      pauseAutoAdvance: vi.fn(),
+      resumeAutoAdvance: vi.fn(),
+    })
+
+    render(<TourTooltip />)
+
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Preparing this view')
+    expect(screen.getByText('Opening About Section…')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exit' })).toBeInTheDocument()
+  })
+
+  it('lets the visitor move on when a target never arrives', () => {
+    mockUseTour.mockReturnValue({
+      steps: [stepOne, stepTwo, stepThree],
+      currentStepIndex: 1,
+      next: mockNext,
+      prev: mockPrev,
+      exit: mockExit,
+      targetReady: false,
+      targetStalled: true,
+      pauseAutoAdvance: vi.fn(),
+      resumeAutoAdvance: vi.fn(),
+    })
+
+    const { container } = render(<TourTooltip />)
+
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Still preparing this view')
+    expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exit' })).toBeInTheDocument()
+    // A stalled step must never start a countdown it cannot honour.
+    expect(container.querySelector('.tour-tooltip__progress-bar')).toBeNull()
   })
 
   it('hides the Previous button on the first step', () => {
