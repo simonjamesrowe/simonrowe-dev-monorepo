@@ -217,9 +217,15 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
         linear.fileIssue(
             new IssueFiling(
                 PRODUCER,
-                // The signature, never the generated title: the same problem phrased differently
-                // on two runs would otherwise file twice. Fingerprint's javadoc records this.
-                List.of(signature.container(), signature.signature()),
+                // The source key, never the generated title and — since 046 — never the whole
+                // normalised line either. Both are phrasings of the problem, and a phrasing that
+                // varies files a second ticket: three phrasings from one Embabel logger became
+                // SIM-13, SIM-24 and SIM-25 for one startup failure. Severity is explicit here
+                // rather than left implicit inside the message text.
+                List.of(
+                    signature.container(),
+                    signature.severity().name(),
+                    signature.sourceKey()),
                 LogWatchReportRenderer.title(signature),
                 LogWatchReportRenderer.body(signature, from, to),
                 LogWatchReportRenderer.occurrenceDetail(signature, runId),

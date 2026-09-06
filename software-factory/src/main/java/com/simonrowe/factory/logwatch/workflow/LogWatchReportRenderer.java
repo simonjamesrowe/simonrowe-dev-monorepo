@@ -25,10 +25,35 @@ public final class LogWatchReportRenderer {
    * Title for one signature's issue.
    *
    * @param signature the grouped problem
-   * @return a one-line title naming the container and the severity
+   * @return a one-line title naming the container, the severity and the emitting source
    */
   public static String title(final LogSignature signature) {
-    return signature.severity() + " in " + signature.container() + ": " + summarise(signature);
+    String source = shortSource(signature);
+    String where =
+        source == null ? signature.container() : signature.container() + " (" + source + ")";
+    return signature.severity() + " in " + where + ": " + summarise(signature);
+  }
+
+  /**
+   * The readable form of the group's source, for a title.
+   *
+   * @param signature the grouped problem
+   * @return the last dot-separated segment of the emitting source, or null when the group is
+   *     keyed on its normalised line because no source could be identified
+   */
+  public static String shortSource(final LogSignature signature) {
+    String key = signature.sourceKey();
+    if (key == null || !key.startsWith("logger:")) {
+      return null;
+    }
+    String source = key.substring("logger:".length());
+    int lastDot = source.lastIndexOf('.');
+    // A Temporal msg is a sentence and often ends in a full stop, so abbreviating at the last dot
+    // would leave nothing. Only abbreviate something that looks like a dotted identifier.
+    if (lastDot < 0 || lastDot == source.length() - 1 || source.contains(" ")) {
+      return source;
+    }
+    return source.substring(lastDot + 1);
   }
 
   /**
@@ -46,18 +71,19 @@ public final class LogWatchReportRenderer {
 
         Window scanned: %s to %s.
 
+        Emitted by (this is what deduplicates the issue):
+
+        ```
+        %s
+        ```
+
         Example line:
 
         ```
         %s
         ```
 
-        Normalised signature (what deduplicates this issue):
-
-        ```
-        %s
-        ```
-        """
+        %s"""
         .formatted(
             signature.severity(),
             signature.container(),
@@ -66,8 +92,36 @@ public final class LogWatchReportRenderer {
             signature.lastSeen(),
             windowStart,
             windowEnd,
+            signature.sourceKey(),
             signature.exampleLine(),
-            signature.signature());
+            variantsSection(signature));
+  }
+
+  /**
+   * The distinct message templates in the group.
+   *
+   * <p>This is what keeps grouping by emitting code honest. One logger can emit two genuinely
+   * different faults, and without this the coarser key would hide the second inside the first.
+   *
+   * @param signature the grouped problem
+   * @return a Markdown section, always non-empty
+   */
+  private static String variantsSection(final LogSignature signature) {
+    StringBuilder section = new StringBuilder("Distinct messages seen (");
+    section.append(signature.distinctVariants()).append(" in total):\n\n");
+    for (LogSignature.Variant variant : signature.variants()) {
+      section
+          .append("* **")
+          .append(variant.occurrences())
+          .append("x** `")
+          .append(variant.signature())
+          .append("`\n");
+    }
+    int withheld = signature.distinctVariants() - signature.variants().size();
+    if (withheld > 0) {
+      section.append("\nand ").append(withheld).append(" further variant(s) not listed.\n");
+    }
+    return section.toString();
   }
 
   /**
