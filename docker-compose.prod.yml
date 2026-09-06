@@ -516,26 +516,25 @@ services:
       # holds no credential, so recreating it is safe - and leaving it off would make the
       # very merge that introduces it decline as `held-back`, which is the
       # self-perpetuating wedge that froze the deploy directory from #130 to #136.
-      # pinggy is on this list for the identical reason, added the day the
-      # `net.ipv6.conf.all.disable_ipv6` sysctl below was added: `sysctls:` is applied at
-      # container *creation*, not by `docker compose restart`, so without pinggy here that
-      # very fix would sit inert in the compose file forever, applying only if something
-      # recreates pinggy for an unrelated reason. It used to read "recreating pinggy
-      # collides with its own still-live tunnel" - untrue in the way that mattered: a
-      # `restart` (which monitor-prod.sh's watchdog already does, see docs/runbooks/
-      # prod-monitoring.md) forces the client to redial and re-resolve DNS, which is
-      # exactly the recovery this whole change relies on, and a `recreate` behaves the
-      # same from the tunnel's perspective - a fresh client reconnecting, not two clients
-      # colliding.
+      # pinggy is DELIBERATELY NOT on this list, and the "recreating pinggy collides with
+      # its own still-live tunnel" caution above is kept because nobody has disproved it.
+      # It is tempting to add it: `sysctls:` applies at container *creation*, not on
+      # `docker compose restart`, so the IPv6 fix below only takes effect when something
+      # recreates pinggy. But pinggy is the single point of ingress for every public
+      # hostname, and one PINGGY_TOKEN admits one active tunnel (see the `+force` note in
+      # CLAUDE.md). If a recreate can ever race its own outgoing session, putting pinggy
+      # here converts a manual step into an unattended, automated outage of the whole site.
       #
-      # NOTE: this default reaches `sync-config` as an environment variable on the
-      # RUNNING deployer, rendered from whichever compose file existed when that container
-      # was last created (see "A decline does not clear itself" in docs/runbooks/
-      # deploy.md) - so adding pinggy here does not help the deploy that ships
-      # this very change. The deployer must be recreated first, and then
-      # `docker compose -f docker-compose.prod.yml up -d pinggy` run by hand once, before
-      # the sysctl takes effect.
-      FACTORY_DEPLOY_RECREATABLE: ${FACTORY_DEPLOY_RECREATABLE:-backend,frontend,software-factory,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend,trivy-server,pinggy}
+      # The asymmetry decides it: leaving pinggy off costs one manual
+      # `docker compose -f docker-compose.prod.yml up -d pinggy` after this merges - which
+      # this change needs anyway, because the allowlist is read from the RUNNING deployer
+      # ("A decline does not clear itself", docs/runbooks/deploy.md) and so would not have
+      # applied to this deploy regardless. Adding it risks the site.
+      #
+      # To settle it properly: recreate pinggy by hand while watching its log for
+      # "A tunnel with the same token is already active". If a clean recreate reconnects,
+      # add pinggy here and cite that observation.
+      FACTORY_DEPLOY_RECREATABLE: ${FACTORY_DEPLOY_RECREATABLE:-backend,frontend,software-factory,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend,trivy-server}
       # All three are the HOST path, not a container-private one, and the mount below puts
       # the deploy directory at that same path inside this container. See the volume for
       # why anything else cannot work.
