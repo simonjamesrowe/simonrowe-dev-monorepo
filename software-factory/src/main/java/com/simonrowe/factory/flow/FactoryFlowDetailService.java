@@ -13,6 +13,8 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -40,6 +42,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class FactoryFlowDetailService {
+
+  private static final Logger LOG = LoggerFactory.getLogger(FactoryFlowDetailService.class);
 
   /** Ten is the whole drawer, not a page: an operator wants a glance, not a browsing history. */
   private static final int MAX_ITEMS = 10;
@@ -98,8 +102,13 @@ public class FactoryFlowDetailService {
           .listWorkflowExecutions(
               ListWorkflowExecutionsRequest.newBuilder()
                   .setNamespace(client.getOptions().getNamespace())
-                  .setQuery("WorkflowType = '" + descriptor.get().workflowType()
-                      + "' ORDER BY StartTime DESC")
+                  // No ORDER BY: standard (SQL) visibility rejects the clause outright
+                  // ("operation is not supported: 'ORDER BY' clause"), on both the local dev
+                  // server and production's Postgres-backed visibility store. It is also
+                  // unnecessary — standard visibility already returns executions newest-first by
+                  // start time, verified empirically. Putting it back makes every drawer's run
+                  // list fail silently again.
+                  .setQuery("WorkflowType = '" + descriptor.get().workflowType() + "'")
                   .setPageSize(MAX_ITEMS)
                   .build())
           .getExecutionsList();
@@ -109,6 +118,7 @@ public class FactoryFlowDetailService {
     } catch (RuntimeException exception) {
       // Null, not FlowDetail.empty(nodeKey): an unreadable Temporal is "could not read this",
       // never "nothing running" — the same distinction the artifact readers make one layer down.
+      LOG.warn("Failed listing Temporal executions for factory flow node '{}'", nodeKey, exception);
       return new FlowDetail(nodeKey, null);
     }
   }

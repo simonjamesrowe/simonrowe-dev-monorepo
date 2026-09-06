@@ -56,6 +56,25 @@ class FactoryFlowDetailServiceTest {
   }
 
   @Test
+  void neverSendsAnOrderByClauseTemporalStandardVisibilityRejects() {
+    // Verified against a real local Temporal server: standard (SQL) visibility answers
+    // "operation is not supported: 'ORDER BY' clause" to this exact clause, and production runs
+    // the same Postgres-backed standard visibility. Standard visibility already returns
+    // executions newest-first with no ORDER BY at all, so the clause was never needed - it just
+    // broke every drawer silently. This test would have caught that: it inspects the actual
+    // query string rather than only mocking a response.
+    WorkflowServiceBlockingStub stub = mock(WorkflowServiceBlockingStub.class);
+    when(stub.listWorkflowExecutions(any())).thenAnswer(invocation -> {
+      ListWorkflowExecutionsRequest request = invocation.getArgument(0);
+      assertThat(request.getQuery()).doesNotContain("ORDER BY");
+      assertThat(request.getQuery()).isEqualTo("WorkflowType = 'DeployWorkflow'");
+      return ListWorkflowExecutionsResponse.getDefaultInstance();
+    });
+
+    service(stub).detail("deploy");
+  }
+
+  @Test
   void returnsAnEmptyDetailForTheNodeWithNoWorkflowType() {
     // Artifact nodes are handled by their own branch; an unknown key must not throw and take the
     // whole drawer down.
