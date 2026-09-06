@@ -274,6 +274,19 @@ services:
       FACTORY_RUNTIME_ROLE: software-factory
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?set GITHUB_WEBHOOK_SECRET in .env}
       FACTORY_TRIGGER_TOKEN: ${FACTORY_TRIGGER_TOKEN:?set FACTORY_TRIGGER_TOKEN in .env}
+      # Narrower than the trigger token above: authorises only GET
+      # /api/factory/flow/{nodeKey}. The deployer below is granted this one too, so it
+      # can report deploy/platformbackup detail truthfully without also holding the
+      # trigger token that starts a deploy.
+      # DELIBERATELY `:-` WITH AN EMPTY DEFAULT, NOT `:?`. This variable does not exist
+      # in production `.env` yet (unlike FACTORY_TRIGGER_TOKEN above), so a `:?` here
+      # would make the WHOLE compose file fail to interpolate the moment this file
+      # shipped - wedging `sync-config` and breaking `monitor-prod.sh`'s minutely
+      # `up -d`, taking the self-healing watchdog down with it (see the identical
+      # reasoning on trivy-server's --token below). With the value unset,
+      # authenticateRead fails closed with 503 and the Factory Flow drawer degrades one
+      # panel to "not available" - a far better failure than an un-interpolatable file.
+      FACTORY_READ_TOKEN: ${FACTORY_READ_TOKEN:-}
       GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?set GITHUB_APP_CLIENT_ID in .env}
       # Inside the container the PEM always lives here. Only the path is ever configured,
       # never the key itself. The bind-mount source below is a SEPARATE variable
@@ -422,12 +435,26 @@ services:
     # weaker: declare what it needs, and nothing else.
     #
     # Note what is absent: GITHUB_WEBHOOK_SECRET and FACTORY_TRIGGER_TOKEN. The deployer
-    # receives nothing - no webhook, no HTTP trigger - so it needs neither.
+    # receives nothing - no webhook, no HTTP trigger - so it needs neither, and granting
+    # it the trigger token would expose every FactoryTokenAuthenticator-protected
+    # endpoint on this socket-holding container, including the one that starts a deploy.
+    # It DOES hold FACTORY_READ_TOKEN below - a separate, narrower credential that
+    # authorises only GET /api/factory/flow/{nodeKey} (via authenticateRead, never
+    # authenticate) - so the backend can read deploy/platformbackup's recent-run detail
+    # from here truthfully, the same way it already reads their live counts from the
+    # unauthenticated /api/factory/flow.
     environment:
       JAVA_TOOL_OPTIONS: "-Xshare:off"
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
       FACTORY_RUNTIME_ROLE: deployer
+      # DELIBERATELY `:-` WITH AN EMPTY DEFAULT, NOT `:?` - same reasoning as the other
+      # FACTORY_READ_TOKEN line above and trivy-server's --token below: this variable
+      # does not exist in production `.env` yet, and a `:?` on an unset variable fails
+      # interpolation for the WHOLE compose file, wedging `sync-config` and breaking
+      # `monitor-prod.sh`'s minutely `up -d`. Unset, authenticateRead fails closed with
+      # 503 and the console shows "not available" for one drawer panel instead.
+      FACTORY_READ_TOKEN: ${FACTORY_READ_TOKEN:-}
       FACTORY_MONGODB_URI: mongodb://mongodb:27017/software_factory
       # MANDATORY, and the least obvious line in this service. Compose derives the project
       # name from the directory it runs in, and this container sees the deploy directory

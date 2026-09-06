@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -6,6 +6,8 @@ import { SoftwareFactoryAdmin } from '../../src/pages/admin/SoftwareFactoryAdmin
 
 vi.mock('../../src/services/softwareFactoryApi', () => ({
   fetchSoftwareFactoryStatus: vi.fn(),
+  fetchFactoryFlow: vi.fn(),
+  fetchFactoryFlowDetail: vi.fn(),
   fetchRunProgress: vi.fn(),
   startCodeReview: vi.fn(),
   startFeedback: vi.fn(),
@@ -20,18 +22,24 @@ vi.mock('../../src/auth/useAuth', () => ({
 }))
 
 import {
+  fetchFactoryFlow,
+  fetchFactoryFlowDetail,
   fetchRunProgress,
   fetchSoftwareFactoryStatus,
   startCodeReview,
   startLogWatchScan,
   startPlatformBackup,
   startVulnerabilityScan,
+  type FactoryFlow,
+  type FactoryFlowNode,
   type FactoryModuleStatus,
   type SoftwareFactoryStatus,
 } from '../../src/services/softwareFactoryApi'
 import { useAuth } from '../../src/auth/useAuth'
 
 const mockFetchStatus = vi.mocked(fetchSoftwareFactoryStatus)
+const mockFetchFlow = vi.mocked(fetchFactoryFlow)
+const mockFetchFlowDetail = vi.mocked(fetchFactoryFlowDetail)
 const mockFetchProgress = vi.mocked(fetchRunProgress)
 const mockStartReview = vi.mocked(startCodeReview)
 const mockStartScan = vi.mocked(startVulnerabilityScan)
@@ -83,30 +91,134 @@ function status(overrides: Partial<SoftwareFactoryStatus> = {}): SoftwareFactory
   }
 }
 
+/** Labels chosen so each node's accessible name is unambiguous in the tests below. */
+const NODE_LABELS: Record<string, string> = {
+  linear: 'Linear',
+  build: 'Build agent',
+  'pull-request': 'Pull request',
+  codereview: 'Code review',
+  main: 'Main',
+  deploy: 'Deploy',
+  production: 'Production',
+  logwatch: 'Log watch',
+  cvefix: 'Vulnerability scan',
+  feedback: 'Review feedback',
+  'agent-setup': 'Agent setup',
+  platformbackup: 'Platform backup',
+}
+
+function flowNode(key: string, overrides: Partial<FactoryFlowNode> = {}): FactoryFlowNode {
+  return {
+    key,
+    kind: 'MODULE',
+    band: 'OBSERVE',
+    label: NODE_LABELS[key] ?? key,
+    counts: { inFlight: 0, ok24h: 0, failed24h: 0 },
+    health: 'READY',
+    diagnostic: null,
+    ...overrides,
+  }
+}
+
+function flow(overrides: Partial<Record<string, Partial<FactoryFlowNode>>> = {}): FactoryFlow {
+  return {
+    fetchedAt: '2026-09-04T10:00:00Z',
+    nodes: Object.keys(NODE_LABELS).map((key) => flowNode(key, overrides[key])),
+    edges: [],
+  }
+}
+
+function renderConsoleWithFlow() {
+  render(<SoftwareFactoryAdmin />)
+}
+
+/** Opens the drawer for the node whose accessible name matches `name`, and returns it. */
+async function openDrawer(name: string | RegExp) {
+  await userEvent.click(await screen.findByRole('button', { name }))
+  return screen.getByRole('dialog')
+}
+
 describe('SoftwareFactoryAdmin', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUseAuth.mockReturnValue({ getAccessToken } as unknown as ReturnType<typeof useAuth>)
     mockFetchStatus.mockResolvedValue(status())
+    mockFetchFlow.mockResolvedValue(flow())
+    mockFetchFlowDetail.mockResolvedValue({ nodeKey: 'logwatch', items: [] })
   })
 
-  it('lists every module the status reports', async () => {
-    // Derived from the fixture rather than hard-coded: the assertion is "one row per module the
-    // backend sent", and a literal count has to be edited every time a module is added, which
-    // makes a genuine regression look like routine maintenance.
-    const expected = status().modules.length
-    render(<SoftwareFactoryAdmin />)
+  it('replaces the module rail with the flow graph', async () => {
+    // Two representations of the same fact on one page is what made "keep the cards" unattractive.
+    renderConsoleWithFlow()
+    expect(await screen.findByRole('button', { name: /Log watch/ })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Software Factory modules' })).not.toBeInTheDocument()
+  })
 
-    await waitFor(() => expect(screen.getByRole('list', {
-      name: 'Software Factory modules',
-    })).toBeInTheDocument())
-    expect(screen.getAllByRole('listitem')).toHaveLength(expected)
+  it('opens the drawer with that module\'s actions when a node is selected', async () => {
+    renderConsoleWithFlow()
+    await userEvent.click(await screen.findByRole('button', { name: /Log watch/ }))
+    const drawer = screen.getByRole('dialog')
+    expect(within(drawer).getByRole('button', { name: 'Scan logs now' })).toBeInTheDocument()
+  })
+
+  it('fetches the selected node\'s recent work and renders it in the drawer', async () => {
+    mockFetchFlowDetail.mockResolvedValue({
+      nodeKey: 'logwatch',
+      items: [{ id: 'logwatch-9', title: 'logwatch-9', status: 'COMPLETED', at: null, url: null }],
+    })
+    renderConsoleWithFlow()
+
+    const drawer = await openDrawer(/Log watch/)
+
+    expect(mockFetchFlowDetail).toHaveBeenCalledWith(getAccessToken, 'logwatch')
+    expect(await within(drawer).findByText('logwatch-9')).toBeInTheDocument()
+  })
+
+  it('shows the drawer as loading before the node\'s recent work arrives', async () => {
+    let resolveDetail: (value: { nodeKey: string; items: [] }) => void = () => {}
+    mockFetchFlowDetail.mockReturnValue(new Promise((resolve) => { resolveDetail = resolve }))
+    renderConsoleWithFlow()
+
+    const drawer = await openDrawer(/Log watch/)
+    expect(within(drawer).getByText(/Loading/i)).toBeInTheDocument()
+
+    await act(async () => resolveDetail({ nodeKey: 'logwatch', items: [] }))
+    expect(await within(drawer).findByText(/No runs in the last 30 days/i)).toBeInTheDocument()
+  })
+
+  it('shows an error, not a permanent spinner, when the recent-work fetch is rejected', async () => {
+    // A failed fetch must render as a failure: leaving the drawer on "Loading…" forever would
+    // be indistinguishable from a fetch that is merely slow.
+    mockFetchFlowDetail.mockRejectedValue(new Error('Request failed (500).'))
+    renderConsoleWithFlow()
+
+    const drawer = await openDrawer(/Log watch/)
+
+    expect(await within(drawer).findByText('Request failed (500).')).toBeInTheDocument()
+    expect(within(drawer).queryByText(/^Loading/i)).not.toBeInTheDocument()
+  })
+
+  it('marks the page content inert while a drawer is open, and live again once it closes', async () => {
+    // aria-modal="true" on the drawer is honest for the keyboard Tab trap, but a screen reader's
+    // own virtual cursor does not go through Tab and can still browse into the background, and a
+    // sighted keyboard user who clicks into that background can Tab their way back out of the
+    // trap. `inert` on the rest of the page closes both residuals in one attribute.
+    const { container } = render(<SoftwareFactoryAdmin />)
+    await screen.findByRole('button', { name: /Log watch/ })
+    const body = container.querySelector('.factory-console__body')
+    expect(body).not.toHaveAttribute('inert')
+
+    const drawer = await openDrawer(/Log watch/)
+    expect(body).toHaveAttribute('inert')
+
+    await userEvent.click(within(drawer).getByRole('button', { name: /close/i }))
+    expect(body).not.toHaveAttribute('inert')
   })
 
   it('reports each container reachability in text, not only colour', async () => {
     mockFetchStatus.mockResolvedValue(status({ deployerReachable: false }))
 
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
 
     expect(await screen.findByText(/Factory reachable/)).toBeInTheDocument()
     expect(screen.getByText(/Deployer unreachable/)).toBeInTheDocument()
@@ -114,34 +226,24 @@ describe('SoftwareFactoryAdmin', () => {
 
   it('shows why an enabled module still cannot work', async () => {
     // Enabled with no credential is neither off nor healthy, and it was invisible before.
+    // The diagnostic and the missing-prerequisite are deliberately different strings here: a
+    // fixture that reuses the same text for both cannot tell whether the diagnostic itself is
+    // rendered, or only the (also-rendered) missing-prerequisites list.
     mockFetchStatus.mockResolvedValue(status({
       modules: [module('cvefix', {
         ready: false,
         missingPrerequisites: ['Dependency-Track API key is not set'],
-        diagnostic: 'Enabled but not usable: Dependency-Track API key is not set',
+        diagnostic: 'Enabled but not usable: no Dependency-Track credential is configured',
       })],
     }))
 
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Vulnerability scan/)
 
-    expect(await screen.findByText('Dependency-Track API key is not set')).toBeInTheDocument()
-  })
-
-  it('says a deployer-owned flag is unconfirmed rather than guessing Off', async () => {
-    // Off would be a confident answer about the wrong container: it is software-factory's flag,
-    // not the deployer's. The poller count beside it is still real, and still decides readiness.
-    mockFetchStatus.mockResolvedValue(status({
-      modules: [module('deploy', {
-        configured: null,
-        ready: true,
-        diagnostic: 'The deployer is unreachable, so its configuration is unconfirmed, but '
-          + 'Temporal shows a live worker on this queue',
-      })],
-    }))
-
-    render(<SoftwareFactoryAdmin />)
-
-    expect(await screen.findByText('Unconfirmed')).toBeInTheDocument()
+    expect(within(drawer).getByText('Dependency-Track API key is not set')).toBeInTheDocument()
+    expect(within(drawer).getByText(
+      'Enabled but not usable: no Dependency-Track credential is configured',
+    )).toBeInTheDocument()
   })
 
   it('disables an action whose module is not ready', async () => {
@@ -149,84 +251,83 @@ describe('SoftwareFactoryAdmin', () => {
       modules: [module('cvefix', { ready: false, diagnostic: 'Disabled by configuration' })],
     }))
 
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Vulnerability scan/)
 
-    expect(await screen.findByRole('button', { name: /Scan now/ })).toBeDisabled()
+    expect(within(drawer).getByRole('button', { name: /Scan now/ })).toBeDisabled()
   })
 
-  it('offers a code review trigger rather than status only', async () => {
+  it('offers a code review trigger with its pull request field', async () => {
     // The webhook cannot replay a review — the workflow id embeds the head SHA under
     // REJECT_DUPLICATE — so this is the only way to re-drive one that failed or never arrived.
-    // Linear stays status-only, because a sink is not something you can sensibly run by itself.
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Code review/)
 
-    expect(await screen.findByRole('button', { name: /Review and comment/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Dry-run review/ })).toBeInTheDocument()
-    expect(screen.getByLabelText(/Pull request to review/)).toBeInTheDocument()
-
-    const codereview = screen.getAllByRole('listitem')[0]
-    expect(codereview).toHaveTextContent('Review a PR')
-    expect(codereview).not.toHaveTextContent('Status only')
+    expect(within(drawer).getByRole('button', { name: /Review and comment/ })).toBeInTheDocument()
+    expect(within(drawer).getByRole('button', { name: /Dry-run review/ })).toBeInTheDocument()
+    expect(within(drawer).getByLabelText(/Pull request to review/)).toBeInTheDocument()
   })
 
   it('says what the field wants, and which repository it targets', async () => {
     // "Is it the URL or the number?" is the first question the field provokes, and the actions
     // always target the server-configured repository regardless of what a pasted URL says.
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Code review/)
 
-    // Both pull-request fields carry it, which is the point — neither should leave the format
-    // to guesswork.
-    expect(await screen.findAllByPlaceholderText('130 or a pull request URL')).toHaveLength(2)
-    expect(screen.getAllByText(/Number or pull request URL/)).toHaveLength(2)
-    expect(screen.getAllByText(/simonjamesrowe\/simonrowe-dev-monorepo/).length)
-      .toBeGreaterThanOrEqual(2)
+    expect(within(drawer).getByPlaceholderText('130 or a pull request URL')).toBeInTheDocument()
+    expect(within(drawer).getByText(/Number or pull request URL/)).toBeInTheDocument()
+    expect(within(drawer).getByText(/simonjamesrowe\/simonrowe-dev-monorepo/)).toBeInTheDocument()
   })
 
   it('accepts a pasted pull request URL and confirms what it read', async () => {
     mockStartReview.mockResolvedValue({
       workflowId: 'code-review-130-uuid', runId: null, detail: 'accepted',
     })
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Code review/)
 
     await userEvent.type(
-      await screen.findByLabelText(/Pull request to review/),
+      within(drawer).getByLabelText(/Pull request to review/),
       'https://github.com/simonjamesrowe/simonrowe-dev-monorepo/pull/130/files',
     )
 
-    expect(screen.getByText('simonjamesrowe/simonrowe-dev-monorepo#130')).toBeInTheDocument()
+    expect(within(drawer).getByText('simonjamesrowe/simonrowe-dev-monorepo#130')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /Dry-run review/ }))
+    await userEvent.click(within(drawer).getByRole('button', { name: /Dry-run review/ }))
     expect(mockStartReview).toHaveBeenCalledWith(getAccessToken, 130, false)
   }, 15000)
 
   it('refuses input it cannot read rather than sending a wrong number', async () => {
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Code review/)
 
-    await userEvent.type(await screen.findByLabelText(/Pull request to review/), 'main')
+    await userEvent.type(within(drawer).getByLabelText(/Pull request to review/), 'main')
 
-    expect(screen.getByText('Not a pull request number or URL')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Dry-run review/ })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /Review and comment/ })).toBeDisabled()
+    expect(within(drawer).getByText('Not a pull request number or URL')).toBeInTheDocument()
+    expect(within(drawer).getByRole('button', { name: /Dry-run review/ })).toBeDisabled()
+    expect(within(drawer).getByRole('button', { name: /Review and comment/ })).toBeDisabled()
   }, 10000)
 
   it('keeps both review buttons disabled until a pull request is named', async () => {
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Code review/)
 
-    expect(await screen.findByRole('button', { name: /Review and comment/ })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /Dry-run review/ })).toBeDisabled()
+    expect(within(drawer).getByRole('button', { name: /Review and comment/ })).toBeDisabled()
+    expect(within(drawer).getByRole('button', { name: /Dry-run review/ })).toBeDisabled()
   })
 
   it('publishes only on the explicit review button', async () => {
     mockStartReview.mockResolvedValue({
       workflowId: 'code-review-130-uuid', runId: null, detail: 'accepted',
     })
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Code review/)
 
-    await userEvent.type(await screen.findByLabelText(/Pull request to review/), '130')
-    await userEvent.click(screen.getByRole('button', { name: /Dry-run review/ }))
+    await userEvent.type(within(drawer).getByLabelText(/Pull request to review/), '130')
+    await userEvent.click(within(drawer).getByRole('button', { name: /Dry-run review/ }))
     expect(mockStartReview).toHaveBeenCalledWith(getAccessToken, 130, false)
 
-    await userEvent.click(screen.getByRole('button', { name: /Review and comment/ }))
+    await userEvent.click(within(drawer).getByRole('button', { name: /Review and comment/ }))
     expect(mockStartReview).toHaveBeenCalledWith(getAccessToken, 130, true)
   }, 10000)
 
@@ -236,9 +337,10 @@ describe('SoftwareFactoryAdmin', () => {
         ready: false, diagnostic: 'Required Temporal poller is missing',
       })],
     }))
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Code review/)
 
-    expect(await screen.findByRole('button', { name: /Review and comment/ })).toBeDisabled()
+    expect(within(drawer).getByRole('button', { name: /Review and comment/ })).toBeDisabled()
   })
 
   it('starts a scan and then follows it to completion', async () => {
@@ -255,9 +357,10 @@ describe('SoftwareFactoryAdmin', () => {
       detail: 'Filed one consolidated report',
       terminal: true,
     })
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Vulnerability scan/)
 
-    await userEvent.click(await screen.findByRole('button', { name: /Scan now/ }))
+    await userEvent.click(within(drawer).getByRole('button', { name: /Scan now/ }))
 
     // Accepted is all the POST can prove; everything else arrives from polling.
     expect(await screen.findByText('Accepted')).toBeInTheDocument()
@@ -277,18 +380,20 @@ describe('SoftwareFactoryAdmin', () => {
       detail: null,
       terminal: true,
     })
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Vulnerability scan/)
 
-    await userEvent.click(await screen.findByRole('button', { name: /Scan now/ }))
+    await userEvent.click(within(drawer).getByRole('button', { name: /Scan now/ }))
 
     expect(await screen.findByText('Failed', {}, { timeout: 5000 })).toBeInTheDocument()
   }, 10000)
 
   it('shows a safe message when an action is refused', async () => {
     mockStartScan.mockRejectedValue(new Error('That run is already in progress'))
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Vulnerability scan/)
 
-    await userEvent.click(await screen.findByRole('button', { name: /Scan now/ }))
+    await userEvent.click(within(drawer).getByRole('button', { name: /Scan now/ }))
 
     expect(await screen.findByText('That run is already in progress')).toBeInTheDocument()
   })
@@ -298,12 +403,13 @@ describe('SoftwareFactoryAdmin', () => {
     mockStartBackup.mockResolvedValue({
       workflowId: 'platform-backup-manual', runId: 'run-2', detail: 'accepted',
     })
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Platform backup/)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Back up now' }))
+    await userEvent.click(within(drawer).getByRole('button', { name: 'Back up now' }))
     expect(mockStartBackup).not.toHaveBeenCalled()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Confirm real backup' }))
+    await userEvent.click(within(drawer).getByRole('button', { name: 'Confirm real backup' }))
     expect(mockStartBackup).toHaveBeenCalledWith(getAccessToken, false)
   })
 
@@ -311,9 +417,10 @@ describe('SoftwareFactoryAdmin', () => {
     mockStartBackup.mockResolvedValue({
       workflowId: 'platform-backup-manual', runId: 'run-2', detail: 'Dry run accepted',
     })
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Platform backup/)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Dry run' }))
+    await userEvent.click(within(drawer).getByRole('button', { name: 'Dry run' }))
 
     expect(mockStartBackup).toHaveBeenCalledWith(getAccessToken, true)
   })
@@ -322,9 +429,10 @@ describe('SoftwareFactoryAdmin', () => {
     mockStartLogScan.mockResolvedValue({
       workflowId: 'logwatch-manual-1', runId: 'run-9', detail: 'Dry-run log scan accepted',
     })
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Log watch/)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Dry run scan' }))
+    await userEvent.click(within(drawer).getByRole('button', { name: 'Dry run scan' }))
 
     expect(mockStartLogScan).toHaveBeenCalledWith(getAccessToken, true)
   })
@@ -333,11 +441,12 @@ describe('SoftwareFactoryAdmin', () => {
     mockStartLogScan.mockResolvedValue({
       workflowId: 'logwatch-manual-2', runId: 'run-10', detail: 'Log scan accepted',
     })
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Log watch/)
 
     // No confirmation step, deliberately: filing a Linear ticket is reversible by cancelling it,
     // unlike the platform backup's upload. It matches the CVE scan, which files the same way.
-    await userEvent.click(await screen.findByRole('button', { name: /Scan logs now/ }))
+    await userEvent.click(within(drawer).getByRole('button', { name: /Scan logs now/ }))
 
     expect(mockStartLogScan).toHaveBeenCalledWith(getAccessToken, false)
   })
@@ -350,30 +459,34 @@ describe('SoftwareFactoryAdmin', () => {
         module('logwatch', { ready: false, missingPrerequisites: ['GRAFANA_CLOUD_API_KEY is not set'] }),
       ],
     }))
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Log watch/)
 
-    expect(await screen.findByRole('button', { name: 'Dry run scan' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /Scan logs now/ })).toBeDisabled()
+    expect(within(drawer).getByRole('button', { name: 'Dry run scan' })).toBeDisabled()
+    expect(within(drawer).getByRole('button', { name: /Scan logs now/ })).toBeDisabled()
   })
 
   it('labels the log-scan buttons distinctly from the other modules', async () => {
-    render(<SoftwareFactoryAdmin />)
-
     // "Dry run" alone collides with platform backup and "Scan now" with the vulnerability scan.
     // The accessible name is all a screen reader gets - the panel heading that separates them
     // visually is not part of it - so each must be unique on its own.
-    await screen.findByRole('button', { name: 'Dry run scan' })
-    expect(screen.getAllByRole('button', { name: 'Dry run' })).toHaveLength(1)
-    expect(screen.getAllByRole('button', { name: /^Scan now$/ })).toHaveLength(1)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Log watch/)
+
+    expect(within(drawer).getByRole('button', { name: 'Dry run scan' })).toBeInTheDocument()
+    expect(within(drawer).getByRole('button', { name: 'Scan logs now' })).toBeInTheDocument()
+    expect(within(drawer).queryByRole('button', { name: 'Dry run' })).not.toBeInTheDocument()
+    expect(within(drawer).queryByRole('button', { name: /^Scan now$/ })).not.toBeInTheDocument()
   })
 
   it('keeps the redeploy button disabled until the phrase matches exactly', async () => {
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/^Deploy /)
 
-    const button = await screen.findByRole('button', { name: /Redeploy 0123456/ })
+    const button = within(drawer).getByRole('button', { name: /Redeploy 0123456/ })
     expect(button).toBeDisabled()
 
-    await userEvent.type(screen.getByLabelText(/Confirmation phrase/), 'REDEPLOY 0123456')
+    await userEvent.type(within(drawer).getByLabelText(/Confirmation phrase/), 'REDEPLOY 0123456')
 
     // Still disabled here, because this bundle reports no commit in a test build, and the two
     // sides disagreeing is exactly when a redeploy must not be offered.
@@ -383,8 +496,148 @@ describe('SoftwareFactoryAdmin', () => {
   it('surfaces a status failure without rendering a broken page', async () => {
     mockFetchStatus.mockRejectedValue(new Error('Software Factory is unavailable'))
 
-    render(<SoftwareFactoryAdmin />)
+    renderConsoleWithFlow()
 
     expect(await screen.findByText('Software Factory is unavailable')).toBeInTheDocument()
+  })
+
+  it('renders the full diagram with every node unavailable when the factory cannot be reached', async () => {
+    // The backend degrades rather than 500s when software-factory itself is unreachable: every
+    // node comes back UNAVAILABLE with null counts, borrowing only the deployer's topology shape.
+    // The one page whose purpose is showing factory health must not go blank at exactly the
+    // moment an operator needs it — it must still draw all twelve buttons, not an error banner.
+    const everyNodeUnavailable = Object.fromEntries(
+      Object.keys(NODE_LABELS).map((key) => [key, {
+        counts: null,
+        health: 'UNAVAILABLE' as const,
+        diagnostic: 'Software Factory could not be reached',
+      }]),
+    )
+    mockFetchFlow.mockResolvedValue(flow(everyNodeUnavailable))
+
+    renderConsoleWithFlow()
+
+    for (const label of Object.values(NODE_LABELS)) {
+      expect(await screen.findByRole('button', { name: new RegExp(label) })).toBeInTheDocument()
+    }
+    expect(screen.getAllByText('counts unknown').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Request failed (500).')).not.toBeInTheDocument()
+  })
+
+  it('shows counts unknown, never zero, for a node whose source could not be read', async () => {
+    // Null means the source could not be read; zero means nothing happened. They must not read
+    // the same, or an operator investigating an outage is sent to the wrong place.
+    mockFetchFlow.mockResolvedValue(flow({
+      logwatch: { counts: null, health: 'UNAVAILABLE' },
+    }))
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Log watch/)
+
+    expect(within(drawer).getByText(/counts unknown/i)).toBeInTheDocument()
+  })
+
+  it('explains why the build agent node has no worker of its own', async () => {
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Build agent/)
+
+    expect(within(drawer).getByText(/not yet running/i)).toBeInTheDocument()
+    expect(within(drawer).queryByRole('button', { name: /Dry run/ })).not.toBeInTheDocument()
+  })
+
+  it('polls the flow at the chosen interval and stops when switched off', async () => {
+    // userEvent.click deadlocks under vi.useFakeTimers() in this environment even with
+    // advanceTimers configured (reproduced in isolation, independent of this component) -
+    // fireEvent.click is a plain, synchronous DOM dispatch and sidesteps that without weakening
+    // what this test proves: a leaked interval is invisible until it is hammering an endpoint,
+    // so "stops when switched off" is the assertion worth keeping.
+    renderConsoleWithFlow()
+    await screen.findByRole('button', { name: /Log watch/ })
+    const initial = mockFetchFlow.mock.calls.length
+
+    vi.useFakeTimers()
+
+    fireEvent.click(screen.getByRole('radio', { name: '15s' }))
+    await act(() => vi.advanceTimersByTimeAsync(15_000))
+    expect(mockFetchFlow.mock.calls.length).toBe(initial + 1)
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Off' }))
+    await act(() => vi.advanceTimersByTimeAsync(60_000))
+    expect(mockFetchFlow.mock.calls.length).toBe(initial + 1)
+
+    vi.useRealTimers()
+  })
+
+  it('does not queue a second poll while the first is still in flight, and releases once it settles', async () => {
+    // Mutation-tested: replacing the guard with `if (false && loadInFlight.current) return`
+    // must fail this test - that is the entire reason the ref exists, and nothing else in this
+    // file would have caught it (verified by hand; see the task-9 fix report).
+    renderConsoleWithFlow()
+    await screen.findByRole('button', { name: /Log watch/ })
+    const initial = mockFetchFlow.mock.calls.length
+
+    let resolveFlow: (value: FactoryFlow) => void = () => {}
+    mockFetchFlow.mockImplementation(
+      () => new Promise<FactoryFlow>((resolve) => { resolveFlow = resolve }),
+    )
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('radio', { name: '15s' }))
+
+    // Two ticks elapse while the first request is still pending. Without the guard, the second
+    // tick would fire another request behind the first.
+    await act(() => vi.advanceTimersByTimeAsync(30_000))
+    expect(mockFetchFlow.mock.calls.length).toBe(initial + 1)
+
+    // Let the pending request settle, which is what releases the guard.
+    mockFetchFlow.mockResolvedValue(flow())
+    await act(async () => {
+      resolveFlow(flow())
+      // Two hops: one for Promise.all's own resolution, one for the `await` in `load` that is
+      // suspended on it.
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // A further tick now fetches again - the guard is a floor on spacing, not a permanent latch.
+    await act(() => vi.advanceTimersByTimeAsync(15_000))
+    expect(mockFetchFlow.mock.calls.length).toBe(initial + 2)
+
+    vi.useRealTimers()
+  })
+
+  it('re-fetches an open drawer\'s run list on the same tick as the flow refresh', async () => {
+    // Previously useFlowDetail depended only on [nodeKey, getAccessToken], so during a deploy
+    // with the drawer open the counts above (driven by `flow`, which DOES refresh) kept moving
+    // while the run list underneath froze at the moment the drawer was opened - the primary use
+    // case the refresh control exists for. Riding the same tick as `load()`, not a second timer.
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Log watch/)
+    const initialDetailCalls = mockFetchFlowDetail.mock.calls.length
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('radio', { name: '15s' }))
+    await act(() => vi.advanceTimersByTimeAsync(15_000))
+
+    expect(mockFetchFlowDetail.mock.calls.length).toBe(initialDetailCalls + 1)
+    // A refresh-triggered re-fetch of the SAME node must not flash "Loading…" over an
+    // already-rendered run list.
+    expect(within(drawer).queryByText(/^Loading/i)).not.toBeInTheDocument()
+
+    vi.useRealTimers()
+  })
+
+  it('stops polling once the console unmounts', async () => {
+    const { unmount } = render(<SoftwareFactoryAdmin />)
+    await screen.findByRole('button', { name: /Log watch/ })
+    const initial = mockFetchFlow.mock.calls.length
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('radio', { name: '15s' }))
+    unmount()
+
+    await act(() => vi.advanceTimersByTimeAsync(60_000))
+    expect(mockFetchFlow.mock.calls.length).toBe(initial)
+
+    vi.useRealTimers()
   })
 })

@@ -28,6 +28,27 @@ public class FactoryAdminController {
     return service.status();
   }
 
+  /**
+   * Returns the factory flow graph.
+   *
+   * @return every node with its live figures, and every edge
+   */
+  @GetMapping("/flow")
+  public FactoryFlow flow() {
+    return service.flow();
+  }
+
+  /**
+   * Returns one node's recent work, for its drawer.
+   *
+   * @param nodeKey the node whose drawer is open
+   * @return that node's items, newest first
+   */
+  @GetMapping("/flow/{nodeKey}")
+  public FactoryFlowDetail flowDetail(@PathVariable final String nodeKey) {
+    return service.flowDetail(nodeKey);
+  }
+
   @GetMapping("/runs/{workflowId}")
   public FactoryRunProgress progress(@PathVariable final String workflowId) {
     return service.progress(workflowId);

@@ -6445,12 +6445,44 @@ a:hover {
   margin: 0 auto;
 }
 
+/* A plain layout passthrough, purely so `inert` has a single subtree to apply to that excludes
+   the drawer — no spacing or sizing of its own beyond its children's existing rules. */
+.factory-console__body {
+  display: contents;
+}
+
 .factory-console__header {
   align-items: flex-start;
 }
 
-.factory-console__eyebrow,
-.factory-console__controls-heading > span {
+.factory-console__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.factory-console__refresh {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.factory-console__refresh label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+
+.factory-console__eyebrow {
   display: block;
   margin-bottom: 0.35rem;
   color: var(--color-accent);
@@ -6496,117 +6528,6 @@ a:hover {
   letter-spacing: 0.08em;
 }
 
-.factory-rail {
-  border-block: 1px solid var(--color-border);
-}
-
-.factory-rail__row {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(14rem, 1.35fr) repeat(2, minmax(9rem, 0.8fr)) minmax(14rem, 1.2fr) minmax(8rem, 0.65fr);
-  gap: 1rem;
-  align-items: center;
-  min-height: 6.25rem;
-  padding: 1rem 0.25rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.factory-rail__row:last-child { border-bottom: 0; }
-.factory-rail__row::before {
-  content: '';
-  position: absolute;
-  left: 2.7rem;
-  bottom: -0.8rem;
-  width: 1px;
-  height: 1.55rem;
-  background: var(--color-border);
-  z-index: 1;
-}
-.factory-rail__row:last-child::before { display: none; }
-.factory-rail__row--fault { background: rgba(239, 68, 68, 0.025); }
-
-.factory-rail__identity {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-}
-
-.factory-rail__number {
-  display: grid;
-  place-items: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  flex: 0 0 auto;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-bg);
-  color: var(--color-accent);
-  font-family: var(--font-mono, monospace);
-  font-size: 0.7rem;
-  font-weight: 700;
-  z-index: 2;
-}
-
-.factory-rail__identity h2 {
-  margin: 0 0 0.2rem;
-  color: var(--color-text);
-  font-family: var(--font-heading);
-  font-size: 1rem;
-}
-
-.factory-rail__identity span,
-.factory-rail__checkpoint span,
-.factory-rail__action span {
-  color: var(--color-text-muted);
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.factory-rail__checkpoint {
-  display: grid;
-  grid-template-columns: 1rem 1fr;
-  gap: 0.2rem 0.45rem;
-  align-items: center;
-  color: #16a34a;
-}
-
-.factory-rail__checkpoint strong {
-  grid-column: 2;
-  color: var(--color-text);
-  font-size: 0.74rem;
-  font-weight: 500;
-  line-height: 1.35;
-}
-
-.factory-rail__row--fault .factory-rail__checkpoint { color: #d97706; }
-.factory-rail__action { display: flex; flex-direction: column; gap: 0.22rem; }
-.factory-rail__action strong { color: var(--color-text); font-size: 0.76rem; }
-.factory-rail__diagnostic {
-  grid-column: 2 / -1;
-  margin: -0.35rem 0 0;
-  color: #b45309;
-  font-size: 0.72rem;
-}
-
-.factory-rail__prerequisites {
-  grid-column: 2 / -1;
-  margin: -0.35rem 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  color: #b45309;
-  font-size: 0.72rem;
-}
-
-.factory-rail__prerequisites li {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
 .factory-console__run {
   display: flex;
   align-items: flex-start;
@@ -6631,17 +6552,6 @@ a:hover {
 .factory-console__run--running { border-left-color: var(--color-primary); }
 .factory-console__run--done { border-left-color: #16a34a; }
 .factory-console__run--failed { border-left-color: #dc2626; }
-
-.factory-console__controls {
-  margin-top: 2.5rem;
-}
-
-.factory-console__controls-heading h2 {
-  margin: 0 0 1rem;
-  color: var(--color-text);
-  font-family: var(--font-heading);
-  font-size: 1.15rem;
-}
 
 .factory-action {
   display: grid;
@@ -6704,11 +6614,425 @@ a:hover {
 
 .factory-console__spin { animation: spin 1s linear infinite; }
 
+.factory-flow {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1000 / 520;
+  margin-bottom: 1.5rem;
+
+  /* Loop hues. Dark and light values are chosen independently for contrast against each theme's
+     page background, not derived from one another — "main" stays the heaviest/most saturated of
+     the three in both, "fast" stays the coolest and lightest, "slow" keeps a distinct violet hue
+     on top of its dash so it never reads as a duller main. */
+  --factory-flow-loop-main: #cbd2e1;
+  --factory-flow-loop-fast: #7ec8ff;
+  --factory-flow-loop-slow: #d8a8f5;
+}
+
+[data-theme="light"] .factory-flow {
+  --factory-flow-loop-main: #2b3040;
+  --factory-flow-loop-fast: #1d6fd1;
+  --factory-flow-loop-slow: #8b2fd6;
+}
+
+/* Overrides `.factory-flow`'s fixed aspect-ratio: this state has no canvas to fill, just an
+   explanatory message, and forcing the ratio would leave a tall empty box under short text. */
+.factory-flow--empty {
+  aspect-ratio: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.factory-flow--empty svg { flex-shrink: 0; margin-top: 0.15rem; }
+.factory-flow--empty p { margin: 0; }
+
+.factory-flow__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.factory-flow__edge {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Each loop gets its own hue as well as its own weight, or the three are only tellable apart by
+   dash pattern. `main` is the production ring and reads as the spine: heaviest and most
+   saturated. `fast` (pull-request <-> codereview) is the lightest weight and coolest hue.
+   `slow` (the feedback loop) keeps its dash on top of a third, distinct hue. */
+/* Painted under every edge so a crossing reads as one line passing over another. Uses the canvas
+   background colour, so a halo is invisible except exactly where two lines meet. */
+.factory-flow__edge-halo {
+  fill: none;
+  stroke: var(--color-surface);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 5.5;
+}
+
+.factory-flow__edge--fast { stroke: var(--factory-flow-loop-fast); stroke-width: 1.25; }
+.factory-flow__edge--main { stroke: var(--factory-flow-loop-main); stroke-width: 1.75; }
+.factory-flow__edge--slow {
+  stroke: var(--factory-flow-loop-slow);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
+}
+
+/* A <marker> does not inherit stroke/fill from the path that references it, so each loop's
+   arrowhead is its own marker element, coloured to match via this class rather than inheritance. */
+.factory-flow__marker--main path { fill: var(--factory-flow-loop-main); }
+.factory-flow__marker--fast path { fill: var(--factory-flow-loop-fast); }
+.factory-flow__marker--slow path { fill: var(--factory-flow-loop-slow); }
+
+.factory-flow__nodes {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.factory-flow__node-slot {
+  position: absolute;
+  left: var(--factory-flow-x);
+  top: var(--factory-flow-y);
+  transform: translate(-50%, -50%);
+}
+
+.factory-flow__node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 7rem;
+  padding: 0.5rem 0.7rem;
+  border: 2px solid var(--color-border);
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: center;
+}
+
+.factory-flow__node:hover { border-color: var(--border-strong); }
+.factory-flow__node[aria-pressed='true'] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
+}
+
+/*
+ * Kind is expressed with fill/shape only, never colour, because health already owns the border
+ * colour and the two channels must stay independent (a red UNAVAILABLE agent must still read as
+ * an agent). Both must survive being viewed in greyscale: a left accent bar reading as a unit of
+ * machinery vs. a stadium-shaped, tinted vessel reading as something that holds things.
+ *
+ * `factory-flow__node--module`'s accent bar is an inset box-shadow rather than a fourth border
+ * side, because the left border itself is already spoken for by health.
+ */
+.factory-flow__node--module {
+  border-radius: 0.5rem;
+  background: var(--color-surface);
+  box-shadow: inset 3px 0 0 0 var(--outline);
+}
+
+.factory-flow__node--artifact {
+  border-radius: 999px;
+  background: var(--color-surface-subtle);
+}
+
+.factory-flow__node-label {
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.factory-flow__node-health {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.factory-flow__node-counts {
+  font-size: 0.62rem;
+  color: var(--color-text-muted);
+}
+
+/* Colour is never the only signal — the health word is always rendered as text above. */
+.factory-flow__node--ready .factory-flow__node-health { color: #16a34a; }
+.factory-flow__node--degraded .factory-flow__node-health { color: #d97706; }
+.factory-flow__node--disabled .factory-flow__node-health { color: var(--color-text-muted); }
+.factory-flow__node--unavailable .factory-flow__node-health { color: #dc2626; }
+.factory-flow__node--offline .factory-flow__node-health { color: #dc2626; }
+.factory-flow__node--idle .factory-flow__node-health { color: var(--color-text-muted); }
+.factory-flow__node--not_tracked .factory-flow__node-health { color: var(--color-text-muted); }
+
+.factory-flow__node--ready { border-color: #16a34a; }
+.factory-flow__node--degraded { border-color: #d97706; }
+.factory-flow__node--disabled { border-color: var(--color-border); }
+.factory-flow__node--unavailable { border-color: #dc2626; }
+.factory-flow__node--offline { border-color: #dc2626; }
+.factory-flow__node--idle { border-color: var(--color-border); }
+.factory-flow__node--not_tracked { border-color: var(--color-border); }
+
+/*
+ * A quiet key: small, muted text with inline swatches, sitting in the top-right corner of the
+ * canvas rather than in normal document flow, so it never pushes the node grid around. Decorative
+ * (see the `aria-hidden` on the element itself in FactoryFlowGraph.tsx) — it repeats channels
+ * already present in the diagram rather than adding new information.
+ */
+.factory-flow__legend {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+  font-size: 0.62rem;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.factory-flow__legend-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.factory-flow__legend-swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.7rem;
+}
+
+.factory-flow__legend-swatch--module {
+  border-radius: 0.25rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: inset 2px 0 0 0 var(--outline);
+}
+
+.factory-flow__legend-swatch--artifact {
+  border-radius: 999px;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+}
+
+.factory-flow__legend-line {
+  display: inline-block;
+  width: 1rem;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+}
+
+.factory-flow__legend-line--main { border-color: var(--factory-flow-loop-main); border-top-width: 3px; }
+.factory-flow__legend-line--fast { border-color: var(--factory-flow-loop-fast); }
+.factory-flow__legend-line--slow { border-color: var(--factory-flow-loop-slow); border-style: dashed; }
+
+@media (max-width: 50rem) {
+  .factory-flow { aspect-ratio: auto; }
+  .factory-flow__canvas { display: none; }
+  .factory-flow__nodes { display: flex; flex-direction: column; gap: 0.6rem; }
+  .factory-flow__node-slot { position: static; transform: none; }
+  .factory-flow__node { width: 100%; min-width: 0; }
+  /* The loop-colour half of the legend is meaningless once the SVG canvas above is dropped, and
+     the kind styling is already visible directly on the stacked node buttons without a key. */
+  .factory-flow__legend { display: none; }
+}
+
+/*
+ * Factory node drawer — same right-side slide-in as the Media Library drawer (`.drawer`), but its
+ * own BEM block: the Media Library drawer wants a backdrop and a click-outside-to-close overlay,
+ * where this one is a lighter-weight inspector that only ever coexists with the graph behind it.
+ */
+.factory-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(26rem, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.35rem 1.5rem;
+  background: var(--color-panel);
+  border-left: 1px solid var(--color-border);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
+  overflow-y: auto;
+  z-index: 100;
+  animation: slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.factory-drawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.factory-drawer__header h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+}
+
+.factory-drawer__health {
+  margin: -0.4rem 0 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.factory-drawer__health--ready { color: #16a34a; }
+.factory-drawer__health--degraded { color: #d97706; }
+.factory-drawer__health--disabled { color: var(--color-text-muted); }
+.factory-drawer__health--unavailable { color: #dc2626; }
+.factory-drawer__health--offline { color: #dc2626; }
+.factory-drawer__health--idle { color: var(--color-text-muted); }
+.factory-drawer__health--not_tracked { color: var(--color-text-muted); }
+
+.factory-drawer__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.factory-drawer__counts div { display: flex; flex-direction: column; gap: 0.15rem; }
+.factory-drawer__counts dt {
+  color: var(--color-text-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.factory-drawer__counts dd { margin: 0; color: var(--color-text); font-size: 0.95rem; font-weight: 600; }
+
+.factory-drawer__diagnostic {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border-left: 3px solid #d97706;
+  border-radius: 0.35rem;
+  background: rgba(217, 119, 6, 0.08);
+  color: var(--color-text);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.factory-drawer__note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.factory-drawer__runs {
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.factory-drawer__runs h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.factory-drawer__runs ol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.factory-drawer__runs li {
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+.factory-drawer__run-id {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.factory-drawer__run-status {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.factory-drawer__run-time {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.factory-drawer__runs .admin-error-banner {
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.factory-drawer__module {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.factory-drawer__module div { display: flex; justify-content: space-between; gap: 1rem; }
+.factory-drawer__module dt { margin: 0; color: var(--color-text-muted); font-size: 0.76rem; }
+.factory-drawer__module dd {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* The action panel that moved in from the old module rail: one column, since the drawer is
+   narrower than the page-width row it used to occupy. */
+.factory-drawer .factory-action {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem 0 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.factory-drawer .factory-action--danger {
+  margin-left: 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--color-rose, var(--error));
+}
+
+.factory-drawer .factory-action__controls {
+  justify-content: flex-start;
+}
+
+@media (max-width: 700px) {
+  .factory-drawer { width: 100%; }
+}
+
 @media (max-width: 1280px) {
-  .factory-rail__row { grid-template-columns: minmax(13rem, 1.2fr) repeat(2, minmax(8rem, 0.8fr)); }
-  .factory-rail__action { grid-column: 3; }
-  .factory-rail__diagnostic { grid-column: 2 / -1; }
-  .factory-rail__prerequisites { grid-column: 2 / -1; }
   .factory-action { grid-template-columns: 1fr 1.5fr; }
   .factory-action__controls { grid-column: 1 / -1; justify-content: flex-end; }
 }
@@ -6716,12 +7040,6 @@ a:hover {
 @media (max-width: 700px) {
   .factory-console__header { flex-direction: column; }
   .factory-console__commit { width: 100%; margin-left: 0; }
-  .factory-rail__row { grid-template-columns: 1fr 1fr; gap: 0.8rem; padding: 1rem 0; }
-  .factory-rail__identity { grid-column: 1 / -1; }
-  .factory-rail__row::before { display: none; }
-  .factory-rail__action { grid-column: auto; }
-  .factory-rail__diagnostic { grid-column: 1 / -1; }
-  .factory-rail__prerequisites { grid-column: 1 / -1; }
   .factory-action { grid-template-columns: 1fr; }
   .factory-action__controls { grid-column: auto; flex-wrap: wrap; }
 }

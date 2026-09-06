@@ -88,7 +88,7 @@ class FactoryAdminApiTest {
             new CodeReviewProperties.Github(
                 "https://api.github.com", "", "", "", "", Duration.ofSeconds(30)),
             null,
-            new CodeReviewProperties.Api(configuredToken),
+            new CodeReviewProperties.Api(configuredToken, null),
             "https://temporal.test"));
   }
 }

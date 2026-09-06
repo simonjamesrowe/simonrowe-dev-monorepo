@@ -75,7 +75,7 @@ class GitHubWebhookControllerTest {
             new CodeReviewProperties.Github(
                 "https://api.github.com", "", SECRET, "", "", Duration.ofSeconds(30)),
             null,
-            new CodeReviewProperties.Api("trigger-token"), "https://temporal.test");
+            new CodeReviewProperties.Api("trigger-token", null), "https://temporal.test");
     GitHubWebhookController controller =
         new GitHubWebhookController(
             properties,

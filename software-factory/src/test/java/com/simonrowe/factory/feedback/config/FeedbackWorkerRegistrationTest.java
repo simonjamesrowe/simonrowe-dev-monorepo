@@ -128,7 +128,7 @@ class FeedbackWorkerRegistrationTest {
           new CodeReviewProperties.Github(
               "https://api.github.com", "", "secret", "", "", Duration.ofSeconds(30)),
           null,
-          new CodeReviewProperties.Api(""),
+          new CodeReviewProperties.Api("", null),
           "https://temporal.test");
     }
 

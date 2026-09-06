@@ -148,3 +148,88 @@ export const startDeploy = (
 
 export const fetchRunProgress = (getAccessToken: GetAccessToken, workflowId: string) =>
   request<FactoryRunProgress>(getAccessToken, `/runs/${encodeURIComponent(workflowId)}`)
+
+export type FactoryNodeKind = 'MODULE' | 'ARTIFACT'
+
+export type FactoryNodeBand = 'OBSERVE' | 'PLAN' | 'BUILD' | 'SHIP' | 'LEARN' | 'UTILITY'
+
+export type FactoryLoop = 'FAST' | 'MAIN' | 'SLOW'
+
+/**
+ * IDLE and OFFLINE are separate on purpose: "nothing to do" and "nothing is listening" send an
+ * operator to different places, and the build agent runs on a machine the server cannot reach.
+ *
+ * NOT_TRACKED is different again: this node has no owning module and no artifact source this
+ * container can read (currently only `production`), so reporting any other value here would be a
+ * false statement of health. Production's real state lives on the platform status page.
+ */
+export type FactoryNodeHealth =
+  | 'READY' | 'DEGRADED' | 'DISABLED' | 'UNAVAILABLE' | 'OFFLINE' | 'IDLE' | 'NOT_TRACKED'
+
+export interface FactoryNodeCounts {
+  inFlight: number
+  ok24h: number
+  failed24h: number
+}
+
+export interface FactoryFlowNode {
+  key: string
+  kind: FactoryNodeKind
+  band: FactoryNodeBand
+  label: string
+  /** null when the source could not be read, which is not the same as zero. */
+  counts: FactoryNodeCounts | null
+  health: FactoryNodeHealth
+  diagnostic: string | null
+}
+
+export interface FactoryFlowEdge {
+  from: string
+  to: string
+  label: string
+  loop: FactoryLoop
+}
+
+export interface FactoryFlow {
+  fetchedAt: string
+  nodes: FactoryFlowNode[]
+  edges: FactoryFlowEdge[]
+}
+
+export const fetchFactoryFlow = (getAccessToken: GetAccessToken) =>
+  request<FactoryFlow>(getAccessToken, '/flow')
+
+export interface FactoryFlowDetailItem {
+  id: string
+  title: string
+  status: string
+  at: string | null
+  url: string | null
+}
+
+export interface FactoryFlowDetail {
+  nodeKey: string
+  /**
+   * The work behind this node, newest first.
+   *
+   * Only a node with no list of its own at all (`production`/`build`, or an unrecognised key)
+   * reports `[]` unconditionally — there is genuinely nothing this console could ever list there.
+   * Every other node distinguishes "could not read this" from "read it and found nothing": a
+   * module's Temporal query failing, an artifact node's own reader (`linear`, `pull-request`,
+   * `main`, `agent-setup`) failing, and — for `deploy`/`platformbackup` — the deployer itself
+   * being unreachable, all report `null` here rather than `[]`. Losing that distinction would
+   * misreport a broken read as a quiet one.
+   */
+  items: FactoryFlowDetailItem[] | null
+}
+
+/**
+ * Reads one node's recent work, for its drawer.
+ *
+ * See {@link FactoryFlowDetail.items} for what `null` versus `[]` means in the response body.
+ * Separately, the drawer distinguishes a detail that has not loaded yet from one that has, by
+ * `null` versus a `FactoryFlowDetail` object — that is a fact about this call's own lifecycle,
+ * not about anything the response body reports.
+ */
+export const fetchFactoryFlowDetail = (getAccessToken: GetAccessToken, nodeKey: string) =>
+  request<FactoryFlowDetail>(getAccessToken, `/flow/${encodeURIComponent(nodeKey)}`)

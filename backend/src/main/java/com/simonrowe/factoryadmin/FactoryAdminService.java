@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
@@ -143,6 +144,139 @@ public class FactoryAdminService {
     return new FactoryInstanceStatus.ModuleStatus(
         key, displayName, null, "unavailable", null, null, "Unavailable", null, List.of(), false,
         "Owning factory service is unreachable");
+  }
+
+  /**
+   * Builds the graph the console draws, from both containers.
+   *
+   * <p>Deploy and platform backup are taken from the deployer and reported {@code UNAVAILABLE}
+   * when it cannot be reached, never from software-factory's own switched-off view of them — the
+   * same split {@link #status()} makes, via the same {@link #DEPLOYER_OWNED} list.
+   *
+   * <p>A factory that cannot be reached at all used to fail the whole call, on the reasoning that
+   * every node's health depends on factory-reported state, so a half-drawn graph would be
+   * actively misleading. That reasoning does not survive contact with the page: the one page
+   * whose purpose is showing factory health is the one that renders nothing at all — not even the
+   * shape of the graph — at exactly the moment an operator needs it most, while {@link #status()}
+   * right beside it degrades gracefully. Now this call never throws for a downstream failure: when
+   * the factory cannot be reached, every node is reported {@code UNAVAILABLE} with null counts
+   * rather than omitted, via {@link #unavailableFlow(FactoryFlow)}.
+   *
+   * @return the merged graph, complete even when a container is unreachable
+   */
+  public FactoryFlow flow() {
+    FactoryFlow factory = safelyFlow(client::factoryFlow);
+    FactoryFlow deployer = safelyFlow(client::deployerFlow);
+    if (factory == null) {
+      return unavailableFlow(deployer);
+    }
+    List<FactoryFlow.Node> merged = new ArrayList<>();
+    for (FactoryFlow.Node node : factory.nodes()) {
+      if (!DEPLOYER_OWNED.contains(node.key())) {
+        merged.add(node);
+      } else if (deployer == null) {
+        merged.add(new FactoryFlow.Node(
+            node.key(), node.kind(), node.band(), node.label(), null,
+            "UNAVAILABLE", "The deployer could not be reached"));
+      } else {
+        merged.add(fromDeployer(deployer, node));
+      }
+    }
+    return new FactoryFlow(factory.fetchedAt(), merged, factory.edges());
+  }
+
+  /**
+   * Builds the fallback graph for when {@code software-factory} itself cannot be reached.
+   *
+   * <p>The topology (node shape, bands and edges) is a fixed constant baked into the image, and
+   * both containers run the same image, so a reachable {@code deployer} answers {@code
+   * /api/factory/flow} with the identical node and edge shape the real factory would, just
+   * alongside health this backend must not trust here: it reflects the deployer's own (mostly
+   * switched-off) module configuration, not the actual factory's. This method borrows only the
+   * shape from that response (key, kind, band, label and every edge) and discards the reported
+   * health, counts and diagnostic for every node, replacing them uniformly with {@code
+   * UNAVAILABLE}, null counts and a diagnostic naming the actual unreachable container. That
+   * keeps this class from inventing a second, hand-maintained copy of the topology.
+   *
+   * <p>When the deployer is unreachable too there is no topology source left anywhere this
+   * backend can reach, and this method returns an empty graph rather than hardcode one: a rare
+   * double outage the console can only report as "nothing to draw", not as a false 500.
+   *
+   * @param deployer the deployer's own flow response, or null when it could not be reached either
+   * @return every node marked {@code UNAVAILABLE}, or an empty graph when no topology source
+   *     answered at all
+   */
+  private static FactoryFlow unavailableFlow(final FactoryFlow deployer) {
+    Instant fetchedAt = Instant.now();
+    if (deployer == null) {
+      return new FactoryFlow(fetchedAt, List.of(), List.of());
+    }
+    List<FactoryFlow.Node> nodes = deployer.nodes().stream()
+        .map(node -> new FactoryFlow.Node(
+            node.key(), node.kind(), node.band(), node.label(), null,
+            "UNAVAILABLE", "Software Factory could not be reached"))
+        .collect(Collectors.toList());
+    return new FactoryFlow(fetchedAt, nodes, deployer.edges());
+  }
+
+  /**
+   * Looks a deployer-owned node up by key in the deployer's own response, falling back to the
+   * unavailable form when the deployer's graph did not report it.
+   */
+  private static FactoryFlow.Node fromDeployer(
+      final FactoryFlow deployer, final FactoryFlow.Node factoryNode) {
+    return deployer.nodes().stream()
+        .filter(candidate -> candidate.key().equals(factoryNode.key()))
+        .findFirst()
+        .orElse(new FactoryFlow.Node(
+            factoryNode.key(), factoryNode.kind(), factoryNode.band(), factoryNode.label(), null,
+            "UNAVAILABLE", "The deployer did not report this node"));
+  }
+
+  private static FactoryFlow safelyFlow(final FlowSupplier supplier) {
+    try {
+      return supplier.get();
+    } catch (RuntimeException exception) {
+      return null;
+    }
+  }
+
+  /**
+   * Looks up one node's recent work, for its drawer.
+   *
+   * <p>{@code deploy} and {@code platformbackup} are deployer-owned, exactly as in {@link
+   * #flow()}, and — unlike an earlier version of this method — the deployer genuinely is asked
+   * for them: it holds a separate, read-only {@code FACTORY_READ_TOKEN} that authorises only
+   * {@code GET /api/factory/flow/{nodeKey}}, never the trigger token that would let it start a
+   * deploy of itself. Routing these two keys to the deployer (rather than reporting them empty
+   * unconditionally) is what keeps this panel consistent with the counts panel in the same
+   * drawer, which already reaches the deployer successfully via the unauthenticated {@link
+   * #flow()}.
+   *
+   * <p>Every failure — deployer unreachable, read token unconfigured there, the factory call
+   * failing, anything else — still collapses to a result rather than an exception (a drawer that
+   * throws takes the whole page down for a detail panel), but it collapses to {@link
+   * FactoryFlowDetail#unavailable(String)}, not {@link FactoryFlowDetail#empty(String)}: those two
+   * mean different things to the operator, and flattening a failed read into "no runs in the last
+   * 30 days" is exactly the ambiguity this method exists to avoid, on the same terms as {@code
+   * FlowDetail}'s null-items convention in software-factory. A response that itself carries null
+   * {@code items} (software-factory's own artifact reader failing) is returned as-is rather than
+   * defaulted to an empty list here — only this method's own catch block mints {@code
+   * unavailable}.
+   *
+   * @param nodeKey the node whose drawer is open
+   * @return that node's items, newest first; {@link FactoryFlowDetail#empty(String) empty} when
+   *     the read succeeded and found nothing; {@link FactoryFlowDetail#unavailable(String)
+   *     unavailable} when the source could not be read at all
+   */
+  public FactoryFlowDetail flowDetail(final String nodeKey) {
+    try {
+      return DEPLOYER_OWNED.contains(nodeKey)
+          ? client.deployerFlowDetail(nodeKey)
+          : client.factoryFlowDetail(nodeKey);
+    } catch (RuntimeException exception) {
+      return FactoryFlowDetail.unavailable(nodeKey);
+    }
   }
 
   /**
@@ -341,6 +475,11 @@ public class FactoryAdminService {
   @FunctionalInterface
   private interface StatusSupplier {
     FactoryInstanceStatus get();
+  }
+
+  @FunctionalInterface
+  private interface FlowSupplier {
+    FactoryFlow get();
   }
 
   @FunctionalInterface

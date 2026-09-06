@@ -252,7 +252,7 @@ class CheckRunGatewayTest {
             new CodeReviewProperties.Agent(
                 "claude", "sonnet", "medium", 12, java.time.Duration.ofMinutes(15),
                 java.nio.file.Path.of("/tmp"), 2097152, 80, "v1"),
-            new CodeReviewProperties.Api("token"), temporalUiBaseUrl);
+            new CodeReviewProperties.Api("token", null), temporalUiBaseUrl);
     return new CheckRunGateway(
         properties,
         new GitHubCredentials(properties, objectMapper),

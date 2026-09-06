@@ -211,6 +211,86 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 044-factory-flow-console: `/admin/software-factory` replaces its seven module cards with a
+  twelve-node loop diagram, `com.simonrowe.factory.flow`. **No module gained persistence** — every
+  count and drawer list is read live from Temporal visibility (`WorkflowCountsReader`,
+  `CountWorkflowExecutions`/`ListWorkflowExecutions` per workflow type) or, for the four artifact
+  nodes, from `linear_issues` and GitHub's REST API (`ArtifactCountsReader`). That is also why
+  `codereview` — the one module with no run collection of its own anywhere in Mongo — is countable
+  at all: Temporal's own visibility store answers for it exactly as well as for the other five.
+  Load-bearing bits:
+  - **`linear` is an artifact, not a module box.** It is the factory's only activity-only task
+    queue — nothing flows *through* it — so it carries the `linear` module's health as a badge on
+    the `linear` artifact node via `NodeDescriptor.moduleKey`, rather than being drawn as a
+    seventh box. `platformbackup` is the opposite deliberate omission: it sits off the ring on
+    `Band.UTILITY` and is on **no edge at all**, pinned by
+    `FactoryFlowTopologyTest.leavesPlatformBackupOffTheRing` — it has nothing downstream inside
+    this factory, and drawing it on a loop would assert a feedback path that does not exist.
+    `FactoryFlowTopologyTest` pins the exact twelve node keys and the topology's internal wiring,
+    and `moduleKeysOnNodesMatchModulePrerequisitesExactly` now cross-checks `NODES` against
+    `ModulePrerequisites.KEYS` in both directions — a key in `ModulePrerequisites.KEYS` carried
+    by no node means a module was added without being drawn into the graph, a node `moduleKey`
+    matching no real key means a typo that would leave that node's health permanently unknown,
+    and both failure messages name the offending keys. At Task 1, before this test existed, a
+    real module/node mismatch like this was caught only by a reviewer reading both lists side by
+    side; a future module now fails the build on its own if it is forgotten.
+  - **Several state pairs are decided separately on purpose and must never collapse**: `IDLE`
+    (nothing to do) vs `OFFLINE` (work waiting, nothing listening) for the `build` node;
+    `NOT_TRACKED` (no source of live data at all — only `production` today, which is reported by
+    `/api/platform/status` instead of duplicated here) vs an unconditional `READY`; a null
+    `NodeCounts`/`FlowDetail.items` (the source could not be read) vs zero/an empty list (it was
+    read and genuinely found nothing). The frontend carries the same three-way split to the pixel —
+    "Counts unknown", a visible error banner, and a node-specific empty message ("No open
+    tickets.") are three different renders of `FactoryNodeDrawer`, not one collapsed "nothing
+    here". Collapsing any of them reproduces the exact bug a reviewer caught mid-implementation: a
+    deployer that could not be reached rendered byte-identical to a deployer with a genuinely quiet
+    30 days, directly under a counts panel proving otherwise.
+  - **`GET /api/factory/flow` is unauthenticated; `GET /api/factory/flow/{nodeKey}` is not — a
+    mid-implementation reversal of the spec, not the original design.** The list endpoint returns
+    only node keys, counts and `diagnostic` strings of the same disclosure class
+    `/api/factory/status` already serves openly from both containers; the *detail* endpoint is the
+    one that actually carries ticket subjects and pull request titles
+    (`FlowDetail.Item#title()`), and lives in a **separate controller class** for exactly the
+    reason `FactoryStatusController` documents elsewhere: `FactoryTokenAuthenticator` is a plain
+    `@Component` each protected controller calls for itself, not a Spring Security filter, so a
+    `@GetMapping("/{nodeKey}")` added to the unauthenticated controller would silently inherit its
+    posture instead of gaining a check. Token-protecting the list endpoint would have forced
+    handing the socket-holding `deployer` — which owns the `deploy`/`platformbackup` nodes and
+    holds no `FACTORY_TRIGGER_TOKEN` — a credential that also authorises the **seven** other
+    trigger-protected controllers (`Review`, `Deploy`, `CveScan`, `PlatformBackup`, `LogWatch`,
+    `Feedback`, `FactoryRun`), including the one that starts a deploy.
+  - **The actual fix is a second, narrower token**, `FACTORY_READ_TOKEN`, checked by
+    `authenticateRead` (never `authenticate`, never the trigger token) and accepted by exactly one
+    endpoint. `deployer` now declares it and still declares no `FACTORY_TRIGGER_TOKEN`, enforced by
+    a new `DeployerReadTokenConfinementTest` in the same compose-parsing style as
+    `DeployerLinearCredentialTest`/`DeployerGrafanaCredentialTest`. It uses compose's `${VAR:-}`
+    empty-default form, **deliberately not `:?`**: the variable does not exist in production `.env`
+    yet, and an unset `:?` fails interpolation for the *whole compose file*, wedging `sync-config`
+    and taking `monitor-prod.sh`'s minutely `up -d` down with it — the identical precedent
+    `trivy-server`'s `--token` argument already established. **Operator action required**:
+    `FACTORY_READ_TOKEN` must be added to the production `.env` before the `deploy`/`platformbackup`
+    drawers show real run history; until then both correctly render "not available" rather than a
+    misleading empty list.
+  - **The `build` node is declared but unstaffed.** The build agent (`specs/045-build-agent/`) runs
+    on a machine this server cannot reach, so its health is derived entirely from the open Linear
+    backlog waiting for it. Recorded, not hidden: today that check keys off **any** open Linear
+    issue rather than specifically `factory:build`-labelled work, and has no agent-liveness check
+    at all — an unrelated open CVE ticket shows `build` as `OFFLINE`. Do not mistake this for
+    finished 045 semantics.
+  - **Accessibility**: every node renders as a real `<button>` in main-loop DOM order
+    (`FACTORY_FLOW_ORDER`) with the SVG laid over it as `aria-hidden` decoration, so keyboard and
+    screen-reader users traverse the same ring a sighted user sees. Below 50rem the SVG is dropped
+    entirely and the buttons stack as the mobile layout, for free. The drawer traps Tab, moves
+    focus to its heading on open, and restores it to the triggering button on close.
+  - **A reciprocal-edge rendering bug survived a full review round looking correct.** The fast
+    loop's two opposite-direction edges between `pull-request` and `codereview` computed the
+    identical curve through a double sign flip that cancelled itself, rendering as one visible
+    segment instead of two. The regression test that should have caught it only compared the two
+    edges' SVG `d` strings for inequality — trivially true whenever two endpoints are textually
+    swapped, so it proved nothing about the actual picture. Found only by a reviewer hand-computing
+    control points. This diagram's geometry needs an eye on it, not just a green suite.
+  See `docs/runbooks/software-factory.md` ("Factory flow console") and
+  `specs/044-factory-flow-console/`.
 - spring-boot-4-upgrade: Boot **3.5.16 → 4.1.1**, Java **21 → 25 LTS**, Gradle 9.7.1, Spring AI
   **2.0.1**, Embabel **1.5.1**, Jackson 3, JUnit 6, Spring Kafka 4, Testcontainers 2,
   Elasticsearch **9.4.5**, Mongock unchanged at 5.5.1. Backend 1160 tests and software-factory

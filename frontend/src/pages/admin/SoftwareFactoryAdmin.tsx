@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
-  CircleDashed,
   CloudCog,
   Loader2,
   Play,
@@ -15,8 +14,12 @@ import {
 
 import { useAuth } from '../../auth/useAuth'
 import { FRONTEND_COMMIT } from '../../config/version'
+import { FactoryFlowGraph } from './FactoryFlowGraph'
+import { FactoryNodeDrawer } from './FactoryNodeDrawer'
 import { parsePullNumber } from './pullRequestInput'
 import {
+  fetchFactoryFlow,
+  fetchFactoryFlowDetail,
   fetchRunProgress,
   fetchSoftwareFactoryStatus,
   startCodeReview,
@@ -25,31 +28,47 @@ import {
   startLogWatchScan,
   startPlatformBackup,
   startVulnerabilityScan,
+  type FactoryFlow,
+  type FactoryFlowDetail,
   type FactoryModuleStatus,
   type FactoryRunAccepted,
   type FactoryRunProgress,
-  type FactoryScheduleStatus,
   type SoftwareFactoryStatus,
 } from '../../services/softwareFactoryApi'
-
-const formatTime = (value: string | null) =>
-  value ? new Date(value).toLocaleString() : 'Not recorded'
-
-/**
- * A paused schedule has no next action time, and neither does one Temporal has not computed yet,
- * so appending it unconditionally produced "Active · next Not recorded".
- */
-function scheduleSummary(schedule: FactoryScheduleStatus): string {
-  if (!schedule.exists) return 'Absent'
-  const state = schedule.paused ? 'Paused' : 'Active'
-  return schedule.nextActionAt ? `${state} · next ${formatTime(schedule.nextActionAt)}` : state
-}
 
 /** Three seconds tracks a deploy phase change closely without hammering an unrouted API. */
 const POLL_INTERVAL_MS = 3000
 
 /** Ten minutes of polling. A deploy that has not finished by then needs Temporal, not this page. */
 const MAX_POLLS = 200
+
+/** Off is the default: a console left open on a second monitor should not poll all day. */
+const REFRESH_OPTIONS: { label: string; ms: number | null }[] = [
+  { label: 'Off', ms: null },
+  { label: '15s', ms: 15_000 },
+  { label: '1m', ms: 60_000 },
+  { label: '5m', ms: 300_000 },
+]
+
+function RefreshInterval(
+  { value, onChange }: { value: number | null; onChange: (ms: number | null) => void },
+) {
+  return (
+    <fieldset className="factory-console__refresh" role="radiogroup" aria-label="Refresh interval">
+      {REFRESH_OPTIONS.map((option) => (
+        <label key={option.label}>
+          <input
+            type="radio"
+            name="factory-refresh"
+            checked={value === option.ms}
+            onChange={() => onChange(option.ms)}
+          />
+          {option.label}
+        </label>
+      ))}
+    </fieldset>
+  )
+}
 
 interface ActiveRun {
   key: string
@@ -110,9 +129,75 @@ function useRunProgress(
   }, [workflowId, terminal, getAccessToken, setRun])
 }
 
+interface FlowDetailState {
+  /**
+   * `null` while a fetch is in flight — including immediately after switching nodes.
+   * `undefined` means no node is selected, so a closed drawer is never drawn as "loading".
+   */
+  detail: FactoryFlowDetail | null | undefined
+  /**
+   * Set on a failed fetch, alongside {@link detail} staying `null`. Distinct from both other
+   * states on purpose, following the same pattern as this page's own top-level `error`: a
+   * detail panel that cannot be read must render as a failure, not as a permanent, silent
+   * spinner indistinguishable from one still in flight, and not as the empty-list copy either —
+   * that would misreport a broken fetch as a node with genuinely nothing to show.
+   */
+  error: string | null
+}
+
+/**
+ * Fetches the selected node's recent work whenever the selection changes, and again on every
+ * `refreshToken` tick — the same tick the page's own flow/status refresh runs on, not a second
+ * polling policy of its own. Without this, the run list under an open drawer froze at the moment
+ * it was opened while the counts panel above it (driven by `flow`, which the refresh interval
+ * does update) kept moving — exactly the primary use case for the refresh control, watching a
+ * deploy's run list update while it is in progress.
+ */
+function useFlowDetail(nodeKey: string | null, refreshToken: number): FlowDetailState {
+  const { getAccessToken } = useAuth()
+  const [detail, setDetail] = useState<FactoryFlowDetail | null | undefined>(undefined)
+  const [error, setError] = useState<string | null>(null)
+  const previousNodeKey = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!nodeKey) {
+      previousNodeKey.current = null
+      setDetail(undefined)
+      setError(null)
+      return undefined
+    }
+    // Only show the loading state on a genuine node switch, not on a refresh-triggered re-fetch
+    // of the same node — that must not flash "Loading…" over an already-rendered run list, the
+    // same convention the top-level status/flow refresh already follows for `flow`.
+    if (previousNodeKey.current !== nodeKey) {
+      setDetail(null)
+    }
+    previousNodeKey.current = nodeKey
+    setError(null)
+    let cancelled = false
+    void (async () => {
+      try {
+        const result = await fetchFactoryFlowDetail(getAccessToken, nodeKey)
+        if (!cancelled) setDetail(result)
+      } catch (reason) {
+        if (!cancelled) {
+          setError(reason instanceof Error ? reason.message : 'Could not load recent runs')
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [nodeKey, getAccessToken, refreshToken])
+
+  return { detail, error }
+}
+
 export function SoftwareFactoryAdmin() {
   const { getAccessToken } = useAuth()
   const [status, setStatus] = useState<SoftwareFactoryStatus | null>(null)
+  const [flow, setFlow] = useState<FactoryFlow | null>(null)
+  const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -121,25 +206,57 @@ export function SoftwareFactoryAdmin() {
   const [pullNumber, setPullNumber] = useState('')
   const [deployConfirmation, setDeployConfirmation] = useState('')
   const [confirmBackup, setConfirmBackup] = useState(false)
+  const [refreshMs, setRefreshMs] = useState<number | null>(null)
+  // Bumped once every time `load()` completes — the initial load, a manual action's own reload,
+  // and every refresh-interval tick alike — so the open drawer's run list rides the SAME tick
+  // rather than a second timer of its own. A plain counter, not the flow/status themselves: those
+  // already drive the counts panel, and reusing them as a dependency would also re-fetch detail
+  // on every unrelated `flow`/`status` change (e.g. a manual action's optimistic update).
+  const [flowTick, setFlowTick] = useState(0)
 
   useRunProgress(run, setRun)
+  const { detail: selectedNodeDetail, error: selectedNodeDetailError } =
+    useFlowDetail(selectedNode, flowTick)
+
+  // A ref, not state: state would re-run the interval effect below and reset its timer on every
+  // load, which would make a slow response push its own next tick out rather than being skipped.
+  const loadInFlight = useRef(false)
 
   const load = useCallback(async () => {
     try {
+      loadInFlight.current = true
       setLoading(true)
       setError(null)
-      setStatus(await fetchSoftwareFactoryStatus(getAccessToken))
+      const [nextStatus, nextFlow] = await Promise.all([
+        fetchSoftwareFactoryStatus(getAccessToken),
+        fetchFactoryFlow(getAccessToken),
+      ])
+      setStatus(nextStatus)
+      setFlow(nextFlow)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not load factory status')
     } finally {
       setLoading(false)
+      loadInFlight.current = false
+      setFlowTick((tick) => tick + 1)
     }
   }, [getAccessToken])
 
   useEffect(() => { void load() }, [load])
 
+  useEffect(() => {
+    if (refreshMs === null) return undefined
+    const timer = setInterval(() => {
+      // The interval is a floor on spacing, not a promise of one request per tick: a slow
+      // response must not queue a second request behind the first.
+      if (loadInFlight.current) return
+      void load()
+    }, refreshMs)
+    return () => clearInterval(timer)
+  }, [refreshMs, load])
+
   const modules = useMemo(
-    () => new Map(status?.modules.map((module) => [module.key, module]) ?? []),
+    () => new Map<string, FactoryModuleStatus>(status?.modules.map((module) => [module.key, module]) ?? []),
     [status],
   )
   const shortCommit = status?.backendCommit?.slice(0, 7) ?? 'unknown'
@@ -163,192 +280,235 @@ export function SoftwareFactoryAdmin() {
     }
   }
 
+  /**
+   * The manual controls offered for a node, inside its drawer.
+   *
+   * A total switch rather than a chain ending in a fallthrough: the previous `actionFor` returned
+   * "Dry run / backup" for anything it did not recognise, silently mislabelling a newly added
+   * module rather than failing visibly. Nodes with no manual action of their own render nothing.
+   */
+  const actionPanelFor = (key: string): React.ReactNode => {
+    switch (key) {
+      case 'codereview':
+        return (
+          <ActionPanel title="Code review" description="Re-review a pull request the webhook could not. A dry run reviews without posting anything; publishing comments on the pull request as the reviewer bot.">
+            <label className="factory-console__field">
+              Pull request to review
+              <input
+                placeholder="130 or a pull request URL"
+                value={reviewPullNumber}
+                onChange={(event) => setReviewPullNumber(event.target.value)}
+              />
+              <PullRequestHint repository={repository} value={reviewPullNumber} parsed={reviewNumber} />
+            </label>
+            <div className="factory-console__button-row">
+              <button
+                className="admin-btn"
+                disabled={
+                  !modules.get('codereview')?.ready || pending !== null || reviewNumber === null
+                }
+                onClick={() => void start('review-dry',
+                  () => startCodeReview(getAccessToken, reviewNumber as number, false))}
+                type="button"
+              >
+                {pending === 'review-dry'
+                  ? <Loader2 className="factory-console__spin" size={16} />
+                  : <ScanSearch size={16} />}
+                Dry-run review
+              </button>
+              <button
+                className="admin-btn admin-btn--primary"
+                disabled={
+                  !modules.get('codereview')?.ready || pending !== null || reviewNumber === null
+                }
+                onClick={() => void start('review',
+                  () => startCodeReview(getAccessToken, reviewNumber as number, true))}
+                type="button"
+              >
+                {pending === 'review'
+                  ? <Loader2 className="factory-console__spin" size={16} />
+                  : <Play size={16} />}
+                Review and comment
+              </button>
+            </div>
+          </ActionPanel>
+        )
+      case 'feedback':
+        return (
+          <ActionPanel title="Review feedback" description="Harvest a closed pull request, file one Linear issue, then propose guidance changes.">
+            <label className="factory-console__field">
+              Pull request to harvest
+              <input
+                placeholder="130 or a pull request URL"
+                value={pullNumber}
+                onChange={(event) => setPullNumber(event.target.value)}
+              />
+              <PullRequestHint repository={repository} value={pullNumber} parsed={feedbackNumber} />
+            </label>
+            <button
+              className="admin-btn admin-btn--primary"
+              disabled={
+                !modules.get('feedback')?.ready || pending !== null || feedbackNumber === null
+              }
+              onClick={() => void start('feedback',
+                () => startFeedback(getAccessToken, feedbackNumber as number))}
+              type="button"
+            >
+              {pending === 'feedback' ? <Loader2 className="factory-console__spin" size={16} /> : <Play size={16} />}
+              Process feedback
+            </button>
+          </ActionPanel>
+        )
+      case 'cvefix':
+        return (
+          <ActionPanel title="Vulnerability report" description="Scan Dependency-Track and create or update one Linear ticket containing all current CVEs.">
+            <button
+              className="admin-btn admin-btn--primary"
+              disabled={!modules.get('cvefix')?.ready || pending !== null}
+              onClick={() => void start('cvefix', () => startVulnerabilityScan(getAccessToken))}
+              type="button"
+            ><ShieldAlert size={16} /> Scan now</button>
+          </ActionPanel>
+        )
+      case 'logwatch':
+        return (
+          // Labels are deliberately more specific than the panel needs. "Dry run" alone collides
+          // with the platform-backup control and "Scan now" with the vulnerability one, and the
+          // accessible name is all a screen reader gets - the panel heading that disambiguates
+          // them visually is not part of it.
+          <ActionPanel title="Log watch" description="Scan production logs for recurring errors and file each distinct problem in Linear. A dry run reports what it would file and creates nothing.">
+            <div className="factory-console__button-row">
+              <button
+                className="admin-btn"
+                disabled={!modules.get('logwatch')?.ready || pending !== null}
+                onClick={() => void start('logwatch-dry', () => startLogWatchScan(getAccessToken, true))}
+                type="button"
+              >Dry run scan</button>
+              <button
+                className="admin-btn admin-btn--primary"
+                disabled={!modules.get('logwatch')?.ready || pending !== null}
+                onClick={() => void start('logwatch', () => startLogWatchScan(getAccessToken, false))}
+                type="button"
+              ><ScrollText size={16} /> Scan logs now</button>
+            </div>
+          </ActionPanel>
+        )
+      case 'platformbackup':
+        return (
+          <ActionPanel title="Platform backup" description="Dry runs exercise the capture plan. A real run uploads a new archive; restore remains a host operation.">
+            <div className="factory-console__button-row">
+              <button
+                className="admin-btn"
+                disabled={!modules.get('platformbackup')?.ready || pending !== null}
+                onClick={() => void start('backup-dry', () => startPlatformBackup(getAccessToken, true))}
+                type="button"
+              >Dry run</button>
+              {!confirmBackup ? (
+                <button
+                  className="admin-btn admin-btn--danger"
+                  disabled={!modules.get('platformbackup')?.ready || pending !== null}
+                  onClick={() => setConfirmBackup(true)}
+                  type="button"
+                >Back up now</button>
+              ) : (
+                <button
+                  className="admin-btn admin-btn--danger"
+                  disabled={pending !== null}
+                  onClick={() => {
+                    setConfirmBackup(false)
+                    void start('backup', () => startPlatformBackup(getAccessToken, false))
+                  }}
+                  type="button"
+                >Confirm real backup</button>
+              )}
+            </div>
+          </ActionPanel>
+        )
+      case 'deploy':
+        return (
+          <ActionPanel title="Redeploy production" description={`Only the currently running commit can be redeployed. Type ${deployPhrase} to continue.`} danger>
+            <label className="factory-console__field">
+              Confirmation phrase
+              <input value={deployConfirmation} onChange={(event) => setDeployConfirmation(event.target.value)} />
+            </label>
+            <button
+              className="admin-btn admin-btn--danger"
+              disabled={
+                !modules.get('deploy')?.ready || pending !== null || FRONTEND_COMMIT === 'unknown'
+                || deployConfirmation !== deployPhrase
+              }
+              onClick={() => void start('deploy', () => startDeploy(getAccessToken, FRONTEND_COMMIT, deployConfirmation))}
+              type="button"
+            ><CloudCog size={16} /> Redeploy {shortCommit}</button>
+          </ActionPanel>
+        )
+      case 'linear':
+      case 'pull-request':
+      case 'main':
+      case 'production':
+      case 'agent-setup':
+      case 'build':
+        return null
+      default:
+        return null
+    }
+  }
+
   if (loading && !status) return <div className="admin-loading">Loading Software Factory…</div>
+
+  const selectedFlowNode = flow?.nodes.find((node) => node.key === selectedNode) ?? null
 
   return (
     <div className="admin-page factory-console">
-      <div className="admin-page__header factory-console__header">
-        <div>
-          <span className="factory-console__eyebrow">Temporal operations</span>
-          <h1 className="admin-page__title">Software Factory</h1>
-          <p className="factory-console__intro">
-            Observe each automation boundary and start the workflows that are safe to run by hand.
-          </p>
-        </div>
-        <button className="admin-btn" disabled={loading} onClick={() => void load()} type="button">
-          <RefreshCw className={loading ? 'factory-console__spin' : ''} size={16} /> Refresh
-        </button>
-      </div>
-
-      <div className="factory-console__service-strip" aria-label="Factory service reachability">
-        <ServiceState label="Factory" reachable={status?.factoryReachable ?? false} />
-        <ServiceState label="Deployer" reachable={status?.deployerReachable ?? false} />
-        <span className="factory-console__commit">production {shortCommit}</span>
-      </div>
-
-      {error && <div className="admin-error-banner"><AlertCircle size={16} /> {error}</div>}
-      {run && <RunBanner run={run} />}
-
-      <div className="factory-rail" role="list" aria-label="Software Factory modules">
-        {status?.modules.map((module, index) => (
-          <ModuleRow
-            key={module.key}
-            module={module}
-            number={index + 1}
-            action={actionFor(module)}
-          />
-        ))}
-      </div>
-
-      <section className="factory-console__controls" aria-labelledby="factory-actions-title">
-        <div className="factory-console__controls-heading">
-          <span>Manual controls</span>
-          <h2 id="factory-actions-title">Durable workflow starts</h2>
-        </div>
-
-        <ActionPanel title="Code review" description="Re-review a pull request the webhook could not. A dry run reviews without posting anything; publishing comments on the pull request as the reviewer bot.">
-          <label className="factory-console__field">
-            Pull request to review
-            <input
-              placeholder="130 or a pull request URL"
-              value={reviewPullNumber}
-              onChange={(event) => setReviewPullNumber(event.target.value)}
-            />
-            <PullRequestHint repository={repository} value={reviewPullNumber} parsed={reviewNumber} />
-          </label>
-          <div className="factory-console__button-row">
-            <button
-              className="admin-btn"
-              disabled={
-                !modules.get('codereview')?.ready || pending !== null || reviewNumber === null
-              }
-              onClick={() => void start('review-dry',
-                () => startCodeReview(getAccessToken, reviewNumber as number, false))}
-              type="button"
-            >
-              {pending === 'review-dry'
-                ? <Loader2 className="factory-console__spin" size={16} />
-                : <ScanSearch size={16} />}
-              Dry-run review
-            </button>
-            <button
-              className="admin-btn admin-btn--primary"
-              disabled={
-                !modules.get('codereview')?.ready || pending !== null || reviewNumber === null
-              }
-              onClick={() => void start('review',
-                () => startCodeReview(getAccessToken, reviewNumber as number, true))}
-              type="button"
-            >
-              {pending === 'review'
-                ? <Loader2 className="factory-console__spin" size={16} />
-                : <Play size={16} />}
-              Review and comment
+      {/*
+        `aria-modal="true"` on the drawer is honest for the keyboard Tab trap, but thin for a
+        screen reader's own virtual cursor, which does not go through Tab and can still browse
+        into "inert" background content — and a sighted keyboard user who clicks into that
+        background and then Tabs can escape the trap the same way. `inert` on the page content
+        besides the drawer closes both: it removes this whole subtree from focus and the
+        accessibility tree while a drawer is open, with no change to the drawer itself.
+      */}
+      <div className="factory-console__body" inert={selectedFlowNode !== null}>
+        <div className="admin-page__header factory-console__header">
+          <div>
+            <span className="factory-console__eyebrow">Temporal operations</span>
+            <h1 className="admin-page__title">Software Factory</h1>
+            <p className="factory-console__intro">
+              Observe each automation boundary and start the workflows that are safe to run by
+              hand.
+            </p>
+          </div>
+          <div className="factory-console__header-actions">
+            <RefreshInterval value={refreshMs} onChange={setRefreshMs} />
+            <button className="admin-btn" disabled={loading} onClick={() => void load()} type="button">
+              <RefreshCw className={loading ? 'factory-console__spin' : ''} size={16} /> Refresh
             </button>
           </div>
-        </ActionPanel>
+        </div>
 
-        <ActionPanel title="Review feedback" description="Harvest a closed pull request, file one Linear issue, then propose guidance changes.">
-          <label className="factory-console__field">
-            Pull request to harvest
-            <input
-              placeholder="130 or a pull request URL"
-              value={pullNumber}
-              onChange={(event) => setPullNumber(event.target.value)}
-            />
-            <PullRequestHint repository={repository} value={pullNumber} parsed={feedbackNumber} />
-          </label>
-          <button
-            className="admin-btn admin-btn--primary"
-            disabled={
-              !modules.get('feedback')?.ready || pending !== null || feedbackNumber === null
-            }
-            onClick={() => void start('feedback',
-              () => startFeedback(getAccessToken, feedbackNumber as number))}
-            type="button"
-          >
-            {pending === 'feedback' ? <Loader2 className="factory-console__spin" size={16} /> : <Play size={16} />}
-            Process feedback
-          </button>
-        </ActionPanel>
+        <div className="factory-console__service-strip" aria-label="Factory service reachability">
+          <ServiceState label="Factory" reachable={status?.factoryReachable ?? false} />
+          <ServiceState label="Deployer" reachable={status?.deployerReachable ?? false} />
+          <span className="factory-console__commit">production {shortCommit}</span>
+        </div>
 
-        <ActionPanel title="Vulnerability report" description="Scan Dependency-Track and create or update one Linear ticket containing all current CVEs.">
-          <button
-            className="admin-btn admin-btn--primary"
-            disabled={!modules.get('cvefix')?.ready || pending !== null}
-            onClick={() => void start('cvefix', () => startVulnerabilityScan(getAccessToken))}
-            type="button"
-          ><ShieldAlert size={16} /> Scan now</button>
-        </ActionPanel>
+        {error && <div className="admin-error-banner"><AlertCircle size={16} /> {error}</div>}
+        {run && <RunBanner run={run} />}
 
-        {/*
-          Labels are deliberately more specific than the panel needs. "Dry run" alone collides
-          with the platform-backup control and "Scan now" with the vulnerability one, and the
-          accessible name is all a screen reader gets - the panel heading that disambiguates them
-          visually is not part of it.
-        */}
-        <ActionPanel title="Log watch" description="Scan production logs for recurring errors and file each distinct problem in Linear. A dry run reports what it would file and creates nothing.">
-          <div className="factory-console__button-row">
-            <button
-              className="admin-btn"
-              disabled={!modules.get('logwatch')?.ready || pending !== null}
-              onClick={() => void start('logwatch-dry', () => startLogWatchScan(getAccessToken, true))}
-              type="button"
-            >Dry run scan</button>
-            <button
-              className="admin-btn admin-btn--primary"
-              disabled={!modules.get('logwatch')?.ready || pending !== null}
-              onClick={() => void start('logwatch', () => startLogWatchScan(getAccessToken, false))}
-              type="button"
-            ><ScrollText size={16} /> Scan logs now</button>
-          </div>
-        </ActionPanel>
+        {flow && (
+          <FactoryFlowGraph flow={flow} selected={selectedNode} onSelect={setSelectedNode} />
+        )}
+      </div>
 
-        <ActionPanel title="Platform backup" description="Dry runs exercise the capture plan. A real run uploads a new archive; restore remains a host operation.">
-          <div className="factory-console__button-row">
-            <button
-              className="admin-btn"
-              disabled={!modules.get('platformbackup')?.ready || pending !== null}
-              onClick={() => void start('backup-dry', () => startPlatformBackup(getAccessToken, true))}
-              type="button"
-            >Dry run</button>
-            {!confirmBackup ? (
-              <button
-                className="admin-btn admin-btn--danger"
-                disabled={!modules.get('platformbackup')?.ready || pending !== null}
-                onClick={() => setConfirmBackup(true)}
-                type="button"
-              >Back up now</button>
-            ) : (
-              <button
-                className="admin-btn admin-btn--danger"
-                disabled={pending !== null}
-                onClick={() => {
-                  setConfirmBackup(false)
-                  void start('backup', () => startPlatformBackup(getAccessToken, false))
-                }}
-                type="button"
-              >Confirm real backup</button>
-            )}
-          </div>
-        </ActionPanel>
-
-        <ActionPanel title="Redeploy production" description={`Only the currently running commit can be redeployed. Type ${deployPhrase} to continue.`} danger>
-          <label className="factory-console__field">
-            Confirmation phrase
-            <input value={deployConfirmation} onChange={(event) => setDeployConfirmation(event.target.value)} />
-          </label>
-          <button
-            className="admin-btn admin-btn--danger"
-            disabled={
-              !modules.get('deploy')?.ready || pending !== null || FRONTEND_COMMIT === 'unknown'
-              || deployConfirmation !== deployPhrase
-            }
-            onClick={() => void start('deploy', () => startDeploy(getAccessToken, FRONTEND_COMMIT, deployConfirmation))}
-            type="button"
-          ><CloudCog size={16} /> Redeploy {shortCommit}</button>
-        </ActionPanel>
-      </section>
+      <FactoryNodeDrawer
+        node={selectedFlowNode}
+        module={selectedNode ? modules.get(selectedNode) ?? null : null}
+        onClose={() => setSelectedNode(null)}
+        detail={selectedNodeDetail}
+        detailError={selectedNodeDetailError}
+      >
+        {selectedNode && actionPanelFor(selectedNode)}
+      </FactoryNodeDrawer>
     </div>
   )
 }
@@ -423,52 +583,6 @@ function RunBanner({ run }: { run: ActiveRun }) {
   )
 }
 
-function ModuleRow({ module, number, action }: { module: FactoryModuleStatus; number: number; action: string }) {
-  const schedule = module.schedule
-  return (
-    <article className={`factory-rail__row${module.ready ? '' : ' factory-rail__row--fault'}`} role="listitem">
-      <div className="factory-rail__identity">
-        <span className="factory-rail__number">{String(number).padStart(2, '0')}</span>
-        <div><h2>{module.displayName}</h2><span>{module.taskQueue}</span></div>
-      </div>
-      <Checkpoint
-        label="Configured"
-        good={module.configured === true}
-        value={module.configured === null ? 'Unconfirmed' : module.configured ? 'On' : 'Off'}
-      />
-      <Checkpoint
-        label="Worker"
-        good={module.ready}
-        value={`${module.workflowPollers ?? '—'} workflow / ${module.activityPollers ?? '—'} activity`}
-      />
-      <Checkpoint
-        label={schedule ? 'Schedule' : 'Trigger'}
-        good={schedule ? schedule.exists && schedule.paused === false : module.ready}
-        value={schedule ? scheduleSummary(schedule) : module.trigger}
-      />
-      <div className="factory-rail__action"><span>Manual</span><strong>{action}</strong></div>
-      {module.missingPrerequisites?.length > 0 && (
-        <ul className="factory-rail__prerequisites" aria-label={`${module.displayName} prerequisites`}>
-          {module.missingPrerequisites.map((missing) => (
-            <li key={missing}><AlertCircle size={14} /> {missing}</li>
-          ))}
-        </ul>
-      )}
-      {module.diagnostic && module.missingPrerequisites?.length === 0
-        && <p className="factory-rail__diagnostic">{module.diagnostic}</p>}
-    </article>
-  )
-}
-
-function Checkpoint({ label, good, value }: { label: string; good: boolean; value: string }) {
-  return (
-    <div className="factory-rail__checkpoint">
-      {good ? <CheckCircle2 size={16} /> : <CircleDashed size={16} />}
-      <span>{label}</span><strong>{value}</strong>
-    </div>
-  )
-}
-
 function ActionPanel({
   title,
   description,
@@ -485,30 +599,4 @@ function ActionPanel({
       <h3>{title}</h3><p>{description}</p><div className="factory-action__controls">{children}</div>
     </div>
   )
-}
-
-/**
- * The manual action offered for a module, in the summary table.
- *
- * A total switch rather than a chain ending in a fallthrough: the previous form returned
- * "Dry run / backup" for anything it did not recognise, so a newly added module was silently
- * mislabelled as a backup control rather than failing visibly.
- */
-function actionFor(module: FactoryModuleStatus): string {
-  switch (module.key) {
-    case 'linear':
-      return 'Status only'
-    case 'codereview':
-      return 'Review a PR'
-    case 'feedback':
-      return 'Process PR'
-    case 'cvefix':
-      return 'Scan now'
-    case 'deploy':
-      return 'Guarded redeploy'
-    case 'platformbackup':
-      return 'Dry run / backup'
-    case 'logwatch':
-      return 'Dry run / scan'
-  }
 }

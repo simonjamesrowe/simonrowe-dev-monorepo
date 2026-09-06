@@ -225,7 +225,7 @@ class GitWorkspaceFactoryTest {
             1024 * 1024,
             10,
             "test"),
-        new CodeReviewProperties.Api(""), "https://temporal.test");
+        new CodeReviewProperties.Api("", null), "https://temporal.test");
   }
 
   private static String git(final Path directory, final String... arguments) throws IOException {

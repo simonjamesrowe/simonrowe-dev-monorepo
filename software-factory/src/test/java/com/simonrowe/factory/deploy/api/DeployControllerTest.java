@@ -111,7 +111,7 @@ class DeployControllerTest {
             new CodeReviewProperties.Github(
                 "https://api.github.com", "", "", "", "", Duration.ofSeconds(30)),
             null,
-            new CodeReviewProperties.Api(TOKEN),
+            new CodeReviewProperties.Api(TOKEN, null),
             "https://temporal.test"));
   }
 }

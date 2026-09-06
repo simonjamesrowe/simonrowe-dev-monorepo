@@ -21,7 +21,26 @@ public class FactoryTokenAuthenticator {
    * Fails closed when the token is unconfigured and compares configured tokens in constant time.
    */
   public void authenticate(final String suppliedToken) {
-    String configured = properties.api().triggerToken();
+    check(properties.api().triggerToken(), suppliedToken);
+  }
+
+  /**
+   * Authenticates with the separate, read-only token rather than the trigger token.
+   *
+   * <p>This exists so a container may be granted read access to titled, per-run detail without
+   * also gaining the trigger token that starts a deploy, a code review or a platform backup. The
+   * {@code deployer} holds {@code FACTORY_READ_TOKEN} but deliberately never
+   * {@code FACTORY_TRIGGER_TOKEN} — see {@code docker-compose.prod.yml}'s comment on that service
+   * for why. Same fail-closed-when-unconfigured behaviour and constant-time comparison as {@link
+   * #authenticate(String)}, against a different configured value.
+   *
+   * @param suppliedToken the value of the {@code X-Factory-Token} header, or null
+   */
+  public void authenticateRead(final String suppliedToken) {
+    check(properties.api().readToken(), suppliedToken);
+  }
+
+  private void check(final String configured, final String suppliedToken) {
     if (configured == null || configured.isBlank()) {
       throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
           "Manual factory actions are disabled");

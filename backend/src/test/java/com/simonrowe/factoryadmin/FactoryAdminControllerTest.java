@@ -1,5 +1,6 @@
 package com.simonrowe.factoryadmin;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -157,6 +158,62 @@ class FactoryAdminControllerTest {
                     + "\",\"confirmation\":\"REDEPLOY 0123456\"}"))
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.detail").value("Redeploying 0123456"));
+  }
+
+  @Test
+  void servesTheFlowGraphAsOkEvenWhenEveryNodeIsUnavailable() throws Exception {
+    // FactoryAdminService.flow() no longer throws when the factory cannot be reached - it
+    // degrades to an all-UNAVAILABLE graph instead. This pins the controller's half: that graph
+    // must reach the browser as an ordinary 200, never surface as the 500 "Request failed" the
+    // console used to render in place of the whole diagram.
+    when(service.flow()).thenReturn(new FactoryFlow(Instant.EPOCH, List.of(
+        new FactoryFlow.Node(
+            "logwatch", "MODULE", "OBSERVE", "Log watch", null, "UNAVAILABLE",
+            "Software Factory could not be reached")),
+        List.of()));
+
+    mockMvc.perform(get(BASE + "/flow"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.nodes[0].key").value("logwatch"))
+        .andExpect(jsonPath("$.nodes[0].health").value("UNAVAILABLE"))
+        .andExpect(jsonPath("$.nodes[0].counts").value(nullValue()));
+  }
+
+  @Test
+  void servesOneNodesFlowDetail() throws Exception {
+    when(service.flowDetail("logwatch")).thenReturn(
+        new FactoryFlowDetail("logwatch", List.of(
+            new FactoryFlowDetail.Item("logwatch-1", "logwatch-1", "COMPLETED", null, null))));
+
+    mockMvc.perform(get(BASE + "/flow/logwatch"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.nodeKey").value("logwatch"))
+        .andExpect(jsonPath("$.items[0].id").value("logwatch-1"));
+  }
+
+  @Test
+  void servesNullCountsAndItemsAsExplicitJsonNullsRatherThanOmittedFields() throws Exception {
+    // If @JsonInclude(NON_NULL) were ever added to FactoryFlow.Node or FactoryFlowDetail, a null
+    // counts/items would be OMITTED from the response body instead of serialised as JSON `null`.
+    // The frontend's `node.counts === null` / `detail.items === null` checks would then see
+    // `undefined`, fall through every strict-equality branch, and the destructuring in
+    // countSummary() would throw - degrading a "could not read this" state into a white screen
+    // instead of the "unknown"/"not available" copy. jsonPath().value(nullValue()) only passes
+    // when the key is present with a JSON null value; an omitted key fails this assertion instead
+    // of silently matching, which a `jsonPath(...).doesNotExist()` check would not distinguish.
+    when(service.flow()).thenReturn(new FactoryFlow(Instant.EPOCH, List.of(
+        new FactoryFlow.Node(
+            "logwatch", "MODULE", "OBSERVE", "Log watch", null, "UNAVAILABLE", null)),
+        List.of()));
+    when(service.flowDetail("logwatch")).thenReturn(new FactoryFlowDetail("logwatch", null));
+
+    mockMvc.perform(get(BASE + "/flow"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.nodes[0].counts").value(nullValue()));
+
+    mockMvc.perform(get(BASE + "/flow/logwatch"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items").value(nullValue()));
   }
 
   @Test

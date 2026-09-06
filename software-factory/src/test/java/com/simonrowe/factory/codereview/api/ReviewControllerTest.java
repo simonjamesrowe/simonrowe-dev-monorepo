@@ -44,7 +44,7 @@ class ReviewControllerTest {
             new CodeReviewProperties.Github(
                 "https://api.github.com", "", "", "", "", Duration.ofSeconds(30)),
             null,
-            new CodeReviewProperties.Api(configuredToken), "https://temporal.test");
+            new CodeReviewProperties.Api(configuredToken, null), "https://temporal.test");
     return MockMvcBuilders.standaloneSetup(
             new ReviewController(
                 new FactoryTokenAuthenticator(properties), workflowService, credentials))
