@@ -99,6 +99,10 @@ export function FactoryFlowGraph(
             * does not inherit stroke/fill from the path referencing it (and `context-stroke` is
             * not reliably supported), so the only way an arrowhead can match its edge's colour is
             * to give each loop its own marker and its own CSS rule targeting the path inside it.
+            *
+            * markerUnits is userSpaceOnUse rather than the strokeWidth default: otherwise each
+            * marker is scaled by its edge's stroke width, so the heaviest loop grows an arrowhead
+            * the size of a node box while the lightest stays tiny. All three want the same head.
             */}
           {(['main', 'fast', 'slow'] as const).map((loop) => (
             <marker
@@ -106,10 +110,11 @@ export function FactoryFlowGraph(
               id={`factory-flow-arrow-${loop}`}
               className={`factory-flow__marker factory-flow__marker--${loop}`}
               viewBox="0 0 10 10"
-              refX="8"
+              refX="9"
               refY="5"
-              markerWidth="10"
-              markerHeight="10"
+              markerWidth="7"
+              markerHeight="7"
+              markerUnits="userSpaceOnUse"
               orient="auto-start-reverse"
             >
               <path d="M0,0 L10,5 L0,10 z" />

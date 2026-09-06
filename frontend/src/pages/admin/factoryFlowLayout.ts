@@ -53,7 +53,7 @@ export const NODE_HALF_HEIGHT = 29
  * ~6 units. Trimming the endpoint back by only that much would still land the visible tip right
  * on the border; this is comfortably larger so the whole arrowhead clears it with a visible gap.
  */
-const EDGE_GAP = 10
+const EDGE_GAP = 3
 
 type Point = { x: number; y: number }
 
