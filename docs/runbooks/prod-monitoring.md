@@ -86,12 +86,28 @@ The fix has two parts:
   reachable from this host, revisit rather than assume this still holds.
 
 `sysctls:` only applies at container *creation*, not `docker compose restart`,
-so `pinggy` was also added to `FACTORY_DEPLOY_RECREATABLE` — otherwise this
-very change would sit inert in the compose file. See the comment beside that
-variable in `docker-compose.prod.yml`: the deployer only picks up an allowlist
-change on its own recreation, so this fix needs one manual
+so the sysctl above lands only when something recreates `pinggy`. The obvious
+move is to add `pinggy` to `FACTORY_DEPLOY_RECREATABLE` so a deploy does that —
+and it was **deliberately not done**.
+
+`pinggy` is the single point of ingress for every public hostname, and one
+`PINGGY_TOKEN` admits one active tunnel. Nobody has established whether a
+*recreate* can race its own outgoing session the way a second host holding the
+token does; the pre-existing comment on that variable warned that it can, and
+this change did not disprove it. If it can, listing `pinggy` there converts a
+manual step into an unattended, automated outage of the whole site.
+
+The asymmetry decides it. Leaving `pinggy` off costs one manual
 `docker compose -f docker-compose.prod.yml up -d pinggy` after the deploy that
-ships it.
+ships this — which is needed **regardless**, because the allowlist reaches
+`sync-config` as an environment variable on the *running* deployer and so would
+not have covered its own deploy either way. Adding it risks the site for no
+saving on this change.
+
+To settle it properly: recreate `pinggy` by hand while watching
+`docker logs -f` for `A tunnel with the same token is already active`. If a
+clean recreate reconnects, add `pinggy` to the allowlist and cite that
+observation in the comment.
 
 ### Testing a change to the watchdog
 
