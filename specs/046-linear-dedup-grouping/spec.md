@@ -66,7 +66,12 @@ of the current Linear triage queue.
 - `FilingDecider`'s precedence rules. They are correct and stay pure and untouched.
 - The `deploy` and `review-feedback` producers' filing behaviour, which stays exactly as it is.
 - Any change to the `source-health` filing, whose key parts (`source-health`, status) are already
-  structural and already deduplicate correctly.
+  structural and already deduplicate correctly. **Not honoured in the implementation**: the
+  source-health filing's key parts stayed untouched as scoped, but its `FilingMode` was changed to
+  `REFRESH` along with every other `logwatch` filing (`LogWatchWorkflowImpl.handleUnusableSource`)
+  — an undeclared departure from this line, caught only on review of the shipped code rather than
+  planned here. Its key parts being unchanged is exactly why it is the one `logwatch` filing whose
+  pre-046 fingerprints are not orphaned by the Changeover section below.
 
 ## Requirements
 
@@ -83,9 +88,15 @@ Handlers are tried in order and cover the six formats observed in production:
 | ECS JSON | `backend` | the `log.logger` value |
 | logfmt | `alloy` | the `component_id` value |
 | Spring plain text | `software-factory` | the logger token preceding ` : ` |
-| Temporal JSON | `temporal` | the `logging-call-at` value |
+| Temporal JSON | `temporal` | the literal `msg` value |
 | Java exception | `deployer` | the fully-qualified class name preceding the first `:` |
 | unrecognised | `elasticsearch`, others | empty |
+
+The Temporal handler deliberately reads `msg`, not the more obvious `logging-call-at`: the latter
+carries a source line number, so a Temporal upgrade that shifts the emitting file by one line
+would fork every ticket that handler files. `msg` is a literal in Temporal's zap JSON — never
+interpolated, since the variable part of the event lives in sibling `error`/`operation` fields —
+so it identifies the emitting call site just as reliably, without that fragility.
 
 It MUST be pure over strings — no clock, no client, no Spring — so it is exhaustively testable
 from fixtures, on the same terms as `SignatureExtractor`.
@@ -188,7 +199,10 @@ anything.
 
 **This is accepted rather than migrated.** The alternatives — rewriting each open ticket's
 attachment URL, or dual-reading old and new fingerprints for a grace period — are throwaway code
-that must be exactly right, guarding a one-time cost of one noisy morning.
+that must be exactly right, guarding a one-time cost. That cost is spread over several nightly
+runs, not a single noisy morning: `max-per-run` (default 5) caps each scan, and the roughly eleven
+distinct problems this grouping surfaces take about three nightly runs plus the post-deploy scan
+to fully re-file.
 
 The fourteen logwatch tickets are cancelled ahead of the deploy. Under the current code a
 cancelled ticket suppresses its fingerprint, so the nightly scan stays quiet in the interval
@@ -205,8 +219,15 @@ Against the `SIM` team on 2026-09-06, before any code change:
   different acts and only the first was wanted.
 - Created the `factory:logwatch` and `factory:feedback` labels (FR-010), and applied
   `factory:feedback` to SIM-22, which had been filed unlabelled for the same reason.
-- Left `linear_issues` in Mongo alone. It is the audit trail, and the new fingerprints create new
-  records beside the old ones rather than colliding with them.
+- Left `linear_issues` in Mongo alone. It is the audit trail for the sink, and the new
+  fingerprints create new records beside the old ones rather than colliding with them — true for
+  the sink, which never reads this collection as truth. **It is not true for the admin console**:
+  `/admin/software-factory`'s `linear` artifact node reads `linear_issues` directly as live state
+  (`com.simonrowe.factory.flow.ArtifactCountsReader`), and the fourteen orphaned pre-046 records
+  will never be re-read by the sink again, so they keep showing as open (`lastKnownStateType =
+  TRIAGE`) forever, even after being cancelled in Linear. Left alone here is therefore not a
+  finished state for the console; an operator still needs to delete or close out those fourteen
+  documents by hand. See `docs/runbooks/linear.md` ("Reading `linear_issues`").
 
 ## Testing
 

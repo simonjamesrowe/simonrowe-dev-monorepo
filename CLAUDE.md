@@ -236,9 +236,12 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     no error anywhere. Now `updated = COMMENTED_EXISTING + UPDATED_EXISTING` and
     `regressed = FILED_REGRESSION + REOPENED_EXISTING`.
   - **The one-time re-file was chosen over migrating fingerprints.** Changing the key parts
-    orphaned every pre-046 logwatch fingerprint — rewriting each open ticket's attachment URL, or
-    dual-reading old and new fingerprints for a grace period, is throwaway code that has to be
-    exactly right, guarding only a one-time cost of one noisy morning. `Fingerprint.VERSION` was
+    orphaned every pre-046 logwatch fingerprint **except the source-health filing's** — see below
+    — rewriting each open ticket's attachment URL, or dual-reading old and new fingerprints for a
+    grace period, is throwaway code that has to be exactly right, guarding a one-time cost that is
+    spread over several nightly runs rather than a single noisy morning: `max-per-run` (default 5)
+    caps each scan, and the ~11 distinct problems the new grouping surfaces take roughly three
+    nightly runs plus the post-deploy scan to fully re-file. `Fingerprint.VERSION` was
     deliberately **not** bumped: that would additionally have orphaned `deploy` and `cvefix`,
     which have no duplicate-ticket problem to fix. The fourteen logwatch tickets (SIM-11 through
     SIM-21, SIM-23 through SIM-25) were cancelled by hand ahead of the deploy, each with a comment
@@ -247,6 +250,21 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     (`cvefix`) and SIM-22 (`review-feedback`) were deliberately left alone: their fingerprints are
     not orphaned, so cancelling them would have been real, lasting suppression — `cvefix` would
     have stopped reporting vulnerabilities until SIM-10 was reopened.
+  - **The console never learned that those fourteen tickets were cancelled, and now never will.**
+    `com.simonrowe.factory.flow.ArtifactCountsReader` (043/044) reads `linear_issues` directly as
+    live state for the `linear` artifact node on `/admin/software-factory`, treating a record as
+    open when `lastKnownStateType()` is null or an open `IssueStateType`. That field is refreshed
+    only when the sink files against the same fingerprint again — which, for the fourteen
+    orphaned pre-046 logwatch records, will now never happen. They keep `lastKnownStateType =
+    TRIAGE` forever, even though all fourteen were cancelled in Linear on 2026-09-06, so the
+    console shows roughly fourteen phantom open tickets — live URLs to cancelled issues — stacked
+    on top of the newly re-filed ones, permanently, with no error anywhere. This is the one
+    consequence nobody anticipated while designing the fingerprint changeover, which reasoned only
+    about the sink (for which orphaning is harmless — Linear itself is truth) and not about a
+    second reader that treats the same collection as truth. **Operator action required**: delete
+    or close out the fourteen orphaned `linear_issues` documents by hand; see
+    `docs/runbooks/linear.md` ("Reading `linear_issues`"). Not fixed here — a production Mongo
+    data change is the owner's call, not a code change.
   - **`IssueFiling.commentOnly` became a `FilingMode` enum**: `OCCURRENCE` (today's behaviour —
     `deploy`, `review-feedback`), `REFRESH` (rewrite the description, post no comment —
     `logwatch`), `ROLLING` (as `REFRESH`, plus reopen a completed issue into Triage instead of
@@ -256,7 +274,19 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     **`REFRESH` posts no comment**, so a problem recurring after its ticket has been moved out of
     Triage now produces no Linear notification at all — the history stays in
     `linear_issues.decisions`, just not surfaced. `FilingDecider` is unchanged and still pure; the
-    mode-to-action mapping lives one layer up, in `IssueFiler`.
+    mode-to-action mapping lives one layer up, in `IssueFiler`. **The source-health filing moved
+    to `REFRESH` too** (`LogWatchWorkflowImpl.handleUnusableSource`), with its key parts
+    (`source-health`, status) left exactly as they were — an undeclared departure from the spec's
+    Scope section, which lists any change to the source-health filing as out of scope. It is why
+    that filing's pre-046 fingerprints are **not** orphaned by this change (see above) even though
+    its mode changed alongside everything else's.
+  - **Not fixed, and accepted:** `IssueFiling` lost `commentOnly` and gained `mode`, and Temporal's
+    `JacksonJsonPayloadConverter` leaves `FAIL_ON_UNKNOWN_PROPERTIES` on — verified in the 1.36.0
+    jar during 040 — so a `fileIssue` activity task scheduled by a pre-046 worker and still
+    pending when the new image starts will fail to deserialize its input. The window is narrow
+    (short-lived nightly workflows), and this repo has direct precedent for tolerating it exactly
+    this way: `CveFixProperties` keeps dead `agent`/`ci` blocks solely so a Temporal history
+    serialized by the old auto-fix implementation still deserializes.
   - **The `factory:logwatch` and `factory:feedback` labels did not exist in Linear** and were
     created by hand on 2026-09-06 — that absence is why all fourteen logwatch tickets were
     unlabelled, and why SIM-21 was `logwatch` filing a ticket about its own missing label.

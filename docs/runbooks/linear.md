@@ -112,6 +112,11 @@ Three facts worth knowing before relying on any of this:
 - **Cancelling a ticket still suppresses its fingerprint in every mode.** The decline gesture —
   `SUPPRESSED`, permanent until a human reopens the ticket — is unchanged by any of this; modes
   only change what happens on an *open* or *completed* issue, never on a cancelled one.
+- **`REFRESH` and `ROLLING` rewrite a ticket's description, never its title.** A ticket filed
+  when one variant (for `logwatch`) or one component (for `cvefix`) led keeps that title for as
+  long as the ticket exists, even after a later rewrite makes a different variant or component
+  the leader in the body. The title is only ever set once, at `FILED_NEW`/`FILED_REGRESSION`
+  time — there is no mechanism that ever revisits it.
 
 `cvefix` is the only producer using two different modes today: `ROLLING` for the findings
 report (so closing it once does not cause the next scan to file a second, parallel report
@@ -152,16 +157,29 @@ decide what counts as "the same problem":
 | `deploy` | failing phase + `DeployStatus` | kind of deploy failure |
 | `cvefix` | repository + the literal `current-vulnerabilities` | repository, forever |
 | `feedback` | owner + repository + pull-request number | closed pull request |
+| `logwatch` | container + severity + discriminated source | piece of emitting code, at one severity |
 
 **`cvefix` deliberately keys on nothing finding-specific.** It files *one*
 consolidated report listing every component Dependency-Track currently reports,
 rather than one ticket per CVE — which at any realistic finding count is an
 unreadable backlog nobody triages. The consequence to keep in mind: because the
-key never varies, a scan that finds a different set of vulnerabilities
-`COMMENTED_EXISTING` on the same long-lived ticket, and the comment carries the
-full current set. Closing that ticket as completed and then scanning again files
-a regression; cancelling it suppresses future scans entirely until someone
-reopens it.
+key never varies, a scan that finds a different set of vulnerabilities has the
+same ticket's description **rewritten** to the new set (`UPDATED_EXISTING`,
+`FilingMode.ROLLING`) rather than commented on — see
+[Filing modes](#filing-modes) above. Closing that ticket as completed and then
+scanning again **reopens it into Triage and rewrites it** (`REOPENED_EXISTING`),
+rather than filing a linked regression issue beside it; cancelling it suppresses
+future scans entirely until someone reopens it.
+
+**`logwatch` keys on the code that emitted a line, not the message text.**
+`(container, severity, discriminatedSource)`, where the discriminated source
+comes from `SourceKeyExtractor` — see
+[logwatch.md](logwatch.md#grouping-what-makes-two-lines-the-same-problem) for
+what that means and why the message text itself cannot be the key. It files
+under `FilingMode.REFRESH`: a recurrence rewrites the existing ticket's
+description rather than commenting, so — like `cvefix` above — a persistent
+problem produces no ongoing stream of comments, only a ticket whose body stays
+current.
 
 ## Human prerequisites
 
@@ -284,6 +302,22 @@ Each record holds the producer, its structured key parts, the Linear issue id
 `lastSeenAt`, an occurrence count, the last state type Linear reported, and a
 capped log of the last 20 decisions (each with the producing workflow id, run
 id and outcome).
+
+**This collection is also live state for the admin console, not only an audit trail.**
+`com.simonrowe.factory.flow.ArtifactCountsReader` (`linearCounts()`/`linearItems()`) reads
+`linear_issues` directly to render the `linear` artifact node on `/admin/software-factory` — a
+record counts as open whenever `lastKnownStateType()` is null or an open `IssueStateType`, and
+that field is only ever refreshed when the sink files against the same fingerprint again. The
+046 grouping change orphaned the fourteen pre-046 `logwatch` fingerprints (see
+[logwatch.md](logwatch.md#grouping-what-makes-two-lines-the-same-problem)), so nothing will ever
+file against them again: they keep whatever `lastKnownStateType` they last had — `TRIAGE` — even
+though all fourteen were cancelled by hand in Linear on 2026-09-06. The console has no way to
+learn about that cancellation, so it will show roughly fourteen phantom open tickets, each with a
+live URL to an issue that is actually cancelled, stacked on top of the newly re-filed regrouped
+tickets — indefinitely, not just until the next scan. **Operator action required**: delete or
+close out the fourteen orphaned `linear_issues` documents (the ones for SIM-11 through SIM-21 and
+SIM-23 through SIM-25) once their cancellation in Linear is confirmed. This is a change against
+production Mongo and is a human call, not something the sink or the console does automatically.
 
 ## Verifying the poller
 

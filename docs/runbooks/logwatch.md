@@ -21,8 +21,15 @@ Related: [log-shipping.md](log-shipping.md) (the pipeline this depends on),
 | Runs in | `software-factory` only — never `deployer` |
 
 It reads `ERROR` and `WARN` lines, reduces each to a signature invariant to timestamps, UUIDs,
-hex identifiers, paths, addresses and numbers, discards signatures occurring fewer than
-`minimum-occurrences` times, sorts most-severe-first, and files at most `max-per-run`.
+hex identifiers, paths, addresses and numbers, groups signatures by container + severity +
+emitting code (see [Grouping](#grouping-what-makes-two-lines-the-same-problem) below), discards
+**groups** occurring fewer than `minimum-occurrences` times, sorts most-severe-first, and files at
+most `max-per-run`. The floor applies to the group, not to any single message text, and that
+order matters: a coarser group has a higher combined count than any one of the message templates
+inside it, so `minimum-occurrences` is now a looser filter than it looks. Two lines that each
+previously stayed below the floor as two separate single-occurrence signatures now clear it
+together the moment they share emitting code — the effective noise floor **dropped** when the
+grouping got coarser, it did not stay the same.
 
 Deduplication, suppression and reopening are **entirely** the sink's: cancel a ticket and that
 signature goes quiet permanently; reopen it and reporting resumes. There is no logwatch-side
@@ -76,11 +83,16 @@ Two deliberate limits:
   its own test — the mechanism is identical to SIM-11/SIM-13, so one regression test already
   covers it.
 
-**Changing this key orphaned every pre-046 logwatch fingerprint.** The first scan after deploy
-re-files each live problem once under its new grouping, and any pre-046 cancellation of a ticket
-stopped suppressing anything — the old fingerprint it suppressed is never computed again.
-`Fingerprint.VERSION` was deliberately not bumped: that would additionally have orphaned `deploy`
-and `cvefix`, which have no duplicate-ticket problem to fix.
+**Changing this key orphaned every pre-046 logwatch fingerprint, except the source-health
+filing's.** Its key parts, `["source-health", <status>]` (see below), are unchanged, so a pre-046
+cancellation of a source-health ticket still suppresses correctly. Every other logwatch
+fingerprint is orphaned: re-filing every live problem under its new grouping is not one scan —
+`max-per-run` (default 5) caps each run, and the roughly eleven distinct problems the 046
+regrouping surfaces spread the one-time re-file over about three nightly runs plus the post-deploy
+scan, not a single noisy morning. Any pre-046 cancellation of one of those orphaned tickets
+stopped suppressing anything in the meantime — the old fingerprint it suppressed is never
+computed again. `Fingerprint.VERSION` was deliberately not bumped: that would additionally have
+orphaned `deploy` and `cvefix`, which have no duplicate-ticket problem to fix.
 
 ## The part that matters most: it knows when it cannot see
 
@@ -118,6 +130,11 @@ A source-health failure is filed as an **ordinary finding** through the same sin
 with no special-case handling. The key parts deliberately exclude the evidence string: a `429`
 whose byte counts differ every run must stay one recurring ticket, while a quota problem and a
 rejected credential stay separate ones.
+
+It files under `FilingMode.REFRESH`, same as every grouped signature — an unhealthy source
+recurring across nights rewrites the same ticket's description rather than piling up a comment a
+night. This mode change was made alongside the grouped findings' even though the key parts were
+not touched, which the spec's Scope section did not call out in advance.
 
 ## Running a scan by hand
 
