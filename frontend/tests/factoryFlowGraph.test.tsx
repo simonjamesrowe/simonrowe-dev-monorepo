@@ -109,6 +109,29 @@ describe('FactoryFlowGraph', () => {
       .toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('renders an explanatory message instead of a silently empty region when there are no nodes', () => {
+    // FactoryAdminService.flow() returns 200 with nodes: [] when neither backing container is
+    // reachable. Rendering the (then-empty) svg/ul would look identical to "the factory has no
+    // nodes" — this is the failure mode the whole feature exists to avoid, so it must say plainly
+    // that the graph could not be drawn.
+    const { container } = render(
+      <FactoryFlowGraph flow={flow([])} selected={null} onSelect={vi.fn()} />)
+
+    expect(screen.getByText(
+      /flow diagram could not be drawn because Software Factory could not be reached/i,
+    )).toBeInTheDocument()
+    expect(container.querySelectorAll('.factory-flow__node').length).toBe(0)
+    expect(container.querySelector('svg.factory-flow__canvas')).not.toBeInTheDocument()
+  })
+
+  it('still renders the diagram, with no empty-state message, when nodes are present', () => {
+    render(<FactoryFlowGraph flow={flow(FACTORY_FLOW_ORDER.map((k) => node(k)))}
+      selected={null} onSelect={vi.fn()} />)
+
+    expect(screen.getAllByRole('button')).toHaveLength(FACTORY_FLOW_ORDER.length)
+    expect(screen.queryByText(/could not be drawn/i)).not.toBeInTheDocument()
+  })
+
   it('bows the two reciprocal fast-loop edges to opposite sides of the line between them', () => {
     // pull-request -> codereview and codereview -> pull-request share the same two fixed
     // endpoints. Two straight lines between the same points are geometrically identical with

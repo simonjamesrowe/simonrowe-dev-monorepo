@@ -1,3 +1,5 @@
+import { AlertCircle } from 'lucide-react'
+
 import type { FactoryFlow, FactoryFlowNode, FactoryNodeHealth } from '../../services/softwareFactoryApi'
 import { FACTORY_FLOW_ORDER, NODE_POSITIONS, edgePath } from './factoryFlowLayout'
 
@@ -54,6 +56,24 @@ export function FactoryFlowGraph(
   { flow, selected, onSelect }:
   { flow: FactoryFlow; selected: string | null; onSelect: (key: string) => void },
 ) {
+  // `flow.nodes` empty is a THIRD state, distinct from a node we drew but could not measure
+  // ("counts unknown") and a drawer list we could read and found empty ("not available"): here
+  // the factory returned 200 with nothing to draw at all, because neither backing container was
+  // reachable. Rendering the (then-empty) svg/ul below would silently present as "there is
+  // nothing here" — the exact failure mode this whole feature exists to avoid — so say plainly
+  // that the graph could not be drawn and that node health is unknown, not healthy.
+  if (flow.nodes.length === 0) {
+    return (
+      <div className="factory-flow factory-flow--empty admin-error-banner">
+        <AlertCircle size={16} />
+        <p>
+          The flow diagram could not be drawn because Software Factory could not be reached.
+          Node health above and in the drawers is unknown, not healthy.
+        </p>
+      </div>
+    )
+  }
+
   const byKey = new Map(flow.nodes.map((node) => [node.key, node]))
   const ordered = FACTORY_FLOW_ORDER
     .map((key) => byKey.get(key))

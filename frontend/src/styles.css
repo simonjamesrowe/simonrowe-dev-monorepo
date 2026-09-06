@@ -6621,6 +6621,18 @@ a:hover {
   margin-bottom: 1.5rem;
 }
 
+/* Overrides `.factory-flow`'s fixed aspect-ratio: this state has no canvas to fill, just an
+   explanatory message, and forcing the ratio would leave a tall empty box under short text. */
+.factory-flow--empty {
+  aspect-ratio: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.factory-flow--empty svg { flex-shrink: 0; margin-top: 0.15rem; }
+.factory-flow--empty p { margin: 0; }
+
 .factory-flow__canvas {
   position: absolute;
   inset: 0;
