@@ -56,8 +56,12 @@ public record LogSignature(
    *
    * <p>A constant rather than an inline lambda so the ordering is testable on its own — it decides
    * which findings are dropped when there are more than the cap allows. The final tie-break is
-   * the source key rather than the signature, because the source key is now the group's identity
-   * and is therefore what guarantees a total order.
+   * the source key rather than the signature, because the source key is now the group's identity.
+   * This is <strong>not</strong> a total order: {@code container} plays no part in it, so two
+   * groups with the same severity and source key from different containers still tie. What
+   * makes the result deterministic for tied groups is the same thing it always was — the sort's
+   * stability over the {@link java.util.LinkedHashMap} insertion order {@code
+   * SignatureExtractor.group} builds groups in — not this comparator alone.
    */
   public static final Comparator<LogSignature> MOST_SEVERE_FIRST =
       Comparator.comparing(LogSignature::severity)
@@ -66,6 +70,12 @@ public record LogSignature(
 
   public LogSignature {
     variants = variants == null ? List.of() : List.copyOf(variants);
+    // A pre-046 activity result replayed from Temporal history carries no sourceKey at all, which
+    // deserializes as null. Defaulting it to the same discriminated form SourceKeyExtractor
+    // produces for a line it cannot identify keeps the value semantically coherent - a sentinel
+    // would not - and avoids the NPE that List.of(container, severity.name(), sourceKey) throws on
+    // a null element in LogWatchWorkflowImpl.fileSignature.
+    sourceKey = sourceKey == null ? "line:" + signature : sourceKey;
   }
 
   /**

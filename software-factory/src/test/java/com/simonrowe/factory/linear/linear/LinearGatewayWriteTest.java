@@ -231,6 +231,7 @@ class LinearGatewayWriteTest {
     byOperation.put("issueUpdate", "{\"data\":{\"issueUpdate\":{\"success\":false}}}");
 
     assertThatThrownBy(() -> gateway().updateIssue("i1", "b", null))
-        .isInstanceOf(LinearApiException.class);
+        .isInstanceOf(LinearApiException.class)
+        .hasMessageContaining("issueUpdate");
   }
 }

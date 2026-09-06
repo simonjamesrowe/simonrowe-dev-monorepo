@@ -8,8 +8,8 @@ package com.simonrowe.factory.linear.domain;
  * filed. That is deliberate and is enforced in {@code IssueFiler}: a producer that reported the
  * stored URL for either occurrence would attribute a ticket to a run that filed nothing, and point
  * a reader at an issue containing none of this occurrence's detail — declined, for
- * {@code SUPPRESSED}; untouched because a {@code commentOnly} filing must never create one, for
- * {@code SKIPPED_NO_ISSUE}.
+ * {@code SUPPRESSED}; untouched because a {@link FilingMode#STATUS_UPDATE} filing must never
+ * create one, for {@code SKIPPED_NO_ISSUE}.
  *
  * @param decision the decision taken
  * @param issueId the Linear UUID used for follow-up attachments; null for a suppressed or
