@@ -2,6 +2,7 @@ package com.simonrowe.factory.logwatch.workflow;
 
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.FiledIssue;
+import com.simonrowe.factory.linear.domain.FilingMode;
 import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import com.simonrowe.factory.logwatch.config.LogWatchTaskQueues;
@@ -190,7 +191,8 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
                   LogWatchReportRenderer.sourceHealthBody(health, from, to),
                   "scan " + runId + ": " + health.evidence(),
                   runId,
-                  workflowId));
+                  workflowId,
+                  FilingMode.REFRESH));
       if (filed.issueUrl() != null) {
         issueUrls.add(filed.issueUrl());
       }
@@ -230,7 +232,8 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
                 LogWatchReportRenderer.body(signature, from, to),
                 LogWatchReportRenderer.occurrenceDetail(signature, runId),
                 runId,
-                workflowId));
+                workflowId,
+                FilingMode.REFRESH));
     if (filed.issueUrl() != null) {
       issueUrls.add(filed.issueUrl());
     }
