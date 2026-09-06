@@ -99,6 +99,22 @@ class SourceKeyExtractorTest {
   }
 
   @Test
+  @DisplayName("a very long non-matching line returns rather than exhausting the stack")
+  void longInputDoesNotOverflowTheStack() {
+    // Both patterns that scan a long run of characters are possessive, so a line that ultimately
+    // fails to match must fail immediately rather than unwinding. Greedy quantifiers threw
+    // StackOverflowError here, and that error escapes the scan activity — log watch would go
+    // blind, which is the one failure it exists to detect. The inputs are shaped to reach the
+    // patterns and then fail at the very last character: a stack trace and a batched Alloy error
+    // both plausibly run this long in production.
+    String unterminatedJson = "{\"msg\":\"" + "a".repeat(200_000);
+    String dottedButNoColon = "com." + "pkg.".repeat(50_000) + "Type";
+
+    assertThat(SourceKeyExtractor.sourceKeyOf(unterminatedJson)).isEmpty();
+    assertThat(SourceKeyExtractor.sourceKeyOf(dottedButNoColon)).isEmpty();
+  }
+
+  @Test
   @DisplayName("SIM-11 and SIM-13 stay separate: one incident, two pieces of emitting code")
   void oneIncidentFromTwoLoggersStaysTwoSources() {
     assertThat(SourceKeyExtractor.sourceKeyOf(ECS_SPRING_APPLICATION))

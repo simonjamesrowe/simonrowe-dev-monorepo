@@ -34,9 +34,19 @@ public final class SourceKeyExtractor {
    * identifies the emitting call site as well as a logger name would. {@code logging-call-at} is
    * the more obvious choice and is deliberately not used: it carries a source line number, so a
    * Temporal upgrade that shifts the file by one line would fork every ticket it emits.
+   *
+   * <p>The quantifiers are <strong>possessive</strong> ({@code ++}, {@code *+}) rather than
+   * greedy. An alternation inside a repetition is the classic catastrophic-backtracking shape, and
+   * Java's engine recurses per repetition — on a long line that fails to match, the greedy form
+   * can exhaust the stack. That is not theoretical for this class: it is handed whole container
+   * log lines, and a stack trace or a batched Alloy error runs to thousands of characters. A
+   * {@code StackOverflowError} here escapes the scan activity, so log watch would go blind — the
+   * one failure it exists to detect. Possessive is safe because the two alternatives are disjoint
+   * on their first character (anything that is neither quote nor backslash, versus a backslash
+   * beginning an escape), so no backtracking is ever needed to find a match that exists.
    */
   private static final Pattern TEMPORAL_MSG =
-      Pattern.compile("\"msg\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+      Pattern.compile("\"msg\"\\s*:\\s*\"((?:[^\"\\\\]++|\\\\.)*+)\"");
 
   /** Alloy's logfmt. {@code component_id} names the pipeline component. */
   private static final Pattern LOGFMT_COMPONENT = Pattern.compile("(?:^|\\s)component_id=(\\S+)");
@@ -49,9 +59,17 @@ public final class SourceKeyExtractor {
    */
   private static final Pattern SPRING_LOGGER = Pattern.compile("(?:^|\\s)([\\w.$]+)\\s+:\\s");
 
-  /** A bare stack-trace head, as the deployer emits when a script fails. */
+  /**
+   * A bare stack-trace head, as the deployer emits when a script fails.
+   *
+   * <p>Possessive for the same reason as {@link #TEMPORAL_MSG}, and the risk is sharper here: a
+   * repetition wrapping a repetition ({@code (?:\.[\w$]+)+}) is the shape that recurses worst, and
+   * the input this runs against is a stack trace. The identifier, separator and terminator
+   * character classes are mutually disjoint, so possessive matches exactly what the greedy form
+   * did and simply fails immediately instead of unwinding.
+   */
   private static final Pattern EXCEPTION_CLASS =
-      Pattern.compile("^([a-zA-Z_$][\\w$]*(?:\\.[\\w$]+)+)\\s*:");
+      Pattern.compile("^([a-zA-Z_$][\\w$]*+(?:\\.[\\w$]++)++)\\s*+:");
 
   private static final List<Handler> HANDLERS =
       List.of(
