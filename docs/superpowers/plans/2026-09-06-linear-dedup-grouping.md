@@ -1459,6 +1459,10 @@ Expected: FAIL — `refreshRewritesTheBody` gets `COMMENTED_EXISTING`.
    * @return the decision the sink will honour
    */
   private static FilingDecision applyMode(final FilingDecision decided, final FilingMode mode) {
+    // Where a mode that must never create an issue meets a decision that would create one, the
+    // answer is SKIPPED_NO_ISSUE: no open issue exists to comment on, and creating one — or
+    // filing a "recurrence" whose actual content is the ABSENCE of the problem — is worse than
+    // silence. Unchanged from 040.
     return switch (decided) {
       case COMMENTED_EXISTING ->
           mode.rewritesBody()
@@ -1468,24 +1472,14 @@ Expected: FAIL — `refreshRewritesTheBody` gets `COMMENTED_EXISTING`.
         if (mode.reopensCompleted()) {
           yield FilingDecision.REOPENED_EXISTING;
         }
-        yield mode.mayCreate() ? FilingDecision.FILED_REGRESSION : creationRefused();
+        yield mode.mayCreate()
+            ? FilingDecision.FILED_REGRESSION
+            : FilingDecision.SKIPPED_NO_ISSUE;
       }
-      case FILED_NEW -> mode.mayCreate() ? FilingDecision.FILED_NEW : creationRefused();
+      case FILED_NEW ->
+          mode.mayCreate() ? FilingDecision.FILED_NEW : FilingDecision.SKIPPED_NO_ISSUE;
       default -> decided;
     };
-  }
-
-  /**
-   * What a mode that must never create an issue does when the decider says one is needed.
-   *
-   * <p>Reducing to {@code SKIPPED_NO_ISSUE} rather than creating is deliberate: no open issue
-   * exists to comment on, and creating one — or filing a "recurrence" whose actual content is the
-   * ABSENCE of the problem — is worse than silence. Unchanged from 040.
-   *
-   * @return {@link FilingDecision#SKIPPED_NO_ISSUE}
-   */
-  private static FilingDecision creationRefused() {
-    return FilingDecision.SKIPPED_NO_ISSUE;
   }
 ```
 
