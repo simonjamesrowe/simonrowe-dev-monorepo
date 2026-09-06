@@ -174,7 +174,7 @@ class LogWatchWorkflowTest {
   }
 
   @Test
-  @DisplayName("each signature is filed with the signature as its key, never the title")
+  @DisplayName("each signature is filed with the source key as its key, never the title")
   void filesOneIssuePerSignatureKeyedOnTheSignature() {
     when(activities.observe(any(), any()))
         .thenReturn(new ScanObservation(alive(), List.of(signature("boom")), 10, false, 5, 0));
@@ -183,7 +183,7 @@ class LogWatchWorkflowTest {
 
     ArgumentCaptor<IssueFiling> filing = ArgumentCaptor.forClass(IssueFiling.class);
     verify(linear).fileIssue(filing.capture());
-    assertThat(filing.getValue().keyParts()).containsExactly("backend", "boom");
+    assertThat(filing.getValue().keyParts()).containsExactly("backend", "ERROR", "logger:boom");
     assertThat(filing.getValue().title()).isNotEqualTo("boom");
     assertThat(result.status()).isEqualTo(LogWatchStatus.COMPLETED);
     assertThat(result.issueUrls()).containsExactly("https://linear.app/SIM-1");
@@ -277,6 +277,8 @@ class LogWatchWorkflowTest {
   }
 
   private static LogSignature signature(final String text) {
-    return new LogSignature(text, Severity.ERROR, "backend", 4, FROM, TO, "raw " + text);
+    return new LogSignature(
+        text, Severity.ERROR, "backend", 4, FROM, TO, "raw " + text,
+        "logger:" + text, List.of(new LogSignature.Variant(text, 4, "raw " + text)), 1);
   }
 }

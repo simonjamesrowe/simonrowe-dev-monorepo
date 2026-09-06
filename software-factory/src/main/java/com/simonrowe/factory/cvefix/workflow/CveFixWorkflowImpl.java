@@ -11,6 +11,7 @@ import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
+import com.simonrowe.factory.linear.domain.FilingMode;
 import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.activity.ActivityOptions;
@@ -96,7 +97,7 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
                           + ". Dependency-Track reports no findings.",
                       runId,
                       workflowId,
-                      true)));
+                      FilingMode.STATUS_UPDATE)));
           detail = "Dependency-Track reported no findings; commented on the existing report";
         }
         current = new CveFixProgress(CveFixPhase.COMPLETED, detail, 0);
@@ -117,7 +118,8 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
                   "scan " + runId + " found " + findingsSeen + " finding(s) across "
                       + componentsSeen + " component(s)\n\n" + report,
                   runId,
-                  workflowId)));
+                  workflowId,
+                  FilingMode.ROLLING)));
       current = new CveFixProgress(CveFixPhase.COMPLETED,
           "Linear filing complete", componentsSeen);
       return finish(workflowId, runId, startedAt, CveFixStatus.COMPLETED,
@@ -151,10 +153,7 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       final int componentsSeen,
       final List<FiledIssue> outcomes,
       final String detail) {
-    int filed = count(outcomes, FilingDecision.FILED_NEW);
-    int updated = count(outcomes, FilingDecision.COMMENTED_EXISTING);
-    int suppressed = count(outcomes, FilingDecision.SUPPRESSED);
-    int regressed = count(outcomes, FilingDecision.FILED_REGRESSION);
+    CveFixCounts counts = countsOf(outcomes);
     List<String> urls = outcomes.stream()
         .map(FiledIssue::issueUrl)
         .filter(url -> url != null && !url.isBlank())
@@ -163,14 +162,51 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
     activities.recordRun(
         new CveFixRunRecord(
             CveFixRunRecord.idFor(workflowId), workflowId, startedAt, status, findingsSeen,
-            List.of(), null, 0, detail, runId, componentsSeen, filed, updated, suppressed,
-            regressed, urls));
+            List.of(), null, 0, detail, runId, componentsSeen, counts.filed(), counts.updated(),
+            counts.suppressed(), counts.regressed(), urls));
     return new CveFixResult(
-        workflowId, status, null, 0, 0, detail, filed, updated, suppressed, regressed, urls);
+        workflowId, status, null, 0, 0, detail, counts.filed(), counts.updated(),
+        counts.suppressed(), counts.regressed(), urls);
+  }
+
+  /**
+   * Tallies what the sink did across one run's filings.
+   *
+   * <p>{@code UPDATED_EXISTING} is what {@link FilingMode#ROLLING} returns where {@link
+   * FilingMode#OCCURRENCE} would have returned {@code COMMENTED_EXISTING}, and {@code
+   * REOPENED_EXISTING} is what it returns where {@code OCCURRENCE} would have returned {@code
+   * FILED_REGRESSION}. Each new decision is counted alongside the old one it replaced, so both
+   * fields keep meaning what their names say regardless of which mode a producer used.
+   *
+   * @param outcomes what the sink decided for each occurrence filed this run
+   * @return the tally of filed, updated, suppressed and regressed occurrences
+   */
+  static CveFixCounts countsOf(final List<FiledIssue> outcomes) {
+    int filed = count(outcomes, FilingDecision.FILED_NEW);
+    int updated =
+        count(outcomes, FilingDecision.COMMENTED_EXISTING)
+            + count(outcomes, FilingDecision.UPDATED_EXISTING);
+    int suppressed = count(outcomes, FilingDecision.SUPPRESSED);
+    int regressed =
+        count(outcomes, FilingDecision.FILED_REGRESSION)
+            + count(outcomes, FilingDecision.REOPENED_EXISTING);
+    return new CveFixCounts(filed, updated, suppressed, regressed);
   }
 
   private static int count(final List<FiledIssue> outcomes, final FilingDecision decision) {
     return (int) outcomes.stream().filter(outcome -> outcome.decision() == decision).count();
+  }
+
+  /**
+   * One run's tally of filing outcomes.
+   *
+   * @param filed occurrences that created a new issue
+   * @param updated occurrences that changed an existing issue, by comment or by rewrite
+   * @param suppressed occurrences a human had declined
+   * @param regressed occurrences that reopened or replaced a previously completed issue
+   */
+  record CveFixCounts(int filed, int updated, int suppressed, int regressed) {
+
   }
 
   private static String safeMessage(final RuntimeException exception) {

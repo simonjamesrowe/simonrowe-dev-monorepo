@@ -56,6 +56,10 @@ public class LinearGateway {
   private static final String CREATE_RELATION =
       "mutation($input:IssueRelationCreateInput!){issueRelationCreate(input:$input){success}}";
 
+  private static final String UPDATE_ISSUE =
+      "mutation($id:String!,$input:IssueUpdateInput!){issueUpdate(id:$id,input:$input)"
+          + "{success issue{id identifier url}}}";
+
   // GraphQL wire names shared by the queries/mutations above and the response handling below.
   // VAR_INPUT is the variable every mutation binds its input object to; FIELD_NODES is the
   // items field of a GraphQL connection (teams/states/labels/attachments all use it);
@@ -244,6 +248,33 @@ public class LinearGateway {
     JsonNode result = execute(CREATE_COMMENT, Map.of(VAR_INPUT, input)).path("commentCreate");
     if (!result.path(FIELD_SUCCESS).asBoolean(false)) {
       throw new LinearApiException("Linear commentCreate reported failure", false);
+    }
+  }
+
+  /**
+   * Rewrites an existing issue's description, and optionally moves it to another state.
+   *
+   * <p>This is what {@link com.simonrowe.factory.linear.domain.FilingMode#REFRESH} and
+   * {@link com.simonrowe.factory.linear.domain.FilingMode#ROLLING} act through. Unlike
+   * {@link #relateIssues} it is <strong>not</strong> best-effort: a failed update leaves the
+   * ticket describing an old occurrence with nothing anywhere saying so, which is the exact
+   * silent staleness those modes exist to remove.
+   *
+   * @param issueId the Linear issue UUID
+   * @param description the new description, in Markdown
+   * @param stateId the workflow state to move the issue to, or null to leave the state alone
+   * @throws LinearApiException on any API fault, or when Linear reports the mutation unsuccessful
+   */
+  public void updateIssue(final String issueId, final String description, final String stateId) {
+    ObjectNode input = objectMapper.createObjectNode();
+    input.put("description", description);
+    if (stateId != null) {
+      input.put("stateId", stateId);
+    }
+    JsonNode result =
+        execute(UPDATE_ISSUE, Map.of("id", issueId, VAR_INPUT, input)).path("issueUpdate");
+    if (!result.path(FIELD_SUCCESS).asBoolean(false)) {
+      throw new LinearApiException("Linear issueUpdate reported failure", false);
     }
   }
 

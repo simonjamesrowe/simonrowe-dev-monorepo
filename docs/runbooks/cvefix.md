@@ -13,10 +13,14 @@ Each scheduled or admin-triggered run:
 3. Creates or updates one Linear issue keyed as the repository's current vulnerability report.
 4. Stores the terminal scan result and Linear URL in `cve_fix_runs`.
 
-An existing open report receives a comment containing the complete current snapshot. A completed
-report produces a regression issue under the shared Linear filing policy; a cancelled or duplicate
-report is suppressed. The scan never edits dependencies, launches a repair agent, creates a branch
-or pull request, or polls CI.
+The report files under `FilingMode.ROLLING`. An existing open report has its description
+rewritten to the complete current snapshot and gets **no comment** — a night where the finding set
+changed produces no visible activity in the ticket beyond the rewrite itself. A completed report is
+reopened into Triage and rewritten, rather than replaced by a linked regression issue: closing the
+report once used to cause the next dirty scan to file a second, parallel ticket beside it (SIM-10
+beside the completed SIM-9), and `ROLLING` exists specifically so that no longer happens. A
+cancelled or duplicate report is suppressed. The scan never edits dependencies, launches a repair
+agent, creates a branch or pull request, or polls CI.
 
 ## Report grouping and scope
 
@@ -40,10 +44,14 @@ failed scan, not a quiet gap in the report.
 
 When a scan comes back clean and the previous scan found something, the run posts one comment on
 the existing ticket noting the repository is now clean, and still ends `NO_FINDINGS` — it never
-creates a ticket for this and never closes one itself. Closing stays a human decision; until that
-happens, the ticket is still open, but a **second** consecutive clean scan stays silent — that is
-the whole point of the transition guard. Only the first clean scan after a dirty one comments; do
-not read a missing nightly comment as a fault.
+creates a ticket for this and never closes one itself. This dirty-to-clean transition is the
+**only** case in this module that ever posts a comment: it files under `FilingMode.STATUS_UPDATE`,
+not `ROLLING`, specifically because a status update is a comment on an already-open ticket, never a
+rewrite. Closing stays a human decision; until that happens, the ticket is still open, but a
+**second** consecutive clean scan stays silent — that is the whole point of the transition guard.
+A dirty scan, by contrast, never comments at all — it rewrites the report's description under
+`ROLLING` instead (see [What it does](#what-it-does)) — so do not read a quiet night, dirty or
+clean, as a fault; check the ticket's description and `cve_fix_runs` for what actually happened.
 
 `cve_fix_runs.componentsSeen` now counts `(project, PURL)` pairs, so a component that shows up as
 a finding in two configured projects (for example a shared library flagged in both `backend` and

@@ -12,10 +12,8 @@ import java.util.List;
  * @param occurrenceDetail one line naming this occurrence, used only when commenting
  * @param occurrenceId the producing workflow's run id, so an activity replay is recognised
  * @param workflowId the producing workflow's id, recorded in the audit trail
- * @param commentOnly whether this is a status update about a known problem rather than a new
- *     occurrence. When set, the sink NEVER creates an issue: it comments on an open one and
- *     otherwise does nothing. It also uses {@code occurrenceDetail} as the comment verbatim,
- *     without the {@code Seen again: } prefix, because a status update is not a recurrence.
+ * @param mode how this occurrence should be handled once an issue for the problem already
+ *     exists; see {@link FilingMode} for what each value means
  */
 public record IssueFiling(
     String producer,
@@ -25,10 +23,11 @@ public record IssueFiling(
     String occurrenceDetail,
     String occurrenceId,
     String workflowId,
-    boolean commentOnly) {
+    FilingMode mode) {
 
   public IssueFiling {
     keyParts = keyParts == null ? List.of() : List.copyOf(keyParts);
+    mode = mode == null ? FilingMode.OCCURRENCE : mode;
   }
 
   /**
@@ -50,6 +49,14 @@ public record IssueFiling(
       final String occurrenceDetail,
       final String occurrenceId,
       final String workflowId) {
-    this(producer, keyParts, title, body, occurrenceDetail, occurrenceId, workflowId, false);
+    this(
+        producer,
+        keyParts,
+        title,
+        body,
+        occurrenceDetail,
+        occurrenceId,
+        workflowId,
+        FilingMode.OCCURRENCE);
   }
 }

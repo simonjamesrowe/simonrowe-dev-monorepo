@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class LinearGatewayWriteTest {
@@ -195,5 +196,42 @@ class LinearGatewayWriteTest {
     gateway().relateIssues("i9", "i1");
 
     assertThat(bodies.get(bodies.size() - 1)).contains("issueRelationCreate");
+  }
+
+  private static final String UPDATE_OK =
+      "{\"data\":{\"issueUpdate\":{\"success\":true,\"issue\":"
+          + "{\"id\":\"i1\",\"identifier\":\"SIM-1\",\"url\":\"https://linear.app/i/1\"}}}}";
+
+  @Test
+  @DisplayName("updateIssue rewrites the description and leaves the state alone when null")
+  void updatesDescriptionOnly() {
+    byOperation.put("issueUpdate", UPDATE_OK);
+
+    gateway().updateIssue("i1", "new body", null);
+
+    String sent = bodies.getLast();
+    assertThat(sent).contains("issueUpdate");
+    assertThat(sent).contains("new body");
+    assertThat(sent).doesNotContain("stateId");
+  }
+
+  @Test
+  @DisplayName("updateIssue sends stateId when one is given, which is how a reopen happens")
+  void updatesStateWhenGiven() {
+    byOperation.put("issueUpdate", UPDATE_OK);
+
+    gateway().updateIssue("i1", "new body", "triage-state-id");
+
+    assertThat(bodies.getLast()).contains("triage-state-id");
+  }
+
+  @Test
+  @DisplayName("a mutation reporting success=false is a failure, not a silent no-op")
+  void unsuccessfulUpdateThrows() {
+    byOperation.put("issueUpdate", "{\"data\":{\"issueUpdate\":{\"success\":false}}}");
+
+    assertThatThrownBy(() -> gateway().updateIssue("i1", "b", null))
+        .isInstanceOf(LinearApiException.class)
+        .hasMessageContaining("issueUpdate");
   }
 }

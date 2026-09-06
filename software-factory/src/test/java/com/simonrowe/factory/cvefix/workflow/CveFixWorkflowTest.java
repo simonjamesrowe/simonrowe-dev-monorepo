@@ -17,6 +17,7 @@ import com.simonrowe.factory.cvefix.domain.Finding;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
+import com.simonrowe.factory.linear.domain.FilingMode;
 import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.client.WorkflowFailedException;
@@ -24,6 +25,7 @@ import io.temporal.client.WorkflowOptions;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -90,7 +92,7 @@ class CveFixWorkflowTest {
     assertThat(result.updated()).isEqualTo(1);
     ArgumentCaptor<IssueFiling> filing = ArgumentCaptor.forClass(IssueFiling.class);
     verify(linear).fileIssue(filing.capture());
-    assertThat(filing.getValue().commentOnly()).isTrue();
+    assertThat(filing.getValue().mode()).isEqualTo(FilingMode.STATUS_UPDATE);
     assertThat(filing.getValue().keyParts())
         .containsExactly("simonjamesrowe/simonrowe-dev-monorepo", "current-vulnerabilities");
     assertThat(filing.getValue().occurrenceDetail())
@@ -122,6 +124,31 @@ class CveFixWorkflowTest {
     assertThatThrownBy(() -> run(activities, linear, false, "clean-no-linear"))
         .isInstanceOf(WorkflowFailedException.class);
     verify(linear, never()).fileIssue(any());
+  }
+
+  // The workflow itself never files more than one occurrence per run, so driving it through
+  // TestWorkflowEnvironment cannot produce the mixed outcome lists these two counter behaviours
+  // need. The arithmetic in CveFixWorkflowImpl.countsOf is the thing under test; the Temporal
+  // environment is not, so it is exercised directly.
+
+  @Test
+  @DisplayName("FR-009: a rolling update counts as updated, not as nothing")
+  void updatedCounterIncludesTheRollingDecisions() {
+    List<FiledIssue> outcomes =
+        List.of(
+            new FiledIssue(FilingDecision.UPDATED_EXISTING, "i1", "SIM-1", "url", "fp"),
+            new FiledIssue(FilingDecision.COMMENTED_EXISTING, "i2", "SIM-2", "url", "fp"));
+
+    assertThat(CveFixWorkflowImpl.countsOf(outcomes).updated()).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("FR-009: a reopened rolling report counts as a regression, which is what it is")
+  void regressedCounterIncludesReopen() {
+    List<FiledIssue> outcomes =
+        List.of(new FiledIssue(FilingDecision.REOPENED_EXISTING, "i1", "SIM-1", "url", "fp"));
+
+    assertThat(CveFixWorkflowImpl.countsOf(outcomes).regressed()).isEqualTo(1);
   }
 
   private static CveFixResult run(
