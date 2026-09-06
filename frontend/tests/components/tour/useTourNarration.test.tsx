@@ -18,6 +18,20 @@ const steps: TourStep[] = [
     order: 2, route: '/', autoAdvanceMs: null } as unknown as TourStep,
 ]
 
+/**
+ * jsdom does not implement `play`, and stubbing it with `vi.spyOn` proved flaky in a full
+ * suite run — the spy was intermittently already restored by the time an effect called it, so
+ * the real unimplemented method ran and returned `undefined`. This installs a plain property
+ * that vitest's mock lifecycle does not touch, with the behaviour swapped per test.
+ */
+let playBehaviour: () => Promise<void> = () => Promise.resolve()
+
+Object.defineProperty(HTMLMediaElement.prototype, 'play', {
+  configurable: true,
+  writable: true,
+  value: () => playBehaviour(),
+})
+
 function lastAudio(): HTMLAudioElement | null {
   return document.querySelector('audio[data-tour-narration]')
 }
@@ -48,13 +62,16 @@ describe('useTourNarration', () => {
       { contentId: 'step-1', audioUrl: '/uploads/narrations/a/n.mp3', durationSeconds: 6 },
       { contentId: 'step-2', audioUrl: '/uploads/narrations/b/n.mp3', durationSeconds: 7 },
     ])
-    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
+    playBehaviour = () => Promise.resolve()
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
     vi.clearAllMocks()
+    // The hook appends its player to <body>; a leaked one would be found by `lastAudio()`
+    // ahead of the next test's own element.
+    document.querySelectorAll('audio').forEach((audio) => audio.remove())
   })
 
   it('reads what is playable once per tour run, not once per step', async () => {
@@ -104,6 +121,31 @@ describe('useTourNarration', () => {
     // Muted is not "play then silence": nothing is fetched over the wire to be played.
     expect(result.current.muted).toBe(true)
     expect(lastAudio()?.getAttribute('src')).toBeNull()
+  })
+
+  it('settles the step when its audio file cannot be loaded', async () => {
+    const { result } = renderHook(() => useTourNarration(true, steps, 0))
+    // Wait for the src, not just the element: until the bulk read resolves there is no audio
+    // for this step, and a step with no audio is settled already — so asserting before that
+    // would pass for the wrong reason.
+    await waitFor(() => expect(lastAudio()?.getAttribute('src')).toBeTruthy())
+    expect(result.current.settled).toBe(false)
+
+    // A 404 or malformed file. Autoplay waits on `settled`, so leaving it false here would
+    // stop the tour advancing off this step for the rest of the visit.
+    act(() => { lastAudio()!.dispatchEvent(new Event('error')) })
+
+    expect(result.current.settled).toBe(true)
+    expect(result.current.speaking).toBe(false)
+  })
+
+  it('settles the step when the browser refuses to play', async () => {
+    playBehaviour = () => Promise.reject(new DOMException('blocked', 'NotAllowedError'))
+
+    const { result } = renderHook(() => useTourNarration(true, steps, 0))
+
+    // Autoplay waits on `settled`; a browser blocking playback must not strand the tour.
+    await waitFor(() => expect(result.current.settled).toBe(true))
   })
 
   it('runs the tour silently when audio cannot be listed', async () => {
