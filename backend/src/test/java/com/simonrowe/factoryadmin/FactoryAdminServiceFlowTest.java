@@ -1,7 +1,6 @@
 package com.simonrowe.factoryadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -47,11 +46,37 @@ class FactoryAdminServiceFlowTest {
   }
 
   @Test
-  void failsLoudlyWhenTheFactoryItselfCannotBeReached() {
-    // Every node would be wrong, so a half-drawn graph is worse than an error the page can show.
+  void returnsAnUnavailableButCompleteGraphWhenTheFactoryCannotBeReached() {
+    // The one page whose purpose is showing factory health must not go blank at exactly the
+    // moment the factory is down. The deployer runs the identical image, so its own flow
+    // response carries the same topology shape (key, kind, band, label, edges) - this is what
+    // lets every node still be drawn, just uniformly marked UNAVAILABLE rather than trusted.
     when(client.factoryFlow()).thenThrow(new RestClientException("connection refused"));
+    when(client.deployerFlow())
+        .thenReturn(flow(node("deploy", "READY"), node("logwatch", "READY")));
 
-    assertThatThrownBy(() -> service().flow()).isInstanceOf(RuntimeException.class);
+    FactoryFlow result = service().flow();
+
+    assertThat(result.nodes()).extracting(FactoryFlow.Node::key)
+        .containsExactlyInAnyOrder("deploy", "logwatch");
+    assertThat(result.nodes()).allSatisfy(candidate -> {
+      assertThat(candidate.health()).isEqualTo("UNAVAILABLE");
+      assertThat(candidate.counts()).isNull();
+      assertThat(candidate.diagnostic()).isEqualTo("Software Factory could not be reached");
+    });
+  }
+
+  @Test
+  void returnsAnEmptyGraphWhenNeitherContainerCanBeReached() {
+    // No topology source is reachable anywhere: the console can only say "nothing to draw", never
+    // a 500, and this must not fabricate a hardcoded second copy of the topology to fill the gap.
+    when(client.factoryFlow()).thenThrow(new RestClientException("connection refused"));
+    when(client.deployerFlow()).thenThrow(new RestClientException("connection refused"));
+
+    FactoryFlow result = service().flow();
+
+    assertThat(result.nodes()).isEmpty();
+    assertThat(result.edges()).isEmpty();
   }
 
   private FactoryAdminService service() {

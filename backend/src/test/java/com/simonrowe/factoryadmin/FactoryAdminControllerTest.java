@@ -161,6 +161,25 @@ class FactoryAdminControllerTest {
   }
 
   @Test
+  void servesTheFlowGraphAsOkEvenWhenEveryNodeIsUnavailable() throws Exception {
+    // FactoryAdminService.flow() no longer throws when the factory cannot be reached - it
+    // degrades to an all-UNAVAILABLE graph instead. This pins the controller's half: that graph
+    // must reach the browser as an ordinary 200, never surface as the 500 "Request failed" the
+    // console used to render in place of the whole diagram.
+    when(service.flow()).thenReturn(new FactoryFlow(Instant.EPOCH, List.of(
+        new FactoryFlow.Node(
+            "logwatch", "MODULE", "OBSERVE", "Log watch", null, "UNAVAILABLE",
+            "Software Factory could not be reached")),
+        List.of()));
+
+    mockMvc.perform(get(BASE + "/flow"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.nodes[0].key").value("logwatch"))
+        .andExpect(jsonPath("$.nodes[0].health").value("UNAVAILABLE"))
+        .andExpect(jsonPath("$.nodes[0].counts").value(nullValue()));
+  }
+
+  @Test
   void servesOneNodesFlowDetail() throws Exception {
     when(service.flowDetail("logwatch")).thenReturn(
         new FactoryFlowDetail("logwatch", List.of(

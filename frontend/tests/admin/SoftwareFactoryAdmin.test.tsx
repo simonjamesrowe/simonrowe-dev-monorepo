@@ -501,6 +501,29 @@ describe('SoftwareFactoryAdmin', () => {
     expect(await screen.findByText('Software Factory is unavailable')).toBeInTheDocument()
   })
 
+  it('renders the full diagram with every node unavailable when the factory cannot be reached', async () => {
+    // The backend degrades rather than 500s when software-factory itself is unreachable: every
+    // node comes back UNAVAILABLE with null counts, borrowing only the deployer's topology shape.
+    // The one page whose purpose is showing factory health must not go blank at exactly the
+    // moment an operator needs it — it must still draw all twelve buttons, not an error banner.
+    const everyNodeUnavailable = Object.fromEntries(
+      Object.keys(NODE_LABELS).map((key) => [key, {
+        counts: null,
+        health: 'UNAVAILABLE' as const,
+        diagnostic: 'Software Factory could not be reached',
+      }]),
+    )
+    mockFetchFlow.mockResolvedValue(flow(everyNodeUnavailable))
+
+    renderConsoleWithFlow()
+
+    for (const label of Object.values(NODE_LABELS)) {
+      expect(await screen.findByRole('button', { name: new RegExp(label) })).toBeInTheDocument()
+    }
+    expect(screen.getAllByText('counts unknown').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Request failed (500).')).not.toBeInTheDocument()
+  })
+
   it('shows counts unknown, never zero, for a node whose source could not be read', async () => {
     // Null means the source could not be read; zero means nothing happened. They must not read
     // the same, or an operator investigating an outage is sent to the wrong place.
