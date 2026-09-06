@@ -94,26 +94,39 @@ export function FactoryFlowGraph(
         focusable="false"
       >
         <defs>
-          <marker
-            id="factory-flow-arrow"
-            viewBox="0 0 10 10"
-            refX="8"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
-          >
-            <path d="M0,0 L10,5 L0,10 z" />
-          </marker>
+          {/*
+            * Three markers, one per loop, each filled with that loop's own colour. A <marker>
+            * does not inherit stroke/fill from the path referencing it (and `context-stroke` is
+            * not reliably supported), so the only way an arrowhead can match its edge's colour is
+            * to give each loop its own marker and its own CSS rule targeting the path inside it.
+            */}
+          {(['main', 'fast', 'slow'] as const).map((loop) => (
+            <marker
+              key={loop}
+              id={`factory-flow-arrow-${loop}`}
+              className={`factory-flow__marker factory-flow__marker--${loop}`}
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="10"
+              markerHeight="10"
+              orient="auto-start-reverse"
+            >
+              <path d="M0,0 L10,5 L0,10 z" />
+            </marker>
+          ))}
         </defs>
-        {flow.edges.map((edge) => (
-          <path
-            key={`${edge.from}-${edge.to}`}
-            className={`factory-flow__edge factory-flow__edge--${edge.loop.toLowerCase()}`}
-            d={edgePath(edge, flow.edges)}
-            markerEnd="url(#factory-flow-arrow)"
-          />
-        ))}
+        {flow.edges.map((edge) => {
+          const loop = edge.loop.toLowerCase()
+          return (
+            <path
+              key={`${edge.from}-${edge.to}`}
+              className={`factory-flow__edge factory-flow__edge--${loop}`}
+              d={edgePath(edge, flow.edges)}
+              markerEnd={`url(#factory-flow-arrow-${loop})`}
+            />
+          )
+        })}
       </svg>
       <ul className="factory-flow__nodes">
         {rendered.map((node, index) => {
@@ -130,8 +143,12 @@ export function FactoryFlowGraph(
               <button
                 type="button"
                 data-node-key={node.key}
+                data-node-kind={node.kind.toLowerCase()}
                 aria-pressed={selected === node.key}
-                className={`factory-flow__node factory-flow__node--${node.health.toLowerCase()}`}
+                className={
+                  `factory-flow__node factory-flow__node--${node.health.toLowerCase()} `
+                  + `factory-flow__node--${node.kind.toLowerCase()}`
+                }
                 onClick={() => onSelect(node.key)}
               >
                 <span className="factory-flow__node-label">{node.label}</span>
@@ -142,6 +159,28 @@ export function FactoryFlowGraph(
           )
         })}
       </ul>
+      {/*
+        * A quiet key, not a feature: it duplicates channels already visible in the diagram
+        * (kind via shape/fill, loop via colour) rather than adding new information, so it is
+        * marked decorative and left out of the accessibility tree entirely — the same treatment
+        * already given to the SVG canvas above.
+        */}
+      <div className="factory-flow__legend" aria-hidden="true">
+        <span className="factory-flow__legend-group">
+          <span className="factory-flow__legend-swatch factory-flow__legend-swatch--module" />
+          Agent
+          <span className="factory-flow__legend-swatch factory-flow__legend-swatch--artifact" />
+          Source / sink
+        </span>
+        <span className="factory-flow__legend-group">
+          <span className="factory-flow__legend-line factory-flow__legend-line--main" />
+          Main loop
+          <span className="factory-flow__legend-line factory-flow__legend-line--fast" />
+          Fast loop
+          <span className="factory-flow__legend-line factory-flow__legend-line--slow" />
+          Slow loop
+        </span>
+      </div>
     </div>
   )
 }

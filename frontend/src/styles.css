@@ -6619,6 +6619,20 @@ a:hover {
   width: 100%;
   aspect-ratio: 1000 / 520;
   margin-bottom: 1.5rem;
+
+  /* Loop hues. Dark and light values are chosen independently for contrast against each theme's
+     page background, not derived from one another — "main" stays the heaviest/most saturated of
+     the three in both, "fast" stays the coolest and lightest, "slow" keeps a distinct violet hue
+     on top of its dash so it never reads as a duller main. */
+  --factory-flow-loop-main: #cbd2e1;
+  --factory-flow-loop-fast: #7ec8ff;
+  --factory-flow-loop-slow: #d8a8f5;
+}
+
+[data-theme="light"] .factory-flow {
+  --factory-flow-loop-main: #2b3040;
+  --factory-flow-loop-fast: #1d6fd1;
+  --factory-flow-loop-slow: #8b2fd6;
 }
 
 /* Overrides `.factory-flow`'s fixed aspect-ratio: this state has no canvas to fill, just an
@@ -6641,16 +6655,25 @@ a:hover {
   pointer-events: none;
 }
 
-.factory-flow__edge {
-  stroke: var(--color-border);
-  fill: none;
+.factory-flow__edge { fill: none; }
+
+/* Each loop gets its own hue as well as its own weight, or the three are only tellable apart by
+   dash pattern. `main` is the production ring and reads as the spine: heaviest and most
+   saturated. `fast` (pull-request <-> codereview) is the lightest weight and coolest hue.
+   `slow` (the feedback loop) keeps its dash on top of a third, distinct hue. */
+.factory-flow__edge--fast { stroke: var(--factory-flow-loop-fast); stroke-width: 1.5; }
+.factory-flow__edge--main { stroke: var(--factory-flow-loop-main); stroke-width: 3; }
+.factory-flow__edge--slow {
+  stroke: var(--factory-flow-loop-slow);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 5;
 }
 
-.factory-flow__edge--fast { stroke-width: 1.5; }
-.factory-flow__edge--main { stroke-width: 2.5; }
-.factory-flow__edge--slow { stroke-width: 3.5; stroke-dasharray: 6 5; }
-
-.factory-flow__canvas marker path { fill: var(--color-border); }
+/* A <marker> does not inherit stroke/fill from the path that references it, so each loop's
+   arrowhead is its own marker element, coloured to match via this class rather than inheritance. */
+.factory-flow__marker--main path { fill: var(--factory-flow-loop-main); }
+.factory-flow__marker--fast path { fill: var(--factory-flow-loop-fast); }
+.factory-flow__marker--slow path { fill: var(--factory-flow-loop-slow); }
 
 .factory-flow__nodes {
   position: relative;
@@ -6675,9 +6698,7 @@ a:hover {
   gap: 0.15rem;
   min-width: 7rem;
   padding: 0.5rem 0.7rem;
-  border-radius: 0.6rem;
   border: 2px solid var(--color-border);
-  background: var(--color-surface);
   color: var(--color-text);
   cursor: pointer;
   text-align: center;
@@ -6687,6 +6708,26 @@ a:hover {
 .factory-flow__node[aria-pressed='true'] {
   border-color: var(--color-primary);
   background: var(--color-primary-subtle);
+}
+
+/*
+ * Kind is expressed with fill/shape only, never colour, because health already owns the border
+ * colour and the two channels must stay independent (a red UNAVAILABLE agent must still read as
+ * an agent). Both must survive being viewed in greyscale: a left accent bar reading as a unit of
+ * machinery vs. a stadium-shaped, tinted vessel reading as something that holds things.
+ *
+ * `factory-flow__node--module`'s accent bar is an inset box-shadow rather than a fourth border
+ * side, because the left border itself is already spoken for by health.
+ */
+.factory-flow__node--module {
+  border-radius: 0.5rem;
+  background: var(--color-surface);
+  box-shadow: inset 3px 0 0 0 var(--outline);
+}
+
+.factory-flow__node--artifact {
+  border-radius: 999px;
+  background: var(--color-surface-subtle);
 }
 
 .factory-flow__node-label {
@@ -6723,12 +6764,71 @@ a:hover {
 .factory-flow__node--idle { border-color: var(--color-border); }
 .factory-flow__node--not_tracked { border-color: var(--color-border); }
 
+/*
+ * A quiet key: small, muted text with inline swatches, sitting in the top-right corner of the
+ * canvas rather than in normal document flow, so it never pushes the node grid around. Decorative
+ * (see the `aria-hidden` on the element itself in FactoryFlowGraph.tsx) — it repeats channels
+ * already present in the diagram rather than adding new information.
+ */
+.factory-flow__legend {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+  font-size: 0.62rem;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.factory-flow__legend-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.factory-flow__legend-swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.7rem;
+}
+
+.factory-flow__legend-swatch--module {
+  border-radius: 0.25rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: inset 2px 0 0 0 var(--outline);
+}
+
+.factory-flow__legend-swatch--artifact {
+  border-radius: 999px;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+}
+
+.factory-flow__legend-line {
+  display: inline-block;
+  width: 1rem;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+}
+
+.factory-flow__legend-line--main { border-color: var(--factory-flow-loop-main); border-top-width: 3px; }
+.factory-flow__legend-line--fast { border-color: var(--factory-flow-loop-fast); }
+.factory-flow__legend-line--slow { border-color: var(--factory-flow-loop-slow); border-style: dashed; }
+
 @media (max-width: 50rem) {
   .factory-flow { aspect-ratio: auto; }
   .factory-flow__canvas { display: none; }
   .factory-flow__nodes { display: flex; flex-direction: column; gap: 0.6rem; }
   .factory-flow__node-slot { position: static; transform: none; }
   .factory-flow__node { width: 100%; min-width: 0; }
+  /* The loop-colour half of the legend is meaningless once the SVG canvas above is dropped, and
+     the kind styling is already visible directly on the stacked node buttons without a key. */
+  .factory-flow__legend { display: none; }
 }
 
 /*

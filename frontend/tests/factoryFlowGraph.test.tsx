@@ -174,4 +174,68 @@ describe('FactoryFlowGraph', () => {
     expect(Math.sign(a.x - 480)).not.toBe(0)
     expect(Math.sign(a.x - 480)).toBe(-Math.sign(b.x - 480))
   })
+
+  it('gives a MODULE node and an ARTIFACT node distinguishable kind classes and attributes', () => {
+    // Health already owns border colour, so kind has to be told apart some other way (fill/shape
+    // in CSS). This asserts the actual class/attribute values a MODULE vs an ARTIFACT node
+    // render with, not merely that some class exists.
+    render(<FactoryFlowGraph
+      flow={flow([
+        node('codereview', { kind: 'MODULE', label: 'Code review' }),
+        node('linear', { kind: 'ARTIFACT', label: 'Linear' }),
+      ])}
+      selected={null} onSelect={vi.fn()}
+    />)
+
+    const moduleButton = screen.getByRole('button', { name: /Code review/ })
+    const artifactButton = screen.getByRole('button', { name: /Linear/ })
+
+    expect(moduleButton).toHaveAttribute('data-node-kind', 'module')
+    expect(moduleButton.className).toContain('factory-flow__node--module')
+    expect(moduleButton.className).not.toContain('factory-flow__node--artifact')
+
+    expect(artifactButton).toHaveAttribute('data-node-kind', 'artifact')
+    expect(artifactButton.className).toContain('factory-flow__node--artifact')
+    expect(artifactButton.className).not.toContain('factory-flow__node--module')
+  })
+
+  it('gives each loop\'s edge a marker referencing that loop\'s own colour, not a shared one', () => {
+    // An SVG <marker> does not inherit stroke/fill from the path referencing it, so a single
+    // shared marker (the pre-fix state) can never colour-match more than one loop. This asserts
+    // the actual marker ids used, per loop, rather than just that some markerEnd is present.
+    const edges: FactoryFlowEdge[] = [
+      { from: 'linear', to: 'build', label: 'files', loop: 'MAIN' },
+      { from: 'pull-request', to: 'codereview', label: 'push webhook', loop: 'FAST' },
+      { from: 'feedback', to: 'agent-setup', label: 'guidance PR', loop: 'SLOW' },
+    ]
+
+    const { container } = render(
+      <FactoryFlowGraph
+        flow={flow([node('linear'), node('build'), node('pull-request'), node('codereview'),
+          node('feedback'), node('agent-setup')], edges)}
+        selected={null} onSelect={vi.fn()}
+      />,
+    )
+
+    const byLoop = (loop: string) =>
+      container.querySelector(`.factory-flow__edge--${loop}`)?.getAttribute('marker-end')
+
+    expect(byLoop('main')).toBe('url(#factory-flow-arrow-main)')
+    expect(byLoop('fast')).toBe('url(#factory-flow-arrow-fast)')
+    expect(byLoop('slow')).toBe('url(#factory-flow-arrow-slow)')
+
+    // And each referenced marker id must actually exist in <defs>, distinctly per loop.
+    expect(container.querySelector('#factory-flow-arrow-main')).toBeInTheDocument()
+    expect(container.querySelector('#factory-flow-arrow-fast')).toBeInTheDocument()
+    expect(container.querySelector('#factory-flow-arrow-slow')).toBeInTheDocument()
+  })
+
+  it('hides the decorative legend from assistive technology', () => {
+    const { container } = render(
+      <FactoryFlowGraph flow={flow([node('logwatch')])} selected={null} onSelect={vi.fn()} />)
+
+    const legend = container.querySelector('.factory-flow__legend')
+    expect(legend).toBeInTheDocument()
+    expect(legend?.getAttribute('aria-hidden')).toBe('true')
+  })
 })
