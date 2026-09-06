@@ -85,10 +85,13 @@ describe('edgePath', () => {
       return { x: Number(match[1]), y: Number(match[2]) }
     })
 
-    // pull-request and codereview are both at x=480 (NODE_POSITIONS), so the line between them
-    // is vertical: opposite sides of it means the control points' x coordinates straddle 480.
+    // pull-request and codereview share an x in NODE_POSITIONS, so the line between them is
+    // vertical: opposite sides means the control points straddle that x. Derived rather than
+    // hard-coded, so moving the layout cannot leave this comparing against a stale axis.
     const [a, b] = controlPoints
-    expect(Math.sign(a.x - 480)).not.toBe(0)
-    expect(Math.sign(a.x - 480)).toBe(-Math.sign(b.x - 480))
+    const midline = NODE_POSITIONS['pull-request'].x
+    expect(NODE_POSITIONS.codereview.x).toBe(midline)
+    expect(Math.sign(a.x - midline)).not.toBe(0)
+    expect(Math.sign(a.x - midline)).toBe(-Math.sign(b.x - midline))
   })
 })

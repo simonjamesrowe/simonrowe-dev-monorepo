@@ -6655,18 +6655,32 @@ a:hover {
   pointer-events: none;
 }
 
-.factory-flow__edge { fill: none; }
+.factory-flow__edge {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 /* Each loop gets its own hue as well as its own weight, or the three are only tellable apart by
    dash pattern. `main` is the production ring and reads as the spine: heaviest and most
    saturated. `fast` (pull-request <-> codereview) is the lightest weight and coolest hue.
    `slow` (the feedback loop) keeps its dash on top of a third, distinct hue. */
-.factory-flow__edge--fast { stroke: var(--factory-flow-loop-fast); stroke-width: 1.5; }
-.factory-flow__edge--main { stroke: var(--factory-flow-loop-main); stroke-width: 3; }
+/* Painted under every edge so a crossing reads as one line passing over another. Uses the canvas
+   background colour, so a halo is invisible except exactly where two lines meet. */
+.factory-flow__edge-halo {
+  fill: none;
+  stroke: var(--color-surface);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 5.5;
+}
+
+.factory-flow__edge--fast { stroke: var(--factory-flow-loop-fast); stroke-width: 1.25; }
+.factory-flow__edge--main { stroke: var(--factory-flow-loop-main); stroke-width: 1.75; }
 .factory-flow__edge--slow {
   stroke: var(--factory-flow-loop-slow);
-  stroke-width: 2.5;
-  stroke-dasharray: 6 5;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
 }
 
 /* A <marker> does not inherit stroke/fill from the path that references it, so each loop's

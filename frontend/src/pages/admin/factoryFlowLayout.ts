@@ -14,18 +14,23 @@ export const FACTORY_FLOW_ORDER = [
 
 /** Fixed grid positions, in an arbitrary 1000x520 viewBox the SVG scales from. */
 export const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
-  linear: { x: 120, y: 260 },
-  build: { x: 300, y: 160 },
-  'pull-request': { x: 480, y: 160 },
-  codereview: { x: 480, y: 60 },
-  main: { x: 660, y: 160 },
-  deploy: { x: 820, y: 260 },
-  production: { x: 660, y: 380 },
-  logwatch: { x: 420, y: 400 },
-  cvefix: { x: 660, y: 470 },
+  // Laid out as a horseshoe rather than a scatter: the main ring runs clockwise
+  // linear -> build -> pull-request -> main -> deploy -> production -> logwatch -> linear,
+  // with `linear` as the left-hand hub because three edges feed it (logwatch, cvefix and a
+  // failed deploy). Its three feeders sit down the bottom edge so they fan in without crossing.
+  // The slow loop lives along the top, clear of the ring.
+  'agent-setup': { x: 100, y: 60 },
   feedback: { x: 300, y: 60 },
-  'agent-setup': { x: 140, y: 60 },
-  platformbackup: { x: 900, y: 440 },
+  codereview: { x: 560, y: 60 },
+  build: { x: 300, y: 185 },
+  'pull-request': { x: 560, y: 185 },
+  main: { x: 790, y: 185 },
+  linear: { x: 100, y: 300 },
+  deploy: { x: 900, y: 300 },
+  cvefix: { x: 300, y: 420 },
+  logwatch: { x: 520, y: 420 },
+  production: { x: 790, y: 420 },
+  platformbackup: { x: 930, y: 470 },
 }
 
 /** How far a reciprocal edge's curve bows away from the straight line between its endpoints. */

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { FactoryFlowGraph } from '../src/pages/admin/FactoryFlowGraph'
-import { FACTORY_FLOW_ORDER } from '../src/pages/admin/factoryFlowLayout'
+import { FACTORY_FLOW_ORDER, NODE_POSITIONS } from '../src/pages/admin/factoryFlowLayout'
 import type { FactoryFlow, FactoryFlowEdge, FactoryFlowNode } from '../src/services/softwareFactoryApi'
 
 const node = (key: string, over: Partial<FactoryFlowNode> = {}): FactoryFlowNode => ({
@@ -167,12 +167,15 @@ describe('FactoryFlowGraph', () => {
 
     expect(controlPoints[0]).not.toEqual(controlPoints[1])
 
-    // pull-request and codereview are both at x=480 (NODE_POSITIONS), so the line between them
-    // is vertical: opposite sides of it means the control points' x coordinates straddle 480,
-    // one above and one below, never both on the same side and never sitting on the line itself.
+    // pull-request and codereview share an x in NODE_POSITIONS, so the line between them is
+    // vertical: opposite sides means the control points straddle that x, never both on the same
+    // side and never sitting on the line. Derived from NODE_POSITIONS rather than hard-coded, so
+    // that moving the layout cannot make this assertion silently compare against a stale axis.
+    const midline = NODE_POSITIONS['pull-request'].x
+    expect(NODE_POSITIONS.codereview.x).toBe(midline)
     const [a, b] = controlPoints
-    expect(Math.sign(a.x - 480)).not.toBe(0)
-    expect(Math.sign(a.x - 480)).toBe(-Math.sign(b.x - 480))
+    expect(Math.sign(a.x - midline)).not.toBe(0)
+    expect(Math.sign(a.x - midline)).toBe(-Math.sign(b.x - midline))
   })
 
   it('gives a MODULE node and an ARTIFACT node distinguishable kind classes and attributes', () => {

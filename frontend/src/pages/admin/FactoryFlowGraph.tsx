@@ -112,8 +112,8 @@ export function FactoryFlowGraph(
               viewBox="0 0 10 10"
               refX="9"
               refY="5"
-              markerWidth="7"
-              markerHeight="7"
+              markerWidth="6"
+              markerHeight="6"
               markerUnits="userSpaceOnUse"
               orient="auto-start-reverse"
             >
@@ -121,6 +121,21 @@ export function FactoryFlowGraph(
             </marker>
           ))}
         </defs>
+        {/*
+          * Every edge is drawn twice: a wider halo in the canvas background colour in a first
+          * pass, then the edges themselves. Some crossings cannot be laid out away - `cvefix`
+          * sits between `main` and `linear`, so one of its two edges is a long chord whichever
+          * side it is placed on, and `linear` is a hub with three inbound edges. The halo makes a
+          * crossing read as one line passing over another rather than as a muddle. Halos go in
+          * their own pass so no halo can ever sit on top of a real edge.
+          */}
+        {flow.edges.map((edge) => (
+          <path
+            key={`halo-${edge.from}-${edge.to}`}
+            className={`factory-flow__edge-halo factory-flow__edge-halo--${edge.loop.toLowerCase()}`}
+            d={edgePath(edge, flow.edges)}
+          />
+        ))}
         {flow.edges.map((edge) => {
           const loop = edge.loop.toLowerCase()
           return (
