@@ -17,6 +17,7 @@ import com.simonrowe.factory.cvefix.domain.Finding;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
+import com.simonrowe.factory.linear.domain.FilingMode;
 import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.client.WorkflowFailedException;
@@ -90,7 +91,7 @@ class CveFixWorkflowTest {
     assertThat(result.updated()).isEqualTo(1);
     ArgumentCaptor<IssueFiling> filing = ArgumentCaptor.forClass(IssueFiling.class);
     verify(linear).fileIssue(filing.capture());
-    assertThat(filing.getValue().commentOnly()).isTrue();
+    assertThat(filing.getValue().mode()).isEqualTo(FilingMode.STATUS_UPDATE);
     assertThat(filing.getValue().keyParts())
         .containsExactly("simonjamesrowe/simonrowe-dev-monorepo", "current-vulnerabilities");
     assertThat(filing.getValue().occurrenceDetail())

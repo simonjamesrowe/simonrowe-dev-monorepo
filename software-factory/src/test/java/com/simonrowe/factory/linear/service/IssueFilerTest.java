@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
+import com.simonrowe.factory.linear.domain.FilingMode;
 import com.simonrowe.factory.linear.domain.Fingerprint;
 import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.domain.IssueStateType;
@@ -349,7 +350,7 @@ class IssueFilerTest {
         "No current vulnerabilities as of scan run-9.",
         "run-9",
         "cve-scan-9",
-        true);
+        FilingMode.STATUS_UPDATE);
   }
 
   @Test

@@ -11,6 +11,7 @@ import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
+import com.simonrowe.factory.linear.domain.FilingMode;
 import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.activity.ActivityOptions;
@@ -96,7 +97,7 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
                           + ". Dependency-Track reports no findings.",
                       runId,
                       workflowId,
-                      true)));
+                      FilingMode.STATUS_UPDATE)));
           detail = "Dependency-Track reported no findings; commented on the existing report";
         }
         current = new CveFixProgress(CveFixPhase.COMPLETED, detail, 0);
