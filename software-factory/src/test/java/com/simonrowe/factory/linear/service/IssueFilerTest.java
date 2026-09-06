@@ -30,8 +30,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -53,6 +55,18 @@ class IssueFilerTest {
         "commit deadbeef at 12:00",
         "run-1",
         "deploy-prod");
+  }
+
+  private static IssueFiling filing(final FilingMode mode) {
+    return new IssueFiling(
+        "logwatch",
+        List.of("backend", "ERROR", "logger:com.example.Thing"),
+        "ERROR in backend (Thing): boom",
+        "fresh body describing the current state",
+        "scan run-2 saw this 4 time(s)",
+        "run-2",
+        "logwatch-1",
+        mode);
   }
 
   private static TrackedIssue issue(final IssueStateType type) {
@@ -463,5 +477,104 @@ class IssueFilerTest {
     verify(gateway, never()).createIssue(anyString(), anyString(), anyInt(), anyString());
     verify(gateway, never()).relateIssues(anyString(), anyString());
     verify(records).save(any(LinearIssueRecord.class));
+  }
+
+  @Test
+  @DisplayName("REFRESH rewrites the open issue's body and posts no comment")
+  void refreshRewritesTheBody() {
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.TRIAGE)));
+
+    FiledIssue filed = filer().file(filing(FilingMode.REFRESH));
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.UPDATED_EXISTING);
+    assertThat(filed.issueIdentifier()).isEqualTo("SIM-1");
+    verify(gateway).updateIssue("i1", "fresh body describing the current state", null);
+    verify(gateway, never()).addComment(anyString(), anyString());
+    verify(gateway, never()).createIssue(anyString(), anyString(), anyInt(), anyString());
+  }
+
+  @Test
+  @DisplayName("ROLLING reopens a completed issue into Triage rather than filing a replacement")
+  void rollingReopensCompletedIssue() {
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.COMPLETED)));
+    when(gateway.teamContext())
+        .thenReturn(new LinearGateway.TeamContext("t1", "triage-state", Map.of()));
+
+    FiledIssue filed = filer().file(filing(FilingMode.ROLLING));
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.REOPENED_EXISTING);
+    verify(gateway).updateIssue("i1", "fresh body describing the current state", "triage-state");
+    verify(gateway, never()).createIssue(anyString(), anyString(), anyInt(), anyString());
+  }
+
+  @Test
+  @DisplayName("REFRESH still files a linked replacement for a completed issue")
+  void refreshDoesNotReopen() {
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.COMPLETED)));
+    when(gateway.createIssue(anyString(), anyString(), anyInt(), anyString()))
+        .thenReturn(new LinearGateway.CreatedIssue("i9", "SIM-9", "https://linear.app/i/9"));
+
+    assertThat(filer().file(filing(FilingMode.REFRESH)).decision())
+        .isEqualTo(FilingDecision.FILED_REGRESSION);
+  }
+
+  @Test
+  @DisplayName("a cancelled issue suppresses every mode, including the rolling one")
+  void cancellationStillSuppressesEveryMode() {
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.CANCELED)));
+
+    for (FilingMode mode : FilingMode.values()) {
+      FiledIssue filed = filer().file(filing(mode));
+      assertThat(filed.decision()).isEqualTo(FilingDecision.SUPPRESSED);
+      assertThat(filed.issueUrl()).isNull();
+    }
+    verify(gateway, never()).updateIssue(anyString(), anyString(), any());
+  }
+
+  @Test
+  @DisplayName("STATUS_UPDATE still never creates, and comments without the recurrence prefix")
+  void statusUpdateIsUnchanged() {
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.TRIAGE)));
+
+    FiledIssue filed = filer().file(filing(FilingMode.STATUS_UPDATE));
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.COMMENTED_EXISTING);
+    verify(gateway).addComment("i1", "scan run-2 saw this 4 time(s)");
+    verify(gateway, never()).updateIssue(anyString(), anyString(), any());
+  }
+
+  @Test
+  @DisplayName("a dry run reports the decision a real run would take, for every mode")
+  void dryRunReportsTheRealDecisionForEveryMode() {
+    properties = new LinearProperties(true, "k", null, "SIM", null, true, null, null);
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.TRIAGE)));
+
+    assertThat(filer().file(filing(FilingMode.REFRESH)).decision())
+        .isEqualTo(FilingDecision.UPDATED_EXISTING);
+    assertThat(filer().file(filing(FilingMode.ROLLING)).decision())
+        .isEqualTo(FilingDecision.UPDATED_EXISTING);
+    verify(gateway, never()).updateIssue(anyString(), anyString(), any());
+  }
+
+  @Test
+  @DisplayName("a half-completed REFRESH filing repairs by rewriting, not by commenting")
+  void pendingAttachmentRepairHonoursTheMode() {
+    LinearIssueRecord pending =
+        LinearIssueRecord.first("fp", "logwatch", List.of("a"), NOW)
+            .withPendingAttachment("i1", "SIM-1", "https://linear.app/i/1");
+    when(records.findById(anyString())).thenReturn(Optional.of(pending));
+
+    FiledIssue filed = filer().file(filing(FilingMode.REFRESH));
+
+    assertThat(filed.decision()).isEqualTo(FilingDecision.UPDATED_EXISTING);
+    verify(gateway).attachFingerprint(eq("i1"), anyString());
+    verify(gateway).updateIssue("i1", "fresh body describing the current state", null);
+    verify(gateway, never()).addComment(anyString(), anyString());
   }
 }

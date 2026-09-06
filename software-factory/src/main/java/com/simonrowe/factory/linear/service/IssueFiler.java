@@ -122,7 +122,7 @@ public class IssueFiler {
     // run would take: a filing whose mode may not create an issue (STATUS_UPDATE) must never
     // create one, and that includes the FILED_NEW/FILED_REGRESSION arms the decider would
     // otherwise pick.
-    FilingDecision effective = commentOnlySafe(outcome.decision(), filing);
+    FilingDecision effective = applyMode(outcome.decision(), filing.mode());
 
     if (properties.dryRun()) {
       log.info(
@@ -157,6 +157,22 @@ public class IssueFiler {
                   policy,
                   fingerprintUrl,
                   outcome.subject().id());
+      case UPDATED_EXISTING -> {
+        gateway.updateIssue(outcome.subject().id(), filing.body(), null);
+        record =
+            record.withIssue(
+                outcome.subject().id(), outcome.subject().identifier(), outcome.subject().url());
+      }
+      case REOPENED_EXISTING -> {
+        // The Triage state, not "whatever state it was in before": Linear does not record that,
+        // and Triage is where a newly filed ticket lands — so a reopened rolling report re-enters
+        // the queue a human actually watches rather than appearing somewhere nobody looks.
+        gateway.updateIssue(
+            outcome.subject().id(), filing.body(), gateway.teamContext().triageStateId());
+        record =
+            record.withIssue(
+                outcome.subject().id(), outcome.subject().identifier(), outcome.subject().url());
+      }
       case SKIPPED_NO_ISSUE ->
           // A filing whose mode may not create (STATUS_UPDATE) that resolved to FILED_NEW or
           // FILED_REGRESSION is deliberately reduced to this instead: no open issue exists to
@@ -173,22 +189,36 @@ public class IssueFiler {
   }
 
   /**
-   * Maps a decision the decider actually took to the one the sink will honour, given whether the
-   * filing's {@link FilingMode} is allowed to create an issue.
+   * Maps the decision {@link FilingDecider} reached onto the one this producer's mode asks for.
+   *
+   * <p>This is the only place a mode is interpreted. {@code FilingDecider} answers what Linear
+   * currently says about the fingerprint and stays pure; the mode decides what to do about that
+   * answer.
    *
    * @param decided the decision {@link FilingDecider} reached
-   * @param filing the occurrence being filed
-   * @return {@code decided}, unless {@code filing}'s mode may not create an issue and
-   *     {@code decided} would create one ({@code FILED_NEW} or {@code FILED_REGRESSION}), in
-   *     which case {@code FilingDecision.SKIPPED_NO_ISSUE}
+   * @param mode the producer's filing mode
+   * @return the decision the sink will honour
    */
-  private static FilingDecision commentOnlySafe(
-      final FilingDecision decided, final IssueFiling filing) {
-    if (filing.mode().mayCreate()) {
-      return decided;
-    }
+  private static FilingDecision applyMode(final FilingDecision decided, final FilingMode mode) {
+    // Where a mode that must never create an issue meets a decision that would create one, the
+    // answer is SKIPPED_NO_ISSUE: no open issue exists to comment on, and creating one — or
+    // filing a "recurrence" whose actual content is the ABSENCE of the problem — is worse than
+    // silence. Unchanged from 040.
     return switch (decided) {
-      case FILED_NEW, FILED_REGRESSION -> FilingDecision.SKIPPED_NO_ISSUE;
+      case COMMENTED_EXISTING ->
+          mode.rewritesBody()
+              ? FilingDecision.UPDATED_EXISTING
+              : FilingDecision.COMMENTED_EXISTING;
+      case FILED_REGRESSION -> {
+        if (mode.reopensCompleted()) {
+          yield FilingDecision.REOPENED_EXISTING;
+        }
+        yield mode.mayCreate()
+            ? FilingDecision.FILED_REGRESSION
+            : FilingDecision.SKIPPED_NO_ISSUE;
+      }
+      case FILED_NEW ->
+          mode.mayCreate() ? FilingDecision.FILED_NEW : FilingDecision.SKIPPED_NO_ISSUE;
       default -> decided;
     };
   }
@@ -206,13 +236,21 @@ public class IssueFiler {
     log.warn(
         "Repairing a pending fingerprint attachment on {} rather than filing a duplicate",
         record.issueIdentifier());
+    FilingDecision decision =
+        filing.mode().rewritesBody()
+            ? FilingDecision.UPDATED_EXISTING
+            : FilingDecision.COMMENTED_EXISTING;
     if (properties.dryRun()) {
-      return finish(record, FilingDecision.COMMENTED_EXISTING, filing, now, null, fingerprint);
+      return finish(record, decision, filing, now, null, fingerprint);
     }
     gateway.attachFingerprint(record.issueId(), fingerprintUrl);
-    gateway.addComment(record.issueId(), occurrenceComment(filing));
+    if (filing.mode().rewritesBody()) {
+      gateway.updateIssue(record.issueId(), filing.body(), null);
+    } else {
+      gateway.addComment(record.issueId(), occurrenceComment(filing));
+    }
     LinearIssueRecord repaired = record.withAttachmentWritten();
-    return finish(repaired, FilingDecision.COMMENTED_EXISTING, filing, now, null, fingerprint);
+    return finish(repaired, decision, filing, now, null, fingerprint);
   }
 
   private LinearIssueRecord createAndAttach(
