@@ -729,7 +729,11 @@ services:
       SPRING_MONGODB_URI: mongodb://mongodb:27017/simonrowe
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
-      CORS_ALLOWED_ORIGINS: https://simonrowe.dev,https://www.simonrowe.dev
+      # term-time.simonrowe.dev must be listed even though its /api and /ws calls are
+      # same-origin: WebSocketConfig passes this list to setAllowedOrigins, and Spring rejects
+      # the STOMP handshake on the Origin header regardless of who is proxying. The symptom
+      # would be a page that loads perfectly and never answers.
+      CORS_ALLOWED_ORIGINS: https://simonrowe.dev,https://www.simonrowe.dev,https://term-time.simonrowe.dev
       MANAGEMENT_SERVER_PORT: "8081"
       SPRING_THREADS_VIRTUAL_ENABLED: "true"
       OTEL_SERVICE_NAME: simonrowe-backend
@@ -765,6 +769,45 @@ services:
       # Self-hosted SearXNG web search (no API key). Points at the internal searxng container;
       # if searxng is down the tool degrades gracefully (returns "unavailable", never errors).
       SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}
+      # Term Time, the school assistant (specs/047-term-time). Off by default: with
+      # SCHOOL_ENABLED false nothing is scheduled, no request is made to the school's website
+      # and no vector index is created.
+      #
+      # Every variable uses the ${VAR:-} empty-default form and NEVER ${VAR:?}. An unset
+      # required variable makes the whole compose file fail to interpolate, which wedges
+      # sync-config and takes monitor-prod.sh's minutely `up -d` down with it - the precedent
+      # trivy-server's --token already set.
+      #
+      # These belong on `backend` alone. The Gmail refresh token reads a mailbox full of
+      # children's school correspondence and must never reach `deployer`, which holds
+      # /var/run/docker.sock; SchoolGmailCredentialConfinementTest fails the build if it does.
+      SCHOOL_ENABLED: ${SCHOOL_ENABLED:-false}
+      # Must repeat application.yml's default, NOT be left empty. `${VAR:-}` passes an empty
+      # STRING, and an empty environment variable is resolvable, so Spring's
+      # `${SCHOOL_INGEST_FROM_DATE:2026-07-01}` would resolve to "" rather than falling back —
+      # binding to a null LocalDate and silently reading the mailbox back to 2020 again.
+      # Keep this date and the one in application.yml in step.
+      SCHOOL_INGEST_FROM_DATE: ${SCHOOL_INGEST_FROM_DATE:-2026-07-01}
+      # The origin PDF citations in an answer are built against. Same reasoning as the date
+      # above: `${VAR:-}` passes an empty STRING, which resolves, so the yml default would
+      # never apply and every attachment link would be relative again.
+      SCHOOL_PUBLIC_BASE_URL: ${SCHOOL_PUBLIC_BASE_URL:-https://term-time.simonrowe.dev}
+      SCHOOL_SENDER_ALLOWLIST: ${SCHOOL_SENDER_ALLOWLIST:-kilmorie.lewisham.sch.uk}
+      # ParentPay is school-adjacent but purely financial: dense with personal data and of
+      # almost no informational value to a question about term dates. Excluded outright rather
+      # than ingested as restricted.
+      SCHOOL_SENDER_DENYLIST: ${SCHOOL_SENDER_DENYLIST:-parentpay.com}
+      SCHOOL_CALENDAR_BASE_URL: ${SCHOOL_CALENDAR_BASE_URL:-}
+      SCHOOL_WEBSITE_BASE_URL: ${SCHOOL_WEBSITE_BASE_URL:-}
+      SCHOOL_STAFF_LIST_URL: ${SCHOOL_STAFF_LIST_URL:-}
+      SCHOOL_CHAT_MODEL: ${SCHOOL_CHAT_MODEL:-}
+      SCHOOL_GUARDRAIL_MODEL: ${SCHOOL_GUARDRAIL_MODEL:-}
+      # Zero means "answer nothing anonymously", deliberately not "unlimited". An unset budget
+      # on an endpoint anyone on the internet can reach must not default to spending.
+      SCHOOL_DAILY_TOKEN_BUDGET: ${SCHOOL_DAILY_TOKEN_BUDGET:-0}
+      SCHOOL_GMAIL_CLIENT_ID: ${SCHOOL_GMAIL_CLIENT_ID:-}
+      SCHOOL_GMAIL_CLIENT_SECRET: ${SCHOOL_GMAIL_CLIENT_SECRET:-}
+      SCHOOL_GMAIL_REFRESH_TOKEN: ${SCHOOL_GMAIL_REFRESH_TOKEN:-}
     volumes:
       - backend-uploads:/workspace/uploads
       # NO DOCKER SOCKET, no docker CLI, no compose file and no .env copy. All five

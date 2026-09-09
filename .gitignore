@@ -86,3 +86,6 @@ blob-report/
 *.bak
 .superpowers/
 .claude/scheduled_tasks*
+
+# Term Time keeps school PDF attachments here; they are ingested data, not source.
+backend/school-attachments/

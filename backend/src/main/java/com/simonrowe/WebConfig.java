@@ -74,6 +74,15 @@ public class WebConfig implements WebMvcConfigurer {
   public void addInterceptors(final InterceptorRegistry registry) {
     registry.addInterceptor(rateLimitInterceptor)
         .addPathPatterns("/mcp/**", "/api/blogs/*/narration",
-            "/api/news/*/summary", "/api/news/*/summary/narration");
+            "/api/news/*/summary", "/api/news/*/summary/narration",
+            // Term Time's chat turn is unauthenticated and costs a model call, so it is the
+            // one endpoint here that anyone on the internet can spend money on without so
+            // much as a login. Rate limiting bounds one caller; SchoolBudget bounds the day.
+            // Both are needed - a limiter alone still permits a botnet, and a daily ceiling
+            // alone lets one script exhaust everyone else's allowance before breakfast.
+            //
+            // /api/school/config is deliberately NOT listed: the page fetches it on load, so
+            // limiting it would 429 the year selector rather than the expensive call.
+            "/api/school/chat");
   }
 }

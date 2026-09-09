@@ -53,8 +53,30 @@ public class BackupService {
       // Share slugs are already pasted into other people's Slack channels and LinkedIn
       // posts. A restore that dropped them would break URLs that exist in the wild, and
       // re-minting would produce different values — nothing recreates a lost slug.
-      "short_links"
+      "short_links",
+      // Term Time. school_documents retains the original text of restricted items so the
+      // classifier can be changed without re-reading the mailbox — and Gmail guarantees no
+      // retention window for its incremental cursor, so that re-read may simply not be
+      // available. Losing this collection is not recoverable by re-ingesting.
+      "school_documents", "school_events", "school_sync_state",
+      // Spend history. Not reconstructable: the provider bills in aggregate and
+      // these rows are the only per-call record that exists.
+      "school_usage",
+      // Fetch/ignore decisions on links found in email. Losing these re-offers every
+      // link already declined, which is the one outcome that makes the queue useless.
+      "school_links"
   );
+
+  private void exportIndex(final ZipOutputStream zos, final String index) {
+    try {
+      String embeddingsJson = esBackupService.exportEmbeddings(index);
+      zos.putNextEntry(new ZipEntry("embeddings/" + index + ".json"));
+      zos.write(embeddingsJson.getBytes(StandardCharsets.UTF_8));
+      zos.closeEntry();
+    } catch (Exception ex) {
+      LOG.warn("Failed to export embeddings for index {}, skipping: {}", index, ex.getMessage());
+    }
+  }
 
   private final MongoClient mongoClient;
   private final String databaseName;
@@ -62,6 +84,7 @@ public class BackupService {
   private final DataOperationsService operationsService;
   private final com.simonrowe.embedding.ElasticsearchBackupService esBackupService;
   private final String uploadsPath;
+  private final String schoolAttachmentPath;
 
   public BackupService(
       final MongoClient mongoClient,
@@ -69,7 +92,8 @@ public class BackupService {
       final GoogleDriveService googleDriveService,
       final DataOperationsService operationsService,
       final com.simonrowe.embedding.ElasticsearchBackupService esBackupService,
-      @Value("${uploads.path:backend/uploads/}") final String uploadsPath
+      @Value("${uploads.path:backend/uploads/}") final String uploadsPath,
+      @Value("${school.attachment-path:school-attachments/}") final String schoolAttachmentPath
   ) {
     this.mongoClient = mongoClient;
     this.databaseName = mongoTemplate.getDb().getName();
@@ -77,6 +101,7 @@ public class BackupService {
     this.operationsService = operationsService;
     this.esBackupService = esBackupService;
     this.uploadsPath = uploadsPath;
+    this.schoolAttachmentPath = schoolAttachmentPath;
   }
 
   /**
@@ -150,15 +175,28 @@ public class BackupService {
           }
         }
 
-        operationsService.updateProgress("Exporting vector embeddings...", 70);
-        try {
-          String embeddingsJson = esBackupService.exportEmbeddings();
-          zos.putNextEntry(new ZipEntry("embeddings/content-embeddings.json"));
-          zos.write(embeddingsJson.getBytes(StandardCharsets.UTF_8));
-          zos.closeEntry();
-        } catch (Exception ex) {
-          LOG.warn("Failed to export embeddings, skipping: {}", ex.getMessage());
+        // Term Time's PDF attachments. Not recoverable by re-ingesting: Gmail guarantees no
+        // retention window for its incremental cursor, and a message can be deleted from the
+        // mailbox entirely. The extracted text lives in Mongo, but the original does not.
+        operationsService.updateProgress("Adding school attachments...", 68);
+        Path attachmentsDir = Path.of(schoolAttachmentPath);
+        if (Files.exists(attachmentsDir) && Files.isDirectory(attachmentsDir)) {
+          try (Stream<Path> walk = Files.walk(attachmentsDir)) {
+            for (Path file : walk.filter(Files::isRegularFile).toList()) {
+              zos.putNextEntry(
+                  new ZipEntry("school-attachments/" + attachmentsDir.relativize(file)));
+              Files.copy(file, zos);
+              zos.closeEntry();
+            }
+          }
         }
+
+        operationsService.updateProgress("Exporting vector embeddings...", 70);
+        // Two indexes, each its own entry. The entry name has always carried the index name,
+        // so an archive written before Term Time existed simply lacks the second file and
+        // restores fine — no manifest version bump needed.
+        exportIndex(zos, esBackupService.contentIndexName());
+        exportIndex(zos, esBackupService.schoolIndexName());
 
         operationsService.updateProgress("Writing manifest...", 75);
         String manifest = buildManifest(timestamp, collectionCounts, mediaFileCount,

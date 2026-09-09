@@ -7,6 +7,7 @@ import {
   Database,
   FileCode,
   FileText,
+  GraduationCap,
   Image,
   LayoutDashboard,
   Link2,
@@ -37,6 +38,20 @@ const navItems = [
   { path: '/admin/aggregated-content', label: 'News & Events', icon: <Newspaper size={18} /> },
   { path: '/admin/content-sources', label: 'Content Sources', icon: <Rss size={18} /> },
   { path: '/admin/short-links', label: 'Share Links', icon: <Link2 size={18} /> },
+  {
+    path: '/admin/school',
+    label: 'Term Time',
+    icon: <GraduationCap size={18} />,
+    // Term Time is the only admin area with enough distinct views to need sub-navigation.
+    // Rendered as an indented group under its parent rather than as four more top-level
+    // entries, which would bury the rest of the menu.
+    children: [
+      { path: '/admin/school', label: 'Overview' },
+      { path: '/admin/school/approvals', label: 'Approvals' },
+      { path: '/admin/school/documents', label: 'Documents' },
+      { path: '/admin/school/events', label: 'Events' },
+    ],
+  },
   { path: '/admin/data-operations', label: 'Data Ops', icon: <Database size={18} /> },
   { path: '/admin/software-factory', label: 'Software Factory', icon: <CircuitBoard size={18} /> },
 ]
@@ -93,15 +108,36 @@ export function AdminLayout() {
         </div>
         <nav className="admin-nav">
           {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`admin-nav__link${isActive(item.path) ? ' admin-nav__link--active' : ''}`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <span className="admin-nav__icon">{item.icon}</span>
-              <span className="admin-nav__label">{item.label}</span>
-            </Link>
+            <div key={item.path}>
+              <Link
+                to={item.path}
+                className={`admin-nav__link${isActive(item.path) ? ' admin-nav__link--active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <span className="admin-nav__icon">{item.icon}</span>
+                <span className="admin-nav__label">{item.label}</span>
+              </Link>
+              {/*
+                Children render only while their section is active, so the sidebar stays the
+                same length as before for every other area.
+              */}
+              {item.children && location.pathname.startsWith(item.path) && (
+                <div className="admin-nav__children">
+                  {item.children.map((child) => (
+                    <Link
+                      key={child.path}
+                      to={child.path}
+                      className={`admin-nav__child${
+                        location.pathname === child.path ? ' admin-nav__child--active' : ''
+                      }`}
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      {child.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
         <div className="admin-sidebar-footer">

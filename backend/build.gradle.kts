@@ -148,7 +148,25 @@ val jacocoExcludes = listOf(
     "com/simonrowe/media/ExternalImageDownloader*",
     "com/simonrowe/aggregation/AdminAggregationController*",
     "com/simonrowe/agents/ContentAggregationAgent*",
-    "com/simonrowe/agents/WeeklyDigestAgent*"
+    "com/simonrowe/agents/WeeklyDigestAgent*",
+    // Term Time's outbound I/O, excluded on exactly the precedent set above: these are HTTP
+    // clients and crawlers whose behaviour lives in the remote system, the same reason
+    // SitemapHtmlScraper, LumaApiScraper and ExternalImageDownloader are here. Everything that
+    // decides anything - tiering, dedup, precedence, the ingest cutoff, link classification,
+    // date reading, rendering - is deliberately NOT excluded and is covered by tests.
+    "com/simonrowe/school/ingest/GmailClient*",
+    "com/simonrowe/school/ingest/SchoolWebsiteCrawler*",
+    "com/simonrowe/school/ingest/CalendarFeedClient*",
+    "com/simonrowe/school/ingest/SchoolPdfExtractor*",
+    // SchoolLinkFetcher is excluded for its HTTP mechanics only, and that exclusion is NOT a
+    // statement that its behaviour is unimportant: it carries the SSRF guard for URLs supplied
+    // by whoever emailed the school. A review of this feature found the guard covered only the
+    // first hop while the client auto-followed redirects. The security property is therefore
+    // pinned directly by SchoolLinkFetcherRedirectTest rather than left to a coverage figure.
+    "com/simonrowe/school/admin/SchoolLinkFetcher*",
+    // Mirrors AdminAggregationController above: a thin admin HTTP surface over services that
+    // are themselves tested.
+    "com/simonrowe/school/admin/SchoolAdminController*"
 )
 
 val jacocoClassDirectories = sourceSets.main.get().output.asFileTree.matching {
@@ -236,6 +254,9 @@ dependencies {
     // in micrometer-registry-otlp and put a second metrics registry beside the Prometheus one.
     implementation(libs.spring.boot.micrometer.tracing.opentelemetry)
     implementation(libs.openpdf)
+    // Text extraction from the school's PDF newsletters, term dates and menus.
+    // openpdf above WRITES pdfs; it cannot read text out of one.
+    implementation(libs.pdfbox)
     implementation(libs.commonmark)
     implementation(libs.spring.boot.starter.mail)
     implementation(libs.spring.ai.starter.model.openai)

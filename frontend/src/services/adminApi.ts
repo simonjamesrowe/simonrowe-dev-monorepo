@@ -928,3 +928,237 @@ export async function updateContentSource(
   )
   return handleResponse<AdminContentSource>(response)
 }
+
+/** One document awaiting a decision in the Term Time approval queue. */
+export interface SchoolApprovalItem {
+  id: string
+  title: string
+  preview: string
+  sourceType: string
+  publishedAt: string
+  visibility: string
+  proposalReason: string | null
+}
+
+export async function fetchSchoolApprovals(
+  getAccessToken: GetAccessToken,
+): Promise<SchoolApprovalItem[]> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/school/approvals`, token)
+  return handleResponse<SchoolApprovalItem[]>(response)
+}
+
+/**
+ * Approve, decline or revoke one document.
+ *
+ * `approve` is the only call in the application that can make school content public, which is
+ * why it is a POST to a named action rather than a PATCH of a visibility field — an action
+ * cannot be invoked by accident with a stray payload.
+ */
+export async function decideSchoolApproval(
+  getAccessToken: GetAccessToken,
+  id: string,
+  action: 'approve' | 'decline' | 'revoke',
+): Promise<SchoolApprovalItem> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/school/approvals/${id}/${action}`, token, {
+    method: 'POST',
+  })
+  return handleResponse<SchoolApprovalItem>(response)
+}
+
+/* ---------------------------------------------------------------------------
+   Term Time admin
+   --------------------------------------------------------------------------- */
+
+export interface SchoolSourceStatus {
+  source: string
+  lastSuccessAt: string | null
+  lastFailureAt: string | null
+  lastFailureReason: string | null
+  running: boolean
+}
+
+export interface SchoolStatus {
+  documentsBySource: Record<string, number>
+  documentsByVisibility: Record<string, number>
+  awaitingApproval: number
+  totalEvents: number
+  eventsByType: Record<string, number>
+  sources: SchoolSourceStatus[]
+}
+
+export interface SchoolDocumentSummary {
+  id: string
+  title: string
+  preview: string
+  sourceType: string
+  sourceRef: string
+  publishedAt: string
+  visibility: string
+  proposedVisibility: string | null
+  proposalReason: string | null
+  approvedBy: string | null
+  approvedAt: string | null
+  hasAttachment: boolean
+  body: string
+  discoveredLinks: SchoolLinkSummary[]
+  originalUrl: string | null
+}
+
+/** A hyperlink found in a document. Nothing has been requested from it. */
+export interface SchoolLinkSummary {
+  id: string
+  sourceDocumentId: string
+  url: string
+  anchorText: string
+  likelyKind: string
+  status: 'PENDING' | 'FETCHED' | 'IGNORED' | 'FAILED'
+  failureReason: string | null
+}
+
+export async function decideSchoolLink(
+  getAccessToken: GetAccessToken,
+  id: string,
+  action: 'fetch' | 'ignore',
+): Promise<SchoolLinkSummary> {
+  const token = await getAccessToken()
+  return handleResponse<SchoolLinkSummary>(
+    await authFetch(`${ADMIN_URL}/school/links/${id}/${action}`, token, { method: 'POST' }),
+  )
+}
+
+/**
+ * Opens a school PDF in a new tab.
+ *
+ * Fetched with the bearer token and handed to the browser as a blob, rather than linked
+ * directly: the admin route requires the token, and an ordinary anchor sends no Authorization
+ * header, so a plain link 401s. Serves restricted attachments too, unlike the public route —
+ * deciding whether to publish a document means being able to read it.
+ */
+export async function openSchoolAttachment(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<void> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/school/documents/${id}/file`, token)
+  if (!response.ok) {
+    throw new Error(`Could not open that PDF (${response.status})`)
+  }
+  const url = URL.createObjectURL(await response.blob())
+  window.open(url, '_blank', 'noopener')
+  // Revoked on a timer, not immediately: revoking before the new tab has read the blob leaves
+  // it showing an empty document.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+export interface SchoolEventRow {
+  id: string
+  title: string
+  startDate: string
+  endDate: string
+  eventType: string
+  yearGroups: string[]
+  academicYear: string
+  sourceType: string
+  visibility: string
+}
+
+export interface SchoolPage<T> {
+  items: T[]
+  total: number
+  page: number
+  size: number
+}
+
+export interface SchoolBulkResult {
+  approved: number
+  declined: number
+  revoked: number
+  missing: number
+}
+
+export async function fetchSchoolStatus(
+  getAccessToken: GetAccessToken,
+): Promise<SchoolStatus> {
+  const token = await getAccessToken()
+  return handleResponse<SchoolStatus>(await authFetch(`${ADMIN_URL}/school/status`, token))
+}
+
+export async function fetchSchoolDocuments(
+  getAccessToken: GetAccessToken,
+  params: Record<string, string | number>,
+): Promise<SchoolPage<SchoolDocumentSummary>> {
+  const token = await getAccessToken()
+  const query = new URLSearchParams(
+    Object.entries(params).map(([k, v]) => [k, String(v)]),
+  ).toString()
+  return handleResponse<SchoolPage<SchoolDocumentSummary>>(
+    await authFetch(`${ADMIN_URL}/school/documents?${query}`, token),
+  )
+}
+
+export async function fetchSchoolEvents(
+  getAccessToken: GetAccessToken,
+  params: Record<string, string | number>,
+): Promise<SchoolPage<SchoolEventRow>> {
+  const token = await getAccessToken()
+  const query = new URLSearchParams(
+    Object.entries(params).map(([k, v]) => [k, String(v)]),
+  ).toString()
+  return handleResponse<SchoolPage<SchoolEventRow>>(
+    await authFetch(`${ADMIN_URL}/school/events?${query}`, token),
+  )
+}
+
+export async function bulkSchoolApproval(
+  getAccessToken: GetAccessToken,
+  ids: string[],
+  action: 'approve' | 'decline' | 'revoke',
+  /**
+   * Publish despite a name-gate block. A separate flag rather than a separate action, so the
+   * server logs the override against the same code path — but the UI must never send it by
+   * default, or the gate stops meaning anything.
+   */
+  force = false,
+): Promise<SchoolBulkResult> {
+  const token = await getAccessToken()
+  return handleResponse<SchoolBulkResult>(
+    await authFetch(`${ADMIN_URL}/school/approvals/bulk`, token, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, action, force }),
+    }),
+  )
+}
+
+export async function triggerSchoolIngest(
+  getAccessToken: GetAccessToken,
+  source: 'calendar' | 'website' | 'gmail',
+): Promise<{ detail: string }> {
+  const token = await getAccessToken()
+  return handleResponse<{ detail: string }>(
+    await authFetch(`${ADMIN_URL}/school/ingest/${source}`, token, { method: 'POST' }),
+  )
+}
+
+export interface SchoolUsageSummary {
+  windowDays: number
+  totalCostUsd: number
+  windowCostUsd: number
+  costByKind: Record<string, number>
+  distinctSessions: number
+  distinctClients: number
+  chatTurns: number
+  includesEstimates: boolean
+}
+
+export async function fetchSchoolUsage(
+  getAccessToken: GetAccessToken,
+  days = 30,
+): Promise<SchoolUsageSummary> {
+  const token = await getAccessToken()
+  return handleResponse<SchoolUsageSummary>(
+    await authFetch(`${ADMIN_URL}/school/usage?days=${days}`, token),
+  )
+}

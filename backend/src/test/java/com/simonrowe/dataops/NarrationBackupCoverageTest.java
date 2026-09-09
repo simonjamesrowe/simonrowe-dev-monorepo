@@ -115,7 +115,7 @@ class NarrationBackupCoverageTest extends AbstractIntegrationTest {
         mongo, mock(GoogleDriveService.class), mock(DataOperationsService.class),
         mock(BackupService.class), mock(IndexService.class),
         mock(ElasticsearchBackupService.class), mock(NarrationRestoreValidator.class),
-        UPLOADS.toString());
+        UPLOADS.toString(), UPLOADS.resolve("school-attachments").toString());
 
     restore.restoreCollections(archive);
 

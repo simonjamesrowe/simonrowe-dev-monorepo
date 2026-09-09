@@ -50,6 +50,10 @@ const DataOperationsAdmin = named(() => import('./pages/admin/DataOperationsAdmi
 const SoftwareFactoryAdmin = named(() => import('./pages/admin/SoftwareFactoryAdmin'), 'SoftwareFactoryAdmin')
 const MediaAdmin = named(() => import('./pages/admin/MediaAdmin'), 'MediaAdmin')
 const ShortLinksAdmin = named(() => import('./pages/admin/ShortLinksAdmin'), 'ShortLinksAdmin')
+const SchoolOverviewAdmin = named(() => import('./pages/admin/SchoolOverviewAdmin'), 'SchoolOverviewAdmin')
+const SchoolApprovalsPage = named(() => import('./pages/admin/SchoolApprovalsPage'), 'SchoolApprovalsPage')
+const SchoolAllDocumentsPage = named(() => import('./pages/admin/SchoolAllDocumentsPage'), 'SchoolAllDocumentsPage')
+const SchoolEventsAdmin = named(() => import('./pages/admin/SchoolEventsAdmin'), 'SchoolEventsAdmin')
 const ProfileAdmin = named(() => import('./pages/admin/ProfileAdmin'), 'ProfileAdmin')
 const SkillGroupEditor = named(() => import('./pages/admin/SkillGroupEditor'), 'SkillGroupEditor')
 const SkillsAdmin = named(() => import('./pages/admin/SkillsAdmin'), 'SkillsAdmin')
@@ -213,6 +217,10 @@ function App() {
           <Route path="aggregated-content" element={<AggregatedContentAdmin />} />
           <Route path="content-sources" element={<ContentSourcesAdmin />} />
           <Route path="short-links" element={<ShortLinksAdmin />} />
+          <Route path="school" element={<SchoolOverviewAdmin />} />
+          <Route path="school/approvals" element={<SchoolApprovalsPage />} />
+          <Route path="school/documents" element={<SchoolAllDocumentsPage />} />
+          <Route path="school/events" element={<SchoolEventsAdmin />} />
         </Route>
         <Route element={<PublicLayout><NotFoundPage /></PublicLayout>} path="*" />
       </Routes>

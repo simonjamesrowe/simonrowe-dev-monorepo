@@ -211,6 +211,189 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 047-term-time: **Term Time**, a school assistant at `simonrowe.dev/school` for Kilmorie Primary
+  School (Lewisham — spelled Kilmor**ie**), `com.simonrowe.school`. Public tier over the school's
+  own published data, restricted tier over the school mailbox that is **unreachable from the browser** — the page has
+  no sign-in at all, so email content reaches a reader only by being approved into the public
+  tier. The tiering stays because ingested mail still needs somewhere safe to sit; what was
+  removed is the way in — and, later, the name gate as well (see below).
+  **All four phases are shipped and green (backend 1292 tests, frontend 824).** Outstanding: an
+  integration test for the public chat path and the `evals/` cases. See
+  `specs/047-term-time/tasks.md`. Load-bearing bits:
+  - **Publishing a second `VectorStore` bean would delete the first one.** Spring AI's
+    Elasticsearch autoconfiguration is `@ConditionalOnMissingBean(VectorStore)`, matching on
+    *type*, so a qualified or non-primary second bean still makes it back off and the main site's
+    store disappear. `school-embeddings` is therefore held behind a `SchoolVectorStore` **wrapper**
+    that composes rather than extends. Do not "simplify" that away.
+  - **A wrapped store never gets `afterPropertiesSet()`.** `ElasticsearchVectorStore` implements
+    `InitializingBean` and `initializeSchema(true)` only takes effect from there; because the
+    instance is wrapped rather than published, Spring calls the lifecycle method on the wrapper.
+    The index would never be created, the first search would return nothing, and nothing would
+    error. It is called by hand in `SchoolVectorStoreConfig`.
+  - **The store is a null object when disabled, not a conditional bean.** Gating it on
+    `school.enabled` while its consumers stayed plain `@Service` beans made the *entire*
+    application context fail to start — every unrelated controller test in the suite went red.
+    `SchoolVectorStore.disabled()` keeps the graph intact so the controller can answer "not
+    switched on".
+  - **Fail-closed tiering, in the constructor.** `Visibility` defaults to `RESTRICTED` in
+    `SchoolDocument`'s compact constructor; a classifier writes only `proposedVisibility`; only
+    `withApproval` writes `PUBLIC`. `withNameGateBlocked()` used to outrank approval and make the
+    gate a gate rather than advice; the gate is gone and that path is dead, so **approval is now
+    the only writer of `PUBLIC` and nothing can veto it**.
+  - **`SchoolSourceType`'s declaration order IS the source precedence** (`CALENDAR_FEED` > `EMAIL`
+    > `WEBSITE_PAGE` > `PDF`) and reordering it silently changes which source wins. Not
+    theoretical: the school's term-dates page still shows the *previous* academic year while its
+    calendar feed carries the current one, and both are ingested. `SchoolIds.eventId` keys on
+    academic year, date and normalised title — deliberately **not** on the source — so the two
+    collide on one row and precedence picks the winner.
+  - **The sender allowlist matches ADDRESSES, never display names.** `system@insighttracking.com`
+    sends mail whose display name is "Kilmorie Primary School". Full-text matching on the school
+    name is also wrong — Kilmorie Road is a street, so it catches estate agents. ParentPay is
+    denied outright rather than ingested as restricted.
+  - **An empty `StaffDirectory` blocks every name**, so the gate is inert-closed rather than
+    inert-open before the crawl runs — which is why `primeStaffDirectory()` runs at
+    `ApplicationReadyEvent` rather than waiting for the first nightly crawl. The default staff
+    URL matters for the same reason: `/our-school/staff` is a 404 and `/our-school/our-staff`
+    is the real page, and getting it wrong leaves the directory empty with one WARN to show
+    for it.
+  - **The name gate is DELETED, and reinstating it would reverse a decision made three times.**
+    `StaffNameGate` compared capitalised word pairs against the published staff directory, blocked
+    any document naming someone it could not place, and redacted names out of anonymous answers.
+    It went in three steps, each on the owner's instruction: off website pages (it matched
+    "Contact Us" as a person, marking 162 of 162 crawled pages restricted), then narrowed to
+    pupils only (it had redacted "Taylor Shaw", the *catering company*, while "Edwards & Blake"
+    survived), then removed altogether — pupils' names included. It blocked 98 of 99 emails, so
+    its "Publish anyway" override was pressed as a matter of routine, which is what a control
+    that has stopped controlling anything looks like. Gone with it: the `blocked` count on the
+    bulk-approval response, `nameGateBlocked` on the documents API, the override button and the
+    "Name-gate blocked" filter. `SchoolDocument.nameGateBlocked` survives as a **never-written**
+    field so stored documents still deserialize. **Approval is now the entire control** over what
+    reaches the public tier — which is what was always doing the real work.
+  - **Events come from four sources and the website was missing for four phases.** Only the email
+    path called `SchoolEventExtractor`, so website pages and the PDFs they link to — the
+    enrichment timetable, term dates and lunch menu, the most current documents the school
+    publishes — produced **zero** events while sitting in the index as prose.
+    `SchoolIngestService.extractEventsFrom` closes it. Two filters run *before* the model because
+    both are free and it is not: a `DATE_LIKE` regex (pure cost control over ~160 pages re-read
+    every crawl, most of which contain no date) and then the ingest cutoff applied to the model's
+    **output**, never to the document — a page last edited in 2022 can still announce a date this
+    term.
+  - **`getEventsBetween` reads both stores, deliberately.** An event row carries a date and a
+    title; the letter announcing it carries the time, venue, what to bring, the booking link and
+    often a PDF, and that lives in Elasticsearch rather than `school_events`. The tool now returns
+    the dated rows plus a prose search **keyed on the titles it just found** — not on the user's
+    phrasing, which pulls back whatever is topically near "this week" instead of the specific
+    letter.
+  - **Exactly one kind of link is followed automatically.** The rule is still "record links, never
+    follow them" — an email can link anywhere and the ingester must not become a general crawler.
+    `SchoolLinkFilter.isAutoFetchable` carves out a **newsletter path on the school's own host**,
+    because the website crawl already reads that host wholesale so following one reaches nobody
+    new. Deliberately not the whole school domain: the parent portal also serves per-family pages.
+    The host is checked before the path, or `evil.example.com/newsletter/` would qualify.
+  - **`SCHOOL_INGEST_FROM_DATE` has to be enforced on the calendar too, not just on Gmail.** It
+    began as an `after:` clause in `GmailIngestService.buildQuery()`, which capped mail correctly
+    and did nothing about `CALENDAR_LOOKBACK_MONTHS = 6` — so a full wipe and repopulate put 53
+    class trips and assemblies from the *previous* academic year straight back into the admin
+    console. `SchoolEventWriter.write()` now drops any event finishing before the cutoff (the
+    guarantee, and it also catches past dates stated by an in-window email) and
+    `SchoolIngestService.calendarRangeStart()` narrows the feed request to match (the
+    optimisation). An event *spanning* the cutoff is kept. **The cutoff deliberately does not
+    apply to website documents**: `publishedAt` there is the CMS last-edited date, and the live
+    Term Dates page carries May 2026 — filtering on it would delete current information.
+    In `docker-compose.prod.yml` the default must be **repeated, not blank**: `${VAR:-}` passes
+    an empty *string*, which resolves, so the yml default never applies and there is no cutoff at
+    all. `SchoolIngestCutoffTest` pins the two declarations together.
+  - **`SCHOOL_DAILY_TOKEN_BUDGET=0` means "answer nothing anonymously", not "unlimited".** An
+    unauthenticated LLM endpoint that defaults to unbounded spend is the wrong default.
+  - **Model and `promptCacheKey` are set on the school `ChatClient`'s own options**, never under
+    `spring.ai.openai.chat`, whose values merge into every per-call `OpenAiChatOptions` in the
+    application — the same trap that bans `reasoning-effort` from the yml. Spring AI 2.0's
+    `options()` takes the **builder**, not a built object.
+  - **`/school` and `/school/` are not the same URL, and the difference is silent.** Bare
+    `/school` is served by the MAIN site's bundle — nginx prefix matching is literal so
+    `location /school/` does not match it, and Vite's dev server only resolves the directory
+    index for the slashed form. Since the Auth0 callback lands on this path, a redirect URI
+    without the slash returns from sign-in into the wrong application. Fixed with
+    `location = /school { return 301 /school/; }` plus a slashed `redirect_uri`; found only by
+    curling the page, because every test in the suite passed either way.
+  - **The school chat MUST send `reasoningEffort("none")`.** `gpt-5.6-luna` is a reasoning model
+    and OpenAI rejects function tools alongside a reasoning effort on `/v1/chat/completions`
+    (`400: Function tools with reasoning_effort are not supported`). Term Time is entirely
+    tool-driven, so without it every single turn fails. Same family as the ban on
+    `reasoning-effort` in `application.yml`, except here the value arrives from the model's own
+    default rather than from configuration — no amount of reading the yml would have shown it.
+  - **Term Time streams over STOMP and reuses the site's chat components**, deliberately — same
+    `styles.css`, same `ChatMessage` (so markdown, the link policy and tool activity all render
+    identically), same `chatStreamReducer`. The wire type is the shared `ChatResponse`, which is
+    the whole reason one reducer serves both; a bespoke frame shape would have meant a second
+    reducer, and two reducers drift. An earlier cut gave Term Time its own design language and a
+    plain JSON POST — that was reversed on request, and with it the ESLint import boundary
+    between `src/` and `src/school/`, whose premise no longer holds.
+  - **`ChatStreamPublisher` hardcodes `/topic/chat.`**, so reusing it for Term Time published
+    every tool frame to the portfolio assistant's topic where nothing was subscribed. The answer
+    still arrived and the activity lines simply never appeared — publishing to an unsubscribed
+    STOMP topic is legal and silent. Hence a separate `SchoolStreamPublisher` on
+    `/topic/school.`, rather than a shared class with a mutable prefix.
+  - **`classifyLink` strips any https URL not in the per-message allowlist**, and that allowlist
+    is built from streamed *widget* payloads. Term Time emits no widgets, so its own refusal
+    advice — "check the school's website" — rendered as unclickable text until `ChatMessage`
+    gained an `extraAllowedUrls` prop.
+  - **The frontend is a second Vite entry point, not a second project** — `frontend/school/`
+    plus `rollupOptions.input`, sharing one `package.json`, ESLint config, Vitest config, CI job
+    and Docker stage. Both bundles emit into the shared `dist/assets/`, so `nginx.conf` needs only
+    a `location /school/` with its own `try_files` and no second caching rule. Note
+    `resolve(__dirname, ...)` needs `@types/node`, which this project does not have — the input
+    paths are relative to Vite's root instead.
+  - **The Gmail `From` header is parsed to a bare address before the allowlist sees it.**
+    `GmailMessage` strips the display name, because the header reads
+    `"Kilmorie Primary School" <system@insighttracking.com>` for a third-party sender and any
+    check applied to the whole header admits it. Attachments are identified by the presence of an
+    `attachmentId`, never a size threshold, and bodies are base64**url** — `Base64.getDecoder()`
+    throws on the `-`/`_` alphabet and the symptom is a silently empty message.
+  - **The page is unauthenticated and stays that way.** `SchoolAudienceResolver` and the
+    token field on the STOMP request are retained deliberately: they are what make a token
+    *safe* if one ever appears, since the resolver validates through the real `JwtDecoder` and
+    falls back to anonymous on anything it cannot verify. Removing them would leave an unvalidated
+    field on a public endpoint.
+  - **Term Time reuses the site's `ThemeProvider` and `theme-preference` key**, so light/dark
+    carries across from the main site. The no-flash script in `frontend/school/index.html` is
+    duplicated from the main entry rather than imported — a module would run after first paint,
+    which is the flash it exists to prevent.
+  - **Approval must re-embed, or it silently does nothing.** `visibility` is chunk metadata and
+    the retrieval filter reads Elasticsearch, not Mongo, so promoting a document without
+    rewriting its chunks leaves it public in one store and restricted in the other. The tier also
+    cascades to every `SchoolEvent` extracted from the document. Nothing re-checks the text at
+    approval time any more — the name gate that used to is deleted.
+  - **Email attachments are downloaded and extracted, and dated facts come out of prose via
+    Embabel.** `SchoolEventExtractor` uses `Ai.createObjectIfPossible` (not `createObject` — most
+    emails have no dated facts and that must be a null, not an exception per newsletter), and
+    each PDF attachment becomes its own document inheriting the parent email's tier. Both were
+    missing initially: attachment *filenames* were recorded and the bytes discarded, and the mail
+    path never wrote a `SchoolEvent` at all, so "what's on this week" saw only the 17-event
+    calendar feed. **`contentHash` means an unchanged email skips re-ingest**, so adding an
+    extraction step does not backfill — delete the documents and let the next sync re-read them.
+  - **Production serves it at `term-time.simonrowe.dev`** from the same `frontend` container.
+    The proxy maps only `location = /` onto `/school/`; rewriting every path would break
+    `/assets/`, which both bundles share, and the page would render blank. `CORS_ALLOWED_ORIGINS`
+    must list the hostname even though its `/api` and `/ws` calls are same-origin — Spring checks
+    the STOMP handshake's `Origin` header against that list regardless of who proxies it, and the
+    symptom is a page that loads perfectly and never answers.
+  - **The school publishes its enrichment timetable, term dates and lunch menu as PDFs**, and
+    the enrichment timetable is the most current document on the site. `SchoolPdfExtractor`
+    handles both of the CMS's URL conventions and is called from the website crawl — it existed
+    for a while without being wired to anything, which presented as the assistant saying "I don't
+    know" about clubs while the answer sat one link away.
+  - **`scripts/google-drive-auth.sh` is dead code**, found while building this: it uses the
+    `urn:ietf:wg:oauth:2.0:oob` redirect Google has removed, so the documented way to re-mint the
+    *production backup* token no longer works. `scripts/termtime-gmail-auth.py` is the working
+    loopback pattern.
+  - **A consent screen left in "Testing" issues 7-day refresh tokens** and adding yourself as a
+    test user does not help. The `simon-james-rowe` project was already External / In production /
+    unverified and already carried the restricted `auth/drive` scope, so `gmail.readonly` was added
+    there rather than to a new project; the OAuth *client* is separate so re-consenting Gmail
+    cannot invalidate the Drive backup token. Changing your Google password revokes any
+    Gmail-scoped refresh token, silently.
+  See `docs/runbooks/term-time.md` and `specs/047-term-time/`.
 - 046-linear-dedup-grouping: The `linear` sink's deduplication was never broken — the bug was one
   layer up. `logwatch`'s fingerprint key was `(container, whole-normalised-line)`, and
   `SignatureExtractor.normalise` masks timestamps, UUIDs, numbers, paths and addresses but **not
