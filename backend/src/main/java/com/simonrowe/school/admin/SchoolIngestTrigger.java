@@ -61,7 +61,10 @@ public class SchoolIngestTrigger {
    * @return true when a run is in progress
    */
   public boolean isRunning(final String source) {
-    return flagFor(source) != null && flagFor(source).get();
+    // Resolved once. Calling flagFor twice was safe only because it is a pure switch, which is
+    // not a property a reader (or an analyser) should have to verify to trust the line.
+    final AtomicBoolean flag = flagFor(source);
+    return flag != null && flag.get();
   }
 
   /**

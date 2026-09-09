@@ -123,3 +123,43 @@ describe('linkPolicy', () => {
     })
   })
 })
+
+describe('classifyLink origin boundary', () => {
+  const SCHOOL = 'https://www.kilmorieschool.co.uk'
+
+  it('allows a deep link on an allowed origin', () => {
+    expect(classifyLink(`${SCHOOL}/enrichment`, new Set(), [SCHOOL])).toBe('external-allowed')
+    expect(classifyLink(SCHOOL, new Set(), [SCHOOL])).toBe('external-allowed')
+  })
+
+  it('strips a domain-suffix forgery of an allowed origin', () => {
+    // The prefix has no trailing slash, so a bare startsWith also matched
+    // "kilmorieschool.co.uk.attacker.example" and rendered it as a clickable link wearing the
+    // school's name. Answers are built from scraped pages and emailed PDFs, so a hostile URL
+    // can genuinely reach the model's context.
+    expect(
+      classifyLink(`${SCHOOL}.attacker.example/phish`, new Set(), [SCHOOL]),
+    ).toBe('strip')
+    expect(
+      classifyLink('https://www.kilmorieschool.co.uk.evil.test/', new Set(), [SCHOOL]),
+    ).toBe('strip')
+  })
+
+  it('strips a different host that merely contains the allowed one', () => {
+    expect(classifyLink('https://evil.test/https://www.kilmorieschool.co.uk', new Set(), [SCHOOL]))
+      .toBe('strip')
+  })
+
+  it('a prefix carrying a path still narrows to that path', () => {
+    // Origin matching alone would widen such a prefix to the whole host, which is the opposite
+    // of what someone writing it intends.
+    const scoped = `${SCHOOL}/letters/`
+    expect(classifyLink(`${SCHOOL}/letters/autumn`, new Set(), [scoped])).toBe('external-allowed')
+    expect(classifyLink(`${SCHOOL}/private/pay`, new Set(), [scoped])).toBe('strip')
+  })
+
+  it('an unparseable href is stripped rather than allowed', () => {
+    expect(classifyLink('https://', new Set(), [SCHOOL])).toBe('strip')
+    expect(classifyLink('not a url', new Set(), [SCHOOL])).toBe('strip')
+  })
+})

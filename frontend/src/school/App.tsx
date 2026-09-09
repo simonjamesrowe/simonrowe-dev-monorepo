@@ -72,7 +72,16 @@ function writeStored(key: string, value: string | null): void {
 }
 
 function newSessionId(): string {
-  return `school-${Date.now()}-${Math.floor(Math.random() * 1e9)}`
+  // Cryptographically random, not Math.random(). This value is the STOMP topic suffix the
+  // answer streams back on (/topic/school.<id>), so a guessable one lets somebody subscribe to
+  // another visitor's conversation. randomUUID needs a secure context, which every origin
+  // serving this page is; the fallback keeps a non-secure local origin working rather than
+  // throwing on load.
+  const uuid =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.floor(Math.random() * 1e9)}`
+  return `school-${uuid}`
 }
 
 export default function App() {

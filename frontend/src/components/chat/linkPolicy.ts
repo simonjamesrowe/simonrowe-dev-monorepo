@@ -61,8 +61,7 @@ export function classifyLink(
   // They must be absolute rather than relative — a model handed a bare path invents an
   // origin to write a markdown link with, and picks whichever domain the answer cites.
   if (typeof window !== 'undefined' && window.location?.origin) {
-    const origin = window.location.origin
-    if (href.toLowerCase().startsWith(`${origin.toLowerCase()}/`)) {
+    if (sameOrigin(href, window.location.origin)) {
       return 'external-allowed'
     }
   }
@@ -71,11 +70,43 @@ export function classifyLink(
   }
   if (
     /^https:\/\//i.test(href) &&
-    allowedPrefixes.some((prefix) => href.toLowerCase().startsWith(prefix.toLowerCase()))
+    allowedPrefixes.some(
+      (prefix) =>
+        // BOTH conditions, and neither is redundant. The origin comparison is what stops a
+        // domain-suffix forgery: with a bare `startsWith`, the prefix
+        // "https://www.kilmorieschool.co.uk" also matches
+        // "https://www.kilmorieschool.co.uk.attacker.example/phish", which then rendered as a
+        // clickable link wearing the school's name. Answers are composed from scraped pages
+        // and emailed PDFs, so a hostile URL really can arrive in the model's context.
+        // The startsWith is kept so a prefix carrying a path still NARROWS to that path
+        // rather than being widened to the whole origin.
+        sameOrigin(href, prefix) && href.toLowerCase().startsWith(prefix.toLowerCase()),
+    )
   ) {
     return 'external-allowed'
   }
   return 'strip'
+}
+
+/**
+ * Whether two absolute URLs share an origin (scheme, host and port).
+ *
+ * <p>Parsed rather than string-compared: an origin boundary cannot be expressed reliably by
+ * concatenating a separator, because a prefix may or may not already end in one.
+ *
+ * @returns false for anything unparseable, so a malformed href is never allowed through
+ */
+function sameOrigin(href: string, other: string): boolean {
+  const a = originOf(href)
+  return a !== null && a === originOf(other)
+}
+
+function originOf(value: string): string | null {
+  try {
+    return new URL(value).origin.toLowerCase()
+  } catch {
+    return null
+  }
 }
 
 function isUploadsOrigin(src: string): boolean {
