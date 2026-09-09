@@ -215,6 +215,17 @@ class ArticleSummaryConcurrencyTest extends AbstractIntegrationTest {
             .isTrue();
       }
       if (release != null) {
+        // `started` counts down BEFORE request() is called, so it only proves each caller has
+        // entered its lambda - not that it has reached the reclaim. Releasing the model call
+        // there lets the winner finish and write READY while a thread the scheduler has not
+        // run yet is still to call request(); that caller then correctly observes a finished
+        // summary and returns READY too, and an "exactly one READY" assertion fails on a
+        // system that behaved perfectly. It failed exactly this way on main while passing on
+        // the pull request, from an identical tree.
+        //
+        // Waiting for every loser to have RETURNED is the real precondition: it can only
+        // happen once each of them has called request() and been turned away.
+        awaitLosersFinished(futures, callers - 1);
         release.countDown();
       }
 
@@ -223,6 +234,24 @@ class ArticleSummaryConcurrencyTest extends AbstractIntegrationTest {
         results.add(future.get(30, TimeUnit.SECONDS));
       }
       return results;
+    }
+  }
+
+  /**
+   * Waits until all but the blocked winner have returned.
+   *
+   * <p>Best-effort on purpose: if it times out we release anyway rather than failing here, so
+   * that a genuine double-reclaim - the bug this class exists to catch - is reported by the
+   * assertion that describes it ({@code respond} called twice) instead of by an opaque timeout
+   * in a helper.
+   */
+  private static void awaitLosersFinished(
+      final List<Future<ArticleSummaryService.RequestResult>> futures, final int expected)
+      throws InterruptedException {
+    final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    while (System.nanoTime() < deadline
+        && futures.stream().filter(Future::isDone).count() < expected) {
+      Thread.sleep(5);
     }
   }
 
