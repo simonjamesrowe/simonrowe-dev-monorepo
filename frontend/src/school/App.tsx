@@ -72,16 +72,18 @@ function writeStored(key: string, value: string | null): void {
 }
 
 function newSessionId(): string {
-  // Cryptographically random, not Math.random(). This value is the STOMP topic suffix the
-  // answer streams back on (/topic/school.<id>), so a guessable one lets somebody subscribe to
-  // another visitor's conversation. randomUUID needs a secure context, which every origin
-  // serving this page is; the fallback keeps a non-secure local origin working rather than
-  // throwing on load.
-  const uuid =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.floor(Math.random() * 1e9)}`
-  return `school-${uuid}`
+  // Cryptographically random, with no Math.random() fallback anywhere in the function. This
+  // value is the STOMP topic suffix the answer streams back on (/topic/school.<id>), so a
+  // guessable one lets somebody subscribe to another visitor's conversation.
+  //
+  // getRandomValues rather than randomUUID: randomUUID requires a secure context and is the
+  // newer API, so it needs a fallback — and a fallback is exactly where the weak generator
+  // crept back in. getRandomValues has neither constraint and is available in every browser
+  // and in jsdom, so there is one path and it is the strong one.
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  return `school-${hex}`
 }
 
 export default function App() {
