@@ -158,6 +158,11 @@ val jacocoExcludes = listOf(
     "com/simonrowe/school/ingest/SchoolWebsiteCrawler*",
     "com/simonrowe/school/ingest/CalendarFeedClient*",
     "com/simonrowe/school/ingest/SchoolPdfExtractor*",
+    // SchoolLinkFetcher is excluded for its HTTP mechanics only, and that exclusion is NOT a
+    // statement that its behaviour is unimportant: it carries the SSRF guard for URLs supplied
+    // by whoever emailed the school. A review of this feature found the guard covered only the
+    // first hop while the client auto-followed redirects. The security property is therefore
+    // pinned directly by SchoolLinkFetcherRedirectTest rather than left to a coverage figure.
     "com/simonrowe/school/admin/SchoolLinkFetcher*",
     // Mirrors AdminAggregationController above: a thin admin HTTP surface over services that
     // are themselves tested.

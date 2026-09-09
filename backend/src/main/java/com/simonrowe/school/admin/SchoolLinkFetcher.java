@@ -42,6 +42,13 @@ import org.springframework.stereotype.Component;
  * caller here is an authenticated administrator, but the URL still came out of an email — a link
  * to {@code http://169.254.169.254/} or a loopback address is exactly the shape of thing a
  * hostile sender would include, and "an admin clicked it" is not a reason to allow it.
+ *
+ * <p><b>Reusing the guard means reusing the redirect handling too, not only the host check.</b>
+ * This class originally validated the first URL and then let the JDK client follow redirects
+ * automatically, which protected exactly one hop: a link that passed the check could 302 to the
+ * metadata address and be followed there transparently. The client is now
+ * {@link HttpClient.Redirect#NEVER} and every hop is resolved and re-validated before it is
+ * requested, the same shape as {@link UrlFetcher#fetch}.
  */
 @Component
 public class SchoolLinkFetcher {
@@ -49,6 +56,7 @@ public class SchoolLinkFetcher {
   private static final Logger LOG = LoggerFactory.getLogger(SchoolLinkFetcher.class);
   private static final Duration TIMEOUT = Duration.ofSeconds(30);
   private static final int MAX_BYTES = 20 * 1024 * 1024;
+  private static final int MAX_REDIRECTS = 5;
 
   private final SchoolLinkRepository links;
   private final SchoolDocumentRepository documents;
@@ -59,9 +67,15 @@ public class SchoolLinkFetcher {
   private final SchoolEventExtractor eventExtractor;
   private final SchoolEventWriter eventWriter;
   private final DocumentDateReader dateReader;
+  // NEVER, not NORMAL. The JDK client follows a 3xx without re-checking the destination, so
+  // with automatic redirects the SSRF guard below protects only the FIRST hop: a link that
+  // passes isFetchableUrl can 302 straight to http://169.254.169.254/ and the client goes
+  // there transparently. These URLs come out of email a hostile sender controls, which is
+  // precisely the attack this class's javadoc describes. Hops are followed by hand instead,
+  // each one re-validated before it is requested, exactly as UrlFetcher.fetch does.
   private final HttpClient httpClient = HttpClient.newBuilder()
       .connectTimeout(TIMEOUT)
-      .followRedirects(HttpClient.Redirect.NORMAL)
+      .followRedirects(HttpClient.Redirect.NEVER)
       .build();
 
   @SuppressWarnings("checkstyle:ParameterNumber")
@@ -114,6 +128,20 @@ public class SchoolLinkFetcher {
         .orElseGet(Instant::now);
   }
 
+  private HttpResponse<byte[]> send(final URI uri) throws IOException, InterruptedException {
+    return httpClient.send(
+        HttpRequest.newBuilder(uri)
+            .header("User-Agent", "SimonRoweBot/1.0 (+https://simonrowe.dev)")
+            .timeout(TIMEOUT)
+            .GET()
+            .build(),
+        HttpResponse.BodyHandlers.ofByteArray());
+  }
+
+  private static boolean isRedirect(final int statusCode) {
+    return statusCode >= 300 && statusCode < 400;
+  }
+
   /**
    * Declines a link permanently.
    *
@@ -148,13 +176,26 @@ public class SchoolLinkFetcher {
       final byte[] body;
       final String contentType;
       try {
-        final HttpResponse<byte[]> response = httpClient.send(
-            HttpRequest.newBuilder(URI.create(link.url()))
-                .header("User-Agent", "SimonRoweBot/1.0 (+https://simonrowe.dev)")
-                .timeout(TIMEOUT)
-                .GET()
-                .build(),
-            HttpResponse.BodyHandlers.ofByteArray());
+        URI current = URI.create(link.url().trim());
+        HttpResponse<byte[]> response = send(current);
+        int hops = 0;
+        while (isRedirect(response.statusCode()) && hops < MAX_REDIRECTS) {
+          final String location = response.headers().firstValue("location").orElse("");
+          if (location.isBlank()) {
+            break;
+          }
+          // Validated BEFORE the request, never after: reaching an internal address even once
+          // is the whole harm, so a check on the response would already be too late.
+          current = current.resolve(location.trim());
+          if (!UrlFetcher.isFetchableUrl(current.toString())) {
+            return fail(link, "It redirected somewhere that is not safe to fetch");
+          }
+          response = send(current);
+          hops++;
+        }
+        if (isRedirect(response.statusCode())) {
+          return fail(link, "It redirected too many times");
+        }
         if (response.statusCode() != 200) {
           return fail(link, "The server returned HTTP " + response.statusCode());
         }
@@ -162,6 +203,8 @@ public class SchoolLinkFetcher {
         contentType = response.headers().firstValue("content-type").orElse("");
       } catch (IOException e) {
         return fail(link, "Could not reach it: " + e.getMessage());
+      } catch (IllegalArgumentException e) {
+        return fail(link, "That address could not be read");
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         return fail(link, "Interrupted");
