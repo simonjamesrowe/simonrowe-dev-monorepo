@@ -38,6 +38,16 @@ export function isInternalRoute(href: string): boolean {
 export function classifyLink(
   href: string | undefined,
   allowlist: ReadonlySet<string>,
+  /**
+   * Whole origins the message may link anywhere within.
+   *
+   * The exact-URL allowlist is built from streamed widget payloads, which works when every
+   * linkable URL was handed to the browser. Term Time cites deep links the model got from a
+   * tool result — a calendar event, a PDF — that the browser never sees, so exact matching
+   * strips them all. A prefix is safe here because it is a fixed first-party origin supplied
+   * by our own code, never by the model.
+   */
+  allowedPrefixes: readonly string[] = [],
 ): LinkClassification {
   if (!href) {
     return 'strip'
@@ -45,7 +55,24 @@ export function classifyLink(
   if (isInternalRoute(href)) {
     return 'internal'
   }
+  // Same-origin absolute links are as trustworthy as the page serving them, and are not
+  // subject to the https rule below: Term Time's PDF citations point at its own
+  // /api/school/attachments/<id>, and local development serves that origin over http.
+  // They must be absolute rather than relative — a model handed a bare path invents an
+  // origin to write a markdown link with, and picks whichever domain the answer cites.
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const origin = window.location.origin
+    if (href.toLowerCase().startsWith(`${origin.toLowerCase()}/`)) {
+      return 'external-allowed'
+    }
+  }
   if (/^https:\/\//i.test(href) && allowlist.has(href)) {
+    return 'external-allowed'
+  }
+  if (
+    /^https:\/\//i.test(href) &&
+    allowedPrefixes.some((prefix) => href.toLowerCase().startsWith(prefix.toLowerCase()))
+  ) {
     return 'external-allowed'
   }
   return 'strip'

@@ -513,3 +513,58 @@ factory-admin:
   timeout: 2s
   owner: simonjamesrowe
   repository: simonrowe-dev-monorepo
+
+# Term Time, the school assistant (specs/047-term-time).
+#
+# Off by default. With school.enabled false no scheduled ingest is registered, no vector index
+# is created, and no request is made to the school's website.
+school:
+  enabled: ${SCHOOL_ENABLED:false}
+  # Earliest school email to read. Blank would mean the full available history, and that was
+  # the setting until 2026-09-09 — cheap to ingest (644 messages) but wrong on quality: the
+  # mailbox goes back to June 2020 and 93% of it predates the current academic year. A 2021
+  # letter about that year's INSET days is the exact shape of thing that produces a confident
+  # wrong answer, and source precedence cannot help when the stale letter is the ONLY source.
+  #
+  # July rather than September deliberately: the end of the summer term is when a UK primary
+  # sends the September arrangements — class allocations, term dates, uniform, clubs. A
+  # September cut loses all of it. Evergreen policy (uniform, PE) is covered by the website
+  # crawl, which this does not affect.
+  ingest-from-date: ${SCHOOL_INGEST_FROM_DATE:2026-07-01}
+  # ADDRESSES, never display names. system@insighttracking.com sends mail whose display name is
+  # "Kilmorie Primary School"; a display-name allowlist would admit it and anything else willing
+  # to set the same name.
+  sender-allowlist: ${SCHOOL_SENDER_ALLOWLIST:kilmorie.lewisham.sch.uk}
+  sender-denylist: ${SCHOOL_SENDER_DENYLIST:parentpay.com}
+  calendar-base-url: ${SCHOOL_CALENDAR_BASE_URL:https://www.kilmorieschool.co.uk/calendar}
+  website-base-url: ${SCHOOL_WEBSITE_BASE_URL:https://www.kilmorieschool.co.uk}
+  staff-list-url: ${SCHOOL_STAFF_LIST_URL:}
+  # robots.txt asks for ten seconds and this is a small school's hosting.
+  crawl-delay-seconds: ${SCHOOL_CRAWL_DELAY_SECONDS:10}
+  # Set on the school ChatClient's own options, never under spring.ai.openai.chat - anything
+  # there is merged into EVERY per-call OpenAiChatOptions in this application, which is why
+  # reasoning-effort is banned from that block.
+  chat-model: ${SCHOOL_CHAT_MODEL:gpt-5.6-luna}
+  guardrail-model: ${SCHOOL_GUARDRAIL_MODEL:gpt-5-nano}
+  # Zero means "answer nothing anonymously", deliberately not "unlimited".
+  daily-token-budget: ${SCHOOL_DAILY_TOKEN_BUDGET:0}
+  embedding-index-name: ${SCHOOL_EMBEDDING_INDEX_NAME:school-embeddings}
+  # The origin an answer's PDF links are built against. It must be ABSOLUTE and it must be set:
+  # a relative path reaches the model as "/api/school/attachments/<id>", and a model writing a
+  # markdown link needs an origin, so it invents one — in practice the school's own domain,
+  # because that is what the rest of the answer cites. Every attachment link then 404s on
+  # kilmorieschool.co.uk. Term Time's own host serves /api/ (the frontend nginx proxies it), so
+  # this is the origin the browser is already on.
+  public-base-url: ${SCHOOL_PUBLIC_BASE_URL:https://term-time.simonrowe.dev}
+  # PDF attachments from school email, kept so an answer can link to the original. Relative to
+  # the backend's working directory. Deliberately NOT under uploads/, which is served straight
+  # out by a resource handler with no authorisation — these are tier-checked by
+  # SchoolAttachmentController instead.
+  attachment-path: ${SCHOOL_ATTACHMENT_PATH:school-attachments/}
+  # Minted by scripts/termtime-gmail-auth.py. All three empty means Gmail ingestion simply does
+  # not run - the public tier is unaffected. A password change on the Google account revokes any
+  # refresh token carrying Gmail scopes, silently, so expect to re-mint occasionally.
+  gmail:
+    client-id: ${SCHOOL_GMAIL_CLIENT_ID:}
+    client-secret: ${SCHOOL_GMAIL_CLIENT_SECRET:}
+    refresh-token: ${SCHOOL_GMAIL_REFRESH_TOKEN:}

@@ -28,18 +28,56 @@ public class ElasticsearchBackupService {
   private final ElasticsearchClient esClient;
   private final ObjectMapper objectMapper;
   private final String indexName;
+  private final String schoolIndexName;
 
   public ElasticsearchBackupService(
       final ElasticsearchClient esClient,
       @Value("${spring.ai.vectorstore.elasticsearch.index-name:content-embeddings}")
-      final String indexName
+      final String indexName,
+      @Value("${school.embedding-index-name:school-embeddings}")
+      final String schoolIndexName
   ) {
     this.esClient = esClient;
     this.objectMapper = new ObjectMapper();
     this.indexName = indexName;
+    this.schoolIndexName = schoolIndexName;
+  }
+
+  /**
+   * The Term Time vector index. Deliberately a second index rather than a metadata filter on the
+   * main one, so it must be backed up separately or a restore silently returns the school
+   * assistant to an empty corpus while reporting success.
+   *
+   * @return the school embedding index name
+   */
+  public String schoolIndexName() {
+    return schoolIndexName;
+  }
+
+  /**
+   * The main site content index.
+   *
+   * @return the content embedding index name
+   */
+  public String contentIndexName() {
+    return indexName;
   }
 
   public String exportEmbeddings() throws IOException {
+    return exportEmbeddings(indexName);
+  }
+
+  /**
+   * Exports one index. Vectors cost real money to regenerate, so a missing index is logged and
+   * returns an empty array rather than throwing — a backup that aborts because a not-yet-created
+   * index is absent would take the whole archive with it.
+   *
+   * @param index the index to export
+   * @return a JSON array of {@code {_id, _source}} objects
+   * @throws IOException if Elasticsearch cannot be read
+   */
+  public String exportEmbeddings(final String index) throws IOException {
+    final String indexName = index;
     if (!esClient.indices().exists(e -> e.index(indexName)).value()) {
       LOG.info("Index {} does not exist, nothing to export", indexName);
       return "[]";
@@ -91,6 +129,19 @@ public class ElasticsearchBackupService {
   }
 
   public int importEmbeddings(final String jsonContent) throws IOException {
+    return importEmbeddings(indexName, jsonContent);
+  }
+
+  /**
+   * Imports one index, replacing whatever is there.
+   *
+   * @param index the index to import into
+   * @param jsonContent a JSON array as produced by {@link #exportEmbeddings(String)}
+   * @return how many documents were imported
+   * @throws IOException if Elasticsearch cannot be written
+   */
+  public int importEmbeddings(final String index, final String jsonContent) throws IOException {
+    final String indexName = index;
     ArrayNode documents = (ArrayNode) objectMapper.readTree(jsonContent);
     if (documents.isEmpty()) {
       LOG.info("No embedding documents to import");

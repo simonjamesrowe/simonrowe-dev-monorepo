@@ -27,16 +27,33 @@ interface ChatMessageProps {
   blocks?: ChatBlock[]
   timestamp?: string
   profileImageUrl?: string
+  /**
+   * Extra https URLs this message may link to.
+   *
+   * The allowlist is normally derived from streamed widget payloads, so an assistant that emits
+   * no widgets can link to nothing at all — its URLs degrade to plain text. Term Time is exactly
+   * that case: it has no widgets and its whole refusal behaviour is "check the school's own
+   * website", which is useless as unclickable text.
+   */
+  extraAllowedUrls?: string[]
+  /**
+   * Origins this message may link anywhere within, e.g. the school's own website. Supplied by
+   * the app, never derived from model output.
+   */
+  allowedLinkPrefixes?: string[]
 }
 
 // Build react-markdown renderers that enforce the safe link/image policy for this
 // message. The model can never produce a fabricated or unsafe live link/image: internal
 // routes navigate in-site, allowlisted https links open in a new tab, and everything
 // else degrades to plain text (links) or is dropped (images).
-function createMarkdownComponents(allowlist: ReadonlySet<string>): Components {
+function createMarkdownComponents(
+  allowlist: ReadonlySet<string>,
+  allowedPrefixes: readonly string[] = [],
+): Components {
   return {
     a({ href, children }) {
-      const classification = classifyLink(href, allowlist)
+      const classification = classifyLink(href, allowlist, allowedPrefixes)
       // Both internal (in-site route) and allowlisted external links open in a NEW TAB
       // so the visitor never loses their chat conversation. Internal hrefs are relative
       // (e.g. /blogs/:id, /experience?job=:id) and resolve against our own origin, so the
@@ -75,10 +92,21 @@ function createMarkdownComponents(allowlist: ReadonlySet<string>): Components {
   }
 }
 
-export function ChatMessage({ role, content = '', blocks, timestamp, profileImageUrl }: ChatMessageProps) {
+export function ChatMessage({
+  role,
+  content = '',
+  blocks,
+  timestamp,
+  profileImageUrl,
+  extraAllowedUrls = [],
+  allowedLinkPrefixes = [],
+}: ChatMessageProps) {
   const isUser = role === 'user'
   const assistantBlocks = !isUser && blocks?.length ? blocks : undefined
-  const markdownComponents = createMarkdownComponents(buildAllowlist(blocks, [profileImageUrl]))
+  const markdownComponents = createMarkdownComponents(
+    buildAllowlist(blocks, [profileImageUrl, ...extraAllowedUrls]),
+    allowedLinkPrefixes,
+  )
 
   return (
     <div

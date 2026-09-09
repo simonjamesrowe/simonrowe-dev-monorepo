@@ -8,6 +8,7 @@ jacoco = "0.8.15"
 cyclonedx = "3.4.1"
 sonarqube = "7.4.0.8496"
 openpdf = "2.0.3"
+pdfbox = "3.0.7"
 commonmark = "0.24.0"
 springAi = "2.0.1"
 embabel = "1.5.1"
@@ -44,6 +45,7 @@ testcontainers-mongodb = { module = "org.testcontainers:testcontainers-mongodb" 
 testcontainers-kafka = { module = "org.testcontainers:testcontainers-kafka" }
 testcontainers-elasticsearch = { module = "org.testcontainers:testcontainers-elasticsearch" }
 openpdf = { module = "com.github.librepdf:openpdf", version.ref = "openpdf" }
+pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
 commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
 spring-ai-bom = { module = "org.springframework.ai:spring-ai-bom", version.ref = "springAi" }
 spring-ai-starter-model-openai = { module = "org.springframework.ai:spring-ai-starter-model-openai" }

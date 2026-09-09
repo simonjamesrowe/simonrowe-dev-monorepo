@@ -1,10 +1,41 @@
+import { loadEnv } from 'vite'
 import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // Conductor runs several workspaces at once and they all want the dev server port. Set
+  // VITE_DEV_PORT in frontend/.env to move this workspace out of the way. Read through Vite's
+  // own loadEnv rather than process.env: the config runs in Node so process exists, but this
+  // project has no @types/node, and loadEnv also picks the value up from .env files.
+  //
+  // strictPort stays true. Falling back to a random free port would be worse than failing —
+  // the backend's CORS allowlist and any registered OAuth callback name a specific port, so a
+  // silent move produces confusing failures later rather than an obvious one now.
+  const env = loadEnv(mode, '.', '')
+  const devPort = Number(env.VITE_DEV_PORT) || 5173
+
+  return {
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      // Two entry points, one project. Term Time is a separate app with its own router, design
+      // language and audience, but it shares this package.json, ESLint config, Vitest config,
+      // CI job and Docker build stage. A second npm project would duplicate all of those and
+      // add a second `npm ci` to every image build.
+      //
+      // Both bundles emit into the same dist/assets/, which is why nginx.conf needs no second
+      // caching rule — only a `location /school/` with its own try_files.
+      // Paths are relative to Vite's root. Deliberately not resolve(__dirname, ...): that
+      // needs @types/node, which this project does not depend on, and adding a dependency to
+      // spell a two-element list is not a trade worth making.
+      input: {
+        main: 'index.html',
+        school: 'school/index.html',
+      },
+    },
+  },
   server: {
-    port: 5173,
+    port: devPort,
     strictPort: true,
     proxy: {
       '/api': {
@@ -80,4 +111,5 @@ export default defineConfig({
       },
     },
   },
+  }
 })

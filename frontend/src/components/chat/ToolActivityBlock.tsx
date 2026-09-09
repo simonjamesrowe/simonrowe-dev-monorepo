@@ -30,6 +30,12 @@ const ICONS_BY_KEYWORD: [RegExp, ComponentType<{ size?: number; className?: stri
   [/blog|post|writing/i, FileText],
   [/news/i, Newspaper],
   [/event/i, CalendarDays],
+  // Term Time's labels. Ordered after the portfolio ones so nothing above changes meaning:
+  // "term dates", "INSET days" and "today's date" are all calendar lookups, clubs are the
+  // school's enrichment activities, and the catch-all school search reads as documents.
+  [/term date|inset|date/i, CalendarDays],
+  [/club|enrichment/i, Sparkles],
+  [/school communication|newsletter|letter/i, FileText],
 ]
 
 function iconFor(label: string) {

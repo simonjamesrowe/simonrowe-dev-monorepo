@@ -16,6 +16,7 @@ import java.util.zip.ZipInputStream;
 import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
 import com.simonrowe.migration.changeunits.V022CreatePlatformReleaseIndexes;
 import com.simonrowe.migration.changeunits.V029CreateShortLinksAndBackfill;
+import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -37,6 +38,11 @@ public class RestoreService {
   private static final String ARTICLE_SUMMARIES = "article_summaries";
   private static final String PLATFORM_RELEASES = "platform_releases";
   private static final String SHORT_LINKS = "short_links";
+  private static final String SCHOOL_DOCUMENTS = "school_documents";
+  private static final String SCHOOL_EVENTS = "school_events";
+  private static final String SCHOOL_SYNC_STATE = "school_sync_state";
+  private static final String SCHOOL_USAGE = "school_usage";
+  private static final String SCHOOL_LINKS = "school_links";
   private static final String FAVOURITES_UNIQUE_INDEX = "idx_type_content";
   private static final String FAVOURITES_LIST_INDEX = "idx_type_created";
 
@@ -54,7 +60,15 @@ public class RestoreService {
       // Short links hold no @DBRef and point at blogs, articles and events by plain id,
       // so order is free here too. They must be restored: the slugs are in URLs already
       // pasted elsewhere, and nothing recreates a lost one with the same value.
-      SHORT_LINKS
+      SHORT_LINKS,
+      // Term Time content references nothing by @DBRef. school_events points at
+      // school_documents by plain id for citation, and sync state points at nothing at all,
+      // so all three are order-free.
+      SCHOOL_DOCUMENTS,
+      SCHOOL_EVENTS,
+      SCHOOL_SYNC_STATE,
+      SCHOOL_USAGE,
+      SCHOOL_LINKS
   );
 
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
@@ -69,6 +83,7 @@ public class RestoreService {
   private final com.simonrowe.embedding.ElasticsearchBackupService esBackupService;
   private final NarrationRestoreValidator narrationRestoreValidator;
   private final String uploadsPath;
+  private final String schoolAttachmentPath;
 
   public RestoreService(
       final MongoTemplate mongoTemplate,
@@ -78,7 +93,8 @@ public class RestoreService {
       final com.simonrowe.search.IndexService indexService,
       final com.simonrowe.embedding.ElasticsearchBackupService esBackupService,
       final NarrationRestoreValidator narrationRestoreValidator,
-      @Value("${uploads.path:backend/uploads/}") final String uploadsPath
+      @Value("${uploads.path:backend/uploads/}") final String uploadsPath,
+      @Value("${school.attachment-path:school-attachments/}") final String schoolAttachmentPath
   ) {
     this.mongoTemplate = mongoTemplate;
     this.googleDriveService = googleDriveService;
@@ -88,6 +104,7 @@ public class RestoreService {
     this.esBackupService = esBackupService;
     this.narrationRestoreValidator = narrationRestoreValidator;
     this.uploadsPath = uploadsPath;
+    this.schoolAttachmentPath = schoolAttachmentPath;
   }
 
   public void performRestore(final String backupFileId) {
@@ -113,6 +130,7 @@ public class RestoreService {
       Path mediaZip = resolveMediaSource(tempZip);
       try {
         restoreMediaFiles(mediaZip);
+        restoreSchoolAttachments(tempZip);
       } finally {
         if (mediaZip != null && !mediaZip.equals(tempZip)) {
           deleteTempFile(mediaZip);
@@ -127,15 +145,10 @@ public class RestoreService {
       indexService.fullSyncBlogIndex();
 
       operationsService.updateProgress("Restoring vector embeddings...", 90);
-      String embeddingsJson = readEntryFromZip(
-          tempZip, "embeddings/content-embeddings.json");
-      if (embeddingsJson != null) {
-        int count = esBackupService.importEmbeddings(embeddingsJson);
-        LOG.info("Restored {} vector embeddings from backup", count);
-      } else {
-        LOG.warn("No vector embeddings found in backup — "
-            + "use 'Re-embed Content' from Data Operations to regenerate");
-      }
+      restoreIndex(tempZip, esBackupService.contentIndexName(), true);
+      // Absent from every archive written before Term Time shipped, which is not a problem
+      // worth warning about — hence the quieter branch.
+      restoreIndex(tempZip, esBackupService.schoolIndexName(), false);
 
       operationsService.completeOperation(
           "Data restored successfully. Search index and vector embeddings restored.");
@@ -191,7 +204,8 @@ public class RestoreService {
         FAVOURITES, this::ensureFavouriteIndexes,
         ARTICLE_SUMMARIES, this::ensureArticleSummaryIndexes,
         PLATFORM_RELEASES, this::ensurePlatformReleaseIndexes,
-        SHORT_LINKS, this::ensureShortLinkIndexes);
+        SHORT_LINKS, this::ensureShortLinkIndexes,
+        SCHOOL_DOCUMENTS, this::ensureSchoolIndexes);
   }
 
   void restoreCollections(final Path zipFile) throws IOException {
@@ -310,6 +324,42 @@ public class RestoreService {
     LOG.info("Recreated short link indexes after restore");
   }
 
+  private void restoreIndex(final Path tempZip, final String index, final boolean warnIfMissing)
+      throws IOException {
+    String embeddingsJson = readEntryFromZip(tempZip, "embeddings/" + index + ".json");
+    if (embeddingsJson != null) {
+      int count = esBackupService.importEmbeddings(index, embeddingsJson);
+      LOG.info("Restored {} vector embeddings into {}", count, index);
+    } else if (warnIfMissing) {
+      LOG.warn("No vector embeddings found in backup for {} — "
+          + "use 'Re-embed Content' from Data Operations to regenerate", index);
+    } else {
+      LOG.info("No embeddings for {} in this backup", index);
+    }
+  }
+
+  /**
+   * Recreates the Term Time indexes after a restore, for the same reason the three hooks above
+   * exist: {@code dropCollection} takes the collection's indexes with it and Mongock will not
+   * re-run an already-recorded change unit.
+   *
+   * <p>The unique {@code (sourceType, sourceRef)} index is the one that matters here. Without it
+   * a re-ingest inserts a second copy of a document it should have updated, and the assistant
+   * then retrieves and cites the same newsletter twice.
+   *
+   * <p>Hooked on {@code school_documents} alone rather than on all three collections: the hook
+   * map is keyed by collection and {@code V040} creates every Term Time index in one call, so
+   * registering it three times would just run the same idempotent work three times.
+   *
+   * <p>Definitions live in {@code V040CreateSchoolCollections} and are called from there rather
+   * than restated, so the two cannot drift.
+   * Package-private so the round-trip test can exercise it directly.
+   */
+  void ensureSchoolIndexes() {
+    V040CreateSchoolCollections.createIndexes(mongoTemplate);
+    LOG.info("Recreated school indexes after restore");
+  }
+
   /**
    * If {@code zipFile} contains uploads/ entries it is returned as-is. Otherwise
    * we read the manifest's {@code mediaSource} field, fetch that backup from
@@ -371,6 +421,49 @@ public class RestoreService {
       return null;
     }
     return json.substring(q1 + 1, q2);
+  }
+
+  /**
+   * Restores Term Time's PDF attachments.
+   *
+   * <p>Additive rather than destructive, unlike the media restore: an archive written before
+   * attachments existed contains none, and wiping the directory for such an archive would
+   * destroy files the backup simply predates. There is no equivalent risk to leaving a stale
+   * file behind — it is unreachable unless a document row points at it, and the rows come from
+   * the same archive.
+   *
+   * @param zipFile the backup archive
+   * @throws IOException if the archive cannot be read
+   */
+  private void restoreSchoolAttachments(final Path zipFile) throws IOException {
+    final Path dir = Path.of(schoolAttachmentPath);
+    int restored = 0;
+    try (var zip = new java.util.zip.ZipFile(zipFile.toFile())) {
+      var entries = zip.entries();
+      while (entries.hasMoreElements()) {
+        var entry = entries.nextElement();
+        if (!entry.getName().startsWith("school-attachments/") || entry.isDirectory()) {
+          continue;
+        }
+        final String relative = entry.getName().substring("school-attachments/".length());
+        final Path target = dir.resolve(relative).normalize();
+        // Zip-slip guard: an entry named ../../etc/passwd would otherwise escape the directory.
+        if (!target.startsWith(dir.toAbsolutePath().normalize())
+            && !target.normalize().startsWith(dir.normalize())) {
+          LOG.warn("Skipping school attachment entry escaping the target directory: {}",
+              entry.getName());
+          continue;
+        }
+        Files.createDirectories(target.getParent());
+        try (var is = zip.getInputStream(entry)) {
+          Files.copy(is, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+          restored++;
+        }
+      }
+    }
+    if (restored > 0) {
+      LOG.info("Restored {} school attachment(s)", restored);
+    }
   }
 
   private void restoreMediaFiles(final Path zipFile) throws IOException {

@@ -11297,3 +11297,680 @@ body[data-narration-bar] .app-layout__main {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
+
+/* ---------------------------------------------------------------------------
+   Term Time approval queue (/admin/school-approvals)
+
+   The only route by which school content becomes publicly readable. Styled to
+   be read rather than skimmed: full preview in a monospace block, the block
+   reason called out in the warning colour, and the two actions clearly
+   different weights. No bulk controls, deliberately.
+   --------------------------------------------------------------------------- */
+
+.admin-approval-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.admin-approval {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.1rem 1.25rem;
+  background: var(--color-surface);
+}
+
+.admin-approval__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.admin-approval__title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.admin-approval__meta {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.admin-approval__blocked {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.7rem 0 0;
+  font-size: 0.88rem;
+  color: #b3541e;
+}
+
+.admin-approval__reason {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.admin-approval__preview {
+  margin: 0.8rem 0 0;
+  padding: 0.8rem;
+  border-radius: 8px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.school-admin__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.school-admin__row-actions .admin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: none;
+}
+
+.admin-approval__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.admin-approval__actions .admin-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Term Time (/school) — the school assistant.
+
+   A standalone page rather than a route inside the SPA, but styled from the
+   same tokens and reusing the site's chat components, so it reads as part of
+   simonrowe.dev. Everything below is only the page frame: the conversation
+   itself is `.chat-panel__messages`, `.chat-message` and `.chat-tool`, shared
+   verbatim with the portfolio assistant.
+   --------------------------------------------------------------------------- */
+
+.school-page {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.school-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.school-page__title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--color-primary);
+}
+
+.school-page__title h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  color: var(--color-text);
+}
+
+.school-page__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.school-page__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.school-page__clear:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.school-page__strapline {
+  margin: 0.35rem 0 0.5rem;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.school-page__beta {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.school-page__beta-note {
+  margin: 0 0 1.4rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-primary-subtle);
+  border-radius: 0 8px 8px 0;
+}
+
+/*
+ * The conversation area. Flex-grows so the input stays at the bottom on a tall
+ * screen and the transcript scrolls rather than pushing it off the page.
+ */
+.school-page__chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 24rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.school-page__chat .chat-panel__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+
+.school-page__error {
+  margin: 0.75rem 1.25rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 8px;
+  background: var(--color-primary-subtle);
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+.school-about {
+  margin: 0 0 1.25rem;
+}
+
+.school-about__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.school-about__toggle:hover {
+  color: var(--color-primary);
+}
+
+.school-about__body {
+  margin-top: 0.75rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  font-size: 0.87rem;
+  line-height: 1.55;
+}
+
+.school-about__body h3 {
+  margin: 1rem 0 0.35rem;
+  font-size: 0.87rem;
+}
+
+.school-about__body h3:first-of-type {
+  margin-top: 0.75rem;
+}
+
+.school-about__body p,
+.school-about__body ul {
+  margin: 0 0 0.5rem;
+}
+
+.school-about__body ul {
+  padding-left: 1.1rem;
+}
+
+.school-about__body li {
+  margin-bottom: 0.3rem;
+}
+
+.school-about__caveat {
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.school-page__footer {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.school-page__disclaimer {
+  margin: 0;
+}
+
+/* Year selector */
+
+.school-years {
+  border: 0;
+  padding: 0;
+  margin: 0 0 1.25rem;
+}
+
+.school-years__legend {
+  padding: 0;
+  font-weight: 600;
+  font-size: 0.88rem;
+  margin-bottom: 0.55rem;
+  color: var(--color-text);
+}
+
+.school-years__hint {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/*
+ * The checkbox itself is hidden but still focusable and still the thing that toggles: the chip
+ * is a <label> wrapping it, so keyboard and screen-reader users get real checkbox semantics
+ * while sighted users get the chip. display:none would remove it from the tab order.
+ */
+.school-years__checkbox {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.school-years__option:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.school-years__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.school-years__option {
+  font: inherit;
+  font-size: 0.87rem;
+  padding: 0.32rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.school-years__option:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.school-years__option--on {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-bg);
+  font-weight: 600;
+}
+
+@media (max-width: 34rem) {
+  .school-page {
+    padding: 1.25rem 0.9rem 2rem;
+  }
+
+  .school-page__chat .chat-panel__messages {
+    padding: 0.9rem;
+  }
+}
+
+/* Term Time admin: sub-navigation, source cards, filters, bulk bar, tables. */
+
+.admin-nav__children {
+  display: flex;
+  flex-direction: column;
+  margin: 0.15rem 0 0.4rem 2.15rem;
+  border-left: 1px solid var(--color-border);
+}
+
+.admin-nav__child {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  margin-left: -1px;
+}
+
+.admin-nav__child:hover {
+  color: var(--color-text);
+}
+
+.admin-nav__child--active {
+  color: var(--color-primary);
+  border-left-color: var(--color-primary);
+  font-weight: 600;
+}
+
+.admin-notice {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 8px;
+  background: var(--color-primary-subtle);
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+.school-admin__sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.school-admin__source {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1rem;
+  background: var(--color-surface);
+}
+
+.school-admin__source-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.school-admin__source-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.83rem;
+  color: var(--color-text-muted);
+}
+
+.school-admin__source-meta {
+  margin: 0 0 0.85rem;
+  font-size: 0.8rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.6rem;
+}
+
+.school-admin__source-meta dt {
+  color: var(--color-text-muted);
+}
+
+.school-admin__source-meta dd {
+  margin: 0;
+}
+
+.school-admin__failure {
+  color: #b3541e;
+}
+
+/* A crawl runs for half an hour, so the spinner is the only sign it is alive. */
+.school-admin__spin {
+  animation: school-admin-spin 1.4s linear infinite;
+}
+
+@keyframes school-admin-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.school-admin__counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+
+.school-admin__count-group {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  background: var(--color-surface);
+}
+
+.school-admin__count-group h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.school-admin__count-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.school-admin__count-group li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.15rem 0;
+  color: var(--color-text-muted);
+}
+
+.school-admin__count-group strong {
+  color: var(--color-text);
+}
+
+.school-admin__estimate-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.school-admin__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Width only — the rest comes from .admin-form__input, which it also carries. */
+.school-admin__search {
+  flex: 1 1 16rem;
+}
+
+.school-admin__intro {
+  margin: -0.4rem 0 1.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.school-admin__filters select {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.school-admin__bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-subtle);
+  font-size: 0.85rem;
+}
+
+.school-admin__check-all,
+.school-admin__row-check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+}
+
+.school-admin__row-check h2 {
+  margin: 0;
+}
+
+.school-admin__selected-count {
+  color: var(--color-text-muted);
+  margin-right: auto;
+}
+
+.school-admin__tag {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  margin-right: 0.35rem;
+}
+
+.school-admin__tag--PUBLIC {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.school-admin__tag--RESTRICTED {
+  border-color: #b3541e;
+  color: #b3541e;
+}
+
+.school-admin__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/* Discovered links awaiting a fetch/ignore decision. */
+
+.school-admin__links {
+  margin-top: 0.7rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  background: var(--color-background);
+}
+
+.school-admin__links-title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.school-admin__links ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.school-admin__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.school-admin__link-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.school-admin__link-text {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* Not an anchor, deliberately — see the comment at the render site. */
+.school-admin__link-url {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  word-break: break-all;
+}
+
+.school-admin__link-error {
+  font-size: 0.75rem;
+  color: #b3541e;
+}
+
+.school-admin__link-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.school-admin__link-actions .admin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
