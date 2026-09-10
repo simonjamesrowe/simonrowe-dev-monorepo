@@ -56,6 +56,7 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - Admin CMS uses Lucide React icons for actions/status, right-side drawer for Media Library, two-column layout for blog editor
 - Uploads served via Spring `ResourceHandlerRegistry` at `/uploads/**`, path configurable via `UPLOADS_PATH` env var (default: `uploads/` relative to backend CWD)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
+- Destructive Mongock change units (ones that remove rows) need an integration test proving they actually run at boot, correct survivor-selection logic, and a comment documenting why the deleted data is safely re-derivable — path classifiers won't flag these for review, so verify by hand
 
 ## Production Deployment
 
