@@ -152,6 +152,11 @@ public class GmailIngestService {
     // never surrender their links at all.
     recordLinks(message, result.document());
 
+    // Also before the changed() check, and for a related reason: the attachment bytes are
+    // state of their own, held outside Mongo, and an unchanged email must still be able to
+    // put them back. It costs nothing in the ordinary case — see the guard inside.
+    ingestAttachments(message, result.document(), result.changed());
+
     if (!result.changed()) {
       return false;
     }
@@ -181,7 +186,6 @@ public class GmailIngestService {
       eventWriter.write(event);
     }
 
-    ingestAttachments(message, document);
     return true;
   }
 
@@ -250,11 +254,30 @@ public class GmailIngestService {
    * <p>Each attachment becomes a separate {@code PDF} document rather than being appended to the
    * email's text: it gets its own tier decision, its own chunks and its own citation, and a
    * timetable is a different kind of thing from the note that carried it.
+   *
+   * <p>Runs even when the parent email is unchanged, because the stored bytes are state of their
+   * own and can go missing while the document, its chunks and its citation all survive — the
+   * assistant then goes on offering a link that 404s, with nothing anywhere reporting it. That
+   * is not hypothetical: in production the store had no volume behind it, so every recreate of
+   * the backend emptied it. The guard below is what keeps the ordinary case free: with the file
+   * already on disk and the email unchanged there is no download, no text extraction and no
+   * write at all.
+   *
+   * @param message the message being ingested
+   * @param parent the email document the attachments belong to
+   * @param parentChanged whether the email's own text differed from what was already stored
    */
-  private void ingestAttachments(final GmailMessage message, final SchoolDocument parent)
-      throws GmailClient.GmailAuthException {
+  private void ingestAttachments(final GmailMessage message, final SchoolDocument parent,
+      final boolean parentChanged) throws GmailClient.GmailAuthException {
     for (GmailMessage.Attachment attachment : message.attachments()) {
       if (!attachment.looksLikePdf()) {
+        continue;
+      }
+      final String sourceRef = "gmail:" + message.id() + ":" + attachment.attachmentId();
+      // Derivable without downloading anything, which is the point: it lets an untouched
+      // attachment be recognised for the price of one `stat`.
+      final String pdfId = SchoolIds.documentId(SchoolSourceType.PDF, sourceRef);
+      if (!parentChanged && attachmentStore.has(pdfId)) {
         continue;
       }
       final byte[] bytes = gmail.fetchAttachment(message.id(), attachment.attachmentId())
@@ -272,20 +295,25 @@ public class GmailIngestService {
       // attachment must never be more visible than the message that carried it.
       final SchoolDocumentWriter.WriteResult result = documentWriter.write(
           SchoolSourceType.PDF,
-          "gmail:" + message.id() + ":" + attachment.attachmentId(),
+          sourceRef,
           attachment.filename(),
           text,
           message.receivedAt(),
           List.of(),
           parent.visibility());
 
-      if (!result.changed()) {
-        continue;
-      }
       SchoolDocument pdf = result.document();
       // Keep the original so an answer can link to it rather than only paraphrasing. Served
       // by SchoolAttachmentController, which refuses anything not in the public tier.
+      //
+      // Written before the unchanged check, so reaching here with the bytes in hand always
+      // leaves the store repaired. Gating this on the text having changed — which is what it
+      // did — is what made a lost file permanent.
       attachmentStore.store(pdf.id(), bytes);
+
+      if (!result.changed()) {
+        continue;
+      }
       if (pdf.approvedAt() == null) {
         pdf = documentWriter.save(
             pdf.withProposal(classifier.propose(pdf.title(), pdf.body()), "classifier proposal"));

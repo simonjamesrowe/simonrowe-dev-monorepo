@@ -792,6 +792,14 @@ services:
       # above: `${VAR:-}` passes an empty STRING, which resolves, so the yml default would
       # never apply and every attachment link would be relative again.
       SCHOOL_PUBLIC_BASE_URL: ${SCHOOL_PUBLIC_BASE_URL:-https://term-time.simonrowe.dev}
+      # ABSOLUTE, and matched by the named volume below. The application.yml default is
+      # `school-attachments/`, relative to the working directory - which in this buildpack
+      # image is /workspace, so the bytes landed in the container's WRITABLE LAYER right
+      # beside the uploads volume and were destroyed by every recreate. Nothing errored:
+      # the Mongo documents and the Elasticsearch chunks (which carry the attachmentUrl)
+      # both survive, so answers went on citing PDFs that returned 404 - and could not
+      # self-heal, because an unchanged email is skipped on re-ingest.
+      SCHOOL_ATTACHMENT_PATH: /workspace/school-attachments/
       SCHOOL_SENDER_ALLOWLIST: ${SCHOOL_SENDER_ALLOWLIST:-kilmorie.lewisham.sch.uk}
       # ParentPay is school-adjacent but purely financial: dense with personal data and of
       # almost no informational value to a question about term dates. Excluded outright rather
@@ -810,6 +818,12 @@ services:
       SCHOOL_GMAIL_REFRESH_TOKEN: ${SCHOOL_GMAIL_REFRESH_TOKEN:-}
     volumes:
       - backend-uploads:/workspace/uploads
+      # The original bytes of PDFs that arrived as school email attachments, served by
+      # SchoolAttachmentController. Deliberately NOT inside backend-uploads: /workspace/uploads
+      # is published by a ResourceHandlerRegistry mapping with no authorisation of any kind,
+      # so putting these there would serve every restricted attachment to anyone who guessed
+      # a document id. No chown init service is needed - this container runs as 0:0.
+      - school-attachments:/workspace/school-attachments
       # NO DOCKER SOCKET, no docker CLI, no compose file and no .env copy. All five
       # mounts were removed with RedeployService: the admin-UI redeploy is gone, and
       # nothing else in backend/src/main/java shells out to a host process (there is a
@@ -1533,6 +1547,9 @@ volumes:
   elasticsearch-data:
   elasticsearch-backups:
   backend-uploads:
+  # Term Time email attachments. Separate from backend-uploads because that path is served
+  # unauthenticated; see the mount on `backend` for the full reasoning.
+  school-attachments:
   portainer-data:
   langfuse-db-data:
   langfuse-clickhouse-data:
