@@ -335,6 +335,43 @@ There are now two halves to the fix and both matter:
   and attachment ids alone, so a file already on disk is recognised for the price of one `stat`,
   with no download and no text extraction.
 
+### An attachment document is keyed on the FILENAME, never on Gmail's attachment id
+
+Gmail's `attachmentId` is an opaque handle minted per `messages.get` response, **not a durable
+identifier**. The same PDF on the same message comes back under a different id on a later fetch.
+`SchoolIds.documentId(PDF, "gmail:<messageId>:<attachmentId>")` treated one as a primary key, and
+every consequence was silent:
+
+- a brand-new document each pass instead of the unchanged one, so a **paid embedding and a paid
+  classifier call** every time;
+- a duplicate row in the approval queue;
+- and worst, the replacement inheriting the parent email's tier — which **discards an approval a
+  human had already given**, leaving the approved copy orphaned and the live copy restricted.
+
+Measured in production on 2026-09-10: fourteen attachments re-ingested on a sync reporting
+`0 of 43 messages new or changed`, and an approved letter whose citation 404'd because the live
+document was a restricted duplicate of the approved one. It stayed hidden while attachments were
+only visited on a *changed* email — which never happens — and surfaced the moment the repair pass
+above started running every sync.
+
+`GmailIngestService.attachmentRef` now keys on `gmail:<messageId>:<filename>`. The filename is
+stable across fetches and unique within a message in practice; two attachments sharing one
+collapse onto a single document, which is right far more often than not. A blank filename (legal
+on a part declaring `application/pdf`) falls back to the declared size, because an empty tail
+would collide across every such attachment on the message.
+
+`V041RekeyGmailAttachmentDocuments` collapses the duplicates already in production. Three things
+about it are load-bearing: an **approval outranks recency** when picking the survivor, or the
+migration reproduces the un-approval it exists to repair; `contentHash` is **deliberately nulled**
+so the next sync re-embeds the survivor, since leaving it intact means a document sitting in the
+index with no chunks and nothing reporting it; and the vector-store deletion is **caught, not
+rethrown**, because Mongock runs at startup and a change-unit exception stops the application —
+a leftover chunk is a far smaller problem than a backend that will not boot.
+
+**The diagnostic for a recurrence** is an `Ingested attachment …` log line on a sync that also
+reports `0 of N messages new or changed`. That line is only reached when the write reported the
+document as *changed*, so the two together mean the id churned again.
+
 **To recover after a loss**, once the volume is in place: trigger a mail sync
 (`POST /api/admin/school/ingest/gmail`, or the button on `/admin/school/documents`). Only
 messages still inside the Gmail query window (`SCHOOL_INGEST_FROM_DATE` onwards) can be

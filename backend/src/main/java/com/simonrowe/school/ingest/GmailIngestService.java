@@ -273,7 +273,7 @@ public class GmailIngestService {
       if (!attachment.looksLikePdf()) {
         continue;
       }
-      final String sourceRef = "gmail:" + message.id() + ":" + attachment.attachmentId();
+      final String sourceRef = attachmentRef(message.id(), attachment);
       // Derivable without downloading anything, which is the point: it lets an untouched
       // attachment be recognised for the price of one `stat`.
       final String pdfId = SchoolIds.documentId(SchoolSourceType.PDF, sourceRef);
@@ -324,6 +324,36 @@ public class GmailIngestService {
       }
       LOG.info("Ingested attachment {} ({} chars)", attachment.filename(), text.length());
     }
+  }
+
+  /**
+   * The stable source reference for one attachment.
+   *
+   * <p><b>Keyed on the filename, deliberately never on the {@code attachmentId}.</b> Gmail's
+   * attachment id is an opaque handle minted per {@code messages.get} response, not a durable
+   * identifier — the same PDF on the same message comes back under a different id on a later
+   * fetch. Keying the document on it made the id churn, and every consequence of that was
+   * silent: a fresh document each pass rather than the unchanged one, so a paid embedding and a
+   * paid classifier call each time, a duplicate row in the approval queue, and — worst — the
+   * new document inheriting the parent email's tier, which quietly discards an approval a human
+   * had already given. Measured in production on 2026-09-10: fourteen attachments re-ingested
+   * on a sync that reported {@code 0 of 43 messages new or changed}.
+   *
+   * <p>The filename is stable across fetches and unique within a message in practice. Two
+   * attachments sharing a filename on one message would collapse onto one document, which is
+   * the right answer far more often than it is the wrong one. A blank filename — legal on a
+   * part declaring {@code application/pdf} — falls back to the declared size, which is at least
+   * stable for the same bytes; an empty ref would collide across every such attachment.
+   *
+   * @param messageId the owning message
+   * @param attachment the attachment
+   * @return the source reference to key the document on
+   */
+  static String attachmentRef(final String messageId, final GmailMessage.Attachment attachment) {
+    final String name = attachment.filename() == null || attachment.filename().isBlank()
+        ? "attachment-" + attachment.size()
+        : attachment.filename();
+    return "gmail:" + messageId + ":" + name;
   }
 
   /**
