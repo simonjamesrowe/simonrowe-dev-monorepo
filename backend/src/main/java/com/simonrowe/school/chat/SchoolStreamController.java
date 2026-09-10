@@ -73,6 +73,10 @@ public class SchoolStreamController {
         .computeIfAbsent(sessionId, key -> new AtomicInteger(0))
         .incrementAndGet();
     if (count > MAX_MESSAGES_PER_SESSION) {
+      // The session is over, so drop its history now rather than waiting for the memory's TTL.
+      // The browser mints a fresh session id when the visitor starts a new chat, so nothing
+      // will ever ask for this one again.
+      chatService.forget(sessionId);
       messagingTemplate.convertAndSend(destination, ChatResponse.error(sessionId,
           "Message limit reached for this session. Please start a new chat."));
       return;

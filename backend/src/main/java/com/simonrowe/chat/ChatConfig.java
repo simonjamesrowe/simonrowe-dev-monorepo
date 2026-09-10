@@ -19,6 +19,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 @Configuration
 public class ChatConfig {
@@ -29,7 +30,21 @@ public class ChatConfig {
   @Value("${chat.system-prompt:You are a helpful assistant.}")
   private String systemPrompt;
 
+  /**
+   * The portfolio chat's conversation memory.
+   *
+   * <p>{@code @Primary} because Term Time publishes a second {@link ChatMemory} — see
+   * {@code SchoolConfiguration.schoolChatMemory}, which is bounded because its endpoint is
+   * unauthenticated. Without this the two beans resolve only by the injection points happening
+   * to name their parameter {@code chatMemory}, which is true today and is not a thing to rest
+   * on. Anything wanting the school's memory must ask for it by qualifier.
+   *
+   * <p>Eviction here is {@code ChatSessionCleanupService}'s job, not the store's.
+   *
+   * @return the portfolio chat memory
+   */
   @Bean
+  @Primary
   public ChatMemory chatMemory() {
     return new ToolFilteringChatMemory(
         MessageWindowChatMemory.builder()

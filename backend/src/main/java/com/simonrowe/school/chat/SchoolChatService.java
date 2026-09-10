@@ -9,8 +9,11 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
 import reactor.core.publisher.Flux;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 /**
@@ -25,6 +28,13 @@ import org.springframework.stereotype.Service;
  * whole application — that merge is why {@code reasoning-effort} is banned from the yml, and the
  * same applies to the model and the prompt cache key, which must differ between this assistant and
  * the portfolio one.
+ *
+ * <p>Taking the {@code ChatClient.Builder} rather than the configured {@code ChatClient} bean is
+ * what makes those per-assistant options possible, and it also means this class inherits
+ * <b>none</b> of the portfolio chat's default advisors. Conversation memory is the one that was
+ * missed: Term Time shipped answering every turn from a blank slate, so a visitor answering the
+ * assistant's own follow-up question found it had forgotten what it asked. It is attached
+ * explicitly in {@link #remembering}, and only where there is a session id to key it on.
  */
 @Service
 public class SchoolChatService {
@@ -44,6 +54,7 @@ public class SchoolChatService {
   private final SchoolProperties properties;
   private final SchoolBudget budget;
   private final SchoolUsageRecorder usageRecorder;
+  private final ChatMemory chatMemory;
 
   public SchoolChatService(
       final ChatClient.Builder chatClientBuilder,
@@ -52,7 +63,11 @@ public class SchoolChatService {
       final SchoolTopicGuardrail guardrail,
       final SchoolProperties properties,
       final SchoolBudget budget,
-      final SchoolUsageRecorder usageRecorder) {
+      final SchoolUsageRecorder usageRecorder,
+      // Qualified, never by type. The portfolio chat's ChatMemory is @Primary and unbounded,
+      // and taking it here would pool an unauthenticated endpoint's conversations into a store
+      // nothing caps.
+      @Qualifier("schoolChatMemory") final ChatMemory chatMemory) {
     this.chatClientBuilder = chatClientBuilder;
     this.queries = queries;
     this.retrieval = retrieval;
@@ -60,6 +75,22 @@ public class SchoolChatService {
     this.properties = properties;
     this.budget = budget;
     this.usageRecorder = usageRecorder;
+    this.chatMemory = chatMemory;
+  }
+
+  /**
+   * Clears one conversation's history.
+   *
+   * <p>{@code BoundedChatMemoryRepository} expires conversations on its own, so this is not
+   * required for correctness — it is here so a caller that knows a session is finished can say
+   * so rather than leaving it to time out.
+   *
+   * @param sessionId the conversation to forget; null and blank are ignored
+   */
+  public void forget(final String sessionId) {
+    if (sessionId != null && !sessionId.isBlank()) {
+      chatMemory.clear(sessionId);
+    }
   }
 
   /**
@@ -172,7 +203,7 @@ public class SchoolChatService {
         ? "The visitor has not said which year group they are asking about."
         : "The visitor is asking about " + String.join(" and ", yearGroups) + ".";
 
-    return chatClientBuilder.build()
+    return remembering(chatClientBuilder.build()
         .prompt()
         .options(OpenAiChatOptions.builder()
             .model(properties.chatModel())
@@ -182,7 +213,7 @@ public class SchoolChatService {
             .promptCacheKey(PROMPT_CACHE_KEY))
         .system(SchoolSystemPrompt.TEXT)
         .tools(tools)
-        .user(context + "\n\nQuestion: " + question)
+        .user(context + "\n\nQuestion: " + question), sessionId)
         .stream()
         .chatResponse()
         // Usage only appears on the terminal chunk of a stream, so cost is recorded as the
@@ -197,6 +228,30 @@ public class SchoolChatService {
           LOG.warn("School chat stream failed: {}", e.getMessage());
           return Flux.just("Something went wrong answering that. Please try again.");
         });
+  }
+
+  /**
+   * Attaches conversation memory to a request, when there is a conversation to attach it to.
+   *
+   * <p>Applied on the streaming path only, because that is the only one carrying a session id.
+   * {@link #answer} has none — {@code POST /api/school/chat} takes a bare question — and adding
+   * the advisor without one would be actively unsafe rather than merely useless:
+   * {@code MessageChatMemoryAdvisor} falls back to a single default conversation id, so every
+   * anonymous caller of that endpoint would share one history and read each other's questions.
+   * A blank session id on the stream path is treated the same way, for the same reason.
+   *
+   * @param request the prompt under construction
+   * @param sessionId the conversation id, or null/blank for a one-shot turn
+   * @return the request, with memory attached where a conversation id was supplied
+   */
+  ChatClient.ChatClientRequestSpec remembering(
+      final ChatClient.ChatClientRequestSpec request, final String sessionId) {
+    if (sessionId == null || sessionId.isBlank()) {
+      return request;
+    }
+    return request
+        .advisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+        .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId));
   }
 
   /**
