@@ -30,7 +30,7 @@ class SchoolWebsiteCrawlerPagesTest {
     private final List<String> fetched = new ArrayList<>();
 
     private StubCrawler(final SchoolProperties properties, final String sitemapBody) {
-      super(properties);
+      super(properties, new SchoolLinkFilter(properties));
       this.sitemapBody = sitemapBody;
     }
 
@@ -216,5 +216,36 @@ class SchoolWebsiteCrawlerPagesTest {
 
     assertThat(crawler.fetchPage(BASE + "/year-six/index").links())
         .containsExactly(BASE + "/year-five");
+  }
+
+  @Test
+  @DisplayName("an off-host canonical is ignored in favour of the URL actually fetched")
+  void offHostCanonicalIsIgnored() {
+    // The canonical is the one URL in the pipeline the fetched PAGE chooses rather than we do,
+    // and it does not stay internal: it becomes the document's sourceRef, which
+    // SchoolTools.renderChunk hands to the model as the citation url= for any value starting
+    // https://. So an unchecked canonical is a way for page content to put a link to another
+    // host into an answer written in the school's voice. Raised by the reviewer on #165.
+    final StubCrawler crawler = new StubCrawler(propertiesWith(BASE, null), sitemapOf(List.of()))
+        .serving(BASE + "/year-six", "<html><head>"
+            + "<link rel=\"canonical\" href=\"https://evil.example.com/year-six\">"
+            + "</head><body><main>Year 6</main></body></html>");
+
+    assertThat(crawler.fetchPage(BASE + "/year-six").canonicalUrl())
+        .isEqualTo(BASE + "/year-six");
+  }
+
+  @Test
+  @DisplayName("a same-host canonical on a different path is still honoured")
+  void sameHostCanonicalIsHonoured() {
+    // The check is host-only, deliberately: pointing at a different page on the school's own
+    // site is exactly what the CMS legitimately does, and is the whole reason to read it.
+    final StubCrawler crawler = new StubCrawler(propertiesWith(BASE, null), sitemapOf(List.of()))
+        .serving(BASE + "/page/?title=Home+Learning&pid=158", "<html><head>"
+            + "<link rel=\"canonical\" href=\"" + BASE + "/year-six-home-learning\">"
+            + "</head><body><main>Spellings</main></body></html>");
+
+    assertThat(crawler.fetchPage(BASE + "/page/?title=Home+Learning&pid=158").canonicalUrl())
+        .isEqualTo(BASE + "/year-six-home-learning");
   }
 }

@@ -237,7 +237,10 @@ public class SchoolIngestService {
       // which is precisely what the ten seconds robots.txt asks for is meant to prevent, and
       // discovery makes such runs more likely rather than less.
       if (visited > 0 && !crawler.politePause()) {
-        LOG.info("Website crawl interrupted after {} pages", changed);
+        // Reports pages VISITED, not pages changed. On an interrupted run "how far did it
+        // get" is the question being asked, and changed undercounts it by every page that
+        // was read and found unchanged — which on a settled site is nearly all of them.
+        LOG.info("Website crawl interrupted after {} pages ({} changed)", visited, changed);
         break;
       }
       final String url = queue.poll();

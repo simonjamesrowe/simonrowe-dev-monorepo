@@ -139,6 +139,26 @@ public class SchoolLinkFilter {
   }
 
   /**
+   * Whether a URL is on the school's own host, ignoring every other rule.
+   *
+   * <p>Narrower than {@link #isCrawlableWebsitePage} on purpose, and they are not
+   * interchangeable. This answers "does this address belong to the school", which is the right
+   * question for a URL being used as a document's stored identity — a canonical pointing at the
+   * school's own cookie notice is a perfectly valid identity even though that page is not worth
+   * crawling.
+   *
+   * @param url the URL to test
+   * @return true when it is on the school's host
+   */
+  public boolean isOnSchoolHost(final String url) {
+    if (url == null || url.isBlank()) {
+      return false;
+    }
+    final URI uri = parse(url);
+    return uri != null && isOnSchoolHost(uri);
+  }
+
+  /**
    * Whether a URI is on the school's own host.
    *
    * <p>The configured host is compared with any leading {@code www.} removed, so

@@ -50,10 +50,13 @@ public class SchoolWebsiteCrawler {
   private static final int MAX_PAGES = 250;
 
   private final SchoolProperties properties;
+  private final SchoolLinkFilter linkFilter;
   private final HttpClient httpClient;
 
-  public SchoolWebsiteCrawler(final SchoolProperties properties) {
+  public SchoolWebsiteCrawler(
+      final SchoolProperties properties, final SchoolLinkFilter linkFilter) {
     this.properties = properties;
+    this.linkFilter = linkFilter;
     this.httpClient = HttpClient.newBuilder().connectTimeout(TIMEOUT).followRedirects(
         HttpClient.Redirect.NORMAL).build();
   }
@@ -179,7 +182,23 @@ public class SchoolWebsiteCrawler {
       return url;
     }
     final String canonical = link.absUrl("href");
-    return canonical.isBlank() ? url : canonical;
+    if (canonical.isBlank()) {
+      return url;
+    }
+    // Host-checked before it is trusted, because this is the one URL in the pipeline that the
+    // fetched PAGE chooses rather than we do — and it does not stay internal. The canonical
+    // becomes the document's sourceRef, which SchoolTools.renderChunk hands to the model as
+    // the citation url= for any value starting https://, so a page declaring a canonical on
+    // another host would put a link to that host in an answer written in the school's voice.
+    // Link following is host-checked (SchoolLinkFilter.isCrawlableWebsitePage); this was the
+    // one way in that was not. A wrong-host canonical is far more likely to be a CMS or
+    // staging misconfiguration than an attack, and falling back to the URL we actually
+    // fetched is the right answer to both.
+    if (!linkFilter.isOnSchoolHost(canonical)) {
+      LOG.warn("Ignoring off-host canonical {} declared by {}", canonical, url);
+      return url;
+    }
+    return canonical;
   }
 
   private List<String> linksIn(final Document document) {
