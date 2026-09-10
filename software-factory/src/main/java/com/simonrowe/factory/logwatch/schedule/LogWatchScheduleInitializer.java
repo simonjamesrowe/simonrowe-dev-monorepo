@@ -1,6 +1,7 @@
 package com.simonrowe.factory.logwatch.schedule;
 
 import com.simonrowe.factory.linear.config.LinearProperties;
+import com.simonrowe.factory.logwatch.config.LogWatchProperties;
 import com.simonrowe.factory.logwatch.config.LogWatchTaskQueues;
 import com.simonrowe.factory.logwatch.domain.LogWatchRequest;
 import com.simonrowe.factory.logwatch.domain.Trigger;
@@ -62,18 +63,24 @@ public class LogWatchScheduleInitializer implements ApplicationRunner {
 
   private final ScheduleClient scheduleClient;
   private final LinearProperties linearProperties;
+  private final LogWatchProperties properties;
 
   /**
    * Creates the initializer.
    *
    * @param scheduleClient the Temporal schedule client, auto-configured by the Temporal starter
+   * @param properties the bound {@code factory.logwatch} configuration, whose resolve settings
+   *     travel on the request for the same reason the Linear flag does
    * @param linearProperties the bound {@code factory.linear} configuration, whose enabled flag is
    *     copied into the scheduled request because a workflow cannot read it itself
    */
   public LogWatchScheduleInitializer(
-      final ScheduleClient scheduleClient, final LinearProperties linearProperties) {
+      final ScheduleClient scheduleClient,
+      final LinearProperties linearProperties,
+      final LogWatchProperties properties) {
     this.scheduleClient = scheduleClient;
     this.linearProperties = linearProperties;
+    this.properties = properties;
   }
 
   /**
@@ -115,7 +122,13 @@ public class LogWatchScheduleInitializer implements ApplicationRunner {
                 // window baked in when the schedule was declared.
                 .setArguments(
                     new LogWatchRequest(
-                        null, null, Trigger.SCHEDULE, false, linearProperties.enabled()))
+                        null,
+                        null,
+                        Trigger.SCHEDULE,
+                        false,
+                        linearProperties.enabled(),
+                        properties.resolveWhenClear(),
+                        properties.resolveAfter()))
                 .build())
         .setSpec(
             ScheduleSpec.newBuilder()

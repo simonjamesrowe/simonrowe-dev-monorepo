@@ -52,7 +52,8 @@ class LogWatchActivitiesImplTest {
         alloy,
         repository,
         new LogWatchProperties(
-            true, minimumOccurrences, maxPerRun, null, lineBudget, 3, null, null));
+            true, minimumOccurrences, maxPerRun, null, lineBudget, 3, null, null, null,
+            null));
   }
 
   @Test
@@ -141,7 +142,8 @@ class LogWatchActivitiesImplTest {
     LogWatchRunRecord record =
         new LogWatchRunRecord(
             "run-1", "logwatch", FROM, TO, LogWatchStatus.COMPLETED, Trigger.SCHEDULE,
-            FROM, TO, 10, false, 5, 1, 0, SourceHealth.Status.ALIVE, "healthy", List.of(), "ok");
+            FROM, TO, 10, false, 5, 1, 0, SourceHealth.Status.ALIVE, "healthy", List.of(),
+            "ok", List.of());
 
     activities(2, 5, 5000).recordRun(record);
 

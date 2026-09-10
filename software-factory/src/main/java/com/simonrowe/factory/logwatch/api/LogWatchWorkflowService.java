@@ -75,7 +75,9 @@ public class LogWatchWorkflowService {
                 end,
                 dryRun ? Trigger.DRY_RUN : Trigger.MANUAL,
                 dryRun,
-                linear.enabled()));
+                linear.enabled(),
+                properties.resolveWhenClear(),
+                properties.resolveAfter()));
     return new LogWatchScanAccepted(
         execution.getWorkflowId(),
         execution.getRunId(),

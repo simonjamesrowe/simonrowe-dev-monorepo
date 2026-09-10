@@ -17,9 +17,11 @@ import com.simonrowe.factory.feedback.domain.LessonScope;
 import com.simonrowe.factory.feedback.domain.LessonSource;
 import com.simonrowe.factory.feedback.domain.ReviewConversation;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.linear.domain.AbsenceSweep;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
 import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.domain.SweepReport;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.client.WorkflowFailedException;
 import io.temporal.client.WorkflowOptions;
@@ -329,6 +331,13 @@ class ReviewFeedbackWorkflowTest {
       }
       return new FiledIssue(
           decision, "linear-id", "SIM-7", "https://linear/SIM-7", "fp");
+    }
+
+    @Override
+    public SweepReport sweepResolved(final AbsenceSweep sweep) {
+      // The feedback producer never sweeps: a review lesson is not a recurring condition that
+      // can stop happening, so its ticket has no "no longer reported" state to reach.
+      throw new UnsupportedOperationException("review-feedback does not sweep");
     }
 
     @Override

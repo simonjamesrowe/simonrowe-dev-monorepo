@@ -14,6 +14,10 @@ import java.util.List;
  * @param truncated whether the read hit its line budget and so examined only part of the window
  * @param issueUrls the Linear issues filed or commented on; empty on a dry run
  * @param detail free-text diagnostics
+ * @param resolvedIssueUrls the Linear issues closed because this module no longer reports them.
+ *     Reported separately from {@code issueUrls} rather than merged into it: "we told you about
+ *     this" and "we stopped telling you about this" are opposite facts, and a caller rendering
+ *     one list would present a closure as a new problem
  */
 public record LogWatchResult(
     LogWatchStatus status,
@@ -24,9 +28,11 @@ public record LogWatchResult(
     int signaturesDropped,
     boolean truncated,
     List<String> issueUrls,
-    String detail) {
+    String detail,
+    List<String> resolvedIssueUrls) {
 
   public LogWatchResult {
     issueUrls = issueUrls == null ? List.of() : List.copyOf(issueUrls);
+    resolvedIssueUrls = resolvedIssueUrls == null ? List.of() : List.copyOf(resolvedIssueUrls);
   }
 }

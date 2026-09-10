@@ -27,5 +27,21 @@ public enum FilingDecision {
    * reopened into Triage and rewritten rather than replaced by a linked new issue. Distinct from
    * {@link #FILED_REGRESSION} for the same reason.
    */
-  REOPENED_EXISTING
+  REOPENED_EXISTING,
+  /**
+   * The producer stopped reporting this problem for long enough that its issue was closed by an
+   * {@link AbsenceSweep}, with a comment saying so.
+   *
+   * <p>The only decision in this enum that is <strong>not</strong> about an occurrence: every
+   * other value answers "this problem happened again, what did we do", and this one answers "this
+   * problem stopped happening". It still lands in the same decision log, because a reader asking
+   * "why is this ticket closed" is asking the same question as "why was it filed".
+   *
+   * <p>Recorded rather than inferred from Linear's own state, because Linear cannot say
+   * <em>who</em> closed an issue in a way this code can read back — and "the factory closed this
+   * because the logs went quiet" and "a human closed this because they fixed it" must stay
+   * tellable apart, especially when the problem comes back and the sink has to choose between
+   * commenting and filing a regression.
+   */
+  RESOLVED_ABSENT
 }

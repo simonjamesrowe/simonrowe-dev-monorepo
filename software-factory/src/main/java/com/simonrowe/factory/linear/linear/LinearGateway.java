@@ -116,9 +116,19 @@ public class LinearGateway {
             "Linear has no team with key " + properties.teamKey(), false);
       }
       String triageStateId = null;
+      String completedStateId = null;
       for (JsonNode state : team.path("states").path(FIELD_NODES)) {
         if ("triage".equals(state.path("type").asText())) {
           triageStateId = state.path("id").asText();
+        }
+        // First completed-type state wins, EXCEPT that a state literally named "Done" always
+        // does. A Linear team can have several completed states ("Done", "Released", "Won't
+        // fix"-as-done), the API returns them in board order, and closing an automated ticket
+        // into whichever happened to come first would put it somewhere a human does not expect.
+        // Unlike triageStateId this may legitimately stay null - see TeamContext.
+        if ("completed".equals(state.path("type").asText())
+            && (completedStateId == null || "Done".equals(state.path("name").asText()))) {
+          completedStateId = state.path("id").asText();
         }
       }
       if (triageStateId == null) {
@@ -133,7 +143,9 @@ public class LinearGateway {
       for (JsonNode label : team.path("labels").path(FIELD_NODES)) {
         labels.put(label.path("name").asText(), label.path("id").asText());
       }
-      cachedTeam = new TeamContext(team.path("id").asText(), triageStateId, Map.copyOf(labels));
+      cachedTeam =
+          new TeamContext(
+              team.path("id").asText(), triageStateId, completedStateId, Map.copyOf(labels));
       return cachedTeam;
     }
   }
@@ -261,13 +273,18 @@ public class LinearGateway {
    * silent staleness those modes exist to remove.
    *
    * @param issueId the Linear issue UUID
-   * @param description the new description, in Markdown
+   * @param description the new description in Markdown, or null to leave the description alone.
+   *     Null must be <strong>omitted</strong> from the input rather than sent: GraphQL takes an
+   *     explicit null as "set this field to null", so sending it would silently erase the
+   *     description of every issue moved by a state-only update
    * @param stateId the workflow state to move the issue to, or null to leave the state alone
    * @throws LinearApiException on any API fault, or when Linear reports the mutation unsuccessful
    */
   public void updateIssue(final String issueId, final String description, final String stateId) {
     ObjectNode input = objectMapper.createObjectNode();
-    input.put("description", description);
+    if (description != null) {
+      input.put("description", description);
+    }
     if (stateId != null) {
       input.put("stateId", stateId);
     }
@@ -362,9 +379,18 @@ public class LinearGateway {
    *
    * @param teamId the team UUID
    * @param triageStateId the id of the team's {@code triage}-type workflow state
+   * @param completedStateId the id of the team's {@code completed}-type state, or <b>null</b> when
+   *     the team has none. Deliberately nullable where {@code triageStateId} is not: Triage is
+   *     load-bearing for the whole suppression design and its absence is a configuration error
+   *     worth failing on, whereas a completed state is needed only by the absence sweep, which
+   *     must degrade to "close nothing" rather than take filing down with it
    * @param labelIds label name to label id, for the labels that exist on the team
    */
-  public record TeamContext(String teamId, String triageStateId, Map<String, String> labelIds) {
+  public record TeamContext(
+      String teamId,
+      String triageStateId,
+      String completedStateId,
+      Map<String, String> labelIds) {
   }
 
   /**

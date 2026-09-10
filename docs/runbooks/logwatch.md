@@ -228,6 +228,84 @@ and an expected outcome rather than a failure of the design.
 - **`logwatch_runs` keys on the Temporal run id, not the workflow id.** The scheduled workflow id
   is stable, so keying on it would collapse all history into one document.
 
+## Closing tickets again: the absence sweep
+
+A factory that only ever opens tickets is half an automation. The other half runs at the end of
+every scan: any problem this module filed and has **not reported for seven days** gets a comment
+and is moved to Done.
+
+```
+scan -> file what is happening -> sweep what has stopped
+```
+
+The comment says what was observed, not what was concluded:
+
+> Closing automatically: this has not appeared in a log scan for 7 day(s).
+>
+> That is an observation, not a verdict — logs also go quiet when a service is stopped or a
+> problem is intermittent. If it happens again, the next scan will file a linked regression
+> rather than losing it, so there is nothing to keep this open for.
+
+That last sentence is the reason an automatic close is safe rather than nerve-wracking. The
+fingerprint attachment survives closure, so a recurrence resolves through the normal precedence to
+`FILED_REGRESSION` — a new ticket, linked to the closed one, saying it came back. **Being early
+costs one extra linked ticket, not a lost report.** It is also why the sweep marks issues
+**Done** and never **Cancelled**: the sink reads a cancelled issue as "never tell me again", so an
+automatic cancel would permanently suppress a problem that had merely paused.
+
+### The four conditions
+
+The sweep runs only when the scan can stand behind its own silence. Each of these is a way it
+could otherwise close a ticket about a problem that is still happening:
+
+| Condition | What goes wrong without it |
+| --- | --- |
+| The source was healthy | An ingest outage reads as universal success, and the sweep closes the whole backlog — including the ticket the same run just filed to say the module cannot see |
+| The read was not truncated | A read that hit its line budget examined an unknown part of the window, so a missing signature is missing for want of looking |
+| Nothing was dropped by the per-run cap | **The subtle one.** The cap (default 5) limits how many signatures are *filed*, not how many were *seen*. With six live problems the sixth never reaches the sink, its `lastSeenAt` never advances, and it looks exactly like a problem that stopped — so a busy stack closes the tickets about its own busiest failures |
+| The window is at least an hour | The post-deploy scan covers about five minutes, in which almost every known problem is absent purely because five minutes is short |
+
+The cap condition has a useful consequence: **while the backlog is over `max-per-run`, the sweep
+is inert**, and it comes into effect as the backlog shrinks. That is the right way round.
+
+The window condition is enforced structurally in `LogWatchWorkflowImpl`, not just by the
+post-deploy caller passing `resolveWhenClear = false` — so a future trigger added by someone who
+has not read that comment still gets the safe behaviour.
+
+### What it will not touch
+
+- **An issue somebody has started.** A candidate in a `started` state is left exactly as it is and
+  counted separately. Someone is mid-fix, and the logs going quiet is very often *because* of what
+  they are doing — a service stopped, a config reverted, a branch deployed. Triage, backlog and
+  unstarted issues are fair game precisely because nobody has claimed them.
+- **Another producer's tickets.** The sweep is scoped by producer key, so it can never close a
+  `cvefix` or `deploy` ticket. An absent CVE finding means something different, and an absent
+  one-shot deploy failure means nothing at all.
+- **The description.** Only a comment and a state change; the ticket still says what it said.
+
+### Configuration
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `FACTORY_LOGWATCH_RESOLVE_WHEN_CLEAR` | `true` | The only flag in this module that defaults ON |
+| `FACTORY_LOGWATCH_RESOLVE_AFTER` | `7d` | Seven consecutive nightly scans |
+
+Do not shorten `resolve-after` much. A problem on a weekly cadence would then be closed and
+re-filed every week, which is the duplicate-ticket disease 046 exists to cure.
+
+`factory.linear.dry-run` and a dry-run scan both preview it: the report says what *would* close
+and nothing is written.
+
+### When it closes nothing
+
+Read the run detail, which distinguishes four cases that all look like "nothing happened":
+
+- silence — nothing was quiet long enough, or everything quiet is already closed;
+- `N ticket(s) look resolved but someone is working on them` — the started-state rule;
+- `... but the Linear team has no Done state to close them into` — a real misconfiguration;
+- `the per-run cap dropped N signature(s), so no ticket was closed as resolved` — the backlog is
+  over the cap.
+
 ## What it deliberately does not do
 
 - **Any remediation whatsoever.** It observes and files. It never restarts, redeploys, edits code

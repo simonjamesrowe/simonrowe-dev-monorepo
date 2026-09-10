@@ -37,6 +37,33 @@ management:
     health:
       show-details: always
       show-components: always
+  health:
+    # /actuator/health is not just an information endpoint here: the backend's Docker
+    # healthcheck greps its body for {"status":"UP"}, and monitor-prod.sh restarts any
+    # container Docker reports unhealthy. Whatever this aggregate contains is therefore
+    # a restart trigger, so a contributor only belongs in it if restarting the backend
+    # is a sensible response to it failing.
+    #
+    # Mail is not. MailHealthIndicator opens a real SMTP connection to Brevo on EVERY
+    # call — roughly 2,880 outbound connections a day at the 30s healthcheck interval —
+    # and in production it intermittently fails DNS:
+    #
+    #   MailConnectException: Couldn't connect to host, port: smtp-relay.brevo.com, 587
+    #     nested exception is: java.net.UnknownHostException: smtp-relay.brevo.com
+    #
+    # 52 of those in one day (filed by the log-watch module as SIM-33). Each one takes
+    # the whole aggregate DOWN, which fails the container healthcheck, which after three
+    # strikes has the watchdog restart a backend that is serving every request perfectly
+    # — to fix a name lookup that has nothing to do with this process. Restarting also
+    # costs the JVM's warm state and, on the deploy path, can strand `frontend`.
+    #
+    # Disabling the contributor does not disable mail. JavaMailSender is untouched and
+    # the contact form still sends; a genuine send failure still surfaces as an error on
+    # the request that attempted it, which is where it belongs. It also takes a real bite
+    # out of the ~9s /actuator/health measured on the Pi (see the healthcheck comment in
+    # docker-compose.prod.yml), since an SMTP connect is the slowest thing in there.
+    mail:
+      enabled: false
   # Tracing: Spring AI (ChatClient/ChatModel) emits gen_ai observations via the Micrometer
   # Observation API. micrometer-tracing-bridge-otel turns those observations into OpenTelemetry
   # spans and this OTLP exporter ships them to Alloy (which forwards only the AI spans to
@@ -52,6 +79,25 @@ management:
           # Reuses the same collector endpoint as the OTel starter (Alloy gRPC :4317 in prod).
           endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
           transport: grpc
+
+logging:
+  level:
+    # PDFBox logs one WARN per non-embedded font per document it opens, e.g.
+    # "Using fallback font LiberationSans for ArialMT". The school PDFs Term Time
+    # ingests (enrichment timetable, term dates, lunch menu) reference the Arial and
+    # Times families without embedding them, so a single crawl produces hundreds:
+    # 339 of these in one hour on 2026-09-09, across six font names, which the
+    # log-watch module filed as SIM-36.
+    #
+    # It is purely informational — the fallback works, and the extracted text is what
+    # the ingester wanted either way. Left at WARN it is the single largest source of
+    # log volume on this service, and volume is not free: shipping it to Grafana Cloud
+    # spends the same monthly allowance whose exhaustion blacked out log ingest for
+    # three weeks in August 2026 (see docs/runbooks/log-shipping.md).
+    #
+    # Scoped to the font package rather than to `org.apache.pdfbox`, so a genuine
+    # parse failure in the document itself is still reported.
+    org.apache.pdfbox.pdmodel.font: ERROR
 
 spring:
   application:

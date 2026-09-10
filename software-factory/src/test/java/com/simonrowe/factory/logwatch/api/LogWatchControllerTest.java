@@ -47,7 +47,7 @@ class LogWatchControllerTest {
             "https://temporal.test");
     return new LogWatchController(
         new FactoryTokenAuthenticator(codeReview),
-        new LogWatchProperties(enabled, 2, 5, null, 5000, 3, null, null),
+        new LogWatchProperties(enabled, 2, 5, null, 5000, 3, null, null, null, null),
         service);
   }
 

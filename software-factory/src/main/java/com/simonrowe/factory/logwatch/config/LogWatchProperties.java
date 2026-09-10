@@ -17,6 +17,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param minimumContainers the coverage floor used when Alloy's component API is unreachable
  * @param loki where to read logs from
  * @param alloy where to ask whether the write path is healthy
+ * @param resolveWhenClear whether a clean scan closes the tickets this module filed for problems
+ *     it no longer sees
+ * @param resolveAfter how long a problem must go unreported before its ticket is closed
  */
 @ConfigurationProperties("factory.logwatch")
 public record LogWatchProperties(
@@ -27,7 +30,31 @@ public record LogWatchProperties(
     int lineBudget,
     int minimumContainers,
     Loki loki,
-    Alloy alloy) {
+    Alloy alloy,
+    // Both last in the record on purpose: appended rather than inserted, so adding them did not
+    // force an edit into the middle of every positional call site in the tests.
+    //
+    // Boxed, unlike `enabled`, because this one defaults ON and a primitive boolean cannot
+    // express that - its zero value is false, so an operator who enables the module and
+    // configures nothing else would get filing without resolving, which is the half-automation
+    // this exists to remove. Boxing lets "absent" and "explicitly false" be told apart.
+    Boolean resolveWhenClear,
+    Duration resolveAfter) {
+
+  /**
+   * How long a problem must go unreported before the sweep closes its ticket.
+   *
+   * <p>Seven days, which is seven consecutive nightly scans, and the number is a trade between
+   * two asymmetric costs. Too short and a genuinely intermittent problem — one that fires on a
+   * weekly cron, or only when a particular job runs — gets closed and re-filed on a cycle, which
+   * is the duplicate-ticket disease 046 was written to cure. Too long and a fixed problem's
+   * ticket loiters in Triage, which is the manual cleanup this feature exists to remove.
+   *
+   * <p>Seven leans short because being early is cheap and recoverable: the fingerprint attachment
+   * outlives the closure, so a recurrence files a linked regression rather than vanishing. Being
+   * late is merely tedious, but it is tedious every single day.
+   */
+  private static final Duration DEFAULT_RESOLVE_AFTER = Duration.ofDays(7);
 
   public LogWatchProperties {
     // Two, not one: a single occurrence of anything is noise at this scale. Provisional - the
@@ -40,6 +67,8 @@ public record LogWatchProperties(
     minimumContainers = minimumContainers <= 0 ? 3 : minimumContainers;
     loki = loki == null ? Loki.defaults() : loki;
     alloy = alloy == null ? Alloy.defaults() : alloy;
+    resolveWhenClear = resolveWhenClear == null || resolveWhenClear;
+    resolveAfter = resolveAfter == null ? DEFAULT_RESOLVE_AFTER : resolveAfter;
   }
 
   /**

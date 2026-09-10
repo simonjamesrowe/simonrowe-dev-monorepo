@@ -102,6 +102,8 @@ class LokiClientTest {
             "1539009",
             "test-key",
             Duration.ofSeconds(5)),
+        null,
+        null,
         null);
   }
 
@@ -252,7 +254,8 @@ class LokiClientTest {
   void refusesWhenUnconfigured() {
     LokiClient unconfigured =
         new LokiClient(
-            new LogWatchProperties(true, 2, 5, null, 5000, 3, null, null), new ObjectMapper());
+            new LogWatchProperties(true, 2, 5, null, 5000, 3, null, null, null, null),
+            new ObjectMapper());
 
     assertThat(unconfigured.configured()).isFalse();
     assertThatThrownBy(() -> unconfigured.linesIn(FROM, TO, 100))

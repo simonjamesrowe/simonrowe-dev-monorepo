@@ -211,6 +211,102 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 048-logwatch-backlog: The nine open `factory:logwatch` tickets were six distinct problems.
+  Five are fixed here; the sixth is recorded, not fixed. **The one that mattered: the nightly
+  platform backup had never once run.** `scripts/backup-platform.sh` executes in the `deployer`,
+  which is a second instance of the software-factory image — and that image installs
+  `ca-certificates git curl jq` and nothing else, while the script requires **`python3`** (all its
+  JSON: the manifest, the ClickHouse row counts, every Drive API response) and **`zip`** (the
+  archive). It aborted at `check_prerequisites()` every night from the day 034 shipped, so no
+  Langfuse / Dependency-Track / Temporal capture has ever reached Google Drive (SIM-30, and
+  SIM-34 is the same incident seen through Temporal's activity-failure WARN). Nothing outside the
+  container log noticed: Temporal retried and gave up, the run landed as failed in a collection
+  nobody reads, and the console rendered it identically to a transient failure. The jq-not-python3
+  decision from 036 is unchanged and still correct **for the deploy settle loop**; the platform
+  backup is a different consumer. `python3-minimal` suffices (the script uses only `json`, `os`,
+  `sys` — verified on arm64). `scripts/test/test-platform-backup-prereqs.sh` now reconciles the
+  script's `check_prerequisites()` against the Dockerfile's runtime `apt-get install` line, with
+  `docker` (bind-mounted from the host) and `sha256sum` (coreutils) as the only exemptions —
+  neither build step runs the other, so this test is the only thing tying the two files together.
+  The other four:
+  - **`ContentAggregationAgent` and `WeeklyDigestAgent` are not Embabel agents and never were**
+    (SIM-27). Both carried `@Agent`/`@Action` while every caller invokes them directly as Spring
+    beans, and neither declared an `@AchievesGoal` — so `DefaultAgentValidationManager` logged
+    `MISSING_GOALS: Agent '...' must have at least one goal defined` at **ERROR** on every boot.
+    An agent with no goal can never be planned or executed, so the annotation was provably
+    decorative. Now plain `@Component`s. **`@Component` is explicit and load-bearing**: `@Agent`
+    is itself meta-annotated `@Component`, so dropping it without adding one removes the bean and
+    breaks constructor injection at startup. `Ai` injection is unaffected — `ArticleSectionWriter`
+    and `DigestComposer` were already doing exactly this from plain components.
+  - **The mail health indicator is off** (SIM-33). `/actuator/health` is not an information
+    endpoint here: the backend's Docker healthcheck greps its body for `{"status":"UP"}` and
+    `monitor-prod.sh` restarts anything Docker calls unhealthy — so everything in that aggregate
+    is a **restart trigger**. `MailHealthIndicator` opened a real SMTP connection to Brevo on
+    every call (~2,880/day at the 30s interval) and intermittently failed DNS
+    (`UnknownHostException: smtp-relay.brevo.com`, 52 times in one day), each failure taking the
+    aggregate DOWN and, after three strikes, restarting a backend that was serving every request
+    perfectly — to fix a name lookup that has nothing to do with the process. Mail itself is
+    untouched; a genuine send failure still surfaces on the request that attempted it. Also takes
+    a real bite out of the ~9s `/actuator/health` measured on the Pi.
+  - **`org.apache.pdfbox.pdmodel.font` is at ERROR** (SIM-36). PDFBox logs one WARN per
+    non-embedded font per document; the school PDFs Term Time ingests reference the Arial/Times
+    families without embedding them, so one crawl produced **339 WARNs in an hour**. Scoped to the
+    font package, not `org.apache.pdfbox`, so a real parse failure is still reported. Log volume
+    is not free — it spends the same Grafana Cloud allowance whose exhaustion blacked out ingest
+    for three weeks in August 2026.
+  - **Not fixed, deliberately:** SIM-28/SIM-32 are Temporal's own shutdown/cancel noise
+    (`context canceled`, `pq: canceling statement due to user request`) and SIM-31 is a transient
+    tail against a container being removed — third-party, nothing in this repo to change.
+    **SIM-29 is a real finding with an unresolved cause**: alloy re-ships `nginx` /
+    `temporal-create-namespace` / `pinggy` log history on restart and Loki rejects it as
+    `timestamp too old`, 22 times across 8 occasions in 14 days, despite `loki.source.docker`
+    persisting positions and the `alloy-data` volume being declared since #141. Note
+    `grafana/alloy` is pinned to **`:latest`** in `docker-compose.prod.yml` — the same
+    unpinned-image shape as the ClickHouse incident. Needs one fact from the host (whether the
+    volume is actually mounted on the running container, and whether the positions file survives)
+    before it can be fixed rather than guessed at.
+  **And the backlog now closes itself.** `com.simonrowe.factory.linear`'s `IssueResolver` +
+  `AbsenceSweep` are the other half of the sink: at the end of every scan, any `logwatch`
+  fingerprint unreported for `factory.logwatch.resolve-after` (**7d**) gets a comment and is moved
+  to Done. `FACTORY_LOGWATCH_RESOLVE_WHEN_CLEAR` is the **only flag in that module that defaults
+  ON**. Load-bearing bits:
+  - **The sweep takes no "what is still present" list, on purpose.** It always runs *after*
+    filing, and every filing advances that fingerprint's `lastSeenAt` — so "still happening" and
+    "recently seen" are the same fact and the quiet period is the only input. A present-set would
+    be a second, independently-wrong answer to one question.
+  - **Four conditions, each of which is a way to close a ticket about a live problem.** The
+    source must be healthy (an ingest outage otherwise reads as universal success and closes the
+    whole backlog, *including* the ticket the same run just filed to say it cannot see); the read
+    must not be truncated; the window must be ≥1h (a post-deploy scan covers ~5 minutes, in which
+    almost everything is absent because 5 minutes is short — enforced structurally in
+    `LogWatchWorkflowImpl`, not only by the caller passing `false`); and **nothing may have been
+    dropped by the per-run cap** — the subtle one, because the cap limits what is *filed*, not
+    what was *seen*, so with more live problems than the cap the overflow never reaches the sink,
+    its `lastSeenAt` never advances, and a busy stack closes the tickets about its own busiest
+    failures. Useful consequence: the sweep is inert while the backlog exceeds `max-per-run` and
+    comes into effect as it shrinks.
+  - **Done, never Cancelled.** The sink reads a cancelled issue as "never tell me again", so an
+    automatic cancel would permanently suppress a problem that had merely paused. Closing as
+    completed leaves the fingerprint attachment in place, so a recurrence files a linked
+    `FILED_REGRESSION` — being early costs one extra linked ticket, not a lost report, and that
+    recoverability is the whole reason 7 days is an acceptable threshold.
+  - **It never touches an issue a human has started**, and counts those separately. Someone
+    mid-fix is very often *why* the logs went quiet. It also never crosses producers (an absent
+    `cvefix` finding means something else entirely; an absent `deploy` failure means nothing),
+    and never rewrites the description.
+  - **`LinearGateway.updateIssue` now omits a null description rather than sending it.** GraphQL
+    reads an explicit null as "set this field to null", so the state-only update the sweep
+    performs would otherwise have erased the description of every issue it closed.
+  - `TeamContext.completedStateId` is **nullable** where `triageStateId` is not, and a team
+    without one reports `SweepReport.unavailable` rather than silence — "nothing was closed" and
+    "nothing *can* be closed" must not present identically. A state literally named `Done` always
+    wins over board order.
+  - **Stub `sweepResolved` in every workflow test, not just the sweep ones.** An unstubbed Mockito
+    mock returns null, the workflow NPEs, and Temporal retries a failed *workflow task*
+    indefinitely — so the symptom is a test that hangs forever rather than one that fails.
+  See `docs/runbooks/logwatch.md` ("Closing tickets again: the absence sweep"),
+  `docs/runbooks/linear.md` ("The absence sweep") and
+  `docs/runbooks/platform-backup-restore.md` §0.
 - sbom-cyclonedx-17-rejected: The three **image** SBOM uploads to Dependency-Track have failed
   with `400` on **every** Publish run since the trivy switch (#140, 2026-08-31) — and the
   workflow was green each time, because the `sbom` job is `continue-on-error` and

@@ -15,10 +15,12 @@ import com.simonrowe.factory.cvefix.domain.CveFixResult;
 import com.simonrowe.factory.cvefix.domain.CveFixStatus;
 import com.simonrowe.factory.cvefix.domain.Finding;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.linear.domain.AbsenceSweep;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
 import com.simonrowe.factory.linear.domain.FilingMode;
 import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.domain.SweepReport;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.client.WorkflowFailedException;
 import io.temporal.client.WorkflowOptions;
@@ -204,6 +206,11 @@ class CveFixWorkflowTest {
     @Override
     public FiledIssue fileIssue(final IssueFiling filing) {
       return delegate.fileIssue(filing);
+    }
+
+    @Override
+    public SweepReport sweepResolved(final AbsenceSweep sweep) {
+      return delegate.sweepResolved(sweep);
     }
 
     @Override

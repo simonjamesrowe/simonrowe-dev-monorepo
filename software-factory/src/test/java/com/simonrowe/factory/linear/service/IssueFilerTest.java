@@ -500,7 +500,7 @@ class IssueFilerTest {
     when(gateway.issuesForFingerprint(anyString()))
         .thenReturn(List.of(issue(IssueStateType.COMPLETED)));
     when(gateway.teamContext())
-        .thenReturn(new LinearGateway.TeamContext("t1", "triage-state", Map.of()));
+        .thenReturn(new LinearGateway.TeamContext("t1", "triage-state", "done-state", Map.of()));
 
     FiledIssue filed = filer().file(filing(FilingMode.ROLLING));
 

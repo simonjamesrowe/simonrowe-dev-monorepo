@@ -212,4 +212,32 @@ public final class LogWatchReportRenderer {
     Duration duration = Duration.between(windowStart, windowEnd);
     return duration.toHours() > 0 ? duration.toHours() + "h" : duration.toMinutes() + "m";
   }
+
+  /**
+   * The comment posted on a ticket as the absence sweep closes it.
+   *
+   * <p>It says what was observed, not what was concluded. "Not seen for seven days" is a fact
+   * this module can stand behind; "fixed" is a claim about the world that it cannot — the logs
+   * also go quiet when a service is stopped, a source is dropped from shipping, or the problem is
+   * merely intermittent. The distinction is the same one {@code publishReview} makes when it
+   * replies "No longer reported as of {@code <sha>}" rather than "Fixed".
+   *
+   * <p>It also tells the reader what happens if that turns out to be wrong, because the honest
+   * answer ("this reopens itself") is what makes an automatic close acceptable rather than
+   * something to be nervous about.
+   *
+   * @param quietFor how long the problem went unreported
+   * @param runId the scan that closed it
+   * @return the Markdown comment
+   */
+  public static String resolutionComment(final Duration quietFor, final String runId) {
+    return "Closing automatically: this has not appeared in a log scan for "
+        + quietFor.toDays()
+        + " day(s).\n\nThat is an observation, not a verdict — logs also go quiet when a "
+        + "service is stopped or a problem is intermittent. If it happens again, the next scan "
+        + "will file a linked regression rather than losing it, so there is nothing to keep this "
+        + "open for.\n\nClosed by log-watch scan `"
+        + runId
+        + "`.";
+  }
 }

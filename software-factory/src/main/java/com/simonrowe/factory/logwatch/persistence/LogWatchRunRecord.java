@@ -37,6 +37,9 @@ import org.springframework.data.mongodb.core.mapping.Document;
  * @param sourceEvidence the justification for that verdict
  * @param filedIssues Linear issue identifiers touched by this run
  * @param detail free-text diagnostics
+ * @param resolvedIssues Linear issues this run closed because it no longer sees the problem they
+ *     describe. A separate field from {@code filedIssues} because the two mean opposite things
+ *     and a console rendering one list would show a closure as a new finding
  */
 @Document(collection = "logwatch_runs")
 public record LogWatchRunRecord(
@@ -56,9 +59,14 @@ public record LogWatchRunRecord(
     SourceHealth.Status sourceHealth,
     String sourceEvidence,
     List<String> filedIssues,
-    String detail) {
+    String detail,
+    // Last in the record on purpose: appended rather than inserted, so adding it did not force an
+    // edit into the middle of every positional call site in the tests. Older documents written
+    // before this field existed read back as an empty list, not as a failure.
+    List<String> resolvedIssues) {
 
   public LogWatchRunRecord {
     filedIssues = filedIssues == null ? List.of() : List.copyOf(filedIssues);
+    resolvedIssues = resolvedIssues == null ? List.of() : List.copyOf(resolvedIssues);
   }
 }

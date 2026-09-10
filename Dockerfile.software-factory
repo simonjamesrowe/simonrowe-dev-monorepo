@@ -69,11 +69,29 @@ FROM eclipse-temurin:25-jre
 # verification curls the public hostnames. jq was previously installed only in the
 # throwaway `claude` stage above, so it never reached the runtime image.
 #
-# jq deliberately rather than python3: the settle-loop parser used to be an inline
-# Python program, and keeping it would mean carrying a whole Python runtime in this
-# image for one JSON filter. See specs/036-auto-deploy-on-merge/research.md §3.
+# jq deliberately rather than python3 FOR THE SETTLE LOOP: that parser used to be an
+# inline Python program, and keeping it would have meant carrying a Python runtime for
+# one JSON filter. See specs/036-auto-deploy-on-merge/research.md §3. That decision is
+# unchanged - restart-prod.sh still parses `docker compose ps --format json` with jq.
+#
+# python3 and zip are here for a different consumer entirely: scripts/backup-platform.sh,
+# which also runs in this image (as the `deployer` service, off the `platform-backup`
+# Temporal queue). It builds the archive with `zip -qr` and does all of its JSON work -
+# the manifest, the ClickHouse row counts, every Google Drive response - in python3, and
+# it checks for both up front. Neither was ever installed here, so the nightly platform
+# backup failed at its first prerequisite check from the day 034 shipped:
+#
+#     backup-platform.sh exited with 1: [backup-platform] ERROR: python3 is required
+#
+# and no Langfuse/Dependency-Track/Temporal capture has ever reached Google Drive.
+# scripts/test/test-platform-backup-prereqs.sh reconciles that script's
+# check_prerequisites() against this apt-get line so the two cannot drift apart again.
+#
+# python3-minimal rather than python3: the script uses only json, os and sys, all of
+# which are in the minimal interpreter's standard library.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git curl jq \
+    && apt-get install -y --no-install-recommends \
+       ca-certificates git curl jq python3-minimal zip \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 10003 factory \
