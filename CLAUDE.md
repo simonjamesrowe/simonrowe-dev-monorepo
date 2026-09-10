@@ -59,6 +59,7 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - Uploads served via Spring `ResourceHandlerRegistry` at `/uploads/**`, path configurable via `UPLOADS_PATH` env var (default: `uploads/` relative to backend CWD)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 - When adding dry-run/preview modes to multiple operations, decide independently what each should expose in preview rather than mirroring another operation's guard conditions — e.g. filing might show nothing useful, but sweeping should show what would be resolved
+- Destructive Mongock change units (ones that remove rows) need an integration test proving they actually run at boot, correct survivor-selection logic, and a comment documenting why the deleted data is safely re-derivable — path classifiers won't flag these for review, so verify by hand
 
 ## Production Deployment
 
