@@ -818,6 +818,13 @@ services:
       SCHOOL_CALENDAR_BASE_URL: ${SCHOOL_CALENDAR_BASE_URL:-}
       SCHOOL_WEBSITE_BASE_URL: ${SCHOOL_WEBSITE_BASE_URL:-}
       SCHOOL_STAFF_LIST_URL: ${SCHOOL_STAFF_LIST_URL:-}
+      # Pages the CMS sitemap does not list, so the crawl would otherwise never reach them —
+      # today the seven year-group pages, which are where the class teachers and per-class PE
+      # days live. Safe to leave empty, unlike the two variables above: the default lives in
+      # SchoolProperties.DEFAULT_EXTRA_PAGE_PATHS and an empty list means "use it", precisely so
+      # that `${VAR:-}` passing an empty STRING cannot silently disable the feature. Setting
+      # this REPLACES the built-in list rather than adding to it.
+      SCHOOL_EXTRA_PAGE_URLS: ${SCHOOL_EXTRA_PAGE_URLS:-}
       SCHOOL_CHAT_MODEL: ${SCHOOL_CHAT_MODEL:-}
       SCHOOL_GUARDRAIL_MODEL: ${SCHOOL_GUARDRAIL_MODEL:-}
       # Zero means "answer nothing anonymously", deliberately not "unlimited". An unset budget

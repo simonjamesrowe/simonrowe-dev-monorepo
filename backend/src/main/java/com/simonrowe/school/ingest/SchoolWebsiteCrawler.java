@@ -8,7 +8,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -23,8 +22,18 @@ import org.springframework.stereotype.Component;
 /**
  * Crawls the school website.
  *
- * <p>Enumerates pages from the CMS's sitemap rather than following links, which keeps the crawl
- * bounded and avoids the calendar's effectively infinite date-parameterised URL space.
+ * <p>Enumerates pages from the CMS's sitemap, which keeps the crawl bounded and avoids the
+ * calendar's effectively infinite date-parameterised URL space. The cost is that a page missing
+ * from the sitemap is invisible, and this sitemap does omit pages — every year-group page among
+ * them, which is where the class teachers, the PE days and the weekly spellings live.
+ *
+ * <p>Two things close that, and they are separate on purpose. {@code
+ * SchoolProperties.extraPageUrls} adds a short list of known-missing pages to
+ * {@link #listPages()}. {@code SchoolIngestService} then follows same-host links out of those
+ * pages, one hop — see {@code SchoolIngestService.shouldFollowLinksFrom} for why the hop starts
+ * only there. This class's part in that is {@link CrawledPage#links()} and
+ * {@link CrawledPage#canonicalUrl()}; the policy of what to follow is
+ * {@link SchoolLinkFilter#isCrawlableWebsitePage}, and the queue is the ingest service's.
  *
  * <p>The crawl delay is honoured because the site's {@code robots.txt} asks for ten seconds and
  * this is a small school's hosting. It makes a full crawl slow — a couple of hundred pages is over
@@ -50,7 +59,18 @@ public class SchoolWebsiteCrawler {
   }
 
   /**
-   * Every page URL listed in the school's sitemap.
+   * Every page the crawl should read: the school's sitemap, plus the configured extras.
+   *
+   * <p>The extras come <b>first</b>, deliberately. {@code MAX_PAGES} caps the whole list, and the
+   * sitemap's tail is years of old sports reports while the extras are the year-group pages —
+   * losing the latter to make room for the former would be exactly backwards. Today the sitemap
+   * has 218 entries so nothing is dropped either way, but the ordering is what keeps that true
+   * as the school adds news.
+   *
+   * <p>A sitemap that cannot be read still returns nothing, even when extras are configured.
+   * {@code SchoolIngestService} treats an empty list as a source failure and records it, and
+   * quietly returning seven pages instead would turn a visible outage into a crawl that appears
+   * to have succeeded while skipping 96% of the site.
    *
    * @return the page URLs, capped to a sane maximum
    */
@@ -60,7 +80,7 @@ public class SchoolWebsiteCrawler {
       LOG.warn("Could not read the school sitemap");
       return List.of();
     }
-    final List<String> urls = new ArrayList<>();
+    final Set<String> urls = new LinkedHashSet<>(properties.extraPageUrls());
     final Matcher matcher = SITEMAP_LOC.matcher(sitemap);
     while (matcher.find() && urls.size() < MAX_PAGES) {
       final String url = matcher.group(1).trim();
@@ -121,10 +141,69 @@ public class SchoolWebsiteCrawler {
       return null;
     }
     final Document document = Jsoup.parse(html, url);
+    // Read before the strip: <link rel="canonical"> lives in <head>, which survives, but taking
+    // it first keeps this independent of what the strip removes.
+    final String canonical = canonicalOf(document, url);
     document.select("script, style, nav, header, footer").remove();
     final String title = document.title();
     final String text = document.body() == null ? "" : document.body().text();
-    return new CrawledPage(url, title, text, html);
+    // Links are taken from the STRIPPED document, and that is the single most effective filter
+    // in the whole discovery path rather than a detail. This CMS emits semantic <nav>/<header>/
+    // <footer>, and the site-wide navigation is ~60 same-host links repeated on every page —
+    // measured on /year-six: 68 same-host links in the raw HTML, 12 once the furniture is gone.
+    // Following the raw set would make one hop from any page equivalent to crawling the site.
+    return new CrawledPage(url, canonical, title, text, html, linksIn(document));
+  }
+
+  /**
+   * The page's own declared canonical URL.
+   *
+   * <p>Load-bearing for link following, because this CMS serves <b>every page under two
+   * URLs</b>: a friendly path and a {@code /page/?title=...&pid=N} form. They are byte-identical
+   * — verified on {@code /year-six-home-learning} and {@code /page/?title=Home+Learning&pid=158}
+   * — and {@code SchoolIds.documentId} keys on the URL, so ingesting both stores the same text
+   * twice and embeds it twice, which shows up as duplicate results rather than as an error.
+   *
+   * <p>Sitemap-only crawling never met this, since the sitemap lists one form. Discovery meets
+   * it immediately: the only link from {@code /year-six} to its home-learning page is the
+   * {@code /page/?} form, so the choice is not "canonicalise or avoid the ugly URLs" — it is
+   * "canonicalise or lose the page".
+   *
+   * @param document the parsed page
+   * @param url the URL it was fetched from, used when no canonical is declared
+   * @return the canonical URL, never null
+   */
+  private String canonicalOf(final Document document, final String url) {
+    final org.jsoup.nodes.Element link = document.selectFirst("link[rel=canonical][href]");
+    if (link == null) {
+      return url;
+    }
+    final String canonical = link.absUrl("href");
+    return canonical.isBlank() ? url : canonical;
+  }
+
+  private List<String> linksIn(final Document document) {
+    final Set<String> links = new LinkedHashSet<>();
+    for (org.jsoup.nodes.Element anchor : document.select("a[href]")) {
+      // absUrl resolves against the base Jsoup.parse was given, so a relative href comes back
+      // absolute. It does NOT filter: a mailto: comes back verbatim and "#top" comes back as
+      // this page's own URL with the fragment still on it, so both are handled here.
+      final String href = anchor.absUrl("href");
+      if (!href.startsWith("http://") && !href.startsWith("https://")) {
+        continue;
+      }
+      // The fragment is stripped at the point links are read rather than by each consumer.
+      // The server never sees it, so "/year-six#top" and "/year-six" are one page — and left
+      // on, an in-page anchor queues the page it was found on all over again.
+      final int fragment = href.indexOf('#');
+      final String url = fragment < 0 ? href : href.substring(0, fragment);
+      // A link to the page it was found on is not a discovery. Common once the fragment is
+      // gone, because "back to top" and the breadcrumb's own last crumb both become one.
+      if (!url.isBlank() && !url.equals(document.location())) {
+        links.add(url);
+      }
+    }
+    return List.copyOf(links);
   }
 
   /**
@@ -175,7 +254,18 @@ public class SchoolWebsiteCrawler {
     }
   }
 
-  private String fetchText(final String url) {
+  /**
+   * Fetches a URL as text.
+   *
+   * <p>Package-private rather than private so a test can override it. {@link #listPages()} is
+   * pure logic over two strings once the fetch is out of the way — which pages the crawl reaches
+   * is exactly the thing that was wrong here, and it should not need a live school website to
+   * assert.
+   *
+   * @param url the URL to fetch
+   * @return the body, or null if it could not be read
+   */
+  String fetchText(final String url) {
     try {
       final HttpRequest request = HttpRequest.newBuilder(URI.create(url))
           .header("User-Agent", "SimonRoweBot/1.0 (+https://simonrowe.dev)")
@@ -201,11 +291,17 @@ public class SchoolWebsiteCrawler {
   /**
    * One fetched page.
    *
-   * @param url the URL fetched
+   * @param url the URL it was fetched from
+   * @param canonicalUrl the URL the page declares as its own, falling back to {@code url}. What
+   *     a document is stored under, so two addresses for one page cannot become two documents
    * @param title the page title
-   * @param text readable text with chrome stripped
-   * @param html the raw HTML, kept so PDF links can be extracted without a second fetch
+   * @param text the readable text, with navigation, header and footer removed
+   * @param html the raw markup, still including the navigation — {@code SchoolPdfExtractor}
+   *     reads it, and a PDF linked from a footer is still a PDF worth having
+   * @param links absolute URLs found in the page's <b>content</b>, navigation excluded
    */
-  public record CrawledPage(String url, String title, String text, String html) {
+  public record CrawledPage(
+      String url, String canonicalUrl, String title, String text, String html,
+      List<String> links) {
   }
 }

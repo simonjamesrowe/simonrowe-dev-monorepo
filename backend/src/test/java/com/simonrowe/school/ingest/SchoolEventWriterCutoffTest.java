@@ -99,6 +99,6 @@ class SchoolEventWriterCutoffTest {
 
   private static SchoolProperties propertiesWithCutoff(final LocalDate cutoff) {
     return new SchoolProperties(
-        true, cutoff, List.of(), List.of(), null, null, null, 0, null, null, 1000L, null);
+        true, cutoff, List.of(), List.of(), null, null, null, 0, null, null, 1000L, null, null);
   }
 }

@@ -188,6 +188,7 @@ class GmailAttachmentRepairTest {
 
   private SchoolProperties properties() {
     return new SchoolProperties(true, LocalDate.of(2026, 7, 1),
-        List.of("kilmorie.lewisham.sch.uk"), List.of(), null, null, null, 0, null, null, 0, null);
+        List.of("kilmorie.lewisham.sch.uk"), List.of(), null, null, null, 0, null, null, 0, null,
+        null);
   }
 }

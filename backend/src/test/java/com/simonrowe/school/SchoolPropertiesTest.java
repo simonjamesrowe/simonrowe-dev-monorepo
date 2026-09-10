@@ -11,7 +11,7 @@ class SchoolPropertiesTest {
   private SchoolProperties withSenders(
       final List<String> allow, final List<String> deny) {
     return new SchoolProperties(
-        true, null, allow, deny, null, null, null, 0, null, null, 100, null);
+        true, null, allow, deny, null, null, null, 0, null, null, 100, null, null);
   }
 
   @Test
@@ -65,10 +65,73 @@ class SchoolPropertiesTest {
   void defaultsAreInert() {
     final SchoolProperties defaults =
         new SchoolProperties(
-            false, null, null, null, null, null, null, 0, null, null, 0, null);
+            false, null, null, null, null, null, null, 0, null, null, 0, null, null);
     assertThat(defaults.enabled()).isFalse();
     assertThat(defaults.dailyTokenBudget()).isZero();
     assertThat(defaults.chatModel()).isEqualTo("gpt-5.6-luna");
     assertThat(defaults.guardrailModel()).isEqualTo("gpt-5-nano");
+  }
+
+  private SchoolProperties withPages(final String baseUrl, final List<String> extraPages) {
+    return new SchoolProperties(
+        true, null, List.of(), List.of(), null, baseUrl, null, 0, null, null, 0, null,
+        extraPages);
+  }
+
+  @Test
+  @DisplayName("the year-group pages are crawled by default")
+  void yearGroupPagesAreOnByDefault() {
+    // These seven return 200 and none of them is in the school's sitemap, so nothing else in
+    // the crawl will ever reach them. Losing this default silently loses every year group's
+    // teachers and PE days, with no error anywhere — which is exactly how it shipped.
+    assertThat(withPages(null, null).extraPageUrls()).containsExactly(
+        "https://www.kilmorieschool.co.uk/year-group-pages",
+        "https://www.kilmorieschool.co.uk/year-one",
+        "https://www.kilmorieschool.co.uk/year-two",
+        "https://www.kilmorieschool.co.uk/year-three",
+        "https://www.kilmorieschool.co.uk/year-4",
+        "https://www.kilmorieschool.co.uk/year-five",
+        "https://www.kilmorieschool.co.uk/year-six");
+  }
+
+  @Test
+  @DisplayName("an empty configured list falls back to the default rather than crawling nothing")
+  void emptyMeansDefault() {
+    // application.yml passes ${SCHOOL_EXTRA_PAGE_URLS:}, and Spring binds an empty string to an
+    // empty list. If empty meant "none", the shipped default would never once apply.
+    assertThat(withPages(null, List.of()).extraPageUrls()).hasSize(7);
+  }
+
+  @Test
+  @DisplayName("configured paths resolve against the website base URL")
+  void pathsResolveAgainstTheBase() {
+    assertThat(withPages("https://example.test", List.of("/year-six", "year-five"))
+        .extraPageUrls())
+        .containsExactly("https://example.test/year-six", "https://example.test/year-five");
+  }
+
+  @Test
+  @DisplayName("an absolute configured URL is left alone")
+  void absoluteUrlsPassThrough() {
+    assertThat(withPages("https://example.test", List.of("https://elsewhere.test/page"))
+        .extraPageUrls())
+        .containsExactly("https://elsewhere.test/page");
+  }
+
+  @Test
+  @DisplayName("a base URL with a trailing slash does not produce a doubled slash")
+  void trailingSlashOnTheBaseIsNormalised() {
+    final SchoolProperties properties = withPages("https://example.test/", List.of("/year-six"));
+    assertThat(properties.extraPageUrls()).containsExactly("https://example.test/year-six");
+    // staffListUrl is built by the same concatenation and had the same latent bug.
+    assertThat(properties.staffListUrl()).isEqualTo("https://example.test/our-school/our-staff");
+  }
+
+  @Test
+  @DisplayName("blank and duplicate entries are dropped")
+  void blankAndDuplicateEntriesDropped() {
+    assertThat(withPages("https://example.test", java.util.Arrays.asList(
+        "/year-six", "  ", null, "/year-six")).extraPageUrls())
+        .containsExactly("https://example.test/year-six");
   }
 }

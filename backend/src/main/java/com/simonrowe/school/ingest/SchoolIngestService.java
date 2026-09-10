@@ -15,8 +15,11 @@ import com.simonrowe.school.usage.SchoolUsageRecorder;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +46,18 @@ public class SchoolIngestService {
   private static final String CALENDAR_SOURCE = "calendar";
   private static final int CALENDAR_LOOKBACK_MONTHS = 6;
   private static final int CALENDAR_LOOKAHEAD_MONTHS = 18;
+
+  /**
+   * The most pages one crawl will fetch, counting those found by following links.
+   *
+   * <p>Above the crawler's own sitemap cap on purpose, because this one has to cover the
+   * discovered pages too — sized against a measured 218 sitemap entries plus the seven seeds
+   * and the ~20 pages one hop from them, with room for the school to keep publishing. It is a
+   * backstop against a link cycle or a CMS that starts generating addresses, not a tuning knob:
+   * hitting it means discovery is misbehaving, and at ten seconds a page the crawl would be
+   * over an hour before it got there.
+   */
+  private static final int MAX_CRAWL_PAGES = 400;
 
   /**
    * Cheap test for "could this text possibly contain a date".
@@ -74,6 +89,7 @@ public class SchoolIngestService {
   private final SchoolUsageRecorder usageRecorder;
   private final SchoolEventExtractor eventExtractor;
   private final DocumentDateReader dateReader;
+  private final SchoolLinkFilter linkFilter;
 
   @SuppressWarnings("checkstyle:ParameterNumber")
   public SchoolIngestService(
@@ -89,7 +105,8 @@ public class SchoolIngestService {
       final SchoolPdfExtractor pdfExtractor,
       final SchoolUsageRecorder usageRecorder,
       final SchoolEventExtractor eventExtractor,
-      final DocumentDateReader dateReader) {
+      final DocumentDateReader dateReader,
+      final SchoolLinkFilter linkFilter) {
     this.properties = properties;
     this.calendarClient = calendarClient;
     this.crawler = crawler;
@@ -103,6 +120,7 @@ public class SchoolIngestService {
     this.usageRecorder = usageRecorder;
     this.eventExtractor = eventExtractor;
     this.dateReader = dateReader;
+    this.linkFilter = linkFilter;
   }
 
   /**
@@ -178,6 +196,10 @@ public class SchoolIngestService {
   /**
    * Crawls and ingests the school website.
    *
+   * <p>The work list starts as the sitemap plus {@code school.extra-page-urls}, and grows by one
+   * hop: same-host links found in the <b>content</b> of a configured extra page are appended.
+   * See {@link #shouldFollowLinksFrom} for why the hop starts only from those pages.
+   *
    * @return how many pages produced new or changed content
    */
   public int ingestWebsite() {
@@ -191,12 +213,56 @@ public class SchoolIngestService {
     // it already had rather than being re-stamped as published today on every crawl.
     final Map<String, Instant> updateTimes = crawler.pageUpdateTimes();
 
+    // Pages we asked for by name rather than found in the sitemap. A sitemap page that fails is
+    // one of two hundred and stays at DEBUG; one of these failing means the configured slug has
+    // rotted — the school renamed the page — and the symptom is Term Time quietly losing a
+    // whole year group's teachers and PE days with nothing in the logs to say so.
+    final Set<String> configuredPages = Set.copyOf(properties.extraPageUrls());
+
+    // A queue rather than a for-each, because discovery appends to it while it is being read.
+    final Deque<String> queue = new ArrayDeque<>(urls);
+    // Both the address we asked for and the address the page says it really is. The CMS serves
+    // every page under two URLs, so without the canonical half of this the same text is
+    // ingested and embedded twice under two ids.
+    final Set<String> seen = new LinkedHashSet<>(urls);
+    int discovered = 0;
     int changed = 0;
-    for (String url : urls) {
+    int visited = 0;
+
+    while (!queue.isEmpty() && visited < MAX_CRAWL_PAGES) {
+      // Between requests, at the TOP of the body rather than the bottom. Every path below can
+      // `continue` — a page that 404s, one that is blank, one that turns out to be a second
+      // address for a page already crawled — and from the server's point of view each of those
+      // was still a request. With the pause at the bottom a run of them went out back to back,
+      // which is precisely what the ten seconds robots.txt asks for is meant to prevent, and
+      // discovery makes such runs more likely rather than less.
+      if (visited > 0 && !crawler.politePause()) {
+        LOG.info("Website crawl interrupted after {} pages", changed);
+        break;
+      }
+      final String url = queue.poll();
+      visited++;
       final SchoolWebsiteCrawler.CrawledPage page = crawler.fetchPage(url);
       if (page == null || page.text().isBlank()) {
+        if (configuredPages.contains(url)) {
+          LOG.warn("Configured school page {} could not be read - has it been renamed?", url);
+        }
         continue;
       }
+
+      // Stored under the canonical URL, so the friendly path and the /page/?pid= form collapse
+      // to one document — and so a citation in an answer shows the address a parent would
+      // recognise. Sitemap URLs are already canonical, so this is a no-op for almost all of them.
+      final String storedUrl = page.canonicalUrl();
+      if (!storedUrl.equals(url) && !seen.add(storedUrl)) {
+        LOG.debug("{} is a second address for {}, already crawled", url, storedUrl);
+        continue;
+      }
+
+      if (shouldFollowLinksFrom(url, configuredPages)) {
+        discovered += enqueueLinksFrom(page, queue, seen);
+      }
+
       // Website pages enter at PUBLIC. The name gate is NOT applied here, and that is a
       // correction rather than an oversight: these pages are already published to the open
       // internet by the school itself, so repeating them discloses nothing. Running the gate
@@ -208,22 +274,29 @@ public class SchoolIngestService {
       // every generated answer served anonymously, which is the point at which a name would
       // actually reach a stranger.
       final SchoolDocumentWriter.WriteResult result = documentWriter.write(
-          SchoolSourceType.WEBSITE_PAGE, url, page.title(), page.text(),
-          publishedAtFor(url, updateTimes), List.of(), Visibility.PUBLIC);
+          SchoolSourceType.WEBSITE_PAGE, storedUrl, page.title(), page.text(),
+          publishedAtFor(storedUrl, updateTimes), List.of(), Visibility.PUBLIC);
 
       if (result.changed()) {
         embed(result.document());
         extractEventsFrom(result.document());
         changed++;
-        ingestPdfsLinkedFrom(page);
       }
-      if (!crawler.politePause()) {
-        LOG.info("Website crawl interrupted after {} pages", changed);
-        break;
-      }
+      // Deliberately OUTSIDE the changed() branch. contentHash is computed over the extracted
+      // TEXT, so a page that swaps which PDF it links to without changing a word of its prose
+      // reports UNCHANGED — and this is not a corner case, it is the weekly spelling sheet:
+      // the CMS names uploads by content hash, so a new sheet is a new URL behind link text
+      // that still reads "Year 6 Spring 1 spellings". Gated inside changed(), the first sheet
+      // of the term would be ingested and every later one silently skipped, which presents as
+      // Term Time confidently reciting a month-old spelling list.
+      //
+      // Cheap despite running every crawl: the page HTML is already in hand, and
+      // ingestPdfsLinkedFrom fetches only URLs it has not already stored.
+      ingestPdfsLinkedFrom(page);
     }
     recordSuccess(WEBSITE_SOURCE);
-    LOG.info("Website crawl complete: {} of {} pages changed", changed, urls.size());
+    LOG.info("Website crawl complete: {} of {} pages changed ({} found by following links)",
+        changed, visited, discovered);
     return changed;
   }
 
@@ -285,6 +358,60 @@ public class SchoolIngestService {
   }
 
   /**
+   * Whether links found on this page should be followed.
+   *
+   * <p>Only from the configured extra pages, and so only one hop — the deliberate bound on
+   * discovery, and the thing to think hardest about before relaxing.
+   *
+   * <p>The sitemap is the school's own statement of what its site contains, and it is 218
+   * pages. Following links from all of them would mostly rediscover those 218, plus the long
+   * tail of {@code /school-news/} and {@code /photo-gallery/} that a sitemap-listed page links
+   * on to — at ten seconds a page, as {@code robots.txt} asks. The gap worth closing is
+   * narrower than that and precisely known: the sitemap omits the year-group subtree entirely,
+   * and it is the year pages that link on to home learning, class calendars and the weekly
+   * spelling sheets.
+   *
+   * <p>So the extras are seeds rather than merely additions, and <b>adding a seed is how you
+   * widen the crawl</b> — one configuration change, with the cost visible in the page count,
+   * rather than a depth setting whose cost depends on someone else's markup.
+   *
+   * @param url the page just fetched
+   * @param configuredPages the resolved {@code school.extra-page-urls}
+   * @return true when this page's links should be queued
+   */
+  private boolean shouldFollowLinksFrom(final String url, final Set<String> configuredPages) {
+    return configuredPages.contains(url);
+  }
+
+  /**
+   * Queues the crawlable links found on a page.
+   *
+   * @param page the page just fetched
+   * @param queue the work list to append to
+   * @param seen every URL already queued or crawled, added to here
+   * @return how many new pages were queued
+   */
+  private int enqueueLinksFrom(
+      final SchoolWebsiteCrawler.CrawledPage page, final Deque<String> queue,
+      final Set<String> seen) {
+    int added = 0;
+    for (String link : page.links()) {
+      // Already absolute, http(s) and fragment-free — CrawledPage.links() guarantees that, so
+      // the only questions left here are "may we?" and "have we?".
+      if (!linkFilter.isCrawlableWebsitePage(link) || !seen.add(link)) {
+        continue;
+      }
+      queue.add(link);
+      added++;
+      LOG.debug("Queued {} found on {}", link, page.url());
+    }
+    if (added > 0) {
+      LOG.info("Followed {} link(s) from {}", added, page.url());
+    }
+    return added;
+  }
+
+  /**
    * Ingests the PDFs a page links to.
    *
    * <p>Not optional detail: the school publishes its enrichment timetable, term dates and lunch
@@ -296,6 +423,17 @@ public class SchoolIngestService {
    */
   private void ingestPdfsLinkedFrom(final SchoolWebsiteCrawler.CrawledPage page) {
     for (String pdfUrl : pdfExtractor.findPdfLinks(page.html(), page.url())) {
+      // Already stored, so nothing to re-read. This is what makes running on every crawl
+      // affordable rather than 133 extra fetches a night, each with its own politeness pause.
+      //
+      // The corresponding limit, and it is a real one: a PDF REPLACED at the same URL is never
+      // re-read. Safe against this CMS specifically, which names uploads by content hash so a
+      // replacement always lands on a new URL — but that is a property of their file naming,
+      // not of anything here, and it is the assumption to check first if a stale document ever
+      // shows up in an answer.
+      if (documentWriter.existingPublishedAt(SchoolSourceType.PDF, pdfUrl).isPresent()) {
+        continue;
+      }
       final String text = pdfExtractor.extractText(pdfUrl);
       if (text == null || text.isBlank()) {
         continue;
