@@ -268,6 +268,38 @@ jobs:
           bomfilename: frontend/bom.json
           autocreate: true
 
+      # Trivy emits CycloneDX **1.7** and has no flag to emit anything else, while
+      # Dependency-Track 5.0.3 ingests 1.6 at most and rejects anything newer outright:
+      #   PUT /api/v1/bom -> 400 {"title":"The uploaded BOM is invalid",
+      #                           "detail":"Unrecognized specVersion 1.7"}
+      # (1.7 ingest landed upstream in Dependency-Track 5.1.0, DependencyTrack/
+      # dependency-track#6703; drop this step once production is past that version.)
+      #
+      # This is why the two dependency uploads above have always succeeded while all three
+      # image uploads have 400'd on every run since they were added: `npm run sbom` pins
+      # `--spec-version 1.6` and the Gradle plugin emits 1.6, so only the trivy-generated
+      # BOMs are affected. Every image project in Dependency-Track therefore sat on its last
+      # syft-era BOM - the very data the trivy switch exists to replace - while the run page
+      # showed a green tick.
+      #
+      # The downgrade is lossless for everything Dependency-Track reads. Measured on this
+      # repo's own images: identical component count, identical purls, all
+      # `aquasecurity:trivy:SrcName` properties (the whole reason for using trivy) intact,
+      # dependency graph and the `operating-system` component preserved. The only diff is
+      # the version fields plus dropped empty `dependsOn: []` / `vulnerabilities: []` -
+      # trivy populates no 1.7-only field at all, so nothing is lost in translation.
+      - name: Convert the image SBOMs to CycloneDX 1.6
+        run: |
+          set -euo pipefail
+          for f in backend-image-bom.json frontend-image-bom.json software-factory-image-bom.json; do
+            # The output file keeps the .json extension on purpose: cyclonedx-cli infers the
+            # output *format* from the filename and exits with "Unable to auto-detect output
+            # format from output filename" for anything else.
+            docker run --rm -v "$PWD:/w" cyclonedx/cyclonedx-cli:0.33.1 \
+              convert --input-file "/w/$f" --output-file "/w/converted-$f" --output-version v1_6
+            mv "converted-$f" "$f"
+          done
+
       # An empty or `{}` BOM uploads successfully and reads as "the image has no
       # components", which on the Projects page is indistinguishable from a clean scan -
       # the exact class of silent failure this whole change is about. Fail here instead of
@@ -277,14 +309,18 @@ jobs:
       # rather than next to the generators: a failing step skips every step after it, so
       # asserting earlier would let a trivy hiccup also stale the Maven and npm data it has
       # nothing to do with. Deliberately NOT continue-on-error - stopping the image uploads
-      # is the entire point.
+      # is the entire point. It runs after the conversion above for the same reason: a
+      # conversion that silently emptied a BOM must not reach Dependency-Track either.
       - name: Assert the image SBOMs are not empty
         run: |
           set -euo pipefail
           for f in backend-image-bom.json frontend-image-bom.json software-factory-image-bom.json; do
             [ -s "$f" ] || { echo "::error::$f is missing or empty"; exit 1; }
+            spec=$(jq -r '.specVersion' "$f")
             n=$(jq '[.components[]? | select(.purl)] | length' "$f")
-            echo "$f: $n components with a purl"
+            src=$(jq '[.components[]? | select(.properties[]? | .name == "aquasecurity:trivy:SrcName")] | length' "$f")
+            echo "$f: CycloneDX $spec, $n components with a purl, $src with a trivy SrcName"
+            [ "$spec" = "1.6" ] || { echo "::error::$f declares CycloneDX $spec; Dependency-Track 5.0.3 rejects anything above 1.6"; exit 1; }
             [ "$n" -ge 20 ] || { echo "::error::$f has only $n components with a purl"; exit 1; }
           done
 

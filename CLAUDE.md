@@ -211,6 +211,28 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- sbom-cyclonedx-17-rejected: The three **image** SBOM uploads to Dependency-Track have failed
+  with `400` on **every** Publish run since the trivy switch (#140, 2026-08-31) — and the
+  workflow was green each time, because the `sbom` job is `continue-on-error` and
+  `DependencyTrack/gh-upload-sbom` logs the status code but **not** the response body. The body
+  reads `{"title":"The uploaded BOM is invalid","detail":"Unrecognized specVersion 1.7"}`:
+  trivy 0.74.0 emits **CycloneDX 1.7** with no flag to emit anything older, and
+  Dependency-Track **5.0.3** ingests 1.6 at most (1.7 landed upstream in **5.1.0**, released
+  2026-08-27). The two *dependency* SBOMs were never affected — `npm run sbom` pins
+  `--spec-version 1.6` and the Gradle plugin emits 1.6 — which is exactly why the failure read
+  as a partial blip rather than a broken feature. Cost: the three `-image` projects served their
+  last **syft-era** BOM from 2026-08-31 09:59 for ten days, so everything 043 says about OS
+  package coverage was true and none of it was reaching production. Fixed with a
+  `cyclonedx/cyclonedx-cli convert --output-version v1_6` step in `publish.yml` before the
+  uploads: measured lossless on this repo's own images (same component count, same purls, all
+  `aquasecurity:trivy:SrcName` properties, same dependency graph and `operating-system`
+  component — trivy populates no 1.7-only field), and the "not empty" assertion now also fails
+  the job unless each BOM declares `1.6`. Two things worth keeping: the temp file in that step
+  **must** keep a `.json` extension (cyclonedx-cli infers the output format from the filename
+  and otherwise exits `Unable to auto-detect output format`), and the conversion sits *after*
+  the two dependency uploads for the same reason the assertion does — a trivy-side failure must
+  not stale the Maven and npm data it has nothing to do with. Drop the step once production is
+  on Dependency-Track >= 5.1.0. See `docs/runbooks/dependency-track.md` ("CycloneDX 1.7").
 - 047-term-time: **Term Time**, a school assistant at `simonrowe.dev/school` for Kilmorie Primary
   School (Lewisham — spelled Kilmor**ie**), `com.simonrowe.school`. Public tier over the school's
   own published data, restricted tier over the school mailbox that is **unreachable from the browser** — the page has
