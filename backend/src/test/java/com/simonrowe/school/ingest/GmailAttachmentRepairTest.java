@@ -43,7 +43,10 @@ class GmailAttachmentRepairTest {
 
   private static final String MESSAGE_ID = "msg-1";
   private static final String ATTACHMENT_ID = "att-1";
-  private static final String SOURCE_REF = "gmail:" + MESSAGE_ID + ":" + ATTACHMENT_ID;
+  private static final String FILENAME = "year-6-homework-books.pdf";
+  // Keyed on the FILENAME, never on ATTACHMENT_ID — Gmail mints a new attachment id per
+  // messages.get, so keying on it made the document id churn and every sync mint a duplicate.
+  private static final String SOURCE_REF = "gmail:" + MESSAGE_ID + ":" + FILENAME;
   private static final String PDF_ID =
       SchoolIds.documentId(SchoolSourceType.PDF, SOURCE_REF);
   private static final byte[] BYTES =
@@ -115,6 +118,32 @@ class GmailAttachmentRepairTest {
   }
 
   @Test
+  @DisplayName("the source reference never contains the volatile Gmail attachment id")
+  void refIsKeyedOnTheFilename() {
+    final GmailMessage.Attachment attachment =
+        new GmailMessage.Attachment(FILENAME, ATTACHMENT_ID, "application/pdf", 1024);
+
+    assertThat(GmailIngestService.attachmentRef(MESSAGE_ID, attachment))
+        .isEqualTo(SOURCE_REF)
+        .doesNotContain(ATTACHMENT_ID);
+  }
+
+  @Test
+  @DisplayName("a blank filename falls back to the size rather than an empty key")
+  void blankFilenameStillProducesDistinctRef() {
+    // Legal on a part declaring application/pdf. An empty tail would collide across every
+    // such attachment on the message and collapse them onto one document.
+    final GmailMessage.Attachment first =
+        new GmailMessage.Attachment("", ATTACHMENT_ID, "application/pdf", 1024);
+    final GmailMessage.Attachment second =
+        new GmailMessage.Attachment("", "att-2", "application/pdf", 2048);
+
+    assertThat(GmailIngestService.attachmentRef(MESSAGE_ID, first))
+        .isNotEqualTo(GmailIngestService.attachmentRef(MESSAGE_ID, second))
+        .endsWith("1024");
+  }
+
+  @Test
   @DisplayName("the id the presence check uses is the one the store writes under")
   void presenceCheckUsesTheStoredId() throws Exception {
     when(attachmentStore.has(PDF_ID)).thenReturn(false);
@@ -136,7 +165,7 @@ class GmailAttachmentRepairTest {
         Instant.parse("2026-09-08T09:00:00Z"),
         "Please see the attached letter.",
         List.of(new GmailMessage.Attachment(
-            "year-6-homework-books.pdf", ATTACHMENT_ID, "application/pdf", 1024)),
+            FILENAME, ATTACHMENT_ID, "application/pdf", 1024)),
         List.of());
   }
 
@@ -151,7 +180,7 @@ class GmailAttachmentRepairTest {
 
   private SchoolDocument pdf() {
     return new SchoolDocument(
-        PDF_ID, SchoolSourceType.PDF, SOURCE_REF, "year-6-homework-books.pdf",
+        PDF_ID, SchoolSourceType.PDF, SOURCE_REF, FILENAME,
         "Year 6 homework books", Instant.parse("2026-09-08T09:00:00Z"),
         Instant.parse("2026-09-08T09:05:00Z"), Visibility.PUBLIC, Visibility.PUBLIC, "approved",
         "simon", Instant.parse("2026-09-08T10:00:00Z"), false, List.of(), "hash", null);
