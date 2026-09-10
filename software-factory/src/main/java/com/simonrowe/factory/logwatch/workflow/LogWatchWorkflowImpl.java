@@ -339,7 +339,13 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
                 request.resolveAfter(),
                 runId,
                 workflowId,
-                LogWatchReportRenderer.resolutionComment(request.resolveAfter(), runId)));
+                LogWatchReportRenderer.resolutionComment(request.resolveAfter(), runId),
+                // A dry run still calls through rather than short-circuiting here: the sink
+                // reports what it WOULD close and writes nothing, and a preview that silently
+                // skips half the run is not a preview. It must be the request's own flag, not
+                // the sink's configured one — the console's "Dry run scan" answers "nothing will
+                // be filed" and has to mean it on a stack where the sink is configured to write.
+                request.dryRun()));
 
     for (SweptIssue swept : report.resolved()) {
       if (swept.issueUrl() != null) {

@@ -207,7 +207,7 @@ class IssueResolverTest {
   }
 
   @Test
-  @DisplayName("a dry run reports what it would close and writes nothing to Linear")
+  @DisplayName("a configured dry run reports what it would close and writes nothing to Linear")
   void dryRunChangesNothing() {
     properties = properties(true);
     LinearIssueRecord quiet = record("boom", NOW.minus(Duration.ofDays(9)));
@@ -220,6 +220,38 @@ class IssueResolverTest {
     assertThat(report.resolved()).hasSize(1);
     verify(gateway, never()).addComment(anyString(), anyString());
     verify(gateway, never()).updateIssue(anyString(), any(), anyString());
+  }
+
+  /**
+   * The two dry-run flags are independent, and only one of them is set on the path that matters.
+   * A manual "Dry run scan" from the console answers "nothing will be filed" while the sink is
+   * configured — correctly — to write on every other run. Consulting only
+   * {@code factory.linear.dry-run} makes that answer a lie, and the lie is a real ticket moved to
+   * Done with a real comment on it.
+   */
+  @Test
+  @DisplayName("a request-level dry run writes nothing even when the sink is configured to write")
+  void requestDryRunChangesNothingWithTheSinkLive() {
+    properties = properties(false);
+    LinearIssueRecord quiet = record("boom", NOW.minus(Duration.ofDays(9)));
+    when(records.findByProducerOrderByLastSeenAtDesc(PRODUCER)).thenReturn(List.of(quiet));
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(open(quiet.issueId(), IssueStateType.TRIAGE)));
+
+    SweepReport report =
+        resolver()
+            .sweep(
+                new AbsenceSweep(
+                    PRODUCER, QUIET_FOR, "run-9", "logwatch-manual", "no longer seen", true));
+
+    assertThat(report.resolved()).hasSize(1);
+    verify(gateway, never()).addComment(anyString(), anyString());
+    verify(gateway, never()).updateIssue(anyString(), any(), anyString());
+
+    ArgumentCaptor<LinearIssueRecord> saved = ArgumentCaptor.forClass(LinearIssueRecord.class);
+    verify(records).save(saved.capture());
+    assertThat(saved.getValue().decisions()).last().extracting(
+        com.simonrowe.factory.linear.persistence.LinearIssueDecision::dryRun).isEqualTo(true);
   }
 
   /**
@@ -269,7 +301,8 @@ class IssueResolverTest {
   }
 
   private static AbsenceSweep sweep() {
-    return new AbsenceSweep(PRODUCER, QUIET_FOR, "run-9", "logwatch-nightly", "no longer seen");
+    return new AbsenceSweep(
+        PRODUCER, QUIET_FOR, "run-9", "logwatch-nightly", "no longer seen", false);
   }
 
   private static LinearIssueRecord record(final String key, final Instant lastSeen) {

@@ -110,6 +110,12 @@ public class IssueResolver {
    */
   public SweepReport sweep(final AbsenceSweep sweep) {
     Instant now = clock.instant();
+    // EITHER flag suppresses the write, and both are needed. `factory.linear.dry-run` is the
+    // sink's own standing configuration; `sweep.dryRun()` is one caller asking for a preview on
+    // one run — the console's "Dry run scan" button, whose API response promises that nothing
+    // will be filed. Consulting only the configured flag makes that promise a lie on a stack
+    // where the sink is (correctly) configured to write.
+    boolean preview = sweep.dryRun() || properties.dryRun();
     Instant cutoff = now.minus(sweep.quietFor());
 
     // Ordered newest-first by the repository, so the candidates are the tail. Iterating the whole
@@ -170,7 +176,7 @@ public class IssueResolver {
         continue;
       }
 
-      if (properties.dryRun()) {
+      if (preview) {
         log.info("Dry run: would close {} as no longer reported", subject.identifier());
       } else {
         // Comment first, then close. The other order leaves a window in which the ticket is
@@ -192,7 +198,7 @@ public class IssueResolver {
                       sweep.occurrenceId(),
                       sweep.workflowId(),
                       "No longer reported; quiet since " + record.lastSeenAt(),
-                      properties.dryRun()),
+                      preview),
                   // lastSeenAt is deliberately NOT advanced to now. It means "when this problem
                   // was last observed", and the sweep observed its absence. Advancing it would
                   // reset the quiet clock and, worse, make the record claim the problem was

@@ -406,6 +406,26 @@ class LogWatchWorkflowTest {
     order.verify(linear).sweepResolved(any());
   }
 
+  /**
+   * A manual dry-run scan answers "nothing will be filed" in its API response. The sweep still
+   * runs — a preview that silently skips half the run is not a preview — but it must carry the
+   * REQUEST's dry-run flag, not rely on the sink's configured one, or that answer is a lie on
+   * every production stack.
+   */
+  @Test
+  @DisplayName("a dry-run scan previews the sweep, and says so in the request")
+  void dryRunStillPreviewsTheSweep() {
+    when(activities.observe(any(), any()))
+        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0));
+    when(linear.sweepResolved(any())).thenReturn(SweepReport.none());
+
+    workflow.run(request(true));
+
+    ArgumentCaptor<AbsenceSweep> sweep = ArgumentCaptor.forClass(AbsenceSweep.class);
+    verify(linear).sweepResolved(sweep.capture());
+    assertThat(sweep.getValue().dryRun()).isTrue();
+  }
+
   @Test
   @DisplayName("the sweep is scoped to log watch, never to another producer")
   void sweepsOnlyItsOwnProducer() {
@@ -420,6 +440,7 @@ class LogWatchWorkflowTest {
     assertThat(sweep.getValue().producer()).isEqualTo("logwatch");
     assertThat(sweep.getValue().quietFor()).isEqualTo(QUIET_FOR);
     assertThat(sweep.getValue().comment()).contains("has not appeared in a log scan for 7 day(s)");
+    assertThat(sweep.getValue().dryRun()).isFalse();
   }
 
   private LogWatchRequest request(final boolean dryRun) {

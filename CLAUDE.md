@@ -301,6 +301,15 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     without one reports `SweepReport.unavailable` rather than silence — "nothing was closed" and
     "nothing *can* be closed" must not present identically. A state literally named `Done` always
     wins over board order.
+  - **A dry run needs BOTH dry-run flags, and only one of them was there.** The sweep is not
+    short-circuited on a dry run — it calls through so the sink can report what it *would* close,
+    because a preview that skips half the run is not a preview — but `IssueResolver` originally
+    gated the write on `factory.linear.dry-run` alone. That is the sink's *standing* posture, not
+    the *request's*, so a manual "Dry run scan" from the console answered "nothing will be filed"
+    in its API response and then moved real tickets to Done with real comments on them, on any
+    stack where the sink is (correctly) configured to write. `AbsenceSweep.dryRun` now carries the
+    request-level flag and the sink honours whichever of the two is set. Caught by the reviewer
+    bot on #161, not by any test — every test set the two flags together.
   - **Stub `sweepResolved` in every workflow test, not just the sweep ones.** An unstubbed Mockito
     mock returns null, the workflow NPEs, and Temporal retries a failed *workflow task*
     indefinitely — so the symptom is a test that hangs forever rather than one that fails.

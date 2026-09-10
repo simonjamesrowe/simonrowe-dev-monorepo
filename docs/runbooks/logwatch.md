@@ -294,7 +294,15 @@ Do not shorten `resolve-after` much. A problem on a weekly cadence would then be
 re-filed every week, which is the duplicate-ticket disease 046 exists to cure.
 
 `factory.linear.dry-run` and a dry-run scan both preview it: the report says what *would* close
-and nothing is written.
+and nothing is written. **Two independent flags, and both are needed.** The configured one is the
+sink's standing posture; the request-level one is a single caller asking for a preview, which is
+what the console's "Dry run scan" button sends. `AbsenceSweep.dryRun` carries the second, and the
+sink honours whichever is set — omitting it was a real bug caught in review on #161, where a
+manual dry-run scan answered "nothing will be filed" and then closed real tickets, because only
+the configured flag was consulted.
+
+The sweep deliberately still *runs* on a dry run rather than being short-circuited in the
+workflow: a preview that silently skips half the run is not a preview.
 
 ### When it closes nothing
 

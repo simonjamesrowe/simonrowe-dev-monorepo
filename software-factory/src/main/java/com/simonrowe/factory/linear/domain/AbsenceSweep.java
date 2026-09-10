@@ -27,11 +27,19 @@ import java.time.Duration;
  * @param occurrenceId the producing run id, recorded in the audit trail
  * @param workflowId the producing workflow id, recorded in the audit trail
  * @param comment posted on each issue as it is closed, so the close is never unexplained
+ * @param dryRun when true, report what would be closed and write nothing. <b>Request-level</b>,
+ *     and separate from the sink's own {@code factory.linear.dry-run} configuration: a producer
+ *     can be asked for a preview on one run while the sink is configured to write on every other,
+ *     which is exactly what the console's "Dry run scan" button does. The sink honours whichever
+ *     of the two is set. Omitting it was a real bug caught in review — a manual dry-run scan
+ *     answered "nothing will be filed" and then closed real tickets, because only the global flag
+ *     was consulted
  */
 public record AbsenceSweep(
     String producer,
     Duration quietFor,
     String occurrenceId,
     String workflowId,
-    String comment) {
+    String comment,
+    boolean dryRun) {
 }
