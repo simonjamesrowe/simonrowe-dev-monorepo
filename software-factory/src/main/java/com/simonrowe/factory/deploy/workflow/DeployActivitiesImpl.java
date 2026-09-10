@@ -136,7 +136,16 @@ public class DeployActivitiesImpl implements DeployActivities {
                 null,
                 Trigger.DEPLOY,
                 false,
-                linearFilingEnabled));
+                linearFilingEnabled,
+                // Never sweeps. A post-deploy scan covers roughly five minutes, which is far too
+                // narrow to conclude that anything has STOPPED happening - almost every known
+                // problem is absent from a five-minute window simply because five minutes is
+                // short. Letting this run the absence sweep would close most of the backlog after
+                // every deploy. LogWatchWorkflowImpl enforces the same rule structurally by
+                // window length; this says it at the call site too, because the reason lives
+                // here.
+                false,
+                null));
     LOG.info("Scheduled post-deploy log scan {} for deploy run {}",
         execution.getWorkflowId(), deployRunId);
     return execution.getWorkflowId();

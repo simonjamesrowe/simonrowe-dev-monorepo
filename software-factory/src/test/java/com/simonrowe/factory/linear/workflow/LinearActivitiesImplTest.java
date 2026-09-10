@@ -16,6 +16,7 @@ import com.simonrowe.factory.linear.domain.TrackedIssue;
 import com.simonrowe.factory.linear.linear.LinearApiException;
 import com.simonrowe.factory.linear.linear.LinearGateway;
 import com.simonrowe.factory.linear.service.IssueFiler;
+import com.simonrowe.factory.linear.service.IssueResolver;
 import io.temporal.failure.ApplicationFailure;
 import java.time.Instant;
 import java.util.List;
@@ -27,8 +28,10 @@ class LinearActivitiesImplTest {
   private static final String TITLE = "Guidance pull request";
 
   private final IssueFiler filer = mock(IssueFiler.class);
+  private final IssueResolver resolver = mock(IssueResolver.class);
   private final LinearGateway gateway = mock(LinearGateway.class);
-  private final LinearActivitiesImpl activities = new LinearActivitiesImpl(filer, gateway);
+  private final LinearActivitiesImpl activities =
+      new LinearActivitiesImpl(filer, resolver, gateway);
 
   private static IssueFiling filing() {
     return new IssueFiling("deploy", List.of("recreate", "backend"), "t", "b", "d", "run-1", "w");

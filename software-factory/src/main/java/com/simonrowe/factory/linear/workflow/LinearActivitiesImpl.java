@@ -1,11 +1,14 @@
 package com.simonrowe.factory.linear.workflow;
 
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.linear.domain.AbsenceSweep;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.domain.SweepReport;
 import com.simonrowe.factory.linear.linear.LinearApiException;
 import com.simonrowe.factory.linear.linear.LinearGateway;
 import com.simonrowe.factory.linear.service.IssueFiler;
+import com.simonrowe.factory.linear.service.IssueResolver;
 import io.temporal.failure.ApplicationFailure;
 import io.temporal.spring.boot.ActivityImpl;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,15 +30,20 @@ import org.springframework.stereotype.Component;
 public class LinearActivitiesImpl implements LinearActivities {
 
   private final IssueFiler filer;
+  private final IssueResolver resolver;
   private final LinearGateway gateway;
 
   /**
    * Creates the activity implementation.
    *
-   * @param filer the orchestration this activity is a thin shell over
+   * @param filer the filing orchestration this activity is a thin shell over
+   * @param resolver the absence-sweep orchestration
+   * @param gateway the Linear API, used directly by {@link #attachUrl}
    */
-  public LinearActivitiesImpl(final IssueFiler filer, final LinearGateway gateway) {
+  public LinearActivitiesImpl(
+      final IssueFiler filer, final IssueResolver resolver, final LinearGateway gateway) {
     this.filer = filer;
+    this.resolver = resolver;
     this.gateway = gateway;
   }
 
@@ -52,6 +60,19 @@ public class LinearActivitiesImpl implements LinearActivities {
       // unparseable Linear response) carry a wrapped IOException that a triager needs to see.
       throw ApplicationFailure.newNonRetryableFailureWithCause(
           exception.getMessage(), "LINEAR_API_ERROR", exception, filing.producer());
+    }
+  }
+
+  @Override
+  public SweepReport sweepResolved(final AbsenceSweep sweep) {
+    try {
+      return resolver.sweep(sweep);
+    } catch (LinearApiException exception) {
+      if (exception.retryable()) {
+        throw exception;
+      }
+      throw ApplicationFailure.newNonRetryableFailureWithCause(
+          exception.getMessage(), "LINEAR_API_ERROR", exception, sweep.producer());
     }
   }
 

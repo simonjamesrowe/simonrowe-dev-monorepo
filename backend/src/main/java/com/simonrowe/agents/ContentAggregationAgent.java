@@ -1,7 +1,5 @@
 package com.simonrowe.agents;
 
-import com.embabel.agent.api.annotation.Action;
-import com.embabel.agent.api.annotation.Agent;
 import com.embabel.agent.api.common.Ai;
 import com.simonrowe.agents.scrapers.ScrapedContent;
 import com.simonrowe.agents.scrapers.ScraperFactory;
@@ -25,12 +23,39 @@ import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
-@Agent(
-    name = "ContentAggregation",
-    description = "Scrapes external content sources, classifies items "
-        + "using an LLM, and stores articles and events locally"
-)
+/**
+ * Scrapes the active external content sources, classifies each item with an LLM
+ * and stores the resulting articles and events locally.
+ *
+ * <p><b>A plain Spring bean, despite the name.</b> This class carried Embabel's
+ * {@code @Agent} and {@code @Action} annotations, and never used them: every
+ * caller ({@code AggregationScheduler}, {@code AdminAggregationController},
+ * {@code ContentSourceBackfill}) invokes these methods directly on the injected
+ * bean, and nothing in this application asks Embabel's planner to reach a goal.
+ * Because {@code @Agent} declared an agent with no {@code @AchievesGoal}
+ * anywhere on it, Embabel's {@code DefaultAgentValidationManager} logged
+ *
+ * <pre>MISSING_GOALS: Agent 'ContentAggregation' must have at least one goal defined</pre>
+ *
+ * at <b>ERROR</b> on every single boot, alongside the identical complaint about
+ * {@link WeeklyDigestAgent} — filed by the log-watch module as SIM-27. An agent
+ * with no goal can never be planned or executed, so the annotation was provably
+ * decorative; the fix is to stop claiming to be an agent rather than to invent a
+ * goal for a planner nothing invokes. The two {@code @Action} methods were also
+ * two unrelated entry points rather than steps in one plan, which is the shape
+ * of a service and not of an agent.
+ *
+ * <p>{@code @Component} is explicit here because {@code @Agent} was itself
+ * meta-annotated {@code @Component} — dropping it without this would have
+ * removed the bean and broken constructor injection at startup.
+ *
+ * <p>Note the inline LLM calls are unaffected: {@link ArticleSectionWriter},
+ * {@link DigestComposer} and {@code SchoolEventExtractor} all inject Embabel's
+ * {@link Ai} the same way from plain {@code @Component}s.
+ */
+@Component
 public class ContentAggregationAgent {
 
   private static final Logger log =
@@ -97,7 +122,7 @@ public class ContentAggregationAgent {
     this.shortLinkService = shortLinkService;
   }
 
-  @Action(description = "Import a single article or event from a URL")
+  /** Imports a single article or event from a URL. */
   public String importFromUrl(final String url) {
     String normalizedUrl = normalizeUrl(url);
     boolean alreadyExists =
@@ -152,7 +177,7 @@ public class ContentAggregationAgent {
     }
   }
 
-  @Action(description = "Aggregate content from all active sources")
+  /** Aggregates content from every active source. */
   public void runAggregation() {
     List<ContentSource> sources = sourceRepository.findByActiveTrue();
     log.info(

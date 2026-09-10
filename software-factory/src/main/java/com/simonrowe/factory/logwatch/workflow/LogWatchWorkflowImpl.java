@@ -1,9 +1,12 @@
 package com.simonrowe.factory.logwatch.workflow;
 
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
+import com.simonrowe.factory.linear.domain.AbsenceSweep;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingMode;
 import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.domain.SweepReport;
+import com.simonrowe.factory.linear.domain.SweptIssue;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import com.simonrowe.factory.logwatch.config.LogWatchTaskQueues;
 import com.simonrowe.factory.logwatch.domain.LogSignature;
@@ -41,6 +44,21 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
   private static final String SOURCE_HEALTH_KEY = "source-health";
 
   private static final Duration DEFAULT_WINDOW = Duration.ofHours(24);
+
+  /**
+   * The shortest window a scan may draw a conclusion about <em>absence</em> from.
+   *
+   * <p>One hour, matching the floor the source-health check already applies to container
+   * coverage, and for the same reason: over a short window an idle stack and a healthy one are
+   * indistinguishable. The post-deploy trigger scans about five minutes, in which almost every
+   * known problem is absent purely because five minutes is short — sweeping there would close
+   * most of the backlog after every single deploy.
+   *
+   * <p>Structural rather than left to callers. The post-deploy path also passes
+   * {@code resolveWhenClear = false} explicitly, but a future trigger added by someone who has
+   * not read that comment gets the safe behaviour without having to ask for it.
+   */
+  private static final Duration MINIMUM_SWEEP_WINDOW = Duration.ofHours(1);
 
   private static final RetryOptions NETWORK_RETRIES =
       RetryOptions.newBuilder()
@@ -80,6 +98,7 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
         request.windowStart() == null ? to.minus(DEFAULT_WINDOW) : request.windowStart();
 
     List<String> issueUrls = new ArrayList<>();
+    List<String> resolvedUrls = new ArrayList<>();
     try {
       current =
           new LogWatchProgress(
@@ -92,7 +111,7 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
 
       if (!observation.sourceHealth().usable()) {
         return handleUnusableSource(request, observation, workflowId, runId, startedAt, from, to,
-            issueUrls);
+            issueUrls, resolvedUrls);
       }
 
       current =
@@ -103,12 +122,17 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
               observation.signatures().size());
 
       if (observation.signatures().isEmpty()) {
+        // A clean scan is exactly when the sweep is most useful, so it runs on this path too and
+        // not only after filing. This is the shape of the run that closes the last open ticket.
+        String swept =
+            sweepResolved(request, observation, from, to, runId, workflowId, resolvedUrls);
         String detail =
             "No signature met the minimum occurrence threshold. Source health: "
-                + observation.sourceHealth().evidence();
+                + observation.sourceHealth().evidence()
+                + swept;
         current = new LogWatchProgress(LogWatchPhase.DONE, detail, 0);
         return finish(request, observation, LogWatchStatus.NO_FINDINGS, workflowId, runId,
-            startedAt, from, to, issueUrls, detail);
+            startedAt, from, to, issueUrls, detail, resolvedUrls);
       }
 
       current =
@@ -123,11 +147,16 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
         fileSignature(request, signature, from, to, runId, workflowId, issueUrls);
       }
 
-      String detail = describeOutcome(request, observation);
+      // AFTER filing, never before. Every filing above advances that fingerprint's lastSeenAt,
+      // and the sweep's entire input is which fingerprints are stale — running it first would
+      // consider this scan's own findings absent and close the tickets it was about to update.
+      String swept =
+          sweepResolved(request, observation, from, to, runId, workflowId, resolvedUrls);
+      String detail = describeOutcome(request, observation) + swept;
       current =
           new LogWatchProgress(LogWatchPhase.DONE, detail, observation.signatures().size());
       return finish(request, observation, LogWatchStatus.COMPLETED, workflowId, runId, startedAt,
-          from, to, issueUrls, detail);
+          from, to, issueUrls, detail, resolvedUrls);
 
     } catch (RuntimeException exception) {
       String detail = safeMessage(exception);
@@ -141,7 +170,7 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
               List.of(), 0, false, 0, 0);
       try {
         finish(request, empty, LogWatchStatus.FAILED, workflowId, runId, startedAt, from, to,
-            issueUrls, detail);
+            issueUrls, detail, resolvedUrls);
       } catch (RuntimeException recordFailure) {
         Workflow.getLogger(LogWatchWorkflowImpl.class)
             .warn("Could not record failed log-watch scan", recordFailure);
@@ -175,7 +204,8 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
       final Instant startedAt,
       final Instant from,
       final Instant to,
-      final List<String> issueUrls) {
+      final List<String> issueUrls,
+      final List<String> resolvedUrls) {
 
     SourceHealth health = observation.sourceHealth();
     String detail = "Source is not usable (" + health.status() + "): " + health.evidence();
@@ -198,9 +228,15 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
       }
     }
 
+    // Deliberately NO sweep on this path, and this is the single most important line in the
+    // feature. An unusable source produces zero signatures for the same reason a fixed
+    // production does: nothing came back. Sweeping here would read "Grafana Cloud stopped
+    // accepting logs" as "every problem is fixed" and close the entire backlog — including the
+    // ticket this method just filed to say the module cannot see. Same reasoning as the module's
+    // founding rule that an empty read is not a clean read.
     current = new LogWatchProgress(LogWatchPhase.DONE, detail, 0);
     return finish(request, observation, LogWatchStatus.SOURCE_UNHEALTHY, workflowId, runId,
-        startedAt, from, to, issueUrls, detail);
+        startedAt, from, to, issueUrls, detail, resolvedUrls);
   }
 
   private void fileSignature(
@@ -239,6 +275,102 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
     }
   }
 
+  /**
+   * Closes the tickets this module filed for problems it no longer sees.
+   *
+   * <p>An automated factory that only ever opens tickets is half an automation: the backlog grows
+   * monotonically and a human has to close each entry by hand once they notice the problem is
+   * gone. This is the other half.
+   *
+   * <p><strong>Four conditions must hold, and each of them is a way this could close a ticket
+   * about a problem that is still happening.</strong> They are checked here, in the producer,
+   * rather than in the sink, because only the producer knows whether its own observation was
+   * complete — the sink cannot tell a quiet stack from a blind one.
+   *
+   * <ol>
+   *   <li><b>The source was healthy.</b> Enforced by where this is called from: never on the
+   *       {@code SOURCE_UNHEALTHY} path. Without it, an ingest outage reads as universal success.
+   *   <li><b>The read was not truncated.</b> A read that hit its line budget examined an unknown
+   *       part of the window, so any signature it missed is missing for want of looking.
+   *   <li><b>The window is long enough to mean anything.</b> See
+   *       {@link #MINIMUM_SWEEP_WINDOW}.
+   *   <li><b>Nothing was dropped by the per-run cap.</b> This is the subtle one. The cap
+   *       (default five) limits how many signatures are <em>filed</em>, not how many were
+   *       <em>seen</em> — so with six live problems the sixth never reaches the sink, its
+   *       {@code lastSeenAt} never advances, and it would look exactly like a problem that had
+   *       stopped. That makes a busy stack close tickets about its own busiest failures. It also
+   *       means the sweep is inert while the backlog is over the cap and comes into effect as the
+   *       backlog shrinks, which is the right way round.
+   * </ol>
+   *
+   * <p>A dry run still calls through: {@code factory.linear.dry-run} makes the sink report what it
+   * would close without writing, and a preview that silently skips half the run is not a preview.
+   *
+   * @return a sentence to append to the run detail, empty when nothing was swept
+   */
+  private String sweepResolved(
+      final LogWatchRequest request,
+      final ScanObservation observation,
+      final Instant from,
+      final Instant to,
+      final String runId,
+      final String workflowId,
+      final List<String> resolvedUrls) {
+
+    if (!request.resolveWhenClear() || !request.linearFilingEnabled()) {
+      return "";
+    }
+    if (Duration.between(from, to).compareTo(MINIMUM_SWEEP_WINDOW) < 0) {
+      return "";
+    }
+    if (observation.truncated()) {
+      return "; the read was truncated, so no ticket was closed as resolved";
+    }
+    if (observation.signaturesDropped() > 0) {
+      return "; the per-run cap dropped "
+          + observation.signaturesDropped()
+          + " signature(s), so no ticket was closed as resolved";
+    }
+
+    SweepReport report =
+        linear.sweepResolved(
+            new AbsenceSweep(
+                PRODUCER,
+                request.resolveAfter(),
+                runId,
+                workflowId,
+                LogWatchReportRenderer.resolutionComment(request.resolveAfter(), runId),
+                // A dry run still calls through rather than short-circuiting here: the sink
+                // reports what it WOULD close and writes nothing, and a preview that silently
+                // skips half the run is not a preview. It must be the request's own flag, not
+                // the sink's configured one — the console's "Dry run scan" answers "nothing will
+                // be filed" and has to mean it on a stack where the sink is configured to write.
+                request.dryRun()));
+
+    for (SweptIssue swept : report.resolved()) {
+      if (swept.issueUrl() != null) {
+        resolvedUrls.add(swept.issueUrl());
+      }
+    }
+
+    if (report.unavailable()) {
+      return "; "
+          + report.considered()
+          + " ticket(s) look resolved but the Linear team has no Done state to close them into";
+    }
+    if (report.resolved().isEmpty()) {
+      return report.skippedStarted() > 0
+          ? "; " + report.skippedStarted()
+              + " ticket(s) look resolved but someone is working on them"
+          : "";
+    }
+    return "; closed "
+        + report.resolved().size()
+        + " ticket(s) no longer reported ("
+        + String.join(", ", report.resolved().stream().map(SweptIssue::issueIdentifier).toList())
+        + ")";
+  }
+
   private String describeOutcome(
       final LogWatchRequest request, final ScanObservation observation) {
     StringBuilder detail = new StringBuilder();
@@ -268,7 +400,8 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
       final Instant from,
       final Instant to,
       final List<String> issueUrls,
-      final String detail) {
+      final String detail,
+      final List<String> resolvedUrls) {
 
     activities.recordRun(
         new LogWatchRunRecord(
@@ -288,7 +421,8 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
             observation.sourceHealth().status(),
             observation.sourceHealth().evidence(),
             issueUrls,
-            detail));
+            detail,
+            resolvedUrls));
 
     return new LogWatchResult(
         status,
@@ -299,7 +433,8 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
         observation.signaturesDropped(),
         observation.truncated(),
         issueUrls,
-        detail);
+        detail,
+        resolvedUrls);
   }
 
   private static String safeMessage(final RuntimeException exception) {

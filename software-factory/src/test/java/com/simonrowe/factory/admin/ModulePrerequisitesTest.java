@@ -199,7 +199,7 @@ class ModulePrerequisitesTest {
         new LinearProperties(
             linear, linearApiKey, null, linearTeamKey, null, false, null, null),
         new PlatformBackupProperties(backup, backupScript, null, null),
-        new LogWatchProperties(false, 0, 0, null, 0, 0, null, null));
+        new LogWatchProperties(false, 0, 0, null, 0, 0, null, null, null, null));
   }
 
   private ModulePrerequisites deployPrerequisites(
@@ -211,7 +211,7 @@ class ModulePrerequisitesTest {
         deployProperties(enabled, triggerEnabled, script),
         new LinearProperties(false, null, null, null, null, false, null, null),
         new PlatformBackupProperties(false, null, null, null),
-        new LogWatchProperties(false, 0, 0, null, 0, 0, null, null));
+        new LogWatchProperties(false, 0, 0, null, 0, 0, null, null, null, null));
   }
 
   private static DeployProperties deployProperties(

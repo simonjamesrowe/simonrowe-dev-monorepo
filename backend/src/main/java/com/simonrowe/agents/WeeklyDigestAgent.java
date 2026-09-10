@@ -1,7 +1,5 @@
 package com.simonrowe.agents;
 
-import com.embabel.agent.api.annotation.Action;
-import com.embabel.agent.api.annotation.Agent;
 import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.blog.Blog;
@@ -23,6 +21,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 /**
  * Builds the weekly digest from the news articles favourited in the last
@@ -31,12 +30,32 @@ import org.springframework.beans.factory.annotation.Value;
  * <p>The window is fixed rather than measured from the last digest, so a
  * skipped run loses that week's items rather than rolling them forward. That
  * is deliberate: it keeps the job stateless.
+ *
+ * <p><b>A plain Spring bean, despite the name.</b> This class carried Embabel's
+ * {@code @Agent} and {@code @Action} annotations, and never used them: every
+ * caller ({@code AggregationScheduler}, {@code AdminAggregationController})
+ * invokes {@link #generateDigest()} directly on the injected bean, and nothing
+ * in this application asks Embabel's planner to reach a goal. Because
+ * {@code @Agent} declared an agent with no {@code @AchievesGoal} anywhere on it,
+ * Embabel's {@code DefaultAgentValidationManager} logged
+ *
+ * <pre>MISSING_GOALS: Agent 'WeeklyDigest' must have at least one goal defined</pre>
+ *
+ * at <b>ERROR</b> on every single boot, alongside the identical complaint about
+ * {@code ContentAggregationAgent} — filed by the log-watch module as SIM-27. An
+ * agent with no goal can never be planned or executed, so the annotation was
+ * provably decorative; the fix is to stop claiming to be an agent rather than to
+ * invent a goal for a planner nothing invokes.
+ *
+ * <p>{@code @Component} is explicit here because {@code @Agent} was itself
+ * meta-annotated {@code @Component} — dropping it without this would have
+ * removed the bean and broken constructor injection at startup.
+ *
+ * <p>Note the inline LLM calls are unaffected: {@link ArticleSectionWriter},
+ * {@link DigestComposer} and {@code SchoolEventExtractor} all inject Embabel's
+ * {@code Ai} the same way from plain {@code @Component}s.
  */
-@Agent(
-    name = "WeeklyDigest",
-    description = "Generates a weekly digest blog post summarising the news "
-        + "articles favourited over the past week"
-)
+@Component
 public class WeeklyDigestAgent {
 
   private static final Logger log =
@@ -92,7 +111,6 @@ public class WeeklyDigestAgent {
   }
 
   /** Generates and publishes the digest, or logs why it did not. */
-  @Action(description = "Generate a digest blog post")
   public void generateDigest() {
     Instant now = Instant.now();
     Instant duplicateCutoff =

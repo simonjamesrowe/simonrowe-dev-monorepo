@@ -33,6 +33,45 @@ software-factory workspace (disposable), the Dependency-Track Lucene index
 
 ---
 
+## 0. It had never run at all (fixed 2026-09-10)
+
+Before reading anything below, know that from the day 034 shipped until this fix, **every single
+nightly platform backup failed**, and no Langfuse, Dependency-Track or Temporal capture ever
+reached Google Drive. The whole of section 1 would have shown an empty archive list, and it was
+not a Drive problem, a credential problem or a ClickHouse problem.
+
+`backup-platform.sh` runs in the `deployer` container, which is a second instance of the
+software-factory image. That image installed `ca-certificates git curl jq` and nothing else,
+while the script's `check_prerequisites()` requires `python3` (all of its JSON handling: the
+manifest, the ClickHouse row counts, every Drive API response) and `zip` (the archive itself).
+So it aborted on its first line of real work, every night:
+
+```
+java.lang.IllegalStateException: backup-platform.sh exited with 1:
+  [backup-platform] ERROR: python3 is required (JSON handling)
+```
+
+Nothing outside the container log noticed. Temporal retried the activity and gave up; the run was
+recorded as failed in a collection nobody reads; the Software Factory console showed a
+platform-backup failure that looks identical to a transient one. It surfaced only when the
+log-watch module started reading container logs and filed it (SIM-30, with SIM-34 as the same
+incident seen through Temporal's activity-failure WARN).
+
+Two things follow for anyone changing either file:
+
+- `Dockerfile.software-factory` now installs `python3-minimal` and `zip` as well. The
+  jq-not-python decision from 036 still stands **for the deploy settle loop** — that parser is
+  still jq — but the platform backup is a different consumer with different needs.
+- `scripts/test/test-platform-backup-prereqs.sh` reconciles `check_prerequisites()` against the
+  Dockerfile's runtime `apt-get install` line and fails the build on any prerequisite that is
+  neither installed nor explicitly exempted (`docker` is bind-mounted from the host;
+  `sha256sum` is coreutils). **Adding a prerequisite to the script now requires accounting for
+  it**, which is the only thing tying these two files together — neither build step runs the
+  other.
+
+After the fix deploys, confirm with section 2 (`--dry-run` first, then a real capture) rather
+than waiting a night.
+
 ## 1. Did the nightly run?
 
 **Fastest check — no shell needed.** Open the admin Data Operations page and look

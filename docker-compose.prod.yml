@@ -355,6 +355,16 @@ services:
       # warnings while it boots. Turn it on, dry-run it, read what it *would* file, then let it
       # file for real.
       FACTORY_LOGWATCH_ENABLED: ${FACTORY_LOGWATCH_ENABLED:-false}
+      # Close the tickets log watch filed for problems it has stopped seeing, with a comment
+      # saying so. ON by default, unlike everything else here: a factory that only ever opens
+      # tickets leaves a human closing them by hand, which is the manual step this whole module
+      # exists to remove. Set it false to go back to filing only.
+      #
+      # `resolve-after` is seven consecutive nightly scans. Do not shorten it much: a problem on a
+      # weekly cadence would then be closed and re-filed every week, which is the duplicate
+      # ticket disease 046 exists to cure.
+      FACTORY_LOGWATCH_RESOLVE_WHEN_CLEAR: ${FACTORY_LOGWATCH_RESOLVE_WHEN_CLEAR:-true}
+      FACTORY_LOGWATCH_RESOLVE_AFTER: ${FACTORY_LOGWATCH_RESOLVE_AFTER:-7d}
       # Deliberately NOT set on `deployer`, which runs this same image: that container holds
       # /var/run/docker.sock and must hold as few other credentials as possible. Enforced by
       # DeployerGrafanaCredentialTest, which fails the build if any variable whose name contains

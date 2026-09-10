@@ -2,13 +2,17 @@ package com.simonrowe.factory.logwatch.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.simonrowe.factory.linear.domain.AbsenceSweep;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
 import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.domain.SweepReport;
+import com.simonrowe.factory.linear.domain.SweptIssue;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.logwatch.config.LogWatchTaskQueues;
@@ -23,6 +27,7 @@ import com.simonrowe.factory.logwatch.persistence.LogWatchRunRecord;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -30,6 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 /** The scan's decision-making, exercised against Temporal's test environment. */
@@ -37,6 +43,7 @@ class LogWatchWorkflowTest {
 
   private static final Instant FROM = Instant.parse("2026-08-31T00:00:00Z");
   private static final Instant TO = Instant.parse("2026-09-01T00:00:00Z");
+  private static final Duration QUIET_FOR = Duration.ofDays(7);
 
   private TestWorkflowEnvironment environment;
   private LogWatchActivities activities;
@@ -79,6 +86,10 @@ class LogWatchWorkflowTest {
                     .setWorkflowId(workflowId)
                     .build());
 
+    // Stubbed for every test, not just the sweep ones. An unstubbed Mockito mock returns null,
+    // the workflow NPEs on it, and Temporal retries a failed WORKFLOW TASK indefinitely — so the
+    // symptom is a test that hangs forever rather than one that fails.
+    when(linear.sweepResolved(any())).thenReturn(SweepReport.none());
     when(linear.fileIssue(any()))
         .thenReturn(
             new FiledIssue(
@@ -109,6 +120,11 @@ class LogWatchWorkflowTest {
     @Override
     public FiledIssue fileIssue(final IssueFiling filing) {
       return delegate.fileIssue(filing);
+    }
+
+    @Override
+    public SweepReport sweepResolved(final AbsenceSweep sweep) {
+      return delegate.sweepResolved(sweep);
     }
 
     @Override
@@ -226,7 +242,7 @@ class LogWatchWorkflowTest {
 
     LogWatchResult result =
         workflow.run(
-            new LogWatchRequest(FROM, TO, Trigger.SCHEDULE, false, false));
+            new LogWatchRequest(FROM, TO, Trigger.SCHEDULE, false, false, true, QUIET_FOR));
 
     verify(linear, never()).fileIssue(any());
     assertThat(result.status()).isEqualTo(LogWatchStatus.COMPLETED);
@@ -266,9 +282,175 @@ class LogWatchWorkflowTest {
     assertThat(record.getValue().id()).isNotBlank();
   }
 
+  /**
+   * The single most important guarantee in the absence sweep.
+   *
+   * <p>An unusable source produces zero signatures for exactly the same reason a fixed production
+   * does: nothing came back. Sweeping here would read "Grafana Cloud stopped accepting logs" as
+   * "every problem is fixed" and close the entire backlog — including the ticket the same run
+   * just filed to say the module cannot see.
+   */
+  @Test
+  @DisplayName("a silent source never closes anything as resolved")
+  void neverSweepsWhenTheSourceIsUnusable() {
+    when(activities.observe(any(), any()))
+        .thenReturn(
+            new ScanObservation(
+                new SourceHealth(
+                    SourceHealth.Status.SILENT,
+                    SourceHealth.Tier.ALLOY_COMPONENT,
+                    "429 ingestion rate limit exceeded"),
+                List.of(), 0, false, 0, 0));
+
+    LogWatchResult result = workflow.run(request(false));
+
+    assertThat(result.status()).isEqualTo(LogWatchStatus.SOURCE_UNHEALTHY);
+    verify(linear, never()).sweepResolved(any());
+  }
+
+  @Test
+  @DisplayName("a clean scan closes the tickets whose problems have stopped")
+  void sweepsOnTheCleanScan() {
+    when(activities.observe(any(), any()))
+        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0));
+    when(linear.sweepResolved(any()))
+        .thenReturn(
+            new SweepReport(
+                1,
+                List.of(
+                    new SweptIssue(
+                        "fp", List.of("backend", "ERROR", "boom"), "SIM-30",
+                        "https://linear.app/SIM-30")),
+                0, 0, 0, false));
+
+    LogWatchResult result = workflow.run(request(false));
+
+    assertThat(result.status()).isEqualTo(LogWatchStatus.NO_FINDINGS);
+    assertThat(result.resolvedIssueUrls()).containsExactly("https://linear.app/SIM-30");
+    assertThat(result.detail()).contains("closed 1 ticket(s) no longer reported (SIM-30)");
+  }
+
+  /**
+   * The subtle one. The per-run cap limits how many signatures are FILED, not how many were SEEN
+   * — so with more live problems than the cap, the overflow never reaches the sink, its
+   * lastSeenAt never advances, and it looks exactly like a problem that has stopped. Without this
+   * gate a busy stack closes the tickets about its own busiest failures.
+   */
+  @Test
+  @DisplayName("a run that hit the per-run cap closes nothing, and says why")
+  void neverSweepsWhenTheCapDroppedSignatures() {
+    when(activities.observe(any(), any()))
+        .thenReturn(new ScanObservation(alive(), List.of(signature("boom")), 400, false, 9, 4));
+
+    LogWatchResult result = workflow.run(request(false));
+
+    verify(linear, never()).sweepResolved(any());
+    assertThat(result.detail()).contains("no ticket was closed as resolved");
+  }
+
+  @Test
+  @DisplayName("a truncated read closes nothing, and says why")
+  void neverSweepsWhenTheReadWasTruncated() {
+    when(activities.observe(any(), any()))
+        .thenReturn(new ScanObservation(alive(), List.of(signature("boom")), 5000, true, 9, 0));
+
+    LogWatchResult result = workflow.run(request(false));
+
+    verify(linear, never()).sweepResolved(any());
+    assertThat(result.detail()).contains("truncated");
+  }
+
+  /**
+   * A post-deploy scan covers about five minutes, in which almost every known problem is absent
+   * purely because five minutes is short. The workflow enforces a minimum window structurally, so
+   * a future trigger that forgets to pass the flag still gets the safe behaviour.
+   */
+  @Test
+  @DisplayName("a window too short to mean anything closes nothing, whatever the request asks")
+  void neverSweepsOverShortWindows() {
+    when(activities.observe(any(), any()))
+        .thenReturn(new ScanObservation(alive(), List.of(), 3, false, 9, 0));
+
+    workflow.run(
+        new LogWatchRequest(
+            TO.minusSeconds(300), TO, Trigger.DEPLOY, false, true, true, QUIET_FOR));
+
+    verify(linear, never()).sweepResolved(any());
+  }
+
+  @Test
+  @DisplayName("the sweep is switched off by its own flag")
+  void respectsTheResolveFlag() {
+    when(activities.observe(any(), any()))
+        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0));
+
+    workflow.run(request(false, false));
+
+    verify(linear, never()).sweepResolved(any());
+  }
+
+  @Test
+  @DisplayName("the sweep runs after filing, never before")
+  void sweepsAfterFiling() {
+    when(activities.observe(any(), any()))
+        .thenReturn(new ScanObservation(alive(), List.of(signature("boom")), 400, false, 9, 0));
+    when(linear.sweepResolved(any())).thenReturn(SweepReport.none());
+
+    workflow.run(request(false));
+
+    // Every filing advances that fingerprint's lastSeenAt, which is the sweep's entire input.
+    // Sweeping first would consider this scan's own findings absent and close the tickets it was
+    // about to update.
+    InOrder order = inOrder(linear);
+    order.verify(linear).fileIssue(any());
+    order.verify(linear).sweepResolved(any());
+  }
+
+  /**
+   * A manual dry-run scan answers "nothing will be filed" in its API response. The sweep still
+   * runs — a preview that silently skips half the run is not a preview — but it must carry the
+   * REQUEST's dry-run flag, not rely on the sink's configured one, or that answer is a lie on
+   * every production stack.
+   */
+  @Test
+  @DisplayName("a dry-run scan previews the sweep, and says so in the request")
+  void dryRunStillPreviewsTheSweep() {
+    when(activities.observe(any(), any()))
+        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0));
+    when(linear.sweepResolved(any())).thenReturn(SweepReport.none());
+
+    workflow.run(request(true));
+
+    ArgumentCaptor<AbsenceSweep> sweep = ArgumentCaptor.forClass(AbsenceSweep.class);
+    verify(linear).sweepResolved(sweep.capture());
+    assertThat(sweep.getValue().dryRun()).isTrue();
+  }
+
+  @Test
+  @DisplayName("the sweep is scoped to log watch, never to another producer")
+  void sweepsOnlyItsOwnProducer() {
+    when(activities.observe(any(), any()))
+        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0));
+    when(linear.sweepResolved(any())).thenReturn(SweepReport.none());
+
+    workflow.run(request(false));
+
+    ArgumentCaptor<AbsenceSweep> sweep = ArgumentCaptor.forClass(AbsenceSweep.class);
+    verify(linear).sweepResolved(sweep.capture());
+    assertThat(sweep.getValue().producer()).isEqualTo("logwatch");
+    assertThat(sweep.getValue().quietFor()).isEqualTo(QUIET_FOR);
+    assertThat(sweep.getValue().comment()).contains("has not appeared in a log scan for 7 day(s)");
+    assertThat(sweep.getValue().dryRun()).isFalse();
+  }
+
   private LogWatchRequest request(final boolean dryRun) {
+    return request(dryRun, true);
+  }
+
+  private LogWatchRequest request(final boolean dryRun, final boolean resolveWhenClear) {
     return new LogWatchRequest(
-        FROM, TO, dryRun ? Trigger.DRY_RUN : Trigger.SCHEDULE, dryRun, true);
+        FROM, TO, dryRun ? Trigger.DRY_RUN : Trigger.SCHEDULE, dryRun, true, resolveWhenClear,
+        QUIET_FOR);
   }
 
   private static SourceHealth alive() {

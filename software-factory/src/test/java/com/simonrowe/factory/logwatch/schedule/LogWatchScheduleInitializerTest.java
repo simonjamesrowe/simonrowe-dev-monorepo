@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.simonrowe.factory.linear.config.LinearProperties;
+import com.simonrowe.factory.logwatch.config.LogWatchProperties;
 import com.simonrowe.factory.logwatch.domain.LogWatchRequest;
 import com.simonrowe.factory.logwatch.domain.Trigger;
 import io.temporal.api.enums.v1.ScheduleOverlapPolicy;
@@ -62,7 +63,8 @@ class LogWatchScheduleInitializerTest {
   private LogWatchScheduleInitializer initializer(final boolean linearEnabled) {
     return new LogWatchScheduleInitializer(
         scheduleClient,
-        new LinearProperties(linearEnabled, "key", null, "SIM", null, false, null, null));
+        new LinearProperties(linearEnabled, "key", null, "SIM", null, false, null, null),
+        new LogWatchProperties(true, 2, 5, null, 5000, 3, null, null, null, null));
   }
 
   private Schedule createdSchedule() {

@@ -286,6 +286,50 @@ Two layers enforce this:
   `LinearActivitiesImpl` in the socket-holding JVM and makes `deployer` poll the
   `linear` queue in the first place.
 
+## The absence sweep: closing tickets again
+
+`IssueFiling` answers "this problem is happening". `AbsenceSweep` answers "these problems have
+stopped", and it is the other half of the same automation — without it the backlog only ever
+grows and a human closes each entry by hand once they notice it has gone away.
+
+`LinearActivities.sweepResolved(AbsenceSweep)` takes a producer key and a quiet period, and for
+every one of that producer's fingerprints whose `lastSeenAt` is older than the quiet period:
+
+1. re-reads the issue's current state **from Linear**, never from `lastKnownStateType` (which for
+   a fingerprint that has gone quiet is by definition stale);
+2. skips it if it is already closed, or if a human has moved it into a `started` state;
+3. otherwise comments, then moves it to the team's `completed` state, and records a
+   `RESOLVED_ABSENT` decision.
+
+Load-bearing details:
+
+- **There is no "what is still present" list.** A sweep always runs *after* the producer has
+  finished filing, and every filing advances that fingerprint's `lastSeenAt`. "Still happening"
+  and "recently seen" are therefore the same fact, and the quiet period is the only input needed.
+  Passing a present-set as well would introduce a second, independently-wrong answer to one
+  question.
+- **`lastSeenAt` is deliberately not advanced by a close.** It means "when this problem was last
+  observed", and the sweep observed its *absence*.
+- **Done, never Cancelled.** The sink reads a cancelled issue as "never tell me again", so an
+  automatic cancel would permanently suppress a problem that had merely paused. Closing as
+  completed means a recurrence resolves to `FILED_REGRESSION` — a new issue linked to the closed
+  one — so being early costs one extra linked ticket rather than a lost report. That recoverability
+  is what makes an automatic close acceptable at all.
+- **A team with no `completed`-type state reports `unavailable`, not silence.** `TeamContext`'s
+  `completedStateId` is nullable where `triageStateId` is not, precisely so this degrades to
+  "close nothing" instead of taking filing down with it — but the caller is told, because
+  "nothing was closed" and "nothing *can* be closed" must not present identically.
+- **`updateIssue` omits a null description rather than sending it.** GraphQL reads an explicit
+  null as "set this field to null", so a state-only update that sent one would erase the
+  description of every issue it moved.
+
+**Only `logwatch` sweeps today.** The other producers deliberately do not: an absent `cvefix`
+finding means the CVE was patched (and that flow already files a rolling report that says so), an
+absent `deploy` failure means nothing at all because a deploy failure is a one-shot event rather
+than a condition, and a `review-feedback` lesson is not a recurring condition that can stop
+happening. See [logwatch.md](logwatch.md#closing-tickets-again-the-absence-sweep) for the four
+conditions log watch requires before it will sweep.
+
 ## Reading `linear_issues`
 
 Outside Temporal's retention window, one document per fingerprint:

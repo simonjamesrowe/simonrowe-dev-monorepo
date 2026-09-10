@@ -315,6 +315,20 @@ factory:
     # so three producing nothing over a full day means something is wrong with the pipeline
     # rather than with the stack.
     minimum-containers: ${FACTORY_LOGWATCH_MIN_CONTAINERS:3}
+    # Close the tickets this module filed for problems it no longer sees, with a comment saying
+    # so. Defaults ON, unlike every other flag in this file: filing without resolving is half an
+    # automation, and the half it leaves out is the one a human has to do by hand every week.
+    #
+    # It is safe to leave on because the workflow refuses to sweep unless the scan can stand
+    # behind its own silence: the source must be healthy, the read untruncated, nothing dropped by
+    # the per-run cap, and the window at least an hour. And it is safe to get wrong because a
+    # closed ticket keeps its fingerprint attachment, so a recurrence files a linked regression
+    # rather than disappearing.
+    resolve-when-clear: ${FACTORY_LOGWATCH_RESOLVE_WHEN_CLEAR:true}
+    # Seven consecutive nightly scans. Short enough that a fixed problem's ticket does not
+    # loiter, long enough that a weekly-cadence problem is not closed and re-filed on a cycle -
+    # which is the duplicate-ticket disease 046 exists to cure.
+    resolve-after: ${FACTORY_LOGWATCH_RESOLVE_AFTER:7d}
     loki:
       # NOTE this is the *push* URL and already contains /loki/api/v1. LokiClient strips the
       # trailing /push to get the query base; appending /api/v1 to the raw value yields
