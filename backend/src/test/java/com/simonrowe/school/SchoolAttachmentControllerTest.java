@@ -44,7 +44,7 @@ class SchoolAttachmentControllerTest {
 
   private SchoolAttachmentController controllerWith(final boolean enabled) {
     return new SchoolAttachmentController(documents, store, new SchoolProperties(
-        enabled, null, List.of(), List.of(), null, null, null, 0, null, null, 0L, null));
+        enabled, null, List.of(), List.of(), null, null, null, 0, null, null, 0L, null, null));
   }
 
   private static SchoolDocument document(final Visibility visibility, final String title) {

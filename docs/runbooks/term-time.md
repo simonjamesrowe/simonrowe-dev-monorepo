@@ -62,6 +62,121 @@ arrive as writes to the same row and the more authoritative one wins.
 **Reordering `SchoolSourceType`'s members silently changes which source wins.** There is no other
 declaration of the ordering.
 
+## The sitemap does not list every page
+
+`SchoolWebsiteCrawler` enumerates pages from `/googlesitemap.asp`. That is what keeps the crawl
+bounded and out of the calendar's infinite date-parameterised URL space, and it has one cost:
+**a page missing from the sitemap is invisible to Term Time, permanently and silently.**
+
+Two things close that gap, and they are separate on purpose: a seed list of known-missing pages
+(below), and one hop of same-host link following out of those seeds (next section).
+
+Found live on 2026-09-10. The sitemap returns 218 `<loc>` entries and **not one of them is a
+year-group page**, while all seven return `200`:
+
+```
+/year-group-pages   /year-one   /year-two   /year-three   /year-4   /year-five   /year-six
+```
+
+Note the slugs are inconsistent (`/year-4` beside `/year-six`) and the hub's children are
+**top-level paths** — `/year-group-pages/year-6` is a 404.
+
+That is where the school publishes each year's **class teachers** and its **per-class PE days**,
+which are among the most-asked things on the site. Term Time had neither, and said so accurately
+("the school's PE page confirms all children have weekly PE but does not list days by year
+group") because `/curriculum/subjects/pe` — the generic page — *is* in the sitemap. Nothing
+failed, nothing was logged, and every test passed.
+
+The seed list is `school.extra-page-urls`, defaulted in
+`SchoolProperties.DEFAULT_EXTRA_PAGE_PATHS` and unioned into `listPages()`. Four things about it:
+
+- **Extras come first in the returned list.** `MAX_PAGES` (250) caps the whole thing, and the
+  sitemap's tail is years of old sports reports. Today 218 fits, so nothing is dropped either
+  way; the ordering is what keeps that true as the school adds news.
+- **An unreadable sitemap still returns nothing**, even with extras configured.
+  `SchoolIngestService` reads an empty list as a source failure and records it, and quietly
+  returning seven pages would turn a visible outage into a crawl that reports success while
+  skipping 96% of the site.
+- **Setting the variable replaces the default rather than adding to it.** Entries may be absolute
+  URLs or paths resolved against `website-base-url`.
+- **A configured page that cannot be fetched logs a WARN**, where a missing sitemap page stays at
+  DEBUG. This is the only rot detector: the CMS's slugs are inconsistent enough that a rename is
+  plausible, and a renamed page would otherwise take a whole year group's information out of the
+  corpus with nothing to show for it.
+
+The hub page is seeded alongside its children: it carries nothing but links today, so it is nearly
+free, and it is where a renamed or newly added year page shows up first.
+
+### One hop from the seeds, and no further
+
+The seeds are not the whole answer, because the year pages link on to material that is not on
+them. *"What are the spellings for this week?"* is answered on `/year-six-home-learning` — absent
+from the sitemap, **not** a child of `/year-group-pages`, and reachable only as a link from
+`/year-six`. The spelling list itself is a PDF linked from there in turn.
+
+So `SchoolIngestService.ingestWebsite()` follows same-host links found in the **content** of a
+configured extra page, one hop. Six things decide how far that goes:
+
+- **Same host is the whole of the security rule** (`SchoolLinkFilter.isCrawlableWebsitePage`), and
+  it is doing real work: `/year-six-home-learning` links to `primaryhomeworkhelp.co.uk`,
+  `natgeokids.com`, `dkfindout.com` and `kids.britannica.com` as Ancient Greece research for the
+  children. Following those turns a school-information crawler into a general web spider and puts
+  third-party pages into a corpus that answers in the school's voice.
+- **Links come from the STRIPPED document**, after `nav`, `header` and `footer` are removed — the
+  single most effective filter in the path, not a detail. The CMS emits semantic navigation and
+  repeats ~60 same-host links on every page: measured on `/year-six`, **68 same-host links in the
+  raw markup become 12** once the furniture is gone. Following the raw set makes one hop from any
+  page equivalent to crawling the whole site.
+- **Only from the seeds, so only one hop.** The sitemap is the school's own 218-page statement of
+  what its site contains; following links from all of it would mostly rediscover those 218 plus
+  the `/school-news/` and `/photo-gallery/` long tail, at ten seconds a page. **Adding a seed is
+  how you widen the crawl** — one config change with the cost visible in the page count, rather
+  than a depth setting whose cost depends on someone else's markup.
+- **Pages are stored under their declared `<link rel="canonical">`.** Load-bearing, because this
+  CMS serves **every page under two URLs**: `/year-six-home-learning` and
+  `/page/?title=Home+Learning&pid=158` return byte-identical text, and `SchoolIds.documentId` keys
+  on the URL — so ingesting both stores and embeds the same text twice, which surfaces as
+  duplicate search results rather than as an error. Sitemap-only crawling never met this. Discovery
+  meets it immediately, because **the only link from `/year-six` to home learning is the ugly
+  form** — the choice is not "canonicalise or avoid ugly URLs", it is "canonicalise or lose the
+  page".
+- Cookie/privacy/accessibility pages and the bare homepage are excluded, sharing
+  `SchoolLinkFilter`'s existing noise list so there is one list rather than two that drift. Note
+  `privacy` and `cookie` are broader than the `privacy-policy`/`cookie-policy` they replaced —
+  the school's page is at `/privacy-cookies`, which neither hyphenated form matched.
+- `MAX_CRAWL_PAGES` (400) is a backstop against a link cycle, not a tuning knob.
+
+**Discovery beats hardcoding here, and there is a concrete proof of it**: `/year-4`'s home-learning
+page is `/year-**four**-home-learning`. A hand-written list would have guessed `/year-4-home-learning`
+and got a 404. Measured 2026-09-10: year six, five, three and 4 each link to a home-learning page;
+year one and year two publish none.
+
+### PDF discovery runs on every crawl, not only on changed pages
+
+`ingestPdfsLinkedFrom` used to sit inside the `if (result.changed())` branch. `contentHash` is
+computed over the extracted **text**, so a page that swaps which PDF it links to without changing a
+word of its prose reports UNCHANGED — and that is not a corner case, it is **the weekly spelling
+sheet**. The CMS names uploads by content hash, so a new sheet is a new URL sitting behind link text
+that still reads "Year 6 Spring 1 spellings". Gated inside `changed()`, the first sheet of the term
+is ingested and every later one silently skipped, which presents as Term Time confidently reciting a
+month-old spelling list.
+
+It is affordable on every crawl because the page HTML is already in hand and
+`ingestPdfsLinkedFrom` now skips any PDF URL it has already stored — without that skip it would be
+~133 extra fetches a night, each with its own ten-second pause.
+
+**The matching limit:** a PDF *replaced at the same URL* is never re-read. That is safe against this
+CMS specifically, because of the content-hash file naming — but it is a property of their uploader,
+not of anything here, and it is the first assumption to check if a stale document ever shows up in
+an answer.
+
+**Still flattened, and not addressed here:** `fetchPage` uses jsoup's `body().text()`, so the PE
+table arrives as `Class Indoor Outdoor Sarah Friday Thursday Dominic Tuesday Thursday ...` — one
+line, row boundaries gone. It is recoverable for a three-column table with its header adjacent,
+and it is what every other page already gets. Preserving table structure would change the
+extracted text of all 218 pages, so every `contentHash` changes and the whole site re-embeds; that
+is a cost decision, not a tidy-up.
+
 ## Configuration
 
 Everything is on the `backend` service only, in `${VAR:-}` empty-default form.
@@ -75,6 +190,7 @@ Everything is on the `backend` service only, in `${VAR:-}` empty-default form.
 | `SCHOOL_DAILY_TOKEN_BUDGET` | `0` | Anonymous turns per day. `0` disables anonymous answering |
 | `SCHOOL_CHAT_MODEL` | `gpt-5.6-luna` | |
 | `SCHOOL_GUARDRAIL_MODEL` | `gpt-5-nano` | Fires every turn |
+| `SCHOOL_EXTRA_PAGE_URLS` | *(blank)* | Pages the sitemap omits. Blank = the seven year-group pages; setting it **replaces** that list — see below |
 | `SCHOOL_GMAIL_CLIENT_ID` / `_SECRET` / `_REFRESH_TOKEN` | *(blank)* | Phase 2 |
 
 ### The ingest cutoff applies in two places, and both are needed
@@ -396,6 +512,58 @@ Two traps this arrangement contains:
 - **A STOMP frame has nowhere for an `Authorization` header**, so the access token travels in the
   message body and is validated server-side by `SchoolAudienceResolver` using the application's
   real `JwtDecoder`. Anything that fails validation resolves to anonymous rather than throwing.
+
+### Conversation memory, and why there was none
+
+Term Time shipped with **no conversation memory whatsoever** — not a short window, none. Every
+turn went to the model as a bare system + user prompt.
+
+The cause is one line of wiring. `SchoolChatService` injects `ChatClient.Builder` and calls
+`.build()` per turn, because it has to set its own model, `reasoningEffort("none")` and prompt
+cache key, which the shared `chatClient` bean cannot carry. Those options came at the price of
+**every default advisor on that bean**, memory among them. The portfolio chat has a 20-message
+window via `MessageChatMemoryAdvisor` (`ChatConfig`); Term Time inherited none of it, and
+`sessionId` was used only to name the STOMP reply topic.
+
+What that looked like to a parent:
+
+| Turn | | |
+|---|---|---|
+| 1 | *what day is PE?* | correctly asks which year group |
+| 2 | *year 6* | the word "PE" is nowhere in the model's context — answers with generic Year 6 news |
+| 3 | *PE day for year 6* | both facts in one message, so it finally searches properly |
+
+Memory is now attached in `SchoolChatService.remembering()`. Three things are load-bearing:
+
+- **No session id means no memory, deliberately.** `MessageChatMemoryAdvisor` falls back to a
+  single default conversation id when none is supplied, so attaching it unconditionally would
+  pool every anonymous caller of `POST /api/school/chat` (which carries no session id) into one
+  shared history they could all read. The advisor is attached on the STOMP path only.
+- **`ToolFilteringChatMemory` is required here, not tidiness.** Term Time is entirely
+  tool-driven, and a message window truncates on count — so an unfiltered store will eventually
+  cut an assistant message carrying `tool_calls` away from its `ToolResponseMessage`. OpenAI
+  rejects a conversation containing one without the other, and the failure would be a `400` that
+  appears only after enough turns to push the pair apart.
+- **The store is bounded by `BoundedChatMemoryRepository`, not Spring AI's default.** The default
+  is a `ConcurrentHashMap` nothing ever removes from. That is survivable behind the portfolio
+  chat, which has `ChatSessionCleanupService` sweeping idle sessions; it is not survivable on an
+  **unauthenticated** endpoint whose conversation id is whatever the browser puts in the frame.
+  A sweeper alone would not close it either — a burst inside one sweep interval still allocates
+  without limit — so the bound is an LRU cap plus a TTL, enforced by the store on write, with no
+  scheduler. Tunable via `school.chat.memory.max-sessions` (500) and
+  `school.chat.memory.ttl-minutes` (30).
+
+`ChatConfig.chatMemory()` is now `@Primary`, because there are two `ChatMemory` beans and they
+were otherwise resolving only by injection points happening to name their parameter
+`chatMemory`. Anything wanting Term Time's must ask for `@Qualifier("schoolChatMemory")`.
+
+The browser already mints a fresh session id on "clear chat", so clearing genuinely starts a new
+conversation rather than reusing one with history behind it.
+
+**Known and left alone:** `SchoolStreamController.sessionMessageCounts` is still an unbounded
+`ConcurrentHashMap` on the same public endpoint. Each entry is a string and an `AtomicInteger`
+rather than a conversation, so it is a much smaller leak than the one closed here, but it is the
+same shape and the same endpoint.
 
 ## Evals
 

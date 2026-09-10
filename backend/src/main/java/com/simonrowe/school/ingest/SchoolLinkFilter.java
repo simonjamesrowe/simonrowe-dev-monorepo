@@ -41,10 +41,18 @@ public class SchoolLinkFilter {
       "doubleclick.net", "googletagmanager.com", "google-analytics.com", "facebook.com",
       "twitter.com", "x.com", "instagram.com", "linkedin.com");
 
-  /** Path or query fragments that mark a link as list-management rather than content. */
+  /**
+   * Path or query fragments that mark a link as list-management or site furniture rather than
+   * content.
+   *
+   * <p>{@code privacy} and {@code cookie} are deliberately broader than the
+   * {@code privacy-policy}/{@code cookie-policy} they replaced: the school's own page is at
+   * {@code /privacy-cookies}, which neither of the hyphenated forms matched, so the crawl
+   * queued the cookie notice from every page that links to it — which is every page.
+   */
   private static final List<String> NOISE_FRAGMENTS = List.of(
       "unsubscribe", "/preferences", "optout", "opt-out", "manage-subscription",
-      "privacy-policy", "cookie-policy", "/accessibility");
+      "privacy", "cookie", "/accessibility");
 
   /**
    * Whether a link should be offered for a decision.
@@ -72,24 +80,100 @@ public class SchoolLinkFilter {
     if (url == null || url.isBlank() || !isWorthOffering(url)) {
       return false;
     }
-    final URI uri;
-    final URI school;
-    try {
-      uri = URI.create(url.trim());
-      school = URI.create(properties.websiteBaseUrl());
-    } catch (IllegalArgumentException e) {
-      return false;
-    }
-    if (uri.getHost() == null || school.getHost() == null) {
-      return false;
-    }
-    final String host = uri.getHost().toLowerCase(Locale.ROOT);
-    final String schoolHost = school.getHost().toLowerCase(Locale.ROOT).replaceFirst("^www\\.", "");
-    if (!host.equals(schoolHost) && !host.endsWith("." + schoolHost)) {
+    final URI uri = parse(url);
+    if (uri == null || !isOnSchoolHost(uri)) {
       return false;
     }
     final String path = uri.getPath() == null ? "" : uri.getPath().toLowerCase(Locale.ROOT);
     return NEWSLETTER_PATHS.stream().anyMatch(path::contains);
+  }
+
+  /**
+   * Whether a link found on a crawled school web page may be crawled in turn.
+   *
+   * <p>This is a different question from {@link #isAutoFetchable}, which governs links arriving
+   * in <b>email</b> — where the sender is hostile-by-assumption and the rule is deliberately
+   * "the school's own newsletter path and nothing else". Here the link was found on a page the
+   * crawler was already reading, on a host it is already reading wholesale, so the bar is
+   * "anywhere on the school's own site" instead.
+   *
+   * <p>Same host is the whole of the security rule, and it is not decoration: the year-group
+   * home-learning pages link out to {@code primaryhomeworkhelp.co.uk}, {@code natgeokids.com},
+   * {@code dkfindout.com} and {@code kids.britannica.com} as suggested research for the
+   * children. Following those would turn a school-information crawler into a general web
+   * spider, and put third-party content into a corpus that answers as the school.
+   *
+   * <p>What is excluded beyond that is noise rather than danger, and it is shared with
+   * {@link #isWorthOffering} so there is one list rather than two that drift: cookie and privacy
+   * notices, the accessibility statement, the bare homepage. The calendar is excluded because
+   * its date-parameterised URL space is effectively infinite — the same reason
+   * {@code SchoolWebsiteCrawler} drops it from the sitemap. PDFs are excluded because they are
+   * not pages: {@code SchoolIngestService} already discovers and extracts those separately, and
+   * putting one on the page queue would try to read a binary as HTML.
+   *
+   * @param url the absolute URL found on a crawled page
+   * @return true when the crawler may fetch it as a page
+   */
+  public boolean isCrawlableWebsitePage(final String url) {
+    if (url == null || url.isBlank() || !isWorthOffering(url)) {
+      return false;
+    }
+    final URI uri = parse(url);
+    if (uri == null || !isOnSchoolHost(uri)) {
+      return false;
+    }
+    final String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+    if (!"http".equals(scheme) && !"https".equals(scheme)) {
+      return false;
+    }
+    final String path = uri.getPath() == null ? "" : uri.getPath().toLowerCase(Locale.ROOT);
+    return !path.contains("/calendar") && !path.endsWith(".pdf");
+  }
+
+  private URI parse(final String url) {
+    try {
+      return URI.create(url.trim());
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+  }
+
+  /**
+   * Whether a URL is on the school's own host, ignoring every other rule.
+   *
+   * <p>Narrower than {@link #isCrawlableWebsitePage} on purpose, and they are not
+   * interchangeable. This answers "does this address belong to the school", which is the right
+   * question for a URL being used as a document's stored identity — a canonical pointing at the
+   * school's own cookie notice is a perfectly valid identity even though that page is not worth
+   * crawling.
+   *
+   * @param url the URL to test
+   * @return true when it is on the school's host
+   */
+  public boolean isOnSchoolHost(final String url) {
+    if (url == null || url.isBlank()) {
+      return false;
+    }
+    final URI uri = parse(url);
+    return uri != null && isOnSchoolHost(uri);
+  }
+
+  /**
+   * Whether a URI is on the school's own host.
+   *
+   * <p>The configured host is compared with any leading {@code www.} removed, so
+   * {@code kilmorieschool.co.uk} and {@code www.kilmorieschool.co.uk} are the same site and a
+   * subdomain of it also qualifies. Note the suffix test is anchored on a dot —
+   * {@code notkilmorieschool.co.uk} must not match.
+   */
+  private boolean isOnSchoolHost(final URI uri) {
+    final URI school = parse(properties.websiteBaseUrl());
+    if (school == null || uri.getHost() == null || school.getHost() == null) {
+      return false;
+    }
+    final String host = uri.getHost().toLowerCase(Locale.ROOT);
+    final String schoolHost = school.getHost().toLowerCase(Locale.ROOT).replaceFirst("^www\\.", "");
+    return host.equals(schoolHost) || host.endsWith("." + schoolHost);
   }
 
   public boolean isWorthOffering(final String url) {

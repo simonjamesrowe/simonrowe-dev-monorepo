@@ -585,6 +585,14 @@ school:
   calendar-base-url: ${SCHOOL_CALENDAR_BASE_URL:https://www.kilmorieschool.co.uk/calendar}
   website-base-url: ${SCHOOL_WEBSITE_BASE_URL:https://www.kilmorieschool.co.uk}
   staff-list-url: ${SCHOOL_STAFF_LIST_URL:}
+  # Pages the CMS sitemap does not list, so the crawl would never reach them. Blank means "use
+  # the built-in list", which is SchoolProperties.DEFAULT_EXTRA_PAGE_PATHS — the seven
+  # year-group pages. Setting this REPLACES that list rather than adding to it.
+  #
+  # Verified live 2026-09-10: /googlesitemap.asp returns 218 entries and not one of them is a
+  # year-group page, while all seven return 200. That is where the Year 6 teachers and the
+  # per-class PE days live, and Term Time had neither.
+  extra-page-urls: ${SCHOOL_EXTRA_PAGE_URLS:}
   # robots.txt asks for ten seconds and this is a small school's hosting.
   crawl-delay-seconds: ${SCHOOL_CRAWL_DELAY_SECONDS:10}
   # Set on the school ChatClient's own options, never under spring.ai.openai.chat - anything

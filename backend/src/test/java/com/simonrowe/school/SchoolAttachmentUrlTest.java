@@ -20,7 +20,7 @@ class SchoolAttachmentUrlTest {
 
   private static SchoolProperties withBaseUrl(final String baseUrl) {
     return new SchoolProperties(
-        true, null, List.of(), List.of(), null, null, null, 0, null, null, 0L, baseUrl);
+        true, null, List.of(), List.of(), null, null, null, 0, null, null, 0L, baseUrl, null);
   }
 
   @Test
