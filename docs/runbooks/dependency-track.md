@@ -845,7 +845,7 @@ Export the API key from your usual env store first (never paste it inline, never
 ```bash
 export DEPENDENCYTRACK_API_KEY="<value from env store>"
 
-for project in "simonrowe-dev/backend" "simonrowe-dev/frontend" "simonrowe-dev/backend-image" "simonrowe-dev/frontend-image" "simonrowe-dev/reviewer-image"; do
+for project in "simonrowe-dev/backend" "simonrowe-dev/frontend" "simonrowe-dev/backend-image" "simonrowe-dev/frontend-image" "simonrowe-dev/software-factory-image"; do
   echo "=== $project ==="
   curl -s -H "X-Api-Key: ${DEPENDENCYTRACK_API_KEY}" \
     "https://dependency-track.simonrowe.dev/api/v1/project/lookup?name=${project}&version=main" \
@@ -857,6 +857,55 @@ Expect a recent (non-null) `lastBomImport` timestamp for all five. A missing pro
 timestamp, or a stale timestamp older than the last merge to `main` means the upload failed —
 check the `sbom` job's logs directly (`gh run view <run-id> --log`) rather than trusting the
 overall workflow conclusion.
+
+## CycloneDX 1.7: why the three image uploads 400'd for ten days (2026-09-10)
+
+Between `#140` (2026-08-31, the trivy switch) and this fix, **every** image-SBOM upload failed
+and the Publish workflow was green every time:
+
+```text
+Reading BOM: backend-image-bom.json...
+Uploading to Dependency-Track server dependency-track.simonrowe.dev...
+##[error]Failed response status code:400
+```
+
+`DependencyTrack/gh-upload-sbom` prints the status code and **not the response body**, which is
+the whole reason this looked like noise. The body says exactly what is wrong:
+
+```json
+{"status":400,"title":"The uploaded BOM is invalid","detail":"Unrecognized specVersion 1.7"}
+```
+
+Trivy 0.74.0 emits **CycloneDX 1.7** and offers no flag to emit anything older. Dependency-Track
+**5.0.3** ingests 1.6 at most; 1.7 support landed upstream in **5.1.0** (2026-08-27,
+DependencyTrack/dependency-track#6703, itself blocked on `cyclonedx-core-java` 13.0.0). The two
+dependency SBOMs were never affected: `frontend/package.json`'s `sbom` script pins
+`--spec-version 1.6` and the CycloneDX Gradle plugin emits 1.6, so *only* the trivy-generated
+BOMs were rejected — which is precisely why the failure read as a partial, ignorable blip.
+
+What it cost: the three `-image` projects kept serving their **last syft-era BOM** from
+2026-08-31 09:59 — the exact data the trivy switch exists to replace, and which yields zero OS
+findings. Everything in "OS packages: why a container project's `0` did not mean clean" was
+true and correct, and none of it was reaching production.
+
+The fix is a conversion step in `publish.yml` (`cyclonedx/cyclonedx-cli convert
+--output-version v1_6`) before the uploads. It is lossless for everything Dependency-Track
+reads — measured on this repo's own images, the 1.6 output has identical component counts,
+identical purls, all `aquasecurity:trivy:SrcName` properties, the same dependency graph and the
+same `operating-system` component; the only differences are the version fields and dropped empty
+`dependsOn: []` / `vulnerabilities: []` arrays. Trivy populates no 1.7-only field at all.
+
+Two guards now exist so this cannot recur silently: the "Assert the image SBOMs are not empty"
+step fails the job unless each BOM declares `1.6`, and it prints the trivy `SrcName` count per
+BOM. **Drop the conversion step once production is on Dependency-Track ≥ 5.1.0** — a 1.6 BOM is
+still accepted there, so the step is safe to leave in place until someone gets to it.
+
+Reproducing a rejection locally, without touching production, is cheap: run
+`dependencytrack/apiserver:5.0.3` against a throwaway Postgres (`DT_DATASOURCE_*` plus a 32-byte
+base64 `DT_SECRET_MANAGEMENT_DATABASE_KEK`; the v4 `ALPINE_DATABASE_*` names are rejected
+outright by v5), log in as `admin`/`admin` via `POST /api/v1/user/forceChangePassword` then
+`POST /api/v1/user/login`, and `PUT /api/v1/bom` with a base64 `bom` field. That path prints the
+body the GitHub Action swallows.
 
 ## Manual SBOM upload (when CI has silently failed)
 
@@ -905,6 +954,14 @@ for svc in backend frontend software-factory; do
     -e TRIVY_USERNAME -e TRIVY_PASSWORD aquasec/trivy:0.74.0 \
     image --quiet --format cyclonedx --output "/out/${svc}-image-bom.json" \
     "ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-${svc}:latest"
+
+  # Trivy emits CycloneDX 1.7, which DT 5.0.3 rejects with
+  # 400 "Unrecognized specVersion 1.7". Downgrade to 1.6 — lossless here.
+  # See "CycloneDX 1.7" above; delete this once prod is on DT >= 5.1.0.
+  docker run --rm -v "$PWD:/w" cyclonedx/cyclonedx-cli:0.33.1 \
+    convert --input-file "/w/${svc}-image-bom.json" \
+            --output-file "/w/${svc}-image-bom.json.1_6" --output-version v1_6
+  mv "${svc}-image-bom.json.1_6" "${svc}-image-bom.json"
 
   # Sanity-check before uploading: an empty BOM uploads fine and reads as "clean".
   jq '[.components[]? | select(.purl)] | length' "${svc}-image-bom.json"

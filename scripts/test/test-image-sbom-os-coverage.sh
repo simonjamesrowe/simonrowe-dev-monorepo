@@ -107,6 +107,46 @@ check "publish.yml asserts the generated image SBOMs are not empty" \
   "grep -q 'Assert the image SBOMs are not empty' <<<\"\$WORKFLOW_BODY\""
 
 # ---------------------------------------------------------------------------
+echo "  the image SBOMs are downgraded to CycloneDX 1.6 before upload"
+# ---------------------------------------------------------------------------
+# The third silent link, found on 2026-09-10: trivy emits CycloneDX **1.7** and
+# has no flag to emit anything older, while Dependency-Track 5.0.3 ingests 1.6 at
+# most and answers `400 {"detail":"Unrecognized specVersion 1.7"}`. The upload
+# action logs the status code and NOT the body, the `sbom` job is
+# continue-on-error, and only the trivy BOMs are affected (npm pins
+# `--spec-version 1.6`, the Gradle plugin emits 1.6) - so from #140 onwards all
+# three image projects silently kept serving their last syft-era BOM while the
+# run page stayed green. Exactly the failure shape links 1 and 2 have.
+check "publish.yml converts the image SBOMs to CycloneDX 1.6" \
+  "grep -q 'output-version v1_6' <<<\"\$WORKFLOW_BODY\""
+check "the conversion covers all three image SBOMs" \
+  "grep -qE 'for f in backend-image-bom.json frontend-image-bom.json software-factory-image-bom.json' <<<\"\$WORKFLOW_BODY\""
+check "the converter is pinned to an explicit tag rather than floating on latest" \
+  "grep -qE 'cyclonedx/cyclonedx-cli:[0-9]+\.[0-9]+\.[0-9]+' <<<\"\$WORKFLOW_BODY\""
+check "no cyclonedx-cli reference floats on :latest" \
+  "! grep -q 'cyclonedx/cyclonedx-cli:latest' <<<\"\$WORKFLOW_BODY\""
+
+# The conversion is the fix; this assertion is what stops it regressing to a
+# silent 400 again. Without it a future trivy or Dependency-Track bump reopens
+# the same hole with the same non-symptom.
+check "the emptiness assertion also pins the spec version at 1.6" \
+  "grep -q 'declares CycloneDX ' <<<\"\$WORKFLOW_BODY\""
+
+# Ordering, not decoration. A step that fails skips every step after it, so the
+# conversion must sit AFTER the two dependency uploads - otherwise a trivy-side
+# or converter-side failure also stales the Maven and npm data it has nothing to
+# do with - and BEFORE the image uploads it exists to feed.
+convert_line="$(grep -n 'Convert the image SBOMs to CycloneDX 1.6' <<<"$WORKFLOW_BODY" | head -1 | cut -d: -f1)"
+frontend_dep_line="$(grep -n 'Upload frontend dependency SBOM' <<<"$WORKFLOW_BODY" | head -1 | cut -d: -f1)"
+backend_image_line="$(grep -n 'Upload backend image SBOM' <<<"$WORKFLOW_BODY" | head -1 | cut -d: -f1)"
+check "the conversion step was located, so the ordering checks are not vacuous" \
+  "[[ -n '$convert_line' && -n '$frontend_dep_line' && -n '$backend_image_line' ]]"
+check "the conversion runs after the two dependency uploads" \
+  "[[ '${convert_line:-0}' -gt '${frontend_dep_line:-0}' ]]"
+check "the conversion runs before the three image uploads" \
+  "[[ '${convert_line:-0}' -lt '${backend_image_line:-0}' ]]"
+
+# ---------------------------------------------------------------------------
 echo "  the trivy server is declared and deployable"
 # ---------------------------------------------------------------------------
 check "the compose file declares a \`trivy-server\` service" \
