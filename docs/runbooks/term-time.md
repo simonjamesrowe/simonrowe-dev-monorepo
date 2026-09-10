@@ -307,6 +307,41 @@ attachment can never be more visible than the message that carried it.
 new extraction step does *not* retroactively apply. To backfill, delete the affected documents
 (`db.school_documents.deleteMany({sourceType:"EMAIL"})`) and restart; the next sync re-reads them.
 
+### Attachment bytes are the one piece of state outside Mongo and Elasticsearch
+
+The original PDF of an email attachment is a file on disk, under `school.attachment-path`, named
+by document id and served by `SchoolAttachmentController` after a tier check. Everything *about*
+it — the document, the chunks, the `attachmentUrl` in the chunk metadata that becomes the
+citation — lives in Mongo and Elasticsearch and is backed up with them. The bytes are not.
+
+Losing them is completely silent, and it happened. `docker-compose.prod.yml` had no volume for
+that directory, so it resolved to `/workspace/school-attachments` in the buildpack image's
+**writable layer**, right next to the `uploads` volume that does survive — and `backend` is in
+`FACTORY_DEPLOY_RECREATABLE`, so every deploy emptied it. The symptom is an answer that cites a
+PDF and a link that returns **404**, from an endpoint whose only two other 404s (unknown id,
+restricted document) look identical. Nothing is logged.
+
+There are now two halves to the fix and both matter:
+
+- A named `school-attachments` volume, with `SCHOOL_ATTACHMENT_PATH` set **absolutely** to match
+  the mount point. Deliberately not inside `backend-uploads`: that path is served by a
+  `ResourceHandlerRegistry` mapping with no authorisation at all, so a restricted attachment
+  stored there would be readable by anyone who knew a document id.
+  `SchoolAttachmentPersistenceTest` reads the compose file and pins all three facts.
+- `GmailIngestService.ingestAttachments` runs **before** the parent email's `changed()` check
+  and re-fetches whenever the file is missing. Without that a lost attachment is permanent: the
+  email never changes, so it is skipped forever while its citation stays in the index. The
+  ordinary case still costs nothing — the attachment's document id is derivable from the message
+  and attachment ids alone, so a file already on disk is recognised for the price of one `stat`,
+  with no download and no text extraction.
+
+**To recover after a loss**, once the volume is in place: trigger a mail sync
+(`POST /api/admin/school/ingest/gmail`, or the button on `/admin/school/documents`). Only
+messages still inside the Gmail query window (`SCHOOL_INGEST_FROM_DATE` onwards) can be
+repaired; anything older is gone for good. Confirm from the documents list — the **Open PDF**
+button renders only when the file is actually on disk, so its absence on a `PDF` row is the
+diagnostic.
+
 ## The chat surface
 
 Term Time streams over STOMP on `/ws/chat`, destination `/app/school.send`, replying on
