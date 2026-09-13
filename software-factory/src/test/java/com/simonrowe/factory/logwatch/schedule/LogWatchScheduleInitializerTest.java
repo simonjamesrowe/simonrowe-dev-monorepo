@@ -64,7 +64,7 @@ class LogWatchScheduleInitializerTest {
     return new LogWatchScheduleInitializer(
         scheduleClient,
         new LinearProperties(linearEnabled, "key", null, "SIM", null, false, null, null),
-        new LogWatchProperties(true, 2, 5, null, 5000, 3, null, null, null, null));
+        new LogWatchProperties(true, 2, 5, null, 5000, 3, null, null, null, null, null));
   }
 
   private Schedule createdSchedule() {

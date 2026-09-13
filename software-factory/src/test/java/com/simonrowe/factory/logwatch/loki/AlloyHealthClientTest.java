@@ -59,6 +59,7 @@ class AlloyHealthClientTest {
             true, 2, 5, null, 5000, 3, null,
             new LogWatchProperties.Alloy(baseUrl, Duration.ofSeconds(2)),
             null,
+            null,
             null),
         new ObjectMapper());
   }

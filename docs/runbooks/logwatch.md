@@ -94,6 +94,86 @@ stopped suppressing anything in the meantime — the old fingerprint it suppress
 computed again. `Fingerprint.VERSION` was deliberately not bumped: that would additionally have
 orphaned `deploy` and `cvefix`, which have no duplicate-ticket problem to fix.
 
+## Muting third-party noise
+
+Three of the containers this module reads log routine internal events at `ERROR` or `WARN`, and
+none of them has a line in this repository to change:
+
+| Container | What it logs | Tickets it filed |
+|---|---|---|
+| `temporal` | `context canceled` — a worker disconnecting, a long poll timing out | SIM-28, SIM-40 |
+| `temporal` | `canceling statement due to user request` — the same, seen from Postgres | SIM-32 |
+| `alloy` | tailing a container that exited between discovery and the read | SIM-31 |
+| `dependencytrack-apiserver` | `[BovModelConverter] Range` — malformed pypi ranges in OSV's data | SIM-41, SIM-42 |
+
+Before `factory.logwatch.ignore` the disposition on all six was "not fixed, deliberately", which
+is a backlog entry pretending to be a decision: they were re-filed nightly, for ever, and the
+absence sweep could never close them because they never stopped happening.
+
+Rules live in `software-factory/src/main/resources/application.yml`, **not** behind an
+environment variable. A rule is a statement that a class of log line belongs to somebody else —
+a code-review decision that wants its `reason` beside it in the diff, not something to be changed
+on a host at 2am while the thing it hides is the outage.
+
+```yaml
+factory:
+  logwatch:
+    ignore:
+      - reason: "Temporal shutdown/cancel churn (context canceled)"
+        container: temporal          # substring of the container name; required in practice
+        contains: "context canceled" # literal, case-sensitive
+```
+
+Two constraints make this safe to leave on:
+
+- **Every variant must match, not just the group's leader.** A group is keyed on the emitting
+  code, and one logger can emit two genuinely different faults — that is the standing objection
+  to source-key grouping, which `variants` exists to answer. Muting on the leader alone would let
+  a real failure ride out of sight inside a group whose most frequent message happens to be
+  noise. A Temporal `Operation failed with internal error.` group carrying both `context
+  canceled` and `connection refused` is filed, not muted.
+- **A group whose variants were capped is never muted**, however well the visible ones match.
+  `MAX_VARIANTS` limits what is *listed*, not what was *seen*, so past that point a rule cannot
+  vouch for the group. Same distinction, and the same reason, as the per-run cap's veto over the
+  absence sweep.
+
+Muting is applied **before** the occurrence floor and the per-run cap. Third-party noise is
+high-volume by nature — Dependency-Track's range warnings were 195 lines in two seconds — so
+muting last would let it occupy the five slots it is being muted from.
+
+**It is not silencing.** Every run's detail names the rules that muted something and how many
+groups each took:
+
+```
+Filed 2 problem(s); 3 muted as third-party noise (Temporal shutdown/cancel churn (context
+canceled); Alloy tailing a container that was being removed)
+```
+
+That string is the only place an over-broad rule is visible, because the whole point is that no
+ticket is filed — hence the reasons, not just a count.
+
+`mutedSignatures` is counted separately from `signaturesDropped` and **must never be folded into
+it**. A dropped signature is one the run could not fit, which is why it vetoes the absence sweep;
+a muted one is excluded on purpose on every run. Collapsing them would make the sweep permanently
+inert on any stack that mutes anything at all.
+
+What happens to the existing tickets: nothing files against those fingerprints any more, so
+`lastSeenAt` stops advancing and the absence sweep closes them after `resolve-after` (7d) — the
+same path a genuinely fixed problem takes. Deleting a rule later re-arms it; the fingerprint
+attachment outlives the closure, so the next occurrence files a linked regression.
+
+`LogWatchIgnoreRulesTest` binds the shipped `application.yml` and runs the **real captured
+production lines** from all six tickets through `SignatureExtractor` and the rules. It also
+asserts that Alloy's `final error sending batch` (the SIM-29 ingest-failure signal, and the one
+thing this module must never stop hearing) is still audible from the same container.
+
+`ScanObservation` gained two fields for this, and Temporal's `JacksonJsonPayloadConverter` leaves
+`FAIL_ON_UNKNOWN_PROPERTIES` on. A result serialized by the **old** worker and replayed by the
+new one is fine — the absent fields default, and the compact constructor handles the null list.
+The reverse would fail, so a workflow started by the new worker and replayed by the old one after
+a rollback would not deserialize. The window is one nightly scan; this repository has the same
+tolerance recorded for `IssueFiling` in 046.
+
 ## The part that matters most: it knows when it cannot see
 
 **An empty read is not a clean read.** Before interpreting anything, the scan establishes that its

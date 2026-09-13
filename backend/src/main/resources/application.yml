@@ -99,6 +99,24 @@ logging:
     # parse failure in the document itself is still reported.
     org.apache.pdfbox.pdmodel.font: ERROR
 
+    # FontBox is the font parser PDFBox delegates to, and it is a SEPARATE package
+    # root — so the line above, which looked like it covered "PDFBox font noise",
+    # covered none of this. What it emits is the font file's own quirks rather than
+    # the document's, one WARN per table per font per document:
+    #
+    #   No PostScript name data is provided for the font Wingdings3   (SIM-44)
+    #   Format 14 cmap table is not supported and will be ignored     (SIM-45)
+    #
+    # Both are statements about what FontBox chose not to read, not about a failure:
+    # the PostScript name is only used for name lookups the extractor never does, and
+    # a format-14 cmap carries Unicode variation sequences that the extracted text
+    # does not need. The school PDFs Term Time crawls embed Wingdings and Symbol
+    # fonts, so the two together produced 30 WARNs in a day off ordinary ingest.
+    #
+    # Scoped to `ttf`, the TrueType/OpenType parser, rather than to
+    # `org.apache.fontbox`: a font that cannot be parsed at all still reports.
+    org.apache.fontbox.ttf: ERROR
+
 spring:
   application:
     name: simonrowe-backend

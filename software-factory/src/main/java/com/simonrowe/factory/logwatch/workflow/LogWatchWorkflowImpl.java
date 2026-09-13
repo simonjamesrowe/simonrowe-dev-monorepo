@@ -167,7 +167,7 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
                   SourceHealth.Status.UNREACHABLE,
                   SourceHealth.Tier.CONTAINER_COVERAGE,
                   "The scan failed before reaching a verdict."),
-              List.of(), 0, false, 0, 0);
+              List.of(), 0, false, 0, 0, 0, List.of());
       try {
         finish(request, empty, LogWatchStatus.FAILED, workflowId, runId, startedAt, from, to,
             issueUrls, detail, resolvedUrls);
@@ -386,6 +386,17 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
     }
     if (observation.truncated()) {
       detail.append("; the read hit its line budget, so part of the window was not examined");
+    }
+    // Always named, never merely counted. A mute rule that has quietly broadened is invisible in
+    // the tickets by definition - the whole point is that no ticket is filed - so the run detail
+    // is the only place it can be seen, and a bare number is not enough to act on.
+    if (observation.mutedSignatures() > 0) {
+      detail
+          .append("; ")
+          .append(observation.mutedSignatures())
+          .append(" muted as third-party noise (")
+          .append(String.join("; ", observation.mutedBy()))
+          .append(")");
     }
     return detail.toString();
   }

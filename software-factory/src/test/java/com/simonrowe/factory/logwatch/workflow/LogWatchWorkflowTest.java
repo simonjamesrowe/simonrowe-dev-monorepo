@@ -148,7 +148,7 @@ class LogWatchWorkflowTest {
                     SourceHealth.Status.SILENT,
                     SourceHealth.Tier.ALLOY_COMPONENT,
                     "Alloy reports its loki.write component unhealthy: 429 limit: 0 bytes/sec"),
-                List.of(), 0, false, 0, 0));
+                List.of(), 0, false, 0, 0, 0, List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -165,7 +165,7 @@ class LogWatchWorkflowTest {
             new ScanObservation(
                 new SourceHealth(
                     SourceHealth.Status.SILENT, SourceHealth.Tier.ALLOY_COMPONENT, "429"),
-                List.of(), 0, false, 0, 0));
+                List.of(), 0, false, 0, 0, 0, List.of()));
 
     workflow.run(request(false));
 
@@ -181,7 +181,7 @@ class LogWatchWorkflowTest {
   @DisplayName("with the source alive and nothing found, the scan reports a genuine all-clear")
   void aliveSourceWithNoSignaturesIsNoFindings() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 120, false, 9, 0));
+        .thenReturn(new ScanObservation(alive(), List.of(), 120, false, 9, 0, 0, List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -193,7 +193,9 @@ class LogWatchWorkflowTest {
   @DisplayName("each signature is filed with the source key as its key, never the title")
   void filesOneIssuePerSignatureKeyedOnTheSignature() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(signature("boom")), 10, false, 5, 0));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(signature("boom")), 10, false, 5, 0, 0, List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -209,7 +211,9 @@ class LogWatchWorkflowTest {
   @DisplayName("a dry run creates and comments on nothing whatsoever")
   void dryRunFilesNothing() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(signature("boom")), 10, false, 5, 0));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(signature("boom")), 10, false, 5, 0, 0, List.of()));
 
     LogWatchResult result = workflow.run(request(true));
 
@@ -226,7 +230,7 @@ class LogWatchWorkflowTest {
             new ScanObservation(
                 new SourceHealth(
                     SourceHealth.Status.SILENT, SourceHealth.Tier.ALLOY_COMPONENT, "429"),
-                List.of(), 0, false, 0, 0));
+                List.of(), 0, false, 0, 0, 0, List.of()));
 
     LogWatchResult result = workflow.run(request(true));
 
@@ -238,7 +242,9 @@ class LogWatchWorkflowTest {
   @DisplayName("with the sink disabled the run completes rather than stalling on a dead queue")
   void filingDisabledStillCompletes() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(signature("boom")), 10, false, 5, 0));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(signature("boom")), 10, false, 5, 0, 0, List.of()));
 
     LogWatchResult result =
         workflow.run(
@@ -252,7 +258,9 @@ class LogWatchWorkflowTest {
   @DisplayName("losses to the cap and to the line budget are both reported, never hidden")
   void reportsItsOwnLosses() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(signature("boom")), 5000, true, 9, 12));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(signature("boom")), 5000, true, 9, 12, 0, List.of()));
 
     LogWatchResult result = workflow.run(request(true));
 
@@ -268,7 +276,7 @@ class LogWatchWorkflowTest {
     environment.close();
     setUpWithWorkflowId("logwatch");
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 1, false, 5, 0));
+        .thenReturn(new ScanObservation(alive(), List.of(), 1, false, 5, 0, 0, List.of()));
 
     workflow.run(request(false));
 
@@ -300,7 +308,7 @@ class LogWatchWorkflowTest {
                     SourceHealth.Status.SILENT,
                     SourceHealth.Tier.ALLOY_COMPONENT,
                     "429 ingestion rate limit exceeded"),
-                List.of(), 0, false, 0, 0));
+                List.of(), 0, false, 0, 0, 0, List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -312,7 +320,7 @@ class LogWatchWorkflowTest {
   @DisplayName("a clean scan closes the tickets whose problems have stopped")
   void sweepsOnTheCleanScan() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0));
+        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0, 0, List.of()));
     when(linear.sweepResolved(any()))
         .thenReturn(
             new SweepReport(
@@ -340,7 +348,9 @@ class LogWatchWorkflowTest {
   @DisplayName("a run that hit the per-run cap closes nothing, and says why")
   void neverSweepsWhenTheCapDroppedSignatures() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(signature("boom")), 400, false, 9, 4));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(signature("boom")), 400, false, 9, 4, 0, List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -352,7 +362,9 @@ class LogWatchWorkflowTest {
   @DisplayName("a truncated read closes nothing, and says why")
   void neverSweepsWhenTheReadWasTruncated() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(signature("boom")), 5000, true, 9, 0));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(signature("boom")), 5000, true, 9, 0, 0, List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -369,7 +381,7 @@ class LogWatchWorkflowTest {
   @DisplayName("a window too short to mean anything closes nothing, whatever the request asks")
   void neverSweepsOverShortWindows() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 3, false, 9, 0));
+        .thenReturn(new ScanObservation(alive(), List.of(), 3, false, 9, 0, 0, List.of()));
 
     workflow.run(
         new LogWatchRequest(
@@ -382,7 +394,7 @@ class LogWatchWorkflowTest {
   @DisplayName("the sweep is switched off by its own flag")
   void respectsTheResolveFlag() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0));
+        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0, 0, List.of()));
 
     workflow.run(request(false, false));
 
@@ -393,7 +405,9 @@ class LogWatchWorkflowTest {
   @DisplayName("the sweep runs after filing, never before")
   void sweepsAfterFiling() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(signature("boom")), 400, false, 9, 0));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(signature("boom")), 400, false, 9, 0, 0, List.of()));
     when(linear.sweepResolved(any())).thenReturn(SweepReport.none());
 
     workflow.run(request(false));
@@ -416,7 +430,7 @@ class LogWatchWorkflowTest {
   @DisplayName("a dry-run scan previews the sweep, and says so in the request")
   void dryRunStillPreviewsTheSweep() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0));
+        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0, 0, List.of()));
     when(linear.sweepResolved(any())).thenReturn(SweepReport.none());
 
     workflow.run(request(true));
@@ -430,7 +444,7 @@ class LogWatchWorkflowTest {
   @DisplayName("the sweep is scoped to log watch, never to another producer")
   void sweepsOnlyItsOwnProducer() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0));
+        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0, 0, List.of()));
     when(linear.sweepResolved(any())).thenReturn(SweepReport.none());
 
     workflow.run(request(false));

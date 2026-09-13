@@ -329,6 +329,47 @@ factory:
     # loiter, long enough that a weekly-cadence problem is not closed and re-filed on a cycle -
     # which is the duplicate-ticket disease 046 exists to cure.
     resolve-after: ${FACTORY_LOGWATCH_RESOLVE_AFTER:7d}
+    # Third-party log noise. Each rule mutes a group only when EVERY distinct message in it
+    # matches, and only when none were hidden by the variant cap, so a real fault emitted by the
+    # same logger still files. Every run says how many groups each rule muted; nothing here is
+    # silent. See docs/runbooks/logwatch.md ("Muting third-party noise").
+    #
+    # Curated in this file rather than driven by an environment variable on purpose. A rule is a
+    # statement that a class of log line belongs to somebody else, which is a code-review
+    # decision and wants the `reason` beside it in the diff - not something to be changed on a
+    # host at 2am while the thing it hides is the outage.
+    #
+    # The four below are the entire pre-existing "not fixed, deliberately" backlog: SIM-28,
+    # SIM-31, SIM-32, SIM-40, SIM-41 and SIM-42, all filed repeatedly, none with a line in this
+    # repository to change. Muted, their tickets stop being refreshed and the absence sweep
+    # closes them after resolve-after, exactly as it would for a problem that was fixed.
+    ignore:
+      # Temporal logs the teardown of its own long-poll and persistence calls at ERROR, with a
+      # full Go stack. `context canceled` is a worker disconnecting or a poll timing out - both
+      # routine, both several times a day. Scoped to the container as well as the phrase because
+      # `context canceled` is generic enough that a first-party log could legitimately say it.
+      - reason: "Temporal shutdown/cancel churn (context canceled)"
+        container: temporal
+        contains: "context canceled"
+      # The same thing seen from Postgres: Temporal cancels a visibility query and the driver
+      # reports the cancellation as a statement error.
+      - reason: "Temporal visibility query cancelled by Temporal itself"
+        container: temporal
+        contains: "canceling statement due to user request"
+      # Alloy tails containers discovered from the Docker socket. A container that exits between
+      # discovery and the read - every one-shot, and every service a deploy recreates - produces
+      # one of these. It is Alloy correctly noticing a race it cannot avoid, and it does not
+      # indicate lost logs for any container that is still running.
+      - reason: "Alloy tailing a container that was being removed"
+        container: alloy
+        contains: "can not get logs from container which is dead or marked for removal"
+      # Dependency-Track mirrors OSV, and OSV carries pypi ranges with malformed versions in them
+      # (`2.7.0rrc0`). DT says so, once per range, and falls back to generic version comparison -
+      # which is the correct handling, logged. 195 lines in two seconds during one mirror sync,
+      # about an ecosystem this portfolio has no components in.
+      - reason: "Dependency-Track parsing malformed OSV pypi version ranges"
+        container: dependencytrack-apiserver
+        contains: "[BovModelConverter] Range"
     loki:
       # NOTE this is the *push* URL and already contains /loki/api/v1. LokiClient strips the
       # trailing /push to get the query base; appending /api/v1 to the raw value yields

@@ -1,6 +1,8 @@
 package com.simonrowe.factory.logwatch.config;
 
+import com.simonrowe.factory.logwatch.domain.LogSignature;
 import java.time.Duration;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -20,6 +22,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param resolveWhenClear whether a clean scan closes the tickets this module filed for problems
  *     it no longer sees
  * @param resolveAfter how long a problem must go unreported before its ticket is closed
+ * @param ignore third-party log noise this module must not file tickets for
  */
 @ConfigurationProperties("factory.logwatch")
 public record LogWatchProperties(
@@ -39,7 +42,9 @@ public record LogWatchProperties(
     // configures nothing else would get filing without resolving, which is the half-automation
     // this exists to remove. Boxing lets "absent" and "explicitly false" be told apart.
     Boolean resolveWhenClear,
-    Duration resolveAfter) {
+    Duration resolveAfter,
+    // Last, for the same reason as the two above: appended rather than inserted.
+    List<Ignore> ignore) {
 
   /**
    * How long a problem must go unreported before the sweep closes its ticket.
@@ -69,6 +74,105 @@ public record LogWatchProperties(
     alloy = alloy == null ? Alloy.defaults() : alloy;
     resolveWhenClear = resolveWhenClear == null || resolveWhenClear;
     resolveAfter = resolveAfter == null ? DEFAULT_RESOLVE_AFTER : resolveAfter;
+    // Unusable rules are dropped here rather than at match time, so `ignore` is a list of rules
+    // that can actually mute something and `mutedBy` never has to re-check. A rule with no
+    // `contains` would otherwise match every group in its container.
+    ignore = ignore == null ? List.of() : ignore.stream().filter(Ignore::usable).toList();
+  }
+
+  /**
+   * The first rule that mutes this group, if any.
+   *
+   * @param signature the grouped problem
+   * @return the matching rule, or {@code null} when the group should be filed
+   */
+  public Ignore mutedBy(final LogSignature signature) {
+    return ignore.stream().filter(rule -> rule.mutes(signature)).findFirst().orElse(null);
+  }
+
+  /**
+   * One class of third-party log noise this module must not file a ticket for.
+   *
+   * <p>Every other filter in this module is a property of the <em>volume</em> of a problem —
+   * how often it occurred, how many made the cap. This one is a statement about a problem's
+   * <em>owner</em>, and it exists because the alternative is worse. Temporal logs its own
+   * shutdown and cancel churn at ERROR, Alloy logs an ERROR each time it tails a container that
+   * is being removed, and Dependency-Track logs a WARN per malformed OSV version range it
+   * mirrors. None of the three has a line in this repository to change; before this list they
+   * were re-filed nightly, for ever, and the recorded disposition was "not fixed, deliberately"
+   * — which is a backlog entry pretending to be a decision.
+   *
+   * <p>Muting is not silencing: every run reports how many groups were muted and which rules did
+   * it, so a rule that has started matching more than it should is visible in the same place the
+   * findings are. What it does mean is that the muted problem's ticket stops being refreshed, so
+   * the absence sweep closes it after {@code resolveAfter} — the same path a genuinely fixed
+   * problem takes.
+   *
+   * @param reason why this noise is somebody else's, in a sentence. Never matched on; it is what
+   *     a future reader needs in order to delete the rule safely
+   * @param container substring of the container name the rule is confined to. Blank matches any
+   *     container, which is almost never what you want — the phrases below are generic enough
+   *     that a first-party log could legitimately contain one
+   * @param contains the literal substring that identifies the noise, matched case-sensitively
+   *     against a variant's normalised signature and its example line
+   */
+  public record Ignore(String reason, String container, String contains) {
+
+    public Ignore {
+      reason = reason == null ? "" : reason.trim();
+      container = container == null ? "" : container.trim();
+      contains = contains == null ? "" : contains.trim();
+    }
+
+    /** Whether this rule is specific enough to be applied at all. */
+    public boolean usable() {
+      return !contains.isBlank();
+    }
+
+    /**
+     * Whether this rule mutes a whole group.
+     *
+     * <p><strong>Every</strong> variant must match, not merely the group's leader. A group is
+     * keyed on the emitting code, and one logger can emit two genuinely different faults — that
+     * is the standing objection to grouping by source key, which {@code LogSignature.variants}
+     * exists to answer. Muting on the leader alone would let a real failure ride out of sight
+     * inside a group whose most frequent message happens to be noise.
+     *
+     * <p>And a group whose variants were capped is never muted, however well the visible ones
+     * match: {@code MAX_VARIANTS} limits what is <em>listed</em>, not what was <em>seen</em>, so
+     * beyond that point the rule cannot vouch for the group. Same distinction, and the same
+     * reason, as the per-run cap's veto over the absence sweep.
+     *
+     * @param signature the grouped problem
+     * @return whether it is this rule's noise, all of it
+     */
+    public boolean mutes(final LogSignature signature) {
+      if (!usable() || signature == null) {
+        return false;
+      }
+      if (!container.isBlank() && !contains(signature.container())) {
+        return false;
+      }
+      if (signature.distinctVariants() > signature.variants().size()) {
+        return false;
+      }
+      if (signature.variants().isEmpty()) {
+        // A LogSignature replayed from a pre-ignore Temporal history carries no variants. Fall
+        // back to the leader rather than refusing to mute, which would re-file the very noise
+        // the operator has already disowned.
+        return matches(signature.signature()) || matches(signature.exampleLine());
+      }
+      return signature.variants().stream()
+          .allMatch(variant -> matches(variant.signature()) || matches(variant.exampleLine()));
+    }
+
+    private boolean contains(final String containerName) {
+      return containerName != null && containerName.contains(container);
+    }
+
+    private boolean matches(final String text) {
+      return text != null && text.contains(contains);
+    }
   }
 
   /**

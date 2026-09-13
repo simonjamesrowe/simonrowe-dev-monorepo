@@ -33,8 +33,19 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 ENV_FILE="${ENV_FILE:-$PROJECT_DIR/.env}"
 
-POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-langfuse-db}"
-CLICKHOUSE_CONTAINER="${CLICKHOUSE_CONTAINER:-langfuse-clickhouse}"
+# COMPOSE SERVICE names, not container names. `docker exec` addresses a container by
+# name or id and knows nothing about compose services, so `docker exec langfuse-db`
+# fails with "No such container" wherever it is run — inside the deployer and on the
+# host alike. resolve_containers() below turns these into the real names.
+# POSTGRES_CONTAINER/CLICKHOUSE_CONTAINER remain honoured as overrides.
+POSTGRES_SERVICE="${POSTGRES_SERVICE:-langfuse-db}"
+CLICKHOUSE_SERVICE="${CLICKHOUSE_SERVICE:-langfuse-clickhouse}"
+POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-}"
+CLICKHOUSE_CONTAINER="${CLICKHOUSE_CONTAINER:-}"
+# Compose derives the project from its working directory, which is not this script's
+# — and in the deployer is not even the same path. Name it, as restore-platform.sh
+# already does. COMPOSE_PROJECT_NAME is set on the deployer for exactly this reason.
+COMPOSE_PROJECT="${COMPOSE_PROJECT:-${COMPOSE_PROJECT_NAME:-simonrowe-dev-monorepo}}"
 CLICKHOUSE_DATABASE="${CLICKHOUSE_DATABASE:-default}"
 # The langfuse-clickhouse-backups volume as the ClickHouse container sees it. The
 # archive comes back out via `docker cp`, so this script needs no mount of its own.
@@ -42,7 +53,8 @@ CLICKHOUSE_BACKUP_DIR="${CLICKHOUSE_BACKUP_DIR:-/backups}"
 
 DATABASES=(langfuse dtrack temporal temporal_visibility)
 # Recorded in the manifest so a restore knows which tool version produced the dump.
-IMAGE_CONTAINERS=(langfuse dependencytrack-apiserver langfuse-clickhouse)
+# Compose SERVICE names, resolved the same way as the two above.
+IMAGE_SERVICES=(langfuse dependencytrack-apiserver langfuse-clickhouse)
 
 DRIVE_FOLDER_NAME="${DRIVE_FOLDER_NAME:-simonrowe-platform-backups}"
 RETENTION="${RETENTION:-7}"
@@ -111,6 +123,66 @@ check_prerequisites() {
   command -v shasum >/dev/null 2>&1 || command -v sha256sum >/dev/null 2>&1 \
     || die "shasum or sha256sum is required (secret fingerprints)"
   [ -f "$ENV_FILE" ] || die "env file not found: $ENV_FILE"
+}
+
+# ---------------------------------------------------------------------------
+# Container resolution
+# ---------------------------------------------------------------------------
+#
+# Compose names a container `<project>-<service>-<index>`, so the service name on its
+# own addresses nothing. This is the whole reason the nightly capture failed every
+# night once it got past check_prerequisites: `sweep_orphans` warned "could not sweep
+# /backups (continuing)" and `dump_postgres` died on "pg_dumpall --roles-only failed",
+# both of which are `docker exec` against a container that does not exist. Neither
+# message says so, which is why it read as a Postgres problem.
+#
+# Resolved by compose's own labels rather than by formatting `<project>-<service>-1`:
+# the label is what compose itself matches on, so a renamed or re-indexed container
+# still resolves. The formatted name is kept only as a dry-run fallback.
+
+# Prints the container name for a compose service, or nothing. Pass `all` to include
+# stopped containers.
+#
+# `awk NR==1` rather than `head -n1`: head closes the pipe on the first line, which
+# under `set -o pipefail` turns docker's SIGPIPE into a non-zero status and aborts
+# the script. awk reads the stream to the end.
+compose_container() {
+  local service="$1" scope="${2:-running}" args=()
+  [ "$scope" = "all" ] && args+=(--all)
+  # `${args[@]+...}` because this file runs under `set -u`, where an empty array
+  # expanded bare is an unbound variable on bash 4.x and on macOS's bash 3.2.
+  docker ps ${args[@]+"${args[@]}"} --format '{{.Names}}' \
+    --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
+    --filter "label=com.docker.compose.service=${service}" \
+    2>/dev/null | awk 'NR==1{print}'
+}
+
+# Resolves one service and assigns it to the named variable IN THE CALLER'S SHELL,
+# rather than printing it for a `$( )` to capture. That is deliberate: `die` runs
+# `exit 1`, and inside a command substitution that exits only the subshell — the
+# assignment would then succeed with an empty string and the very next line would run
+# `docker exec "" pg_dumpall`. `set -e` happens to catch it today, through a rule about
+# the last command of a `||` list that nothing here should depend on.
+resolve_container_into() {
+  local target_var="$1" service="$2" name
+  name="$(compose_container "$service")"
+  if [ -z "$name" ]; then
+    # A dry run is the documented way to check this script without touching anything,
+    # and it must stay usable on a machine where the stack is not up.
+    if [ "$DRY_RUN" -eq 1 ]; then
+      name="${COMPOSE_PROJECT}-${service}-1"
+    else
+      die "no running container for compose service '$service' in project '$COMPOSE_PROJECT' (set POSTGRES_CONTAINER/CLICKHOUSE_CONTAINER to override, or COMPOSE_PROJECT if the project name differs)"
+    fi
+  fi
+  printf -v "$target_var" '%s' "$name"
+}
+
+resolve_containers() {
+  [ -n "$POSTGRES_CONTAINER" ] || resolve_container_into POSTGRES_CONTAINER "$POSTGRES_SERVICE"
+  [ -n "$CLICKHOUSE_CONTAINER" ] \
+    || resolve_container_into CLICKHOUSE_CONTAINER "$CLICKHOUSE_SERVICE"
+  log "Using containers: postgres=$POSTGRES_CONTAINER clickhouse=$CLICKHOUSE_CONTAINER"
 }
 
 # ---------------------------------------------------------------------------
@@ -298,16 +370,22 @@ print(json.dumps(tables), end="")
 }
 
 # Best-effort: a missing container costs a manifest entry, not the backup.
+#
+# `all` scope, unlike the two datastores: the manifest wants the image a service was
+# last created from, and langfuse or the DT apiserver being stopped is not a reason to
+# omit it. Keyed by SERVICE name so the manifest stays readable across a project rename.
 image_tags_json() {
-  local container tag
+  local service container tag
   local pairs=""
-  for container in "${IMAGE_CONTAINERS[@]}"; do
+  for service in "${IMAGE_SERVICES[@]}"; do
     if [ "$DRY_RUN" -eq 1 ]; then
       continue
     fi
+    container="$(compose_container "$service" all)"
+    [ -n "$container" ] || { warn "no container for compose service $service"; continue; }
     tag="$(docker inspect --format '{{.Config.Image}}' "$container" 2>/dev/null || true)"
     [ -n "$tag" ] || { warn "could not read image tag for $container"; continue; }
-    pairs="${pairs}${container}=${tag}"$'\n'
+    pairs="${pairs}${service}=${tag}"$'\n'
   done
   printf '%s' "$pairs" | python3 -c '
 import json, sys
@@ -594,6 +672,10 @@ main() {
   if [ "$DRY_RUN" -eq 1 ]; then
     log "DRY RUN — no command below will actually be executed."
   fi
+
+  # After the dry-run banner, because it falls back to a formatted name under --dry-run
+  # and the log should read in that order. Before anything that shells into a container.
+  resolve_containers
 
   local timestamp created_at build_dir archive_name archive_path token folder_id
   timestamp="$(date -u +%Y%m%d-%H%M%S)"

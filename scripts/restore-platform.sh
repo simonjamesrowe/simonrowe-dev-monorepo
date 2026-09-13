@@ -49,8 +49,16 @@ COMPOSE_FILE="${COMPOSE_FILE:-$PROJECT_DIR/docker-compose.prod.yml}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-simonrowe-dev-monorepo}"
 ENV_FILE="${ENV_FILE:-$PROJECT_DIR/.env}"
 
-POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-langfuse-db}"
-CLICKHOUSE_CONTAINER="${CLICKHOUSE_CONTAINER:-langfuse-clickhouse}"
+# COMPOSE SERVICE names, not container names — compose calls the container
+# `<project>-<service>-<index>` and `docker exec` knows nothing about services, so the
+# bare service name addresses nothing. wait_for_health() below has always formatted the
+# full name; these two did not, which is the identical defect that stopped every
+# nightly backup-platform.sh run dead. resolve_containers() turns them into real names;
+# POSTGRES_CONTAINER/CLICKHOUSE_CONTAINER stay honoured as explicit overrides.
+POSTGRES_SERVICE="${POSTGRES_SERVICE:-langfuse-db}"
+CLICKHOUSE_SERVICE="${CLICKHOUSE_SERVICE:-langfuse-clickhouse}"
+POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-}"
+CLICKHOUSE_CONTAINER="${CLICKHOUSE_CONTAINER:-}"
 CLICKHOUSE_DATABASE="${CLICKHOUSE_DATABASE:-default}"
 # Where the ClickHouse container sees the shared langfuse-clickhouse-backups volume.
 CLICKHOUSE_BACKUP_DIR="${CLICKHOUSE_BACKUP_DIR:-/backups}"
@@ -84,6 +92,51 @@ STOPPED_SERVICES=()
 log()  { printf '[restore-platform] %s\n' "$*"; }
 warn() { printf '[restore-platform] WARNING: %s\n' "$*" >&2; }
 die()  { printf '[restore-platform] ERROR: %s\n' "$*" >&2; exit 1; }
+
+# ---------------------------------------------------------------------------
+# Container resolution — identical to backup-platform.sh
+# ---------------------------------------------------------------------------
+
+# Prints the container name for a compose service, or nothing.
+#
+# `awk NR==1` rather than `head -n1`: head closes the pipe on the first line, which
+# under `set -o pipefail` turns docker's SIGPIPE into a non-zero status and aborts the
+# script. awk reads the stream to the end.
+compose_container() {
+  local service="$1"
+  docker ps --format '{{.Names}}' \
+    --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
+    --filter "label=com.docker.compose.service=${service}" \
+    2>/dev/null | awk 'NR==1{print}'
+}
+
+# Resolves one service and assigns it to the named variable IN THE CALLER'S SHELL,
+# rather than printing it for a `$( )` to capture. That is deliberate: `die` runs
+# `exit 1`, and inside a command substitution that exits only the subshell — the
+# assignment would then succeed with an empty string and the very next line would run
+# `docker exec "" pg_dumpall`. `set -e` happens to catch it today, through a rule about
+# the last command of a `||` list that nothing here should depend on.
+resolve_container_into() {
+  local target_var="$1" service="$2" name
+  name="$(compose_container "$service")"
+  if [ -z "$name" ]; then
+    # A dry run is the documented rehearsal for a restore and must stay usable where
+    # the stack is not up.
+    if [ "$DRY_RUN" -eq 1 ]; then
+      name="${COMPOSE_PROJECT}-${service}-1"
+    else
+      die "no running container for compose service '$service' in project '$COMPOSE_PROJECT' (set POSTGRES_CONTAINER/CLICKHOUSE_CONTAINER to override, or COMPOSE_PROJECT if the project name differs)"
+    fi
+  fi
+  printf -v "$target_var" '%s' "$name"
+}
+
+resolve_containers() {
+  [ -n "$POSTGRES_CONTAINER" ] || resolve_container_into POSTGRES_CONTAINER "$POSTGRES_SERVICE"
+  [ -n "$CLICKHOUSE_CONTAINER" ] \
+    || resolve_container_into CLICKHOUSE_CONTAINER "$CLICKHOUSE_SERVICE"
+  log "Using containers: postgres=$POSTGRES_CONTAINER clickhouse=$CLICKHOUSE_CONTAINER"
+}
 
 # Runs a command, or prints it under --dry-run. Every mutating action goes
 # through this; anything that bypasses it will run during a dry run.
@@ -734,6 +787,10 @@ main() {
   if [ "$DRY_RUN" -eq 1 ]; then
     log "DRY RUN — no command below will actually be executed."
   fi
+
+  # After the --list return: listing Drive archives needs no running stack, and dying
+  # here would make `--list` unusable exactly when it is most wanted.
+  resolve_containers
 
   if [ "$USE_LATEST" -eq 1 ]; then
     download_latest_archive
