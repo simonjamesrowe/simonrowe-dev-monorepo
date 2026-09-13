@@ -513,6 +513,53 @@ Two traps this arrangement contains:
   message body and is validated server-side by `SchoolAudienceResolver` using the application's
   real `JwtDecoder`. Anything that fails validation resolves to anonymous rather than throwing.
 
+### "It keeps saying it cannot connect"
+
+Term Time's socket was being closed by the infrastructure roughly once a minute and the page was
+reporting each closure as a failure. Three separate things had to be true for that:
+
+1. **Spring's simple broker sends no heartbeats unless it is given a `TaskScheduler`.** The
+   default is `"0, 0"`, and the broker *advertises* that zero in its CONNECTED frame, which
+   switches the client's heartbeat off too however the client is configured. So the socket
+   carried no traffic at all between questions — and every proxy on the path treats a silent
+   connection as a dead one: nginx's `proxy_read_timeout` defaults to **60s**, Cloudflare's
+   WebSocket idle timeout is around 100s, and pinggy has its own. `WebSocketConfig` now sets the
+   scheduler and states `{10000, 10000}` explicitly, and `WebSocketHeartbeatTest` pins it. That
+   test exists because nothing else notices: a context with heartbeats off starts perfectly and
+   passes every other test in the suite.
+2. **The nginx block carrying every production chat socket is `api.simonrowe.dev`, not the
+   term-time one.** The frontend image is built with `VITE_API_BASE_URL=https://api.simonrowe.dev`,
+   so the browser opens `wss://api.simonrowe.dev/ws/chat` *even from `term-time.simonrowe.dev`*.
+   The `location /ws/` block in the term-time server block — with its careful
+   `proxy_read_timeout 300s` — is same-origin only and is not the one a released build uses.
+   `api.simonrowe.dev` now has its own `/ws/` block with the same timeout, and it carries the
+   maintenance-flag check that `location /` gave it before the split. Keep the two in step.
+3. **The page announced every drop and never took it back.** `onWebSocketError` set an error
+   string that nothing cleared, and `sendMessage` was `if (connected) publish(...)` with no
+   `else` — so a question typed into a page whose socket had quietly timed out was discarded in
+   silence, under a typing indicator that never stopped.
+
+What the browser does now, in `schoolChatService.ts`:
+
+- Exponential reconnect from **1s**, capped at **15s**. The ceiling is low because nobody presses
+  anything to recover, so the ceiling *is* how long a reader waits after the service returns.
+- `connecting` / `connected` / `reconnecting` / `offline` are four separate states and only
+  `offline` renders anything — a quiet "Reconnecting to Term Time…" line, no error styling and
+  **no button**. `reconnecting` is deliberately silent: it is typically over inside a second, and
+  announcing it is what made a working page feel broken.
+- A message sent while the socket is down is **held in one slot** and published on reconnect. If
+  that has not happened within 20s the page is told, the empty reply bubble is removed and the
+  indicator stops. One slot, not a queue: a second question supersedes the first, because two
+  answers arriving at once is worse than one lost draft.
+- **Staleness is judged on a connection epoch, not on the session id.** A reconnect reuses the
+  same session deliberately, and `deactivate()` is asynchronous, so the outgoing client's close
+  event lands after the replacement is live. Compared on session id those two are identical, and
+  the stale close would be scored as a failure of a connection that is fine.
+- Once `offline`, the page polls `probeSiteStatus()` (`services/siteStatus.ts`) every 10s. A
+  **503** means a deploy is running, so it reloads and lets nginx's maintenance page take over;
+  anything else leaves the page where it is, because the transcript is still readable and the
+  socket is still retrying. It never polls while connected.
+
 ### Conversation memory, and why there was none
 
 Term Time shipped with **no conversation memory whatsoever** — not a short window, none. Every

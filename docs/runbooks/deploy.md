@@ -46,6 +46,36 @@ Two things about this list are load-bearing and easy to "tidy" into bugs:
   the script after their own `git pull` must not have it decide to move `HEAD`
   for them. It is opt-in, and only the deployer opts in.
 
+### The maintenance page brings people back on its own
+
+`config/nginx/maintenance/maintenance.html` and `unavailable.html` each carry two
+**inline** scripts. That is not a loosening of the "nothing is fetched" rule those
+files are built around — neither requests anything at parse time, and both pages
+are complete and correct with scripting off, where the `<meta http-equiv="refresh">`
+is the fallback.
+
+- **Theme.** They read `theme-preference` from `localStorage` — per-origin, so on
+  `term-time.simonrowe.dev` that is the preference the Term Time reader actually
+  set — and resolve to an explicit `data-theme` before first paint, falling back to
+  the OS setting and then to a `prefers-color-scheme` rule in the CSS. The
+  attribute is written for **both** values, unlike the main site which only writes
+  it for light: here an absent attribute is what the media-query fallback claims,
+  so leaving it off for dark would show a light page to somebody who chose dark on
+  a light OS.
+- **Coming back.** They poll `window.location.href` with `HEAD`, every 5s
+  (maintenance) or 15s (unavailable), and reload as soon as the answer stops being
+  502/503/504. `href`, not `/`: the flag is evaluated per server block, a visitor
+  may be deep in the site, and Term Time is a different hostname entirely — so
+  returning them to a root would lose where they were. They also name the site from
+  the hostname, because telling a Term Time reader that "simonrowe.dev" is updating
+  leaves them wondering whether they are in the right place at all.
+
+`scripts/test/test-nginx-maintenance.sh` covers all of it, including that a `HEAD`
+of the same URL reports the same status as a `GET` — without that the pages would
+either never return anyone or return them into a still-broken site. Its
+"needs no external asset" assertion was narrowed to catch `<link>`, `<script src>`,
+`src="http"`, `@import` and `url(` rather than any `<script>` at all.
+
 Full contract:
 `specs/036-auto-deploy-on-merge/contracts/restart-prod-phases.md`.
 

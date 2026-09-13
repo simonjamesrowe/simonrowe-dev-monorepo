@@ -1,5 +1,5 @@
 import { GraduationCap, Moon, Sun, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -12,12 +12,23 @@ import {
 } from '../components/chat/chatStreamReducer'
 import type { ChatMessageModel } from '../components/chat/chatTypes'
 import type { ChatResponse } from '../services/chatService'
+import { probeSiteStatus, reloadPage } from '../services/siteStatus'
 import { HowItWorks } from './components/HowItWorks'
 import { YearSelector } from './components/YearSelector'
 import * as schoolChat from './schoolChatService'
+import type { SchoolConnectionState } from './schoolChatService'
 
 const YEAR_STORAGE_KEY = 'term-time-year-groups'
 const SCHOOL_URL = 'https://www.kilmorieschool.co.uk'
+
+/**
+ * How often to ask the proxy whether a deploy is under way, once the socket has given up.
+ *
+ * Only while offline, and only then. A page that is connected has no question to ask, and a
+ * poll running the rest of the time would be a request every few seconds from every open tab
+ * for the whole life of the page.
+ */
+const SITE_STATUS_POLL_MS = 10_000
 
 const YEAR_GROUPS = [
   'Reception',
@@ -91,6 +102,7 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessageModel[]>([])
   const [awaiting, setAwaiting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [connection, setConnection] = useState<SchoolConnectionState>('connecting')
   const [yearGroups, setYearGroups] = useState<string[]>([])
   const sessionIdRef = useRef<string>(newSessionId())
   const endRef = useRef<HTMLDivElement>(null)
@@ -134,16 +146,79 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => {
-    const sessionId = sessionIdRef.current
-    schoolChat.connect(
-      sessionId,
-      onFrame,
-      undefined,
-      (message) => setError(message),
+  /**
+   * A message typed while the socket was down and never delivered.
+   *
+   * The optimistic render has already drawn the question and an empty reply bubble with a
+   * typing indicator under it. Leaving those in place is the failure mode this whole change is
+   * about: the page looks like it is thinking, forever. The empty bubble goes, the indicator
+   * stops, and the reader is told plainly.
+   */
+  const onUndelivered = useCallback(() => {
+    setAwaiting(false)
+    setMessages((prior) => {
+      const last = prior[prior.length - 1]
+      const isEmptyPlaceholder =
+        last?.role === 'assistant' && !last.finalized && (last.blocks?.length ?? 0) === 0
+      return isEmptyPlaceholder ? prior.slice(0, -1) : prior
+    })
+    setError(
+      'That question did not get through — Term Time could not reach the server. ' +
+        'Please try again in a moment.',
     )
+  }, [])
+
+  // One object, so clearChat reconnects with the same handlers the effect installed rather
+  // than assembling its own.
+  const handlers = useMemo(
+    () => ({
+      onMessage: onFrame,
+      onStateChange: setConnection,
+      onError: setError,
+      onUndelivered,
+    }),
+    [onFrame, onUndelivered],
+  )
+
+  useEffect(() => {
+    schoolChat.connect(sessionIdRef.current, handlers)
     return () => schoolChat.disconnect()
-  }, [onFrame])
+  }, [handlers])
+
+  /**
+   * Once the socket has genuinely given up, find out whether a deploy is the reason.
+   *
+   * If it is, nginx is already serving the themed "update in progress" page at this exact URL,
+   * and that page polls its way back to Term Time when the deploy finishes — so the whole job
+   * here is to reload and let it. Anything else (an upstream down, no network at all) leaves
+   * the page where it is: the transcript is still readable and the socket is still retrying,
+   * and replacing that with an error page would be a downgrade.
+   */
+  useEffect(() => {
+    if (connection !== 'offline') return
+
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let cancelled = false
+
+    const check = async () => {
+      const status = await probeSiteStatus(controller.signal)
+      if (cancelled) return
+      if (status === 'maintenance') {
+        reloadPage()
+        return
+      }
+      timer = setTimeout(() => void check(), SITE_STATUS_POLL_MS)
+    }
+
+    void check()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+      if (timer !== null) clearTimeout(timer)
+    }
+  }, [connection])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -158,7 +233,7 @@ export default function App() {
     setMessages([])
     setError(null)
     setAwaiting(false)
-    schoolChat.connect(sessionIdRef.current, onFrame, undefined, (m) => setError(m))
+    schoolChat.connect(sessionIdRef.current, handlers)
   }
 
   function chooseYears(next: string[]) {
@@ -184,6 +259,11 @@ export default function App() {
 
       // No token, ever. Term Time is entirely public; the backend resolves a null token to the
       // anonymous audience, which can only reach content that has been approved for it.
+      //
+      // The return value is deliberately ignored: `false` means the transport is holding the
+      // message until the reconnect already in flight completes, which is indistinguishable
+      // from a slow answer and needs no separate UI. If that reconnect never comes, the
+      // transport calls onUndelivered and the placeholder above is cleaned up there.
       schoolChat.sendMessage({
         sessionId: sessionIdRef.current,
         message: trimmed,
@@ -288,6 +368,27 @@ export default function App() {
             <div className="chat-message chat-message--assistant">
               <ChatTypingIndicator />
             </div>
+          )}
+
+          {/*
+            Nothing to press, and nothing to see for the first several seconds.
+
+            'connecting' is where every visit starts, so a notice there would fire on every
+            single page load. 'reconnecting' is a socket that dropped and is already coming
+            back — typically inside a second — and saying so would be noise about something
+            the reader cannot act on and will not outlast. Only 'offline', which the transport
+            reaches after the retries have genuinely not worked, says anything, and what it
+            says is that it is still trying. The retry is automatic, and a question typed in
+            the meantime is held and sent the moment the socket returns.
+
+            role="status" rather than role="alert": this is polite, and a screen reader
+            interrupting an answer being read out to announce a reconnection is worse than the
+            reconnection.
+          */}
+          {connection === 'offline' && (
+            <p className="school-page__notice" role="status">
+              Reconnecting to Term Time…
+            </p>
           )}
 
           {error && <p className="school-page__error">{error}</p>}

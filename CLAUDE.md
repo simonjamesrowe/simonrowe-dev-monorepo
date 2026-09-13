@@ -211,6 +211,68 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- term-time-connection-resilience: Term Time said it could not connect roughly once a minute,
+  and the cause was that **the STOMP socket carried no traffic at all between questions**.
+  Spring's simple broker sends no heartbeats unless it is handed a `TaskScheduler` — the default
+  is `"0, 0"` — and it *advertises* that zero in its CONNECTED frame, which disables the client's
+  heartbeat however the client is configured. A silent WebSocket is indistinguishable from a dead
+  one to every proxy on the path: nginx's `proxy_read_timeout` defaults to **60s**, Cloudflare's
+  is ~100s, pinggy has its own. So the socket was closed underneath any reader who spent a minute
+  reading, and the next question went nowhere. Nothing logged anything. Load-bearing bits:
+  - **`WebSocketConfig` injects `messageBrokerTaskScheduler` by qualifier rather than declaring a
+    `TaskScheduler` bean.** `@EnableWebSocketMessageBroker` already publishes one for exactly this
+    purpose, and a second `TaskScheduler` bean would make Boot's task-scheduling auto-configuration
+    back off (`@ConditionalOnMissingBean(TaskScheduler.class)`) and quietly move every `@Scheduled`
+    method in the application onto whichever pool was declared last. `{10000, 10000}` is stated
+    explicitly even though `setTaskScheduler` already defaults to it — that default is a side
+    effect of a setter whose name says nothing about heartbeats.
+  - **`WebSocketHeartbeatTest` exists because nothing else would notice.** A context with
+    heartbeats off starts perfectly, serves every request and passes every other test in the suite.
+  - **The nginx block carrying every production chat socket is `api.simonrowe.dev`, not the
+    term-time one.** The frontend image is built with `VITE_API_BASE_URL=https://api.simonrowe.dev`,
+    so the browser opens `wss://api.simonrowe.dev/ws/chat` *even from `term-time.simonrowe.dev`* —
+    the term-time block's `/ws/` with its careful `proxy_read_timeout 300s` is same-origin only and
+    is not the one a released build uses. `api` now has its own `/ws/` block, carrying the
+    maintenance-flag check that `location /` gave it before the split; `location /` keeps nginx's
+    default timeouts, because it also serves every ordinary request and a 300s ceiling there would
+    hold connections open for five minutes against a backend that has stopped answering.
+  - **`sendMessage` was `if (connected) publish(...)` with no `else`.** A question typed into a
+    page whose socket had quietly timed out was discarded silently, under a typing indicator that
+    never stopped. It is now held in **one slot** and published on reconnect; if that has not
+    happened in 20s the page is told, the empty reply bubble is removed and the indicator stops.
+    One slot rather than a queue: a second question supersedes the first, because two answers
+    arriving at once is worse than one lost draft.
+  - **Four connection states, and only `offline` renders anything.** `reconnecting` is silent on
+    purpose — it is typically over inside a second, and announcing it is what made a working page
+    feel broken. `offline` shows one quiet "Reconnecting to Term Time…" line with **no button**:
+    recovery is automatic (exponential from 1s, capped at 15s — the cap *is* how long a reader
+    waits after the service returns, since nobody presses anything).
+  - **Staleness is judged on a connection epoch, not the session id.** A reconnect reuses the same
+    session deliberately, and `deactivate()` is asynchronous, so the outgoing client's close event
+    lands after the replacement is live. Compared on session id those two are identical and the
+    stale close is scored as a failure of a connection that is fine.
+  - **Only a 503 hands over to the landing page.** While `offline`, the page polls
+    `probeSiteStatus()` every 10s; 503 means a deploy, so it reloads and lets nginx's maintenance
+    page take over. 502/504/network-error leaves it where it is — the transcript is still readable
+    and the socket is still retrying, and replacing that with an error page is a downgrade. It
+    never polls while connected.
+  - **Both landing pages now carry the visitor's own light/dark preference and bring them back to
+    the URL they were on.** Two inline scripts each — not a loosening of the "nothing is fetched"
+    rule, since neither requests anything at parse time and both pages are complete with scripting
+    off. The theme script writes `data-theme` for **both** values, unlike the main site which only
+    writes it for light: here an absent attribute is what the `prefers-color-scheme` fallback
+    claims, so leaving it off for dark shows a light page to somebody who chose dark on a light OS.
+    The return poll targets `window.location.href`, never `/` — the flag is evaluated per server
+    block, a visitor may be deep in the site, and Term Time is a different hostname entirely. The
+    pages also name the site from the hostname. `test-nginx-maintenance.sh` gained term-time
+    coverage, a `HEAD`-parity check (the poll uses HEAD, so a HEAD that disagreed with GET would
+    either never return anyone or return them into a broken site) and a narrowed "no external
+    asset" assertion that catches `<link>`, `<script src>`, `src="http"`, `@import` and `url(`
+    rather than any `<script>` at all.
+  - **`reloadPage()` lives in `services/siteStatus.ts` beside the probe.** `window.location.reload`
+    is non-configurable in jsdom, so a caller reaching for it directly cannot be tested at all.
+  See `docs/runbooks/term-time.md` ("It keeps saying it cannot connect") and
+  `docs/runbooks/deploy.md` ("The maintenance page brings people back on its own").
 - 048-logwatch-backlog: The nine open `factory:logwatch` tickets were six distinct problems.
   Five are fixed here; the sixth is recorded, not fixed. **The one that mattered: the nightly
   platform backup had never once run.** `scripts/backup-platform.sh` executes in the `deployer`,

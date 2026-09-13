@@ -11528,6 +11528,23 @@ body[data-narration-bar] .app-layout__main {
   font-size: 0.9rem;
 }
 
+/* Deliberately quieter than .school-page__error: a reconnect is housekeeping, not a problem
+   the reader has to do anything about, and dressing it like one is what made the old page
+   feel broken every time a proxy timed an idle socket out. */
+.school-page__notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 1.25rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+
 .school-about {
   margin: 0 0 1.25rem;
 }

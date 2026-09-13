@@ -112,15 +112,31 @@ body() {
   docker exec "$NAME" cat /tmp/body 2>/dev/null
 }
 
+# curl -I, not -X HEAD: with -X HEAD curl still waits for a response body that a HEAD
+# reply never sends, and hangs until it times out.
+head_code() {
+  local host="$1" path="${2:-/}"
+  docker exec "$NAME" curl -sI -o /dev/null -w '%{http_code}' \
+    -H "Host: $host" "http://localhost${path}" 2>/dev/null
+}
+
 # ---------------------------------------------------------------------------
 echo "  flag absent: upstreams down -> themed unavailable page"
 # ---------------------------------------------------------------------------
+# The pages must fetch NOTHING: the container that would serve a stylesheet, font or
+# image is the one that is down or being replaced. Inline <script> is deliberately not
+# caught here - both pages carry two, for the theme resolution and the reload poll, and
+# neither requests anything at parse time. What must never appear is a <link>, a script
+# with a src, or a css url()/@import.
+fetches_nothing() {
+  ! grep -qiE '<link|<script[^>]+src=|src="http|@import|url\(' <<<"$(body)"
+}
+
 code="$(req www.simonrowe.dev /)"
 check "www returns a 502-class status when the frontend is down" "[[ '$code' == '502' ]]"
 check "www serves the themed unavailable page, not nginx's raw 502" \
   "grep -q 'Temporarily unavailable' <<<\"\$(body)\""
-check "the unavailable page needs no external asset" \
-  "! grep -qE '<(link|script)|src=\"http' <<<\"\$(body)\""
+check "the unavailable page needs no external asset" fetches_nothing
 
 code="$(req api.simonrowe.dev /api/blogs)"
 check "api returns a 502-class status when the backend is down" "[[ '$code' == '502' ]]"
@@ -153,8 +169,21 @@ code="$(req www.simonrowe.dev /)"
 check "www returns 503 while the flag is set" "[[ '$code' == '503' ]]"
 check "www serves the themed maintenance page" \
   "grep -q 'Update in progress' <<<\"\$(body)\""
-check "the maintenance page needs no external asset" \
-  "! grep -qE '<(link|script)|src=\"http' <<<\"\$(body)\""
+check "the maintenance page needs no external asset" fetches_nothing
+
+# Both pages are served on every public hostname and must carry the visitor's own
+# light/dark preference, not a hardcoded dark one. The attribute is what the inline
+# script sets; the media query is the fallback for storage being unavailable.
+check "the maintenance page resolves a theme rather than hardcoding dark" \
+  "grep -q 'data-theme' <<<\"\$(body)\""
+check "the maintenance page carries a light palette" \
+  "grep -q 'prefers-color-scheme: light' <<<\"\$(body)\""
+
+# The reason the poll targets window.location.href and not '/': a visitor mid-deploy may
+# be deep in the site, or on term-time.simonrowe.dev, which is a different hostname
+# entirely. Returning them to a root would lose where they were.
+check "the maintenance page returns the visitor to the url they were on" \
+  "grep -q 'window.location.href' <<<\"\$(body)\""
 
 retry="$(req www.simonrowe.dev / '%{header_json}' | tr 'A-Z' 'a-z')"
 check "www sends Retry-After with the maintenance page" \
@@ -164,6 +193,31 @@ code="$(req api.simonrowe.dev /api/blogs)"
 check "api returns 503 while the flag is set" "[[ '$code' == '503' ]]"
 check "api serves the themed maintenance page" \
   "grep -q 'Update in progress' <<<\"\$(body)\""
+
+# Term Time is its own server block on its own hostname, with its own copy of the
+# error_page/@maintenance pair - error_page and named locations are not inherited. The
+# page a Term Time reader sees during a deploy comes from here, and nothing else in this
+# file would notice if that block lost its flag check.
+code="$(req term-time.simonrowe.dev /)"
+check "term-time returns 503 while the flag is set" "[[ '$code' == '503' ]]"
+check "term-time serves the themed maintenance page" \
+  "grep -q 'Update in progress' <<<\"\$(body)\""
+
+# /ws/ was split out of api's `location /` to give the STOMP socket a longer
+# proxy_read_timeout than nginx's 60s default. The flag check had to be copied across with
+# it; without this assertion, losing it during that split would be invisible.
+code="$(req api.simonrowe.dev /ws/chat)"
+check "api's websocket path is behind the flag too" "[[ '$code' == '503' ]]"
+
+# The page brings the visitor back by polling its own url with HEAD and reloading as soon
+# as the answer stops being 502/503/504. If HEAD did not carry the same status as GET, the
+# page would either never return them or return them into a still-broken site.
+code="$(head_code www.simonrowe.dev /)"
+check "a HEAD of the same url reports 503, which is what the page polls" \
+  "[[ '$code' == '503' ]]"
+code="$(head_code term-time.simonrowe.dev /)"
+check "the same holds on term-time, which has its own server block" \
+  "[[ '$code' == '503' ]]"
 
 # --- the negative assertions, which are the point of the placement ---
 code="$(req localhost /healthz)"
