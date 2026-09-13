@@ -558,7 +558,13 @@ What the browser does now, in `schoolChatService.ts`:
 - Once `offline`, the page polls `probeSiteStatus()` (`services/siteStatus.ts`) every 10s. A
   **503** means a deploy is running, so it reloads and lets nginx's maintenance page take over;
   anything else leaves the page where it is, because the transcript is still readable and the
-  socket is still retrying. It never polls while connected.
+  socket is still retrying. It never polls while connected. The probe targets this origin and
+  this **path** — not the full `href`. Query and hash are the only parts of the address a third
+  party can influence and no server block's maintenance decision reads either, so sending them
+  would replay a possibly-sensitive query to answer a question it has no bearing on. Nothing is
+  lost: returning the visitor to their exact address is `reloadPage()`'s job, and reload keeps
+  the whole href. The landing pages themselves *do* poll the full `href`, correctly — there the
+  poll target and the reload target are the same thing.
 
 ### Conversation memory, and why there was none
 

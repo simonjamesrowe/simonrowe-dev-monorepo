@@ -21,16 +21,30 @@ export type SiteStatus =
 /**
  * Probes the page the visitor is actually on, not a fixed path.
  *
- * Deliberately `window.location.href`: the maintenance flag is checked per server block, and
+ * Deliberately this origin and this path: the maintenance flag is checked per server block, and
  * Term Time is a different hostname from the main site with its own block. Probing `/` of some
  * canonical host would answer a question about a site the visitor is not looking at.
+ *
+ * Equally deliberately, NOT the full `href`. The query string and hash are the only parts of the
+ * address a third party can influence — a crafted link, a deep link like `?article=123` — and no
+ * server block's maintenance decision depends on either, so sending them would replay a
+ * possibly-sensitive query in a side-channel request to answer a question it has no bearing on.
+ * Dropping them costs nothing: returning the visitor to their *exact* address is
+ * {@link reloadPage}'s job, and reload keeps the whole href. Composed through `URL` rather than
+ * string concatenation so the same-origin property is structural.
+ *
+ * Redirects are followed, which is the default. Worth stating because it was considered: the
+ * browser is currently displaying this URL, so it has already resolved without redirecting, and
+ * `redirect: 'manual'` would answer with an opaque `status === 0` that this function would then
+ * have to guess at.
  *
  * HEAD, and `cache: 'no-store'`. A cached 200 from before the deploy started is exactly the
  * wrong answer, and it is the answer a plain GET would be entitled to give.
  */
 export async function probeSiteStatus(signal?: AbortSignal): Promise<SiteStatus> {
   try {
-    const response = await fetch(window.location.href, {
+    const target = new URL(window.location.pathname, window.location.origin)
+    const response = await fetch(target, {
       method: 'HEAD',
       cache: 'no-store',
       signal,
