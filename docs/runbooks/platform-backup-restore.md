@@ -72,6 +72,57 @@ Two things follow for anyone changing either file:
 After the fix deploys, confirm with section 2 (`--dry-run` first, then a real capture) rather
 than waiting a night.
 
+### 0a. And then it still failed, one layer further in (fixed 2026-09-13)
+
+The prerequisite fix was correct and did not make the backup work. With `python3` and `zip`
+present, the script got as far as its first `docker` calls and failed there instead:
+
+```
+[backup-platform] WARNING: could not sweep /backups (continuing)   (SIM-46)
+[backup-platform] ERROR: pg_dumpall --roles-only failed            (SIM-43)
+Activity failure. activityType=Capture                             (SIM-34, again)
+```
+
+Neither message names a container, which is why the first read as a ClickHouse volume permission
+problem and the second as a Postgres one. Both were the same thing: **the script addressed the
+datastores by their compose SERVICE names.**
+
+```bash
+POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-langfuse-db}"        # before
+CLICKHOUSE_CONTAINER="${CLICKHOUSE_CONTAINER:-langfuse-clickhouse}"
+```
+
+`docker exec` takes a container name or id and knows nothing about compose services. Compose
+names the container `<project>-<service>-<index>` — `simonrowe-dev-monorepo-langfuse-db-1` — so
+every one of those calls returned "No such container", on the host as much as in the deployer.
+This was never environment-specific and never worked anywhere.
+
+`restore-platform.sh` had the identical defect, and is the sharper illustration: its own
+`wait_for_health()` has always built `${COMPOSE_PROJECT}-${service}-1` correctly. The two halves
+of one file disagreed about what a container is called.
+
+Both scripts now resolve the name from compose's own labels:
+
+```bash
+docker ps --format '{{.Names}}' \
+  --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" \
+  --filter "label=com.docker.compose.service=langfuse-db"
+```
+
+- The label rather than a formatted `<project>-<service>-1` string, because the label is what
+  compose itself matches on: a re-indexed or renamed container still resolves.
+- `COMPOSE_PROJECT` comes from `COMPOSE_PROJECT_NAME`, which the deployer already sets (it has
+  to, or its `docker compose` calls would build a second parallel stack — see
+  `docs/runbooks/deploy.md`).
+- `POSTGRES_CONTAINER` / `CLICKHOUSE_CONTAINER` still override, for a host that differs.
+- **A real run dies if a service does not resolve**; only `--dry-run` falls back to the formatted
+  name, so that the documented rehearsal stays usable on a laptop with nothing running. Guessing
+  a container name in a real capture is how "No such container" gets attributed to Postgres.
+
+`scripts/test/test-platform-container-resolution.sh` puts a fake `docker` on PATH, answers the
+label query with a name that is deliberately *not* `<project>-<service>-1`, and fails the build if
+either script ever again execs a bare service name.
+
 ## 1. Did the nightly run?
 
 **Fastest check — no shell needed.** Open the admin Data Operations page and look

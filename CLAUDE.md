@@ -211,6 +211,76 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 049-logwatch-backlog-2: The fourteen open `factory:logwatch` tickets on 2026-09-13 were four
+  problems, one already fixed, and six that no code in this repository could ever fix.
+  - **The platform backup STILL had never run.** 048 was right that the `deployer` image lacked
+    `python3`, and fixing it only moved the failure one layer in: with the prerequisites met the
+    script reached its first `docker` calls and every one of them failed, because
+    `backup-platform.sh` addressed the datastores by their compose **service** names
+    (`POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-langfuse-db}"`). `docker exec` takes a container
+    name or id and knows nothing about services; compose calls the container
+    `simonrowe-dev-monorepo-langfuse-db-1`. So `sweep_orphans` warned "could not sweep /backups"
+    (SIM-46) and `dump_postgres` died on "pg_dumpall --roles-only failed" (SIM-43) — **neither
+    message names a container**, which is why the first read as a ClickHouse volume-permissions
+    problem and the second as a Postgres one, and SIM-34 is the same incident seen through
+    Temporal's activity-failure WARN. This never worked anywhere and was never environment-
+    specific. `restore-platform.sh` carried the identical defect and is the sharper illustration:
+    its own `wait_for_health()` has always built `${COMPOSE_PROJECT}-${service}-1` correctly, so
+    the two halves of one file disagreed about what a container is called. Both now resolve via
+    `docker ps --filter label=com.docker.compose.project/service` — the label rather than a
+    formatted name, because the label is what compose itself matches on. **Only `--dry-run` falls
+    back to the formatted name**; a real run dies naming the service and project, because
+    guessing in a real capture is how "No such container" gets attributed to Postgres.
+    `scripts/test/test-platform-container-resolution.sh` stubs `docker` on PATH and answers the
+    label query with a name deliberately *not* of the `<project>-<service>-1` shape, so the
+    assertions cannot pass on the fallback path.
+  - **`org.apache.fontbox.ttf` is a different package root from `org.apache.pdfbox.pdmodel.font`,**
+    which is why 048's PDFBox silencing covered none of SIM-44/SIM-45. FontBox is the font parser
+    PDFBox delegates to; it logs one WARN per table per font per document ("No PostScript name
+    data is provided for the font Wingdings3", "Format 14 cmap table is not supported and will be
+    ignored"). Both are statements about what it chose not to read, not failures. Scoped to `ttf`
+    rather than all of `org.apache.fontbox`, so a font that cannot be parsed at all still reports.
+  - **Six tickets had no fix in this repository and now have a mechanism instead.** Temporal logs
+    `context canceled` and `pq: canceling statement due to user request` at ERROR (SIM-28, SIM-32,
+    SIM-40), Alloy logs an ERROR per container that exits between discovery and tailing (SIM-31),
+    and Dependency-Track logs a WARN per malformed pypi range it mirrors from OSV — 195 lines in
+    two seconds (SIM-41, SIM-42). Their recorded disposition was "not fixed, deliberately", which
+    is a backlog entry pretending to be a decision: they were re-filed nightly for ever, and the
+    absence sweep could never close them because they never stopped happening.
+    `factory.logwatch.ignore` is a curated list of `(reason, container, contains)` rules.
+    Load-bearing bits:
+    - **Every variant must match, not just the group's leader.** A group is keyed on the emitting
+      code and one logger can emit two different faults — the standing objection to source-key
+      grouping, which `variants` exists to answer. Leader-only muting would let a real failure
+      ride out of sight inside a group whose most frequent message is noise.
+    - **A group whose variants were capped is never muted**, however well the visible ones match:
+      `MAX_VARIANTS` limits what is *listed*, not what was *seen*. Same distinction, and the same
+      reason, as the per-run cap's veto over the absence sweep.
+    - **Muting runs before the occurrence floor and the cap.** Third-party noise is high-volume by
+      nature, so muting last would let it occupy the five slots it is being muted from.
+    - **`mutedSignatures` is counted separately from `signaturesDropped` and must never be folded
+      into it.** Dropped means "could not fit", which is why it vetoes the absence sweep; muted
+      means "excluded on purpose, every run". Collapsing them makes the sweep permanently inert on
+      any stack that mutes anything.
+    - **Every run's detail names the rules, not just a count.** An over-broad rule is invisible in
+      the tickets by definition, so the run detail is the only place it can be seen.
+    - **In `application.yml`, not behind an env var.** A rule is a statement that a class of log
+      line belongs to somebody else — a code-review decision that wants its `reason` in the diff,
+      not something to change on a host at 2am while the thing it hides is the outage.
+    - `LogWatchIgnoreRulesTest` binds the shipped YAML and runs the **real captured production
+      lines** from all six tickets through it, and asserts Alloy's `final error sending batch`
+      (the SIM-29 ingest-failure signal, the one thing this module must never stop hearing) stays
+      audible from the same container.
+    The muted tickets are closed by the existing absence sweep after `resolve-after` (7d) — the
+    same path a fixed problem takes — so nothing needs cancelling by hand.
+  - **Not changed, deliberately:** SIM-39 (Embabel `MISSING_GOALS`) is already fixed — #161
+    converted both agents to plain `@Component`s on 2026-09-10 and the occurrences it cites are
+    from 06:00 that morning, before the deploy; it will sweep itself. SIM-29 (Alloy re-shipping
+    log history as `timestamp too old`) is a **real** finding and is deliberately not muted; it
+    still needs the one host fact 048 named — whether `alloy-data` is actually mounted on the
+    running container and whether the positions file survives a recreate.
+  See `docs/runbooks/logwatch.md` ("Muting third-party noise") and
+  `docs/runbooks/platform-backup-restore.md` §0a.
 - term-time-connection-resilience: Term Time said it could not connect roughly once a minute,
   and the cause was that **the STOMP socket carried no traffic at all between questions**.
   Spring's simple broker sends no heartbeats unless it is handed a `TaskScheduler` — the default

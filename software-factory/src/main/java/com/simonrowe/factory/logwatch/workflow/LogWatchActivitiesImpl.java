@@ -15,7 +15,10 @@ import com.simonrowe.factory.logwatch.signature.SignatureExtractor;
 import io.temporal.spring.boot.ActivityImpl;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -88,7 +91,9 @@ public class LogWatchActivitiesImpl implements LogWatchActivities {
           0,
           false,
           0,
-          0);
+          0,
+          0,
+          List.of());
     }
 
     SourceHealth health =
@@ -105,8 +110,23 @@ public class LogWatchActivitiesImpl implements LogWatchActivities {
     // partial scan as a full one, which is what FR-006 forbids.
     boolean truncated = lines.size() >= properties.lineBudget();
 
+    // Muting runs BEFORE the occurrence floor and the cap, not after. The cap keeps the five
+    // most severe of what is left, and third-party noise is high-volume by nature - Alloy's
+    // BovModelConverter warnings alone were 195 lines in two seconds - so muting last would let
+    // noise crowd first-party findings out of the run it is being muted from.
+    Map<String, Integer> mutedByReason = new LinkedHashMap<>();
+    List<LogSignature> audible = new ArrayList<>();
+    for (LogSignature signature : SignatureExtractor.group(lines)) {
+      LogWatchProperties.Ignore rule = properties.mutedBy(signature);
+      if (rule == null) {
+        audible.add(signature);
+      } else {
+        mutedByReason.merge(rule.reason(), 1, Integer::sum);
+      }
+    }
+
     List<LogSignature> grouped =
-        SignatureExtractor.group(lines).stream()
+        audible.stream()
             .filter(signature -> signature.occurrences() >= properties.minimumOccurrences())
             .sorted(LogSignature.MOST_SEVERE_FIRST)
             .toList();
@@ -116,7 +136,15 @@ public class LogWatchActivitiesImpl implements LogWatchActivities {
     int dropped = Math.max(0, grouped.size() - properties.maxPerRun());
     List<LogSignature> capped = grouped.stream().limit(properties.maxPerRun()).toList();
 
-    return new ScanObservation(health, capped, lines.size(), truncated, containers, dropped);
+    int muted = mutedByReason.values().stream().mapToInt(Integer::intValue).sum();
+    List<String> reasons =
+        mutedByReason.entrySet().stream()
+            .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+            .map(Map.Entry::getKey)
+            .toList();
+
+    return new ScanObservation(
+        health, capped, lines.size(), truncated, containers, dropped, muted, reasons);
   }
 
   @Override
