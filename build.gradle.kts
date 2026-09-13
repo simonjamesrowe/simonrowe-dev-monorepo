@@ -159,13 +159,27 @@ subprojects {
     // respectively). Carrying the old value forward would have pinned Jackson 3 to
     // "2.21.5", a version that does not exist.
     //
-    // Drop the remaining entry once the Boot BOM ships that version or newer.
+    // Drop each entry once the Boot BOM ships that version or newer.
     // -----------------------------------------------------------------------
 
     // GHSA-rcgg-9c38-7xpx, fixed in 1.62.0, which is exactly what Boot 4.1.1
     // manages. Kept above it at 1.64.0 so both modules stay on one OpenTelemetry
     // version alongside the separately-pinned opentelemetry-spring-boot-starter.
     ext["opentelemetry.version"] = "1.64.0"
+
+    // SIM-10: three CRITICAL Tomcat advisories, all fixed in 11.0.25 — Boot 4.1.1
+    // manages 11.0.24 and there is no 4.1.2 to upgrade to yet. One property covers
+    // tomcat-embed-core, -el and -websocket, which the BOM all version from it.
+    //
+    //   GHSA-9xv2-5v5q-p794  DIGEST auth capture-replay bypass
+    //   GHSA-gcx9-497g-6cp6  improper access control / incorrect authorization
+    //   GHSA-h3x4-894j-xpx5  FORM auth incorrect authorization
+    //
+    // None is reachable from this application's own configuration — it uses neither
+    // DIGEST nor FORM authentication, and authenticates with OAuth2 resource-server
+    // JWTs — but the vulnerable class ships in the deployed jar, which is what
+    // Dependency-Track reports and what a future Tomcat-level default could expose.
+    ext["tomcat.version"] = "11.0.25"
 
     java {
         toolchain {
