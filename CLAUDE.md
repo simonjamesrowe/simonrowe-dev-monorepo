@@ -255,7 +255,11 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     `probeSiteStatus()` every 10s; 503 means a deploy, so it reloads and lets nginx's maintenance
     page take over. 502/504/network-error leaves it where it is — the transcript is still readable
     and the socket is still retrying, and replacing that with an error page is a downgrade. It
-    never polls while connected.
+    never polls while connected. The probe uses this origin plus this **path**, never the full
+    `href`: query and hash are the only third-party-influenceable part and no server block reads
+    them, and returning the visitor to their exact address is `reloadPage()`'s job anyway. The
+    landing pages *do* poll the full href, correctly — there the poll and the reload target the
+    same URL.
   - **Both landing pages now carry the visitor's own light/dark preference and bring them back to
     the URL they were on.** Two inline scripts each — not a loosening of the "nothing is fetched"
     rule, since neither requests anything at parse time and both pages are complete with scripting
