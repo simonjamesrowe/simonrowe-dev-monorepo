@@ -79,7 +79,9 @@ class ProfileControllerTest extends AbstractIntegrationTest {
         "",
         "/api/resume",
         now,
-        now
+        now,
+        null,
+        null
     );
   }
 

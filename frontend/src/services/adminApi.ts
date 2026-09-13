@@ -98,6 +98,8 @@ export interface AdminProfile {
   sidebarImage: { url: string } | null
   backgroundImage: { url: string } | null
   mobileBackgroundImage: { url: string } | null
+  resumeSummary: string | null
+  resumePhoto: { url: string } | null
   createdAt: string
   updatedAt: string
 }

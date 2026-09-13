@@ -105,7 +105,9 @@ class ProfileServiceTest {
         "",
         "/api/resume",
         now,
-        now
+        now,
+        null,
+        null
     );
   }
 

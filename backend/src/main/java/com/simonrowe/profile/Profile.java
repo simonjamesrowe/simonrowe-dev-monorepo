@@ -24,6 +24,8 @@ public record Profile(
     String secondaryEmail,
     String cvUrl,
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    String resumeSummary,
+    Image resumePhoto
 ) {
 }

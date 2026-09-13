@@ -24,6 +24,12 @@ public class AdminProfileController {
   private static final Logger LOG =
       LoggerFactory.getLogger(AdminProfileController.class);
 
+  /**
+   * The CV summary sits in a fixed block above the experience section. Beyond roughly
+   * this length it pushes the first role onto page two, which defeats the point of it.
+   */
+  private static final int RESUME_SUMMARY_MAX_LENGTH = 900;
+
   private final AdminProfileRepository profileRepository;
 
   public AdminProfileController(
@@ -71,7 +77,9 @@ public class AdminProfileController {
         parseImage(body.get("backgroundImage")),
         parseImage(body.get("mobileBackgroundImage")),
         existing != null ? existing.createdAt() : now,
-        now
+        now,
+        (String) body.get("resumeSummary"),
+        parseImage(body.get("resumePhoto"))
     );
 
     Profile saved = profileRepository.save(updated);
@@ -118,6 +126,13 @@ public class AdminProfileController {
         && !primaryEmail.matches("^[^@]+@[^@]+\\.[^@]+$")) {
       errors.add(new ValidationErrorResponse.FieldError(
           "primaryEmail", "Invalid email format"));
+    }
+
+    String resumeSummary = (String) body.get("resumeSummary");
+    if (resumeSummary != null && resumeSummary.length() > RESUME_SUMMARY_MAX_LENGTH) {
+      errors.add(new ValidationErrorResponse.FieldError(
+          "resumeSummary",
+          "CV summary must not exceed " + RESUME_SUMMARY_MAX_LENGTH + " characters"));
     }
 
     return errors;

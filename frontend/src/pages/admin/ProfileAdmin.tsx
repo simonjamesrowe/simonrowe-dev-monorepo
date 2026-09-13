@@ -39,6 +39,9 @@ import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
 import { ImagePicker } from '../../components/admin/ImagePicker'
 
+/** Mirrors AdminProfileController.RESUME_SUMMARY_MAX_LENGTH. */
+const RESUME_SUMMARY_MAX_LENGTH = 900
+
 interface SocialMediaFormState {
   type: string
   link: string
@@ -80,6 +83,8 @@ export function ProfileAdmin() {
     sidebarImage: null,
     backgroundImage: null,
     mobileBackgroundImage: null,
+    resumeSummary: '',
+    resumePhoto: null,
   })
 
   const [socialMedia, setSocialMedia] = useState<AdminSocialMedia[]>([])
@@ -115,6 +120,8 @@ export function ProfileAdmin() {
         sidebarImage: data.sidebarImage ?? null,
         backgroundImage: data.backgroundImage ?? null,
         mobileBackgroundImage: data.mobileBackgroundImage ?? null,
+        resumeSummary: data.resumeSummary ?? '',
+        resumePhoto: data.resumePhoto ?? null,
       })
       setEditorKey((k) => k + 1)
     } catch (err) {
@@ -449,6 +456,40 @@ export function ProfileAdmin() {
               />
             </div>
             <div className="blog-editor__section" />
+          </div>
+
+          <h3 className="blog-editor__section-label" style={{ marginTop: '1rem' }}>CV</h3>
+          <div className="blog-editor__two-col">
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label" htmlFor="resume-summary">
+                Summary
+              </label>
+              <textarea
+                className="admin-form__textarea"
+                id="resume-summary"
+                maxLength={RESUME_SUMMARY_MAX_LENGTH}
+                name="resumeSummary"
+                onChange={handleProfileChange}
+                rows={6}
+                value={form.resumeSummary ?? ''}
+              />
+              <p className="admin-form__hint">
+                Opens the downloadable CV, above Experience. Written in the third
+                person. {(form.resumeSummary ?? '').length} / {RESUME_SUMMARY_MAX_LENGTH}
+                {' '}characters.
+              </p>
+            </div>
+            <div className="blog-editor__section">
+              <label className="blog-editor__section-label">CV Photo</label>
+              <ImagePicker
+                value={form.resumePhoto?.url ?? null}
+                onChange={(url) => updateField('resumePhoto', url ? { url } : null)}
+              />
+              <p className="admin-form__hint">
+                A professional headshot, cropped square. Leave empty to use the one
+                bundled with the app.
+              </p>
+            </div>
           </div>
 
           <div className="form-actions">

@@ -5529,6 +5529,13 @@ a:hover {
   min-height: 80px;
 }
 
+.admin-form__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
 .admin-form__actions {
   display: flex;
   gap: 0.75rem;
