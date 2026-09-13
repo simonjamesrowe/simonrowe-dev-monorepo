@@ -480,11 +480,20 @@ export function ProfileAdmin() {
               </p>
             </div>
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">CV Photo</label>
-              <ImagePicker
-                value={form.resumePhoto?.url ?? null}
-                onChange={(url) => updateField('resumePhoto', url ? { url } : null)}
-              />
+              {/*
+                Not a <label>: ImagePicker is a group of buttons and a hidden file
+                input, so there is no single control to associate one with. A named
+                group is what a screen reader can actually use here.
+              */}
+              <span className="blog-editor__section-label" id="resume-photo-label">
+                CV Photo
+              </span>
+              <div aria-labelledby="resume-photo-label" role="group">
+                <ImagePicker
+                  value={form.resumePhoto?.url ?? null}
+                  onChange={(url) => updateField('resumePhoto', url ? { url } : null)}
+                />
+              </div>
               <p className="admin-form__hint">
                 A professional headshot, cropped square. Leave empty to use the one
                 bundled with the app.
