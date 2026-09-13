@@ -270,6 +270,50 @@ class LogWatchWorkflowTest {
     assertThat(result.signaturesDropped()).isEqualTo(12);
   }
 
+  /**
+   * Muting is the one filter whose effect is invisible in the tickets, by definition — no ticket
+   * is filed. So the run detail is the only place an over-broad rule can be seen, and it has to
+   * name the rules rather than merely count them: "3 muted" tells an operator nothing they can
+   * act on.
+   */
+  @Test
+  @DisplayName("muted findings are named in the run detail, never silently withheld")
+  void reportsWhatItMutedAndWhichRulesDidIt() {
+    when(activities.observe(any(), any()))
+        .thenReturn(
+            new ScanObservation(
+                alive(),
+                List.of(signature("boom")),
+                400,
+                false,
+                9,
+                0,
+                3,
+                List.of("Temporal cancel churn", "Alloy tailing a removed container")));
+
+    LogWatchResult result = workflow.run(request(false));
+
+    assertThat(result.detail()).contains("3 muted as third-party noise");
+    assertThat(result.detail()).contains("Temporal cancel churn");
+    assertThat(result.detail()).contains("Alloy tailing a removed container");
+    // Muted is not dropped: the cap reported nothing, and the detail must not imply it did.
+    assertThat(result.detail()).doesNotContain("dropped by the per-run cap");
+    assertThat(result.signaturesDropped()).isZero();
+  }
+
+  @Test
+  @DisplayName("a scan that mutes nothing says nothing about muting")
+  void saysNothingAboutMutingWhenNothingWasMuted() {
+    when(activities.observe(any(), any()))
+        .thenReturn(
+            new ScanObservation(alive(), List.of(signature("boom")), 400, false, 9, 0, 0,
+                List.of()));
+
+    LogWatchResult result = workflow.run(request(false));
+
+    assertThat(result.detail()).doesNotContain("muted");
+  }
+
   @Test
   @DisplayName("the run record is keyed on the run id, not the workflow id")
   void recordsTheRunUnderTheRunId() {

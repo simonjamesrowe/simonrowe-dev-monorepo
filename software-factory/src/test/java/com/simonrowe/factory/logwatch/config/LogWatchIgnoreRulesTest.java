@@ -129,6 +129,56 @@ class LogWatchIgnoreRulesTest {
     });
   }
 
+  /**
+   * The second safety constraint, and the one no realistic fixture can reach through
+   * {@code SignatureExtractor}: a group with more distinct messages than {@code MAX_VARIANTS}
+   * lists only the first five, so a rule that matches all five still knows nothing about the
+   * rest. Same distinction, and the same reason, as the per-run cap's veto over the absence
+   * sweep — the cap limits what is listed, not what was seen.
+   */
+  @Test
+  @DisplayName(
+      "a group whose variants were capped is never muted, however well the visible ones match")
+  void neverMutesGroupsItCannotFullySee() {
+    LogWatchProperties.Ignore rule =
+        new LogWatchProperties.Ignore("noise", "temporal", "context canceled");
+    List<LogSignature.Variant> visible =
+        List.of(new LogSignature.Variant("a context canceled", 3, "a context canceled"));
+
+    assertThat(rule.mutes(signatureWith(visible, 1))).isTrue();
+    assertThat(rule.mutes(signatureWith(visible, 9))).isFalse();
+  }
+
+  /**
+   * A {@code LogSignature} replayed from a Temporal history serialized before this feature
+   * carries no variants at all. Falling back to the leader is deliberate: refusing to mute would
+   * re-file the very noise an operator has already disowned.
+   */
+  @Test
+  @DisplayName("a variant-less signature falls back to its leader rather than refusing to mute")
+  void mutesReplayedSignatureWithNoVariants() {
+    LogWatchProperties.Ignore rule =
+        new LogWatchProperties.Ignore("noise", "temporal", "context canceled");
+
+    assertThat(rule.mutes(signatureWith(List.of(), 0))).isTrue();
+    assertThat(rule.mutes(null)).isFalse();
+  }
+
+  private LogSignature signatureWith(
+      final List<LogSignature.Variant> variants, final int distinctVariants) {
+    return new LogSignature(
+        "a context canceled",
+        Severity.ERROR,
+        "simonrowe-dev-monorepo-temporal-1",
+        6,
+        WHEN,
+        WHEN,
+        "a context canceled",
+        "logger:Operation failed.",
+        variants,
+        distinctVariants);
+  }
+
   private void assertMuted(final String container, final Severity severity, final String raw) {
     LogSignature signature = group(container, severity, raw);
     assertThat(properties.mutedBy(signature))
