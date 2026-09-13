@@ -16,6 +16,13 @@
   Deliberately worded differently from maintenance.html. A visitor who sees this
   is not waiting out a planned couple of minutes, and telling them they are would
   be a lie the page cannot keep.
+
+  The two inline scripts do what maintenance.html's do and are commented there:
+  resolve the visitor's own light/dark preference before first paint, and reload
+  THIS url — not the site root — as soon as it stops answering 502/503/504, so a
+  reader is returned to the page they were on. Neither fetches anything at parse
+  time and the page is complete with scripting off; the <meta http-equiv="refresh">
+  is that fallback.
 -->
 <html lang="en">
   <head>
@@ -26,8 +33,31 @@
     <meta http-equiv="refresh" content="60" />
     <meta name="robots" content="noindex" />
     <title>Temporarily unavailable — simonrowe.dev</title>
+    <script>
+      (function () {
+        var choice = null;
+        try {
+          var stored = localStorage.getItem('theme-preference');
+          if (stored === 'light' || stored === 'dark') choice = stored;
+        } catch (e) {
+          // Storage unavailable; the prefers-color-scheme rule below covers it.
+        }
+        if (!choice) {
+          try {
+            choice = window.matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark';
+          } catch (e) {
+            choice = 'dark';
+          }
+        }
+        document.documentElement.setAttribute('data-theme', choice);
+      })();
+    </script>
     <style>
-      :root {
+      :root,
+      :root[data-theme="dark"] {
+        color-scheme: dark;
         --surface: #0f131c;
         --surface-container: #1c2029;
         --primary: #77d1ff;
@@ -37,6 +67,34 @@
         /* Warmer than --primary, so the two pages are legibly different states
            rather than the same page with different words. */
         --warning: #f0b866;
+      }
+
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --surface: #f8f9fc;
+        --surface-container: #ffffff;
+        --primary: #2563eb;
+        --on-surface: #1a1d2b;
+        --on-surface-muted: #4b5563;
+        --outline: #d1d5db;
+        /* Not the dark page's #f0b866: on a white card that is a pale wash rather
+           than a colour. Same hue, taken down to where it reads. */
+        --warning: #b45309;
+      }
+
+      /* The no-script / storage-threw path. Scoped to :not([data-theme]) so it can
+         never override the explicit choice the script above resolves. */
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme]) {
+          color-scheme: light;
+          --surface: #f8f9fc;
+          --surface-container: #ffffff;
+          --primary: #2563eb;
+          --on-surface: #1a1d2b;
+          --on-surface-muted: #4b5563;
+          --outline: #d1d5db;
+          --warning: #b45309;
+        }
       }
 
       * {
@@ -135,15 +193,59 @@
       <p class="eyebrow"><span class="dot"></span> Temporarily unavailable</p>
       <h1>This part of the site is not responding</h1>
       <p>
-        Something behind simonrowe.dev is down. This is not a planned update, and
-        it is being watched — a health monitor checks the site every minute and
-        restarts what it can on its own.
+        Something behind <span id="site-name">simonrowe.dev</span> is down. This is
+        not a planned update, and it is being watched — a health monitor checks the
+        site every minute and restarts what it can on its own.
       </p>
-      <p>This page reloads itself, so you can leave it open and come back.</p>
+      <p>
+        Leave this page open. It checks for itself and takes you straight back to the
+        page you were on as soon as it is answering again.
+      </p>
       <p class="footnote">
         If it is still like this in a while, you can reach me on
         <a href="https://www.linkedin.com/in/simonjamesrowe/">LinkedIn</a>.
       </p>
     </main>
+    <script>
+      (function () {
+        // Name the thing the visitor was actually looking at. Term Time is a separate
+        // hostname served by this same page, and telling a Term Time reader that
+        // "simonrowe.dev" is down leaves them wondering whether they are in the right place.
+        var host = (window.location.hostname || '').toLowerCase();
+        var isTermTime = host.indexOf('term-time.') === 0;
+        var isApi = host.indexOf('api.') === 0;
+        var inSentence = isTermTime ? 'Term Time' : isApi ? 'the simonrowe.dev API' : 'simonrowe.dev';
+        var titleName = isTermTime ? 'Term Time' : isApi ? 'simonrowe.dev API' : 'simonrowe.dev';
+        var slot = document.getElementById('site-name');
+        if (slot) slot.textContent = inSentence;
+        document.title = 'Temporarily unavailable — ' + titleName;
+
+        if (typeof window.fetch !== 'function') return;
+
+        var target = window.location.href;
+        var DOWN = { 502: 1, 503: 1, 504: 1 };
+
+        function check() {
+          fetch(target, { method: 'HEAD', cache: 'no-store' })
+            .then(function (response) {
+              if (!DOWN[response.status]) {
+                window.location.reload();
+                return;
+              }
+              schedule();
+            })
+            .catch(schedule);
+        }
+
+        // Slower than the maintenance page's 5s, for the same reason its meta refresh is
+        // slower: an unplanned outage is not a couple of minutes, and polling a struggling
+        // upstream harder does not bring it back.
+        function schedule() {
+          window.setTimeout(check, 15000);
+        }
+
+        schedule();
+      })();
+    </script>
   </body>
 </html>

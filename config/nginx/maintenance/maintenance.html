@@ -1,36 +1,108 @@
 <!doctype html>
 <!--
-  Served for simonrowe.dev / www.simonrowe.dev / api.simonrowe.dev while
-  /var/run/deploy-state/maintenance.on exists (see config/nginx/nginx-proxy.conf).
+  Served for simonrowe.dev / www.simonrowe.dev / term-time.simonrowe.dev /
+  api.simonrowe.dev while /var/run/deploy-state/maintenance.on exists (see
+  config/nginx/nginx-proxy.conf).
 
-  EVERYTHING IS INLINE AND NOTHING IS FETCHED. No stylesheet, no web font, no
-  image, no script. The frontend container that would serve those assets is
-  precisely what is being replaced while this page is up, so any external
-  reference would render as a broken page at exactly the wrong moment. Fonts are
-  stacks with system fallbacks for the same reason: Space Grotesk and Inter are
-  used if the visitor happens to have them, and the page looks deliberate either
-  way.
+  NOTHING IS FETCHED. No stylesheet, no web font, no image, no external script.
+  The frontend container that would serve those assets is precisely what is being
+  replaced while this page is up, so any external reference would render as a
+  broken page at exactly the wrong moment. Fonts are stacks with system fallbacks
+  for the same reason: Space Grotesk and Inter are used if the visitor happens to
+  have them, and the page looks deliberate either way.
+
+  The two inline scripts below are NOT an exception to that rule — neither fetches
+  anything at parse time, and the page is complete and correct with JavaScript
+  switched off. What they add:
+
+    1. Theme. The site's own preference lives in localStorage under
+       'theme-preference', which is per-origin — so this page, served on the same
+       origin, can read the very preference the visitor set. The same no-flash
+       script shape as frontend/index.html, for the same reason: a module or a
+       stylesheet media query alone would resolve after first paint, and the
+       flash is what it exists to prevent. It falls back to the OS setting, and
+       the CSS falls back again for the case where storage throws.
+    2. Coming back. Reloads this exact URL as soon as it stops answering 503, so
+       the visitor is returned to the page they were on rather than to the site
+       root — including Term Time, which is a different hostname with its own
+       server block. The <meta http-equiv="refresh"> below does the same thing
+       more slowly and is what runs with scripting off; it is the fallback, not
+       dead weight.
 
   Colours are the site's own tokens, copied rather than imported:
-    --surface #0f131c  --surface-container #1c2029
-    --primary #77d1ff  --on-surface #dfe2ef
+    dark   --surface #0f131c  --surface-container #1c2029
+           --primary #77d1ff  --on-surface #dfe2ef
+    light  --surface #f8f9fc  --surface-container #ffffff
+           --primary #2563eb  --on-surface #1a1d2b
 -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- Retries itself. Paired with the Retry-After header nginx adds. -->
+    <!-- Retries itself with scripting off. Paired with the Retry-After header nginx adds. -->
     <meta http-equiv="refresh" content="30" />
     <meta name="robots" content="noindex" />
     <title>Update in progress — simonrowe.dev</title>
+    <script>
+      (function () {
+        // Resolves to an explicit 'light' or 'dark', never to "unset". The main site only
+        // ever writes data-theme for light and removes it for dark, but here an absent
+        // attribute is what the prefers-color-scheme rule below claims — so leaving it off
+        // for dark would show a light page to somebody who chose dark on a light OS.
+        var choice = null;
+        try {
+          var stored = localStorage.getItem('theme-preference');
+          if (stored === 'light' || stored === 'dark') choice = stored;
+        } catch (e) {
+          // Storage unavailable (private browsing, blocked cookies). The CSS media query
+          // below is the fallback and is already correct.
+        }
+        if (!choice) {
+          try {
+            choice = window.matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark';
+          } catch (e) {
+            choice = 'dark';
+          }
+        }
+        document.documentElement.setAttribute('data-theme', choice);
+      })();
+    </script>
     <style>
-      :root {
+      :root,
+      :root[data-theme="dark"] {
+        color-scheme: dark;
         --surface: #0f131c;
         --surface-container: #1c2029;
         --primary: #77d1ff;
         --on-surface: #dfe2ef;
         --on-surface-muted: #97a0b5;
         --outline: #2b3140;
+      }
+
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --surface: #f8f9fc;
+        --surface-container: #ffffff;
+        --primary: #2563eb;
+        --on-surface: #1a1d2b;
+        --on-surface-muted: #4b5563;
+        --outline: #d1d5db;
+      }
+
+      /* The no-script / storage-threw path. Scoped to :not([data-theme]) so it can never
+         override the explicit choice the script above resolves. */
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme]) {
+          color-scheme: light;
+          --surface: #f8f9fc;
+          --surface-container: #ffffff;
+          --primary: #2563eb;
+          --on-surface: #1a1d2b;
+          --on-surface-muted: #4b5563;
+          --outline: #d1d5db;
+        }
       }
 
       * {
@@ -78,7 +150,7 @@
         text-transform: uppercase;
       }
 
-      /* A pure-CSS pulse, so there is no image and no script to load. */
+      /* A pure-CSS pulse, so there is no image to load. */
       .dot {
         width: 0.5rem;
         height: 0.5rem;
@@ -144,15 +216,60 @@
       <p class="eyebrow"><span class="dot"></span> Update in progress</p>
       <h1>A new version is going live</h1>
       <p>
-        simonrowe.dev is being updated right now. This usually takes a couple of
-        minutes, and nothing is broken — the site is just mid-swap.
+        <span id="site-name">simonrowe.dev</span> is being updated right now. This
+        usually takes a couple of minutes, and nothing is broken — the site is just
+        mid-swap.
       </p>
-      <p>This page reloads itself, so you can leave it open.</p>
+      <p>
+        Leave this page open. It checks for itself and takes you straight back to the
+        page you were on as soon as the update finishes.
+      </p>
       <p class="footnote">
         <strong>Deploys here are automatic.</strong> A merge builds, ships and
         verifies itself, and rolls back on its own if the new version does not
         come up clean.
       </p>
     </main>
+    <script>
+      (function () {
+        // Name the thing the visitor was actually looking at. Term Time is a separate
+        // hostname served by this same page, and telling a Term Time reader that
+        // "simonrowe.dev" is updating leaves them wondering whether they are in the right
+        // place at all.
+        var host = (window.location.hostname || '').toLowerCase();
+        var name = 'simonrowe.dev';
+        if (host.indexOf('term-time.') === 0) name = 'Term Time';
+        else if (host.indexOf('api.') === 0) name = 'The simonrowe.dev API';
+        var slot = document.getElementById('site-name');
+        if (slot) slot.textContent = name;
+        document.title = 'Update in progress — ' + name;
+
+        if (typeof window.fetch !== 'function') return;
+
+        // Polls THIS url, not '/'. The maintenance flag is evaluated per server block and a
+        // visitor mid-deploy may be deep in the site; returning them to the root would lose
+        // where they were, which is the whole point of coming back at all.
+        var target = window.location.href;
+        var DOWN = { 502: 1, 503: 1, 504: 1 };
+
+        function check() {
+          fetch(target, { method: 'HEAD', cache: 'no-store' })
+            .then(function (response) {
+              if (!DOWN[response.status]) {
+                window.location.reload();
+                return;
+              }
+              schedule();
+            })
+            .catch(schedule);
+        }
+
+        function schedule() {
+          window.setTimeout(check, 5000);
+        }
+
+        schedule();
+      })();
+    </script>
   </body>
 </html>
