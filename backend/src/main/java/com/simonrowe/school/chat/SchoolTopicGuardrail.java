@@ -34,6 +34,18 @@ public class SchoolTopicGuardrail {
       holidays, INSET days, events, clubs, uniform, school lunches, PE, trips, staff, \
       newsletters, term times, school policies, or day-to-day school arrangements.
 
+      Also answer YES to these, which arrive with no school words in them at all:
+
+      - A FOLLOW-UP that only makes sense after an earlier question - "what about Year 3?", \
+      "and the week after?", "why not?", "are you sure?". You are shown one message with no \
+      conversation around it, so a short question that reads as meaningless in isolation is far \
+      more likely to be a follow-up than an off-topic one.
+      - A question ABOUT THIS ASSISTANT and what it can see - "why don't you have that?", \
+      "where does your information come from?", "how up to date are you?". Refusing those is \
+      the worst possible moment to refuse: the reader is already unsure whether to trust an \
+      answer, and a flat "I can only help with questions about the school" tells them nothing \
+      and reads as evasion.
+
       Answer NO for anything else.
 
       Answer with exactly one word: YES or NO.

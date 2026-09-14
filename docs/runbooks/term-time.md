@@ -433,6 +433,35 @@ The window is clamped to 62 days rather than refused when it is too wide, and cl
 **recent** end: the caller is a model turning "this term" into two dates, and the recent half is
 the half being asked about.
 
+## Answer length, and the guardrail's blind spot
+
+Two rules that exist because the assistant was answering too thinly, both found in one real
+conversation on 14 September 2026.
+
+**The STYLE section used to open "Be brief and practical. Parents are usually checking one
+fact."** That is true of "when is half term" and wrong about everything else. Asked what the
+latest news was, Term Time returned three bullets drawn from a week of school letters it had
+just read in full, and the reader had to ask twice more to get the rest of what was already in
+front of it. Length now scales with the question: a single fact gets a sentence, an open question
+gets everything found, and the tie-break is "when in doubt, give more". Deciding on a parent's
+behalf which three of eight newsletter sections mattered is not brevity — it is dropping the
+other five.
+
+**`SchoolTopicGuardrail` sees one message with no conversation around it.** So the follow-up
+"Why don't we have the contents available?" scored as off-topic and got the flat *"I can only
+help with questions about Kilmorie Primary School"* — at the exact moment the reader had spotted
+a gap and was deciding whether to trust anything it had said. The classifier prompt now admits
+two extra classes: **follow-ups** (a short question that reads as meaningless alone is far more
+likely to be one than to be off-topic) and **questions about the assistant itself** — what it can
+see, where its information comes from, how current it is. The system prompt has the matching half:
+answer those, naming the website, the calendar and the school's emails as the sources, rather
+than deflecting.
+
+Whether the model actually obeys either is an evals question, not a unit-test one.
+`SchoolAnswerDepthTest` asserts only that the instructions are present, and is deliberately
+limited to the two rules with a known failure behind them rather than being a checklist of the
+whole prompt.
+
 ## One kind of link is followed automatically
 
 The rule is still "record links, never follow them": an email can link anywhere, and the ingester
