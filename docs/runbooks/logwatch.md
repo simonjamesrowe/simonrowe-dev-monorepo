@@ -103,6 +103,8 @@ none of them has a line in this repository to change:
 |---|---|---|
 | `temporal` | `context canceled` — a worker disconnecting, a long poll timing out | SIM-28, SIM-40 |
 | `temporal` | `canceling statement due to user request` — the same, seen from Postgres | SIM-32 |
+| `temporal` | `transaction has already been committed or rolled back` — the same, seen from the SQL driver | SIM-28 |
+| `temporal` | `database connection lost: driver: bad connection` — a task-queue connection dropped while workers were replaced | SIM-28 |
 | `alloy` | tailing a container that exited between discovery and the read | SIM-31 |
 | `dependencytrack-apiserver` | `[BovModelConverter] Range` — malformed pypi ranges in OSV's data | SIM-41, SIM-42 |
 
@@ -126,16 +128,50 @@ factory:
 
 Two constraints make this safe to leave on:
 
-- **Every variant must match, not just the group's leader.** A group is keyed on the emitting
-  code, and one logger can emit two genuinely different faults — that is the standing objection
-  to source-key grouping, which `variants` exists to answer. Muting on the leader alone would let
-  a real failure ride out of sight inside a group whose most frequent message happens to be
-  noise. A Temporal `Operation failed with internal error.` group carrying both `context
-  canceled` and `connection refused` is filed, not muted.
+- **Every variant must be claimed by *some* rule — but not necessarily the same one.** A group is
+  keyed on the emitting code, and one logger can emit two genuinely different faults — that is the
+  standing objection to source-key grouping, which `variants` exists to answer. Muting on the
+  leader alone would let a real failure ride out of sight inside a group whose most frequent
+  message happens to be noise. A Temporal `Operation failed with internal error.` group carrying
+  both `context canceled` and `connection refused` is filed, not muted.
+
+  Muting is decided across the whole rule list, in `LogWatchProperties.mutedBy`, rather than one
+  rule at a time. **SIM-28 is why.** Its group has five distinct messages: three say `context
+  canceled` and two report the same deploy-time teardown from the SQL driver's side. No single
+  phrase could cover all five, so with per-rule matching the group stayed audible with three of
+  its messages already disowned, and was re-filed every night from 7 to 14 September while its
+  rule sat in this file apparently doing nothing. The safety property is unchanged: one message
+  no rule claims and the whole group is filed, so a real fault under a muted logger un-mutes it on
+  the next scan.
+
+  A group covered by more than one rule is counted **once** in `mutedSignatures` and attributed to
+  **every** rule that helped, so the two numbers no longer agree by construction. Do not "fix"
+  that by summing the attributions.
 - **A group whose variants were capped is never muted**, however well the visible ones match.
   `MAX_VARIANTS` limits what is *listed*, not what was *seen*, so past that point a rule cannot
   vouch for the group. Same distinction, and the same reason, as the per-run cap's veto over the
   absence sweep.
+
+### When a rule cannot reach it: silence the logger instead
+
+A group with more distinct messages than `MAX_VARIANTS` lists can never be muted, so for some
+noise `factory.logwatch.ignore` is not an option at all. **SIM-47** is the worked example: Spring's
+`BeanPostProcessorChecker` warns once per bean that a `BeanPostProcessor` declared through a
+non-static factory method made ineligible for auto-proxying, and the six beans it names all belong
+to Embabel, Spring AI and OpenTelemetry. Six distinct messages, five listed — permanently
+unmutable, and re-filed after every deploy because it fires on every boot.
+
+When the noise comes out of a container this repository builds, the answer is a `logging.level`
+entry in that service's `application.yml` rather than a log-watch rule. It also stops the volume
+reaching Grafana Cloud, which a mute rule does not. Two rules of thumb:
+
+- **Scope one level below the obvious package** — `org.apache.fontbox.ttf`, not
+  `org.apache.fontbox` — so a real failure from the same library still reports.
+- **Bracket a logger name containing `$`.** `logging.level` binds as a map, and Spring's relaxed
+  binding strips the `$` from an unbracketed key, applying the level to a logger no class owns.
+  The application starts and the warnings keep coming. `LoggingLevelConfigTest` in the backend
+  binds the shipped YAML and asserts the key that comes out, because the file's text looks
+  identical either way.
 
 Muting is applied **before** the occurrence floor and the per-run cap. Third-party noise is
 high-volume by nature — Dependency-Track's range warnings were 195 lines in two seconds — so

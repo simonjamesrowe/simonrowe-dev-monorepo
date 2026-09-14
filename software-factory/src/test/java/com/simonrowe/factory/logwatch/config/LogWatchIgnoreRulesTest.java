@@ -7,6 +7,7 @@ import com.simonrowe.factory.logwatch.domain.LogSignature;
 import com.simonrowe.factory.logwatch.domain.Severity;
 import com.simonrowe.factory.logwatch.signature.SignatureExtractor;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,19 @@ class LogWatchIgnoreRulesTest {
           + "internal error.\",\"error\":\"GetTaskQueue operation failed. Failed to check if task "
           + "queue /_sys/default-worker-tq/1 of type Workflow existed. Error: context canceled\","
           + "\"error-type\":\"serviceerror.Unavailable\",\"operation\":\"GetTaskQueue\"}";
+
+  private static final String TEMPORAL_COMMITTED_TRANSACTION =
+      "{\"level\":\"error\",\"ts\":\"2026-09-13T20:04:46.645Z\",\"msg\":\"Operation failed "
+          + "with internal error.\",\"error\":\"UpdateTaskQueue operation failed. Failed to "
+          + "commit transaction. Error: sql: transaction has already been committed or rolled "
+          + "back\",\"error-type\":\"serviceerror.Unavailable\",\"operation\":"
+          + "\"UpdateTaskQueue\"}";
+
+  private static final String TEMPORAL_LOST_CONNECTION =
+      "{\"level\":\"error\",\"ts\":\"2026-09-13T20:04:46.730Z\",\"msg\":\"Operation failed "
+          + "with internal error.\",\"error\":\"database connection lost: driver: bad "
+          + "connection\",\"error-type\":\"serviceerror.Unavailable\",\"operation\":"
+          + "\"UpdateTaskQueue\"}";
 
   private static final String TEMPORAL_POLL_TIMEOUT =
       "{\"level\":\"error\",\"ts\":\"2026-09-10T06:40:38.554Z\",\"msg\":\"Unable to call "
@@ -114,6 +128,57 @@ class LogWatchIgnoreRulesTest {
         "{\"level\":\"error\",\"msg\":\"upload aborted\",\"error\":\"context canceled\"}");
   }
 
+  /**
+   * The reason muting is decided across the rule list rather than one rule at a time.
+   *
+   * <p>These three lines are SIM-28, verbatim from Loki. They share a {@code msg}, so they are
+   * one group keyed on one logger, and no single phrase covers all three: Temporal reports the
+   * same deploy-time teardown as a cancelled context, as a finished SQL transaction and as a
+   * lost connection. Under one-rule-at-a-time matching the group was audible with three of its
+   * five messages already disowned, and was re-filed every night for a week.
+   */
+  @Test
+  @DisplayName("a group whose messages take several rules between them is muted")
+  void mutesTheGroupThatNoSingleRuleCovers() {
+    assertMuted(
+        "simonrowe-dev-monorepo-temporal-1",
+        Severity.ERROR,
+        TEMPORAL_INTERNAL_ERROR,
+        TEMPORAL_COMMITTED_TRANSACTION,
+        TEMPORAL_LOST_CONNECTION);
+
+    assertThat(
+            properties.mutedBy(
+                group(
+                    "simonrowe-dev-monorepo-temporal-1",
+                    Severity.ERROR,
+                    TEMPORAL_INTERNAL_ERROR,
+                    TEMPORAL_COMMITTED_TRANSACTION,
+                    TEMPORAL_LOST_CONNECTION)))
+        .as("each rule that disowned part of the group has to be named in the run detail")
+        .hasSize(3);
+  }
+
+  /**
+   * And the safety property that makes the above acceptable. One message no rule claims and the
+   * whole group is filed — so a real fault appearing under a muted logger un-mutes it on the
+   * next scan rather than riding out of sight beside the noise it resembles.
+   */
+  @Test
+  @DisplayName("one unclaimed message in a group makes the whole group audible again")
+  void doesNotMuteTheGroupWithOneUnclaimedMessage() {
+    assertAudible(
+        "simonrowe-dev-monorepo-temporal-1",
+        Severity.ERROR,
+        TEMPORAL_INTERNAL_ERROR,
+        TEMPORAL_COMMITTED_TRANSACTION,
+        TEMPORAL_LOST_CONNECTION,
+        "{\"level\":\"error\",\"ts\":\"2026-09-13T20:04:47.001Z\",\"msg\":\"Operation "
+            + "failed with internal error.\",\"error\":\"UpdateTaskQueue operation failed. "
+            + "Error: no space left on device\",\"error-type\":"
+            + "\"serviceerror.Unavailable\",\"operation\":\"UpdateTaskQueue\"}");
+  }
+
   @Test
   @DisplayName("every shipped rule names a container, and none is a bare phrase")
   void everyRuleIsScopedAndExplained() {
@@ -179,31 +244,40 @@ class LogWatchIgnoreRulesTest {
         distinctVariants);
   }
 
-  private void assertMuted(final String container, final Severity severity, final String raw) {
+  private void assertMuted(final String container, final Severity severity, final String... raw) {
     LogSignature signature = group(container, severity, raw);
     assertThat(properties.mutedBy(signature))
-        .as("expected a rule to mute: %s", raw)
-        .isNotNull();
+        .as("expected the shipped rules to mute: %s", String.join(" | ", raw))
+        .isNotEmpty();
   }
 
-  private void assertAudible(final String container, final Severity severity, final String raw) {
+  private void assertAudible(
+      final String container, final Severity severity, final String... raw) {
     LogSignature signature = group(container, severity, raw);
     assertThat(properties.mutedBy(signature))
-        .as("expected no rule to mute: %s", raw)
-        .isNull();
+        .as("expected no rule to mute: %s", String.join(" | ", raw))
+        .isEmpty();
   }
 
   /**
-   * Two identical lines, because a single occurrence never reaches the filter in production
-   * either — the grouping is what turns a line into the thing a rule is applied to.
+   * Builds the thing a rule is actually applied to. Grouping is what turns lines into one
+   * problem with several distinct messages, and several distinct messages is the whole subject
+   * of the union test below — so the fixtures go through {@code SignatureExtractor} rather than
+   * being constructed by hand.
    */
-  private LogSignature group(final String container, final Severity severity, final String raw) {
-    List<LogSignature> grouped =
-        SignatureExtractor.group(
-            List.of(
-                new LogLine(container, WHEN, severity, raw),
-                new LogLine(container, WHEN, severity, raw)));
-    assertThat(grouped).hasSize(1);
+  private LogSignature group(
+      final String container, final Severity severity, final String... raw) {
+    List<LogLine> lines = new ArrayList<>();
+    for (String line : raw) {
+      // Twice each, because a single occurrence never reaches the filter in production either.
+      lines.add(new LogLine(container, WHEN, severity, line));
+      lines.add(new LogLine(container, WHEN, severity, line));
+    }
+    List<LogSignature> grouped = SignatureExtractor.group(lines);
+    assertThat(grouped)
+        .as("these lines must land in ONE group, or the test is not asking the question it looks"
+            + " like it is asking")
+        .hasSize(1);
     return grouped.getFirst();
   }
 
