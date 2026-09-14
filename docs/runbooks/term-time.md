@@ -307,6 +307,11 @@ Two things have caused this, both fixed, both worth checking first if it recurs:
 2. **The staff list URL.** `/our-school/staff` is a 404; the real page is `/our-school/our-staff`.
    This no longer gates anything, but `StaffDirectory` still feeds answers about who teaches
    what, so a wrong URL leaves those unanswerable. The symptom is one `WARN` at startup.
+3. **A fetched newsletter inheriting the email's tier.** Fixed — see "It is public, and that took
+   a second go to get right". Worth knowing as a shape rather than only as a past bug: a document
+   can be ingested perfectly, logged as ingested, and be invisible to every visitor, and nothing
+   anywhere reports it. If a source looks missing, check its `visibility` in
+   `/admin/school/documents` before suspecting the crawl.
 
 PDFs are ingested from links on crawled pages (`SchoolPdfExtractor`), covering both of the CMS's
 URL conventions. The enrichment timetable is a PDF and is the most current document the school
@@ -387,6 +392,47 @@ venue, what to bring, the booking link and often a PDF, and those live in Elasti
 than in `school_events`. Answering from the event table alone produced a bare list of titles with
 the detail one search away — the same failure mode as the website PDFs above, one layer up.
 
+## "Was there a newsletter last week" is a query, not a search
+
+`getRecentCommunications(from, to)` lists everything the school published in a window, newest
+first, with the full text of as many items as the budget allows. It exists because the date half
+of `SchoolQueryService`'s design — *everything date-shaped is answered by query* — covered events
+and not documents, and questions about documents are just as date-shaped.
+
+Routed through `searchSchoolInformation` they were answered by similarity alone: top-8, threshold
+0.3, no recency signal anywhere in the path. A dozen weekly newsletters are worded almost
+identically, so they sit in nearly the same place in vector space and the one that comes back is
+close to arbitrary — and the assistant has no way to tell it is old. Measured on production before
+the fix, three questions one after another:
+
+| Asked | Answered from |
+| --- | --- |
+| "What was in the newsletter from last week?" | the newsletter of **10 July**, reported as the latest |
+| "Who were the stars of the week?" | the newsletter of **3 July** |
+| "How much did the Big Half team raise?" | **£2,230**, cited to "the newsletter of 11 September" — a figure that appears in no source at all |
+
+The third is the one to take seriously. A plausible number under a specific, confident citation is
+the most damaging thing this assistant can produce, because it is the one nobody thinks to check.
+The system prompt now forbids naming a document that was not returned by a tool, and forbids
+carrying a fact from one source across to another's date.
+
+Three properties of the tool are load-bearing:
+
+- **It can say a window was empty.** An empty top-k means "nothing was similar", never "nothing
+  exists", so until this existed there was no way to tell a parent there was no newsletter last
+  week — only a way to hand them the nearest old one.
+- **`CALENDAR_FEED` is excluded from what counts as a communication.** `ingestCalendar` re-stamps
+  its single container document with `Instant.now()` on every pass, every thirty minutes. Included,
+  that stub would be the newest thing the school had "published" in every window for ever.
+- **Documents are included whole or named in the index and left out — never truncated.** A model
+  reading half a newsletter cannot tell it is reading half, so it reports that the newsletter does
+  not mention something that was in the paragraph after the cut. The closing line counts what was
+  omitted so the assistant knows to say there is more.
+
+The window is clamped to 62 days rather than refused when it is too wide, and clamped from the
+**recent** end: the caller is a model turning "this term" into two dates, and the recent half is
+the half being asked about.
+
 ## One kind of link is followed automatically
 
 The rule is still "record links, never follow them": an email can link anywhere, and the ingester
@@ -398,6 +444,42 @@ Deliberately narrow. Widening it to the whole school domain is defensible on the
 and is a one-line change, but the parent portal also serves per-family pages, so a blanket rule
 would start fetching those. Everything on any other host still waits for a person, and the
 homepage footer link is filtered out before it ever becomes a row.
+
+### It is public, and that took a second go to get right
+
+`SchoolLinkFetcher.tierFor` decides the tier by **what the content is**, never by which door it
+came through. The school's own published newsletter is `PUBLIC`, for the identical reason
+`SchoolIngestService.ingestWebsite` stores every other page on that host that way: the school
+published it on the open internet. Everything else still inherits the tier of the document the
+link was found in, which for email is `RESTRICTED` by construction.
+
+It originally inherited in every case, which contradicted the reasoning above and broke the
+feature the week it started mattering. On **11 September 2026** the school moved its weekly
+newsletter out of the mail body and onto the parent portal; the email is now a covering sentence
+and a link. Ingest followed it correctly —
+
+```
+2026-09-11T15:22:35Z  Auto-fetched school newsletter …/parentportal/newsletter/?id=163
+```
+
+— and then filed the page behind the approval queue, where it sat. Nothing errored. The symptoms
+were entirely at the chat surface: asked what was in last week's newsletter, Term Time answered
+from the one dated **10 July** and volunteered that the 10 July one was the latest it had.
+
+Two consequences to keep in mind. The rule applies to the admin **Fetch** button too, because an
+administrator clicking fetch on that URL is looking at the same public page. And it only applies
+on **first write** — `SchoolDocumentWriter` carries `prior.visibility()` forward with every other
+human decision — so newsletters already stored as `RESTRICTED` stay that way and must be approved
+in the console, which is also the only path that re-embeds the chunks.
+
+### A failed fetch used to be permanent
+
+`GmailIngestService.recordLinks` skipped every link row it had already seen *before* reaching the
+auto-fetch. An email's text never changes, so a newsletter whose fetch hit one timeout or one 502
+was found and skipped again on every subsequent sync, for ever, with nothing but a human clicking
+Fetch able to recover it. A `FAILED` row is now retried; `PENDING`, `FETCHED` and `IGNORED` are
+not, because those are decisions — `PENDING` most of all, being the queue this mechanism exists to
+feed.
 
 ## What ingestion actually does
 

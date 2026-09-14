@@ -9,6 +9,7 @@ import com.simonrowe.school.ingest.SchoolAttachmentStore;
 import com.simonrowe.school.ingest.SchoolDocumentWriter;
 import com.simonrowe.school.ingest.SchoolEventWriter;
 import com.simonrowe.school.ingest.SchoolIngestService;
+import com.simonrowe.school.ingest.SchoolLinkFilter;
 import com.simonrowe.school.ingest.SchoolPdfExtractor;
 import com.simonrowe.school.model.SchoolDocumentRepository;
 import com.simonrowe.school.model.SchoolLinkRepository;
@@ -38,7 +39,8 @@ class SchoolLinkFetcherRedirectTest {
         mock(SchoolIngestService.class),
         mock(SchoolEventExtractor.class),
         mock(SchoolEventWriter.class),
-        mock(DocumentDateReader.class));
+        mock(DocumentDateReader.class),
+        mock(SchoolLinkFilter.class));
   }
 
   @Test

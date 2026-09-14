@@ -6,6 +6,7 @@ import com.simonrowe.school.ingest.DocumentDateReader;
 import com.simonrowe.school.ingest.SchoolDocumentWriter;
 import com.simonrowe.school.ingest.SchoolEventWriter;
 import com.simonrowe.school.ingest.SchoolIngestService;
+import com.simonrowe.school.ingest.SchoolLinkFilter;
 import com.simonrowe.school.ingest.SchoolPdfExtractor;
 import com.simonrowe.school.model.SchoolDocument;
 import com.simonrowe.school.model.SchoolDocumentRepository;
@@ -32,11 +33,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Fetches a discovered link, but only when a person has asked for it.
+ * Fetches a discovered link and ingests what comes back.
  *
- * <p>Nothing calls this from the ingest path. It exists behind one admin action, which is the
- * whole point: an email can link anywhere, and the ingester must never be the thing that decides
- * to make a request to an arbitrary address.
+ * <p>Almost always because a person asked: an email can link anywhere, and the ingester must not
+ * be the thing that decides to make a request to an arbitrary address. The one exception is
+ * {@code GmailIngestService.autoFetch}, which follows a school newsletter on the school's own
+ * host during ingest — see {@link SchoolLinkFilter#isAutoFetchable} for why that is not the
+ * general case, and {@link #tierFor} for why it lands in a different tier.
  *
  * <p>Reuses {@link UrlFetcher#isFetchableUrl} for the SSRF guard rather than re-deriving it. The
  * caller here is an authenticated administrator, but the URL still came out of an email — a link
@@ -67,6 +70,7 @@ public class SchoolLinkFetcher {
   private final SchoolEventExtractor eventExtractor;
   private final SchoolEventWriter eventWriter;
   private final DocumentDateReader dateReader;
+  private final SchoolLinkFilter linkFilter;
   // NEVER, not NORMAL. The JDK client follows a 3xx without re-checking the destination, so
   // with automatic redirects the SSRF guard below protects only the FIRST hop: a link that
   // passes isFetchableUrl can 302 straight to http://169.254.169.254/ and the client goes
@@ -88,7 +92,8 @@ public class SchoolLinkFetcher {
       final SchoolIngestService ingestService,
       final SchoolEventExtractor eventExtractor,
       final SchoolEventWriter eventWriter,
-      final DocumentDateReader dateReader) {
+      final DocumentDateReader dateReader,
+      final SchoolLinkFilter linkFilter) {
     this.links = links;
     this.documents = documents;
     this.documentWriter = documentWriter;
@@ -98,6 +103,7 @@ public class SchoolLinkFetcher {
     this.eventExtractor = eventExtractor;
     this.eventWriter = eventWriter;
     this.dateReader = dateReader;
+    this.linkFilter = linkFilter;
   }
 
   /**
@@ -126,6 +132,54 @@ public class SchoolLinkFetcher {
         .map(date -> date.atStartOfDay(ZoneId.systemDefault()).toInstant())
         .or(() -> documentWriter.existingPublishedAt(type, link.url()))
         .orElseGet(Instant::now);
+  }
+
+  /**
+   * The tier something fetched from a link belongs in.
+   *
+   * <p>Decided by <b>what the content is</b>, never by who asked for it or which door it came
+   * through. Two cases:
+   *
+   * <p>The school's own published newsletter, on the school's own host, is public. It is public
+   * because the school published it on the open internet, which is the identical reason
+   * {@code SchoolIngestService.ingestWebsite} stores every other page on that host at
+   * {@link Visibility#PUBLIC}. This page is absent from {@code /googlesitemap.asp} — so the crawl
+   * never reaches it and only an email link does — but that is an accident of the CMS, not a
+   * statement about privacy.
+   *
+   * <p>Inheriting the parent email's tier here, which is what this did, contradicted the
+   * reasoning that lets ingest follow the link at all:
+   * {@link SchoolLinkFilter#isAutoFetchable} permits it precisely because "the website crawl
+   * already reads that host wholesale, so fetching one discloses nothing". The consequence was
+   * not theoretical. The school moved its weekly newsletter out of the mail body and onto the
+   * parent portal on 11 September 2026; the covering email carries a sentence and a link. The
+   * page was fetched correctly and then filed {@code RESTRICTED} behind the approval queue, so
+   * Term Time answered questions about "last week's newsletter" from a copy dated 10 July and
+   * said so — and, asked for a figure from a newsletter it could not read, produced one.
+   *
+   * <p>Everything else — any other host, any other path — still inherits the tier of the document
+   * the link was found in, which for email is {@code RESTRICTED} by construction. Fetching
+   * something is not the same as publishing it.
+   *
+   * <p>{@code isAutoFetchable} is reused rather than a second predicate written here, so there is
+   * one statement of "this is the school's own published newsletter" rather than two that drift.
+   * It applies equally to the admin Fetch button: the content decides, not the requester, and an
+   * administrator clicking fetch on the same URL is looking at the same public page.
+   *
+   * <p>Package-private so it can be asserted directly. The alternative is going through
+   * {@link #fetch}, which makes a real request to a real school website — so the tier rule, the
+   * thing that actually decides whether a parent can read the newsletter, would be covered only
+   * by a test nobody can run offline.
+   *
+   * @param url the address that was fetched
+   * @param parent the document the link was found in, or null when it has gone
+   * @return the tier to store the fetched document at
+   */
+  Visibility tierFor(final String url, final SchoolDocument parent) {
+    if (linkFilter.isAutoFetchable(url)) {
+      return Visibility.PUBLIC;
+    }
+    return parent == null ? Visibility.RESTRICTED : parent.visibility();
   }
 
   private HttpResponse<byte[]> send(final URI uri) throws IOException, InterruptedException {
@@ -157,10 +211,11 @@ public class SchoolLinkFetcher {
   /**
    * Fetches a link and ingests what comes back.
    *
-   * <p>The new document inherits the tier of the email the link was found in, which is
-   * {@link Visibility#RESTRICTED} by construction. Fetching something is not the same as
-   * publishing it, and conflating the two would let a single click put an arbitrary fetched
-   * document on the public site.
+   * <p>The new document's tier is decided by {@link #tierFor}: the school's own published
+   * newsletter is public, and everything else inherits the tier of the document the link was
+   * found in, which for email is {@link Visibility#RESTRICTED} by construction. Fetching
+   * something is not the same as publishing it, and conflating the two in the general case would
+   * let a single click put an arbitrary fetched document on the public site.
    *
    * @param id the link id
    * @return the updated link, or empty when unknown
@@ -171,7 +226,7 @@ public class SchoolLinkFetcher {
         return fail(link, "That address is not safe to fetch (non-public or unsupported scheme)");
       }
       final SchoolDocument parent = documents.findById(link.sourceDocumentId()).orElse(null);
-      final Visibility tier = parent == null ? Visibility.RESTRICTED : parent.visibility();
+      final Visibility tier = tierFor(link.url(), parent);
 
       final byte[] body;
       final String contentType;

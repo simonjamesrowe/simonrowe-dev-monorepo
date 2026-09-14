@@ -211,6 +211,65 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- termtime-newsletter-tier-and-recency: Term Time could not answer anything about the newsletter of
+  11 September 2026, and the two reasons were independent. **The newsletter had been ingested
+  perfectly and then hidden.** The school moved its weekly newsletter out of the mail body onto its
+  parent portal that week, so the email is now a covering sentence and a link;
+  `SchoolLinkFilter.isAutoFetchable`'s carve-out followed it correctly (prod Loki, 2026-09-11
+  15:22:35Z: `Auto-fetched school newsletter …/parentportal/newsletter/?id=163`), and then
+  `SchoolLinkFetcher` filed the page at the **parent email's** tier, which is `RESTRICTED` by
+  construction — so it sat in the approval queue, invisible to a chat whose audience is
+  `PUBLIC`-only. That contradicted the reasoning that permits the fetch at all: `isAutoFetchable`
+  allows it *because* "the website crawl already reads that host wholesale", and
+  `SchoolIngestService.ingestWebsite` stores every other page on that host at `PUBLIC`. The same
+  page got opposite tiers depending on which door it came through, and it is absent from
+  `/googlesitemap.asp` (218 entries, no `/parentportal/`) so only the email door exists. Now
+  `SchoolLinkFetcher.tierFor` decides on the **content**: an auto-fetchable school newsletter is
+  `PUBLIC`, everything else still inherits. Load-bearing bits:
+  - **One predicate, reused.** `isAutoFetchable` answers both "may ingest follow this" and "is this
+    the school's own published page", so there is no second list to drift. It therefore applies to
+    the admin **Fetch** button too — the content decides, not the requester.
+  - **It only applies on first write.** `SchoolDocumentWriter` carries `prior.visibility()` forward
+    with every other human decision, so newsletters already stored `RESTRICTED` stay that way and
+    need approving in the console — which is also the only path that re-embeds the chunks. No
+    Mongock unit: a change unit could flip Mongo and would leave Elasticsearch disagreeing, which
+    is the exact inconsistency `SchoolApprovalService` exists to prevent.
+  - **A failed auto-fetch used to be permanent.** `recordLinks` skipped every existing link row
+    *before* reaching the fetch, and an email's text never changes, so one timeout left a `FAILED`
+    row that was re-found and re-skipped for ever. `FAILED` is now retried; `PENDING` is not,
+    because that is the approval queue and re-fetching it would be ingest making the decision the
+    queue exists to ask for.
+  **The second fault is why the conversation was bad even where the data was present.**
+  `searchSchoolInformation` is pure similarity — top-8, threshold 0.3, no recency signal anywhere —
+  and a dozen weekly newsletters are worded almost identically, so they cluster and the one
+  returned is close to arbitrary. Measured live on prod before the fix: "what was in the newsletter
+  from last week?" answered from **10 July** *and reported 10 July as the latest*; "stars of the
+  week" from **3 July**; and, asked what the Big Half raised, it produced **£2,230** cited to "the
+  newsletter of 11 September" — a figure in no source at all, under a specific confident citation,
+  which is the most damaging output this assistant can produce. `SchoolQueryService`'s own premise
+  ("everything date-shaped is answered here, by query") covered events and not documents, and
+  questions about documents are just as date-shaped. New `getRecentCommunications(from, to)` over
+  `SchoolDocumentRepository.findPublishedBetween`. Load-bearing bits:
+  - **It is the only tool that can say a window was EMPTY.** An empty top-k means "nothing was
+    similar", never "nothing exists" — so until this existed there was no way to tell a parent
+    there was no newsletter last week, only a way to hand them the nearest old one.
+  - **`CALENDAR_FEED` is excluded from what counts as a communication, and that is not tidiness.**
+    `ingestCalendar` re-stamps its single container document (`"The school's published calendar
+    feed."`) with `Instant.now()` every pass — every 30 minutes in prod. Included, that stub would
+    be the newest thing the school had "published" in every window for ever.
+  - **Documents are included whole or left out and named, never truncated.** A model reading half a
+    newsletter cannot tell it is reading half, so it reports that the newsletter does not mention
+    something that was in the paragraph after the cut. The first document is included regardless of
+    size, or a school that publishes one long newsletter gets an index with no text under it.
+  - **The window is clamped to 62 days from the RECENT end, not refused.** The caller is a model
+    turning "this term" into two dates, and the recent half is the half being asked about. The end
+    bound is the end of the last *day*: the newsletter that started all this was sent at 15:03 on
+    the closing day of the window anyone would ask about.
+  - Two system-prompt rules with it: route "what did the school send" questions here rather than to
+    search, and **never attribute anything to a source you were not shown** — no naming a document
+    you have not read, no carrying a fact from one source across to another's date.
+  See `docs/runbooks/term-time.md` ("It is public, and that took a second go to get right" and
+  "'Was there a newsletter last week' is a query, not a search").
 - 050-logwatch-backlog-3: 049's mute rules were correct and **SIM-28 was re-filed anyway, every
   night**, because muting was decided one rule at a time. `Ignore.mutes` requires every variant to
   match *that* rule, and SIM-28's group has five distinct messages from one logger — three saying

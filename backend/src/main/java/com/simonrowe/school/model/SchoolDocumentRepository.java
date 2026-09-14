@@ -1,5 +1,6 @@
 package com.simonrowe.school.model;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.mongodb.repository.MongoRepository;
@@ -42,4 +43,30 @@ public interface SchoolDocumentRepository extends MongoRepository<SchoolDocument
    * @return matching documents
    */
   List<SchoolDocument> findByVisibility(Visibility visibility);
+
+  /**
+   * What the school published in a date window, newest first, tier-filtered.
+   *
+   * <p>The half of retrieval that similarity search cannot do, and the reason it exists is the
+   * same reason {@code SchoolQueryService} exists for events: "the newsletter from last week"
+   * has no useful embedding. Every weekly newsletter in the corpus sits in almost the same place
+   * in vector space, so a top-k search over them returns one essentially at random and the
+   * assistant reports it as the latest — observed in production answering from a newsletter five
+   * weeks stale, and stating so.
+   *
+   * <p>{@code sourceTypes} is a parameter rather than a constant here so the caller states what
+   * it means by a communication; see {@code SchoolQueryService.COMMUNICATION_SOURCES} for the
+   * one that matters, which is that {@code CALENDAR_FEED} must never be in it.
+   *
+   * @param visibilities which tiers the caller may see
+   * @param sourceTypes which kinds of document count
+   * @param from window start, inclusive
+   * @param to window end, inclusive
+   * @return matching documents, most recently published first
+   */
+  @Query(value = "{ 'visibility': { $in: ?0 }, 'sourceType': { $in: ?1 }, "
+      + "'publishedAt': { $gte: ?2, $lte: ?3 } }",
+      sort = "{ 'publishedAt': -1 }")
+  List<SchoolDocument> findPublishedBetween(
+      List<Visibility> visibilities, List<SchoolSourceType> sourceTypes, Instant from, Instant to);
 }

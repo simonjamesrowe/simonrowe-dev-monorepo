@@ -209,21 +209,47 @@ public class GmailIngestService {
       }
       final String id = SchoolIds.documentId(SchoolSourceType.EMAIL,
           document.id() + '|' + link.url());
-      if (links.existsById(id)) {
+      final Optional<SchoolLink> existing = links.findById(id);
+      if (existing.isEmpty()) {
+        links.save(new SchoolLink(id, document.id(), link.url(),
+            link.text() == null || link.text().isBlank() ? link.url() : link.text(),
+            Instant.now(), SchoolLink.Status.PENDING, null, null));
+      } else if (!shouldRetry(existing.get())) {
         continue;
       }
-      links.save(new SchoolLink(id, document.id(), link.url(),
-          link.text() == null || link.text().isBlank() ? link.url() : link.text(),
-          Instant.now(), SchoolLink.Status.PENDING, null, null));
 
       // The one link the ingester follows on its own. See SchoolLinkFilter.isAutoFetchable: a
       // newsletter on the school's own site is already being read wholesale by the website
       // crawl, so following it reaches nobody new. The row is written first and then fetched,
-      // so a failure leaves an ordinary pending link a human can retry rather than losing it.
+      // so a failure leaves the link recorded rather than losing it.
       if (linkFilter.isAutoFetchable(link.url())) {
         autoFetch(id, link.url());
       }
     }
+  }
+
+  /**
+   * Whether an already-recorded link should be offered to the auto-fetcher again.
+   *
+   * <p>Only a {@link SchoolLink.Status#FAILED} one, and only because the alternative is that it
+   * is never retried at all. This loop used to skip every existing row before reaching the
+   * auto-fetch, so a newsletter whose fetch hit one timeout, one 502 or one rename stayed
+   * {@code FAILED} for ever: the email's text never changes, so the row is found again on every
+   * sync and skipped again, and nothing but a human clicking Fetch in the console recovers it.
+   * The symptom is a week's newsletter simply missing, which is indistinguishable from the
+   * school not having sent one.
+   *
+   * <p>Deliberately not {@code PENDING}: that is a link awaiting a human decision — the queue
+   * this whole mechanism exists to feed — and re-fetching it would be the ingester overriding
+   * that decision every night. Deliberately not {@code IGNORED} or {@code FETCHED} either: those
+   * are decisions, one human and one already carried out. Only the auto-fetchable subset ever
+   * reaches the fetch below, so this cannot start re-requesting third-party addresses.
+   *
+   * @param link the row already stored for this address
+   * @return true when it is worth another attempt
+   */
+  private static boolean shouldRetry(final SchoolLink link) {
+    return link.status() == SchoolLink.Status.FAILED;
   }
 
   /**

@@ -1,6 +1,9 @@
 package com.simonrowe.school.chat;
 
+import com.simonrowe.school.model.SchoolDocument;
 import com.simonrowe.school.model.SchoolEvent;
+import com.simonrowe.school.model.SchoolSourceType;
+import com.simonrowe.school.model.Visibility;
 import com.simonrowe.school.retrieval.SchoolAudience;
 import com.simonrowe.school.retrieval.SchoolRetrievalService;
 import java.time.LocalDate;
@@ -25,11 +28,24 @@ public class SchoolTools {
 
   private static final int MAX_PROSE_CHARS = 6000;
 
+  /**
+   * The character budget for whole documents in {@link #getRecentCommunications}.
+   *
+   * <p>Twice {@link #MAX_PROSE_CHARS}, deliberately. That budget caps a set of retrieved
+   * fragments, where losing the tail costs one more fragment; this one caps whole school
+   * communications for a window a parent asked about, and a typical week is five short letters
+   * and one newsletter of about five thousand characters. Sized so that week arrives complete,
+   * because arriving nearly complete is what makes the assistant say a newsletter did not mention
+   * something it mentioned in its last paragraph.
+   */
+  private static final int MAX_COMMUNICATION_CHARS = 12000;
+
   private static final String TERM_DATES_LABEL = "Checking term dates";
   private static final String INSET_LABEL = "Looking up INSET days";
   private static final String EVENTS_LABEL = "Finding school events";
   private static final String CLUBS_LABEL = "Looking up clubs";
   private static final String SEARCH_LABEL = "Searching school communications";
+  private static final String COMMUNICATIONS_LABEL = "Reading recent school letters";
   private static final String TODAY_LABEL = "Checking today's date";
 
   private final SchoolQueryService queries;
@@ -204,6 +220,140 @@ public class SchoolTools {
     return tracked(CLUBS_LABEL,
         () -> render(queries.ofType(SchoolEvent.EventType.CLUB, null, audience),
             "No clubs are recorded."));
+  }
+
+  /**
+   * Everything the school published in a date window, newest first.
+   *
+   * <p>The document-shaped counterpart to {@link #getEventsBetween}, and the answer to a class of
+   * question that had none. "Was there a newsletter last week" is a yes or a no; "what was in the
+   * newsletter from the 11th" names one document. Neither is a similarity question, and putting
+   * them through {@link #searchSchoolInformation} produced a confident answer from a newsletter
+   * five weeks old, because a dozen weekly newsletters are nearly indistinguishable to an
+   * embedding and there was no recency signal anywhere in the path.
+   *
+   * <p>It is also the only tool that can say <b>nothing was published</b>, which
+   * {@code searchSchoolInformation} structurally cannot: an empty top-k means "nothing was
+   * similar", never "nothing exists".
+   *
+   * @param from ISO date, inclusive
+   * @param to ISO date, inclusive
+   * @return an index of what was published, then as many full texts as the budget allows
+   */
+  @Tool(description = "List what the school actually sent or published between two dates - "
+      + "newsletters, letters, emails, website pages and PDFs - newest first, with their full "
+      + "text. Use this for 'was there a newsletter last week', 'what was in the latest "
+      + "newsletter', 'what is the latest news' and any question about a named date or a "
+      + "recent period. Prefer it over searching when the question is about WHEN something was "
+      + "sent rather than WHAT it said.")
+  public String getRecentCommunications(
+      @ToolParam(description = "Start date, ISO format yyyy-MM-dd") final String from,
+      @ToolParam(description = "End date, ISO format yyyy-MM-dd") final String to) {
+    final LocalDate start;
+    final LocalDate end;
+    try {
+      start = LocalDate.parse(from);
+      end = LocalDate.parse(to);
+    } catch (RuntimeException e) {
+      return "Those dates could not be read. Use yyyy-MM-dd.";
+    }
+    return tracked(COMMUNICATIONS_LABEL, () -> {
+      final List<SchoolDocument> found = queries.communicationsBetween(start, end, audience);
+      if (found.isEmpty()) {
+        // Stated as a fact about the window, not as "nothing was found". The difference is the
+        // whole value of this tool: it licenses the assistant to tell a parent there was no
+        // newsletter last week, which a similarity search never can.
+        return "The school published nothing between %s and %s.".formatted(start, end);
+      }
+      return renderCommunications(found, start, end);
+    });
+  }
+
+  /**
+   * Renders a window's documents: an index of every one, then full texts until the budget runs
+   * out.
+   *
+   * <p>The index comes first and covers <b>all</b> of them, because the question underneath is
+   * often "did the school send X" and that must be answerable even when X's text was budgeted
+   * out. Bodies are then included whole, in order, while they fit — never truncated mid-document.
+   * A half-quoted newsletter is worse than an omitted one: the assistant cannot tell that it is
+   * reading a fragment, so it answers "the newsletter does not mention it" about a paragraph that
+   * was cut off. Anything omitted is named in the index and counted in the closing line, so the
+   * assistant knows there is more and can say so.
+   */
+  private String renderCommunications(
+      final List<SchoolDocument> found, final LocalDate start, final LocalDate end) {
+    final StringBuilder out = new StringBuilder(
+        "%d item(s) published between %s and %s, newest first:\n"
+            .formatted(found.size(), start, end));
+    for (SchoolDocument document : found) {
+      out.append("- %s \"%s\" (%s)%s\n".formatted(
+          localDateOf(document.publishedAt()), document.title(), document.sourceType(),
+          urlOf(document).isEmpty() ? "" : " " + urlOf(document)));
+    }
+
+    out.append("\nFull text follows, newest first.\n");
+    int budget = MAX_COMMUNICATION_CHARS;
+    int included = 0;
+    for (SchoolDocument document : found) {
+      final String body = document.body() == null ? "" : document.body();
+      if (included > 0 && body.length() > budget) {
+        break;
+      }
+      out.append('\n').append(renderDocument(document));
+      budget -= body.length();
+      included++;
+    }
+    if (included < found.size()) {
+      // Named rather than silent. An assistant that cannot see that it was given 3 of 9
+      // documents will answer as though it read all nine.
+      out.append("\n\nThe full text of the remaining %d older item(s) was not included. "
+          .formatted(found.size() - included))
+          .append("Narrow the dates, or search for one by name, to read them.");
+    }
+    return out.toString();
+  }
+
+  /**
+   * Renders one stored document in the same envelope retrieved chunks arrive in.
+   *
+   * <p>Deliberately identical in shape to {@link #renderChunk} so the assistant reads a
+   * whole document and a retrieved fragment the same way, and cites both the same way.
+   */
+  private String renderDocument(final SchoolDocument document) {
+    return """
+        <<<SOURCE title="%s" published="%s" type="%s" url="%s">>>
+        %s
+        <<<END SOURCE>>>"""
+        .formatted(document.title(), document.publishedAt(), document.sourceType(),
+            urlOf(document), document.body());
+  }
+
+  /**
+   * The address a reader could click for a stored document, or empty when there is not one.
+   *
+   * <p>Mirrors {@link #renderChunk}: a real web address, or a first-party attachment URL for a
+   * public email PDF, and never a {@code gmail:} pseudo-reference — which is meaningless to a
+   * reader, and which the model will happily render as a link if it is handed one.
+   */
+  private String urlOf(final SchoolDocument document) {
+    final String ref = document.sourceRef() == null ? "" : document.sourceRef();
+    if (ref.startsWith("https://")) {
+      return ref;
+    }
+    if (document.sourceType() == SchoolSourceType.PDF
+        && document.visibility() == Visibility.PUBLIC
+        && ref.startsWith("gmail:")) {
+      return absolute("/api/school/attachments/" + document.id());
+    }
+    return "";
+  }
+
+  /** The publication date as a plain date, for the index lines. */
+  private String localDateOf(final java.time.Instant instant) {
+    return instant == null
+        ? "undated"
+        : instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString();
   }
 
   /**
