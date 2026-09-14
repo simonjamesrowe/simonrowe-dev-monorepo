@@ -116,12 +116,20 @@ public class LogWatchActivitiesImpl implements LogWatchActivities {
     // noise crowd first-party findings out of the run it is being muted from.
     Map<String, Integer> mutedByReason = new LinkedHashMap<>();
     List<LogSignature> audible = new ArrayList<>();
+    int muted = 0;
     for (LogSignature signature : SignatureExtractor.group(lines)) {
-      LogWatchProperties.Ignore rule = properties.mutedBy(signature);
-      if (rule == null) {
+      List<LogWatchProperties.Ignore> rules = properties.mutedBy(signature);
+      if (rules.isEmpty()) {
         audible.add(signature);
       } else {
-        mutedByReason.merge(rule.reason(), 1, Integer::sum);
+        // One group, counted once, but attributed to every rule that had a hand in disowning it.
+        // The two numbers therefore no longer have to agree, and must not be made to: `muted` is
+        // how many problems went unfiled, while the reasons are how a reader tells which rule
+        // has started matching more than it should. Summing the attributions instead would
+        // double-count a group that took two rules to cover - which is exactly the Temporal case
+        // this exists for.
+        muted++;
+        rules.forEach(rule -> mutedByReason.merge(rule.reason(), 1, Integer::sum));
       }
     }
 
@@ -136,7 +144,6 @@ public class LogWatchActivitiesImpl implements LogWatchActivities {
     int dropped = Math.max(0, grouped.size() - properties.maxPerRun());
     List<LogSignature> capped = grouped.stream().limit(properties.maxPerRun()).toList();
 
-    int muted = mutedByReason.values().stream().mapToInt(Integer::intValue).sum();
     List<String> reasons =
         mutedByReason.entrySet().stream()
             .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())

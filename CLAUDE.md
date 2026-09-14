@@ -211,6 +211,49 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 050-logwatch-backlog-3: 049's mute rules were correct and **SIM-28 was re-filed anyway, every
+  night**, because muting was decided one rule at a time. `Ignore.mutes` requires every variant to
+  match *that* rule, and SIM-28's group has five distinct messages from one logger — three saying
+  `context canceled` and two reporting the same deploy-time teardown from the SQL driver
+  (`sql: transaction has already been committed or rolled back`, `database connection lost:
+  driver: bad connection`). No single phrase can cover all five, so a group of mixed third-party
+  noise was structurally unmutable however many rules were added. `LogWatchProperties.mutedBy` now
+  returns **the set of rules that between them disown every variant**, and the safety property is
+  unchanged and is the point: one message no rule claims and the whole group is filed, so a real
+  fault under a muted logger un-mutes it on the next scan. Load-bearing bits:
+  - **A group covered by two rules counts once in `mutedSignatures` and is attributed to both.**
+    The two numbers no longer agree by construction and must not be made to — `muted` is how many
+    problems went unfiled; the reasons are how an over-broad rule is spotted. The old
+    `sum(mutedByReason)` would double-count exactly the case this change exists for.
+  - **The two new Temporal rules are justified by timing, not by reading the message.** Across the
+    14 days to 2026-09-14 all 26 occurrences of both phrases landed within a minute of a container
+    recreate (09-06 09:00, 09-10 06:00, 09-13 18:30 and 20:04 — every one a deploy) and none at
+    any other time. `database connection lost` is the kind of line that should not be muted on its
+    wording alone; the rule's `reason` records the evidence and the condition for deleting it.
+  - **SIM-47 could not be muted at all, and that is a property of the group, not the rules.**
+    Spring's `BeanPostProcessorChecker` emits six distinct messages (Embabel's
+    `embeddingTrackingConfiguration`, Spring AI MCP's `serverAnnotatedBeanRegistry` and
+    `McpServerAnnotationScannerAutoConfiguration`, OpenTelemetry's `otelMapConverter` and
+    `PropertiesConfig`) and `MAX_VARIANTS` lists five — a capped group is never muted. It fires on
+    every boot, so it re-filed after every deploy. Fixed with a `logging.level` entry in the
+    backend instead, which also keeps the volume out of Grafana Cloud.
+  - **`logging.level` keys containing `$` must be bracketed.** `logging.level` binds as a map and
+    Spring's relaxed binding **strips the `$`** from an unbracketed key, so the level lands on
+    `...PostProcessorRegistrationDelegateBeanPostProcessorChecker`, a logger no class owns. Starts
+    cleanly, silences nothing — the silently-ignored-config theme again. `LoggingLevelConfigTest`
+    binds the shipped YAML and asserts the bound key, and was confirmed to fail on the unbracketed
+    form before being trusted.
+  - **Not fixed, and now quiet anyway:** SIM-29 (Alloy re-shipping history as `timestamp too old`)
+    last occurred 2026-09-11 and did not recur across the 09-13 deploys — but `alloy` was not
+    recreated by either of them, so the question 048 named (does the positions file survive a
+    *recreate*) is still untested. The absence sweep will close it around 19 September regardless;
+    that is a statement about the logs, not about the cause.
+  Verified in production while diagnosing this, both from Loki: the platform backup **now works**
+  (`Platform backup completed`, 01:04 on 2026-09-14, first successful run ever), and the FontBox
+  silencing works (a school ingest at 06:28 produced none). The absence sweep has **never yet
+  closed a ticket** — SIM-27/33/36 were closed by hand on 09-10 — because nothing has been absent
+  for the full 7 days; the first closures fall due 17–21 September.
+  See `docs/runbooks/logwatch.md` ("Muting third-party noise" and "When a rule cannot reach it").
 - 049-logwatch-backlog-2: The fourteen open `factory:logwatch` tickets on 2026-09-13 were four
   problems, one already fixed, and six that no code in this repository could ever fix.
   - **The platform backup STILL had never run.** 048 was right that the `deployer` image lacked

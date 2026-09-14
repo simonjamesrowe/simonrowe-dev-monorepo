@@ -2,6 +2,7 @@ package com.simonrowe.factory.logwatch.config;
 
 import com.simonrowe.factory.logwatch.domain.LogSignature;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -81,13 +82,60 @@ public record LogWatchProperties(
   }
 
   /**
-   * The first rule that mutes this group, if any.
+   * The rules that between them disown every distinct message in this group.
+   *
+   * <p>Muting is decided across the whole rule list rather than one rule at a time, because a
+   * group is keyed on the emitting code and one logger emits more than one kind of somebody
+   * else's noise. Temporal's {@code Operation failed with internal error.} is the case that
+   * forced it: five distinct messages, three saying {@code context canceled} and two reporting
+   * the same cancellation from the SQL driver's side. No single rule could ever cover all five,
+   * so SIM-28 was re-filed every night by a mechanism that had already been told twice that its
+   * contents were not ours.
+   *
+   * <p>The safety property is unchanged and is the whole point: <strong>every</strong> variant
+   * must be disowned by <em>some</em> curated rule. One message no rule claims, and the group is
+   * filed in full — so a real fault appearing under a muted logger un-mutes it on the next scan
+   * rather than riding out of sight beside the noise.
    *
    * @param signature the grouped problem
-   * @return the matching rule, or {@code null} when the group should be filed
+   * @return the rules that mute it, in declaration order, or empty when the group should be filed
    */
-  public Ignore mutedBy(final LogSignature signature) {
-    return ignore.stream().filter(rule -> rule.mutes(signature)).findFirst().orElse(null);
+  public List<Ignore> mutedBy(final LogSignature signature) {
+    if (signature == null || ignore.isEmpty()) {
+      return List.of();
+    }
+    List<Ignore> candidates = ignore.stream().filter(rule -> rule.appliesTo(signature)).toList();
+    if (candidates.isEmpty()) {
+      return List.of();
+    }
+    // MAX_VARIANTS limits what is listed, not what was seen. Beyond it no rule can vouch for the
+    // group, however well the visible messages match. Same distinction, and the same reason, as
+    // the per-run cap's veto over the absence sweep.
+    if (signature.distinctVariants() > signature.variants().size()) {
+      return List.of();
+    }
+    if (signature.variants().isEmpty()) {
+      // A LogSignature replayed from a pre-ignore Temporal history carries no variants. Fall
+      // back to the leader rather than refusing to mute, which would re-file the very noise the
+      // operator has already disowned.
+      return candidates.stream()
+          .filter(rule -> rule.matchesLeaderOf(signature))
+          .findFirst()
+          .map(List::of)
+          .orElseGet(List::of);
+    }
+    List<Ignore> used = new ArrayList<>();
+    for (LogSignature.Variant variant : signature.variants()) {
+      Ignore match =
+          candidates.stream().filter(rule -> rule.matches(variant)).findFirst().orElse(null);
+      if (match == null) {
+        return List.of();
+      }
+      if (!used.contains(match)) {
+        used.add(match);
+      }
+    }
+    return List.copyOf(used);
   }
 
   /**
@@ -130,7 +178,10 @@ public record LogWatchProperties(
     }
 
     /**
-     * Whether this rule mutes a whole group.
+     * Whether this rule <em>on its own</em> mutes a whole group.
+     *
+     * <p>A scan asks {@link LogWatchProperties#mutedBy(LogSignature)} instead, which lets several
+     * rules cover one group between them; this is the single-rule form of the same question.
      *
      * <p><strong>Every</strong> variant must match, not merely the group's leader. A group is
      * keyed on the emitting code, and one logger can emit two genuinely different faults — that
@@ -147,30 +198,44 @@ public record LogWatchProperties(
      * @return whether it is this rule's noise, all of it
      */
     public boolean mutes(final LogSignature signature) {
-      if (!usable() || signature == null) {
-        return false;
-      }
-      if (!container.isBlank() && !contains(signature.container())) {
+      if (!appliesTo(signature)) {
         return false;
       }
       if (signature.distinctVariants() > signature.variants().size()) {
         return false;
       }
       if (signature.variants().isEmpty()) {
-        // A LogSignature replayed from a pre-ignore Temporal history carries no variants. Fall
-        // back to the leader rather than refusing to mute, which would re-file the very noise
-        // the operator has already disowned.
-        return matches(signature.signature()) || matches(signature.exampleLine());
+        return matchesLeaderOf(signature);
       }
-      return signature.variants().stream()
-          .allMatch(variant -> matches(variant.signature()) || matches(variant.exampleLine()));
+      return signature.variants().stream().allMatch(this::matches);
+    }
+
+    /** Whether this rule is usable at all and confined to this group's container. */
+    boolean appliesTo(final LogSignature signature) {
+      return usable()
+          && signature != null
+          && (container.isBlank() || contains(signature.container()));
+    }
+
+    /**
+     * Whether this rule claims a group's leading message, used only for a variant-less signature
+     * replayed from a Temporal history serialized before variants existed.
+     */
+    boolean matchesLeaderOf(final LogSignature signature) {
+      return containsPhrase(signature.signature()) || containsPhrase(signature.exampleLine());
+    }
+
+    /** Whether this rule claims one distinct message within a group. */
+    boolean matches(final LogSignature.Variant variant) {
+      return variant != null
+          && (containsPhrase(variant.signature()) || containsPhrase(variant.exampleLine()));
     }
 
     private boolean contains(final String containerName) {
       return containerName != null && containerName.contains(container);
     }
 
-    private boolean matches(final String text) {
+    private boolean containsPhrase(final String text) {
       return text != null && text.contains(contains);
     }
   }

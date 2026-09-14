@@ -117,6 +117,24 @@ logging:
     # `org.apache.fontbox`: a font that cannot be parsed at all still reports.
     org.apache.fontbox.ttf: ERROR
 
+    # Spring logs one WARN per bean that a BeanPostProcessor declared through a non-static
+    # factory method made ineligible for auto-proxying. Every bean it names here belongs to a
+    # dependency — Embabel's `embeddingTrackingConfiguration`, Spring AI MCP's
+    # `serverAnnotatedBeanRegistry` and `McpServerAnnotationScannerAutoConfiguration`, and
+    # OpenTelemetry's `otelMapConverter` and `PropertiesConfig` — so there is no line in this
+    # repository to change and no proxying this application asks for that it loses.
+    #
+    # It is emitted six times on every boot, which makes it the one piece of noise that comes
+    # back after each deploy: it filed SIM-47 on 2026-09-14 and would re-file it indefinitely.
+    # A `factory.logwatch.ignore` rule cannot reach it — the group has six distinct messages and
+    # MAX_VARIANTS lists five, and a group whose variants were capped is never muted.
+    #
+    # The key is bracketed because the logger name contains `$`. Left bare, Spring's relaxed
+    # binding strips it while binding `logging.level` as a map, and the level is applied to a
+    # logger name that no logger has. It starts cleanly and does nothing, which is why
+    # LoggingLevelConfigTest asserts the bound key rather than the file's text.
+    "[org.springframework.context.support.PostProcessorRegistrationDelegate$BeanPostProcessorChecker]": ERROR
+
 spring:
   application:
     name: simonrowe-backend
