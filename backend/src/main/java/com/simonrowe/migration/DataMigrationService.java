@@ -276,7 +276,11 @@ public class DataMigrationService implements ApplicationRunner {
             toImage(getString(doc, "backgroundImage")),
             toImage(getString(doc, "mobileBackgroundImage")),
             createdAt,
-            updatedAt
+            updatedAt,
+            // The legacy Strapi export has no CV fields; keep whatever the CMS holds
+            // rather than clearing them on a re-import.
+            existing.getFirst().resumeSummary(),
+            existing.getFirst().resumePhoto()
         );
         profileRepository.save(updated);
       } else {
@@ -295,7 +299,9 @@ public class DataMigrationService implements ApplicationRunner {
             toImage(getString(doc, "backgroundImage")),
             toImage(getString(doc, "mobileBackgroundImage")),
             createdAt,
-            updatedAt
+            updatedAt,
+            null,
+            null
         );
         profileRepository.save(profile);
       }

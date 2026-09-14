@@ -129,7 +129,9 @@ class AdminProfileControllerTest extends AbstractIntegrationTest {
         null,
         null,
         now,
-        now
+        now,
+        null,
+        null
     );
   }
 }

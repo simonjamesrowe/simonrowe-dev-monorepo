@@ -21,6 +21,8 @@ public record Profile(
     Image backgroundImage,
     Image mobileBackgroundImage,
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    String resumeSummary,
+    Image resumePhoto
 ) {
 }

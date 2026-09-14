@@ -43,7 +43,9 @@ public class ResumeService {
 
     ResumeProfile resumeProfile = buildResumeProfile(profile, socialLinks);
 
-    List<Job> allJobs = jobRepository.findAllByOrderByStartDateDesc();
+    List<Job> allJobs = jobRepository.findAllByOrderByStartDateDesc().stream()
+        .filter(ResumeService::includedOnResume)
+        .toList();
 
     List<ResumeJob> employment = allJobs.stream()
         .filter(job -> !Boolean.TRUE.equals(job.isEducation()))
@@ -79,8 +81,22 @@ public class ResumeService {
         profile.location(),
         linkedIn,
         github,
-        website
+        website,
+        profile.resumeSummary(),
+        profile.resumePhoto() == null ? null : profile.resumePhoto().url()
     );
+  }
+
+  /**
+   * A row the CMS has un-ticked is omitted from the CV entirely, rather than demoted
+   * to a compact entry. The toggle in the admin job editor reads as include/exclude,
+   * and the renderer's own detail taper is a separate concern.
+   *
+   * <p>A null is treated as included, matching {@code AdminJobController}, which
+   * defaults the flag to true when a request body omits it.
+   */
+  private static boolean includedOnResume(Job job) {
+    return !Boolean.FALSE.equals(job.includeOnResume());
   }
 
   private String findSocialLink(List<SocialMediaLink> links, String type) {
@@ -105,6 +121,6 @@ public class ResumeService {
   }
 
   private ResumeSkillGroup toResumeSkillGroup(SkillGroup group) {
-    return new ResumeSkillGroup(group.name(), group.rating());
+    return new ResumeSkillGroup(group.name());
   }
 }

@@ -9,6 +9,8 @@ public record ResumeProfile(
     String location,
     String linkedIn,
     String github,
-    String website
+    String website,
+    String summary,
+    String photoUrl
 ) {
 }
