@@ -212,6 +212,11 @@ class LogWatchIgnoreRulesTest {
 
     assertThat(rule.mutes(signatureWith(visible, 1))).isTrue();
     assertThat(rule.mutes(signatureWith(visible, 9))).isFalse();
+
+    // And through the call a scan actually makes, where a second rule covering the same phrase
+    // must not be able to make up for what neither of them can see.
+    assertThat(properties.mutedBy(signatureWith(visible, 1))).isNotEmpty();
+    assertThat(properties.mutedBy(signatureWith(visible, 9))).isEmpty();
   }
 
   /**
@@ -227,6 +232,9 @@ class LogWatchIgnoreRulesTest {
 
     assertThat(rule.mutes(signatureWith(List.of(), 0))).isTrue();
     assertThat(rule.mutes(null)).isFalse();
+
+    assertThat(properties.mutedBy(signatureWith(List.of(), 0))).isNotEmpty();
+    assertThat(properties.mutedBy(null)).isEmpty();
   }
 
   private LogSignature signatureWith(
