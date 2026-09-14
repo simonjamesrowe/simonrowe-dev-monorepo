@@ -53,6 +53,7 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 ## Key Design Decisions
 
 - Blog tags/skills use MongoDB `@DBRef` references; admin API uses DTO pattern converting between `@DBRef` entities and string IDs for the frontend
+- When a request DTO reconstructs a whole resource for a save/update API, test that every field round-trips unchanged, not just the ones the change touches — an omitted field silently drops existing data on save
 - Admin CMS uses Lucide React icons for actions/status, right-side drawer for Media Library, two-column layout for blog editor
 - Uploads served via Spring `ResourceHandlerRegistry` at `/uploads/**`, path configurable via `UPLOADS_PATH` env var (default: `uploads/` relative to backend CWD)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
