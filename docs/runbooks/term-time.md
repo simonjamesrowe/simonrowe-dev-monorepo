@@ -583,6 +583,44 @@ relabelling existing rows in place is not possible without orphaning them — a 
 third-party pages fetched from email before this change keep the `WEBSITE_PAGE` label, and are
 all restricted, so they reach nobody.
 
+### Two things the reviewer caught, both silent
+
+Neither produced an error, a log line or a failing test, and both defeated the mechanism they
+sat inside.
+
+**The year-group scope was applied once, in the wrong place.** It was a pass in
+`SchoolNoteService` straight after its own call to `SchoolLinkFetcher.fetch`, so it only held
+for links fetched through the note pipeline — and `fetch()` re-extracts and rewrites a
+document's events on **every** invocation, including from `POST /links/{id}/fetch`, the admin
+Fetch button. So retrying a note's `FAILED` link, which a 403 from a school's website makes
+routine, re-wrote its events whole-school and put four secondary schools' open evenings back
+into every year group's "what is on this week". The scope already persists on the fetched
+document, so the narrowing now lives in `SchoolLinkFetcher.writeEventsFor` and reads it from
+there: one statement rather than two that can disagree. Scoping before the write also stops it
+touching rows it does not own, since `SchoolEventWriter.write` can decline an incoming event on
+source precedence and the old pass rewrote whatever was stored under that id regardless.
+
+**A fetched page was classified by the address requested, not the address answered.** `fetch()`
+follows up to five redirects, revalidating each hop, and then called `sourceTypeFor` with
+`link.url()`. A link on the school's own host that redirects off it — a moved page now pointing
+at a third-party portal, a shortener, a hijacked path — was therefore stored as `WEBSITE_PAGE`,
+and from a note that document is public, so it joined the answer to "what did the school send
+last week" under the school's name. That is precisely the misattribution `EXTERNAL_PAGE` was
+added to prevent, so classifying on the pre-redirect address defeated the type's entire purpose.
+
+**The split that resolves it is worth stating, because the obvious fix over-reaches.** Only the
+*classification* moves to the resolved address. The *identity* stays on the requested one:
+`sourceRef` feeds `SchoolIds.documentId`, so keying it on the resolved address would orphan
+every document already fetched and fork a new one whenever a redirect target moved, and
+`publishedAtFor` matches `existingPublishedAt(type, link.url())`, which is what stops a re-fetch
+re-dating an undated page. It is also the honest citation — the address the school published is
+the one to hand a parent, even when it redirects.
+
+Neither fix's wiring can be covered by an offline test, for the reason
+`SchoolLinkFetcherRedirectTest` already documents: the first URL has to pass `isFetchableUrl`,
+and a loopback test server never does. `SchoolLinkFetcherSourceTypeTest` pins both halves of
+each rule and says so rather than implying coverage it does not have.
+
 ### The extractor can now return a link, and it is checked
 
 `ExtractedSchoolEvents.Event` carries a `url`, rendered by `SchoolTools` as `link:` so an answer

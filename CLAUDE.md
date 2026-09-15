@@ -263,11 +263,28 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     useless to somebody holding four in their head and dangerous if they act on it for the wrong
     one), to say these are not Kilmorie's announcements, and to prefer a school's own page over a
     note when they disagree.
+  - **Two faults the reviewer caught, both silent, both defeating the mechanism they sat inside.**
+    (1) The year-group scope was a pass in `SchoolNoteService` straight after its own call to
+    `SchoolLinkFetcher.fetch` — but `fetch()` re-extracts and rewrites a document's events on
+    **every** invocation, including from `POST /links/{id}/fetch`, the admin Fetch button. So
+    retrying a note's `FAILED` link, which a 403 from a school's site makes routine, re-wrote its
+    events whole-school. Now `SchoolLinkFetcher.writeEventsFor` narrows them from the document,
+    which persists the scope, on every path; scoping *before* the write also stops it touching
+    rows `SchoolEventWriter` declined on precedence. (2) A fetched page was classified with the
+    address **requested** rather than the one answered, so a school-host link redirecting off the
+    host stored third-party content as `WEBSITE_PAGE` — public from a note, therefore in the
+    answer to "what did the school send last week", under the school's name. **The split that
+    resolves it matters, because the obvious fix over-reaches:** only classification follows the
+    resolved address; `sourceRef` stays the requested one, because it feeds `SchoolIds.documentId`
+    (re-keying orphans every fetched document and forks a new one whenever a redirect target
+    moves), because `publishedAtFor` matches on it, and because it is the honest citation.
+    Neither fix's wiring is coverable offline — the first URL must pass `isFetchableUrl` and a
+    loopback server never does, the same limit `SchoolLinkFetcherRedirectTest` documents.
   - **Not done:** no image paste (the messages usually arrive as a screenshot, so transcribing one
     is still manual), links are followed one level only, and duplicate events remain possible —
     collapsing the note's row onto the page's depends on the extractor titling both with the
     school's name, which is a prompt instruction rather than a guarantee.
-  Backend 1528 tests, frontend 875. See `docs/runbooks/term-time.md` ("Pasting a note in").
+  Backend 1542 tests, frontend 882. See `docs/runbooks/term-time.md` ("Pasting a note in").
 - termtime-newsletter-tier-and-recency: Term Time could not answer anything about the newsletter of
   11 September 2026, and the two reasons were independent. **The newsletter had been ingested
   perfectly and then hidden.** The school moved its weekly newsletter out of the mail body onto its
