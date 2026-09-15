@@ -54,6 +54,7 @@ const SchoolOverviewAdmin = named(() => import('./pages/admin/SchoolOverviewAdmi
 const SchoolApprovalsPage = named(() => import('./pages/admin/SchoolApprovalsPage'), 'SchoolApprovalsPage')
 const SchoolAllDocumentsPage = named(() => import('./pages/admin/SchoolAllDocumentsPage'), 'SchoolAllDocumentsPage')
 const SchoolEventsAdmin = named(() => import('./pages/admin/SchoolEventsAdmin'), 'SchoolEventsAdmin')
+const SchoolNotesAdmin = named(() => import('./pages/admin/SchoolNotesAdmin'), 'SchoolNotesAdmin')
 const ProfileAdmin = named(() => import('./pages/admin/ProfileAdmin'), 'ProfileAdmin')
 const SkillGroupEditor = named(() => import('./pages/admin/SkillGroupEditor'), 'SkillGroupEditor')
 const SkillsAdmin = named(() => import('./pages/admin/SkillsAdmin'), 'SkillsAdmin')
@@ -221,6 +222,7 @@ function App() {
           <Route path="school/approvals" element={<SchoolApprovalsPage />} />
           <Route path="school/documents" element={<SchoolAllDocumentsPage />} />
           <Route path="school/events" element={<SchoolEventsAdmin />} />
+          <Route path="school/notes" element={<SchoolNotesAdmin />} />
         </Route>
         <Route element={<PublicLayout><NotFoundPage /></PublicLayout>} path="*" />
       </Routes>

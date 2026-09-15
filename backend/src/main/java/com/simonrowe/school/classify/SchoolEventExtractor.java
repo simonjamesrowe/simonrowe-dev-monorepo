@@ -57,9 +57,20 @@ public class SchoolEventExtractor {
       - time: the time of day as written, e.g. "6:00pm" or "9:15am". Leave empty if not given.
       - Never invent a description, location or time. An empty field is
       correct when the text is silent; a plausible guess is not.
+      - url: a web address for this specific event - a booking page, an announcement, \
+      an open day listing. Copy it EXACTLY as it appears in the text. If the text contains \
+      no address for this event, leave it empty. Never construct, complete or guess one: a \
+      link that goes nowhere is worse than no link, and anything you did not copy will be \
+      discarded anyway.
+      - If the event belongs to a named school, venue or organisation OTHER than the one \
+      this text is from, begin the title with that name - "Kingsdale Foundation School open \
+      day", not "Open day". The reader may be comparing four schools at once and a bare \
+      title tells them nothing about which.
       - Return an empty list if the text contains no dated events. Do not invent any.
 
       Reference date (the date this text was published): %s
+
+      Title of the document this text came from: %s
 
       Text:
       %s
@@ -98,7 +109,8 @@ public class SchoolEventExtractor {
     try {
       extracted = ai.withLlm(properties.guardrailModel())
           .createObjectIfPossible(
-              PROMPT.formatted(published, text), ExtractedSchoolEvents.class);
+              PROMPT.formatted(published, titleOf(document), text),
+              ExtractedSchoolEvents.class);
     } catch (Exception e) {
       LOG.warn("Event extraction failed for '{}': {}", document.title(), e.getMessage());
       return List.of();
@@ -151,8 +163,49 @@ public class SchoolEventExtractor {
         blankToNull(candidate.description()),
         blankToNull(candidate.location()),
         blankToNull(candidate.time()),
-        // Extracted events have no deep link of their own; the citation is the document.
-        null));
+        // The one field the model is allowed to contribute that a reader will click. Verified
+        // against the source text rather than taken on trust — see verbatimUrl.
+        verbatimUrl(candidate.url(), document.body())));
+  }
+
+  /**
+   * A title for the document, for the prompt's benefit.
+   *
+   * <p>The body of a fetched web page does not contain its own {@code <title>}, so without this
+   * a page headed "Open Events" at a school named only in the browser tab produces events called
+   * "Open Evening" with no school attached to them. Those then collide, by title, with every
+   * other school's open evening on the same date.
+   */
+  private static String titleOf(final SchoolDocument document) {
+    return document.title() == null || document.title().isBlank()
+        ? "(untitled)"
+        : document.title().trim();
+  }
+
+  /**
+   * Returns the model's URL only if it appears literally in the text it was reading.
+   *
+   * <p>The single defence against an invented link, and it is a complete one: a model asked to
+   * copy an address out of a document either copied it or did not, and an address that is not in
+   * the document cannot have come from it. Checked as a plain substring rather than by parsing —
+   * the question is "did you copy this", not "is this a well-formed URL".
+   *
+   * <p>A trailing {@code .} or {@code ,} swept up from prose is trimmed before the check, or a
+   * link at the end of a sentence fails verification and is dropped for punctuation.
+   *
+   * @param candidate what the model returned, possibly null
+   * @param body the text the model was shown
+   * @return the verified URL, or null
+   */
+  static String verbatimUrl(final String candidate, final String body) {
+    if (candidate == null || body == null) {
+      return null;
+    }
+    final String trimmed = candidate.trim().replaceAll("[.,;:)]+$", "");
+    if (trimmed.isBlank() || !trimmed.toLowerCase(Locale.ROOT).startsWith("http")) {
+      return null;
+    }
+    return body.contains(trimmed) ? trimmed : null;
   }
 
   private static String blankToNull(final String value) {

@@ -269,22 +269,25 @@ public class SchoolLinkFetcher {
         return fail(link, "Nothing usable came back (" + body.length + " bytes)");
       }
 
-      final String text = extractText(body, contentType);
-      if (text == null || text.isBlank()) {
+      final Extracted extracted = extractText(body, contentType);
+      if (extracted == null || extracted.text() == null || extracted.text().isBlank()) {
         // An image is a legitimate thing to link to and there is nothing to index in one, so
         // this is a decline rather than an error.
         return fail(link, "No readable text — it may be an image or an unsupported format");
       }
 
-      final SchoolSourceType type =
-          isPdf(body) ? SchoolSourceType.PDF : SchoolSourceType.WEBSITE_PAGE;
+      final String text = extracted.text();
+      final SchoolSourceType type = sourceTypeFor(body, link.url());
       final SchoolDocumentWriter.WriteResult result = documentWriter.write(
           type,
           link.url(),
-          link.anchorText(),
+          titleFor(link, extracted.title()),
           text,
           publishedAtFor(type, link, text),
-          List.of(),
+          // A fetched page inherits its parent's year-group scope for the same reason it
+          // inherits the tier: it is being read because of the document that named it. A note
+          // about Year 6 open evenings leads only to Year 6 pages.
+          parent == null ? List.of() : parent.yearGroups(),
           tier);
 
       final SchoolDocument fetched = result.document();
@@ -303,17 +306,78 @@ public class SchoolLinkFetcher {
     });
   }
 
-  private String extractText(final byte[] body, final String contentType) {
+  /**
+   * The source type a fetched address belongs under.
+   *
+   * <p>A PDF is a PDF wherever it came from. Everything else splits on the host, because
+   * {@code SchoolQueryService.communicationsBetween} — "what did the school send or publish" —
+   * reads an allowlist of source types that includes {@link SchoolSourceType#WEBSITE_PAGE}. A
+   * secondary school's admissions page filed under that type is reported to a parent as
+   * something Kilmorie published. See {@link SchoolSourceType#EXTERNAL_PAGE}.
+   *
+   * <p>Package-private for the same reason as {@link #tierFor}: reaching it through
+   * {@link #fetch} means making a real request to a real third-party website, so the rule that
+   * decides whether another school's page is reported as this school's would be covered only by
+   * a test nobody can run offline.
+   *
+   * @param body the bytes fetched, to recognise a PDF by its magic number
+   * @param url the address fetched
+   * @return the type to store it under
+   */
+  SchoolSourceType sourceTypeFor(final byte[] body, final String url) {
     if (isPdf(body)) {
-      return pdfExtractor.extractTextFromBytes(body);
+      return SchoolSourceType.PDF;
+    }
+    return linkFilter.isOnSchoolHost(url)
+        ? SchoolSourceType.WEBSITE_PAGE
+        : SchoolSourceType.EXTERNAL_PAGE;
+  }
+
+  /**
+   * A title for the fetched document.
+   *
+   * <p>The link's anchor text when it is real text, the page's own {@code <title>} otherwise.
+   * Links pasted into the admin console are bare addresses — WhatsApp sends no anchor text —
+   * so without this the document is titled {@code https://www.harrisdulwichboys.org.uk/…}, and
+   * so is every citation an answer builds from it. It also matters to extraction: the title is
+   * the only place the school's <i>name</i> appears for a page headed only "Open Events".
+   *
+   * @param link the link being fetched
+   * @param pageTitle the page's own title, or null
+   * @return a title, never blank
+   */
+  static String titleFor(final SchoolLink link, final String pageTitle) {
+    final String anchor = link.anchorText() == null ? "" : link.anchorText().trim();
+    final boolean anchorIsJustTheUrl = anchor.isEmpty() || anchor.equalsIgnoreCase(link.url());
+    if (anchorIsJustTheUrl && pageTitle != null && !pageTitle.isBlank()) {
+      return pageTitle.trim();
+    }
+    return anchorIsJustTheUrl ? link.url() : anchor;
+  }
+
+  private Extracted extractText(final byte[] body, final String contentType) {
+    if (isPdf(body)) {
+      return new Extracted(pdfExtractor.extractTextFromBytes(body), null);
     }
     if (contentType.toLowerCase(java.util.Locale.ROOT).contains("html")) {
       final org.jsoup.nodes.Document parsed =
           Jsoup.parse(new String(body, java.nio.charset.StandardCharsets.UTF_8));
+      // Read before the strip: title() lives in <head>, which survives, but reading it first
+      // keeps the two independent of which elements the next edit decides to remove.
+      final String title = parsed.title();
       parsed.select("script, style, nav, header, footer").remove();
-      return parsed.body() == null ? null : parsed.body().text();
+      return new Extracted(parsed.body() == null ? null : parsed.body().text(), title);
     }
     return null;
+  }
+
+  /**
+   * What came out of a fetched response.
+   *
+   * @param text the readable text, or null when there is none
+   * @param title the page's own title, or null for a PDF or an untitled page
+   */
+  private record Extracted(String text, String title) {
   }
 
   private static boolean isPdf(final byte[] body) {

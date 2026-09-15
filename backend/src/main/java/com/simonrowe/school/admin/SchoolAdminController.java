@@ -56,6 +56,7 @@ public class SchoolAdminController {
   private final SchoolAttachmentStore attachments;
   private final SchoolLinkRepository links;
   private final SchoolLinkFetcher linkFetcher;
+  private final SchoolNoteService notes;
 
   public SchoolAdminController(
       final MongoTemplate mongoTemplate,
@@ -65,7 +66,8 @@ public class SchoolAdminController {
       final SchoolUsageRepository usage,
       final SchoolAttachmentStore attachments,
       final SchoolLinkRepository links,
-      final SchoolLinkFetcher linkFetcher) {
+      final SchoolLinkFetcher linkFetcher,
+      final SchoolNoteService notes) {
     this.mongoTemplate = mongoTemplate;
     this.syncState = syncState;
     this.approvalService = approvalService;
@@ -74,6 +76,7 @@ public class SchoolAdminController {
     this.attachments = attachments;
     this.links = links;
     this.linkFetcher = linkFetcher;
+    this.notes = notes;
   }
 
   /**
@@ -264,6 +267,52 @@ public class SchoolAdminController {
   public ResponseEntity<LinkSummary> ignoreLink(@PathVariable final String id) {
     return linkFetcher.ignore(id).map(LinkSummary::from).map(ResponseEntity::ok)
         .orElseGet(() -> ResponseEntity.notFound().build());
+  }
+
+  /**
+   * Stores text pasted into the console and reads the dates out of it.
+   *
+   * <p>Synchronous as far as the dates, which is one model call and a few seconds: the operator
+   * pasted something and needs to see what was understood before they trust it. The links are
+   * fetched in the background — six hosts at a thirty-second timeout is not a request — and the
+   * page polls {@link #note} until they settle.
+   *
+   * @param request the pasted text, an optional title and the year groups it concerns
+   * @return the note, its events and its links, or 400 when there is nothing to save
+   */
+  @PostMapping("/notes")
+  public ResponseEntity<NoteResponse> createNote(
+      @org.springframework.web.bind.annotation.RequestBody final NoteRequest request) {
+    try {
+      return ResponseEntity.ok(NoteResponse.from(
+          notes.save(request.text(), request.title(), request.yearGroups())));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().build();
+    }
+  }
+
+  /**
+   * One pasted note, for polling while its links are fetched.
+   *
+   * @param id the note's document id
+   * @return the note, or 404
+   */
+  @GetMapping("/notes/{id}")
+  public ResponseEntity<NoteResponse> note(@PathVariable final String id) {
+    return notes.read(id).map(NoteResponse::from).map(ResponseEntity::ok)
+        .orElseGet(() -> ResponseEntity.notFound().build());
+  }
+
+  /**
+   * The most recent pasted notes.
+   *
+   * @param limit how many to return
+   * @return the notes, newest first
+   */
+  @GetMapping("/notes")
+  public List<NoteResponse> recentNotes(@RequestParam(defaultValue = "20") final int limit) {
+    return notes.recent(Math.min(Math.max(1, limit), MAX_PAGE_SIZE))
+        .stream().map(NoteResponse::from).toList();
   }
 
   /**
@@ -469,6 +518,59 @@ public class SchoolAdminController {
     static LinkSummary from(final SchoolLink link) {
       return new LinkSummary(link.id(), link.sourceDocumentId(), link.url(), link.anchorText(),
           link.likelyKind(), link.status().name(), link.failureReason());
+    }
+  }
+
+  /**
+   * Text pasted into the console.
+   *
+   * @param text the pasted text
+   * @param title a title, or blank to derive one from the first line
+   * @param yearGroups the year groups this note concerns, empty for whole-school
+   */
+  public record NoteRequest(String text, String title, List<String> yearGroups) {
+
+    /** Normalises nulls so a body with a missing field cannot NPE below. */
+    public NoteRequest {
+      text = text == null ? "" : text;
+      title = title == null ? "" : title;
+      yearGroups = com.simonrowe.school.model.YearGroups.sanitise(yearGroups);
+    }
+  }
+
+  /**
+   * A pasted note and what came of it.
+   *
+   * @param id the note's document id
+   * @param title its title
+   * @param body the text as pasted
+   * @param publishedAt when it was pasted, which is the date its relative dates resolve against
+   * @param yearGroups the year groups it concerns
+   * @param events every dated fact from the note and from the pages its links led to
+   * @param links the addresses found in it, with what has happened to each
+   * @param fetching true while links are still being fetched
+   */
+  public record NoteResponse(
+      String id,
+      String title,
+      String body,
+      Instant publishedAt,
+      List<String> yearGroups,
+      List<SchoolEvent> events,
+      List<LinkSummary> links,
+      boolean fetching) {
+
+    static NoteResponse from(final SchoolNoteService.Note note) {
+      final SchoolDocument document = note.document();
+      return new NoteResponse(
+          document.id(),
+          document.title(),
+          document.body(),
+          document.publishedAt(),
+          document.yearGroups(),
+          note.events(),
+          note.links().stream().map(LinkSummary::from).toList(),
+          note.fetching());
     }
   }
 
