@@ -82,6 +82,26 @@ class SchoolLinkFetcherSourceTypeTest {
   }
 
   @Test
+  @DisplayName("a school link that redirects off the school's host is classified as external")
+  void redirectOffTheSchoolHostIsExternal() {
+    // The address that decides the type is the one the bytes CAME FROM, which after a redirect
+    // is not the one that was requested. fetch() therefore passes its resolved `fetchedFrom`,
+    // not link.url(); classifying on the requested address stored third-party content as
+    // WEBSITE_PAGE, and from a note that document is public, so it joined the answer to "what
+    // did the school send last week" under the school's name.
+    final String requested = "https://www.kilmorieschool.co.uk/our-school/wraparound-care";
+    final String resolved = "https://bookings.thirdpartyprovider.example/kilmorie";
+
+    assertThat(fetcher.sourceTypeFor(HTML, requested))
+        .isEqualTo(SchoolSourceType.WEBSITE_PAGE);
+    assertThat(fetcher.sourceTypeFor(HTML, resolved))
+        .isEqualTo(SchoolSourceType.EXTERNAL_PAGE);
+    // Only the wiring inside fetch() can close the gap between those two, and it cannot be
+    // covered offline for the reason SchoolLinkFetcherRedirectTest documents: the first URL has
+    // to pass isFetchableUrl, and a loopback test server never does.
+  }
+
+  @Test
   @DisplayName("a PDF is a PDF wherever it was fetched from")
   void pdfIsUnaffected() {
     assertThat(fetcher.sourceTypeFor(PDF, "https://www.harrisdulwichboys.org.uk/prospectus.pdf"))

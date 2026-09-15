@@ -230,6 +230,9 @@ public class SchoolLinkFetcher {
 
       final byte[] body;
       final String contentType;
+      // The address the bytes actually came from, after every redirect. Distinct from
+      // link.url() and the distinction is load-bearing — see the sourceTypeFor call below.
+      final String fetchedFrom;
       try {
         URI current = URI.create(link.url().trim());
         HttpResponse<byte[]> response = send(current);
@@ -256,6 +259,7 @@ public class SchoolLinkFetcher {
         }
         body = response.body();
         contentType = response.headers().firstValue("content-type").orElse("");
+        fetchedFrom = current.toString();
       } catch (IOException e) {
         return fail(link, "Could not reach it: " + e.getMessage());
       } catch (IllegalArgumentException e) {
@@ -277,9 +281,21 @@ public class SchoolLinkFetcher {
       }
 
       final String text = extracted.text();
-      final SchoolSourceType type = sourceTypeFor(body, link.url());
+      // Classified on where the content CAME FROM, never on what was requested. A link on the
+      // school's own host that redirects off it — a moved page now pointing at a third-party
+      // portal, a shortener, a hijacked path — would otherwise be stored as WEBSITE_PAGE, and
+      // from a note that document is public, so it would join the answer to "what did the
+      // school send last week" and attribute somebody else's content to the school. That is
+      // the exact misattribution EXTERNAL_PAGE exists to prevent, so classifying on the
+      // pre-redirect address defeated the type's whole purpose.
+      final SchoolSourceType type = sourceTypeFor(body, fetchedFrom);
       final SchoolDocumentWriter.WriteResult result = documentWriter.write(
           type,
+          // The requested address stays the document's identity, deliberately. It is what the
+          // link row records, what a re-fetch looks up, and what publishedAtFor matches on to
+          // stop a re-fetch re-dating an undated page; keying on the resolved address instead
+          // would orphan every document already fetched and fork a new one whenever a redirect
+          // target moved. It is also the honest citation — the address the school published.
           link.url(),
           titleFor(link, extracted.title()),
           text,
