@@ -255,6 +255,52 @@ class SchoolNoteServiceTest {
         .containsExactly("https://a.example/x");
   }
 
+  @Test
+  @DisplayName("a note's events include those from the pages its links led to")
+  void eventsIncludeFetchedPages() {
+    final SchoolDocument document = noteDocument();
+    stubReadBack(document);
+    final SchoolLink fetched = new SchoolLink("l1", "note-1",
+        "https://www.harrisdulwichboys.org.uk/admissions/open-events", "", NOW,
+        SchoolLink.Status.FETCHED, "fetched-doc-1", null);
+    when(links.findBySourceDocumentId("note-1")).thenReturn(List.of(fetched));
+    when(events.findBySourceDocumentIdIn(anyList()))
+        .thenReturn(List.of(event("Harris Boys open evening", YEAR_6)));
+
+    final SchoolNoteService.Note note = service.read("note-1").orElseThrow();
+
+    // The whole point of fetching the links: the note gives a bare date, and the school's own
+    // page gives the same evening with a time and a booking address. An operator has to be able
+    // to see that the second half worked.
+    final ArgumentCaptor<List<String>> sources = ArgumentCaptor.captor();
+    verify(events).findBySourceDocumentIdIn(sources.capture());
+    assertThat(sources.getValue()).containsExactly("note-1", "fetched-doc-1");
+    assertThat(note.events()).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("reading something that is not a pasted note finds nothing")
+  void onlyPastedNotesAreReadable() {
+    // The id comes off a URL, and every school document lives in one collection. An email read
+    // through this endpoint would render its body on a screen that says notes are public.
+    when(documents.findById("email-1")).thenReturn(Optional.of(new SchoolDocument(
+        "email-1", SchoolSourceType.EMAIL, "gmail:1", "Weekly newsletter", "text", NOW, NOW,
+        Visibility.RESTRICTED, null, null, null, null, false, List.of(), "hash", null)));
+
+    assertThat(service.read("email-1")).isEmpty();
+  }
+
+  @Test
+  @DisplayName("the recent list is newest first and skips anything that has gone")
+  void recentListsNotes() {
+    final SchoolDocument document = noteDocument();
+    stubReadBack(document);
+    when(documents.findBySourceTypeOrderByPublishedAtDesc(SchoolSourceType.PASTED_NOTE))
+        .thenReturn(List.of(document));
+
+    assertThat(service.recent(20)).extracting(n -> n.document().id()).containsExactly("note-1");
+  }
+
   private SchoolEvent event(final String title, final List<String> yearGroups) {
     return new SchoolEvent("e-" + title, title, LocalDate.of(2026, 9, 19), null, true,
         SchoolEvent.EventType.OTHER, yearGroups, "2026/27", SchoolSourceType.PASTED_NOTE,
@@ -263,8 +309,12 @@ class SchoolNoteServiceTest {
 
   /** Makes the post-save read-back resolve, so {@code save} can return. */
   private void captureDocument() {
-    stubReadBack(new SchoolDocument("note-1", SchoolSourceType.PASTED_NOTE, "paste:x", "Note",
+    stubReadBack(noteDocument());
+  }
+
+  private static SchoolDocument noteDocument() {
+    return new SchoolDocument("note-1", SchoolSourceType.PASTED_NOTE, "paste:x", "Note",
         WHATSAPP, NOW, NOW, Visibility.PUBLIC, null, null, null, null, false, YEAR_6, "hash",
-        null));
+        null);
   }
 }

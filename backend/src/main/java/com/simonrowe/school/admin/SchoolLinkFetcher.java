@@ -295,15 +295,42 @@ public class SchoolLinkFetcher {
         attachmentStore.store(fetched.id(), body);
       }
       ingestService.embed(fetched);
-      for (SchoolEvent event : eventExtractor.extract(fetched)) {
-        eventWriter.write(event);
-      }
+      writeEventsFor(fetched);
       LOG.info("Fetched linked content from {} into document {}", link.url(), fetched.id());
 
       return links.save(new SchoolLink(
           link.id(), link.sourceDocumentId(), link.url(), link.anchorText(),
           link.discoveredAt(), SchoolLink.Status.FETCHED, fetched.id(), null));
     });
+  }
+
+  /**
+   * Stores the dated facts in a fetched document, narrowed to that document's year groups.
+   *
+   * <p>The scope comes from the <b>document</b>, which persists it, and is reapplied here on
+   * every fetch. It was originally applied once by {@code SchoolNoteService} in a pass straight
+   * after its own call to {@link #fetch}, and that was wrong in a way that produced no error and
+   * no log line: {@link #fetch} re-extracts and rewrites events on every invocation, and is
+   * reachable generically from {@code POST /links/{id}/fetch} — the admin Fetch button. So
+   * retrying a note's link that had failed (a 403 from a school's site is an ordinary Tuesday)
+   * re-wrote its events whole-school, silently undoing the narrowing and putting four secondary
+   * schools' open evenings back into every year group's "what is on this week" — the exact leak
+   * the scope exists to prevent. Applying it here makes every path idempotent.
+   *
+   * <p>Scoping before the write rather than after is also why this no longer touches rows it
+   * does not own: {@link SchoolEventWriter#write} may decline an incoming event on source
+   * precedence, and the post-pass rewrote whatever was stored under that id regardless of which
+   * source had won it.
+   *
+   * <p>Package-private so it can be asserted without a network call, for the same reason as
+   * {@link #tierFor} and {@link #sourceTypeFor}.
+   *
+   * @param fetched the document just written
+   */
+  void writeEventsFor(final SchoolDocument fetched) {
+    for (SchoolEvent event : eventExtractor.extract(fetched)) {
+      eventWriter.write(event.withYearGroupScope(fetched.yearGroups()));
+    }
   }
 
   /**

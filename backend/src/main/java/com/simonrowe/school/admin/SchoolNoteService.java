@@ -196,7 +196,7 @@ public class SchoolNoteService {
     final List<SchoolLink> recorded = recordLinks(document, body);
 
     if (!recorded.isEmpty() && fetching.add(document.id())) {
-      executor.submit(() -> fetchAll(document.id(), yearGroups));
+      executor.submit(() -> fetchAll(document.id()));
     }
     LOG.info("Pasted note {} stored: {} event(s), {} link(s) queued",
         document.id(), found.size(), recorded.size());
@@ -293,44 +293,28 @@ public class SchoolNoteService {
    *
    * <p>Never throws. A note whose third link times out must still keep the four that worked, and
    * the failure is recorded on the link row where the operator can see it and retry.
+   *
+   * <p>Narrowing the fetched pages' events to the note's year groups is deliberately <b>not</b>
+   * done here. It was, in a pass over each fetched document straight after this call, and that
+   * only held for links fetched through this method — a retry from the admin Fetch button
+   * re-wrote the same events whole-school with nothing to show for it. The scope is carried on
+   * the fetched document and reapplied by {@link SchoolLinkFetcher#writeEventsFor} on every
+   * fetch instead.
    */
-  private void fetchAll(final String documentId, final List<String> yearGroups) {
+  private void fetchAll(final String documentId) {
     try {
       for (SchoolLink link : links.findBySourceDocumentId(documentId)) {
         if (link.status() != SchoolLink.Status.PENDING) {
           continue;
         }
         try {
-          linkFetcher.fetch(link.id())
-              .map(SchoolLink::fetchedDocumentId)
-              .filter(java.util.Objects::nonNull)
-              .ifPresent(fetched -> applyScope(fetched, yearGroups));
+          linkFetcher.fetch(link.id());
         } catch (RuntimeException e) {
           LOG.warn("Fetching {} for note {} failed: {}", link.url(), documentId, e.getMessage());
         }
       }
     } finally {
       fetching.remove(documentId);
-    }
-  }
-
-  /**
-   * Narrows the events of a fetched page to the note's year groups.
-   *
-   * <p>Applied here rather than inside {@link SchoolLinkFetcher} so that the fetcher stays a
-   * general-purpose "fetch this link" and does not have to know why it was called. The scope
-   * belongs to the note: an open-evening page fetched from a Year 6 note is Year 6 content, and
-   * the same page fetched from the Documents screen is not.
-   */
-  private void applyScope(final String fetchedDocumentId, final List<String> yearGroups) {
-    if (yearGroups == null || yearGroups.isEmpty()) {
-      return;
-    }
-    for (SchoolEvent event : events.findBySourceDocumentIdIn(List.of(fetchedDocumentId))) {
-      final SchoolEvent scoped = event.withYearGroupScope(yearGroups);
-      if (scoped != event) {
-        events.save(scoped);
-      }
     }
   }
 

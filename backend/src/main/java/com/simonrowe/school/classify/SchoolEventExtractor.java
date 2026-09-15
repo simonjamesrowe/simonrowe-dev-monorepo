@@ -191,7 +191,11 @@ public class SchoolEventExtractor {
    * the question is "did you copy this", not "is this a well-formed URL".
    *
    * <p>A trailing {@code .} or {@code ,} swept up from prose is trimmed before the check, or a
-   * link at the end of a sentence fails verification and is dropped for punctuation.
+   * link at the end of a sentence fails verification and is dropped for punctuation. That
+   * quantifier is <b>possessive</b>: the input is a string a model produced, which is exactly
+   * the unbounded-input case where a greedy quantifier against an anchor backtracks
+   * super-linearly. It changes no match here — a maximal run of those characters at the end of
+   * the input is the only thing either form can match — it only removes the backtracking.
    *
    * @param candidate what the model returned, possibly null
    * @param body the text the model was shown
@@ -201,7 +205,7 @@ public class SchoolEventExtractor {
     if (candidate == null || body == null) {
       return null;
     }
-    final String trimmed = candidate.trim().replaceAll("[.,;:)]+$", "");
+    final String trimmed = candidate.trim().replaceAll("[.,;:)]++$", "");
     if (trimmed.isBlank() || !trimmed.toLowerCase(Locale.ROOT).startsWith("http")) {
       return null;
     }

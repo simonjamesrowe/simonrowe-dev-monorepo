@@ -12,16 +12,21 @@ import com.simonrowe.school.ingest.SchoolEventWriter;
 import com.simonrowe.school.ingest.SchoolIngestService;
 import com.simonrowe.school.ingest.SchoolLinkFilter;
 import com.simonrowe.school.ingest.SchoolPdfExtractor;
+import com.simonrowe.school.model.SchoolDocument;
 import com.simonrowe.school.model.SchoolDocumentRepository;
+import com.simonrowe.school.model.SchoolEvent;
 import com.simonrowe.school.model.SchoolLink;
 import com.simonrowe.school.model.SchoolLinkRepository;
 import com.simonrowe.school.model.SchoolSourceType;
+import com.simonrowe.school.model.Visibility;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 /**
  * Which source type a fetched page lands under, and what it is called.
@@ -43,6 +48,9 @@ import org.junit.jupiter.api.Test;
  */
 class SchoolLinkFetcherSourceTypeTest {
 
+  private final SchoolEventExtractor eventExtractor = mock(SchoolEventExtractor.class);
+  private final SchoolEventWriter eventWriter = mock(SchoolEventWriter.class);
+
   private final SchoolLinkFetcher fetcher = new SchoolLinkFetcher(
       mock(SchoolLinkRepository.class),
       mock(SchoolDocumentRepository.class),
@@ -50,8 +58,8 @@ class SchoolLinkFetcherSourceTypeTest {
       mock(SchoolPdfExtractor.class),
       mock(SchoolAttachmentStore.class),
       mock(SchoolIngestService.class),
-      mock(SchoolEventExtractor.class),
-      mock(SchoolEventWriter.class),
+      eventExtractor,
+      eventWriter,
       mock(DocumentDateReader.class),
       new SchoolLinkFilter(properties()));
 
@@ -110,6 +118,67 @@ class SchoolLinkFetcherSourceTypeTest {
         .isEqualTo("https://example.school/x");
     assertThat(SchoolLinkFetcher.titleFor(link("https://example.school/x"), null))
         .isEqualTo("https://example.school/x");
+  }
+
+  @Test
+  @DisplayName("a fetched page's events take the document's year groups on EVERY fetch")
+  void eventsTakeTheDocumentsYearGroupsOnEveryFetch() {
+    final SchoolDocument fetched = external(List.of("Year 6"));
+    Mockito.when(eventExtractor.extract(fetched))
+        .thenReturn(List.of(event("Harris Boys open evening", List.of())));
+
+    fetcher.writeEventsFor(fetched);
+
+    // The regression this pins: the scope used to be applied by a pass in SchoolNoteService
+    // straight after its own call to fetch(), so it only held for links fetched through the
+    // note pipeline. fetch() re-extracts and rewrites events on every invocation and is
+    // reachable from the admin Fetch button, so retrying a note's failed link re-wrote its
+    // events whole-school — putting four secondary schools' open evenings back into every
+    // year group's "what is on this week", with no error and no log line.
+    final ArgumentCaptor<SchoolEvent> written = ArgumentCaptor.forClass(SchoolEvent.class);
+    Mockito.verify(eventWriter).write(written.capture());
+    assertThat(written.getValue().yearGroups()).containsExactly("Year 6");
+  }
+
+  @Test
+  @DisplayName("an event that stated its own year groups keeps them")
+  void statedYearGroupsSurvive() {
+    final SchoolDocument fetched = external(List.of("Year 6"));
+    Mockito.when(eventExtractor.extract(fetched))
+        .thenReturn(List.of(event("Years 5 and 6 taster morning", List.of("Year 5", "Year 6"))));
+
+    fetcher.writeEventsFor(fetched);
+
+    final ArgumentCaptor<SchoolEvent> written = ArgumentCaptor.forClass(SchoolEvent.class);
+    Mockito.verify(eventWriter).write(written.capture());
+    assertThat(written.getValue().yearGroups()).containsExactly("Year 5", "Year 6");
+  }
+
+  @Test
+  @DisplayName("a document with no scope leaves its events whole-school")
+  void unscopedDocumentLeavesEventsWholeSchool() {
+    final SchoolDocument fetched = external(List.of());
+    Mockito.when(eventExtractor.extract(fetched))
+        .thenReturn(List.of(event("Open evening", List.of())));
+
+    fetcher.writeEventsFor(fetched);
+
+    final ArgumentCaptor<SchoolEvent> written = ArgumentCaptor.forClass(SchoolEvent.class);
+    Mockito.verify(eventWriter).write(written.capture());
+    assertThat(written.getValue().yearGroups()).isEmpty();
+  }
+
+  private static SchoolDocument external(final List<String> yearGroups) {
+    return new SchoolDocument("doc-1", SchoolSourceType.EXTERNAL_PAGE,
+        "https://www.harrisdulwichboys.org.uk/admissions/open-events", "Open Events",
+        "Open evening on 17 September.", Instant.now(), Instant.now(), Visibility.PUBLIC,
+        null, null, null, null, false, yearGroups, "hash", null);
+  }
+
+  private static SchoolEvent event(final String title, final List<String> yearGroups) {
+    return new SchoolEvent("e-1", title, LocalDate.of(2026, 9, 17), null, true,
+        SchoolEvent.EventType.OTHER, yearGroups, "2026/27", SchoolSourceType.EXTERNAL_PAGE,
+        "doc-1", Visibility.PUBLIC, null, null, null, null);
   }
 
   private SchoolLink link(final String url) {
