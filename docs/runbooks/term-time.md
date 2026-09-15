@@ -621,6 +621,19 @@ Neither fix's wiring can be covered by an offline test, for the reason
 and a loopback test server never does. `SchoolLinkFetcherSourceTypeTest` pins both halves of
 each rule and says so rather than implying coverage it does not have.
 
+**Known limit, accepted: a fetched document's id has two content-derived inputs.**
+`SchoolIds.documentId` hashes `sourceType.name() + ':' + sourceRef`, and for a fetched link the
+type is derived from the bytes (`isPdf`) and now also from the resolved host. So if the same
+address serves HTML once and a PDF later, or resolves on-host once and off-host later, the id
+moves and the previous document is orphaned with its embeddings and events. The consequence is a
+**stale row, not a wrong attribution** — both documents are truthful about the bytes they were
+built from. It is left alone because both fixes are worse: keying the id on `sourceRef` alone
+re-keys every document in the corpus, across every source, since `documentId` is shared; and
+pinning the type on the `SchoolLink` row reinstates the misattribution above, because a link
+that resolved on-host on its first fetch would keep storing third-party content as
+`WEBSITE_PAGE`. Anyone changing `documentId` should know the type is in the key deliberately —
+it is what lets one `sourceRef` mean different things under different source types.
+
 ### The extractor can now return a link, and it is checked
 
 `ExtractedSchoolEvents.Event` carries a `url`, rendered by `SchoolTools` as `link:` so an answer
