@@ -45,6 +45,16 @@ public interface SchoolDocumentRepository extends MongoRepository<SchoolDocument
   List<SchoolDocument> findByVisibility(Visibility visibility);
 
   /**
+   * Every document from one source, newest publication first.
+   *
+   * <p>Used by the pasted-notes screen, which is a list of one source type and nothing else.
+   *
+   * @param sourceType the source kind
+   * @return matching documents, newest first
+   */
+  List<SchoolDocument> findBySourceTypeOrderByPublishedAtDesc(SchoolSourceType sourceType);
+
+  /**
    * What the school published in a date window, newest first, tier-filtered.
    *
    * <p>The half of retrieval that similarity search cannot do, and the reason it exists is the

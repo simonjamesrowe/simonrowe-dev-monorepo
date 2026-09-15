@@ -99,6 +99,8 @@ export function SchoolEventsAdmin() {
           <option value="EMAIL">Email</option>
           <option value="PDF">PDF</option>
           <option value="WEBSITE_PAGE">Website</option>
+          <option value="PASTED_NOTE">Pasted note</option>
+          <option value="EXTERNAL_PAGE">Another school's site</option>
         </select>
         <button type="submit" className="admin-btn admin-btn--sm">
           Search

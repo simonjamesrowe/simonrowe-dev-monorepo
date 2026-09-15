@@ -87,6 +87,21 @@ class SchoolCommunicationsQueryTest {
   }
 
   @Test
+  @DisplayName("another school's page is not something this school published")
+  void otherSchoolsContentIsExcluded() {
+    queries.communicationsBetween(
+        LocalDate.of(2026, 9, 7), LocalDate.of(2026, 9, 13), SchoolAudience.anonymous());
+
+    // A note pasted into the admin console is a parents'-group message somebody transcribed,
+    // and an external page is a secondary school's own website read from a link in one. Both
+    // legitimately answer "when is the Kingsdale open evening"; neither answers "what did the
+    // school send last week", and including them attributes another school's announcement to
+    // this one. This is why EXTERNAL_PAGE exists as a type separate from WEBSITE_PAGE at all.
+    assertThat(sourceTypeArgument())
+        .doesNotContain(SchoolSourceType.PASTED_NOTE, SchoolSourceType.EXTERNAL_PAGE);
+  }
+
+  @Test
   @DisplayName("an anonymous visitor's window is filtered to the public tier")
   void tierIsApplied() {
     queries.communicationsBetween(

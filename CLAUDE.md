@@ -211,6 +211,80 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- termtime-pasted-notes: A **Paste a note** screen at `/admin/school/notes` — text in, dated events
+  and scraped pages out. It exists because a whole class of thing a Year 6 parent asks about
+  **cannot reach Term Time through any existing source**: secondary-school open evenings arrive in
+  a parents' WhatsApp group, one school and one date and one link per message, and none of it is
+  Kilmorie's so neither the mailbox, the calendar feed nor the website crawl will ever see it.
+  Almost no new machinery: the note becomes an ordinary `SchoolDocument`, the dates come out
+  through the same `SchoolEventExtractor` that reads newsletters, and the links are fetched by the
+  same `SchoolLinkFetcher` that serves the admin Fetch button — SSRF guard, per-hop redirect
+  revalidation and all. Deliberately no date picker and no per-event form: retyping four messages
+  into a structured form is slower than reading them. Load-bearing bits:
+  - **A note is PUBLIC with no approval, and that is the rule working rather than a hole in it.**
+    The queue exists because mail arrives from somebody else and nobody has read it; a note is
+    typed by an administrator who has, so pasting it *is* the decision and a queue would mean
+    approving your own typing. `SchoolNoteService` is now the only writer of `PUBLIC` besides
+    `withApproval` and the two already-public sources.
+  - **`SchoolSourceType` gains two members and `PASTED_NOTE` is LAST — least authoritative of
+    all.** A note is a transcription of somebody else's message with no publisher behind it, so
+    anything a school publishes for itself beats it, and the collision is the common case not a
+    corner case: the note says "Harris Boys — 17 Sept" and the school's own page, fetched from the
+    link in that same note, says the same evening with a time and a booking address. Both land on
+    one `SchoolIds.eventId`. The ordering is the whole of what makes the page win.
+  - **`EXTERNAL_PAGE` is not tidiness.** `SchoolQueryService.COMMUNICATION_SOURCES` — the
+    allowlist behind "what did the school send last week" — contains `WEBSITE_PAGE`, so a
+    secondary school's admissions page filed under that type is reported to a parent as something
+    Kilmorie published. Invisible while every fetched third-party page was `RESTRICTED`; notes are
+    public and so is everything fetched from them, so it would have started on the first note.
+    Only **new** fetches are relabelled — the document id derives from the source type, so
+    relabelling existing rows would orphan them, and the pre-existing ones are all restricted.
+  - **`SchoolLinkFilter.isWorthOffering` is deliberately NOT applied to a note's links.** It drops
+    bare homepages, which is right for a mail footer and wrong here: "St Matthew's Academy Catholic
+    school: <homepage>" **is** the message, and filtering it discards the only address that school
+    has in the note. Every link is also fetched without being offered — the "record links, never
+    follow them" rule is about *email*, where a sender the school does not control chose the
+    address; these were pasted by the one person allowed to press Fetch. Nothing about the guard is
+    relaxed, only the ceremony.
+  - **`SchoolEvent.withYearGroupScope` narrows a note's events to Year 6**, and the events of the
+    pages its links led to. Applied only where the source named no year group itself, so "Years 5
+    and 6 welcome" survives. Without it four secondary open days land whole-school and every
+    Reception parent asking what is on this week is shown all of them. `yearGroups` is not part of
+    `eventId`, so narrowing does not move the row.
+  - **The extractor can now return a link and `verbatimUrl` checks it.** A URL is exactly the shape
+    of thing a model completes rather than copies — right host, guessed path — and an invented
+    booking link reaches a parent under the same confident citation as the date. Any value not
+    found literally in the document body is discarded; a plain substring test, because the question
+    is "did you copy this", not "is this well formed".
+  - **Two prompt changes ship with it and the feature is close to useless without them.**
+    `SchoolTopicGuardrail` answered only for "a UK primary school", so "when is the Kingsdale open
+    evening" could be refused before reaching a tool. `SchoolSystemPrompt` gains a Year 6 section
+    requiring the assistant to **name the school every time** (a date attached to no school is
+    useless to somebody holding four in their head and dangerous if they act on it for the wrong
+    one), to say these are not Kilmorie's announcements, and to prefer a school's own page over a
+    note when they disagree.
+  - **Two faults the reviewer caught, both silent, both defeating the mechanism they sat inside.**
+    (1) The year-group scope was a pass in `SchoolNoteService` straight after its own call to
+    `SchoolLinkFetcher.fetch` — but `fetch()` re-extracts and rewrites a document's events on
+    **every** invocation, including from `POST /links/{id}/fetch`, the admin Fetch button. So
+    retrying a note's `FAILED` link, which a 403 from a school's site makes routine, re-wrote its
+    events whole-school. Now `SchoolLinkFetcher.writeEventsFor` narrows them from the document,
+    which persists the scope, on every path; scoping *before* the write also stops it touching
+    rows `SchoolEventWriter` declined on precedence. (2) A fetched page was classified with the
+    address **requested** rather than the one answered, so a school-host link redirecting off the
+    host stored third-party content as `WEBSITE_PAGE` — public from a note, therefore in the
+    answer to "what did the school send last week", under the school's name. **The split that
+    resolves it matters, because the obvious fix over-reaches:** only classification follows the
+    resolved address; `sourceRef` stays the requested one, because it feeds `SchoolIds.documentId`
+    (re-keying orphans every fetched document and forks a new one whenever a redirect target
+    moves), because `publishedAtFor` matches on it, and because it is the honest citation.
+    Neither fix's wiring is coverable offline — the first URL must pass `isFetchableUrl` and a
+    loopback server never does, the same limit `SchoolLinkFetcherRedirectTest` documents.
+  - **Not done:** no image paste (the messages usually arrive as a screenshot, so transcribing one
+    is still manual), links are followed one level only, and duplicate events remain possible —
+    collapsing the note's row onto the page's depends on the extractor titling both with the
+    school's name, which is a prompt instruction rather than a guarantee.
+  Backend 1542 tests, frontend 882. See `docs/runbooks/term-time.md` ("Pasting a note in").
 - termtime-newsletter-tier-and-recency: Term Time could not answer anything about the newsletter of
   11 September 2026, and the two reasons were independent. **The newsletter had been ingested
   perfectly and then hidden.** The school moved its weekly newsletter out of the mail body onto its

@@ -11998,3 +11998,123 @@ body[data-narration-bar] .app-layout__main {
   align-items: center;
   gap: 0.3rem;
 }
+
+/* Pasted notes — text in, dates and links out. */
+
+.school-notes__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-bottom: 2rem;
+}
+
+.school-notes__form .admin-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.school-notes__text {
+  width: 100%;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.school-notes__meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 50rem) {
+  .school-notes__meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.school-notes__years {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+}
+
+.school-notes__years legend {
+  padding: 0 0.3rem;
+}
+
+.school-notes__year {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+}
+
+.school-notes__years .school-admin__source-note {
+  flex-basis: 100%;
+  margin: 0.2rem 0 0;
+}
+
+.school-notes__result {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1rem 1.15rem 1.15rem;
+  margin-bottom: 1.25rem;
+}
+
+.school-notes__result-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.school-notes__result-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.school-notes__body {
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  background: var(--color-background);
+  border: 1px dashed var(--color-border);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.school-notes__events,
+.school-notes__links {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+}
+
+.school-notes__events a,
+.school-notes__links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.school-notes__recent > h2 {
+  font-size: 1.05rem;
+  margin: 2rem 0 0.9rem;
+}

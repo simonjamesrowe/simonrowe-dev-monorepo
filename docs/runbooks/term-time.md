@@ -51,8 +51,8 @@ published staff list is withheld. That catches a mistake in either boundary abov
 
 ## Sources and precedence
 
-`CALENDAR_FEED` > `EMAIL` > `WEBSITE_PAGE` > `PDF`, encoded as `SchoolSourceType`'s declaration
-order and applied by `SchoolEventWriter`.
+`CALENDAR_FEED` > `EMAIL` > `WEBSITE_PAGE` > `EXTERNAL_PAGE` > `PDF` > `PASTED_NOTE`, encoded as
+`SchoolSourceType`'s declaration order and applied by `SchoolEventWriter`.
 
 This is not theoretical. The school's own term-dates page still shows the **previous** academic
 year while its calendar feed carries the current one, and both are ingested. `SchoolIds.eventId`
@@ -60,7 +60,19 @@ keys on academic year, date and normalised title — deliberately *not* on the s
 arrive as writes to the same row and the more authoritative one wins.
 
 **Reordering `SchoolSourceType`'s members silently changes which source wins.** There is no other
-declaration of the ordering.
+declaration of the ordering. `SchoolSourceTypeTest` pins the relationships that matter.
+
+`PASTED_NOTE` is **last**, and that is the ordering doing real work rather than a tidy-up. A note
+is a transcription of somebody else's message with no publisher behind it, so anything a school
+publishes for itself beats it — and the collision is the common case, not a corner case. A note
+says "Harris Boys — 17 Sept" and the school's own page, fetched from the link in that same note,
+says the same evening with a time and a booking address. Both land on one event id. This ordering
+is the whole of what makes the page win.
+
+`EXTERNAL_PAGE` sits beside `WEBSITE_PAGE` rather than above it. They cannot realistically
+collide — one is Kilmorie's site and the other is another school's — so the ordering between them
+is a statement rather than a mechanism, and "a third party outranks the school's own website"
+would be the wrong statement to leave in the enum.
 
 ## The sitemap does not list every page
 
@@ -359,7 +371,7 @@ always doing the real work — the gate blocked so indiscriminately that it was 
 override button was pressed as a matter of routine, which is the definition of a control that has
 stopped controlling anything.
 
-## Events come from four sources, not one
+## Events come from five sources, not one
 
 `SchoolEventWriter` is the single write point, and `SchoolSourceType` declaration order decides
 who wins a collision. What feeds it:
@@ -370,6 +382,7 @@ who wins a collision. What feeds it:
 | Email bodies | `SchoolEventExtractor` | Where most of school life is announced |
 | Email PDF attachments | `SchoolEventExtractor` | The newsletter often *is* the attachment |
 | Website pages and site PDFs | `SchoolEventExtractor` | **Added late** — see below |
+| Pasted notes, and the pages they link to | `SchoolEventExtractor` | Things no source of ours publishes — see "Pasting a note in" |
 
 **The website produced no events at all for the first four phases.** Only the email path called
 the extractor, so the enrichment timetable, the term-dates PDF and the lunch menu — the most
@@ -509,6 +522,148 @@ was found and skipped again on every subsequent sync, for ever, with nothing but
 Fetch able to recover it. A `FAILED` row is now retried; `PENDING`, `FETCHED` and `IGNORED` are
 not, because those are decisions — `PENDING` most of all, being the queue this mechanism exists to
 feed.
+
+## Pasting a note in: things that will not arrive any other way
+
+`/admin/school/notes`, `SchoolNoteService`, `SchoolSourceType.PASTED_NOTE`.
+
+The case this exists for: a parents' WhatsApp group posts a run of secondary-school open
+evenings — a school, a date, a link, one message each — and **none of it can ever reach Term Time
+through the mailbox, the calendar feed or the website crawl, because none of it is Kilmorie's.**
+Paste the messages in as they arrived; the dates are read out of the text by the same
+`SchoolEventExtractor` that reads newsletters, and every address in it is fetched by the same
+`SchoolLinkFetcher` that serves the Fetch button.
+
+There is deliberately no date picker and no per-event form. Retyping four messages into a
+structured form is slower than reading them.
+
+Four decisions in that pipeline are load-bearing.
+
+**A note is public immediately, with no approval.** The queue exists because mail arrives from
+somebody else and nobody has read it. A note is typed by an administrator who has read it —
+pasting it *is* the decision, and routing it through a queue would mean approving your own
+typing. It is the only writer of `PUBLIC` other than `withApproval` and the two already-public
+sources.
+
+**Every link is fetched without being offered.** The standing rule is "record links, never follow
+them", and that rule is about *email*: a sender the school does not control can put any address
+in a message body. These addresses were pasted deliberately by the one person allowed to press
+Fetch. The SSRF guard, the redirect revalidation and the 20 MB ceiling all still apply — nothing
+about the guard is relaxed, only the ceremony. Fetching runs on a background thread (six hosts at
+a thirty-second timeout is not a request) and the page polls until it settles.
+
+**`SchoolLinkFilter.isWorthOffering` is deliberately NOT applied to a note's links.** It drops
+bare homepages, which is right for a mail footer — a homepage is the single most repeated link
+there is and the crawl already reads that site. Here a bare homepage is frequently the entire
+message ("St Matthew's Academy Catholic school: `https://www.stmatthewacademy.co.uk`"), and
+dropping it silently discards the only address that school has in the note.
+
+**A note's year groups narrow the events it yields, and the pages its links lead to.**
+`SchoolEvent.withYearGroupScope` applies them only where the source named no year group of its
+own, so a note saying "Years 5 and 6 welcome" keeps what it said. Without this, four secondary
+schools' open days land whole-school and every Reception parent asking what is on this week is
+shown all of them. `yearGroups` is not part of `SchoolIds.eventId`, so narrowing does not move
+the row — the same evening arriving later from a source that states its own years still collapses
+onto it.
+
+### `EXTERNAL_PAGE` is not a tidy-up
+
+A page fetched from a host that is not the school's is stored as `EXTERNAL_PAGE`, not
+`WEBSITE_PAGE`. The reason is `SchoolQueryService.COMMUNICATION_SOURCES`: the tool behind "what
+did the school send last week" reads an **allowlist** of source types that includes
+`WEBSITE_PAGE`. A secondary school's admissions page filed under that type is reported to a
+parent as something Kilmorie published.
+
+That was invisible while every fetched third-party page was `RESTRICTED`. Pasted notes are
+public, and so is everything fetched from them, so it would have started happening on the first
+note.
+
+Only **new** fetches are labelled this way. The document id is derived from the source type, so
+relabelling existing rows in place is not possible without orphaning them — a handful of
+third-party pages fetched from email before this change keep the `WEBSITE_PAGE` label, and are
+all restricted, so they reach nobody.
+
+### Two things the reviewer caught, both silent
+
+Neither produced an error, a log line or a failing test, and both defeated the mechanism they
+sat inside.
+
+**The year-group scope was applied once, in the wrong place.** It was a pass in
+`SchoolNoteService` straight after its own call to `SchoolLinkFetcher.fetch`, so it only held
+for links fetched through the note pipeline — and `fetch()` re-extracts and rewrites a
+document's events on **every** invocation, including from `POST /links/{id}/fetch`, the admin
+Fetch button. So retrying a note's `FAILED` link, which a 403 from a school's website makes
+routine, re-wrote its events whole-school and put four secondary schools' open evenings back
+into every year group's "what is on this week". The scope already persists on the fetched
+document, so the narrowing now lives in `SchoolLinkFetcher.writeEventsFor` and reads it from
+there: one statement rather than two that can disagree. Scoping before the write also stops it
+touching rows it does not own, since `SchoolEventWriter.write` can decline an incoming event on
+source precedence and the old pass rewrote whatever was stored under that id regardless.
+
+**A fetched page was classified by the address requested, not the address answered.** `fetch()`
+follows up to five redirects, revalidating each hop, and then called `sourceTypeFor` with
+`link.url()`. A link on the school's own host that redirects off it — a moved page now pointing
+at a third-party portal, a shortener, a hijacked path — was therefore stored as `WEBSITE_PAGE`,
+and from a note that document is public, so it joined the answer to "what did the school send
+last week" under the school's name. That is precisely the misattribution `EXTERNAL_PAGE` was
+added to prevent, so classifying on the pre-redirect address defeated the type's entire purpose.
+
+**The split that resolves it is worth stating, because the obvious fix over-reaches.** Only the
+*classification* moves to the resolved address. The *identity* stays on the requested one:
+`sourceRef` feeds `SchoolIds.documentId`, so keying it on the resolved address would orphan
+every document already fetched and fork a new one whenever a redirect target moved, and
+`publishedAtFor` matches `existingPublishedAt(type, link.url())`, which is what stops a re-fetch
+re-dating an undated page. It is also the honest citation — the address the school published is
+the one to hand a parent, even when it redirects.
+
+Neither fix's wiring can be covered by an offline test, for the reason
+`SchoolLinkFetcherRedirectTest` already documents: the first URL has to pass `isFetchableUrl`,
+and a loopback test server never does. `SchoolLinkFetcherSourceTypeTest` pins both halves of
+each rule and says so rather than implying coverage it does not have.
+
+**Known limit, accepted: a fetched document's id has two content-derived inputs.**
+`SchoolIds.documentId` hashes `sourceType.name() + ':' + sourceRef`, and for a fetched link the
+type is derived from the bytes (`isPdf`) and now also from the resolved host. So if the same
+address serves HTML once and a PDF later, or resolves on-host once and off-host later, the id
+moves and the previous document is orphaned with its embeddings and events. The consequence is a
+**stale row, not a wrong attribution** — both documents are truthful about the bytes they were
+built from. It is left alone because both fixes are worse: keying the id on `sourceRef` alone
+re-keys every document in the corpus, across every source, since `documentId` is shared; and
+pinning the type on the `SchoolLink` row reinstates the misattribution above, because a link
+that resolved on-host on its first fetch would keep storing third-party content as
+`WEBSITE_PAGE`. Anyone changing `documentId` should know the type is in the key deliberately —
+it is what lets one `sourceRef` mean different things under different source types.
+
+### The extractor can now return a link, and it is checked
+
+`ExtractedSchoolEvents.Event` carries a `url`, rendered by `SchoolTools` as `link:` so an answer
+can offer a booking address. **`SchoolEventExtractor.verbatimUrl` discards any value it cannot
+find literally in the document body.** A URL is exactly the shape of thing a model completes
+rather than copies — the right host with a guessed path — and an invented booking link is offered
+to a parent under the same confident citation as the date. The check is a plain substring test,
+because the question is "did you copy this" and not "is this well formed".
+
+### The chat had to be told about it
+
+Two prompt changes ship with this and the feature is close to useless without them.
+`SchoolTopicGuardrail` answers YES to secondary-school open evenings, admissions and named south
+London secondaries — before, "when is the Kingsdale open evening" could be refused as off-topic
+before it ever reached a tool. `SchoolSystemPrompt` gains a Year 6 section requiring the assistant
+to **name the school every time** (an open evening date attached to no school is useless to
+somebody holding four in their head, and dangerous if they act on it for the wrong one), to say
+these are not Kilmorie's announcements, and to prefer a school's own page over a note when they
+disagree.
+
+### What it does not do
+
+- **No image paste.** The messages usually arrive as a screenshot; transcribing one is currently
+  manual. The endpoint takes text only.
+- **Links are followed one level.** A page that links onward to the real booking form is not
+  crawled further.
+- **Duplicate events are possible.** The note and the school's own page produce one row when the
+  model titles both with the school's name, which is what the extractor prompt asks for and what
+  the document title given to it supports — but it is a prompt instruction, not a guarantee.
+  Check `/admin/school/events` after pasting.
 
 ## What ingestion actually does
 

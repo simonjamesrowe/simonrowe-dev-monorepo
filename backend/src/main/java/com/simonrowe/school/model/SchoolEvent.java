@@ -85,6 +85,31 @@ public record SchoolEvent(
   }
 
   /**
+   * Returns a copy narrowed to a year group scope, when the source did not state one itself.
+   *
+   * <p>For content whose whole subject is one year group — a note about secondary-school open
+   * evenings concerns Year 6 and nobody else. Without this, those events land whole-school and
+   * every Reception parent asking "what is on this week" is shown four secondary schools'
+   * open days.
+   *
+   * <p>Applied only when the event has no year groups of its own, so a note that does say
+   * "Years 5 and 6 welcome" keeps what it said. {@code yearGroups} is not part of
+   * {@link com.simonrowe.school.ingest.SchoolIds#eventId}, so narrowing one does not move the
+   * row — the same event arriving later from a source that states its own years still collapses
+   * onto it.
+   *
+   * @param scope the year groups to apply, empty or null to leave the event alone
+   * @return the narrowed copy, or this event unchanged
+   */
+  public SchoolEvent withYearGroupScope(final List<String> scope) {
+    if (scope == null || scope.isEmpty() || !yearGroups.isEmpty()) {
+      return this;
+    }
+    return new SchoolEvent(id, title, startDate, endDate, allDay, eventType, scope, academicYear,
+        sourceType, sourceDocumentId, visibility, description, location, time, sourceUrl);
+  }
+
+  /**
    * Whether this event applies to a given year group.
    *
    * @param yearGroup the year group to test, e.g. {@code Year 3}
