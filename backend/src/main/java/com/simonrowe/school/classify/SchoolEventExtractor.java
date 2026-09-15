@@ -37,6 +37,9 @@ public class SchoolEventExtractor {
   private static final Logger LOG = LoggerFactory.getLogger(SchoolEventExtractor.class);
   private static final int MAX_CHARS = 12000;
 
+  /** Sentence punctuation a URL quoted in prose picks up at its end. */
+  private static final String TRAILING_PUNCTUATION = ".,;:)";
+
   private static final String PROMPT = """
       Extract every dated school event from the text below.
 
@@ -191,11 +194,13 @@ public class SchoolEventExtractor {
    * the question is "did you copy this", not "is this a well-formed URL".
    *
    * <p>A trailing {@code .} or {@code ,} swept up from prose is trimmed before the check, or a
-   * link at the end of a sentence fails verification and is dropped for punctuation. That
-   * quantifier is <b>possessive</b>: the input is a string a model produced, which is exactly
-   * the unbounded-input case where a greedy quantifier against an anchor backtracks
-   * super-linearly. It changes no match here — a maximal run of those characters at the end of
-   * the input is the only thing either form can match — it only removes the backtracking.
+   * link at the end of a sentence fails verification and is dropped for punctuation. The trim
+   * is a <b>scan, not a regex</b>. It was {@code replaceAll("[.,;:)]+$", "")}, and this input
+   * is a string a model produced — unbounded, and the case where a quantifier against an
+   * anchor stops being linear. Making the quantifier possessive removes the backtracking
+   * within one attempt and not the cost of retrying the match at every position, so the answer
+   * is to not ask a regex engine a question this simple. {@link #stripTrailingPunctuation} is
+   * obviously linear by inspection, which is the property that was wanted.
    *
    * @param candidate what the model returned, possibly null
    * @param body the text the model was shown
@@ -205,11 +210,29 @@ public class SchoolEventExtractor {
     if (candidate == null || body == null) {
       return null;
     }
-    final String trimmed = candidate.trim().replaceAll("[.,;:)]++$", "");
+    final String trimmed = stripTrailingPunctuation(candidate.trim());
     if (trimmed.isBlank() || !trimmed.toLowerCase(Locale.ROOT).startsWith("http")) {
       return null;
     }
     return body.contains(trimmed) ? trimmed : null;
+  }
+
+  /**
+   * Drops sentence punctuation from the end of a value.
+   *
+   * <p>{@code )} is in the set because a URL quoted in prose is routinely parenthesised. Note
+   * the sibling rule in {@code SchoolNoteService} uses a different set and keeps its regex: it
+   * runs over a single URL token a match already delimited, not over arbitrary model output.
+   *
+   * @param value the value to trim, never null
+   * @return the value with any trailing {@code . , ; : )} removed
+   */
+  private static String stripTrailingPunctuation(final String value) {
+    int end = value.length();
+    while (end > 0 && TRAILING_PUNCTUATION.indexOf(value.charAt(end - 1)) >= 0) {
+      end--;
+    }
+    return value.substring(0, end);
   }
 
   private static String blankToNull(final String value) {
