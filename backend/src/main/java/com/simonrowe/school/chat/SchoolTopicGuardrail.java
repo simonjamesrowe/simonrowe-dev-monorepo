@@ -34,6 +34,11 @@ public class SchoolTopicGuardrail {
       holidays, INSET days, events, clubs, uniform, school lunches, PE, trips, staff, \
       newsletters, term times, school policies, or day-to-day school arrangements.
 
+      Also answer YES to questions about choosing a SECONDARY school - open evenings, open \
+      days, open mornings, school tours, admissions and application deadlines, and named \
+      secondary schools in south London. Parents of Year 6 children are applying to secondary \
+      school while their child is still at this primary school, and they ask about it here.
+
       Also answer YES to these, which arrive with no school words in them at all:
 
       - A FOLLOW-UP that only makes sense after an earlier question - "what about Year 3?", \

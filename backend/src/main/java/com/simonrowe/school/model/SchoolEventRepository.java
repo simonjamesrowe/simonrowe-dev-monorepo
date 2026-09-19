@@ -24,6 +24,17 @@ public interface SchoolEventRepository extends MongoRepository<SchoolEvent, Stri
   List<SchoolEvent> findOverlapping(LocalDate from, LocalDate to, List<Visibility> visibilities);
 
   /**
+   * Every event extracted from any of several documents.
+   *
+   * <p>Reads a note's own events together with those from the pages its links led to, in one
+   * query rather than one per document — a note carrying six links is seven lookups otherwise.
+   *
+   * @param sourceDocumentIds the documents to read events for
+   * @return their events, in no particular order
+   */
+  List<SchoolEvent> findBySourceDocumentIdIn(List<String> sourceDocumentIds);
+
+  /**
    * Events of a given type within one academic year, used for "when are the INSET days".
    *
    * @param academicYear e.g. {@code 2026/27}

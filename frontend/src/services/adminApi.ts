@@ -1064,6 +1064,70 @@ export interface SchoolEventRow {
   academicYear: string
   sourceType: string
   visibility: string
+  /** Only ever a link the source text actually contained — the server discards invented ones. */
+  sourceUrl?: string | null
+  description?: string | null
+  location?: string | null
+  time?: string | null
+}
+
+/**
+ * Text pasted into the console, and everything that came of it.
+ *
+ * `events` covers the note itself AND the pages its links led to, which is the point of
+ * fetching them: a note reading "Harris Boys - 17 Sept - <link>" yields one bare date, and the
+ * page behind it yields the same evening with a time and a booking address.
+ */
+export interface SchoolNote {
+  id: string
+  title: string
+  body: string
+  publishedAt: string
+  yearGroups: string[]
+  events: SchoolEventRow[]
+  links: SchoolLinkSummary[]
+  /** True while links are still being fetched. Goes false on a server restart too — see below. */
+  fetching: boolean
+}
+
+/**
+ * Saves pasted text. Returns once the dates have been read, which is one model call; the links
+ * are fetched afterwards in the background and the caller polls {@link fetchSchoolNote}.
+ */
+export async function createSchoolNote(
+  getAccessToken: GetAccessToken,
+  input: { text: string; title?: string; yearGroups?: string[] },
+): Promise<SchoolNote> {
+  const token = await getAccessToken()
+  return handleResponse<SchoolNote>(
+    await authFetch(`${ADMIN_URL}/school/notes`, token, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: input.text,
+        title: input.title ?? '',
+        yearGroups: input.yearGroups ?? [],
+      }),
+    }),
+  )
+}
+
+export async function fetchSchoolNote(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<SchoolNote> {
+  const token = await getAccessToken()
+  return handleResponse<SchoolNote>(await authFetch(`${ADMIN_URL}/school/notes/${id}`, token))
+}
+
+export async function fetchSchoolNotes(
+  getAccessToken: GetAccessToken,
+  limit = 20,
+): Promise<SchoolNote[]> {
+  const token = await getAccessToken()
+  return handleResponse<SchoolNote[]>(
+    await authFetch(`${ADMIN_URL}/school/notes?limit=${limit}`, token),
+  )
 }
 
 export interface SchoolPage<T> {

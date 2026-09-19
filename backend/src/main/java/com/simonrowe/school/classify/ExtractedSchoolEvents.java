@@ -33,6 +33,10 @@ public record ExtractedSchoolEvents(List<Event> events) {
    *     needs beyond the date
    * @param location where it happens, when the text says
    * @param time the time of day, as written
+   * @param url a link that appears <b>verbatim</b> in the source text and belongs to this event,
+   *     or empty. Never trusted as written: {@code SchoolEventExtractor} discards any value it
+   *     cannot find in the document body, because a plausible-looking booking link that goes
+   *     nowhere is worse than no link at all
    */
   public record Event(
       String title,
@@ -42,7 +46,8 @@ public record ExtractedSchoolEvents(List<Event> events) {
       List<String> yearGroups,
       String description,
       String location,
-      String time) {
+      String time,
+      String url) {
 
     /** Normalises a null year-group list, which the model omits for whole-school events. */
     public Event {

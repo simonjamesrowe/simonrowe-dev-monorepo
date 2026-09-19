@@ -50,6 +50,7 @@ const navItems = [
       { path: '/admin/school/approvals', label: 'Approvals' },
       { path: '/admin/school/documents', label: 'Documents' },
       { path: '/admin/school/events', label: 'Events' },
+      { path: '/admin/school/notes', label: 'Paste a note' },
     ],
   },
   { path: '/admin/data-operations', label: 'Data Ops', icon: <Database size={18} /> },

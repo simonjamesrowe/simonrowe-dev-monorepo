@@ -42,6 +42,17 @@ public class SchoolQueryService {
    * thirty minutes in production. Included, it would be the newest communication in every window
    * for ever, so "what did the school send this week" would always lead with a stub describing a
    * data source.
+   *
+   * <p>{@link SchoolSourceType#PASTED_NOTE} and {@link SchoolSourceType#EXTERNAL_PAGE} are
+   * excluded for a different reason, and it is the reason {@code EXTERNAL_PAGE} exists as a
+   * separate type at all: neither is something <b>the school</b> published. A note pasted into
+   * the admin console is a parents'-group message somebody transcribed, and an external page is
+   * another school's own website. Both are legitimate answers to "when is the open evening";
+   * neither is an answer to "what did the school send last week", and reporting them as such
+   * would attribute another school's announcement to this one.
+   *
+   * <p>An allowlist rather than a denylist, so a source type added later is silently absent
+   * from this answer until somebody decides it belongs — which is the safe direction.
    */
   private static final List<SchoolSourceType> COMMUNICATION_SOURCES = List.of(
       SchoolSourceType.EMAIL, SchoolSourceType.WEBSITE_PAGE, SchoolSourceType.PDF);
