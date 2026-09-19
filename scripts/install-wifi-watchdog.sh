@@ -150,8 +150,24 @@ if [[ ! -d "$JOURNAL_DIR" ]]; then
   sudo mkdir -p "$JOURNAL_DIR"
 fi
 sudo mkdir -p /etc/systemd/journald.conf.d
-sudo tee /etc/systemd/journald.conf.d/10-persistent.conf >/dev/null <<'EOF'
+# THE FILENAME IS LOAD-BEARING. Raspberry Pi OS ships
+# /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf (package
+# raspberrypi-sys-mods) containing Storage=volatile. Drop-ins are merged by
+# filename across /etc and /usr/lib and applied in lexical order, so a
+# 10-prefixed file in /etc loses to the vendor's 40- one - it is read, it is
+# reported by `systemd-analyze cat-config`, and it has no effect. That was the
+# first attempt here and it silently did nothing.
+#
+# `Storage=volatile` is a sensible default for a Pi booting from an SD card. This
+# one boots from a 117G USB SSD, so the wear argument it exists for does not
+# apply, and losing the journal on every reboot cost us the entire explanation
+# for the 2026-09-18 outage.
+sudo rm -f /etc/systemd/journald.conf.d/10-persistent.conf
+sudo tee /etc/systemd/journald.conf.d/95-persistent-journal.conf >/dev/null <<'EOF'
 # Managed by simonrowe-dev-monorepo: scripts/install-wifi-watchdog.sh
+#
+# Overrides /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf, which
+# sets Storage=volatile. The 95- prefix is what makes this win; do not renumber.
 [Journal]
 Storage=persistent
 SystemMaxUse=300M
@@ -159,6 +175,16 @@ MaxRetentionSec=1month
 EOF
 sudo systemctl restart systemd-journald
 sudo journalctl --flush >/dev/null 2>&1 || true
+
+# Assert rather than assume: the failure mode above is silent, and a journal that
+# is not persistent is only discovered by the reboot that needed it.
+if sudo journalctl --header 2>/dev/null | grep -q 'File path: /run/log/journal'; then
+  echo "    WARNING: the journal is still volatile. Check for a drop-in sorting"
+  echo "             after 95-persistent-journal.conf:"
+  echo "             systemd-analyze cat-config systemd/journald.conf | grep -E '^# /|Storage='"
+else
+  echo "    journal is persistent under $JOURNAL_DIR"
+fi
 
 echo
 echo "Installed. Verifying with a dry run:"

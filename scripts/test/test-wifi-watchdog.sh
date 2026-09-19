@@ -200,5 +200,22 @@ check "the unit does not ExecStart out of the project directory" \
   '! grep -q "ExecStart=.*\$PROJECT_DIR" "$INSTALLER"'
 
 echo
+echo "  The journal drop-in outranks the vendor one"
+# Raspberry Pi OS ships /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf
+# with Storage=volatile. Drop-ins merge by filename across /etc and /usr/lib and
+# apply in lexical order, so anything below 40- is read, reported by
+# `systemd-analyze cat-config`, and completely ineffective. The first cut of the
+# installer used 10- and silently did nothing on the real host.
+journal_dropin="$(grep -oE '/etc/systemd/journald\.conf\.d/[0-9]+-[a-z-]+\.conf' "$INSTALLER" | grep -v '10-persistent' | head -1)"
+check "the installer writes a journald drop-in" '[[ -n "$journal_dropin" ]]'
+check "its name sorts after 40-rpi-volatile-storage.conf" \
+  '[[ "$(printf "%s\n" "$(basename "$journal_dropin")" "40-rpi-volatile-storage.conf" | sort | tail -1)" == "$(basename "$journal_dropin")" ]]'
+check "it sets Storage=persistent" 'grep -q "^Storage=persistent" "$INSTALLER"'
+check "the journal is size-capped, on a host already at ~83% disk" \
+  'grep -qE "^SystemMaxUse=[0-9]+M" "$INSTALLER"'
+check "the installer verifies persistence rather than assuming it" \
+  'grep -q "File path: /run/log/journal" "$INSTALLER"'
+
+echo
 echo "  checks: $checks  failures: $failures"
 [[ "$failures" -eq 0 ]]

@@ -142,12 +142,40 @@ in the `run-tests.sh` suite, so it sits inside the required
 ### 3. A persistent journal
 
 `Storage=persistent`, `SystemMaxUse=300M`, `MaxRetentionSec=1month` in
-`/etc/systemd/journald.conf.d/10-persistent.conf`. Capped because the host runs at
-~83% disk and an uncapped journal is the kind of fix that becomes the next
-outage.
+**`/etc/systemd/journald.conf.d/95-persistent-journal.conf`**. Capped because the
+host runs at ~83% disk and an uncapped journal is the kind of fix that becomes
+the next outage.
 
 This is here so the **next** occurrence leaves evidence. Without it the recovery
 action — a power cycle — is also the action that destroys the explanation.
+
+**The `95-` prefix is load-bearing; do not renumber it.** Raspberry Pi OS ships
+`/usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf` (package
+`raspberrypi-sys-mods`) containing `Storage=volatile`. Drop-ins are merged by
+filename across `/etc` and `/usr/lib` and applied in lexical order, so a
+`10-`-prefixed file in `/etc` **loses to the vendor's `40-` one**. The first cut
+of the installer used `10-`, and the result was the failure mode this repo keeps
+meeting: the setting is present, it is reported by `systemd-analyze cat-config`,
+and it does nothing.
+
+```
+$ systemd-analyze cat-config systemd/journald.conf | grep -E '^# /|Storage='
+# /etc/systemd/journald.conf.d/10-persistent.conf
+Storage=persistent                                   <- read, then overridden
+# /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf
+Storage=volatile                                     <- wins
+```
+
+That is also the command to diagnose it. The authoritative check is where the
+journal actually lives — anything under `/run` is volatile:
+
+```bash
+sudo journalctl --header | grep -m1 'File path'
+```
+
+`Storage=volatile` is a sensible vendor default for a Pi booting from an SD card.
+This one boots from a 117G USB SSD (`/dev/sda2`), so the write-wear argument it
+exists for does not apply here.
 
 ## What this does not fix
 
