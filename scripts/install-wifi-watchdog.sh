@@ -176,12 +176,19 @@ EOF
 sudo systemctl restart systemd-journald
 sudo journalctl --flush >/dev/null 2>&1 || true
 
-# Assert rather than assume: the failure mode above is silent, and a journal that
-# is not persistent is only discovered by the reboot that needed it.
+# Assert rather than assume, and assert with the EXIT STATUS rather than with
+# text. The failure mode above is silent by nature - a drop-in that loses to a
+# vendor one is read, is reported by `systemd-analyze cat-config`, and does
+# nothing - so a warning printed in the middle of a wall of install output is
+# very nearly the same silence. It is also how the 10-prefix version of this
+# survived its first run here.
+#
+# Where the journal actually lives is the authoritative check. Anything under
+# /run is volatile, whatever the config claims.
+journal_persistent=1
 if sudo journalctl --header 2>/dev/null | grep -q 'File path: /run/log/journal'; then
-  echo "    WARNING: the journal is still volatile. Check for a drop-in sorting"
-  echo "             after 95-persistent-journal.conf:"
-  echo "             systemd-analyze cat-config systemd/journald.conf | grep -E '^# /|Storage='"
+  journal_persistent=0
+  echo "    the journal is STILL VOLATILE"
 else
   echo "    journal is persistent under $JOURNAL_DIR"
 fi
@@ -192,4 +199,22 @@ sudo env DRY_RUN=1 STATE_DIR="$(mktemp -d)" "$WATCHDOG_SCRIPT"
 echo
 sudo systemctl list-timers wifi-watchdog.timer --no-pager
 echo
+
+# Reported last and failed last, so the exit status covers the whole run while
+# the output above still tells an operator exactly how far it got. The watchdog
+# and the NetworkManager settings - the parts that keep the host reachable - are
+# installed and running by this point either way; only the ability to diagnose
+# the NEXT outage is missing, which is worth a non-zero exit and is not worth
+# unwinding the rest.
+if [[ "$journal_persistent" -eq 0 ]]; then
+  echo "ERROR: the watchdog and NetworkManager settings are installed and active,"
+  echo "       but the journal is still volatile, so the next outage will again"
+  echo "       leave no evidence. Look for a journald drop-in sorting AFTER"
+  echo "       95-persistent-journal.conf:"
+  echo
+  echo "         systemd-analyze cat-config systemd/journald.conf | grep -E '^# /|Storage='"
+  echo "         sudo journalctl --header | grep -m1 'File path'"
+  exit 1
+fi
+
 echo "Wi-Fi watchdog installed. Log: $LOG_FILE"

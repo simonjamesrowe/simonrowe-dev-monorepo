@@ -215,6 +215,18 @@ check "the journal is size-capped, on a host already at ~83% disk" \
   'grep -qE "^SystemMaxUse=[0-9]+M" "$INSTALLER"'
 check "the installer verifies persistence rather than assuming it" \
   'grep -q "File path: /run/log/journal" "$INSTALLER"'
+# It must fail, not warn. The whole failure mode is silence, so text an operator
+# scrolls past is barely an improvement on no check at all - and an automated
+# install chaining on the exit status would miss it entirely.
+#
+# Scoped to the journal branch on purpose: a bare `grep "exit 1"` also matches
+# the missing-source-script guard at the top of the installer, so it passes
+# whether or not this branch fails. That looser assertion was written first and
+# survived its own mutation test, which is the only reason it was caught.
+check "the volatile branch records the failure" \
+  'grep -q "journal_persistent=0" "$INSTALLER"'
+check "and the script FAILS on it rather than only printing a warning" \
+  'sed -n "/journal_persistent. -eq 0/,/^fi$/p" "$INSTALLER" | grep -q "exit 1"'
 
 echo
 echo "  checks: $checks  failures: $failures"
