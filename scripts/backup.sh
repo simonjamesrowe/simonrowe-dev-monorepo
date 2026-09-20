@@ -22,13 +22,17 @@ trap 'rm -rf "$TEMP_DIR"' EXIT
 BACKUP_FOLDER="${TEMP_DIR}/${BACKUP_NAME}"
 mkdir -p "$BACKUP_FOLDER"
 
-# Dump the simonrowe database
-echo "=== Dumping MongoDB (simonrowe) ==="
+# Dump both application databases from the shared Mongo container.
+echo "=== Dumping MongoDB (simonrowe + coparent) ==="
+docker exec "$CONTAINER" rm -rf /tmp/mongodump
 docker exec "$CONTAINER" mongodump --db simonrowe --out /tmp/mongodump 2>&1 | grep -E '(done dumping|writing)'
+docker exec "$CONTAINER" mongodump --db coparent --out /tmp/mongodump 2>&1 | grep -E '(done dumping|writing)'
 mkdir -p "$BACKUP_FOLDER/mongodb"
 docker cp "$CONTAINER:/tmp/mongodump/simonrowe" "$BACKUP_FOLDER/mongodb/simonrowe"
+docker cp "$CONTAINER:/tmp/mongodump/coparent" "$BACKUP_FOLDER/mongodb/coparent"
 docker exec "$CONTAINER" rm -rf /tmp/mongodump
-echo "Collections dumped: $(ls "$BACKUP_FOLDER/mongodb/simonrowe/"*.bson 2>/dev/null | wc -l | tr -d ' ')"
+echo "Simonrowe collections dumped: $(find "$BACKUP_FOLDER/mongodb/simonrowe" -name '*.bson' | wc -l | tr -d ' ')"
+echo "CoParent collections dumped: $(find "$BACKUP_FOLDER/mongodb/coparent" -name '*.bson' | wc -l | tr -d ' ')"
 
 # Copy uploads
 echo ""

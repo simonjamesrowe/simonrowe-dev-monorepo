@@ -743,7 +743,7 @@ services:
       # same-origin: WebSocketConfig passes this list to setAllowedOrigins, and Spring rejects
       # the STOMP handshake on the Origin header regardless of who is proxying. The symptom
       # would be a page that loads perfectly and never answers.
-      CORS_ALLOWED_ORIGINS: https://simonrowe.dev,https://www.simonrowe.dev,https://term-time.simonrowe.dev
+      CORS_ALLOWED_ORIGINS: https://simonrowe.dev,https://www.simonrowe.dev,https://term-time.simonrowe.dev,https://coparents.simonrowe.dev
       MANAGEMENT_SERVER_PORT: "8081"
       SPRING_THREADS_VIRTUAL_ENABLED: "true"
       OTEL_SERVICE_NAME: simonrowe-backend
@@ -833,6 +833,15 @@ services:
       SCHOOL_GMAIL_CLIENT_ID: ${SCHOOL_GMAIL_CLIENT_ID:-}
       SCHOOL_GMAIL_CLIENT_SECRET: ${SCHOOL_GMAIL_CLIENT_SECRET:-}
       SCHOOL_GMAIL_REFRESH_TOKEN: ${SCHOOL_GMAIL_REFRESH_TOKEN:-}
+      # CoParent remains inert until cutover. All secrets/config stay on the backend;
+      # the browser receives only the public SPA client id at image-build time.
+      COPARENT_ENABLED: ${COPARENT_ENABLED:-false}
+      COPARENT_DATABASE: ${COPARENT_DATABASE:-coparent}
+      COPARENT_APP_URL: ${COPARENT_APP_URL:-https://coparents.simonrowe.dev}
+      COPARENT_AUTH0_EMAIL_CLAIM: ${COPARENT_AUTH0_EMAIL_CLAIM:-email}
+      COPARENT_EMAIL_FROM: ${COPARENT_EMAIL_FROM:-noreply@simonrowe.dev}
+      COPARENT_EMAIL_ENABLED: ${COPARENT_EMAIL_ENABLED:-false}
+      COPARENT_SOURCE_DATABASE: ${COPARENT_SOURCE_DATABASE:-coparent_legacy}
     volumes:
       - backend-uploads:/workspace/uploads
       # The original bytes of PDFs that arrived as school email attachments, served by

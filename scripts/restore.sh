@@ -49,6 +49,17 @@ docker cp "$DUMP_DIR" "$CONTAINER:/tmp/native-dump"
 docker exec "$CONTAINER" mongorestore --drop --db simonrowe /tmp/native-dump 2>&1 | grep -E '(restored|failed)'
 docker exec "$CONTAINER" rm -rf /tmp/native-dump
 
+COPARENT_DUMP_DIR="$BACKUP_FOLDER/mongodb/coparent"
+if [ -d "$COPARENT_DUMP_DIR" ]; then
+  echo "=== Restoring MongoDB (coparent) ==="
+  docker cp "$COPARENT_DUMP_DIR" "$CONTAINER:/tmp/coparent-dump"
+  docker exec "$CONTAINER" mongorestore --drop --db coparent /tmp/coparent-dump 2>&1 \
+    | grep -E '(restored|failed)'
+  docker exec "$CONTAINER" rm -rf /tmp/coparent-dump
+else
+  echo "WARNING: No coparent database found in this older backup"
+fi
+
 # Copy uploads
 echo ""
 echo "=== Copying uploads to $UPLOADS_DIR ==="

@@ -8,6 +8,10 @@ it, and the self-hosted agents that review and deploy this repository.
 
 It runs on a single Raspberry Pi.
 
+The same deployment also hosts the isolated CoParent application at
+`coparents.simonrowe.dev` and Term Time at `term-time.simonrowe.dev`; both reuse the shared images
+without adding another runtime.
+
 ---
 
 ## What's in here
@@ -111,6 +115,7 @@ project in `frontend/`. Shared JVM dependency versions live in
 | [Static analysis](docs/runbooks/static-analysis.md) | SonarQube Cloud, coverage reports, quality gate |
 | [Langfuse observability](docs/runbooks/langfuse-observability.md) | LLM traces are missing or shallow |
 | [Article summaries](docs/runbooks/article-summaries.md) | On-demand summary generation |
+| [CoParent cutover](docs/runbooks/coparent-cutover.md) | Rehearsing, enabling, rolling back, or retiring the legacy CoParent runtime |
 
 ### Setup guides
 
@@ -145,6 +150,7 @@ reloads and a debugger. Credentials are read from `.env` files —
 | Endpoint | URL |
 |----------|-----|
 | Frontend | <http://localhost:5173> |
+| CoParent frontend | <http://coparents.localhost:5173> |
 | API | <http://localhost:8080/api/profile> |
 | Actuator | <http://localhost:8082/actuator/health> |
 | Temporal UI | <http://localhost:8233> |

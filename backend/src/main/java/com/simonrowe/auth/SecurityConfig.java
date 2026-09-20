@@ -1,5 +1,6 @@
 package com.simonrowe.auth;
 
+import com.simonrowe.coparent.config.CoparentFeatureFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -8,6 +9,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -18,7 +20,8 @@ public class SecurityConfig {
   @Bean
   public SecurityFilterChain filterChain(
       final HttpSecurity http,
-      final RolesJwtAuthenticationConverter rolesConverter
+      final RolesJwtAuthenticationConverter rolesConverter,
+      final CoparentFeatureFilter coparentFeatureFilter
   ) throws Exception {
     http
         .cors(Customizer.withDefaults())
@@ -44,6 +47,7 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST, "/api/news/*/summary/narration")
             .authenticated()
             .requestMatchers(HttpMethod.POST, "/api/blogs/*/narration").authenticated()
+            .requestMatchers("/api/coparent/**").authenticated()
             .anyRequest().permitAll()
         )
         .headers(headers -> headers.cacheControl(cache -> cache.disable()))
@@ -53,7 +57,8 @@ public class SecurityConfig {
         .csrf(csrf -> csrf.disable())
         .sessionManagement(session ->
             session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-        );
+        )
+        .addFilterBefore(coparentFeatureFilter, BearerTokenAuthenticationFilter.class);
     return http.build();
   }
 }

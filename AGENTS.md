@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/040-software-factory-console/plan.md
+specs/048-coparent-migration/plan.md
 <!-- SPECKIT END -->
 
 # simonrowe-dev-monorepo — agent guidelines
@@ -22,9 +22,9 @@ CLAUDE.md wins.
 
 ## Stack
 
-- **Backend** — Java 21, Spring Boot 3.5.16, Spring Data MongoDB, Spring Data
+- **Backend** — Java 25, Spring Boot 4.1.1, Spring Data MongoDB, Spring Data
   Elasticsearch, Spring Kafka, Spring Security (OAuth2 resource server),
-  Spring AI 1.1.8, Embabel, Mongock. Gradle, versions in
+  Spring AI 2.0.1, Embabel, Mongock. Gradle, versions in
   `gradle/libs.versions.toml`.
 - **Frontend** — React 19, TypeScript 5.7, Vite 6, React Router 7, Vitest,
   Playwright. Plain CSS with BEM in a single `styles.css`.
@@ -98,11 +98,15 @@ consumer can ever read, healthchecks whose cold-start budget strands dependent
 containers in `created`.
 
 ## Active Technologies
-- Java 21 (`backend`, `software-factory`), TypeScript 5.7 / React 19,
-  Spring Boot 3.5.16, Temporal Java SDK 1.36.0
+- Java 25 (`backend`, `software-factory`), TypeScript 5.7 / React 19,
+  Spring Boot 4.1.1, Temporal Java SDK 1.36.0
 - Existing MongoDB `software_factory` collections (`cve_fix_runs`,
   `review_learnings`, `linear_issues`)
+- CoParent module using legacy-compatible collection names in a dedicated `coparent`
+  database on the existing MongoDB container (048-coparent-migration)
 
 ## Recent Changes
+- 048-coparent-migration: Consolidated CoParent Java API, third frontend entry,
+  separate Mongo database, migration, and `coparents.simonrowe.dev` routing.
 - 040-software-factory-console: Admin factory status/manual actions, issue-first
   feedback, CVE-to-Linear ticketing, and active platform backups.
