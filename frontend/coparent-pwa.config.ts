@@ -6,4 +6,8 @@ export const coparentWorkbox = {
   globPatterns: ['**/*.{js,css,svg,woff,woff2}', 'coparent/index.html'],
   navigateFallback: '/coparent/index.html',
   navigateFallbackDenylist: [/^\/api\//],
+  // A bad worker can render another app before CoParent's update prompt exists. Let a
+  // corrected worker replace it without waiting for every affected tab to be closed.
+  skipWaiting: true,
+  clientsClaim: true,
 };

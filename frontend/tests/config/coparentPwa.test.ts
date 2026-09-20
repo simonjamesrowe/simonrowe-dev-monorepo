@@ -10,4 +10,9 @@ describe('CoParent PWA precache', () => {
     ]);
     expect(coparentWorkbox.navigateFallback).toBe('/coparent/index.html');
   });
+
+  it('replaces a broken worker without relying on the CoParent UI', () => {
+    expect(coparentWorkbox.skipWaiting).toBe(true);
+    expect(coparentWorkbox.clientsClaim).toBe(true);
+  });
 });
