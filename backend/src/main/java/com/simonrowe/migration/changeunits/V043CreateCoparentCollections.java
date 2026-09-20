@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.index.Index;
-import org.springframework.data.mongodb.core.index.PartialIndexFilter;
 
 /**
  * Creates CoParent's collections in its dedicated database and adds query/uniqueness indexes
@@ -58,8 +57,7 @@ public class V043CreateCoparentCollections {
         .on("familyId", Sort.Direction.ASC)
         .on("auth0Id", Sort.Direction.ASC)
         .unique()
-        .partial(PartialIndexFilter.of(new org.bson.Document("familyId",
-            new org.bson.Document("$type", "objectId")))));
+        .sparse());
 
     mongoTemplate.indexOps(CHILDREN).createIndex(index("idx_coparent_child_family_active")
         .on("familyId", Sort.Direction.ASC)

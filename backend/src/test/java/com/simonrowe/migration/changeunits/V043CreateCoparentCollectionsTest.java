@@ -1,10 +1,14 @@
 package com.simonrowe.migration.changeunits;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.mongodb.MongoWriteException;
 import com.simonrowe.AbstractIntegrationTest;
 import com.simonrowe.coparent.persistence.CoparentMongoOperations;
 import java.util.List;
+import org.bson.Document;
+import org.bson.types.ObjectId;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,6 +68,21 @@ class V043CreateCoparentCollectionsTest extends AbstractIntegrationTest {
 
     assertThat(indexNames(V043CreateCoparentCollections.EVENTS))
         .containsExactlyInAnyOrderElementsOf(before);
+  }
+
+  @Test
+  void permitsOneUnassignedProfilePerAuth0Subject() {
+    changeUnit.execution(new CoparentMongoOperations(mongoTemplate));
+    final var parents = mongoTemplate.getCollection(V043CreateCoparentCollections.PARENTS);
+    parents.insertOne(new Document("_id", new ObjectId()).append("auth0Id", "auth0|parent"));
+
+    assertThatThrownBy(() -> parents.insertOne(
+        new Document("_id", new ObjectId()).append("auth0Id", "auth0|parent")))
+        .isInstanceOf(MongoWriteException.class);
+
+    parents.insertOne(new Document("_id", new ObjectId())
+        .append("auth0Id", "auth0|parent")
+        .append("familyId", new ObjectId()));
   }
 
   private List<String> indexNames(final String collection) {
