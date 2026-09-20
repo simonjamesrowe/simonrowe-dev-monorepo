@@ -116,6 +116,7 @@ sonar {
         property("sonar.coverage.exclusions",
             listOf(
                 "frontend/src/coparent/**",
+                "frontend/src/test/setup.ts",
                 "**/com/simonrowe/migration/**",
                 "**/com/simonrowe/dataops/**",
                 "**/com/simonrowe/embedding/**",
