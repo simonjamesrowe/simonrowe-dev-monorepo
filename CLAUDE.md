@@ -49,6 +49,7 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - Java: Google Java Style Guide, enforced via Checkstyle
 - TypeScript: Standard conventions, ESLint
 - CSS: BEM naming, plain CSS with custom properties
+- Keep null checks on third-party library return values even when static analysis flags them unreachable — library behavior varies across versions and the check is cheaper than an NPE from a dependency upgrade.
 
 ## Key Design Decisions
 
