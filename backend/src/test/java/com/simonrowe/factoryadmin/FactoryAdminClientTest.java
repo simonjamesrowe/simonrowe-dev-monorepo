@@ -316,10 +316,11 @@ class FactoryAdminClientTest {
         2200,
         "{\"fetchedAt\":\"2026-09-20T19:00:00Z\",\"nodes\":[],\"edges\":[]}")));
     startDeployer(Map.of());
-    FactoryAdminClient client = new FactoryAdminClient(
-        new FactoryAdminProperties(
-            baseUrl(factory), baseUrl(deployer), TOKEN, READ_TOKEN, null, null, null));
+    FactoryAdminProperties properties = new FactoryAdminProperties(
+        baseUrl(factory), baseUrl(deployer), TOKEN, READ_TOKEN, null, null, null);
+    FactoryAdminClient client = new FactoryAdminClient(properties);
 
+    assertThat(properties.timeout()).isEqualTo(Duration.ofSeconds(30));
     assertThat(client.factoryFlow().fetchedAt()).isNotNull();
   }
 

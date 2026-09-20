@@ -28,8 +28,9 @@ public record FactoryAdminProperties(
     readToken = readToken == null ? "" : readToken;
     // A cold flow snapshot gathers Temporal plus GitHub/Linear artifact counts. On the Pi that
     // legitimately crosses two seconds, so the old default misreported healthy containers as
-    // unreachable. Keep this bounded, but leave enough room for the production hardware.
-    timeout = timeout == null ? Duration.ofSeconds(5) : timeout;
+    // unreachable. Thirty seconds keeps the call bounded while leaving headroom for slow
+    // external providers and production hardware under load.
+    timeout = timeout == null ? Duration.ofSeconds(30) : timeout;
     owner = defaulted(owner, "simonjamesrowe");
     repository = defaulted(repository, "simonrowe-dev-monorepo");
   }
