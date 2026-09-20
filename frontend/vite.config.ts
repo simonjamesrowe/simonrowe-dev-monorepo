@@ -3,6 +3,8 @@ import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+import { coparentWorkbox } from './coparent-pwa.config'
+
 export default defineConfig(({ mode }) => {
   // Conductor runs several workspaces at once and they all want the dev server port. Set
   // VITE_DEV_PORT in frontend/.env to move this workspace out of the way. Read through Vite's
@@ -39,13 +41,9 @@ export default defineConfig(({ mode }) => {
       injectRegister: null,
       manifest: false,
       filename: 'coparent-sw.js',
-      workbox: {
-        // Private family API responses are intentionally absent: only immutable build assets
-        // and the CoParent navigation shell can be used offline.
-        globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
-        navigateFallback: '/coparent/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
-      },
+      // Private family API responses are intentionally absent: only immutable build assets
+      // and the CoParent navigation shell can be used offline.
+      workbox: coparentWorkbox,
       devOptions: { enabled: false },
     }),
   ],

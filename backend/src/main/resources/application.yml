@@ -603,7 +603,10 @@ factory-admin:
   # one so the backend can read deploy/platformbackup detail from it truthfully, without the
   # backend needing the deployer's absent trigger token (which it does not have either).
   read-token: ${FACTORY_READ_TOKEN:}
-  timeout: 2s
+  # A cold flow snapshot gathers Temporal plus GitHub/Linear counts and can take just over two
+  # seconds on the production Pi. Two seconds made the admin graph intermittently render every
+  # healthy node as unavailable; keep the internal call bounded without racing normal work.
+  timeout: ${FACTORY_ADMIN_TIMEOUT:5s}
   owner: simonjamesrowe
   repository: simonrowe-dev-monorepo
 
