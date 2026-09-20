@@ -392,10 +392,11 @@ export function OnboardingWizard({
 
               <div className="space-y-6">
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <label htmlFor="onboarding-full-name" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                     Your Full Name
                   </label>
                   <input
+                    id="onboarding-full-name"
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
@@ -407,10 +408,11 @@ export function OnboardingWizard({
                   </p>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <label htmlFor="onboarding-family-name" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                     Family Name
                   </label>
                   <input
+                    id="onboarding-family-name"
                     type="text"
                     value={familyName}
                     onChange={(e) => setFamilyName(e.target.value)}
@@ -422,10 +424,11 @@ export function OnboardingWizard({
                   </p>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <label htmlFor="onboarding-location" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                     Location
                   </label>
                   <input
+                    id="onboarding-location"
                     type="text"
                     list="location-options"
                     value={location}
@@ -563,10 +566,11 @@ export function OnboardingWizard({
               <div className="space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <label htmlFor="onboarding-child-name" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                       Child's Full Name <span className="text-rose-500">*</span>
                     </label>
                     <input
+                      id="onboarding-child-name"
                       type="text"
                       value={childName}
                       onChange={(e) => setChildName(e.target.value)}
@@ -575,10 +579,11 @@ export function OnboardingWizard({
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <label htmlFor="onboarding-child-dob" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                       Date of Birth <span className="text-rose-500">*</span>
                     </label>
                     <input
+                      id="onboarding-child-dob"
                       type="date"
                       value={childDob}
                       onChange={(e) => setChildDob(e.target.value)}
@@ -587,10 +592,11 @@ export function OnboardingWizard({
                   </div>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <label htmlFor="onboarding-child-school" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                     School <span className="font-normal text-slate-400">(optional)</span>
                   </label>
                   <input
+                    id="onboarding-child-school"
                     type="text"
                     value={childSchool}
                     onChange={(e) => setChildSchool(e.target.value)}
@@ -599,10 +605,11 @@ export function OnboardingWizard({
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <label htmlFor="onboarding-child-medical-notes" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                     Medical Notes <span className="font-normal text-slate-400">(optional)</span>
                   </label>
                   <textarea
+                    id="onboarding-child-medical-notes"
                     value={childMedicalNotes}
                     onChange={(e) => setChildMedicalNotes(e.target.value)}
                     placeholder="Allergies, medications, or special requirements"
@@ -753,10 +760,11 @@ export function OnboardingWizard({
 
               <div className="space-y-5">
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <label htmlFor="onboarding-invite-email" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                     Co-Parent Email
                   </label>
                   <input
+                    id="onboarding-invite-email"
                     type="email"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
@@ -765,10 +773,11 @@ export function OnboardingWizard({
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <label htmlFor="onboarding-invite-role" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                     Role
                   </label>
                   <select
+                    id="onboarding-invite-role"
                     value={inviteRole}
                     onChange={(e) => setInviteRole(e.target.value as ParentRole)}
                     className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-white"

@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.slf4j.Logger;
@@ -34,7 +33,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class InvitationService {
 
   private static final Logger log = LoggerFactory.getLogger(InvitationService.class);
-  private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
   private static final String PENDING = "pending";
 
   private final InvitationRepository invitations;
@@ -251,7 +249,12 @@ public class InvitationService {
 
   private static String normaliseEmail(final String email) {
     final String normalised = email == null ? "" : email.trim().toLowerCase();
-    if (!EMAIL.matcher(normalised).matches()) {
+    final int at = normalised.indexOf('@');
+    final int dot = normalised.indexOf('.', at + 2);
+    final boolean hasOneAt = at > 0 && at == normalised.lastIndexOf('@');
+    final boolean hasDomain = dot > at + 1 && dot < normalised.length() - 1;
+    final boolean hasWhitespace = normalised.chars().anyMatch(Character::isWhitespace);
+    if (!hasOneAt || !hasDomain || hasWhitespace) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid email address");
     }
     return normalised;

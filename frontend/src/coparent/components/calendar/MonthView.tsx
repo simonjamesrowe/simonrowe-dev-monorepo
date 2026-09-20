@@ -173,7 +173,15 @@ export function MonthView({
           return (
             <div
               key={day.date.toISOString()}
+              role="button"
+              tabIndex={0}
               onClick={() => onDayClick(day.date)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onDayClick(day.date);
+                }
+              }}
               className={`relative min-h-[80px] cursor-pointer p-1 transition-all duration-150 sm:min-h-[100px] ${!day.isCurrentMonth ? 'opacity-40' : ''} ${day.isToday ? 'z-10 rounded-xl ring-2 ring-inset ring-teal-500' : ''} hover:bg-slate-50 dark:hover:bg-slate-700/30 ${custodyPosition ? getCustodyGradient(day.custodyParent, custodyPosition) : ''} `}
             >
               {/* Day number */}

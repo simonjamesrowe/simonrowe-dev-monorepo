@@ -12,7 +12,9 @@ export function ChildrenDrawer({
 }: ChildrenDrawerProps) {
   return (
     <div className={`fixed inset-0 z-40 ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-      <div
+      <button
+        type="button"
+        aria-label="Close children drawer"
         className={`absolute inset-0 bg-slate-950/30 transition ${isOpen ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}
       />

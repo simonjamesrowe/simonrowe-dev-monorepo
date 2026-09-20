@@ -109,7 +109,7 @@
 
 ## Phase 8: Polish and Quality Gates
 
-- [ ] T035 Replace the scoped legacy utility CSS with BEM, verify dark/mobile styling, and retain only implemented placeholder routes in `frontend/src/coparent/` and `frontend/src/styles.css`
+- [ ] T035 Replace the scoped legacy utility CSS with BEM, complete the migrated frontend's Sonar test baseline and remove its temporary coverage exclusion, verify dark/mobile styling, and retain only implemented placeholder routes in `frontend/src/coparent/` and `frontend/src/styles.css`
 - [X] T036 Run the full backend test, checkstyle, and coverage gates
 - [X] T037 Run frontend lint, unit coverage, production build, dependency audit, and CoParent Playwright checks
 - [X] T038 Validate `specs/048-coparent-migration/quickstart.md` and record production-only inventory, Auth0, DNS, SMTP, and cutover prerequisites without performing cutover

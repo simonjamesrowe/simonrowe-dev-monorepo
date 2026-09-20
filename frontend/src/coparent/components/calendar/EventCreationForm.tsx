@@ -248,10 +248,11 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
             </h2>
             <div className="mt-4 grid gap-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                <label htmlFor="event-title" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Title
                 </label>
                 <input
+                  id="event-title"
                   type="text"
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
@@ -261,9 +262,9 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Event type
-                </label>
+                </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {TYPE_OPTIONS.map((option) => {
                     const selected = normalizedType === option.value;
@@ -292,11 +293,12 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
 
               <div className="grid gap-4 sm:grid-cols-[1.4fr_1fr]">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <label htmlFor="event-custom-type" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Custom type
                   </label>
                   <div className="flex gap-2">
                     <input
+                      id="event-custom-type"
                       type="text"
                       value={type}
                       onChange={(event) => {
@@ -322,11 +324,12 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <label htmlFor="event-all-day" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                     All day
                   </label>
                   <div className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-2.5 dark:border-slate-700">
                     <input
+                      id="event-all-day"
                       type="checkbox"
                       checked={isCustody ? true : allDay}
                       onChange={(event) => setAllDay(event.target.checked)}
@@ -349,9 +352,9 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Parent in charge
-                  </label>
+                  </p>
                   <div className="space-y-2">
                     {parents.map((parent) => {
                       const selected = custodyParentId === parent.id;
@@ -378,9 +381,9 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Additional parents
-                  </label>
+                  </p>
                   <div className="space-y-2">
                     {parents.map((parent) => {
                       const selected = selectedParentIds.includes(parent.id);
@@ -419,10 +422,11 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
             <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Schedule</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                <label htmlFor="event-start-date" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Start date
                 </label>
                 <input
+                  id="event-start-date"
                   type="date"
                   value={startDate}
                   onChange={(event) => setStartDate(event.target.value)}
@@ -433,10 +437,11 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                <label htmlFor="event-end-date" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   End date
                 </label>
                 <input
+                  id="event-end-date"
                   type="date"
                   value={endDate}
                   onChange={(event) => setEndDate(event.target.value)}
@@ -451,10 +456,11 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
             {!allDay && !isCustody && (
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <label htmlFor="event-start-time" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Start time
                   </label>
                   <input
+                    id="event-start-time"
                     type="time"
                     value={startTime}
                     onChange={(event) => setStartTime(event.target.value)}
@@ -465,10 +471,11 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <label htmlFor="event-end-time" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                     End time
                   </label>
                   <input
+                    id="event-end-time"
                     type="time"
                     value={endTime}
                     onChange={(event) => setEndTime(event.target.value)}
@@ -482,9 +489,9 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
             )}
 
             <div className="mt-5">
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Repeats
-              </label>
+              </p>
               <div className="flex flex-wrap gap-2">
                 {['none', 'daily', 'weekly'].map((option) => (
                   <button
@@ -531,9 +538,9 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
             </h2>
             <div className="mt-4 grid gap-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Children
-                </label>
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {children.map((child) => {
                     const selected = selectedChildIds.includes(child.id);
@@ -557,9 +564,9 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
 
               {isCustody && (
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Custody with
-                  </label>
+                  </p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {parents.map((parent) => {
                       const selected = custodyParentId === parent.id;
@@ -594,10 +601,11 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <label htmlFor="event-location" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Location
                   </label>
                   <input
+                    id="event-location"
                     type="text"
                     value={location}
                     onChange={(event) => setLocation(event.target.value)}
@@ -606,9 +614,9 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Shared visibility
-                  </label>
+                  </p>
                   <div className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-2.5 dark:border-slate-700">
                     <div className="h-2.5 w-2.5 rounded-full bg-teal-500" />
                     <p className="text-sm text-slate-600 dark:text-slate-300">
@@ -619,10 +627,11 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                <label htmlFor="event-notes" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Notes
                 </label>
                 <textarea
+                  id="event-notes"
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   rows={4}

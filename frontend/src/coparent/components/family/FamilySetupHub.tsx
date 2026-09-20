@@ -199,17 +199,27 @@ export function FamilySetupHub({
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-teal-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-teal-950/20">
       {editingChild && (
         <div className="fixed inset-0 z-50">
-          <div
+          <button
+            type="button"
+            aria-label="Close child editor"
             className="absolute inset-0 bg-slate-950/30 backdrop-blur-sm"
             onClick={closeEditor}
           />
-          <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-2xl rounded-t-3xl border border-slate-200 bg-white p-6 shadow-2xl sm:inset-y-0 sm:my-auto sm:rounded-3xl dark:border-slate-700 dark:bg-slate-900">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="child-editor-title"
+            className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-2xl rounded-t-3xl border border-slate-200 bg-white p-6 shadow-2xl sm:inset-y-0 sm:my-auto sm:rounded-3xl dark:border-slate-700 dark:bg-slate-900"
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                   Edit child
                 </p>
-                <h3 className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                <h3
+                  id="child-editor-title"
+                  className="mt-1 text-lg font-bold text-slate-900 dark:text-white"
+                >
                   {editingChild.fullName}
                 </h3>
               </div>
@@ -575,10 +585,11 @@ export function FamilySetupHub({
               <div className="mb-6 rounded-xl border border-slate-200/60 bg-white/60 p-4 dark:border-slate-700/60 dark:bg-slate-800/40">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <label htmlFor="new-child-name" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Child Name
                     </label>
                     <input
+                      id="new-child-name"
                       type="text"
                       value={childName}
                       onChange={(e) => setChildName(e.target.value)}
@@ -587,10 +598,11 @@ export function FamilySetupHub({
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <label htmlFor="new-child-dob" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Date of Birth
                     </label>
                     <input
+                      id="new-child-dob"
                       type="date"
                       value={childDob}
                       onChange={(e) => setChildDob(e.target.value)}
@@ -598,10 +610,11 @@ export function FamilySetupHub({
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <label htmlFor="new-child-school" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
                       School (optional)
                     </label>
                     <input
+                      id="new-child-school"
                       type="text"
                       value={childSchool}
                       onChange={(e) => setChildSchool(e.target.value)}
@@ -610,10 +623,11 @@ export function FamilySetupHub({
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <label htmlFor="new-child-medical-notes" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Medical Notes (optional)
                     </label>
                     <textarea
+                      id="new-child-medical-notes"
                       value={childMedicalNotes}
                       onChange={(e) => setChildMedicalNotes(e.target.value)}
                       placeholder="Allergies, medications, or notes"
@@ -819,10 +833,11 @@ export function FamilySetupHub({
               <div className="mb-6 rounded-xl border border-slate-200/60 bg-white/60 p-4 dark:border-slate-700/60 dark:bg-slate-800/40">
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="sm:col-span-2">
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <label htmlFor="family-invite-email" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Email
                     </label>
                     <input
+                      id="family-invite-email"
                       type="email"
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
@@ -831,10 +846,11 @@ export function FamilySetupHub({
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <label htmlFor="family-invite-role" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Role
                     </label>
                     <select
+                      id="family-invite-role"
                       value={inviteRole}
                       onChange={(e) => setInviteRole(e.target.value as ParentRole)}
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/40 dark:border-slate-700 dark:bg-slate-900 dark:text-white"

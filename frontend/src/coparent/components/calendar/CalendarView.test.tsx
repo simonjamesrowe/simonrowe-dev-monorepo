@@ -84,6 +84,7 @@ describe('CalendarView', () => {
   it('supports view switching', async () => {
     const user = userEvent.setup();
     const onChangeView = vi.fn();
+    const onNavigateDate = vi.fn();
 
     render(
       <CalendarView
@@ -93,13 +94,28 @@ describe('CalendarView', () => {
         scheduleChangeRequests={[]}
         currentParentId="parent-1"
         onChangeView={onChangeView}
+        onNavigateDate={onNavigateDate}
       />,
     );
 
+    const monthDay = screen
+      .getAllByRole('button')
+      .find((element) => element.getAttribute('tabindex') === '0');
+    expect(monthDay).toBeDefined();
+    monthDay?.focus();
+    await user.keyboard('{Enter}');
+
     await user.click(screen.getByRole('button', { name: 'Week' }));
+    const weekDay = screen
+      .getAllByRole('button')
+      .find((element) => element.getAttribute('tabindex') === '0');
+    expect(weekDay).toBeDefined();
+    weekDay?.focus();
+    await user.keyboard(' ');
     await user.click(screen.getByRole('button', { name: 'Day' }));
 
     expect(onChangeView).toHaveBeenCalledWith('week');
     expect(onChangeView).toHaveBeenCalledWith('day');
+    expect(onNavigateDate).toHaveBeenCalledTimes(2);
   });
 });

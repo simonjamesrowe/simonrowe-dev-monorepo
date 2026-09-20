@@ -44,7 +44,9 @@ export function ProfileDrawer({
 
   return (
     <div className={`fixed inset-0 z-40 ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-      <div
+      <button
+        type="button"
+        aria-label="Close profile settings"
         className={`absolute inset-0 bg-slate-950/30 transition ${isOpen ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}
       />
@@ -69,10 +71,11 @@ export function ProfileDrawer({
 
         <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
           <div className="space-y-3">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            <label htmlFor="profile-name" className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
               Name
             </label>
             <input
+              id="profile-name"
               value={formState.fullName}
               onChange={(event) =>
                 setFormState((prev) => ({ ...prev, fullName: event.target.value }))
@@ -82,10 +85,11 @@ export function ProfileDrawer({
           </div>
 
           <div className="space-y-3">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            <label htmlFor="profile-email" className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
               Email
             </label>
             <input
+              id="profile-email"
               value={formState.email}
               onChange={(event) => setFormState((prev) => ({ ...prev, email: event.target.value }))}
               className="w-full rounded-2xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-sm text-slate-900 focus:border-teal-400 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
@@ -93,10 +97,11 @@ export function ProfileDrawer({
           </div>
 
           <div className="space-y-3">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            <label htmlFor="profile-phone" className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
               Phone
             </label>
             <input
+              id="profile-phone"
               value={formState.phone}
               onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
               className="w-full rounded-2xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-sm text-slate-900 focus:border-teal-400 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"

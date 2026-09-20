@@ -97,7 +97,7 @@ export function useIdleTimeout({
     }
 
     const stored = localStorage.getItem(IDLE_LAST_ACTIVITY_KEY);
-    const parsed = stored ? Number(stored) : NaN;
+    const parsed = stored ? Number(stored) : Number.NaN;
     const now = Date.now();
     const initial = Number.isFinite(parsed) ? parsed : now;
 

@@ -117,7 +117,7 @@ export async function getDB(): Promise<IDBPDatabase<CoParentDB>> {
 
 export async function addToOfflineQueue(action: string, data: unknown): Promise<void> {
   const db = await getDB();
-  const id = `${action}-${Date.now()}-${Math.random()}`;
+  const id = `${action}-${crypto.randomUUID()}`;
 
   await db.add('offline-queue', {
     id,

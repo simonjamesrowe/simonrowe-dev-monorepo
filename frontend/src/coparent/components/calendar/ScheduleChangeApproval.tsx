@@ -419,10 +419,11 @@ export function ScheduleChangeApproval({
                     <div className="rounded-2xl border border-slate-200/60 bg-slate-50/80 p-4 dark:border-slate-700/60 dark:bg-slate-800/50">
                       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div className="flex-1">
-                          <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                          <label htmlFor="schedule-response-note" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">
                             Response note (optional)
                           </label>
                           <textarea
+                            id="schedule-response-note"
                             value={responseNote}
                             onChange={(event) => setResponseNote(event.target.value)}
                             rows={3}

@@ -98,17 +98,16 @@ export function ScheduleChangeRequestModal({
   return (
     <>
       {/* Backdrop */}
-      <div
+      <button
+        type="button"
+        aria-label="Close schedule change request"
         className="animate-in fade-in fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm duration-200"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
-          className="animate-in zoom-in-95 slide-in-from-bottom-4 w-full max-w-lg rounded-2xl border border-slate-200/60 bg-white shadow-2xl duration-300 dark:border-slate-700/60 dark:bg-slate-800"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="animate-in zoom-in-95 slide-in-from-bottom-4 w-full max-w-lg rounded-2xl border border-slate-200/60 bg-white shadow-2xl duration-300 dark:border-slate-700/60 dark:bg-slate-800">
           {/* Header */}
           <div className="relative border-b border-slate-200 px-6 pb-4 pt-6 dark:border-slate-700">
             {/* Decorative gradient accent */}
@@ -124,6 +123,8 @@ export function ScheduleChangeRequestModal({
                 </p>
               </div>
               <button
+                type="button"
+                aria-label="Close schedule change request"
                 onClick={onClose}
                 className="-m-2 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
               >
@@ -198,9 +199,9 @@ export function ScheduleChangeRequestModal({
 
             {/* Change Type Selection */}
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Type of Change
-              </label>
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { value: 'swap', label: 'Swap Days', icon: '↔️', desc: 'Trade days' },
@@ -279,10 +280,11 @@ export function ScheduleChangeRequestModal({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
+                    <label htmlFor="schedule-new-start-date" className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
                       Start Date
                     </label>
                     <input
+                      id="schedule-new-start-date"
                       type="date"
                       value={newStartDate}
                       onChange={(e) => setNewStartDate(e.target.value)}
@@ -290,10 +292,11 @@ export function ScheduleChangeRequestModal({
                     />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
+                    <label htmlFor="schedule-new-end-date" className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
                       End Date
                     </label>
                     <input
+                      id="schedule-new-end-date"
                       type="date"
                       value={newEndDate}
                       onChange={(e) => setNewEndDate(e.target.value)}
@@ -332,10 +335,11 @@ export function ScheduleChangeRequestModal({
 
             {/* Reason Field */}
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label htmlFor="schedule-change-reason" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Reason for Request
               </label>
               <textarea
+                id="schedule-change-reason"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="Explain why you're requesting this change. Be specific so the other parent can make an informed decision..."

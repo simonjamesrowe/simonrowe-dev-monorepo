@@ -124,6 +124,38 @@ class FamilyApiIntegrationTest extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.childIds", hasSize(0)));
   }
 
+  @Test
+  void updatesProfileFamilyAndOnboardingState() throws Exception {
+    final String familyId = createFamily("alice", "Alice", "Alice Family");
+
+    mockMvc.perform(patch("/api/coparent/me")
+            .with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"fullName\":\"Alice Updated\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.fullName", is("Alice Updated")));
+
+    mockMvc.perform(patch("/api/coparent/families/{familyId}", familyId)
+            .with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Updated Family\",\"timeZone\":\"Europe/Paris\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.name", is("Updated Family")))
+        .andExpect(jsonPath("$.timeZone", is("Europe/Paris")));
+
+    mockMvc.perform(patch("/api/coparent/onboarding/{familyId}", familyId)
+            .with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"currentStep":"child","completedSteps":["account","family","account"],
+                 "isComplete":false}
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.currentStep", is("child")))
+        .andExpect(jsonPath("$.completedSteps", contains("account", "family")))
+        .andExpect(jsonPath("$.isComplete", is(false)));
+  }
+
   private String createFamily(
       final String subject,
       final String fullName,

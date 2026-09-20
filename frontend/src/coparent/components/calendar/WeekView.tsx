@@ -110,7 +110,15 @@ export function WeekView({
             return (
               <div
                 key={date.toISOString()}
+                role="button"
+                tabIndex={0}
                 onClick={() => onDayClick(date)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onDayClick(date);
+                  }
+                }}
                 className={`cursor-pointer p-3 text-center transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 ${i < 6 ? 'border-r border-slate-200 dark:border-slate-700' : ''} `}
               >
                 <div className="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">

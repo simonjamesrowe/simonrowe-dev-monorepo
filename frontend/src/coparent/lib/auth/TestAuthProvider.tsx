@@ -11,7 +11,11 @@ function base64UrlEncode(input: Uint8Array): string {
     binary += String.fromCharCode(byte);
   });
 
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  let encoded = btoa(binary).split('+').join('-').split('/').join('_');
+  while (encoded.endsWith('=')) {
+    encoded = encoded.slice(0, -1);
+  }
+  return encoded;
 }
 
 function base64UrlEncodeJson(data: Record<string, unknown>): string {

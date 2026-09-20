@@ -79,7 +79,9 @@ export function AppShell({
 
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <div
+        <button
+          type="button"
+          aria-label="Close navigation menu"
           className="fixed inset-0 z-30 bg-black/50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />

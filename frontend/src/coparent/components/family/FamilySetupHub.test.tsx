@@ -66,10 +66,11 @@ describe('FamilySetupHub child editor', () => {
       />,
     );
 
-    const dob = screen.getByLabelText('Date of Birth');
-    const fullName = screen.getByLabelText('Full Name');
-    const school = screen.getByLabelText('School (optional)');
-    const medicalNotes = screen.getByLabelText('Medical Notes (optional)');
+    const editor = within(screen.getByRole('dialog', { name: 'Theo Rowe' }));
+    const dob = editor.getByLabelText('Date of Birth');
+    const fullName = editor.getByLabelText('Full Name');
+    const school = editor.getByLabelText('School (optional)');
+    const medicalNotes = editor.getByLabelText('Medical Notes (optional)');
     await user.clear(fullName);
     await user.type(fullName, 'Theo James Rowe');
     await user.clear(dob);
