@@ -17,6 +17,17 @@ uploads:
 site:
   base-url: ${SITE_BASE_URL:https://simonrowe.dev}
 
+# CoParent is deployed in the shared backend but remains inert until its own
+# domain, Auth0 client and data have passed the cutover checks.
+coparent:
+  enabled: ${COPARENT_ENABLED:false}
+  database: ${COPARENT_DATABASE:coparent}
+  app-url: ${COPARENT_APP_URL:http://localhost:5173}
+  auth0-email-claim: ${COPARENT_AUTH0_EMAIL_CLAIM:https://coparents.simonrowe.dev/email}
+  email-from: ${COPARENT_EMAIL_FROM:noreply@simonrowe.dev}
+  email-enabled: ${COPARENT_EMAIL_ENABLED:false}
+  source-database: ${COPARENT_SOURCE_DATABASE:coparent_legacy}
+
 mongock:
   enabled: ${MONGOCK_ENABLED:true}
   migration-scan-package:

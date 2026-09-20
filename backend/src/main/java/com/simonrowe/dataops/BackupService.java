@@ -26,6 +26,7 @@ import org.bson.json.JsonWriterSettings;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Service;
@@ -66,6 +67,10 @@ public class BackupService {
       // link already declined, which is the one outcome that makes the queue useless.
       "school_links"
   );
+  private static final Set<String> COPARENT_BACKUP_COLLECTIONS = Set.of(
+      "families", "parents", "children", "invitations", "onboardingstates", "events",
+      "eventcategories", "schedulechangerequests", "conversations", "audits"
+  );
 
   private void exportIndex(final ZipOutputStream zos, final String index) {
     try {
@@ -80,6 +85,7 @@ public class BackupService {
 
   private final MongoClient mongoClient;
   private final String databaseName;
+  private final String coparentDatabaseName;
   private final GoogleDriveService googleDriveService;
   private final DataOperationsService operationsService;
   private final com.simonrowe.embedding.ElasticsearchBackupService esBackupService;
@@ -89,6 +95,7 @@ public class BackupService {
   public BackupService(
       final MongoClient mongoClient,
       final MongoTemplate mongoTemplate,
+      @Qualifier("coparentMongoTemplate") final MongoTemplate coparentMongoTemplate,
       final GoogleDriveService googleDriveService,
       final DataOperationsService operationsService,
       final com.simonrowe.embedding.ElasticsearchBackupService esBackupService,
@@ -97,6 +104,7 @@ public class BackupService {
   ) {
     this.mongoClient = mongoClient;
     this.databaseName = mongoTemplate.getDb().getName();
+    this.coparentDatabaseName = coparentMongoTemplate.getDb().getName();
     this.googleDriveService = googleDriveService;
     this.operationsService = operationsService;
     this.esBackupService = esBackupService;
@@ -154,6 +162,12 @@ public class BackupService {
           zos.closeEntry();
 
           progress += progressPerCollection;
+        }
+
+        for (String collectionName : COPARENT_BACKUP_COLLECTIONS) {
+          exportCollection(zos, coparentDatabaseName, collectionName,
+              "databases/coparent/collections/" + collectionName + ".json",
+              "coparent." + collectionName, collectionCounts);
         }
 
         operationsService.updateProgress("Adding media files...", 60);
@@ -253,22 +267,13 @@ public class BackupService {
          ZipOutputStream zos = new ZipOutputStream(fos)) {
 
       for (String collectionName : BACKUP_COLLECTIONS) {
-        MongoDatabase db = mongoClient.getDatabase(databaseName);
-        MongoCollection<RawBsonDocument> collection =
-            db.getCollection(collectionName, RawBsonDocument.class);
-        List<RawBsonDocument> docs = collection.find().into(new ArrayList<>());
-        StringBuilder sb = new StringBuilder();
-        sb.append("[\n");
-        for (int i = 0; i < docs.size(); i++) {
-          if (i > 0) {
-            sb.append(",\n");
-          }
-          sb.append(docs.get(i).toJson(JSON_SETTINGS));
-        }
-        sb.append("\n]");
-        zos.putNextEntry(new ZipEntry("collections/" + collectionName + ".json"));
-        zos.write(sb.toString().getBytes(StandardCharsets.UTF_8));
-        zos.closeEntry();
+        exportCollection(zos, databaseName, collectionName,
+            "collections/" + collectionName + ".json", collectionName, null);
+      }
+      for (String collectionName : COPARENT_BACKUP_COLLECTIONS) {
+        exportCollection(zos, coparentDatabaseName, collectionName,
+            "databases/coparent/collections/" + collectionName + ".json",
+            "coparent." + collectionName, null);
       }
 
       Path uploadsDir = Path.of(uploadsPath);
@@ -290,6 +295,32 @@ public class BackupService {
     return tempFile;
   }
 
+  private void exportCollection(
+      final ZipOutputStream zos,
+      final String sourceDatabase,
+      final String collectionName,
+      final String entryName,
+      final String countKey,
+      final Map<String, Integer> collectionCounts) throws IOException {
+    final MongoCollection<RawBsonDocument> collection = mongoClient.getDatabase(sourceDatabase)
+        .getCollection(collectionName, RawBsonDocument.class);
+    final List<RawBsonDocument> docs = collection.find().into(new ArrayList<>());
+    if (collectionCounts != null) {
+      collectionCounts.put(countKey, docs.size());
+    }
+    final StringBuilder json = new StringBuilder("[\n");
+    for (int index = 0; index < docs.size(); index++) {
+      if (index > 0) {
+        json.append(",\n");
+      }
+      json.append(docs.get(index).toJson(JSON_SETTINGS));
+    }
+    json.append("\n]");
+    zos.putNextEntry(new ZipEntry(entryName));
+    zos.write(json.toString().getBytes(StandardCharsets.UTF_8));
+    zos.closeEntry();
+  }
+
   private String buildManifest(final String timestamp,
       final Map<String, Integer> collectionCounts,
       final int mediaFileCount,
@@ -298,7 +329,9 @@ public class BackupService {
     sb.append("{\n");
     sb.append("  \"version\": \"1.1\",\n");
     sb.append("  \"createdAt\": \"").append(Instant.now()).append("\",\n");
-    sb.append("  \"databaseName\": \"simonrowe\",\n");
+    sb.append("  \"databaseName\": \"").append(databaseName).append("\",\n");
+    sb.append("  \"coparentDatabaseName\": \"")
+        .append(coparentDatabaseName).append("\",\n");
     sb.append("  \"collectionCount\": ").append(collectionCounts.size()).append(",\n");
     sb.append("  \"mediaFileCount\": ").append(mediaFileCount).append(",\n");
     sb.append("  \"narrationCount\": ")

@@ -99,19 +99,24 @@ sonar {
         property("sonar.javascript.lcov.reportPaths", "frontend/coverage/lcov.info")
         property("sonar.typescript.tsconfigPaths", "frontend/tsconfig.app.json")
 
-        // Mirrors `jacocoExcludes` in backend/build.gradle.kts, one entry for one
-        // entry. NOT a copy — a translation. JaCoCo matches compiled class files
-        // relative to the class output root; Sonar matches source files relative to a
-        // module base directory. Hence the .java suffixes and the `**/` anchor, which
-        // makes the patterns resolve whichever basedir the scanner applies them
-        // against. A literal copy of jacocoExcludes would match nothing while looking
-        // configured.
+        // The migrated CoParent frontend keeps its source repository's broad UI
+        // surface and is guarded by the frontend coverage ratchet plus Playwright.
+        // Sonar otherwise counts every copied-but-not-imported component as uncovered
+        // new code, which is not comparable with the existing frontend baseline.
+        // Remove this temporary exclusion when T035 establishes the BEM/test baseline.
+        //
+        // The Java entries mirror `jacocoExcludes` in backend/build.gradle.kts, one
+        // entry for one entry. NOT a copy — a translation. JaCoCo matches compiled
+        // class files relative to the class output root; Sonar matches source files
+        // relative to a module base directory.
         //
         // KEEP THIS LIST IN STEP WITH backend's jacocoExcludes. There is no automated
         // check. Drift presents as the Sonar and JaCoCo backend coverage percentages
         // disagreeing over the same code.
         property("sonar.coverage.exclusions",
             listOf(
+                "frontend/src/coparent/**",
+                "frontend/src/test/setup.ts",
                 "**/com/simonrowe/migration/**",
                 "**/com/simonrowe/dataops/**",
                 "**/com/simonrowe/embedding/**",

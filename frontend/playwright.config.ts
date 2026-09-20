@@ -13,6 +13,7 @@ import { defineConfig, devices } from '@playwright/test'
  * rules), never exact model wording, so the suite stays deterministic despite a real LLM.
  */
 const LOCAL_BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5173'
+const COPARENT_BASE_URL = process.env.E2E_COPARENT_URL ?? 'http://coparents.localhost:5173'
 const PROD_BASE_URL = process.env.E2E_PROD_URL ?? 'https://simonrowe.dev'
 
 export default defineConfig({
@@ -27,7 +28,16 @@ export default defineConfig({
     {
       name: 'local',
       testMatch: /\.local\.spec\.ts$/,
+      testIgnore: /coparent\.local\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'], baseURL: LOCAL_BASE_URL },
+    },
+    {
+      name: 'coparent-local',
+      testMatch: /coparent\.local\.spec\.ts$/,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: COPARENT_BASE_URL,
+      },
     },
     {
       name: 'prod-smoke',

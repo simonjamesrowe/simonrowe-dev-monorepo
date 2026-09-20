@@ -1,6 +1,7 @@
 import { loadEnv } from 'vite'
 import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig(({ mode }) => {
   // Conductor runs several workspaces at once and they all want the dev server port. Set
@@ -15,10 +16,43 @@ export default defineConfig(({ mode }) => {
   const devPort = Number(env.VITE_DEV_PORT) || 5173
 
   return {
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'coparent-dev-host',
+      configureServer(server) {
+        server.middlewares.use((request, _response, next) => {
+          const host = request.headers.host?.split(':')[0]
+          const pathname = request.url?.split('?')[0] ?? ''
+          const isNavigationPath = pathname === '/' || !pathname.split('/').pop()?.includes('.')
+          const acceptsHtml = request.headers.accept?.includes('text/html') ?? false
+          if (host === 'coparents.localhost' && request.method === 'GET' && acceptsHtml
+              && isNavigationPath
+              && !pathname.startsWith('/api/')) {
+            request.url = '/coparent/index.html'
+          }
+          next()
+        })
+      },
+    },
+    VitePWA({
+      injectRegister: null,
+      manifest: false,
+      filename: 'coparent-sw.js',
+      workbox: {
+        // Private family API responses are intentionally absent: only immutable build assets
+        // and the CoParent navigation shell can be used offline.
+        globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
+        navigateFallback: '/coparent/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
+      },
+      devOptions: { enabled: false },
+    }),
+  ],
   build: {
     rollupOptions: {
-      // Two entry points, one project. Term Time is a separate app with its own router, design
+      // Three entry points, one project. Term Time and CoParent are separate apps with their
+      // own routers, design
       // language and audience, but it shares this package.json, ESLint config, Vitest config,
       // CI job and Docker build stage. A second npm project would duplicate all of those and
       // add a second `npm ci` to every image build.
@@ -31,6 +65,7 @@ export default defineConfig(({ mode }) => {
       input: {
         main: 'index.html',
         school: 'school/index.html',
+        coparent: 'coparent/index.html',
       },
     },
   },

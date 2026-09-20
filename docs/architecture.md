@@ -25,7 +25,7 @@ flowchart TB
         nginx[nginx reverse proxy]
         tunnel --> nginx
 
-        nginx -->|simonrowe.dev| fe[frontend<br/>React SPA on nginx]
+        nginx -->|simonrowe.dev / term-time / coparents| fe[frontend<br/>three Vite entries on nginx]
         nginx -->|api.simonrowe.dev| be[backend<br/>Spring Boot]
         nginx -->|console.simonrowe.dev| portainer[Portainer]
         nginx -->|langfuse.simonrowe.dev| lf[Langfuse]
@@ -88,6 +88,7 @@ packages are the boundary.
 | `tour`, `contact` | Guided site tour, contact form (reCAPTCHA + mail) |
 | `admin`, `dataops`, `migration` | Admin CMS API, backup/restore/re-embed operations, Mongock change units |
 | `auth`, `ratelimit`, `observability`, `common` | Auth0 resource-server config, Bucket4j rate limits, Langfuse/OTel plumbing |
+| `coparent` | Feature-gated family tenancy, onboarding, invitations, calendar, messages, permissions, and audit APIs |
 
 ### HTTP surface
 
@@ -97,6 +98,11 @@ Everything under `/api/admin/*` requires an Auth0 JWT, as do the endpoints that
 spend money on a model — `POST` for summaries and narration. Chat runs over a
 STOMP WebSocket at `/ws/chat`, and the MCP server answers Streamable-HTTP
 JSON-RPC at `/mcp`. Uploaded media is served from `/uploads/**`.
+
+CoParent is an authenticated product module under `/api/coparent/**`. It derives the acting parent
+from the JWT subject and scopes every addressed record through family membership. Its repositories
+use a named template targeting the separate `coparent` database in the same Mongo container; the
+shared backup/restore workflow captures both `simonrowe` and `coparent` databases.
 
 ### Data stores
 
@@ -139,7 +145,12 @@ per-card polling would trip the rate limiter on first render.
 
 ## Frontend
 
-A single Vite-built React 19 SPA. `HomePage` stays in the initial bundle;
+A single Vite project builds three React 19 entry points: the portfolio, Term Time, and CoParent.
+nginx selects the entry by path/hostname while all three share content-hashed `/assets/` output.
+CoParent owns `coparents.simonrowe.dev`, registers its namespaced service worker only on that
+canonical origin, and never caches `/api/**` responses.
+
+In the portfolio SPA, `HomePage` stays in the initial bundle;
 every other route is lazily code-split, which keeps the MDXEditor (admin),
 `react-syntax-highlighter` and `mermaid` (blog detail) stacks out of first paint.
 

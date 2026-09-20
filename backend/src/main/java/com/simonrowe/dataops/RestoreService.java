@@ -17,10 +17,12 @@ import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
 import com.simonrowe.migration.changeunits.V022CreatePlatformReleaseIndexes;
 import com.simonrowe.migration.changeunits.V029CreateShortLinksAndBackfill;
 import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
+import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -71,11 +73,24 @@ public class RestoreService {
       SCHOOL_LINKS
   );
 
+  private static final List<String> COPARENT_IMPORT_ORDER = List.of(
+      V043CreateCoparentCollections.FAMILIES,
+      V043CreateCoparentCollections.PARENTS,
+      V043CreateCoparentCollections.CHILDREN,
+      V043CreateCoparentCollections.INVITATIONS,
+      V043CreateCoparentCollections.ONBOARDING,
+      V043CreateCoparentCollections.EVENTS,
+      V043CreateCoparentCollections.CATEGORIES,
+      V043CreateCoparentCollections.SCHEDULE_CHANGES,
+      V043CreateCoparentCollections.CONVERSATIONS,
+      V043CreateCoparentCollections.AUDITS);
+
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
       "skill_groups", "jobs", "blogs", "code_examples", "narrations"
   );
 
   private final MongoTemplate mongoTemplate;
+  private final MongoTemplate coparentMongoTemplate;
   private final GoogleDriveService googleDriveService;
   private final DataOperationsService operationsService;
   private final BackupService backupService;
@@ -87,6 +102,7 @@ public class RestoreService {
 
   public RestoreService(
       final MongoTemplate mongoTemplate,
+      @Qualifier("coparentMongoTemplate") final MongoTemplate coparentMongoTemplate,
       final GoogleDriveService googleDriveService,
       final DataOperationsService operationsService,
       final BackupService backupService,
@@ -97,6 +113,7 @@ public class RestoreService {
       @Value("${school.attachment-path:school-attachments/}") final String schoolAttachmentPath
   ) {
     this.mongoTemplate = mongoTemplate;
+    this.coparentMongoTemplate = coparentMongoTemplate;
     this.googleDriveService = googleDriveService;
     this.operationsService = operationsService;
     this.backupService = backupService;
@@ -200,12 +217,12 @@ public class RestoreService {
    * @return collection name to its post-import hook
    */
   private Map<String, Runnable> postImportIndexHooks() {
-    return Map.of(
-        FAVOURITES, this::ensureFavouriteIndexes,
-        ARTICLE_SUMMARIES, this::ensureArticleSummaryIndexes,
-        PLATFORM_RELEASES, this::ensurePlatformReleaseIndexes,
-        SHORT_LINKS, this::ensureShortLinkIndexes,
-        SCHOOL_DOCUMENTS, this::ensureSchoolIndexes);
+    return Map.ofEntries(
+        Map.entry(FAVOURITES, this::ensureFavouriteIndexes),
+        Map.entry(ARTICLE_SUMMARIES, this::ensureArticleSummaryIndexes),
+        Map.entry(PLATFORM_RELEASES, this::ensurePlatformReleaseIndexes),
+        Map.entry(SHORT_LINKS, this::ensureShortLinkIndexes),
+        Map.entry(SCHOOL_DOCUMENTS, this::ensureSchoolIndexes));
   }
 
   void restoreCollections(final Path zipFile) throws IOException {
@@ -246,6 +263,30 @@ public class RestoreService {
           .run();
 
       progress += progressPerCollection;
+    }
+
+    restoreCoparentCollections(zipFile);
+  }
+
+  private void restoreCoparentCollections(final Path zipFile) throws IOException {
+    boolean restoredAny = false;
+    for (String collectionName : COPARENT_IMPORT_ORDER) {
+      final String jsonContent = readEntryFromZip(zipFile,
+          "databases/coparent/collections/" + collectionName + ".json");
+      if (jsonContent == null) {
+        continue;
+      }
+      restoredAny = true;
+      coparentMongoTemplate.dropCollection(collectionName);
+      final List<Document> docs = Document.parse("{\"d\":" + jsonContent + "}")
+          .getList("d", Document.class);
+      if (docs != null && !docs.isEmpty()) {
+        coparentMongoTemplate.insert(docs, collectionName);
+        LOG.info("Restored {} documents to CoParent collection {}", docs.size(), collectionName);
+      }
+    }
+    if (restoredAny) {
+      ensureCoparentIndexes();
     }
   }
 
@@ -358,6 +399,12 @@ public class RestoreService {
   void ensureSchoolIndexes() {
     V040CreateSchoolCollections.createIndexes(mongoTemplate);
     LOG.info("Recreated school indexes after restore");
+  }
+
+  /** Recreates all CoParent indexes after its first restored collection is imported. */
+  void ensureCoparentIndexes() {
+    V043CreateCoparentCollections.createIndexes(coparentMongoTemplate);
+    LOG.info("Recreated CoParent indexes after restore");
   }
 
   /**
