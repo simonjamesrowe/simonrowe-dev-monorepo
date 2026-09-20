@@ -4,7 +4,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 import { useCurrentUser } from '../../hooks/api/useParents';
 import { clearAuth0Cache } from '../../lib/auth/clearAuth0Cache';
-import { getPendingInviteToken } from '../../pages/AcceptInvitePage';
 
 export function AuthCallback() {
   const { isAuthenticated, isLoading, error } = useAuth0();
@@ -31,14 +30,6 @@ export function AuthCallback() {
     if (shouldFetchUser && !isLoadingUser && currentUser) {
       const state = location.state as { from?: { pathname: string } } | null;
       const returnTo = state?.from?.pathname;
-
-      // Check for pending invite token from sessionStorage
-      const pendingInviteToken = getPendingInviteToken();
-      if (pendingInviteToken) {
-        // The token remains in CoParent-scoped session storage and never returns to the URL.
-        navigate('/invitations/accept', { replace: true });
-        return;
-      }
 
       // Check if user has accepted an invitation (has a family but no profile was created during onboarding)
       const hasAcceptedInvitation =

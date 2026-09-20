@@ -24,6 +24,14 @@ const auth0RedirectUri = `${window.location.origin}/auth/callback`;
 const auth0Audience = import.meta.env.VITE_COPARENT_AUTH0_AUDIENCE || AUTH0_AUDIENCE;
 const isE2ETestMode = import.meta.env.VITE_E2E_TEST_MODE === 'true';
 
+function handleAuthRedirect(appState?: { returnTo?: string }) {
+  const fallback = new URL('/auth/callback', window.location.origin);
+  const returnTo = typeof appState?.returnTo === 'string' ? appState.returnTo : fallback.pathname;
+  const requested = new URL(returnTo, window.location.origin);
+  const target = requested.origin === window.location.origin ? requested : fallback;
+  window.history.replaceState(null, '', `${target.pathname}${target.search}${target.hash}`);
+}
+
 if (!isE2ETestMode && !auth0ClientId) {
   throw new Error('Missing CoParent Auth0 client configuration.');
 }
@@ -62,6 +70,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         clientId={auth0ClientId!}
         authorizationParams={authorizationParams}
         cacheLocation="localstorage"
+        onRedirectCallback={handleAuthRedirect}
       >
         <AppProviders />
       </Auth0Provider>

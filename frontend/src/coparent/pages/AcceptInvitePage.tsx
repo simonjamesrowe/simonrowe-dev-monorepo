@@ -4,29 +4,13 @@ import { useNavigate } from 'react-router-dom';
 
 import { useAcceptInvitation } from '../hooks/api/useInvitations';
 
-const PENDING_INVITE_TOKEN_KEY = 'coparent_pending_invite_token';
-
-export function getPendingInviteToken(): string | null {
-  return sessionStorage.getItem(PENDING_INVITE_TOKEN_KEY);
-}
-
-export function clearPendingInviteToken(): void {
-  sessionStorage.removeItem(PENDING_INVITE_TOKEN_KEY);
-}
-
-function setPendingInviteToken(token: string): void {
-  sessionStorage.setItem(PENDING_INVITE_TOKEN_KEY, token);
-}
-
 const AcceptInvitePage = () => {
   const [token] = useState(() => {
     const fragmentToken = new URLSearchParams(window.location.hash.slice(1)).get('token');
     if (fragmentToken) {
-      setPendingInviteToken(fragmentToken);
       window.history.replaceState(null, '', window.location.pathname);
-      return fragmentToken;
     }
-    return getPendingInviteToken();
+    return fragmentToken;
   });
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
@@ -49,10 +33,10 @@ const AcceptInvitePage = () => {
     }
 
     if (!isAuthenticated) {
-      // Store token and redirect to Auth0 login
-      setPendingInviteToken(token);
       loginWithRedirect({
-        appState: { returnTo: '/invitations/accept' },
+        appState: {
+          returnTo: `/invitations/accept#token=${encodeURIComponent(token)}`,
+        },
       });
       return;
     }
@@ -64,10 +48,8 @@ const AcceptInvitePage = () => {
         onSuccess: (data) => {
           setAcceptanceState('success');
           setFamilyName(data.family.name);
-          clearPendingInviteToken();
         },
         onError: (error) => {
-          clearPendingInviteToken();
           setAcceptanceState('error');
           const message = error instanceof Error ? error.message : 'Failed to accept invitation';
           // Parse API error response if available
