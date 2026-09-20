@@ -26,7 +26,11 @@ public record FactoryAdminProperties(
     deployerBaseUrl = defaulted(deployerBaseUrl, "http://deployer:8090");
     triggerToken = triggerToken == null ? "" : triggerToken;
     readToken = readToken == null ? "" : readToken;
-    timeout = timeout == null ? Duration.ofSeconds(2) : timeout;
+    // A cold flow snapshot gathers Temporal plus GitHub/Linear artifact counts. On the Pi that
+    // legitimately crosses two seconds, so the old default misreported healthy containers as
+    // unreachable. Thirty seconds keeps the call bounded while leaving headroom for slow
+    // external providers and production hardware under load.
+    timeout = timeout == null ? Duration.ofSeconds(30) : timeout;
     owner = defaulted(owner, "simonjamesrowe");
     repository = defaulted(repository, "simonrowe-dev-monorepo");
   }

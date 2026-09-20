@@ -306,6 +306,24 @@ class FactoryAdminClientTest {
     assertThatThrownBy(client::factoryStatus).isInstanceOf(RestClientException.class);
   }
 
+  @Test
+  void defaultTimeoutAllowsTheFlowSnapshotToFinishOnTheProductionPi() throws IOException {
+    // The flow endpoint gathers Temporal and artifact counts. A cold read on the production Pi
+    // can legitimately take just over two seconds; treating that as an outage made the console
+    // alternate between an empty graph and a graph whose every node was "Unknown", even though
+    // both factory containers were healthy and returned the complete topology directly.
+    startFactory(Map.of("/api/factory/flow", delayedJson(
+        2200,
+        "{\"fetchedAt\":\"2026-09-20T19:00:00Z\",\"nodes\":[],\"edges\":[]}")));
+    startDeployer(Map.of());
+    FactoryAdminProperties properties = new FactoryAdminProperties(
+        baseUrl(factory), baseUrl(deployer), TOKEN, READ_TOKEN, null, null, null);
+    FactoryAdminClient client = new FactoryAdminClient(properties);
+
+    assertThat(properties.timeout()).isEqualTo(Duration.ofSeconds(30));
+    assertThat(client.factoryFlow().fetchedAt()).isNotNull();
+  }
+
   private FactoryAdminClient client() {
     return new FactoryAdminClient(
         new FactoryAdminProperties(
@@ -349,6 +367,14 @@ class FactoryAdminClientTest {
 
   private static void respond(final HttpExchange exchange, final Response response)
       throws IOException {
+    if (response.delayMillis() > 0) {
+      try {
+        Thread.sleep(response.delayMillis());
+      } catch (InterruptedException exception) {
+        Thread.currentThread().interrupt();
+        throw new IOException("Interrupted while delaying test response", exception);
+      }
+    }
     byte[] bytes = response.body().getBytes(StandardCharsets.UTF_8);
     if (bytes.length > 0) {
       exchange.getResponseHeaders().add("Content-Type", "application/json");
@@ -377,13 +403,18 @@ class FactoryAdminClientTest {
   }
 
   private static Response json(final int status, final String body) {
-    return new Response(status, body);
+    return new Response(status, body, 0);
+  }
+
+  private static Response delayedJson(
+      final long delayMillis, final String body) {
+    return new Response(200, body, delayMillis);
   }
 
   private static Response empty(final int status) {
-    return new Response(status, "");
+    return new Response(status, "", 0);
   }
 
-  private record Response(int status, String body) {
+  private record Response(int status, String body, long delayMillis) {
   }
 }
