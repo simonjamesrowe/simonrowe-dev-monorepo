@@ -52,9 +52,12 @@ export function AppShell({
       {/* Mobile header */}
       <header className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden dark:border-slate-700 dark:bg-slate-800">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 text-lg font-bold text-white">
-            CP
-          </div>
+          <img
+            src="/coparent-pwa-192x192.png"
+            alt=""
+            aria-hidden="true"
+            className="block h-10 w-10 rounded-xl"
+          />
           <div className="flex items-center gap-2">
             <span className="text-xl font-bold text-slate-900 dark:text-white">CoParent</span>
             {shouldShowCountdown && countdownLabel && (
@@ -94,9 +97,12 @@ export function AppShell({
         {/* Logo */}
         <div className="border-b border-slate-200 px-4 py-6 dark:border-slate-700">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 text-lg font-bold text-white">
-              CP
-            </div>
+            <img
+              src="/coparent-pwa-192x192.png"
+              alt=""
+              aria-hidden="true"
+              className="block h-10 w-10 rounded-xl"
+            />
             <span className="text-xl font-bold text-slate-900 dark:text-white">CoParent</span>
           </div>
           {shouldShowCountdown && countdownLabel && (
