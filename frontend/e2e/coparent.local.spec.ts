@@ -29,7 +29,11 @@ test('CoParent install metadata is namespaced', async ({ request }) => {
   expect(manifest.start_url).toBe('/dashboard')
   expect(manifest.scope).toBe('/')
   expect(manifest.icons).toEqual(expect.arrayContaining([
-    expect.objectContaining({ src: '/coparent-pwa-192x192.svg' }),
+    expect.objectContaining({
+      src: '/coparent-pwa-192x192.png',
+      sizes: '192x192',
+      type: 'image/png',
+    }),
   ]))
 })
 
