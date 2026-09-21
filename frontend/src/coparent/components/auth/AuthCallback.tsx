@@ -12,7 +12,12 @@ export function AuthCallback() {
   const [shouldFetchUser, setShouldFetchUser] = useState(false);
 
   // Only fetch user data after authentication is confirmed
-  const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser(shouldFetchUser);
+  const {
+    data: currentUser,
+    isLoading: isLoadingUser,
+    isError: hasCurrentUserError,
+    refetch: refetchCurrentUser,
+  } = useCurrentUser(shouldFetchUser);
 
   useEffect(() => {
     if (!isLoading) {
@@ -46,7 +51,11 @@ export function AuthCallback() {
     }
   }, [shouldFetchUser, isLoadingUser, currentUser, navigate, location.state]);
 
-  if (error) {
+  const currentUserFailed = shouldFetchUser && hasCurrentUserError;
+  const callbackErrorMessage = error?.message ||
+    (currentUserFailed ? "We couldn't load your CoParent profile." : null);
+
+  if (callbackErrorMessage) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-teal-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-teal-950/20">
         <div className="mx-auto max-w-md p-8 text-center">
@@ -69,15 +78,24 @@ export function AuthCallback() {
             Authentication Error
           </h2>
           <p className="mb-6 text-slate-500 dark:text-slate-400">
-            {error.message || 'An error occurred during authentication'}
+            {callbackErrorMessage}
           </p>
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
-            <button
-              onClick={() => navigate('/login', { replace: true })}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            >
-              Return to Login
-            </button>
+            {currentUserFailed ? (
+              <button
+                onClick={() => void refetchCurrentUser()}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              >
+                Try again
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/login', { replace: true })}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              >
+                Return to Login
+              </button>
+            )}
             <button
               onClick={() => {
                 clearAuth0Cache();
