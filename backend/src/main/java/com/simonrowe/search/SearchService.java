@@ -1,6 +1,8 @@
 package com.simonrowe.search;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.query_dsl.MultiMatchQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import com.simonrowe.media.MediaVariantResolver;
@@ -23,6 +25,36 @@ public class SearchService {
 
   private static final Logger LOG = LoggerFactory.getLogger(SearchService.class);
   private static final int MIN_QUERY_LENGTH = 2;
+
+  /**
+   * The site index's searchable fields, weighted so a title match beats a body match.
+   *
+   * <p>They all counted the same before, which is why searching for two words where only
+   * one of them matched anything returned whatever happened to mention that one word most
+   * often rather than the item the query was about.
+   */
+  private static final List<String> SITE_FIELDS =
+      List.of("name^3", "shortDescription^2", "longDescription", "company");
+
+  private static final List<String> BLOG_FIELDS =
+      List.of("title^3", "tags^2", "shortDescription^2", "content", "skills");
+
+  /**
+   * Edit distance allowed per term: none below three characters, one up to five, two
+   * beyond. Typing "SLDC" for "SDLC" is a transposition, which Elasticsearch's
+   * Damerau-Levenshtein automaton counts as one edit.
+   *
+   * <p>Without this a mistyped term matches nothing at all and the query silently degrades
+   * to whichever of the remaining words did match — a result set that looks like a working
+   * search returning the wrong answer, rather than like a typo.
+   */
+  private static final String FUZZINESS = "AUTO";
+
+  /**
+   * The first character has to be right. It keeps term expansion cheap and stops a short
+   * query reaching half the index.
+   */
+  private static final int FUZZY_PREFIX_LENGTH = 1;
 
   private final ElasticsearchClient client;
   private final int maxResultsPerGroup;
@@ -55,12 +87,7 @@ public class SearchService {
       SearchResponse<SiteSearchDocument> response = client.search(s -> s
               .index(ElasticsearchConfig.SITE_SEARCH_INDEX)
               .size(totalSize)
-              .query(q -> q
-                  .multiMatch(mm -> mm
-                      .query(sanitized)
-                      .fields("name", "shortDescription", "longDescription", "company")
-                      .type(co.elastic.clients.elasticsearch._types.query_dsl
-                          .TextQueryType.BestFields)))
+              .query(q -> q.multiMatch(mm -> typoTolerant(mm, sanitized, SITE_FIELDS)))
               .sort(sort -> sort.score(sc -> sc
                   .order(co.elastic.clients.elasticsearch._types.SortOrder.Desc)))
               .sort(sort -> sort.field(f -> f
@@ -98,12 +125,7 @@ public class SearchService {
       SearchResponse<BlogSearchDocument> response = client.search(s -> s
               .index(ElasticsearchConfig.BLOG_SEARCH_INDEX)
               .size(maxBlogResults)
-              .query(q -> q
-                  .multiMatch(mm -> mm
-                      .query(sanitized)
-                      .fields("title^3", "tags^2", "shortDescription^2", "content", "skills")
-                      .type(co.elastic.clients.elasticsearch._types.query_dsl
-                          .TextQueryType.BestFields))),
+              .query(q -> q.multiMatch(mm -> typoTolerant(mm, sanitized, BLOG_FIELDS))),
           BlogSearchDocument.class);
 
       return response.hits().hits().stream()
@@ -135,11 +157,7 @@ public class SearchService {
               .query(q -> q
                   .bool(b -> b
                       .must(m -> m
-                          .multiMatch(mm -> mm
-                              .query(sanitized)
-                              .fields("name", "shortDescription", "longDescription", "company")
-                              .type(co.elastic.clients.elasticsearch._types.query_dsl
-                                  .TextQueryType.BestFields)))
+                          .multiMatch(mm -> typoTolerant(mm, sanitized, SITE_FIELDS)))
                       .filter(f -> f
                           .term(t -> t
                               .field("type")
@@ -160,6 +178,27 @@ public class SearchService {
       throw new SearchUnavailableException(
           "Search is temporarily unavailable. Please try again later.");
     }
+  }
+
+  /**
+   * The one query shape every search here uses: best-fields across weighted fields, with a
+   * term's spelling allowed to be slightly wrong.
+   *
+   * @param builder the multi-match builder being populated
+   * @param query the already-sanitized query text
+   * @param fields the boosted field list for the index being searched
+   * @return the same builder, for use inside a lambda
+   */
+  private static MultiMatchQuery.Builder typoTolerant(
+      final MultiMatchQuery.Builder builder,
+      final String query,
+      final List<String> fields) {
+    return builder
+        .query(query)
+        .fields(fields)
+        .type(TextQueryType.BestFields)
+        .fuzziness(FUZZINESS)
+        .prefixLength(FUZZY_PREFIX_LENGTH);
   }
 
   private List<SearchResult> toSearchResults(final List<SiteSearchDocument> documents) {

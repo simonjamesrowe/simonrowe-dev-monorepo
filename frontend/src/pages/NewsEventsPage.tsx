@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Calendar, ChevronDown, ExternalLink, Heart, MapPin } from 'lucide-react'
+import { Calendar, ExternalLink, MapPin } from 'lucide-react'
 
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { FavouriteButton } from '../components/common/FavouriteButton'
@@ -8,6 +8,7 @@ import { ShareButton } from '../components/common/ShareButton'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { ListenButton } from '../components/narration/ListenButton'
 import { useNarrationAudio } from '../components/narration/useNarrationAudio'
+import { NewsFilterBar } from '../components/news/NewsFilterBar'
 import { NewsSummaryDrawer } from '../components/news/NewsSummaryDrawer'
 import { SummaryNarration } from '../components/news/SummaryNarration'
 import { SummaryButton } from '../components/news/SummaryButton'
@@ -23,22 +24,37 @@ import { API_BASE_URL } from '../config/api'
 import type { ArticleResponse, SourceSummary } from '../types/news'
 import type { EventResponse } from '../types/events'
 
-type SourceFilter = 'all' | string
-
 /** Articles per request. Was a single `size=100` fetch — the slowest public page. */
 const NEWS_PAGE_SIZE = 24
 
 /**
- * Below this, a source is a long-tail one-off — usually a single manually imported
- * article — and goes in the "More" menu instead of costing a pill in the main row.
+ * How long typing has to stop before the feed is re-queried.
+ *
+ * <p>Short enough to feel immediate, long enough that a nine-character word is one request
+ * rather than nine — each one re-reads page zero and replaces the whole grid.
  */
-const MIN_ARTICLES_FOR_PILL = 3
+const SEARCH_DEBOUNCE_MS = 300
 
 function resolveImageUrl(url: string | null): string | undefined {
   if (!url) return undefined
   if (url.startsWith('/uploads/')) return `${API_BASE_URL}${url}`
   if (url.startsWith('http')) return url
   return undefined
+}
+
+/**
+ * Whether every word of the query appears somewhere in the given fields.
+ *
+ * <p>Mirrors what the backend does for articles, and is the only implementation for
+ * events and for the favourites view — both of those are complete in-memory lists that
+ * never go back to the server, so filtering them client-side is not a duplicate of the
+ * query, it is the whole of it.
+ */
+function matchesQuery(query: string, fields: Array<string | null | undefined>): boolean {
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (terms.length === 0) return true
+  const haystack = fields.filter(Boolean).join(' ').toLowerCase()
+  return terms.every(term => haystack.includes(term))
 }
 
 export function NewsEventsPage() {
@@ -55,15 +71,21 @@ export function NewsEventsPage() {
   const [eventsSettled, setEventsSettled] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
+
+  // Empty means every source. A list rather than a single name because the filter is now a
+  // set of checkboxes, and the backend takes `source` more than once.
+  const [selectedSources, setSelectedSources] = useState<string[]>([])
+  // Only the events timeline, no articles. A view mode, not a source.
+  const [eventsOnly, setEventsOnly] = useState(false)
+  // What is in the box, and what the last request was actually made with. They differ for
+  // as long as SEARCH_DEBOUNCE_MS after the last keystroke.
+  const [queryInput, setQueryInput] = useState('')
+  const [appliedQuery, setAppliedQuery] = useState('')
 
   const [favouritesOnly, setFavouritesOnly] = useState(false)
   const [favouriteArticles, setFavouriteArticles] = useState<ArticleResponse[]>([])
   const [favouriteEvents, setFavouriteEvents] = useState<EventResponse[]>([])
   const [favouritesLoading, setFavouritesLoading] = useState(false)
-  const [moreOpen, setMoreOpen] = useState(false)
-  const moreMenuRef = useRef<HTMLDivElement>(null)
-  const moreToggleRef = useRef<HTMLButtonElement>(null)
 
   const newsFavourites = useFavourites('news')
   const eventFavourites = useFavourites('events')
@@ -94,11 +116,6 @@ export function NewsEventsPage() {
     }
   }, [lastCompleted, summaries])
 
-  // 'all' and 'events' are local-only view modes; only a real source name is a query
-  // parameter, so the backend does the filtering and paging continues within a source.
-  const activeSource =
-    sourceFilter === 'all' || sourceFilter === 'events' ? undefined : sourceFilter
-
   const loading = !newsSettled || !eventsSettled
 
   // Discards any news response that has been superseded — switching source while a
@@ -113,29 +130,13 @@ export function NewsEventsPage() {
     trackPageView('/news-events')
   }, [])
 
+  // The timer is cleared on every keystroke and on unmount, so a query the visitor has
+  // already moved past never lands and nothing is scheduled against a gone component.
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
-        setMoreOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  // The toggle advertises aria-haspopup, so Escape has to close it and hand focus back —
-  // otherwise a keyboard user who opens it just tabs on into the page with it still open.
-  useEffect(() => {
-    if (!moreOpen) return
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setMoreOpen(false)
-        moreToggleRef.current?.focus()
-      }
-    }
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
-  }, [moreOpen])
+    if (queryInput === appliedQuery) return
+    const timer = window.setTimeout(() => setAppliedQuery(queryInput), SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [queryInput, appliedQuery])
 
   useEffect(() => {
     const requestId = newsRequestId.current + 1
@@ -143,7 +144,7 @@ export function NewsEventsPage() {
 
     setLoadMoreError(null)
     setRefreshingNews(true)
-    fetchNews(0, NEWS_PAGE_SIZE, activeSource)
+    fetchNews(0, NEWS_PAGE_SIZE, { sources: selectedSources, query: appliedQuery })
       .then((newsPage) => {
         if (newsRequestId.current !== requestId) return
         setArticles(newsPage.content)
@@ -159,7 +160,8 @@ export function NewsEventsPage() {
         setRefreshingNews(false)
         setNewsSettled(true)
       })
-  }, [activeSource, attempt])
+    // `selectedSources` is state, so its identity only changes when the selection does.
+  }, [selectedSources, appliedQuery, attempt])
 
   // Events and the source list are independent of news paging, so they load once.
   useEffect(() => {
@@ -186,7 +188,10 @@ export function NewsEventsPage() {
 
     setLoadingMore(true)
     setLoadMoreError(null)
-    fetchNews(newsPageNumber + 1, NEWS_PAGE_SIZE, activeSource)
+    fetchNews(newsPageNumber + 1, NEWS_PAGE_SIZE, {
+      sources: selectedSources,
+      query: appliedQuery,
+    })
       .then((newsPage) => {
         if (newsRequestId.current !== requestId) return
         // Append, never replace: the container stays put so scroll position holds.
@@ -204,8 +209,13 @@ export function NewsEventsPage() {
       })
   }
 
-  const handleSourceSelect = (next: SourceFilter) => {
-    setSourceFilter(next)
+  /** Puts the feed back to every source, no text, everything visible. */
+  const clearFilters = () => {
+    setSelectedSources([])
+    setQueryInput('')
+    setAppliedQuery('')
+    setEventsOnly(false)
+    setFavouritesOnly(false)
   }
 
   const retry = useCallback(() => {
@@ -232,11 +242,6 @@ export function NewsEventsPage() {
       })
       .finally(() => setFavouritesLoading(false))
   }, [favouritesOnly])
-
-  // Favourites are globally shared, so viewing them needs no session — just flip the view.
-  const handleFavouritesToggle = () => {
-    setFavouritesOnly(prev => !prev)
-  }
 
   /**
    * Opens the summary drawer. An article that already has a summary just reads it — no
@@ -370,23 +375,22 @@ export function NewsEventsPage() {
   const sortedSources = [...sourceSummaries].sort(
     (a, b) => b.count - a.count || a.name.localeCompare(b.name),
   )
-  const pillSources = sortedSources.filter(s => s.count >= MIN_ARTICLES_FOR_PILL)
-  const menuSources = sortedSources.filter(s => s.count < MIN_ARTICLES_FOR_PILL)
-  // A collapsed source that is the active filter has to surface somewhere, or the
-  // page looks unfiltered while showing one source's articles.
-  const activeMenuSource = menuSources.find(s => s.name === sourceFilter)
 
   // Unfavouriting while in favourites-only mode removes the card immediately.
   const visibleArticles = favouritesOnly
     ? favouriteArticles.filter(a => newsFavourites.isFavourite(a.id))
     : articles
 
-  // Filter articles by source
-  const filtered = sourceFilter === 'all'
-    ? visibleArticles
-    : sourceFilter === 'events'
-    ? [] // show events timeline instead
-    : visibleArticles.filter(a => a.sourceName === sourceFilter)
+  // The source and text filters are the backend's work on the ordinary feed — it is what
+  // makes "Load more" page through the matching set rather than the whole one. Favourites
+  // never go through that query, so they are the one list filtered here.
+  const filtered = eventsOnly
+    ? []
+    : favouritesOnly
+      ? visibleArticles.filter(a =>
+          (selectedSources.length === 0 || selectedSources.includes(a.sourceName))
+          && matchesQuery(appliedQuery, [a.title, a.summary, a.author, a.sourceName]))
+      : visibleArticles
 
   // Looked up across both the loaded list and the favourites list, so the drawer survives
   // a switch into favourites-only mode while it is open.
@@ -395,7 +399,24 @@ export function NewsEventsPage() {
         .find(a => a.id === summaryArticleId) ?? null
     : null
 
-  const showEvents = sourceFilter === 'all' || sourceFilter === 'events'
+  // Events carry a source of their own — Meetup, lu.ma — that the source list, built from
+  // articles, does not contain. Picking a publisher therefore means "articles from these
+  // publishers" and hides the timeline, exactly as selecting a pill used to.
+  const showEvents = eventsOnly || selectedSources.length === 0
+  const eventMatchesQuery = (event: EventResponse) =>
+    matchesQuery(appliedQuery, [
+      event.title, event.summary, event.venue, event.location, event.sourceName,
+    ])
+  const trimmedQuery = appliedQuery.trim()
+  const filtersApplied = selectedSources.length > 0 || trimmedQuery.length > 0 || eventsOnly
+  // Naming what was filtered on is the difference between "there is nothing here" and
+  // "there is nothing here *because of what you typed*", which is the only version a
+  // visitor can act on.
+  const emptyFilteredMessage = trimmedQuery
+    ? selectedSources.length > 0
+      ? `Nothing matches “${trimmedQuery}” in ${selectedSources.join(', ')}.`
+      : `Nothing matches “${trimmedQuery}”.`
+    : `No articles from ${selectedSources.join(', ')} yet.`
   const featured = filtered.slice(0, 2)
   const grid = filtered.slice(2)
   // A shared event has to have a card — unlike an article it has no drawer, so the card is
@@ -406,98 +427,38 @@ export function NewsEventsPage() {
     return extra.length > 0 ? [...events, ...extra] : events
   }
 
+  // Drives whether the Events toggle is offered at all, so it counts what the feed holds
+  // rather than what the current query matched — a toggle that vanished as you typed
+  // would take the way back out with it.
+  const allEvents = withDeepLinkedEvents(favouritesOnly
+    ? favouriteEvents.filter(e => eventFavourites.isFavourite(e.id))
+    : [...upcomingEvents, ...pastEvents])
   const timelineEvents = withDeepLinkedEvents(favouritesOnly
     ? favouriteEvents.filter(e => eventFavourites.isFavourite(e.id))
-    : upcomingEvents)
-  const allEvents = favouritesOnly
-    ? timelineEvents
-    : withDeepLinkedEvents([...upcomingEvents, ...pastEvents])
+    : upcomingEvents).filter(eventMatchesQuery)
+
+  // A search that matched nothing anywhere gets one empty state, not two: the timeline's
+  // own "no events match" line above the feed's "nothing matches" line reads as a page
+  // that half-loaded. It stays for the useful case — articles found, events not — and in
+  // events-only mode, where it is the only thing that can answer.
+  const nothingMatches = filtered.length === 0 && timelineEvents.length === 0
+  const showEventsSection = showEvents && allEvents.length > 0
+    && (eventsOnly || !(trimmedQuery && nothingMatches))
 
   return (
     <div className="feed tour-news-events">
-      {/* View modes, kept apart from sources so "Events" doesn't read as a publisher. */}
-      <div className="feed__modes tour-news-filters">
-        {allEvents.length > 0 && (
-          <button
-            className={`feed__pill feed__pill--events${sourceFilter === 'events' ? ' feed__pill--active' : ''}`}
-            onClick={() => handleSourceSelect('events')}
-            type="button"
-          >
-            Events
-          </button>
-        )}
-        <button
-          aria-pressed={favouritesOnly}
-          className={`feed__pill feed__favourites-toggle${favouritesOnly ? ' feed__pill--active' : ''}`}
-          onClick={handleFavouritesToggle}
-          type="button"
-        >
-          <Heart aria-hidden="true" fill={favouritesOnly ? 'currentColor' : 'none'} size={14} />
-          <span>Show favourites only</span>
-        </button>
-      </div>
-
-      {/* Source filter pills, busiest first, long tail collapsed.
-          The mobile horizontal scroller lives on the wrapper, not on the pill row:
-          overflow-x on the row itself makes it a clipping context, which cut the
-          absolutely positioned More popover down to a sliver at phone widths. */}
-      <div className="feed__filters-scroll">
-        <div className="feed__filters">
-          <button
-            className={`feed__pill${sourceFilter === 'all' ? ' feed__pill--active' : ''}`}
-            onClick={() => handleSourceSelect('all')}
-            type="button"
-          >
-            All
-          </button>
-          {pillSources.map(({ name }) => (
-            <button
-              className={`feed__pill${sourceFilter === name ? ' feed__pill--active' : ''}`}
-              key={name}
-              onClick={() => handleSourceSelect(name)}
-              type="button"
-            >
-              {name}
-            </button>
-          ))}
-          {menuSources.length > 0 && (
-            <div className="feed__more" ref={moreMenuRef}>
-              <button
-                aria-expanded={moreOpen}
-                aria-haspopup="true"
-                className={`feed__pill feed__more-toggle${activeMenuSource ? ' feed__pill--active' : ''}`}
-                onClick={() => setMoreOpen(open => !open)}
-                ref={moreToggleRef}
-                type="button"
-              >
-                <span>{activeMenuSource ? activeMenuSource.name : `More (${menuSources.length})`}</span>
-                <ChevronDown aria-hidden="true" size={14} />
-              </button>
-              {moreOpen && (
-                /* Plain buttons, not role="menu"/"menuitem": an explicit menuitem role
-                   would stop these matching getByRole('button'), and the popover is a
-                   list of filters rather than an application menu. */
-                <div className="feed__more-menu">
-                  {menuSources.map(({ name, count }) => (
-                    <button
-                      className={`feed__more-item${sourceFilter === name ? ' feed__more-item--active' : ''}`}
-                      key={name}
-                      onClick={() => {
-                        handleSourceSelect(name)
-                        setMoreOpen(false)
-                      }}
-                      type="button"
-                    >
-                      <span>{name}</span>
-                      <span className="feed__more-count">{count}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      <NewsFilterBar
+        eventsOnly={eventsOnly}
+        favouritesOnly={favouritesOnly}
+        onEventsOnlyChange={setEventsOnly}
+        onFavouritesOnlyChange={setFavouritesOnly}
+        onQueryChange={setQueryInput}
+        onSelectedSourcesChange={setSelectedSources}
+        query={queryInput}
+        selectedSources={selectedSources}
+        showEventsToggle={allEvents.length > 0}
+        sources={sortedSources}
+      />
 
       {/* Anchor target for /news-events#news deep links */}
       <div id="news" className="feed__anchor" aria-hidden="true" />
@@ -507,7 +468,7 @@ export function NewsEventsPage() {
       ) : (
         <>
           {/* Featured hero section */}
-          {sourceFilter !== 'events' && featured.length > 0 && (
+          {!eventsOnly && featured.length > 0 && (
             <div className="feed__hero">
               {featured.map((article, i) => (
                 <a
@@ -578,7 +539,7 @@ export function NewsEventsPage() {
           )}
 
           {/* Article grid */}
-          {sourceFilter !== 'events' && grid.length > 0 && (
+          {!eventsOnly && grid.length > 0 && (
             <div className="feed__grid">
               {grid.map(article => (
                 <a
@@ -650,7 +611,7 @@ export function NewsEventsPage() {
 
           {/* Backend-driven paging: appends below the grid, so scroll position holds.
               Favourites are a complete in-memory list and are never paged (FR-040). */}
-          {!favouritesOnly && sourceFilter !== 'events' && !isLastNewsPage && (
+          {!favouritesOnly && !eventsOnly && !isLastNewsPage && (
             <div className="feed__load-more">
               <button
                 className="button button--secondary"
@@ -674,7 +635,7 @@ export function NewsEventsPage() {
           )}
 
           {/* Events timeline */}
-          {showEvents && allEvents.length > 0 && (
+          {showEventsSection && (
             <div id="events" className="feed__events">
               <h2 className="feed__events-title">Timeline</h2>
               {timelineEvents.length > 0 && (
@@ -723,21 +684,37 @@ export function NewsEventsPage() {
                   ))}
                 </div>
               )}
-              {allEvents.length === 0 && (
+              {/* The timeline shows upcoming events only, so it can be empty while the
+                  feed still holds events — and now also when the query matched none of
+                  them. Saying which is the difference between a page that looks broken
+                  and one that is telling you what it did. */}
+              {timelineEvents.length === 0 && (
                 <div className="feed__events-empty">
-                  <p>We are currently scraping the next set of workshops and webinars. Stay tuned for updates.</p>
+                  {trimmedQuery ? (
+                    <p>No upcoming events match &ldquo;{trimmedQuery}&rdquo;.</p>
+                  ) : (
+                    <p>We are currently scraping the next set of workshops and webinars. Stay tuned for updates.</p>
+                  )}
                 </div>
               )}
             </div>
           )}
 
-          {/* Empty state */}
-          {filtered.length === 0 && sourceFilter !== 'events' && (
+          {/* Empty state. Three different nothings: nothing saved, nothing matching, and
+              nothing here yet — and only the middle one has an action worth offering. */}
+          {filtered.length === 0 && !eventsOnly && (
             <div className="feed__empty">
-              {favouritesOnly ? (
+              {favouritesOnly && !filtersApplied ? (
                 <p>No favourites yet. Tap the heart on any article or event to save it here.</p>
+              ) : filtersApplied ? (
+                <>
+                  <p>{emptyFilteredMessage}</p>
+                  <button className="button button--secondary" onClick={clearFilters} type="button">
+                    Clear filters
+                  </button>
+                </>
               ) : (
-                <p>No articles from this source yet. Check back soon!</p>
+                <p>No articles yet. Check back soon!</p>
               )}
             </div>
           )}

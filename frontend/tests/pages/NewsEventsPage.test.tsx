@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NewsEventsPage } from '../../src/pages/NewsEventsPage'
 import type { ArticlePage, ArticleResponse, SourceSummary } from '../../src/types/news'
-import type { EventPage } from '../../src/types/events'
+import type { EventPage, EventResponse } from '../../src/types/events'
 
 vi.mock('../../src/services/newsApi', () => ({
   fetchNews: vi.fn(),
@@ -84,6 +84,20 @@ function source(name: string, count = 5): SourceSummary {
   return { name, count }
 }
 
+function sampleEvent(id: string, title: string): EventResponse {
+  return {
+    id,
+    title,
+    sourceName: 'Meetup',
+    originalUrl: `https://example.com/${id}`,
+    summary: `${title} summary`,
+    eventDate: '2099-09-01T18:00:00Z',
+    venue: 'Somewhere',
+    location: 'London',
+    imageUrl: null,
+  } as EventResponse
+}
+
 const emptyEventPage: EventPage = {
   content: [],
   totalElements: 0,
@@ -97,6 +111,11 @@ const emptyEventPage: EventPage = {
  * stage before rendering. `renderPage` reads whatever is current.
  */
 let narration = narrationAudioStub()
+
+/** The sources multi-select is behind one click; every filter test starts here. */
+async function openSources() {
+  await userEvent.click(screen.getByRole('button', { name: /sources|^All sources$/ }))
+}
 
 function renderPage() {
   return render(
@@ -123,13 +142,13 @@ describe('NewsEventsPage', () => {
     vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
   })
 
-  it('requests the first page of 24 articles with no source filter', async () => {
+  it('requests the first page of 24 articles with no filters', async () => {
     renderPage()
 
     await waitFor(() => {
       expect(screen.getByText('First article')).toBeInTheDocument()
     })
-    expect(fetchNews).toHaveBeenCalledWith(0, 24, undefined)
+    expect(fetchNews).toHaveBeenCalledWith(0, 24, { sources: [], query: '' })
     expect(fetchNews).toHaveBeenCalledTimes(1)
   })
 
@@ -153,7 +172,7 @@ describe('NewsEventsPage', () => {
       expect(screen.getByText('Page two article')).toBeInTheDocument()
     })
     expect(screen.getByText('Page one article')).toBeInTheDocument()
-    expect(fetchNews).toHaveBeenCalledWith(1, 24, undefined)
+    expect(fetchNews).toHaveBeenCalledWith(1, 24, { sources: [], query: '' })
   })
 
   it('hides "Load more" once the last page is loaded', async () => {
@@ -169,11 +188,11 @@ describe('NewsEventsPage', () => {
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
   })
 
-  it('re-queries the backend when a source chip is selected', async () => {
+  it('re-queries the backend when a source is ticked in the dropdown', async () => {
     vi.mocked(fetchNewsSources).mockResolvedValue([source('Ars Technica'), source('InfoQ')])
     vi.mocked(fetchNews).mockImplementation((...args) =>
       Promise.resolve(
-        args[2] === 'InfoQ'
+        args[2]?.sources?.includes('InfoQ')
           ? newsPage([article('a-2', 'InfoQ only article')])
           : newsPage([article('a-1', 'Ars article', 'Ars Technica')]),
       ),
@@ -184,33 +203,151 @@ describe('NewsEventsPage', () => {
       expect(screen.getByText('Ars article')).toBeInTheDocument()
     })
 
-    await userEvent.click(screen.getByRole('button', { name: 'InfoQ' }))
+    await openSources()
+    await userEvent.click(screen.getByRole('checkbox', { name: /InfoQ/ }))
 
     await waitFor(() => {
-      expect(fetchNews).toHaveBeenCalledWith(0, 24, 'InfoQ')
+      expect(fetchNews).toHaveBeenCalledWith(0, 24, { sources: ['InfoQ'], query: '' })
     })
     expect(screen.getByText('InfoQ only article')).toBeInTheDocument()
   })
 
-  it('renders chips for sources that have no article on the first page', async () => {
-    vi.mocked(fetchNewsSources).mockResolvedValue([source('Ars Technica'), source('InfoQ'), source('The Pragmatic Engineer')])
-    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article', 'InfoQ')]))
-
+  it('sends every ticked source, because they narrow together rather than replace', async () => {
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('Spring Blog', 81),
+    ])
     renderPage()
-    await waitFor(() => {
-      expect(screen.getByText('First article')).toBeInTheDocument()
-    })
+    await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
 
-    expect(screen.getByRole('button', { name: 'Ars Technica' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'The Pragmatic Engineer' })).toBeInTheDocument()
+    await openSources()
+    await userEvent.click(screen.getByRole('checkbox', { name: /Rundown AI/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Spring Blog/ }))
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenCalledWith(
+        0, 24, { sources: ['Rundown AI', 'Spring Blog'], query: '' })
+    })
+  })
+
+  it('unticking a source removes only that source from the query', async () => {
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('Spring Blog', 81),
+    ])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+    await openSources()
+    await userEvent.click(screen.getByRole('checkbox', { name: /Rundown AI/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Spring Blog/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Rundown AI/ }))
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenLastCalledWith(
+        0, 24, { sources: ['Spring Blog'], query: '' })
+    })
+  })
+
+  it('names the selection on the closed toggle so the filter stays visible', async () => {
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('Spring Blog', 81),
+    ])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /All sources/ })).toBeInTheDocument()
+
+    await openSources()
+    await userEvent.click(screen.getByRole('checkbox', { name: /Spring Blog/ }))
+
+    expect(screen.getByRole('button', { name: /^Spring Blog/ })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Rundown AI/ }))
+
+    expect(screen.getByRole('button', { name: /2 sources/ })).toBeInTheDocument()
+  })
+
+  it('"Clear" puts the feed back to every source', async () => {
+    vi.mocked(fetchNewsSources).mockResolvedValue([source('Rundown AI', 298)])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+    await openSources()
+    await userEvent.click(screen.getByRole('checkbox', { name: /Rundown AI/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Clear' }))
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenLastCalledWith(0, 24, { sources: [], query: '' })
+    })
+    expect(screen.getByRole('button', { name: /All sources/ })).toBeInTheDocument()
+  })
+
+  it('lists every source in the dropdown, however few articles it holds', async () => {
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Rundown AI', 298),
+      source('blog.cloudflare.com', 2),
+      source('ssntpl.com', 1),
+    ])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+    await openSources()
+
+    // No threshold and no overflow menu any more: a one-off manual import is as
+    // selectable as the busiest feed, which is what the pill row could not manage.
+    expect(screen.getByRole('checkbox', { name: /blog\.cloudflare\.com/ })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /ssntpl\.com/ })).toBeInTheDocument()
+  })
+
+  it('orders sources by article count, busiest first', async () => {
+    vi.mocked(fetchNewsSources).mockResolvedValue([
+      source('Dan Vega', 16),
+      source('Rundown AI', 298),
+      source('Spring Blog', 81),
+    ])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+    await openSources()
+
+    const names = screen.getAllByRole('checkbox').map(box => box.closest('label')?.textContent)
+    expect(names).toEqual(['Rundown AI298', 'Spring Blog81', 'Dan Vega16'])
+  })
+
+  it('closes the source dropdown on a click outside it', async () => {
+    vi.mocked(fetchNewsSources).mockResolvedValue([source('Rundown AI', 298)])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+    await openSources()
+    expect(screen.getByRole('checkbox', { name: /Rundown AI/ })).toBeInTheDocument()
+
+    await userEvent.click(document.body)
+
+    expect(screen.queryByRole('checkbox', { name: /Rundown AI/ })).toBeNull()
+  })
+
+  it('closes the source dropdown on Escape and returns focus to the toggle', async () => {
+    vi.mocked(fetchNewsSources).mockResolvedValue([source('Rundown AI', 298)])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+    await openSources()
+    expect(screen.getByRole('checkbox', { name: /Rundown AI/ })).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}')
+
+    expect(screen.queryByRole('checkbox', { name: /Rundown AI/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /All sources/ })).toHaveFocus()
   })
 
   it('discards a stale page-two response that arrives after a source switch', async () => {
     vi.mocked(fetchNewsSources).mockResolvedValue([source('Ars Technica'), source('InfoQ')])
     let resolvePageTwo: (value: ArticlePage) => void = () => {}
     vi.mocked(fetchNews).mockImplementation((...args) => {
-      const [page = 0, , source] = args
-      if (source === 'InfoQ') {
+      const [page = 0, , filters] = args
+      if (filters?.sources?.includes('InfoQ')) {
         return Promise.resolve(newsPage([article('a-9', 'InfoQ article')], 0, true))
       }
       if (page === 1) {
@@ -218,7 +355,8 @@ describe('NewsEventsPage', () => {
           resolvePageTwo = resolve
         })
       }
-      return Promise.resolve(newsPage([article('a-1', 'Unfiltered page one', 'Ars Technica')], 0, false))
+      return Promise.resolve(
+        newsPage([article('a-1', 'Unfiltered page one', 'Ars Technica')], 0, false))
     })
 
     renderPage()
@@ -228,7 +366,8 @@ describe('NewsEventsPage', () => {
 
     // Load more is in flight when the visitor switches source.
     await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
-    await userEvent.click(screen.getByRole('button', { name: 'InfoQ' }))
+    await openSources()
+    await userEvent.click(screen.getByRole('checkbox', { name: /InfoQ/ }))
     await waitFor(() => {
       expect(screen.getByText('InfoQ article')).toBeInTheDocument()
     })
@@ -286,95 +425,6 @@ describe('NewsEventsPage', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('orders source pills by article count, busiest first', async () => {
-    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
-    vi.mocked(fetchNewsSources).mockResolvedValue([
-      source('Dan Vega', 16),
-      source('Rundown AI', 298),
-      source('Spring Blog', 81),
-    ])
-    renderPage()
-
-    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
-
-    const pills = screen.getAllByRole('button').map(b => b.textContent)
-    expect(pills.indexOf('Rundown AI')).toBeLessThan(pills.indexOf('Spring Blog'))
-    expect(pills.indexOf('Spring Blog')).toBeLessThan(pills.indexOf('Dan Vega'))
-  })
-
-  it('hides sources with fewer than three articles behind the More menu', async () => {
-    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
-    vi.mocked(fetchNewsSources).mockResolvedValue([
-      source('Rundown AI', 298),
-      source('blog.cloudflare.com', 2),
-      source('ssntpl.com', 1),
-    ])
-    renderPage()
-
-    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
-
-    // Regex, not an exact string: a menu row's accessible name is its source name
-    // followed by its article count ("blog.cloudflare.com 2").
-    expect(screen.queryByRole('button', { name: /blog\.cloudflare\.com/ })).toBeNull()
-    expect(screen.getByRole('button', { name: 'More (2)' })).toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('button', { name: 'More (2)' }))
-
-    expect(screen.getByRole('button', { name: /blog\.cloudflare\.com/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /ssntpl\.com/ })).toBeInTheDocument()
-  })
-
-  it('filters by a source chosen from the More menu and shows it as active', async () => {
-    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
-    vi.mocked(fetchNewsSources).mockResolvedValue([
-      source('Rundown AI', 298),
-      source('ssntpl.com', 1),
-    ])
-    renderPage()
-
-    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: 'More (1)' }))
-    await userEvent.click(screen.getByRole('button', { name: /ssntpl\.com/ }))
-
-    await waitFor(() =>
-      expect(fetchNews).toHaveBeenCalledWith(0, 24, 'ssntpl.com'),
-    )
-    // The menu has closed, so this now matches the toggle itself: the active filter
-    // must stay visible even though the source is collapsed out of the main row.
-    expect(screen.getByRole('button', { name: 'ssntpl.com' })).toBeInTheDocument()
-  })
-
-  it('closes the More menu on Escape and returns focus to the toggle', async () => {
-    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
-    vi.mocked(fetchNewsSources).mockResolvedValue([
-      source('Rundown AI', 298),
-      source('ssntpl.com', 1),
-    ])
-    renderPage()
-
-    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: 'More (1)' }))
-    expect(screen.getByRole('button', { name: /ssntpl\.com/ })).toBeInTheDocument()
-
-    await userEvent.keyboard('{Escape}')
-
-    expect(screen.queryByRole('button', { name: /ssntpl\.com/ })).toBeNull()
-    expect(screen.getByRole('button', { name: /^More/ })).toHaveFocus()
-  })
-
-  it('renders no More button when every source clears the threshold', async () => {
-    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('1', 'One')], 0, true))
-    vi.mocked(fetchNewsSources).mockResolvedValue([
-      source('Rundown AI', 298),
-      source('Spring Blog', 81),
-    ])
-    renderPage()
-
-    await waitFor(() => expect(screen.getByText('Rundown AI')).toBeInTheDocument())
-
-    expect(screen.queryByRole('button', { name: /^More/ })).toBeNull()
-  })
-
   it('offers "Summarise" on a card with no summary and "Read summary" on one with', async () => {
     summarisedIds.add('a-2')
     vi.mocked(fetchNews).mockResolvedValue(newsPage([
@@ -408,7 +458,7 @@ describe('NewsEventsPage', () => {
     await waitFor(() =>
       expect(screen.getByText('AI-generated summary')).toBeInTheDocument())
     // The list is still mounted underneath, filters and all.
-    expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /All sources/ })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Close' }))
 
@@ -442,6 +492,197 @@ describe('NewsEventsPage', () => {
     expect(screen.queryByRole('button', { name: /AI summary of A conference/ }))
       .not.toBeInTheDocument()
     expect(screen.queryByText('Summarise')).not.toBeInTheDocument()
+  })
+
+  describe('the search box', () => {
+    it('re-queries the feed with what was typed', async () => {
+      vi.mocked(fetchNews).mockImplementation((...args) =>
+        Promise.resolve(
+          args[2]?.query === 'sdlc'
+            ? newsPage([article('a-9', 'The AI-Native SDLC playbook')])
+            : newsPage([article('a-1', 'First article')]),
+        ),
+      )
+
+      renderPage()
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Search news and events' }), 'sdlc')
+
+      await waitFor(() => {
+        expect(screen.getByText('The AI-Native SDLC playbook')).toBeInTheDocument()
+      })
+      expect(fetchNews).toHaveBeenLastCalledWith(0, 24, { sources: [], query: 'sdlc' })
+    })
+
+    /**
+     * Four keystrokes, one request. Each one re-reads page zero and replaces the grid, so
+     * without the debounce typing a word visibly thrashes the list.
+     */
+    it('makes one request for a word rather than one per keystroke', async () => {
+      renderPage()
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+      vi.mocked(fetchNews).mockClear()
+
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Search news and events' }), 'sdlc')
+
+      await waitFor(() => {
+        expect(fetchNews).toHaveBeenCalledWith(0, 24, { sources: [], query: 'sdlc' })
+      })
+      expect(fetchNews).toHaveBeenCalledTimes(1)
+    })
+
+    it('carries the text into "Load more", so paging stays inside the matching set', async () => {
+      vi.mocked(fetchNews).mockImplementation((page = 0) =>
+        Promise.resolve(page === 0
+          ? newsPage([article('a-1', 'First article')], 0, false)
+          : newsPage([article('a-2', 'Second article')], 1, true)))
+
+      renderPage()
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Search news and events' }), 'sdlc')
+      await waitFor(() => {
+        expect(fetchNews).toHaveBeenCalledWith(0, 24, { sources: [], query: 'sdlc' })
+      })
+      await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
+
+      await waitFor(() => {
+        expect(fetchNews).toHaveBeenLastCalledWith(0 + 1, 24, { sources: [], query: 'sdlc' })
+      })
+    })
+
+    it('combines the text with the ticked sources', async () => {
+      vi.mocked(fetchNewsSources).mockResolvedValue([source('Claude Blog', 40)])
+
+      renderPage()
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+      await openSources()
+      await userEvent.click(screen.getByRole('checkbox', { name: /Claude Blog/ }))
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Search news and events' }), 'agents')
+
+      await waitFor(() => {
+        expect(fetchNews).toHaveBeenLastCalledWith(
+          0, 24, { sources: ['Claude Blog'], query: 'agents' })
+      })
+    })
+
+    it('clears back to the unfiltered feed', async () => {
+      renderPage()
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Search news and events' }), 'sdlc')
+      await waitFor(() => {
+        expect(fetchNews).toHaveBeenCalledWith(0, 24, { sources: [], query: 'sdlc' })
+      })
+
+      await userEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+
+      await waitFor(() => {
+        expect(fetchNews).toHaveBeenLastCalledWith(0, 24, { sources: [], query: '' })
+      })
+    })
+
+    /**
+     * "Nothing here" and "nothing here because of what you typed" are different states,
+     * and only the second one has a way out worth offering.
+     */
+    it('names what was searched for when nothing matches, and offers a way back', async () => {
+      vi.mocked(fetchNews).mockImplementation((...args) =>
+        Promise.resolve(
+          args[2]?.query ? newsPage([]) : newsPage([article('a-1', 'First article')]),
+        ),
+      )
+
+      renderPage()
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Search news and events' }), 'zzz')
+
+      await waitFor(() => {
+        expect(screen.getByText('Nothing matches \u201Czzz\u201D.')).toBeInTheDocument()
+      })
+
+      await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+
+      await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
+    })
+
+    /**
+     * "No upcoming events match" stacked above "Nothing matches" reads as a page that
+     * half-loaded. One search, one answer.
+     */
+    it('shows one empty state, not two, when nothing matched anywhere', async () => {
+      vi.mocked(fetchEvents).mockImplementation(((_page: number, _size: number, upcoming: boolean) =>
+        Promise.resolve(upcoming
+          ? { ...emptyEventPage, content: [sampleEvent('e-1', 'A conference')], totalElements: 1 }
+          : emptyEventPage)) as unknown as typeof fetchEvents)
+      vi.mocked(fetchNews).mockImplementation((...args) =>
+        Promise.resolve(
+          args[2]?.query ? newsPage([]) : newsPage([article('a-1', 'First article')]),
+        ),
+      )
+
+      renderPage()
+      await waitFor(() => expect(screen.getByText('A conference')).toBeInTheDocument())
+
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Search news and events' }), 'zzz')
+
+      await waitFor(() => {
+        expect(screen.getByText('Nothing matches \u201Czzz\u201D.')).toBeInTheDocument()
+      })
+      expect(screen.queryByText(/No upcoming events match/)).not.toBeInTheDocument()
+    })
+
+    /** But it is worth saying when the articles did match and the events did not. */
+    it('still reports an unmatched timeline when the articles matched', async () => {
+      vi.mocked(fetchEvents).mockImplementation(((_page: number, _size: number, upcoming: boolean) =>
+        Promise.resolve(upcoming
+          ? { ...emptyEventPage, content: [sampleEvent('e-1', 'A conference')], totalElements: 1 }
+          : emptyEventPage)) as unknown as typeof fetchEvents)
+      vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'An SDLC article')]))
+
+      renderPage()
+      await waitFor(() => expect(screen.getByText('A conference')).toBeInTheDocument())
+
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Search news and events' }), 'sdlc')
+
+      await waitFor(() => {
+        expect(screen.getByText('No upcoming events match \u201Csdlc\u201D.')).toBeInTheDocument()
+      })
+      expect(screen.getByText('An SDLC article')).toBeInTheDocument()
+    })
+
+    /**
+     * Events are a complete in-memory list that never goes back to the server, so the
+     * filtering the backend does for articles has to be done here for them.
+     */
+    it('filters the events timeline too', async () => {
+      vi.mocked(fetchEvents).mockImplementation(((_page: number, _size: number, upcoming: boolean) =>
+        Promise.resolve(upcoming
+          ? {
+            ...emptyEventPage,
+            content: [
+              { ...sampleEvent('e-1', 'Spring I/O Barcelona'), venue: 'Barcelona' },
+              { ...sampleEvent('e-2', 'A Kafka meetup'), venue: 'London' },
+            ],
+            totalElements: 2,
+          }
+          : emptyEventPage)) as unknown as typeof fetchEvents)
+      vi.mocked(fetchNews).mockResolvedValue(newsPage([]))
+
+      renderPage()
+      await waitFor(() => expect(screen.getByText('Spring I/O Barcelona')).toBeInTheDocument())
+      expect(screen.getByText('A Kafka meetup')).toBeInTheDocument()
+
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Search news and events' }), 'kafka')
+
+      await waitFor(() => {
+        expect(screen.queryByText('Spring I/O Barcelona')).not.toBeInTheDocument()
+      })
+      expect(screen.getByText('A Kafka meetup')).toBeInTheDocument()
+    })
   })
 
   describe('the listen control', () => {

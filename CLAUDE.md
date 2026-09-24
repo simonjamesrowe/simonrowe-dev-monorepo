@@ -215,6 +215,77 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- news-search-and-source-filter: Two things, one page. **The site search box was never missing the
+  article — it was silently degrading.** "AI SLDC" (a transposition of SDLC) returned five Rundown
+  AI headlines and not `The AI-Native SDLC playbook`, which reads exactly like an import that never
+  reached Elasticsearch. It had: the document was indexed on import, `?q=SDLC` returned it, and the
+  4-hourly `fullSyncSiteIndex` plus the per-item Kafka path both cover it. What actually happened is
+  that `multi_match` has no fuzziness, so `sldc` matched **nothing**, and with the default OR
+  operator the query collapsed to `ai` alone — a full page of plausible results, none of them the
+  answer, and no error anywhere. `SearchService` now sends `fuzziness: AUTO` with
+  `prefix_length: 1` on all three of its queries (site, blog, by-type) and weights the title
+  (`name^3` / `title^3`). Load-bearing bits:
+  - **AUTO is what makes the reported case work**: it allows one edit at four characters, and
+    Elasticsearch's automaton is Damerau-Levenshtein, so a transposition costs one. Measured
+    against a 300-article copy of the production index in a throwaway 9.4.5 container: the SDLC
+    article goes from absent to rank 1 (score 1.28 → 17.26), and `marketplce`, `anthropik` and
+    `sprign boot` all start finding what they mean.
+  - **The boosts matter as much as the fuzziness and are the part that would be quietly dropped.**
+    Every field scored the same before, so `claude marketplace` put five articles that merely
+    say "Claude" above the one titled "Claude Marketplace". Fuzziness without weighting would have
+    found the SDLC article and still ranked it below the noise.
+  - **`prefix_length: 1`** keeps the term expansion bounded; verified that `zzzzqqq` and
+    `kubernets` (no such document) still return nothing rather than everything.
+  **And the News & Events page got the search box it never had, plus a source filter that scales.**
+  The pill row was one pill per source with a `MIN_ARTICLES_FOR_PILL = 3` threshold and a "More"
+  overflow; at sixteen sources it wrapped to three lines, hid the long tail — which is exactly where
+  a manually imported one-off lands — and could only ever hold **one** source at a time. It is now
+  a free-text box, a checkbox dropdown that lists every source with its count, and the two existing
+  view toggles, on one wrapping row. Load-bearing bits:
+  - **`GET /api/news` takes `source` repeatedly and a new `q`.** Repeated rather than
+    comma-joined: a source name may contain a comma — `/api/news/sources` is built from scraped
+    publisher names — and a joined value would split it into two sources matching nothing. A
+    single `?source=X` still works, so nothing that linked to the old behaviour breaks.
+  - **`@RequestParam List<String> source` does not do what it looks like, and a test is what
+    proved it.** Spring resolves a parameter present exactly *once* to a `String` and then
+    converts it to the list **by splitting on commas**, so the repeated-parameter design defended
+    against the frontend joining names and then reintroduced the identical fault one layer down:
+    `?source=Smith,%20Jones%20%26%20Co` arrived as two sources, and the page reported a real
+    source as holding no articles. `NewsController.sourcesFrom` reads
+    `HttpServletRequest.getParameterValues` instead, which splits nothing. The comment claiming
+    the repeat was sufficient was written before the test existed and was simply wrong; the cost
+    of the fix is that a hand-written `?source=A,B` no longer means two sources, which is the
+    right way round — a comma inside a name is a real thing, a comma-joined list is a convention.
+  - **The page's search is Mongo, not Elasticsearch, and that is deliberate.** What it backs is a
+    filter over a date-ordered paged listing — newest first, "Load more" paging the *matching* set —
+    and relevance ranking is the wrong shape for that. `ArticleQueryService` ANDs terms across the
+    record but ORs them across `title`/`summary`/`author`/`sourceName`, so "claude marketplace"
+    matches a Claude Blog article titled "Marketplace launch". Each term is `Pattern.quote`d, so a
+    visitor typing `C++` matches literally and there is no quantifier for a regex engine to
+    backtrack over; the 100-character and six-term caps bound the collection scan, not a crafted
+    pattern. Deliberately **not** `fullContent` — matching text that is not on the card looks like
+    a bug. The consequence to know: the page's box is literal where the site box tolerates a typo.
+  - **Events are filtered in the browser and articles on the server, and that is not an
+    inconsistency.** Events are fetched whole (50 upcoming, 20 past) and never paged, as are
+    favourites; for those two, client-side filtering is not a duplicate of the query, it is the
+    whole of it. Articles are paged out of ~740, so filtering them client-side would search only
+    the loaded 24.
+  - **Picking a source still hides the events timeline**, exactly as selecting a pill did: events
+    carry sources (`Meetup`, `lu.ma`) that `/api/news/sources` — built from articles — does not
+    list, so "these publishers" cannot sensibly include them.
+  - **Source counts do not narrow as you type.** They label the sources; numbers that move while
+    you read them are harder to choose from.
+  - **A search that matched nothing anywhere gets one empty state, not two.** The timeline's own
+    "No upcoming events match" above the feed's "Nothing matches" reads as a page that
+    half-loaded. It is kept for the useful case — articles found, events not — and in events-only
+    mode, where it is the only thing that can answer. Both are pinned by tests.
+  - **The hidden checkbox needs `position: relative` on its row.** Absolutely positioned inside a
+    label whose nearest positioned ancestor was the whole panel, it landed on some other row's hit
+    area — invisible in jsdom, where clicks go straight to the input, and caught only by driving a
+    real browser.
+  - `.feed__filters` / `.feed__pill` / `.feed__more-count` stay: `/status`'s release timeline wears
+    them. `.feed__more*` (the departed overflow menu) and `.feed__modes` are deleted.
+  Backend 1593 tests, frontend 958.
 - termtime-pasted-notes: A **Paste a note** screen at `/admin/school/notes` — text in, dated events
   and scraped pages out. It exists because a whole class of thing a Year 6 parent asks about
   **cannot reach Term Time through any existing source**: secondary-school open evenings arrive in

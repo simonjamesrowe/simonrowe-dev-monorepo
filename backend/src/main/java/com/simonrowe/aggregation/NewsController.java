@@ -3,6 +3,7 @@ package com.simonrowe.aggregation;
 import com.simonrowe.shortlink.ShortLinkContentType;
 import com.simonrowe.shortlink.ShortLinkService;
 import com.simonrowe.summary.ArticleSummaryService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,39 +30,51 @@ public class NewsController {
   private static final Logger LOG = LoggerFactory.getLogger(NewsController.class);
 
   private final AggregatedArticleRepository articleRepository;
+  private final ArticleQueryService articleQueryService;
   private final MongoTemplate mongoTemplate;
   private final ArticleSummaryService summaryService;
   private final ShortLinkService shortLinkService;
 
   public NewsController(
       final AggregatedArticleRepository articleRepository,
+      final ArticleQueryService articleQueryService,
       final MongoTemplate mongoTemplate,
       final ArticleSummaryService summaryService,
       final ShortLinkService shortLinkService
   ) {
     this.articleRepository = articleRepository;
+    this.articleQueryService = articleQueryService;
     this.mongoTemplate = mongoTemplate;
     this.summaryService = summaryService;
     this.shortLinkService = shortLinkService;
   }
 
+  /**
+   * One page of the visible news feed, newest first.
+   *
+   * <p>{@code source} repeats — {@code ?source=Claude%20Blog&source=Spring%20Blog} — so the
+   * feed's source filter can hold several at once. A single value still works, which is
+   * what the filter row sent before it grew checkboxes.
+   *
+   * @param page zero-based page number
+   * @param size articles per page
+   * @param q free text matched against the fields a card shows; omitted means no filter
+   * @param request read directly for the repeated {@code source} values; see
+   *     {@link #sourcesFrom(HttpServletRequest)}
+   * @return the page of articles
+   */
   @GetMapping
   public Page<ArticleResponse> list(
       @RequestParam(defaultValue = "0") final int page,
       @RequestParam(defaultValue = "20") final int size,
-      @RequestParam(required = false) final String source
+      @RequestParam(required = false) final String q,
+      final HttpServletRequest request
   ) {
+    List<String> source = sourcesFrom(request);
     PageRequest pageRequest = PageRequest.of(page, size);
-    Page<AggregatedArticle> articles;
-    if (source != null && !source.isBlank()) {
-      articles = articleRepository
-          .findByVisibleTrueAndSourceNameOrderByPublishedDateDesc(source, pageRequest);
-    } else {
-      articles = articleRepository
-          .findByVisibleTrueOrderByPublishedDateDesc(pageRequest);
-    }
-    LOG.debug("Listing news articles: page={}, size={}, source={}, total={}",
-        page, size, source, articles.getTotalElements());
+    Page<AggregatedArticle> articles = articleQueryService.find(source, q, pageRequest);
+    LOG.debug("Listing news articles: page={}, size={}, sources={}, q={}, total={}",
+        page, size, source, q, articles.getTotalElements());
 
     // One query for the whole page, not one per card. The page size is 24, so resolving
     // per article would turn a single render into 24 extra round trips.
@@ -74,12 +87,37 @@ public class NewsController {
   }
 
   /**
+   * The requested source names, exactly as sent.
+   *
+   * <p>Deliberately not {@code @RequestParam List<String> source}. Spring resolves a
+   * parameter present exactly once to a {@code String} and then converts it to the list by
+   * splitting on commas — so a source genuinely named "Smith, Jones &amp; Co" arrives as two
+   * source names, neither of which matches anything, and the page reports the source as
+   * holding no articles. {@code getParameterValues} returns the values the client actually
+   * sent and splits nothing.
+   *
+   * <p>The cost is that a hand-written {@code ?source=A,B} no longer means two sources. That
+   * is the right way round: the feed repeats the parameter, and a comma inside a name is a
+   * real thing a scraped publisher can have while a comma-joined list is only a convention.
+   *
+   * @param request the current request
+   * @return the source names, empty when the parameter is absent
+   */
+  private static List<String> sourcesFrom(final HttpServletRequest request) {
+    String[] values = request.getParameterValues("source");
+    return values == null ? List.of() : List.of(values);
+  }
+
+  /**
    * Every source across the visible articles with its article count, busiest first.
    *
-   * <p>Backs the news filter pills, which must list every source the site holds rather
-   * than only those appearing on the first page of results. The count lets the page sort
-   * by volume and collapse low-volume sources into a "More" overflow, which is what keeps
-   * one-off manual imports from crowding the row.
+   * <p>Backs the news source filter, which must list every source the site holds rather
+   * than only those appearing on the first page of results. The count orders the list by
+   * volume and tells a visitor what selecting a source is worth before they select it.
+   *
+   * <p>Counts are of the whole feed and deliberately do not narrow as the free-text filter
+   * is typed: they label the sources, and a list whose numbers move while you read it is
+   * harder to choose from than one whose numbers hold still.
    *
    * <p>Declared before the {@code /{id}} mapping for readability only — Spring matches the
    * literal {@code /sources} path ahead of the {@code {id}} template regardless of order.

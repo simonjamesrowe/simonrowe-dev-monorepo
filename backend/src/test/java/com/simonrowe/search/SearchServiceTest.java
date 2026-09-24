@@ -3,12 +3,16 @@ package com.simonrowe.search;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.query_dsl.MultiMatchQuery;
+import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.elasticsearch.core.search.HitsMetadata;
+import co.elastic.clients.util.ObjectBuilder;
 import com.simonrowe.media.MediaVariantResolver;
 import com.simonrowe.search.elasticsearch.BlogSearchDocument;
 import com.simonrowe.search.elasticsearch.SiteSearchDocument;
@@ -17,7 +21,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class SearchServiceTest {
 
@@ -240,5 +246,76 @@ class SearchServiceTest {
 
     assertThat(result).isNotNull();
     assertThat(result.blogs()).isEmpty();
+  }
+
+  /**
+   * The query actually put on the wire, rather than what comes back — the relevance
+   * problem these guard against is decided entirely by the request.
+   *
+   * <p>They exist because a mistyped term used to match nothing and leave the query
+   * silently degraded to whichever of the remaining words did match: searching two words
+   * with one of them misspelled returned a page of plausible-looking results with the one
+   * right answer nowhere in it, which reads as "the thing was never indexed".
+   */
+  @Nested
+  class TheQuerySent {
+
+    @SuppressWarnings("unchecked")
+    private SearchRequest capture() throws Exception {
+      ArgumentCaptor<Function<SearchRequest.Builder, ObjectBuilder<SearchRequest>>> captor =
+          ArgumentCaptor.forClass(Function.class);
+      verify(esClient).search(captor.capture(), any(Class.class));
+      return SearchRequest.of(builder -> captor.getValue().apply(builder));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void stubEmptyResponse() throws Exception {
+      HitsMetadata<SiteSearchDocument> hits = mock(HitsMetadata.class);
+      when(hits.hits()).thenReturn(List.of());
+      SearchResponse<SiteSearchDocument> response = mock(SearchResponse.class);
+      when(response.hits()).thenReturn(hits);
+      when(esClient.search(any(Function.class), any(Class.class))).thenReturn(response);
+    }
+
+    @Test
+    void toleratesTyposAndWeightsTheTitleOnTheSiteSearch() throws Exception {
+      stubEmptyResponse();
+
+      searchService.siteSearch("AI SLDC");
+
+      MultiMatchQuery query = capture().query().multiMatch();
+      assertThat(query.fuzziness()).isEqualTo("AUTO");
+      assertThat(query.prefixLength()).isEqualTo(1);
+      assertThat(query.fields()).containsExactly(
+          "name^3", "shortDescription^2", "longDescription", "company");
+    }
+
+    @Test
+    void toleratesTyposOnTheBlogSearch() throws Exception {
+      stubEmptyResponse();
+
+      searchService.blogSearch("sprign boot");
+
+      MultiMatchQuery query = capture().query().multiMatch();
+      assertThat(query.fuzziness()).isEqualTo("AUTO");
+      assertThat(query.prefixLength()).isEqualTo(1);
+      assertThat(query.fields()).startsWith("title^3");
+    }
+
+    /**
+     * The by-type search wraps its match in a bool so it can filter on type. That wrapping
+     * is exactly where a shared query shape gets forgotten.
+     */
+    @Test
+    void toleratesTyposOnTheByTypeSearch() throws Exception {
+      stubEmptyResponse();
+
+      searchService.searchByType("AI SLDC", "news");
+
+      MultiMatchQuery query = capture().query().bool().must().getFirst().multiMatch();
+      assertThat(query.fuzziness()).isEqualTo("AUTO");
+      assertThat(query.prefixLength()).isEqualTo(1);
+      assertThat(query.fields()).startsWith("name^3");
+    }
   }
 }
