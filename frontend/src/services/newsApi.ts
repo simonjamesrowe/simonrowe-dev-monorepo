@@ -6,9 +6,32 @@ const NEWS_ENDPOINT = `${API_BASE_URL}/api/news`
 
 const FALLBACK_MESSAGE = 'Unable to load news data.'
 
-export async function fetchNews(page = 0, size = 20, source?: string): Promise<ArticlePage> {
+/** What the feed's filter row narrows the listing by. Both are optional and combine. */
+export interface NewsFilters {
+  /** Source names to include. Empty or absent means every source. */
+  sources?: string[]
+  /** Free text matched against the fields a card shows. Blank or absent means no filter. */
+  query?: string
+}
+
+/**
+ * One page of the news feed.
+ *
+ * <p>`source` repeats rather than being comma-joined: a source name may legitimately
+ * contain a comma, and a joined value would silently split it into two sources that match
+ * nothing.
+ */
+export async function fetchNews(
+  page = 0,
+  size = 20,
+  filters: NewsFilters = {},
+): Promise<ArticlePage> {
   const params = new URLSearchParams({ page: String(page), size: String(size) })
-  if (source) params.set('source', source)
+  for (const source of filters.sources ?? []) {
+    if (source) params.append('source', source)
+  }
+  const query = filters.query?.trim()
+  if (query) params.set('q', query)
   return fetchWithRetry<ArticlePage>(`${NEWS_ENDPOINT}?${params}`, {
     fallbackMessage: FALLBACK_MESSAGE,
   })

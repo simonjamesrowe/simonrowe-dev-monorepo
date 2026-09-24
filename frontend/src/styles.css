@@ -8930,32 +8930,108 @@ a:hover {
   gap: 0.5rem;
 }
 
-.feed__modes {
+/* The feed's filter row: search box, source multi-select, and the two view toggles.
+   One row that wraps, rather than the two rows of pills it replaced — sixteen sources
+   made that row three lines deep with half of them behind a "More" overflow. */
+.feed__toolbar {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 2rem;
 }
 
-.feed__more {
+.feed__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 18rem;
+  /* Stops the box eating the whole row on a wide screen and pushing the toggles off the
+     end — it is the widest thing here, so it is the one that needs a ceiling. */
+  max-width: 26rem;
+}
+
+.feed__search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.feed__search-input {
+  width: 100%;
+  padding: 0.5rem 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.feed__search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.feed__search-input:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 99, 102, 241), 0.2);
+}
+
+/* The platform's own clear control, suppressed in favour of the explicit button: it is
+   absent in Firefox, unstyleable in WebKit, and would sit on top of ours where present. */
+.feed__search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.feed__search-clear {
+  position: absolute;
+  right: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.feed__search-clear:hover {
+  background: var(--color-surface-subtle);
+  color: var(--color-primary);
+}
+
+.feed__sources {
   position: relative;
   display: inline-flex;
 }
 
-.feed__more-toggle {
+.feed__sources-toggle {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  /* A long source name is the label when exactly one is picked, and it must not stretch
+     the row past the viewport. */
+  max-width: 14rem;
 }
 
-.feed__more-menu {
+.feed__sources-toggle > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed__sources-menu {
   position: absolute;
   top: calc(100% + 0.4rem);
   left: 0;
   z-index: 20;
-  min-width: 14rem;
-  max-height: 18rem;
-  overflow-y: auto;
+  min-width: 16rem;
   padding: 0.35rem;
   border: 1px solid var(--color-border);
   border-radius: 0.65rem;
@@ -8963,32 +9039,108 @@ a:hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
-.feed__more-item {
+.feed__sources-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  width: 100%;
-  padding: 0.45rem 0.6rem;
-  border: none;
-  border-radius: 0.4rem;
-  background: transparent;
+  padding: 0.35rem 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.feed__sources-heading {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--color-text-muted);
-  font-size: 0.85rem;
-  text-align: left;
+}
+
+.feed__sources-clear {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  font-family: inherit;
   cursor: pointer;
 }
 
-.feed__more-item:hover {
+.feed__sources-clear:disabled {
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  cursor: default;
+}
+
+.feed__sources-list {
+  max-height: 18rem;
+  overflow-y: auto;
+  padding-top: 0.35rem;
+}
+
+.feed__sources-option {
+  /* Positioned so the visually-hidden checkbox below stays inside its own row rather
+     than absolutely positioning itself against the panel and landing on some other
+     row's hit area. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.4rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.feed__sources-option:hover {
   background: var(--color-surface-subtle);
   color: var(--color-primary);
 }
 
-.feed__more-item--active {
-  color: var(--color-primary);
-  font-weight: 600;
+/* Kept in the accessibility tree and in the tab order — only its default appearance is
+   replaced, by the box beside it. Hiding it with display:none would take the checkbox
+   role and the keyboard with it. */
+.feed__sources-checkbox {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
+.feed__sources-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  color: #fff;
+}
+
+.feed__sources-checkbox:checked + .feed__sources-box {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+.feed__sources-checkbox:focus-visible + .feed__sources-box {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.feed__sources-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Also worn by the release-timeline filters on /status. */
 .feed__more-count {
   font-size: 0.75rem;
   opacity: 0.7;
@@ -9339,6 +9491,11 @@ a:hover {
   font-size: 1.1rem;
 }
 
+/* The "Clear filters" way out of an over-narrowed feed. */
+.feed__empty .button {
+  margin-top: 1rem;
+}
+
 /* Favourites */
 .favourite-button {
   display: inline-flex;
@@ -9452,9 +9609,19 @@ a:hover {
     white-space: nowrap;
   }
 
-  .feed__more-menu {
-    left: auto;
-    right: 0;
+  /* Stays anchored to the toggle's left edge — the toggle sits at the start of its row
+     here, so anchoring right would hang the panel off the left of the screen. The width
+     cap is what keeps it on screen instead. */
+  .feed__sources-menu {
+    min-width: 0;
+    width: calc(100vw - 3rem);
+  }
+
+  .feed__search {
+    /* Its own line: below this width the box and three toggles on one row leaves the box
+       too narrow to read what has been typed into it. */
+    flex-basis: 100%;
+    max-width: none;
   }
 }
 

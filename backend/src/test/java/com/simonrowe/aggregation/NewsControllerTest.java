@@ -1,5 +1,6 @@
 package com.simonrowe.aggregation;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -65,6 +66,157 @@ class NewsControllerTest extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].id").value("a-1"));
+  }
+
+  @Test
+  void getLatestNews_filtersBySeveralSourcesAtOnce() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticleWithSource("a-1", "One", "Claude Blog", true),
+        sampleArticleWithSource("a-2", "Two", "Spring Blog", true),
+        sampleArticleWithSource("a-3", "Three", "Rundown AI", true)));
+
+    mockMvc.perform(get("/api/news")
+            .param("source", "Claude Blog")
+            .param("source", "Spring Blog"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(2))
+        .andExpect(jsonPath("$.content[*].sourceName",
+            containsInAnyOrder("Claude Blog", "Spring Blog")));
+  }
+
+  /** {@code ?source=} with nothing after it has to mean "every source", not "no source". */
+  @Test
+  void getLatestNews_treatsBlankSourceAsNoFilter() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticleWithSource("a-1", "One", "Claude Blog", true),
+        sampleArticleWithSource("a-2", "Two", "Spring Blog", true)));
+
+    mockMvc.perform(get("/api/news").param("source", ""))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(2));
+  }
+
+  /**
+   * Spring binds a single-valued parameter to a {@code List<String>} by splitting it on
+   * commas, so a source whose own name contains one must arrive as its own value and still
+   * be matched whole.
+   */
+  @Test
+  void getLatestNews_handlesSourceNameContainingComma() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticleWithSource("a-1", "One", "Smith, Jones & Co", true),
+        sampleArticleWithSource("a-2", "Two", "Spring Blog", true)));
+
+    mockMvc.perform(get("/api/news").param("source", "Smith, Jones & Co"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.content[0].id").value("a-1"));
+  }
+
+  @Test
+  void getLatestNews_matchesFreeTextAgainstTheTitle() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticle("a-1", "The AI-Native SDLC playbook", true),
+        sampleArticle("a-2", "Something else entirely", true)));
+
+    mockMvc.perform(get("/api/news").param("q", "sdlc"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.content[0].id").value("a-1"));
+  }
+
+  @Test
+  void getLatestNews_matchesFreeTextAgainstTheSummary() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticle("a-1", "An opaque headline", true),
+        sampleArticle("a-2", "Another opaque headline", true)));
+
+    // Both share the same summary text, so a summary hit returns both.
+    mockMvc.perform(get("/api/news").param("q", "summary of the article"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(2));
+  }
+
+  /**
+   * Terms are ANDed across the record but ORed across its fields, so a source name and a
+   * title word in one query narrow each other rather than cancelling out.
+   */
+  @Test
+  void getLatestNews_requiresEveryTermButNotInOneField() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticleWithSource("a-1", "Marketplace launch", "Claude Blog", true),
+        sampleArticleWithSource("a-2", "Marketplace launch", "Spring Blog", true)));
+
+    mockMvc.perform(get("/api/news").param("q", "claude marketplace"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.content[0].id").value("a-1"));
+  }
+
+  @Test
+  void getLatestNews_freeTextIgnoresCase() throws Exception {
+    articleRepository.save(sampleArticle("a-1", "The AI-Native SDLC playbook", true));
+
+    mockMvc.perform(get("/api/news").param("q", "AI-NATIVE"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(1));
+  }
+
+  /**
+   * A term is matched as a literal. Without quoting, a visitor typing a bracket or a plus
+   * into the box would either match nothing or fail the query outright.
+   */
+  @Test
+  void getLatestNews_treatsRegexMetacharactersAsLiteralText() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticle("a-1", "C++ is back", true),
+        sampleArticle("a-2", "CCC is not", true)));
+
+    mockMvc.perform(get("/api/news").param("q", "C++"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.content[0].id").value("a-1"));
+  }
+
+  @Test
+  void getLatestNews_combinesFreeTextWithTheSourceFilter() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticleWithSource("a-1", "Agents at work", "Claude Blog", true),
+        sampleArticleWithSource("a-2", "Agents at work", "Rundown AI", true),
+        sampleArticleWithSource("a-3", "Nothing relevant", "Claude Blog", true)));
+
+    mockMvc.perform(get("/api/news")
+            .param("source", "Claude Blog")
+            .param("q", "agents"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.content[0].id").value("a-1"));
+  }
+
+  @Test
+  void getLatestNews_freeTextStillExcludesHiddenArticles() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticle("a-1", "Visible SDLC article", true),
+        sampleArticle("a-2", "Hidden SDLC article", false)));
+
+    mockMvc.perform(get("/api/news").param("q", "sdlc"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.content[0].id").value("a-1"));
+  }
+
+  @Test
+  void getLatestNews_pagesTheFilteredSetRatherThanTheWholeFeed() throws Exception {
+    articleRepository.saveAll(List.of(
+        sampleArticle("a-1", "SDLC one", true),
+        sampleArticle("a-2", "SDLC two", true),
+        sampleArticle("a-3", "Unrelated", true)));
+
+    mockMvc.perform(get("/api/news").param("q", "sdlc").param("size", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(2))
+        .andExpect(jsonPath("$.totalPages").value(2))
+        .andExpect(jsonPath("$.last").value(false));
   }
 
   @Test
