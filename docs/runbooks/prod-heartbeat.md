@@ -54,10 +54,14 @@ access policy with only `logs:read` in the Grafana Cloud portal and replace
 as well, or every run fails as `cannot check`.
 
 ```bash
-set -a; source ~/workspace/simonjamesrowe/env; set +a
+# Wrapped in `bash -c` on purpose: `${!v}` is bash-only, and in zsh (the macOS
+# default shell) it fails with "bad substitution" - after which each secret is
+# silently set to an EMPTY string and every run fails as `cannot check`.
+bash -c 'set -a; source ~/workspace/simonjamesrowe/env; set +a
 for v in GRAFANA_CLOUD_LOKI_ENDPOINT GRAFANA_CLOUD_LOKI_USER GRAFANA_CLOUD_API_KEY; do
-  printf '%s' "${!v}" | gh secret set "$v"
-done
+  [[ -n "${!v}" ]] || { echo "$v is empty - not setting it"; exit 1; }
+  printf "%s" "${!v}" | gh secret set "$v"
+done'
 ```
 
 ## Limits
