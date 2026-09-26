@@ -1,0 +1,167 @@
+openapi: 3.1.0
+info:
+  title: CoParent Assistant API
+  version: 1.0.0
+paths:
+  /api/coparent/assistant/config:
+    get:
+      summary: Return assistant feature availability
+      responses:
+        '200':
+          description: Availability
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled]
+                properties:
+                  enabled: { type: boolean }
+  /api/coparent/families/{familyId}/assistant/batches:
+    parameters:
+      - $ref: '#/components/parameters/FamilyId'
+    post:
+      summary: Analyse text and/or one image into private proposals
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                text: { type: string, maxLength: 20000 }
+                image: { type: string, contentEncoding: binary }
+      responses:
+        '201': { $ref: '#/components/responses/Batch' }
+        '400': { $ref: '#/components/responses/Problem' }
+    get:
+      summary: List caller-owned unexpired batches
+      responses:
+        '200':
+          description: Recent batches
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BatchSummary' }
+  /api/coparent/families/{familyId}/assistant/batches/{batchId}:
+    parameters:
+      - $ref: '#/components/parameters/FamilyId'
+      - $ref: '#/components/parameters/BatchId'
+    get:
+      summary: Return one caller-owned unexpired batch
+      responses:
+        '200': { $ref: '#/components/responses/Batch' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/coparent/families/{familyId}/assistant/batches/{batchId}/actions/{actionId}:
+    parameters:
+      - $ref: '#/components/parameters/FamilyId'
+      - $ref: '#/components/parameters/BatchId'
+      - $ref: '#/components/parameters/ActionId'
+    patch:
+      summary: Replace one action's typed payload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EditAction' }
+      responses:
+        '200': { $ref: '#/components/responses/Action' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Action' }
+  /api/coparent/families/{familyId}/assistant/batches/{batchId}/actions/{actionId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/FamilyId'
+      - $ref: '#/components/parameters/BatchId'
+      - $ref: '#/components/parameters/ActionId'
+    post:
+      summary: Approve and apply one action
+      requestBody: { $ref: '#/components/requestBodies/Version' }
+      responses:
+        '200': { $ref: '#/components/responses/Action' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /api/coparent/families/{familyId}/assistant/batches/{batchId}/actions/{actionId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/FamilyId'
+      - $ref: '#/components/parameters/BatchId'
+      - $ref: '#/components/parameters/ActionId'
+    post:
+      summary: Reject one action without mutation
+      requestBody: { $ref: '#/components/requestBodies/Version' }
+      responses:
+        '200': { $ref: '#/components/responses/Action' }
+        '409': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    FamilyId: { name: familyId, in: path, required: true, schema: { type: string } }
+    BatchId: { name: batchId, in: path, required: true, schema: { type: string } }
+    ActionId: { name: actionId, in: path, required: true, schema: { type: string } }
+  requestBodies:
+    Version:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [version]
+            properties:
+              version: { type: integer, minimum: 0 }
+  responses:
+    Batch:
+      description: Proposal batch
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Batch' }
+    Action:
+      description: Updated action
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Action' }
+    Problem:
+      description: Safe API error
+      content:
+        application/problem+json:
+          schema: { type: object }
+  schemas:
+    ActionType:
+      type: string
+      enum: [CREATE_EVENT, UPDATE_EVENT, DELETE_EVENT, CREATE_CATEGORY, UPDATE_CATEGORY, DELETE_CATEGORY, CREATE_SCHEDULE_CHANGE, WITHDRAW_SCHEDULE_CHANGE, START_MESSAGE_CONVERSATION, SEND_MESSAGE, CREATE_PERMISSION_REQUEST]
+    ActionStatus:
+      type: string
+      enum: [BLOCKED, PENDING, APPLYING, APPLIED, REJECTED, FAILED]
+    EditAction:
+      type: object
+      required: [version, actionType, payload]
+      properties:
+        version: { type: integer, minimum: 0 }
+        actionType: { $ref: '#/components/schemas/ActionType' }
+        payload: { type: object, additionalProperties: true }
+    Action:
+      type: object
+      required: [id, actionType, status, payload, fieldErrors, revision]
+      properties:
+        id: { type: string }
+        actionType: { $ref: '#/components/schemas/ActionType' }
+        status: { $ref: '#/components/schemas/ActionStatus' }
+        payload: { type: object, additionalProperties: true }
+        fieldErrors: { type: array, items: { type: object } }
+        revision: { type: integer }
+        targetSnapshot: { type: [object, 'null'], additionalProperties: true }
+        result: { type: [object, 'null'], additionalProperties: true }
+        failureMessage: { type: [string, 'null'] }
+    BatchSummary:
+      type: object
+      required: [id, status, actionCount, createdAt, expiresAt]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [READY, NO_ACTION, FAILED] }
+        actionCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    Batch:
+      allOf:
+        - $ref: '#/components/schemas/BatchSummary'
+        - type: object
+          required: [familyId, actions]
+          properties:
+            familyId: { type: string }
+            actions: { type: array, items: { $ref: '#/components/schemas/Action' } }

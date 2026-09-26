@@ -13,4 +13,8 @@ public interface ConversationRepository extends MongoRepository<Conversation, Ob
   Optional<Conversation> findByIdAndFamilyIdAndDeletedAtIsNull(ObjectId id, ObjectId familyId);
 
   Optional<Conversation> findByPermissionRequestIdAndDeletedAtIsNull(ObjectId permissionId);
+
+  Optional<Conversation> findByAssistantActionId(ObjectId assistantActionId);
+
+  Optional<Conversation> findByMessagesId(ObjectId messageId);
 }

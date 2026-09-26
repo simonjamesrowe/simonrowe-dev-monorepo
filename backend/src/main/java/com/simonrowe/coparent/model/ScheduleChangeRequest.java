@@ -19,6 +19,7 @@ public record ScheduleChangeRequest(
     ProposedChange proposedChange,
     String reason,
     String responseNote,
+    ObjectId assistantActionId,
     Instant deletedAt,
     Instant createdAt,
     Instant updatedAt

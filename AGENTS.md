@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/048-coparent-migration/plan.md
+specs/049-coparent-assistant/plan.md
 <!-- SPECKIT END -->
 
 # simonrowe-dev-monorepo — agent guidelines
@@ -104,6 +104,8 @@ containers in `created`.
   `review_learnings`, `linear_issues`)
 - CoParent module using legacy-compatible collection names in a dedicated `coparent`
   database on the existing MongoDB container (048-coparent-migration)
+- Java 25; TypeScript 5.7; React 19 + Spring Boot 4.1.1, Spring AI 2.0.1 OpenAI, Spring Data MongoDB, Jakarta Validation, React Query, React Hook Form, Zod, Vaul, Lucide React (simonrowe/feat/coparent-llm-actions)
+- Dedicated CoParent MongoDB database; proposal batches in an ephemeral TTL collection; raw submissions are never stored (simonrowe/feat/coparent-llm-actions)
 
 ## Recent Changes
 - 048-coparent-migration: Consolidated CoParent Java API, third frontend entry,

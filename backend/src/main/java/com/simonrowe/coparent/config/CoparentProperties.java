@@ -11,6 +11,10 @@ public record CoparentProperties(
     String auth0EmailClaim,
     String emailFrom,
     boolean emailEnabled,
-    String sourceDatabase
+    String sourceDatabase,
+    Assistant assistant
 ) {
+  /** Configuration for the private proposal-only CoParent assistant. */
+  public record Assistant(boolean enabled, String model) {
+  }
 }

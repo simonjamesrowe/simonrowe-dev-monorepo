@@ -49,4 +49,14 @@ describe('AppShell', () => {
     await user.click(toggle);
     expect(sidebar).toHaveClass('invisible');
   });
+
+  it('shows desktop and mobile Quick add launchers only when enabled', () => {
+    render(
+      <AppShell navigationItems={[]} assistantEnabled>
+        <p>Content</p>
+      </AppShell>,
+    );
+
+    expect(screen.getAllByRole('button', { name: /Quick add/i })).toHaveLength(2);
+  });
 });

@@ -12,4 +12,6 @@ public interface EventCategoryRepository extends MongoRepository<EventCategory, 
 
   Optional<EventCategory> findByIdAndFamilyIdAndDeletedAtIsNull(
       ObjectId id, ObjectId familyId);
+
+  Optional<EventCategory> findByAssistantActionId(ObjectId assistantActionId);
 }

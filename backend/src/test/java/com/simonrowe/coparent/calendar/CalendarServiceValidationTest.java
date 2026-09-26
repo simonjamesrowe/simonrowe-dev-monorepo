@@ -197,12 +197,12 @@ class CalendarServiceValidationTest {
 
   private EventCategory category(final ObjectId id, final boolean system) {
     return new EventCategory(id, FAMILY_ID, "School", "book", "#fff", false, system, null,
-        START, START);
+        null, START, START);
   }
 
   private CalendarEvent calendarEvent(final ObjectId id) {
     return new CalendarEvent(id, FAMILY_ID, "school", "Pickup", START, null, null, null, true,
-        null, List.of(), List.of(CHILD_ID), null, null, null, null, START, START);
+        null, List.of(), List.of(CHILD_ID), null, null, null, null, null, START, START);
   }
 
   private ScheduleChangeRequest.ProposedChange proposed(
@@ -217,7 +217,7 @@ class CalendarServiceValidationTest {
       final ObjectId requestedBy,
       final String status) {
     return new ScheduleChangeRequest(id, FAMILY_ID, status, requestedBy, START, null, null, null,
-        proposed("swap", "2026-10-02", "2026-10-03"), "Needed", null, null, START, START);
+        proposed("swap", "2026-10-02", "2026-10-03"), "Needed", null, null, null, START, START);
   }
 
   private void assertBadRequest(final Runnable operation) {

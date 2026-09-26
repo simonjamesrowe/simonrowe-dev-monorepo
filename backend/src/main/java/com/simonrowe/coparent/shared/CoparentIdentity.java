@@ -25,11 +25,17 @@ public class CoparentIdentity {
 
   /** Returns the configured verified-email claim, normalised for comparisons. */
   public String email() {
-    final String email = jwt().getClaimAsString(properties.auth0EmailClaim());
+    final String email = emailOrNull();
     if (email == null || email.isBlank()) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Verified email is required");
     }
-    return email.trim().toLowerCase();
+    return email;
+  }
+
+  /** Returns the normalised verified-email claim when the access token contains it. */
+  public String emailOrNull() {
+    final String email = jwt().getClaimAsString(properties.auth0EmailClaim());
+    return email == null || email.isBlank() ? null : email.trim().toLowerCase();
   }
 
   private Jwt jwt() {

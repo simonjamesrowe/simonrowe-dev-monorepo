@@ -105,6 +105,7 @@ class V044MigrateCoparentDataTest extends AbstractIntegrationTest {
   private void execute() {
     changeUnit.execution(new CoparentMongoOperations(mongoTemplate), mongoClient,
         new CoparentProperties(true, "coparent", "http://localhost", "email",
-            "noreply@example.com", false, SOURCE_DATABASE));
+            "noreply@example.com", false, SOURCE_DATABASE,
+            new CoparentProperties.Assistant(false, "gpt-5.4-nano")));
   }
 }

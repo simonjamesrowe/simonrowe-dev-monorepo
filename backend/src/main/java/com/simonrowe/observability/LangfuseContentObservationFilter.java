@@ -32,6 +32,8 @@ import org.springframework.ai.tool.observation.ToolCallingObservationContext;
  */
 public class LangfuseContentObservationFilter implements ObservationFilter {
 
+  public static final String SUPPRESS_CONTENT = "coparent.assistant.suppress-content";
+
   private static final Logger LOG =
       LoggerFactory.getLogger(LangfuseContentObservationFilter.class);
 
@@ -60,6 +62,12 @@ public class LangfuseContentObservationFilter implements ObservationFilter {
   }
 
   private void mapChatContent(final ChatModelObservationContext context) {
+    if (context.getRequest() != null && context.getRequest().getInstructions() != null
+        && context.getRequest().getInstructions().stream()
+            .anyMatch(message -> Boolean.TRUE.equals(
+                message.getMetadata().get(SUPPRESS_CONTENT)))) {
+      return;
+    }
     if (context.getRequest() != null && context.getRequest().getInstructions() != null) {
       String prompt = context.getRequest().getInstructions().stream()
           .map(LangfuseContentObservationFilter::renderMessage)

@@ -18,6 +18,7 @@ import com.simonrowe.migration.changeunits.V022CreatePlatformReleaseIndexes;
 import com.simonrowe.migration.changeunits.V029CreateShortLinksAndBackfill;
 import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
+import com.simonrowe.migration.changeunits.V045CreateCoparentAssistantSchema;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -404,6 +405,7 @@ public class RestoreService {
   /** Recreates all CoParent indexes after its first restored collection is imported. */
   void ensureCoparentIndexes() {
     V043CreateCoparentCollections.createIndexes(coparentMongoTemplate);
+    V045CreateCoparentAssistantSchema.createIndexes(coparentMongoTemplate);
     LOG.info("Recreated CoParent indexes after restore");
   }
 

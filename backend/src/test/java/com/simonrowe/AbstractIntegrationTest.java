@@ -8,6 +8,7 @@ import com.simonrowe.media.ImageVariantGenerator;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.Map;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -51,6 +52,9 @@ public abstract class AbstractIntegrationTest {
 
   @MockitoBean
   protected Ai ai;
+
+  @MockitoBean
+  protected ChatModel chatModel;
 
   @Autowired
   protected MockMvc mockMvc;

@@ -14,4 +14,6 @@ public interface ScheduleChangeRepository
 
   Optional<ScheduleChangeRequest> findByIdAndFamilyIdAndDeletedAtIsNull(
       ObjectId id, ObjectId familyId);
+
+  Optional<ScheduleChangeRequest> findByAssistantActionId(ObjectId assistantActionId);
 }

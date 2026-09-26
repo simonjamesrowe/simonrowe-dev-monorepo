@@ -52,16 +52,24 @@ public class FamilyService {
   /** Returns all profiles, creating a single unassigned profile on first use. */
   public CurrentUser currentUser() {
     List<Parent> profiles = parents.findByAuth0IdAndStatus(identity.subject(), ACTIVE);
+    final String verifiedEmail;
     if (profiles.isEmpty()) {
       profiles = List.of(createInitialProfile(""));
+      verifiedEmail = identity.email();
     } else {
+      final String tokenEmail = identity.emailOrNull();
+      verifiedEmail = tokenEmail == null
+          ? profiles.stream().map(Parent::email)
+              .filter(email -> email != null && !email.isBlank())
+              .findFirst().orElseGet(identity::email)
+          : tokenEmail;
       final Instant now = Instant.now();
       profiles = profiles.stream().map(parent -> new Parent(
           parent.id(), parent.auth0Id(), parent.familyId(), parent.fullName(), parent.email(),
           parent.role(), parent.status(), parent.color(), parent.avatarUrl(), now,
           parent.createdAt(), now)).map(parents::save).toList();
     }
-    return new CurrentUser(identity.subject(), identity.email(), profiles,
+    return new CurrentUser(identity.subject(), verifiedEmail, profiles,
         profiles.stream().allMatch(profile -> profile.familyId() == null));
   }
 

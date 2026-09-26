@@ -64,13 +64,23 @@ public class CalendarService {
 
   /** Creates an event after all referenced family rows have been checked in bounded queries. */
   public CalendarEvent createEvent(final ObjectId familyId, final EventValues values) {
+    return createEvent(familyId, values, null, null);
+  }
+
+  /** Creates an event with preallocated assistant identifiers for retry reconciliation. */
+  public CalendarEvent createEvent(
+      final ObjectId familyId,
+      final EventValues values,
+      final ObjectId eventId,
+      final ObjectId assistantActionId) {
     access.requireMember(familyId);
     validateEvent(familyId, values);
     final Instant now = Instant.now();
-    final CalendarEvent saved = events.save(new CalendarEvent(null, familyId, values.type(),
+    final CalendarEvent saved = events.save(new CalendarEvent(eventId, familyId, values.type(),
         values.title().trim(), values.startDate(), values.endDate(), values.startTime(),
         values.endTime(), values.allDay(), values.parentId(), values.parentIds(),
-        values.childIds(), values.location(), values.notes(), values.recurring(), null, now, now));
+        values.childIds(), values.location(), values.notes(), values.recurring(), assistantActionId,
+        null, now, now));
     audits.record(familyId, "event", saved.id(), "create",
         Map.of("type", saved.type(), "title", saved.title(), "startDate", saved.startDate()));
     return saved;
@@ -94,13 +104,23 @@ public class CalendarService {
       final ObjectId familyId,
       final ObjectId eventId,
       final EventValues values) {
+    return updateEvent(familyId, eventId, values, null);
+  }
+
+  /** Replaces event values and records an internal assistant action marker. */
+  public CalendarEvent updateEvent(
+      final ObjectId familyId,
+      final ObjectId eventId,
+      final EventValues values,
+      final ObjectId assistantActionId) {
     final CalendarEvent current = getEvent(familyId, eventId);
     validateEvent(familyId, values);
     final CalendarEvent saved = events.save(new CalendarEvent(current.id(), familyId, values.type(),
         values.title().trim(), values.startDate(), values.endDate(), values.startTime(),
         values.endTime(), values.allDay(), values.parentId(), values.parentIds(),
-        values.childIds(), values.location(), values.notes(), values.recurring(), null,
-        current.createdAt(), Instant.now()));
+        values.childIds(), values.location(), values.notes(), values.recurring(),
+        assistantActionId == null ? current.assistantActionId() : assistantActionId,
+        null, current.createdAt(), Instant.now()));
     audits.record(familyId, "event", saved.id(), "update",
         Map.of("type", saved.type(), "title", saved.title(), "startDate", saved.startDate()));
     return saved;
@@ -108,12 +128,20 @@ public class CalendarService {
 
   /** Soft-deletes an authorised event. */
   public void deleteEvent(final ObjectId familyId, final ObjectId eventId) {
+    deleteEvent(familyId, eventId, null);
+  }
+
+  /** Soft-deletes an event and records an internal assistant action marker. */
+  public void deleteEvent(
+      final ObjectId familyId, final ObjectId eventId, final ObjectId assistantActionId) {
     final CalendarEvent current = getEvent(familyId, eventId);
     final Instant now = Instant.now();
     events.save(new CalendarEvent(current.id(), familyId, current.type(), current.title(),
         current.startDate(), current.endDate(), current.startTime(), current.endTime(),
         current.allDay(), current.parentId(), current.parentIds(), current.childIds(),
-        current.location(), current.notes(), current.recurring(), now, current.createdAt(), now));
+        current.location(), current.notes(), current.recurring(),
+        assistantActionId == null ? current.assistantActionId() : assistantActionId,
+        now, current.createdAt(), now));
     audits.record(familyId, "event", eventId, "delete", Map.of("deletedAt", now));
   }
 
@@ -121,12 +149,21 @@ public class CalendarService {
   public EventCategory createCategory(
       final ObjectId familyId,
       final CategoryValues values) {
+    return createCategory(familyId, values, null, null);
+  }
+
+  /** Creates a category with preallocated assistant identifiers. */
+  public EventCategory createCategory(
+      final ObjectId familyId,
+      final CategoryValues values,
+      final ObjectId categoryId,
+      final ObjectId assistantActionId) {
     access.requireMember(familyId);
     validateCategory(values);
     final Instant now = Instant.now();
-    final EventCategory saved = categories.save(new EventCategory(null, familyId,
+    final EventCategory saved = categories.save(new EventCategory(categoryId, familyId,
         values.name().trim(), values.icon().trim(), values.color(), values.defaultCategory(),
-        false, null, now, now));
+        false, assistantActionId, null, now, now));
     audits.record(familyId, "event_category", saved.id(), "create",
         Map.of("name", saved.name(), "icon", saved.icon()));
     return saved;
@@ -151,6 +188,15 @@ public class CalendarService {
       final ObjectId familyId,
       final ObjectId categoryId,
       final CategoryValues values) {
+    return updateCategory(familyId, categoryId, values, null);
+  }
+
+  /** Replaces category values and records an internal assistant action marker. */
+  public EventCategory updateCategory(
+      final ObjectId familyId,
+      final ObjectId categoryId,
+      final CategoryValues values,
+      final ObjectId assistantActionId) {
     final EventCategory current = getCategory(familyId, categoryId);
     if (current.system()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -159,7 +205,8 @@ public class CalendarService {
     validateCategory(values);
     final EventCategory saved = categories.save(new EventCategory(current.id(), familyId,
         values.name().trim(), values.icon().trim(), values.color(), values.defaultCategory(),
-        false, null, current.createdAt(), Instant.now()));
+        false, assistantActionId == null ? current.assistantActionId() : assistantActionId,
+        null, current.createdAt(), Instant.now()));
     audits.record(familyId, "event_category", saved.id(), "update",
         Map.of("name", saved.name(), "icon", saved.icon()));
     return saved;
@@ -167,6 +214,12 @@ public class CalendarService {
 
   /** Soft-deletes a non-system event category. */
   public void deleteCategory(final ObjectId familyId, final ObjectId categoryId) {
+    deleteCategory(familyId, categoryId, null);
+  }
+
+  /** Soft-deletes a category and records an internal assistant action marker. */
+  public void deleteCategory(
+      final ObjectId familyId, final ObjectId categoryId, final ObjectId assistantActionId) {
     final EventCategory current = getCategory(familyId, categoryId);
     if (current.system()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -174,7 +227,9 @@ public class CalendarService {
     }
     final Instant now = Instant.now();
     categories.save(new EventCategory(current.id(), familyId, current.name(), current.icon(),
-        current.color(), current.defaultCategory(), false, now, current.createdAt(), now));
+        current.color(), current.defaultCategory(), false,
+        assistantActionId == null ? current.assistantActionId() : assistantActionId,
+        now, current.createdAt(), now));
     audits.record(familyId, "event_category", categoryId, "delete", Map.of("deletedAt", now));
   }
 
@@ -184,6 +239,17 @@ public class CalendarService {
       final ObjectId originalEventId,
       final ScheduleChangeRequest.ProposedChange proposedChange,
       final String reason) {
+    return createChange(familyId, originalEventId, proposedChange, reason, null, null);
+  }
+
+  /** Creates a schedule request with preallocated assistant identifiers. */
+  public ScheduleChangeRequest createChange(
+      final ObjectId familyId,
+      final ObjectId originalEventId,
+      final ScheduleChangeRequest.ProposedChange proposedChange,
+      final String reason,
+      final ObjectId requestId,
+      final ObjectId assistantActionId) {
     final Parent actor = access.requireMember(familyId);
     if (reason == null || reason.isBlank() || proposedChange == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -194,9 +260,9 @@ public class CalendarService {
       getEvent(familyId, originalEventId);
     }
     final Instant now = Instant.now();
-    final ScheduleChangeRequest saved = changes.save(new ScheduleChangeRequest(null, familyId,
+    final ScheduleChangeRequest saved = changes.save(new ScheduleChangeRequest(requestId, familyId,
         "pending", actor.id(), now, null, null, originalEventId, proposedChange, reason.trim(),
-        null, null, now, now));
+        null, assistantActionId, null, now, now));
     audits.record(familyId, "schedule_change_request", saved.id(), "create",
         Map.of("reason", saved.reason(), "changeType", proposedChange.type()));
     return saved;
@@ -249,6 +315,12 @@ public class CalendarService {
 
   /** Lets only the original requester withdraw a still-pending request. */
   public void withdrawChange(final ObjectId familyId, final ObjectId requestId) {
+    withdrawChange(familyId, requestId, null);
+  }
+
+  /** Withdraws a schedule request and records an internal assistant action marker. */
+  public void withdrawChange(
+      final ObjectId familyId, final ObjectId requestId, final ObjectId assistantActionId) {
     final Parent actor = access.requireMember(familyId);
     final ScheduleChangeRequest current = getChange(familyId, requestId);
     if (!actor.id().equals(current.requestedBy())) {
@@ -263,7 +335,9 @@ public class CalendarService {
     changes.save(new ScheduleChangeRequest(current.id(), familyId, current.status(),
         current.requestedBy(), current.requestedAt(), current.resolvedBy(), current.resolvedAt(),
         current.originalEventId(), current.proposedChange(), current.reason(),
-        current.responseNote(), now, current.createdAt(), now));
+        current.responseNote(),
+        assistantActionId == null ? current.assistantActionId() : assistantActionId,
+        now, current.createdAt(), now));
     audits.record(familyId, "schedule_change_request", requestId, "withdraw", Map.of());
   }
 

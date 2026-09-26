@@ -16,6 +16,7 @@ public record EventCategory(
     String color,
     @Field("isDefault") boolean defaultCategory,
     @Field("isSystem") boolean system,
+    ObjectId assistantActionId,
     Instant deletedAt,
     Instant createdAt,
     Instant updatedAt

@@ -6,4 +6,6 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 /** Append-only audit persistence. */
 public interface AuditRepository extends MongoRepository<AuditRecord, ObjectId> {
+
+  boolean existsByAssistantActionId(ObjectId assistantActionId);
 }

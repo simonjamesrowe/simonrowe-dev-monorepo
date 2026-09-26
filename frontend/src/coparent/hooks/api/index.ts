@@ -7,3 +7,4 @@ export * from './useOnboarding';
 export * from './useConversations';
 export * from './useEvents';
 export * from './useScheduleChangeRequests';
+export * from './useAssistant';

@@ -24,6 +24,7 @@ public record CalendarEvent(
     String location,
     String notes,
     Recurring recurring,
+    ObjectId assistantActionId,
     Instant deletedAt,
     Instant createdAt,
     Instant updatedAt

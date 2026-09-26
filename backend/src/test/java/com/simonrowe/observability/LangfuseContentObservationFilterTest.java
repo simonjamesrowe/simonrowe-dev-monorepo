@@ -89,6 +89,27 @@ class LangfuseContentObservationFilterTest {
     assertThat(valueOf(result, LangfuseAttributes.OBSERVATION_OUTPUT)).isNull();
   }
 
+  @Test
+  void suppressesAssistantContentEvenWhenGlobalCaptureIsEnabled() {
+    LangfuseContentObservationFilter filter =
+        new LangfuseContentObservationFilter(enabledProperties());
+    UserMessage privateMessage = UserMessage.builder()
+        .text("Private family input")
+        .metadata(java.util.Map.of(LangfuseContentObservationFilter.SUPPRESS_CONTENT, true))
+        .build();
+    ChatModelObservationContext context = ChatModelObservationContext.builder()
+        .prompt(new Prompt(privateMessage))
+        .provider("openai")
+        .build();
+    context.setResponse(new ChatResponse(
+        List.of(new Generation(new AssistantMessage("Private proposal")))));
+
+    Observation.Context result = filter.map(context);
+
+    assertThat(valueOf(result, LangfuseAttributes.OBSERVATION_INPUT)).isNull();
+    assertThat(valueOf(result, LangfuseAttributes.OBSERVATION_OUTPUT)).isNull();
+  }
+
   /**
    * Built from the real Spring AI context rather than by injecting {@code spring.ai.tool.call.*}
    * key values by hand: the previous hand-injected form passed even though the production code
