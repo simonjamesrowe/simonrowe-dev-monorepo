@@ -4,7 +4,7 @@ set -euo pipefail
 # Production watchdog. Installed by scripts/install-prod-monitoring.sh as a
 # once-a-minute cron job logging to /var/log/prod-health/monitor.log.
 #
-# It runs three independent layers, cheapest first:
+# It runs four independent layers, cheapest first:
 #
 #   1. SITE   - the public site is reachable. If not, restart pinggy (every public
 #               hostname is behind that one tunnel) and reconcile the whole stack.
@@ -12,6 +12,8 @@ set -euo pipefail
 #               container is `unhealthy`, restart just that container.
 #   3. ENDPOINT - each public hostname actually serves. If one is down while the
 #               site is up, restart the single service behind it.
+#   4. DNS    - each container that talks to the internet can resolve an external
+#               name while the host can. If one cannot, restart just that container.
 #
 # Layer 2 exists because *Docker never restarts an unhealthy container*.
 # `restart: unless-stopped` only fires when the process exits; a container whose
@@ -104,6 +106,34 @@ ENDPOINTS=(
   "temporal-ui|https://temporal.simonrowe.dev/|200"
   "portainer|https://console.simonrowe.dev/|200"
 )
+
+# Services that cannot do their job without resolving names OUTSIDE the stack
+# (Auth0, Grafana Cloud, GitHub, Linear, OpenAI, the Trivy/NVD feeds, the pinggy
+# relay). Layer 4 probes exactly these. Databases, Kafka, Elasticsearch and the
+# rest only ever resolve compose service names, which Docker's embedded resolver
+# answers without an upstream - so their external DNS being broken costs nothing,
+# and restarting mongodb over it would take the backend down for no reason.
+DNS_EGRESS_SERVICES=(
+  "alloy"
+  "backend"
+  "software-factory"
+  "deployer"
+  "dependencytrack-apiserver"
+  "temporal-ui"
+  "langfuse"
+  "langfuse-worker"
+  "searxng"
+  "trivy-server"
+  "pinggy"
+)
+# Any name every one of those services depends on resolving would do; github.com
+# is stable, has no IPv6 records to confuse an IPv4-only host, and is what the
+# factory and deployer reach first.
+DNS_PROBE_NAME=${DNS_PROBE_NAME:-github.com}
+# A container with no upstream answers SERVFAIL instantly, but a slow upstream
+# makes getent wait out resolv.conf's timeout x attempts. Bound each probe so a
+# bad tick cannot run into the next cron minute.
+DNS_PROBE_TIMEOUT=${DNS_PROBE_TIMEOUT:-5}
 
 mkdir -p "$STATE_DIR"
 
@@ -473,6 +503,84 @@ for entry in "${ENDPOINTS[@]}"; do
 
   if (( f >= SERVICE_FAILURE_THRESHOLD )); then
     svc_restart "$svc" "$url returned $code" || true
+  fi
+done
+
+# ---------------------------------------------------------------------------
+# Layer 4: can each internet-facing container resolve an external name?
+#
+# Every container here resolves through Docker's embedded resolver (127.0.0.11),
+# which forwards non-compose names to upstream servers that - unless daemon.json
+# pins `dns` - were copied from the host's resolv.conf when the container
+# STARTED, and are never re-read. On 2026-09-24 the wifi-watchdog rebooted the Pi
+# while the Wi-Fi was down, Docker started the stack with no nameservers on the
+# host, and twenty containers spent ~23 hours after the link returned unable to
+# resolve anything outside the stack. Every healthcheck stayed green (service
+# names still resolved) and every public hostname served, so layers 1-3 had
+# nothing to see. What broke was everything that talks OUT: Dependency-Track's
+# Auth0 sign-in vanished, alloy shipped nothing to Loki, and software-factory
+# could not reach Loki or Linear to report any of it.
+#
+# scripts/enable-docker-dns.sh removes that cause. This layer is the backstop
+# for it and for any other way a single container loses DNS.
+#
+# The host is probed first as the control: "the host resolves, the container
+# does not" is a fault restarting that container fixes. If the host cannot
+# resolve either, the internet (or the host's own DNS) is down, restarting
+# containers would achieve nothing, and wifi-watchdog.sh owns that problem.
+#
+# Its failure counter is separate from the endpoint layer's (`.dns-failures`,
+# not `.failures`): layer 3 resets a service's counter every tick its hostname
+# serves, and a service whose hostname serves while its outbound DNS is dead is
+# exactly the case this layer exists for. The restart budget IS shared, through
+# svc_restart, so the two layers together cannot restart one service more than
+# SERVICE_MAX_RESTARTS times per window.
+# ---------------------------------------------------------------------------
+
+bounded() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$DNS_PROBE_TIMEOUT" "$@"
+  else
+    "$@"
+  fi
+}
+
+dns_failures_file() {
+  echo "$(svc_state_file "$1").dns-failures"
+}
+
+if ! bounded getent hosts "$DNS_PROBE_NAME" >/dev/null 2>&1; then
+  log "WARN" "host cannot resolve $DNS_PROBE_NAME - skipping container DNS checks (not a container fault)"
+  exit 0
+fi
+
+# `|| true` inside the substitution: under `set -eo pipefail` a failed `docker ps`
+# would otherwise end the script here, and an empty list just skips the layer.
+running_containers=" $( { docker ps --format '{{.Names}}' 2>/dev/null || true; } | tr '\n' ' ') "
+
+for svc in "${DNS_EGRESS_SERVICES[@]}"; do
+  container="${COMPOSE_PROJECT}-${svc}-1"
+  # A stopped container is layer 2's business; probing it would read as a DNS
+  # failure and restart something that is not running.
+  [[ "$running_containers" == *" $container "* ]] || continue
+
+  failures_file="$(dns_failures_file "$svc")"
+  if bounded docker exec "$container" getent hosts "$DNS_PROBE_NAME" >/dev/null 2>&1; then
+    echo 0 > "$failures_file"
+    continue
+  fi
+
+  f=$(cat "$failures_file" 2>/dev/null || echo 0)
+  [[ "$f" =~ ^[0-9]+$ ]] || f=0
+  (( f++ )) || true
+  echo "$f" > "$failures_file"
+  log "WARN" "$svc: cannot resolve $DNS_PROBE_NAME although the host can ($f/$SERVICE_FAILURE_THRESHOLD)"
+
+  if (( f >= SERVICE_FAILURE_THRESHOLD )); then
+    # A restart regenerates the container's resolv.conf from the daemon's current
+    # view of upstream servers, which is what actually cures it.
+    svc_restart "$svc" "cannot resolve external names (Docker DNS has no working upstream)" || true
+    echo 0 > "$failures_file"
   fi
 done
 

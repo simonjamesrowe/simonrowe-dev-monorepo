@@ -193,6 +193,15 @@ addressed independently. If it recurs, the watchdog log and the persistent
 journal will say which — and the watchdog's own escalation record is itself the
 diagnosis, since the rung that restores the link names the cause.
 
+**A reboot while the link is down strands every container's DNS, unless it is
+pinned.** On 2026-09-24 the reboot rung fired with the Wi-Fi away, Docker started
+the stack while the host had no nameservers, and twenty containers could not
+resolve any external name for ~23 hours after the link returned — Docker copies a
+container's upstream DNS servers from the host at container start and never
+re-reads them. `scripts/enable-docker-dns.sh` pins them in `daemon.json`, and
+`monitor-prod.sh` layer 4 restarts any container that still loses them. See
+[prod-monitoring.md](prod-monitoring.md#why-layer-4-exists-2026-09-24-dns-outage).
+
 ## Related
 
 - Disk was at **83%** on 2026-09-19, and Elasticsearch had already logged

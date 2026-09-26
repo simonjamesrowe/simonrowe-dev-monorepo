@@ -182,6 +182,18 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   A `start_period` is free when boot is fast: the first successful probe ends it early.
   Recovery needs no special action — once ES is healthy, a plain `up -d` starts both
   stranded containers (`monitor-prod.sh` does this within a minute).
+- **Container DNS is pinned in `daemon.json`, because a boot without network strands it.** Docker's
+  embedded resolver copies each container's upstream servers from the host *at container start*
+  and never re-reads them. On 2026-09-24 the wifi-watchdog rebooted the Pi with the Wi-Fi down,
+  twenty containers started with no upstream, and for ~34 hours they resolved service names (all
+  green) but nothing external: Dependency-Track lost its Auth0 button (`/api/v1/oidc/available`
+  → `false`), alloy shipped nothing to Loki, and software-factory could reach neither Loki nor
+  Linear, so nothing reported it. `scripts/enable-docker-dns.sh` pins `dns` (applying needs a
+  Docker restart, i.e. a cold start); `monitor-prod.sh` layer 4 restarts an internet-facing
+  container that cannot resolve while the host can; and `.github/workflows/prod-heartbeat.yml`
+  checks Loki freshness and the public hostnames **from GitHub**, the only alarm the Pi's own
+  network cannot silence. A missing `# ExtServers:` line in a container's resolv.conf is the tell.
+  See `docs/runbooks/prod-monitoring.md` and `docs/runbooks/prod-heartbeat.md`.
 - **`deployer`** is a second instance of `FACTORY_IMAGE` with no ingress, holding
   `/var/run/docker.sock` and a **read-write** mount of the deploy directory. It executes deploys
   off the `deploy` Temporal queue and is the only container permitted to run

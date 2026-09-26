@@ -14,13 +14,14 @@ crontab -l | grep monitor-prod
 tail -50 /var/log/prod-health/monitor.log
 ```
 
-It runs three layers, cheapest first, and stops after the first one that acts.
+It runs four layers, cheapest first, and stops after the first one that acts.
 
 | Layer | Question | Remedy |
 | --- | --- | --- |
 | 1. Site | Does `https://www.simonrowe.dev` answer? | After 3 consecutive failures, restart `pinggy` (see below), then `docker compose up -d` to reconcile the whole stack |
 | 2. Container health | Does every container report `running` + `healthy`? | After 3 consecutive ticks `unhealthy`, restart **that** service. Containers in `created`/`exited` trigger a stack reconcile instead |
 | 3. Endpoint | Does each public hostname actually serve? | After 3 consecutive bad responses, restart the single service behind it |
+| 4. DNS | Can each internet-facing container resolve an external name while the host can? | After 3 consecutive failures, restart **that** service (see below) |
 
 Backoff: the whole-stack path allows 3 reconciles per 10 minutes; each service
 (including `pinggy`) allows 2 restarts per 30 minutes. On exhaustion it logs
@@ -33,6 +34,48 @@ been down a while.
 fires when the process *exits*. A container whose healthcheck fails forever is
 left running, untouched, indefinitely. Nothing in Docker or Compose closes that
 gap, so the cron job is the only thing that does.
+
+### Why layer 4 exists (2026-09-24 DNS outage)
+
+On 2026-09-24 the Wi-Fi dropped, the wifi-watchdog rebooted the Pi at 20:18Z,
+and Docker started the stack at 20:20Z **with the link still down** — no DHCP
+lease, so the host had no nameservers. Docker's embedded resolver (`127.0.0.11`,
+what every container here uses) copies its upstream servers from the host **when
+a container starts** and never re-reads them. Twenty containers came up with an
+empty upstream list. They resolved compose service names, so every healthcheck
+and every public hostname stayed green, and could not resolve anything outside
+the stack. The link came back at 06:45Z; layer 1 restarted `pinggy`, `backend`
+and `temporal-ui` to bring the site back, those three picked up DNS, and the
+other twenty stayed broken for ~23 more hours, until Dependency-Track's "Login
+with Auth0" button was noticed missing. Over the same window alloy shipped
+nothing to Loki and software-factory could reach neither Loki nor Linear, so
+nothing reported any of it.
+
+The tell is the `# ExtServers:` comment Docker writes into a container's
+generated resolv.conf — present and listing servers on a healthy container,
+absent on a broken one. `scripts/enable-docker-dns.sh --verify` lists every
+container without it.
+
+Two guards came out of it:
+
+- **The cause is removed** by pinning `dns` in `/etc/docker/daemon.json`
+  (`scripts/enable-docker-dns.sh --apply`). The upstream list becomes a property
+  of the daemon rather than a snapshot of the host during boot.
+- **Layer 4 is the backstop.** For each service in `DNS_EGRESS_SERVICES` —
+  the ones that need the internet: alloy, backend, software-factory, deployer,
+  the Dependency-Track apiserver, temporal-ui, langfuse and its worker, searxng,
+  trivy-server, pinggy — it runs `getent hosts github.com` inside the container.
+  The host is probed first as the control: if the host cannot resolve either,
+  that is an outage (wifi-watchdog's problem) and nothing is restarted. Databases,
+  Kafka and Elasticsearch are deliberately not probed — they only resolve service
+  names, and restarting mongodb over external DNS would take the backend down for
+  nothing. Layer 4 keeps its own counter (`svc_<service>.dns-failures`), because
+  layer 3 resets a service's counter every time its hostname serves, and a service
+  that serves while its outbound DNS is dead is exactly the case this is for. It
+  shares the per-service restart budget with the other layers.
+
+Neither of those can raise an alarm off the Pi. That is what the
+[production heartbeat](prod-heartbeat.md) is for.
 
 ### Why layer 1 restarts `pinggy` specifically (2026-09-06 outage)
 
@@ -199,6 +242,8 @@ set it inline in the crontab entry.
 | `STATE_DIR` | `/tmp/prod-health` | Where the counters live |
 | `COMPOSE_PROJECT` | `simonrowe-dev-monorepo` | Compose project name |
 | `DRY_RUN` | `0` | `1` logs intended commands and skips all remediation |
+| `DNS_PROBE_NAME` | `github.com` | External name layer 4 resolves, on the host and in each container |
+| `DNS_PROBE_TIMEOUT` | `5` | Seconds allowed per layer-4 probe |
 
 Per-service remediation is deliberately less trigger-happy than the whole-stack
 path: a container restart is cheap, but a restart *loop* is worse than one bad
@@ -210,7 +255,7 @@ In `STATE_DIR`:
 
 - `failure_count` — consecutive layer-1 failures, reset on success or reconcile
 - `restart_timestamps` — epoch times of recent whole-stack reconciles, pruned each run
-- `svc_<service>` — per-service failure counters and restart history
+- `svc_<service>.failures` / `.dns-failures` / `.restarts` — per-service failure counters (layers 2-3 and layer 4) and restart history
 
 They live in `/tmp`, so a reboot clears them. That is the wanted behaviour: after
 a reboot the stack needs starting fresh anyway, and a stale backoff window would
@@ -377,3 +422,5 @@ curl -s -o /dev/null -w '%{redirect_url}\n' https://temporal.simonrowe.dev/auth/
 | `scripts/monitor-prod.sh` | Single-run watchdog check (designed for cron) |
 | `scripts/install-prod-monitoring.sh` | Install the cron job, log file and logrotate config |
 | `scripts/enable-memory-cgroup.sh` | Report/apply/revert the kernel memory-cgroup fix |
+| `scripts/enable-docker-dns.sh` | Report/apply/revert pinned upstream DNS for containers; `--verify` lists containers with none |
+| `scripts/prod-heartbeat.sh` | Off-Pi check run by the `Production heartbeat` workflow — see [prod-heartbeat.md](prod-heartbeat.md) |
