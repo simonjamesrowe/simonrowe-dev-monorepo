@@ -4,6 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AppShell } from './AppShell';
 
+vi.mock('../assistant', () => ({
+  QuickAddDrawer: ({ onClose }: { onClose: () => void }) => (
+    <button type="button" onClick={onClose}>Close assistant drawer</button>
+  ),
+}));
+
 describe('AppShell', () => {
   it('gives every navigation control an accessible name', async () => {
     const user = userEvent.setup();
@@ -58,5 +64,37 @@ describe('AppShell', () => {
     );
 
     expect(screen.getAllByRole('button', { name: /Quick add/i })).toHaveLength(2);
+  });
+
+  it('opens and closes Quick add from both responsive launchers', async () => {
+    const user = userEvent.setup();
+    render(
+      <AppShell navigationItems={[]} assistantEnabled>
+        <p>Content</p>
+      </AppShell>,
+    );
+
+    const launchers = screen.getAllByRole('button', { name: /Quick add/i });
+    await user.click(launchers[0]);
+    await user.click(screen.getByRole('button', { name: 'Close assistant drawer' }));
+    await user.click(launchers[1]);
+
+    expect(screen.getByRole('button', { name: 'Close assistant drawer' })).toBeInTheDocument();
+  });
+
+  it('formats the idle countdown and closes the menu through its overlay', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <AppShell navigationItems={[]} showIdleCountdown idleCountdownSeconds={125}>
+        <p>Content</p>
+      </AppShell>,
+    );
+
+    expect(screen.getByText('Auto logout 2:05')).toBeInTheDocument();
+    expect(screen.getByText('Auto logout in 2:05')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Toggle menu' }));
+    await user.click(screen.getByRole('button', { name: 'Close navigation menu' }));
+
+    expect(container.querySelector('aside')).toHaveClass('invisible');
   });
 });

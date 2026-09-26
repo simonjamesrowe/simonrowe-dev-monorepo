@@ -1,7 +1,7 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useCurrentUser } from '../../hooks/api/useParents';
@@ -55,5 +55,33 @@ describe('AuthCallback', () => {
     await user.click(screen.getByRole('button', { name: 'Try again' }));
 
     expect(refetch).toHaveBeenCalledOnce();
+  });
+
+  it('returns to login after an Auth0 callback error', async () => {
+    const user = userEvent.setup();
+    mockedUseAuth0.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+      error: new Error('Invalid state'),
+    } as unknown as ReturnType<typeof useAuth0>);
+    mockedUseCurrentUser.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>);
+
+    render(
+      <MemoryRouter initialEntries={['/auth/callback']}>
+        <Routes>
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/login" element={<p>Login page</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Return to Login' }));
+    expect(screen.getByText('Login page')).toBeInTheDocument();
   });
 });

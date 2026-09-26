@@ -10,6 +10,7 @@ const analyse = {
   isError: false,
   reset: vi.fn(),
 };
+let familyData = [{ id: 'family-1', name: 'Example Family' }];
 
 vi.mock('../../hooks/api', () => ({
   useAnalyseAssistantInput: () => analyse,
@@ -25,7 +26,7 @@ vi.mock('../../hooks/api', () => ({
   useConversations: () => ({ data: [] }),
   useCurrentUser: () => ({ data: { profiles: [{ id: 'parent-1', familyId: 'family-1' }] } }),
   useEvents: () => ({ data: [] }),
-  useFamilies: () => ({ data: [{ id: 'family-1', name: 'Example Family' }] }),
+  useFamilies: () => ({ data: familyData }),
   useParents: () => ({ data: [] }),
   useScheduleChangeRequests: () => ({ data: [] }),
 }));
@@ -39,6 +40,12 @@ describe('QuickAddDrawer', () => {
     analyse.mutateAsync.mockReset();
     analyse.reset.mockClear();
     analyse.isError = false;
+    familyData = [{ id: 'family-1', name: 'Example Family' }];
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:preview'),
+      revokeObjectURL: vi.fn(),
+    });
   });
 
   it('keeps capture and review as separate wizard steps', async () => {
@@ -95,5 +102,40 @@ describe('QuickAddDrawer', () => {
       familyId: 'family-1', text: 'School concert next Thursday', image: null,
     }));
     expect(input).toHaveValue('School concert next Thursday');
+  });
+
+  it('switches family, previews and removes an image, and clears input on close', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    familyData = [
+      { id: 'family-1', name: 'Example Family' },
+      { id: 'family-2', name: 'Second Family' },
+    ];
+    render(<QuickAddDrawer open onClose={onClose} />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Family' }), 'family-2');
+    const image = new File(['image'], 'flyer.png', { type: 'image/png' });
+    await user.upload(screen.getByLabelText(/Add an image/i), image);
+    expect(screen.getByRole('img', { name: 'Selected upload preview' })).toHaveAttribute(
+      'src', 'blob:preview',
+    );
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(screen.queryByRole('img', { name: 'Selected upload preview' })).not.toBeInTheDocument();
+
+    await user.type(screen.getByRole('textbox', { name: /Note/i }), 'Keep this private');
+    await user.click(screen.getByRole('button', { name: 'Close Quick add' }));
+    expect(analyse.reset).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('opens a selected recent private batch', async () => {
+    const user = userEvent.setup();
+    render(<QuickAddDrawer open onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: /^2 Review actions/i }));
+    await user.click(screen.getByRole('button', { name: /2 actions/i }));
+
+    expect(screen.getByRole('heading', { name: 'Review each proposed action' }))
+      .toBeInTheDocument();
   });
 });

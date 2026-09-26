@@ -135,4 +135,38 @@ describe('AssistantActionCard', () => {
     expect(screen.getByRole('button', { name: 'Reject' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
   });
+
+  it('approves or rejects only this action', async () => {
+    const user = userEvent.setup();
+    const action: AssistantAction = {
+      id: 'action-4',
+      actionType: 'DELETE_EVENT',
+      status: 'PENDING',
+      payload: { eventId: 'event-1' },
+      fieldErrors: [],
+      revision: 1,
+      targetSnapshot: null,
+      result: null,
+      failureMessage: null,
+    };
+    render(
+      <AssistantActionCard
+        familyId="family-1"
+        batchId="batch-1"
+        action={action}
+        online
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Delete event pending/i }));
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
+    await user.click(screen.getByRole('button', { name: 'Reject' }));
+
+    expect(approveMutation.mutate).toHaveBeenCalledWith({
+      familyId: 'family-1', batchId: 'batch-1', action,
+    });
+    expect(rejectMutation.mutate).toHaveBeenCalledWith({
+      familyId: 'family-1', batchId: 'batch-1', action,
+    });
+  });
 });
