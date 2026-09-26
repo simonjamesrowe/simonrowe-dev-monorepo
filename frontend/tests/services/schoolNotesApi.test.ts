@@ -4,6 +4,7 @@ import {
   createSchoolNote,
   fetchSchoolNote,
   fetchSchoolNotes,
+  transcribeSchoolNoteImage,
   type SchoolNote,
 } from '../../src/services/adminApi'
 
@@ -39,6 +40,22 @@ describe('school notes API', () => {
   })
 
   const fetchMock = () => vi.mocked(globalThis.fetch)
+
+  it('uploads a prepared photo as multipart data without forcing a content type', async () => {
+    fetchMock().mockResolvedValue(jsonResponse({ text: 'played', title: 'Spellings' }))
+    const photo = new Blob(['jpeg'], { type: 'image/jpeg' })
+
+    const result = await transcribeSchoolNoteImage(getAccessToken, photo)
+
+    const [url, init] = fetchMock().mock.calls[0] as [string, RequestInit]
+    expect(url).toMatch(/\/admin\/school\/notes\/transcribe$/)
+    expect(init.method).toBe('POST')
+    expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+    const upload = (init.body as FormData).get('file') as File
+    expect(upload.name).toBe('school-note.jpg')
+    expect(upload.type).toBe('image/jpeg')
+    expect(result).toEqual({ text: 'played', title: 'Spellings' })
+  })
 
   it('posts the pasted text, title and year groups as JSON', async () => {
     fetchMock().mockResolvedValue(jsonResponse(NOTE))

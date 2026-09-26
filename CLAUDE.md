@@ -298,6 +298,21 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   - `.feed__filters` / `.feed__pill` / `.feed__more-count` stay: `/status`'s release timeline wears
     them. `.feed__more*` (the departed overflow menu) and `.feed__modes` are deleted.
   Backend 1593 tests, frontend 958.
+- termtime-note-image-upload: `/admin/school/notes` can now turn one photographed page into
+  editable note text and a suggested title before the existing Save note path runs. The image is
+  never persisted: the browser fixes displayed EXIF orientation, scales the longest edge to 2000
+  px and sends a JPEG to a new stateless vision endpoint; the operator reviews the transcription
+  in the existing textarea, where it appends rather than replacing typed context. A title is
+  prefilled only while the title field is empty. Dateless notes such as spelling lists remain
+  ordinary useful notes: they are embedded even when they yield zero events and zero links.
+  `SCHOOL_VISION_MODEL` is independently switchable and usage is recorded as `TRANSCRIBE`, because
+  an image call should not disappear inside dated-event extraction spend. Both nginx layers now
+  allow 12 MB so the backend's 10 MB validation, rather than nginx's default 1 MB HTML error, is
+  authoritative; this also repairs the Media Library's existing 10 MB promise. The outer proxy
+  config is bind-mounted by file, so production must recreate nginx to pick up that directive.
+  Deliberately unchanged: no image bytes in `SchoolAttachmentStore`, one image per note, HEIC
+  rejected, and Gmail image attachments still skipped. See `docs/runbooks/term-time.md` ("Reading
+  a photographed page before saving it").
 - termtime-pasted-notes: A **Paste a note** screen at `/admin/school/notes` — text in, dated events
   and scraped pages out. It exists because a whole class of thing a Year 6 parent asks about
   **cannot reach Term Time through any existing source**: secondary-school open evenings arrive in

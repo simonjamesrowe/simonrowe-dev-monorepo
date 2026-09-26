@@ -11,7 +11,7 @@ class SchoolLinkFilterTest {
 
   private final SchoolLinkFilter filter = new SchoolLinkFilter(new SchoolProperties(
       true, null, List.of(), List.of(), null, "https://www.kilmorieschool.co.uk", null,
-      0, null, null, 0L, null, null));
+      0, null, null, null, 0L, null, null));
 
   @Test
   @DisplayName("the school homepage is footer boilerplate and is never offered")

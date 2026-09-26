@@ -11,7 +11,7 @@ class SchoolPropertiesTest {
   private SchoolProperties withSenders(
       final List<String> allow, final List<String> deny) {
     return new SchoolProperties(
-        true, null, allow, deny, null, null, null, 0, null, null, 100, null, null);
+        true, null, allow, deny, null, null, null, 0, null, null, null, 100, null, null);
   }
 
   @Test
@@ -65,16 +65,17 @@ class SchoolPropertiesTest {
   void defaultsAreInert() {
     final SchoolProperties defaults =
         new SchoolProperties(
-            false, null, null, null, null, null, null, 0, null, null, 0, null, null);
+            false, null, null, null, null, null, null, 0, null, null, null, 0, null, null);
     assertThat(defaults.enabled()).isFalse();
     assertThat(defaults.dailyTokenBudget()).isZero();
     assertThat(defaults.chatModel()).isEqualTo("gpt-5.6-luna");
     assertThat(defaults.guardrailModel()).isEqualTo("gpt-5-nano");
+    assertThat(defaults.visionModel()).isEqualTo("gpt-5.6-luna");
   }
 
   private SchoolProperties withPages(final String baseUrl, final List<String> extraPages) {
     return new SchoolProperties(
-        true, null, List.of(), List.of(), null, baseUrl, null, 0, null, null, 0, null,
+        true, null, List.of(), List.of(), null, baseUrl, null, 0, null, null, null, 0, null,
         extraPages);
   }
 

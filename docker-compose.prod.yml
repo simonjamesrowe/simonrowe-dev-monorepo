@@ -827,6 +827,7 @@ services:
       SCHOOL_EXTRA_PAGE_URLS: ${SCHOOL_EXTRA_PAGE_URLS:-}
       SCHOOL_CHAT_MODEL: ${SCHOOL_CHAT_MODEL:-}
       SCHOOL_GUARDRAIL_MODEL: ${SCHOOL_GUARDRAIL_MODEL:-}
+      SCHOOL_VISION_MODEL: ${SCHOOL_VISION_MODEL:-gpt-5.6-luna}
       # Zero means "answer nothing anonymously", deliberately not "unlimited". An unset budget
       # on an endpoint anyone on the internet can reach must not default to spending.
       SCHOOL_DAILY_TOKEN_BUDGET: ${SCHOOL_DAILY_TOKEN_BUDGET:-0}

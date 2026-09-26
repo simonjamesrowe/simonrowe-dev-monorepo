@@ -63,6 +63,18 @@ class SchoolUsageRecorderTest {
   }
 
   @Test
+  @DisplayName("an image token estimate is stored as tokens and remains marked estimated")
+  void tokenEstimatesAreNotDividedAsCharacters() {
+    recorder.recordEstimatedTokens(SchoolUsage.Kind.TRANSCRIBE, "gpt-5.6-luna", 2500, 100);
+
+    final ArgumentCaptor<SchoolUsage> captor = ArgumentCaptor.forClass(SchoolUsage.class);
+    verify(repository).save(captor.capture());
+    assertThat(captor.getValue().estimated()).isTrue();
+    assertThat(captor.getValue().inputTokens()).isEqualTo(2500);
+    assertThat(captor.getValue().outputTokens()).isEqualTo(100);
+  }
+
+  @Test
   @DisplayName("the client address is hashed, never stored")
   void clientAddressIsHashed() {
     recorder.record(SchoolUsage.Kind.CHAT, "gpt-5-nano", 10, 5, 0, "session-1", "203.0.113.7");

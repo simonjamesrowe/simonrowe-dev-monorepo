@@ -51,6 +51,8 @@ public record SchoolUsage(
     CLASSIFY,
     /** Pulling dated facts out of prose. */
     EXTRACT,
+    /** Reading a photographed page into text. */
+    TRANSCRIBE,
     /** Turning content into vectors for retrieval. */
     EMBEDDING
   }

@@ -1,5 +1,6 @@
 package com.simonrowe.school.admin;
 
+import com.simonrowe.school.classify.SchoolNoteTranscriber;
 import com.simonrowe.school.ingest.SchoolAttachmentStore;
 import com.simonrowe.school.model.SchoolDocument;
 import com.simonrowe.school.model.SchoolEvent;
@@ -10,15 +11,18 @@ import com.simonrowe.school.model.SchoolSyncStateRepository;
 import com.simonrowe.school.model.Visibility;
 import com.simonrowe.school.usage.SchoolUsage;
 import com.simonrowe.school.usage.SchoolUsageRepository;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,6 +30,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Read and operate the Term Time corpus from the admin console.
@@ -47,6 +53,9 @@ public class SchoolAdminController {
 
   private static final int MAX_PAGE_SIZE = 200;
   private static final int PREVIEW_CHARS = 300;
+  private static final long MAX_NOTE_IMAGE_BYTES = 10L * 1024 * 1024;
+  private static final Set<String> NOTE_IMAGE_TYPES = Set.of(
+      "image/jpeg", "image/png", "image/webp", "image/gif");
 
   private final MongoTemplate mongoTemplate;
   private final SchoolSyncStateRepository syncState;
@@ -57,7 +66,9 @@ public class SchoolAdminController {
   private final SchoolLinkRepository links;
   private final SchoolLinkFetcher linkFetcher;
   private final SchoolNoteService notes;
+  private final SchoolNoteTranscriber noteTranscriber;
 
+  @SuppressWarnings("checkstyle:ParameterNumber")
   public SchoolAdminController(
       final MongoTemplate mongoTemplate,
       final SchoolSyncStateRepository syncState,
@@ -67,7 +78,8 @@ public class SchoolAdminController {
       final SchoolAttachmentStore attachments,
       final SchoolLinkRepository links,
       final SchoolLinkFetcher linkFetcher,
-      final SchoolNoteService notes) {
+      final SchoolNoteService notes,
+      final SchoolNoteTranscriber noteTranscriber) {
     this.mongoTemplate = mongoTemplate;
     this.syncState = syncState;
     this.approvalService = approvalService;
@@ -77,6 +89,7 @@ public class SchoolAdminController {
     this.links = links;
     this.linkFetcher = linkFetcher;
     this.notes = notes;
+    this.noteTranscriber = noteTranscriber;
   }
 
   /**
@@ -289,6 +302,42 @@ public class SchoolAdminController {
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().build();
     }
+  }
+
+  /**
+   * Reads one photographed page into the existing editable note form without storing its bytes.
+   *
+   * @param file a JPEG, PNG, WebP or GIF no larger than 10 MB
+   * @return the transcription and a suggested filing title
+   */
+  @PostMapping("/notes/transcribe")
+  public ResponseEntity<TranscriptionResponse> transcribeNoteImage(
+      @RequestParam("file") final MultipartFile file) {
+    if (file == null || file.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a photo to transcribe.");
+    }
+    final String contentType = file.getContentType();
+    if (contentType == null || !NOTE_IMAGE_TYPES.contains(contentType)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Unsupported photo type. Use JPEG, PNG, WebP or GIF.");
+    }
+    if (file.getSize() > MAX_NOTE_IMAGE_BYTES) {
+      throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+          "Photo too large. Maximum size is 10 MB.");
+    }
+
+    final byte[] bytes;
+    try {
+      bytes = file.getBytes();
+    } catch (IOException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "That photo could not be read.", e);
+    }
+    return noteTranscriber.transcribe(bytes, contentType)
+        .map(result -> ResponseEntity.ok(
+            new TranscriptionResponse(result.text(), result.title())))
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+            "Nothing readable came back from that photo."));
   }
 
   /**
@@ -536,6 +585,10 @@ public class SchoolAdminController {
       title = title == null ? "" : title;
       yearGroups = com.simonrowe.school.model.YearGroups.sanitise(yearGroups);
     }
+  }
+
+  /** Text read from a photographed page and its suggested filing label. */
+  public record TranscriptionResponse(String text, String title) {
   }
 
   /**

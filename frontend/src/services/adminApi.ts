@@ -219,6 +219,9 @@ async function handleResponse<T>(response: Response): Promise<T> {
       const errorPayload = await response.json()
       if (typeof errorPayload.message === 'string' && errorPayload.message.trim() !== '') {
         message = errorPayload.message
+      } else if (typeof errorPayload.detail === 'string' && errorPayload.detail.trim() !== '') {
+        // Spring's problem-details response uses `detail` for a ResponseStatusException reason.
+        message = errorPayload.detail
       }
     } catch {
       // Keep default fallback message when the response has no JSON payload.
@@ -1088,6 +1091,27 @@ export interface SchoolNote {
   links: SchoolLinkSummary[]
   /** True while links are still being fetched. Goes false on a server restart too — see below. */
   fetching: boolean
+}
+
+export interface SchoolNoteTranscription {
+  text: string
+  title: string
+}
+
+/** Reads one image into editable text. The image itself is never stored. */
+export async function transcribeSchoolNoteImage(
+  getAccessToken: GetAccessToken,
+  file: Blob,
+): Promise<SchoolNoteTranscription> {
+  const token = await getAccessToken()
+  const formData = new FormData()
+  formData.append('file', file, 'school-note.jpg')
+  return handleResponse<SchoolNoteTranscription>(
+    await authFetch(`${ADMIN_URL}/school/notes/transcribe`, token, {
+      method: 'POST',
+      body: formData,
+    }),
+  )
 }
 
 /**

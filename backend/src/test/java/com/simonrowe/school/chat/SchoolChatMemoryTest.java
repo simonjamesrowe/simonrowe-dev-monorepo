@@ -41,7 +41,8 @@ class SchoolChatMemoryTest {
         mock(com.simonrowe.school.retrieval.SchoolRetrievalService.class),
         mock(SchoolTopicGuardrail.class),
         new SchoolProperties(
-            true, null, List.of(), List.of(), null, null, null, 0, null, null, 0L, null, null),
+            true, null, List.of(), List.of(), null, null, null, 0, null, null, null, 0L,
+            null, null),
         mock(SchoolBudget.class),
         mock(SchoolUsageRecorder.class),
         memory);

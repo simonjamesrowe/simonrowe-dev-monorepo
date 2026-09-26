@@ -654,6 +654,7 @@ school:
   # reasoning-effort is banned from that block.
   chat-model: ${SCHOOL_CHAT_MODEL:gpt-5.6-luna}
   guardrail-model: ${SCHOOL_GUARDRAIL_MODEL:gpt-5-nano}
+  vision-model: ${SCHOOL_VISION_MODEL:gpt-5.6-luna}
   # Zero means "answer nothing anonymously", deliberately not "unlimited".
   daily-token-budget: ${SCHOOL_DAILY_TOKEN_BUDGET:0}
   embedding-index-name: ${SCHOOL_EMBEDDING_INDEX_NAME:school-embeddings}

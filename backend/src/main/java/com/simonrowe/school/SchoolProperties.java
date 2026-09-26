@@ -32,6 +32,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *     for ten
  * @param chatModel model for the school chat client
  * @param guardrailModel model for the topic gate and the output-side name check
+ * @param visionModel model for photographed-note transcription
  * @param dailyTokenBudget hard ceiling on tokens spent serving anonymous traffic per day; zero
  *     disables anonymous answering entirely rather than defaulting to unlimited
  * @param publicBaseUrl absolute origin that attachment links in an answer are built against.
@@ -54,6 +55,7 @@ public record SchoolProperties(
     int crawlDelaySeconds,
     String chatModel,
     String guardrailModel,
+    String visionModel,
     long dailyTokenBudget,
     String publicBaseUrl,
     List<String> extraPageUrls
@@ -112,6 +114,7 @@ public record SchoolProperties(
     crawlDelaySeconds = crawlDelaySeconds <= 0 ? DEFAULT_CRAWL_DELAY_SECONDS : crawlDelaySeconds;
     chatModel = defaulted(chatModel, "gpt-5.6-luna");
     guardrailModel = defaulted(guardrailModel, "gpt-5-nano");
+    visionModel = defaulted(visionModel, "gpt-5.6-luna");
     publicBaseUrl = stripTrailingSlash(
         defaulted(publicBaseUrl, "https://term-time.simonrowe.dev"));
     extraPageUrls = resolveExtraPages(extraPageUrls, websiteBaseUrl);
