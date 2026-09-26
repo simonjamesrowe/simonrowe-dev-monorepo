@@ -95,11 +95,11 @@ export interface CalendarSchedulingProps {
   /** Called when user wants to request a schedule change */
   onRequestScheduleChange?: (eventId: string) => void;
   /** Called when user approves a schedule change request */
-  onApproveRequest?: (requestId: string, responseNote?: string) => void;
+  onApproveRequest?: (requestId: string, responseNote?: string) => void | Promise<void>;
   /** Called when user declines a schedule change request */
-  onDeclineRequest?: (requestId: string, responseNote?: string) => void;
+  onDeclineRequest?: (requestId: string, responseNote?: string) => void | Promise<void>;
   /** Called when user wants to view request details */
-  onViewRequest?: (requestId: string) => void;
+  onViewRequest?: (requestId?: string) => void;
 
   // View actions
   /** Called when user changes the calendar view */

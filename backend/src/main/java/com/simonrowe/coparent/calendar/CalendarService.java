@@ -306,8 +306,18 @@ public class CalendarService {
           "A proposed change and reason are required");
     }
     validateProposedChange(proposedChange);
+    // Approval applies the change to the calendar, so a request must say which event (and, for
+    // a repeating one, which occurrence) it changes; only "add" can stand on its own.
+    if (originalEventId == null && !"add".equals(proposedChange.type())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Choose the event this request changes");
+    }
     if (originalEventId != null) {
-      getEvent(familyId, originalEventId);
+      final CalendarEvent original = getEvent(familyId, originalEventId);
+      if (original.recurring() != null && !"add".equals(proposedChange.type())) {
+        requireDate(proposedChange.originalStartDate(),
+            "Choose which occurrence of the repeating event this request changes");
+      }
     }
     final Instant now = Instant.now();
     final ScheduleChangeRequest saved = changes.save(new ScheduleChangeRequest(requestId, familyId,
@@ -361,6 +371,22 @@ public class CalendarService {
     }
     audits.record(familyId, "schedule_change_request", requestId, decision, Map.of());
     return saved;
+  }
+
+  /**
+   * Puts an approval that could not be applied back to pending. The claim and the calendar
+   * writes are separate operations (the database runs without transactions), so this is the
+   * compensation that keeps an "approved" status meaning "the calendar was changed". Matched on
+   * the approver as well as the status, so it can never reopen somebody else's decision.
+   */
+  void reopenChange(final ObjectId familyId, final ObjectId requestId, final ObjectId approver) {
+    mongoTemplate.findAndModify(
+        Query.query(Criteria.where("_id").is(requestId).and("familyId").is(familyId)
+            .and("status").is("approved").and("resolvedBy").is(approver)),
+        new Update().set("status", "pending").unset("resolvedBy").unset("resolvedAt")
+            .unset("responseNote").set("updatedAt", Instant.now()),
+        ScheduleChangeRequest.class);
+    audits.record(familyId, "schedule_change_request", requestId, "approval_reverted", Map.of());
   }
 
   /** Lets only the original requester withdraw a still-pending request. */
@@ -433,6 +459,14 @@ public class CalendarService {
             "A series can skip at most " + MAX_EXCLUDED_DATES + " dates");
       }
       values.recurring().excludedDates().forEach(CalendarService::parseOccurrenceDate);
+    }
+  }
+
+  private static void requireDate(final String value, final String message) {
+    try {
+      LocalDate.parse(value == null ? "" : value);
+    } catch (java.time.format.DateTimeParseException exception) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message, exception);
     }
   }
 

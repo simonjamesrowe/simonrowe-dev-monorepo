@@ -205,7 +205,7 @@ class CalendarApiIntegrationTest extends AbstractIntegrationTest {
             .with(user("alice"))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
-                {"reason":"Swap weekend","proposedChange":{"type":"swap",
+                {"reason":"Extra weekend","proposedChange":{"type":"add",
                  "newStartDate":"2026-10-02","newEndDate":"2026-10-04"}}
                 """))
         .andExpect(status().isCreated()).andReturn();
