@@ -36,7 +36,7 @@ software-factory/   Temporal-backed agents: code review, cvefix, deploy, feedbac
 scripts/            Local dev, backup/restore, production operations, monitoring
 config/             nginx, checkstyle, Grafana Alloy, OTel, SearXNG, Temporal
 docs/               Architecture, setup guides, production runbooks
-specs/              Spec-driven feature folders (spec, plan, tasks, research)
+specs/              Read-only record of earlier SpecKit-planned features
 ```
 
 ## Commands
