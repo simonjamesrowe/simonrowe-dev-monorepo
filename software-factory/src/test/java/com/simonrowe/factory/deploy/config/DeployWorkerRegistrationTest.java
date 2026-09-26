@@ -31,10 +31,11 @@ import org.springframework.data.mongodb.core.MongoTemplate;
  * {@code @ConditionalOnProperty} is the only thing that keeps the Docker socket out of {@code
  * software-factory}, the JVM that terminates untrusted internet traffic.
  *
- * <p>Both containers run the same image and both register a workflow-task poller on the {@code
- * deploy} queue, because {@code @WorkflowImpl} classpath scanning is unconditional and cannot be
- * gated — those classes are not Spring beans. Only the <em>activity</em> bean can be gated, and it
- * is the activities that touch the socket, the deploy directory and {@code restart-prod.sh}.
+ * <p>Both containers run the same image. Only {@code deployer} polls the {@code deploy} queue for
+ * workflow tasks, because the deploy workflow package is listed only in its profile's {@code
+ * workflow-packages} (see {@code FactoryWorkflowWorkersTest}). That is configuration, not a guard:
+ * it is the <em>activity</em> bean's condition that keeps the socket, the deploy directory and
+ * {@code restart-prod.sh} out of the internet-facing JVM, whatever either list says.
  *
  * <p>If the condition is removed, nothing fails loudly. Whichever JVM happens to win an activity
  * task runs it, so deploys fail intermittently on a missing docker binary — an error that looks

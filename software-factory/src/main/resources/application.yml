@@ -12,6 +12,13 @@ management:
 spring:
   application:
     name: software-factory
+  # The container's role is its Spring profile. Both containers run this image; the role decides
+  # which workflows each one polls for (see workers-auto-discovery below and
+  # application-deployer.yml). FACTORY_RUNTIME_ROLE is already set on both services in
+  # docker-compose.prod.yml, so this needs no compose change - and a compose change to the
+  # deployer's service definition is what holds a deploy back (#130).
+  profiles:
+    active: ${FACTORY_RUNTIME_ROLE:software-factory}
   # Boot 4 moved the Mongo connection settings to their own spring.mongodb namespace.
   mongodb:
     uri: ${FACTORY_MONGODB_URI:mongodb://localhost:27017/software_factory}
@@ -26,36 +33,30 @@ spring:
     # is the signature-verified webhook. See docs/runbooks/software-factory.md.
     workers-auto-discovery:
       enabled: true
+      # Only the workflows whose activities run in THIS container. This list is the software-factory
+      # role's; application-deployer.yml replaces it with deploy and platform-backup for the
+      # deployer. Both containers once scanned all six, because @WorkflowImpl scanning is
+      # unconditional, and so both polled every workflow queue. That is only harmless while both
+      # run the same build, and the deployer is updated separately: on 2026-09-15 it took a
+      # log-watch workflow task on an older build than the activity that fed it, and the run
+      # wedged logwatch-daily for eleven days (see docs/runbooks/logwatch.md). The activity gates
+      # (@ConditionalOnProperty on each *ActivitiesImpl) still decide where side effects run;
+      # this decides where the orchestration runs, and the two now agree.
+      # FactoryWorkflowWorkersTest fails if the two roles' lists stop covering every @WorkflowImpl
+      # package exactly once - a package in neither is a queue nothing polls, which is the quiet
+      # failure: a healthy container, a schedule that fires, and a run that never starts.
       workflow-packages:
-        # The activity gate here is ReviewActivitiesImpl's @ConditionalOnProperty on
-        # factory.codereview.enabled, false only on `deployer`. As with the deploy queue below,
-        # this entry does NOT gate anything: both containers register a code-review workflow-task
-        # poller regardless, which is harmless. It was the missing activity gate that let the
-        # deployer win half the review activities and fail them.
+        # The activity gate is ReviewActivitiesImpl's @ConditionalOnProperty on
+        # factory.codereview.enabled, false only on `deployer`.
         - com.simonrowe.factory.codereview.workflow
         - com.simonrowe.factory.feedback.workflow
         # Without this entry no worker polls the cve-fix task queue and CveFixActivitiesImpl's
         # @ActivityImpl is never registered: the container is healthy, the schedule fires, and
         # nothing ever runs.
         - com.simonrowe.factory.cvefix.workflow
-        # Same again for the logwatch queue. The activity gate is
-        # LogWatchActivitiesImpl's @ConditionalOnProperty on factory.logwatch.enabled,
-        # which is what keeps the Grafana read credential out of the `deployer` JVM.
+        # The activity gate is LogWatchActivitiesImpl's @ConditionalOnProperty on
+        # factory.logwatch.enabled, which keeps the Grafana read credential out of the deployer.
         - com.simonrowe.factory.logwatch.workflow
-        # Same for the deploy queue. Note what this does NOT gate: classpath scanning for
-        # @WorkflowImpl is unconditional (WorkersTemplate creates a worker for every task queue
-        # a discovered class names), and both `software-factory` and `deployer` run this image —
-        # so both register a deploy *workflow*-task poller. That is harmless: a workflow
-        # implementation is deterministic orchestration that only schedules activities.
-        #
-        # The executor gate is DeployActivitiesImpl's @ConditionalOnProperty on
-        # factory.deploy.enabled, which is true only on `deployer`. Only that container holds an
-        # implementation of any side-effecting step, which is what confines the Docker socket to
-        # the container with no ingress. See specs/036-auto-deploy-on-merge/research.md §11.
-        - com.simonrowe.factory.deploy.workflow
-        # Same again for the platform-backup queue. Its own queue rather than sharing `deploy`:
-        # a capture can run for hours and must never sit in front of a deploy.
-        - com.simonrowe.factory.platformbackup.workflow
         # NOTE: the issue sink adds no entry here. This list drives @WorkflowImpl classpath
         # scanning only, and the `linear` queue has no @WorkflowImpl — its worker comes from
         # LinearActivitiesImpl's @ActivityImpl(taskQueues = ...) alone. `linear` is this

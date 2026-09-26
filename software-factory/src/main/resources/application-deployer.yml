@@ -1,0 +1,17 @@
+# Active on the `deployer` container, whose FACTORY_RUNTIME_ROLE becomes its Spring profile (see
+# spring.profiles.active in application.yml).
+spring:
+  temporal:
+    workers-auto-discovery:
+      # Replaces - does not extend - the software-factory role's list: a list in a profile
+      # document overrides the base one wholesale. These are the two workflows whose activities
+      # run only here, because only this container holds the Docker socket and the deploy
+      # directory.
+      workflow-packages:
+        # The executor gate is DeployActivitiesImpl's @ConditionalOnProperty on
+        # factory.deploy.enabled, true only on `deployer`. See
+        # specs/036-auto-deploy-on-merge/research.md section 11.
+        - com.simonrowe.factory.deploy.workflow
+        # Its own queue rather than sharing `deploy`: a capture can run for hours and must never
+        # sit in front of a deploy.
+        - com.simonrowe.factory.platformbackup.workflow

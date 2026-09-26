@@ -295,12 +295,16 @@ In order of likelihood:
    the Temporal UI, not the healthcheck. This failure mode is already documented
    for `code-review` and applies identically.
 
-Note that `software-factory` *does* register a workflow-task poller on the
-`deploy` queue even with every flag off — that is expected and harmless.
-`@WorkflowImpl` classpath scanning is unconditional, and a workflow
-implementation only schedules activities. What confines the Docker socket to the
-`deployer` is that `DeployActivitiesImpl` is gated on `factory.deploy.enabled`,
-so `software-factory` holds no implementation of any deploy step.
+Only the `deployer` polls the `deploy` queue, for workflow tasks and activities
+alike. Until 2026-09-26 `software-factory` also polled it for workflow tasks,
+because `@WorkflowImpl` classpath scanning cannot be gated by a condition. It was
+called harmless, and was not: see "Which container polls which queue" in
+`software-factory.md`. The deploy workflow package is now listed only in
+`application-deployer.yml`, so a `software-factory` identity among the `deploy`
+pollers means the role profile did not activate. None of this is what confines
+the Docker socket: that is still `DeployActivitiesImpl`'s gate on
+`factory.deploy.enabled`, so `software-factory` holds no implementation of any
+deploy step whatever the package lists say.
 
 ### A deploy is stuck on `verify`
 

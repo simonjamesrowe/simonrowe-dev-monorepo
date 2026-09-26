@@ -231,6 +231,41 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- factory-workflow-workers-per-role: **Each Temporal workflow is now polled by one container.**
+  `software-factory` and `deployer` run the same image, and `@WorkflowImpl` classpath scanning
+  cannot be gated by a Spring condition, since those classes are not beans. So both used to poll
+  all six workflow queues. The comments called that harmless ("a workflow only schedules
+  activities"), and it was harmless only while both ran the same build. The `deployer` never
+  recreates itself and routinely lags; on 2026-09-15 that is what wedged `logwatch-daily` (see
+  `temporal-version-skew` below). #191's lenient converter survives an *added* field. It could
+  not survive a changed workflow: adding, removing or reordering an activity call on one build
+  replays as a `NonDeterministicException` on the other. This removes the mismatch at its source.
+  Load-bearing bits:
+  - **`spring.profiles.active: ${FACTORY_RUNTIME_ROLE:software-factory}`.** The role variable was
+    already set on both services, so there is **no compose change**. That matters: editing the
+    `deployer`'s service definition holds a deploy back, the self-perpetuating wedge from #130.
+    `application.yml` lists `codereview`, `feedback`, `cvefix` and `logwatch`;
+    `application-deployer.yml` **replaces** that list with `deploy` and `platformbackup` (a list
+    in a profile document overrides wholesale, it does not merge). Each workflow now sits in the
+    container whose `*ActivitiesImpl` flag is true.
+  - **Two silent failures, both pinned by `FactoryWorkflowWorkersTest`.** (1) A role that stops
+    being exactly `deployer`, or any `SPRING_PROFILES_ACTIVE` on either service, gives the
+    `deployer` the software-factory list. Nothing then polls `deploy`, and no deploy ever starts.
+    The test reads both roles out of the compose file. (2) A new `@WorkflowImpl` package listed
+    for neither role is a queue nothing polls. The test scans the classpath for every
+    `@WorkflowImpl` package and asserts the two lists partition them. Mutation-checked: dropping
+    `platformbackup` from the deployer list fails two of its tests. `FactoryDeployerRoleTest`
+    boots the deployer's context and reads the starter's own registration info, which shows the
+    starter honours the profile, not just that the YAML resolves.
+  - **The activity gates are unchanged and still the security boundary.** The lists decide where
+    orchestration runs; `@ConditionalOnProperty` on each `*ActivitiesImpl` still decides where
+    credentials and the Docker socket live. `FactoryApplicationTest`'s old
+    `registersDeployWorkflowPollerEvenWithTheFlagsOff` pinned the double registration "so it is
+    not fixed"; it now asserts the opposite.
+  - **Consequence:** a deploy or platform-backup run's `progress` query is answered only by the
+    `deployer`, so it is unavailable while that container is down. `FactoryRunService` already
+    reports that as a status with no phase.
+  See `docs/runbooks/software-factory.md` ("Which container polls which queue").
 - temporal-version-skew: The daily log-watch scan had not run since 2026-09-15, and nothing
   said so. One scheduled run, `logwatch-2026-09-15T00:00:00Z`, was stuck retrying its workflow
   task (about 1,700 attempts, one every ~9 minutes). With overlap `SKIP`, `logwatch-daily` skipped
@@ -263,11 +298,9 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     `RunningWorkflows` and `SkippedOverlap`, and a non-zero skip count is the whole signal. The
     workflow list shows a stuck run as merely `Running`. The post-deploy scans kept completing
     throughout, which is why log watch looked alive.
-  - **Not changed:** workflows still register on both containers. Gating `@WorkflowImpl` per
-    container would need explicit worker configuration instead of auto-discovery, and with the
-    lenient converter plus the timeout, the version mismatch is survivable for additive changes.
-    It remains a hazard for anything non-additive, so update `deployer` in the same window as
-    `software-factory`.
+  - **Not changed here, and since fixed:** workflows still registered on both containers after
+    this change. `factory-workflow-workers-per-role` (above) gives each workflow one owning
+    container.
   See `docs/runbooks/logwatch.md` ("Muting third-party noise", last part).
 - news-search-and-source-filter: Two things, one page. **The site search box was never missing the
   article — it was silently degrading.** "AI SLDC" (a transposition of SDLC) returned five Rundown
@@ -1253,9 +1286,10 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     as clean.
   - **The credential is confined by one annotation**, `LogWatchActivitiesImpl`'s class-level
     `@ConditionalOnProperty`, evaluated by the component scanner — declaring the class through an
-    explicit `@Bean` would register it unconditionally and silently ignore it. Both containers do
-    register a *workflow* poller on the queue (`@WorkflowImpl` scanning is unconditional); that is
-    harmless and must not be "fixed". `DeployerGrafanaCredentialTest` reads the compose file and
+    explicit `@Bean` would register it unconditionally and silently ignore it. Both containers did
+    register a *workflow* poller on the queue (`@WorkflowImpl` scanning is unconditional); that was
+    called harmless and was not, and since `factory-workflow-workers-per-role` only
+    `software-factory` does. `DeployerGrafanaCredentialTest` reads the compose file and
     fails the build if any variable **containing** `GRAFANA` appears under `deployer`, because the
     Java gate alone does not stop a future compose edit — same reasoning, and now a shared
     `testsupport/ComposeFile` helper, as `DeployerLinearCredentialTest`.
@@ -1898,9 +1932,10 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   `verify` → `maintenance-off` → `verify-public`, with rollback + a `Bash`-less Claude triage +
   a GitHub issue and commit comment on failure. Things that are load-bearing and easy to break:
   - **The socket is confined to `deployer` by ONE annotation.** Both containers run the same
-    image, and `@WorkflowImpl` classpath scanning is unconditional, so **both** register a
-    *workflow*-task poller on the `deploy` queue — harmless, since a workflow only schedules
-    activities. What stops `software-factory` executing a deploy step is that
+    image, and `@WorkflowImpl` classpath scanning is unconditional, so **both** registered a
+    *workflow*-task poller on the `deploy` queue. That was called harmless, since a workflow only
+    schedules activities; it was not, and since `factory-workflow-workers-per-role` only the
+    `deployer` does. What stops `software-factory` executing a deploy step is that
     `DeployActivitiesImpl` carries `@ConditionalOnProperty(factory.deploy.enabled)` and that flag
     is true only on `deployer`. Note a class-level `@ConditionalOnProperty` is evaluated by the
     *component scanner*: declare the same class through an explicit `@Bean` method and the
