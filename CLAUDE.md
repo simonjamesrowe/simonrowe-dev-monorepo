@@ -231,6 +231,44 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- temporal-version-skew: The daily log-watch scan had not run since 2026-09-15, and nothing
+  said so. One scheduled run, `logwatch-2026-09-15T00:00:00Z`, was stuck retrying its workflow
+  task (about 1,700 attempts, one every ~9 minutes). With overlap `SKIP`, `logwatch-daily` skipped
+  every firing behind it: `SkippedOverlap: 11` by the time it was terminated on 2026-09-26. The
+  cause was **two builds serving one workflow**. `deployer` runs `FACTORY_IMAGE` too, and
+  `@WorkflowImpl` scanning registers every workflow on both containers. The config comment calls
+  that "harmless: deterministic orchestration", which holds only while both run the same build,
+  and `deployer` is updated separately, so they routinely don't (on 2026-09-26 the two digests
+  still differed). That night `observe` ran on the build that had #169's `mutedSignatures`, and
+  the workflow task landed on one that did not. Temporal's stock `JacksonJsonPayloadConverter`
+  keeps `FAIL_ON_UNKNOWN_PROPERTIES` on, so it threw. The catch block recorded the run and
+  rethrew a plain `RuntimeException`, which fails the workflow *task* and retries forever. Every
+  replay on the newer build then parsed the result, took the filing path, and hit
+  `NonDeterministicException` (`FileIssue` where the history held `RecordRun`). Load-bearing bits:
+  - **`TemporalPayloadConfiguration` ignores unknown properties on every payload**, as the bean
+    named `mainDataConverter` (the name the starter prefers). This reverses the 046 entry's
+    "not fixed, and accepted". That entry expected the exposure only across a deploy boundary,
+    for one short-lived run. The deployer makes it permanent, and one stuck run blocks a schedule
+    indefinitely. Additive fields are now always safe; removing or renaming one is still breaking.
+    `TemporalPayloadConfigurationTest` replays the incident: a payload from the current
+    `ScanObservation` read into its pre-#169 shape. A control asserts the stock converter still
+    throws on it, so the test cannot pass by testing nothing.
+  - **Every scheduled workflow gets a 22h execution timeout** (`ScheduledRuns.EXECUTION_TIMEOUT`,
+    on `logwatch-daily`, `cve-fix-daily` and `platform-backup-nightly`): shorter than the gap
+    between firings, so a run stuck for *any* reason ends before the next one is due. 22 rather
+    than 23 because the backup runs on a `Europe/London` calendar and the spring-forward day is
+    23h long. It clears the longest legitimate run, a backup exhausting three 6h attempts. The
+    schedules reconcile on boot, so the timeout lands on the next `software-factory` start.
+  - **Diagnose from the schedule, not the workflow list.** `temporal schedule describe` shows
+    `RunningWorkflows` and `SkippedOverlap`, and a non-zero skip count is the whole signal. The
+    workflow list shows a stuck run as merely `Running`. The post-deploy scans kept completing
+    throughout, which is why log watch looked alive.
+  - **Not changed:** workflows still register on both containers. Gating `@WorkflowImpl` per
+    container would need explicit worker configuration instead of auto-discovery, and with the
+    lenient converter plus the timeout, the version mismatch is survivable for additive changes.
+    It remains a hazard for anything non-additive, so update `deployer` in the same window as
+    `software-factory`.
+  See `docs/runbooks/logwatch.md` ("Muting third-party noise", last part).
 - news-search-and-source-filter: Two things, one page. **The site search box was never missing the
   article — it was silently degrading.** "AI SLDC" (a transposition of SDLC) returned five Rundown
   AI headlines and not `The AI-Native SDLC playbook`, which reads exactly like an import that never
@@ -1008,7 +1046,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     Scope section, which lists any change to the source-health filing as out of scope. It is why
     that filing's pre-046 fingerprints are **not** orphaned by this change (see above) even though
     its mode changed alongside everything else's.
-  - **Not fixed, and accepted:** `IssueFiling` lost `commentOnly` and gained `mode`, and Temporal's
+  - **Not fixed, and accepted** (reversed by `temporal-version-skew` above: the window proved not
+    to be narrow): `IssueFiling` lost `commentOnly` and gained `mode`, and Temporal's
     `JacksonJsonPayloadConverter` leaves `FAIL_ON_UNKNOWN_PROPERTIES` on — verified in the 1.36.0
     jar during 040 — so a `fileIssue` activity task scheduled by a pre-046 worker and still
     pending when the new image starts will fail to deserialize its input. The window is narrow
@@ -1443,7 +1482,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     method named `progress` returning `{phase, detail, <one module-specific field>}`. It is read
     as a `JsonNode` via an **untyped** stub: Temporal's `JacksonJsonPayloadConverter` does *not*
     disable `FAIL_ON_UNKNOWN_PROPERTIES` (verified in the 1.36.0 jar), so a typed read of one
-    module's record throws on another's. Temporal's `executionStatus` and the workflow's `phase`
+    module's record throws on another's. (The factory's converter has been lenient since
+    `temporal-version-skew`; the untyped read stays because it is the one shape that fits all.) Temporal's `executionStatus` and the workflow's `phase`
     are reported separately — a failed workflow cannot answer a query at all, and "it failed" is
     the most useful thing the page can say, so the query failing must not lose the status.
   **Code review gained a manual trigger after all** (the original cut had it status-only): the

@@ -6,6 +6,7 @@ import com.simonrowe.factory.logwatch.config.LogWatchTaskQueues;
 import com.simonrowe.factory.logwatch.domain.LogWatchRequest;
 import com.simonrowe.factory.logwatch.domain.Trigger;
 import com.simonrowe.factory.logwatch.workflow.LogWatchWorkflow;
+import com.simonrowe.factory.temporal.ScheduledRuns;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.client.schedules.Schedule;
 import io.temporal.client.schedules.ScheduleActionStartWorkflow;
@@ -116,6 +117,7 @@ public class LogWatchScheduleInitializer implements ApplicationRunner {
                     WorkflowOptions.newBuilder()
                         .setWorkflowId(WORKFLOW_ID)
                         .setTaskQueue(LogWatchTaskQueues.LOG_WATCH)
+                        .setWorkflowExecutionTimeout(ScheduledRuns.EXECUTION_TIMEOUT)
                         .build())
                 // Null window: the workflow resolves it from its own clock, so a scheduled run
                 // always covers the period ending at the moment it actually starts rather than a

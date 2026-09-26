@@ -2,6 +2,7 @@ package com.simonrowe.factory.platformbackup.schedule;
 
 import com.simonrowe.factory.platformbackup.config.PlatformBackupTaskQueues;
 import com.simonrowe.factory.platformbackup.workflow.PlatformBackupWorkflow;
+import com.simonrowe.factory.temporal.ScheduledRuns;
 import io.temporal.api.enums.v1.ScheduleOverlapPolicy;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.client.schedules.Schedule;
@@ -94,6 +95,7 @@ public class PlatformBackupScheduleInitializer implements ApplicationRunner {
                     WorkflowOptions.newBuilder()
                         .setWorkflowId(WORKFLOW_ID)
                         .setTaskQueue(PlatformBackupTaskQueues.PLATFORM_BACKUP)
+                        .setWorkflowExecutionTimeout(ScheduledRuns.EXECUTION_TIMEOUT)
                         .build())
                 .setArguments(false)
                 .build())

@@ -5,6 +5,7 @@ import com.simonrowe.factory.cvefix.config.CveFixTaskQueues;
 import com.simonrowe.factory.cvefix.domain.CveFixRequest;
 import com.simonrowe.factory.cvefix.workflow.CveFixWorkflow;
 import com.simonrowe.factory.linear.config.LinearProperties;
+import com.simonrowe.factory.temporal.ScheduledRuns;
 import io.temporal.api.enums.v1.ScheduleOverlapPolicy;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.client.schedules.Schedule;
@@ -135,6 +136,7 @@ public class CveFixScheduleInitializer implements ApplicationRunner {
                     WorkflowOptions.newBuilder()
                         .setWorkflowId(WORKFLOW_ID)
                         .setTaskQueue(CveFixTaskQueues.CVE_FIX)
+                        .setWorkflowExecutionTimeout(ScheduledRuns.EXECUTION_TIMEOUT)
                         .build())
                 .setArguments(
                     new CveFixRequest(

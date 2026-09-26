@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.simonrowe.factory.temporal.ScheduledRuns;
 import io.temporal.api.enums.v1.ScheduleOverlapPolicy;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.client.schedules.Schedule;
@@ -22,8 +23,10 @@ import io.temporal.client.schedules.ScheduleState;
 import io.temporal.client.schedules.ScheduleUpdate;
 import io.temporal.client.schedules.ScheduleUpdateInput;
 import io.temporal.workflow.Functions;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -138,6 +141,19 @@ class PlatformBackupScheduleInitializerTest {
    * A capture still running when the next one fires means one taking over 24 hours. Starting a
    * second would have both writing the same ClickHouse staging file.
    */
+  @Test
+  @DisplayName("a stuck run ends before the next firing instead of skipping it forever")
+  void boundsEachRunBelowTheGapBetweenFirings() {
+    initializer().run(null);
+
+    ScheduleActionStartWorkflow action =
+        (ScheduleActionStartWorkflow) createdSchedule().getAction();
+    assertThat(action.getOptions().getWorkflowExecutionTimeout())
+        .isEqualTo(ScheduledRuns.EXECUTION_TIMEOUT)
+        // Strictly under the shortest gap between firings: the 23-hour day the clocks go forward.
+        .isLessThan(Duration.ofHours(23));
+  }
+
   @Test
   void skipsOverlappingRuns() {
     initializer().run(null);
