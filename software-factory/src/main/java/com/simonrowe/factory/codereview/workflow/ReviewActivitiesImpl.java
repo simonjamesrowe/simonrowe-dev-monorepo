@@ -49,8 +49,9 @@ import org.springframework.stereotype.Component;
  * guards no credential — the review activities need only what both containers already hold — so a
  * default of off would buy no safety while making a missing or overridden
  * {@code FACTORY_CODEREVIEW_ENABLED} silently disable code review everywhere — with the
- * repository's merge gate requiring the {@code Code Review} check, that would block every pull request and look like an outage. Defaulting on fails toward
- * the visible, already-diagnosed problem instead of the silent one.
+ * repository's merge gate requiring the {@code Code Review} check, that would block every pull
+ * request and look like an outage. Defaulting on fails toward the visible, already-diagnosed
+ * problem instead of the silent one.
  *
  * <p>Deliberately not a field on {@link CodeReviewProperties}: nothing reads this value at
  * runtime, it exists only for the component scanner, and widening that record would touch twenty
