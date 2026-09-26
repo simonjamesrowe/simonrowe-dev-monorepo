@@ -95,6 +95,25 @@ class CalendarServiceValidationTest {
     assertBadRequest(() -> service.createEvent(FAMILY_ID, event("school", "Pickup", START, null,
         List.of(CHILD_ID), null, List.of(),
         new CalendarEvent.Recurring("monthly", List.of()))));
+    assertBadRequest(() -> service.createEvent(FAMILY_ID, event("school", "Pickup", START, null,
+        List.of(CHILD_ID), null, List.of(),
+        new CalendarEvent.Recurring("weekly", List.of("TUE")))));
+    assertBadRequest(() -> service.createEvent(FAMILY_ID, event("school", "Pickup", START, null,
+        List.of(CHILD_ID), null, List.of(),
+        new CalendarEvent.Recurring("weekly", List.of("tuesday"), List.of("13/10/2026")))));
+    assertBadRequest(() -> service.createEvent(FAMILY_ID, event("school", "Pickup", START, null,
+        List.of(CHILD_ID), null, List.of(),
+        new CalendarEvent.Recurring("weekly", List.of("tuesday"),
+            java.util.stream.IntStream.rangeClosed(0, CalendarService.MAX_EXCLUDED_DATES)
+                .mapToObj(day -> java.time.LocalDate.of(2026, 1, 1).plusDays(day).toString())
+                .toList()))));
+  }
+
+  @Test
+  void keepsSkippedDatesSortedAndDistinct() {
+    assertThat(new CalendarEvent.Recurring("weekly", List.of("monday"),
+        java.util.Arrays.asList("2026-11-02", null, "2026-10-26", "2026-11-02"))
+        .excludedDates()).containsExactly("2026-10-26", "2026-11-02");
   }
 
   @Test

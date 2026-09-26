@@ -53,6 +53,27 @@ class AssistantInferenceServiceTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  void constrainsRecurrenceToTheVocabularyTheCalendarRenders() throws Exception {
+    for (final String tool : List.of("propose_create_event", "propose_update_event")) {
+      final String schemaJson = service.toolCallbacks().stream()
+          .filter(callback -> callback.getToolDefinition().name().equals(tool))
+          .findFirst().orElseThrow().getToolDefinition().inputSchema();
+      final Map<String, Object> properties = (Map<String, Object>)
+          new tools.jackson.databind.ObjectMapper().readValue(schemaJson,
+              new tools.jackson.core.type.TypeReference<Map<String, Object>>() { })
+              .get("properties");
+      final Map<String, Object> frequency =
+          (Map<String, Object>) properties.get("recurringFrequency");
+      assertThat((List<Object>) frequency.get("enum")).containsExactly("daily", "weekly", null);
+      final Map<String, Object> days = (Map<String, Object>) ((Map<String, Object>)
+          properties.get("recurringDays")).get("items");
+      assertThat((List<Object>) days.get("enum")).containsExactly("monday", "tuesday",
+          "wednesday", "thursday", "friday", "saturday", "sunday");
+    }
+  }
+
+  @Test
   void returnsMultipleToolCallsWithPrivateStrictOptions() {
     when(chatModel.call(any(Prompt.class))).thenReturn(response(
         new AssistantMessage.ToolCall("one", "function", "propose_create_event",

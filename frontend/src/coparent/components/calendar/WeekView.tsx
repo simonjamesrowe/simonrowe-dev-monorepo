@@ -4,14 +4,14 @@ import type { Event, Parent } from '../../types/calendar';
 
 import { EventPill } from './EventPill';
 import { getEventOwnerLabel } from './eventOwners';
-import { expandRecurringEvents } from './recurrence';
+import { expandRecurringEvents, occurrenceTarget } from './recurrence';
 
 interface WeekViewProps {
   currentDate: Date;
   events: Event[];
   parents: Record<string, Parent>;
   onDayClick: (date: Date) => void;
-  onEventClick?: (eventId: string) => void;
+  onEventClick?: (eventId: string, occurrenceDate?: string) => void;
 }
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7); // 7 AM to 8 PM
@@ -198,7 +198,7 @@ export function WeekView({
                       key={event.id}
                       event={event}
                       ownerLabel={getEventOwnerLabel(event, parents)}
-                      onClick={() => onEventClick?.(event.sourceId ?? event.id)}
+                      onClick={() => onEventClick?.(...occurrenceTarget(event))}
                       compact
                     />
                   ))}
@@ -222,7 +222,7 @@ export function WeekView({
                     <EventPill
                       event={event}
                       ownerLabel={getEventOwnerLabel(event, parents)}
-                      onClick={() => onEventClick?.(event.sourceId ?? event.id)}
+                      onClick={() => onEventClick?.(...occurrenceTarget(event))}
                       showTime
                     />
                   </div>

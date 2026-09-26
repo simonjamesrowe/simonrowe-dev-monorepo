@@ -22,6 +22,8 @@ export interface Child {
 export interface RecurringPattern {
   frequency: 'daily' | 'weekly';
   days?: string[];
+  /** YYYY-MM-DD dates on which one occurrence is skipped, e.g. a cancelled week. */
+  excludedDates?: string[];
 }
 
 export interface Event {
@@ -80,8 +82,8 @@ export interface CalendarSchedulingProps {
   currentParentId: string;
 
   // Event actions
-  /** Called when user wants to view event details */
-  onViewEvent?: (eventId: string) => void;
+  /** Called when user wants to view event details; a repeating event also names the date */
+  onViewEvent?: (eventId: string, occurrenceDate?: string) => void;
   /** Called when user wants to create a new event */
   onCreateEvent?: () => void;
   /** Called when user wants to edit an event */

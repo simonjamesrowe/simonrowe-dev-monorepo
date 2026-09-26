@@ -1,5 +1,6 @@
 package com.simonrowe.coparent.assistant;
 
+import com.simonrowe.coparent.calendar.Recurrence;
 import com.simonrowe.coparent.config.CoparentProperties;
 import com.simonrowe.observability.LangfuseContentObservationFilter;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -42,6 +43,18 @@ public class AssistantInferenceService {
       If a target is uncertain, set its ID to null and provide targetHint. Resolve relative dates
       using the supplied currentDateTime and timeZone. Proposals are reviewed by a human and are
       not executed by you.
+
+      Make one function call per distinct item in the source, all in this one response. A
+      source that lists ten activities needs ten calls: never merge items, summarise them, or
+      stop after the first. Each activity for each child is a separate event.
+
+      Calendar events: dates are YYYY-MM-DD and times are 24-hour HH:mm. type is one of
+      activity, school, medical, holiday or custody unless a family category name fits better.
+      A regular activity is one recurring event: set recurringFrequency and recurringDays, set
+      startDate to its first occurrence and endDate to the last date the series runs; the
+      calendar repeats the event on recurringDays between those two dates. Use a null endDate
+      only when the source gives no end at all. The calendar cannot pause a series, so when an
+      activity stops for holidays or half terms, say so in notes.
 
       FAMILY_CONTEXT:
       """;
@@ -192,8 +205,9 @@ public class AssistantInferenceService {
         + ",\"allDay\":{\"type\":[\"boolean\",\"null\"]}"
         + ",\"parentId\":" + nullableString() + ",\"parentIds\":" + stringArray()
         + ",\"childIds\":" + stringArray() + ",\"location\":" + nullableString()
-        + ",\"notes\":" + nullableString() + ",\"recurringFrequency\":"
-        + nullableString() + ",\"recurringDays\":" + stringArray();
+        + ",\"notes\":" + nullableString()
+        + ",\"recurringFrequency\":" + nullableEnum(Recurrence.FREQUENCIES)
+        + ",\"recurringDays\":" + enumArray(Recurrence.DAYS);
     final List<String> required = new ArrayList<>();
     if (update) {
       required.add("eventId");
@@ -227,6 +241,25 @@ public class AssistantInferenceService {
 
   private static String stringArray() {
     return "{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\"}}";
+  }
+
+  /**
+   * Constrains the value at decode time. A free-text weekday is the difference between a series
+   * that renders and one that is saved and never shown, so the vocabulary is enforced here rather
+   * than only repaired afterwards.
+   */
+  private static String nullableEnum(final List<String> values) {
+    return "{\"type\":[\"string\",\"null\"],\"enum\":[" + quoted(values) + ",null]}";
+  }
+
+  private static String enumArray(final List<String> values) {
+    return "{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\",\"enum\":["
+        + quoted(values) + "]}}";
+  }
+
+  private static String quoted(final List<String> values) {
+    return values.stream().map(value -> "\"" + value + "\"")
+        .collect(java.util.stream.Collectors.joining(","));
   }
 
   public record ProposedCall(String name, Map<String, Object> arguments) {

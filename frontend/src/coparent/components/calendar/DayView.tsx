@@ -4,14 +4,14 @@ import type { Event, Parent, Child } from '../../types/calendar';
 
 import { getEventOwnerLabel } from './eventOwners';
 import { getEventTypeColor } from './eventTypeColors';
-import { expandRecurringEvents } from './recurrence';
+import { expandRecurringEvents, occurrenceTarget } from './recurrence';
 
 interface DayViewProps {
   currentDate: Date;
   events: Event[];
   parents: Record<string, Parent>;
   children: Child[];
-  onEventClick?: (eventId: string) => void;
+  onEventClick?: (eventId: string, occurrenceDate?: string) => void;
   onCreateEvent?: () => void;
 }
 
@@ -220,7 +220,7 @@ export function DayView({
                 return (
                   <button
                     key={event.id}
-                    onClick={() => onEventClick?.(event.sourceId ?? event.id)}
+                    onClick={() => onEventClick?.(...occurrenceTarget(event))}
                     className={`w-full rounded-xl border p-3 text-left transition-all duration-150 hover:shadow-md ${colors.bg} ${colors.border} `}
                   >
                     <div className={`text-sm font-medium ${colors.text}`}>{event.title}</div>
@@ -307,7 +307,7 @@ export function DayView({
             return (
               <button
                 key={event.id}
-                onClick={() => onEventClick?.(event.sourceId ?? event.id)}
+                onClick={() => onEventClick?.(...occurrenceTarget(event))}
                 className={`absolute left-20 right-4 rounded-xl border p-3 text-left transition-all duration-150 hover:scale-[1.02] hover:shadow-lg ${colors.bg} ${colors.border} `}
                 style={{
                   top: `${position.top}px`,
