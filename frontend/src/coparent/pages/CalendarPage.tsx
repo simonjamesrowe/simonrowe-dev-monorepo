@@ -13,6 +13,7 @@ import {
   useUpdateEvent,
   useDeleteEvent,
   useSkipOccurrence,
+  useCurrentParentId,
   useApproveScheduleChangeRequest,
   useDeclineScheduleChangeRequest,
 } from '../hooks/api';
@@ -83,7 +84,9 @@ const CalendarPage = () => {
 
   // Get drawer state from URL
   const isCreating = searchParams.get('create') === 'true';
-  const editingEventId = searchParams.get('edit') || undefined;
+  // `event` is the link other screens hand out (the dashboard, an applied assistant action);
+  // it opens the same drawer as `edit`.
+  const editingEventId = searchParams.get('edit') || searchParams.get('event') || undefined;
   const occurrenceDate = searchParams.get('occurrence') || undefined;
   const isEditing = Boolean(editingEventId);
   const initialDate = searchParams.get('date') || todayYmd;
@@ -107,9 +110,7 @@ const CalendarPage = () => {
     }
   }, [activeFamilyId, families]);
 
-  // Get current parent (the logged-in user)
-  const currentParent = parents.find((p) => p.role === 'primary') || parents[0];
-  const currentParentId = currentParent?.id || '';
+  const currentParentId = useCurrentParentId(activeFamilyId) ?? '';
 
   // Transform data to match component expectations
   const transformedParents: Parent[] = parents.map((p) => ({
@@ -276,7 +277,7 @@ const CalendarPage = () => {
         scheduleChangeRequests={transformedRequests}
         currentParentId={currentParentId}
         onViewEvent={handleViewEvent}
-        onCreateEvent={() => handleOpenDrawer()}
+        onCreateEvent={(date) => handleOpenDrawer(date)}
         onEditEvent={handleEditEvent}
         onDeleteEvent={handleDeleteEvent}
         onRequestScheduleChange={handleRequestScheduleChange}
@@ -297,6 +298,7 @@ const CalendarPage = () => {
         mode={drawerMode}
         occurrenceDate={editingEvent?.recurring ? occurrenceDate : undefined}
         onSkipOccurrence={handleSkipOccurrence}
+        onDelete={editingEventId ? () => handleDeleteEvent(editingEventId) : undefined}
         currentParentId={currentParentId}
         onSubmit={(eventData) => {
           if (drawerMode === 'edit' && editingEventId) {

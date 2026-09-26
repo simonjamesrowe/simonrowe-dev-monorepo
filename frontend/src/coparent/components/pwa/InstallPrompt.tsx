@@ -6,9 +6,36 @@ import { useState } from 'react';
 
 import { usePWAInstall } from '../../lib/pwa/usePWAInstall';
 
+const DISMISSED_KEY = 'coparent.installPrompt.dismissedAt';
+const SNOOZE_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Storage can be unavailable (private mode, blocked cookies); the prompt then behaves as before.
+const dismissedRecently = () => {
+  try {
+    const at = Number(window.localStorage.getItem(DISMISSED_KEY));
+    return Number.isFinite(at) && at > 0 && Date.now() - at < SNOOZE_MS;
+  } catch {
+    return false;
+  }
+};
+
+const rememberDismissal = () => {
+  try {
+    window.localStorage.setItem(DISMISSED_KEY, String(Date.now()));
+  } catch {
+    // Not persisting only means the prompt returns on the next load.
+  }
+};
+
 export function InstallPrompt() {
   const { canInstall, isInstalled, promptInstall } = usePWAInstall();
-  const [dismissed, setDismissed] = useState(false);
+  // "Not Now" used to last only until the next page load, so the prompt covered the message
+  // composer on every visit. It is now remembered for 30 days.
+  const [dismissed, setDismissedState] = useState(dismissedRecently);
+  const setDismissed = (value: boolean) => {
+    if (value) rememberDismissal();
+    setDismissedState(value);
+  };
 
   if (!canInstall || isInstalled || dismissed) {
     return null;

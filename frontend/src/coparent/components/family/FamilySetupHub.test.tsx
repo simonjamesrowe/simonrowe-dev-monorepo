@@ -28,6 +28,15 @@ const parent: Parent = {
   lastSignedInAt: '2026-02-01T00:00:00Z',
 };
 
+const coParent: Parent = {
+  ...parent,
+  id: 'par-2',
+  fullName: 'Jordan Rowe',
+  email: 'jordan@example.com',
+  role: 'co-parent',
+  auth0Id: 'auth0|2',
+};
+
 const child: Child = {
   id: 'chi-1',
   familyId: 'fam-1',
@@ -95,6 +104,33 @@ describe('FamilySetupHub child editor', () => {
     expect(onCloseChildEditor).toHaveBeenCalledTimes(1);
   });
 
+  it('clears a school and medical note that were emptied, rather than keeping them', async () => {
+    const user = userEvent.setup();
+    const onUpdateChild = vi.fn();
+    render(
+      <FamilySetupHub
+        families={[family]}
+        parents={[parent]}
+        children={[child]}
+        invitations={[] as Invitation[]}
+        activeFamilyId="fam-1"
+        childIdToEdit="chi-1"
+        onUpdateChild={onUpdateChild}
+      />,
+    );
+
+    const editor = within(screen.getByRole('dialog', { name: 'Theo Rowe' }));
+    await user.clear(editor.getByLabelText('School (optional)'));
+    await user.clear(editor.getByLabelText('Medical Notes (optional)'));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    // An omitted field means "unchanged" to the API, so a clear has to be sent as ''.
+    expect(onUpdateChild).toHaveBeenCalledWith(
+      'chi-1',
+      expect.objectContaining({ school: '', medicalNotes: '' }),
+    );
+  });
+
   it('manages family members and invitations', async () => {
     const user = userEvent.setup();
     const onUpdateFamily = vi.fn();
@@ -107,10 +143,11 @@ describe('FamilySetupHub child editor', () => {
     const { container } = render(
       <FamilySetupHub
         families={[family]}
-        parents={[parent]}
+        parents={[parent, coParent]}
         children={[child]}
         invitations={[invitation]}
         activeFamilyId="fam-1"
+        currentParentId="par-1"
         onUpdateFamily={onUpdateFamily}
         onAssignRole={onAssignRole}
         onAddChild={onAddChild}
@@ -122,11 +159,9 @@ describe('FamilySetupHub child editor', () => {
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
 
-    const parentRow = screen.getByText('alex@example.com').closest('div.flex.items-center')
-      ?.parentElement;
-    const roleButton = parentRow?.querySelector('button');
-    expect(roleButton).not.toBeNull();
-    await user.click(roleButton as HTMLButtonElement);
+    // Only a primary parent may change a role, and never their own (the API refuses both).
+    expect(screen.queryByRole('button', { name: /Make Alex Rowe/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Make Jordan Rowe a primary parent' }));
 
     await user.type(screen.getByPlaceholderText('First and last name'), 'Jamie Rowe');
     const dateInput = container.querySelector('input[type="date"]');
@@ -149,7 +184,7 @@ describe('FamilySetupHub child editor', () => {
     await user.click(within(invitationCard as HTMLElement).getByRole('button', { name: 'Cancel' }));
 
     expect(onUpdateFamily).toHaveBeenCalledWith('fam-1', {});
-    expect(onAssignRole).toHaveBeenCalledWith('par-1', 'co-parent');
+    expect(onAssignRole).toHaveBeenCalledWith('par-2', 'primary');
     expect(onAddChild).toHaveBeenCalledWith({
       fullName: 'Jamie Rowe',
       dateOfBirth: '2018-03-04',

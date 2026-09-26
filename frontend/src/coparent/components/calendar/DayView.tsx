@@ -5,6 +5,7 @@ import type { Event, Parent, Child } from '../../types/calendar';
 import { getEventOwnerLabel } from './eventOwners';
 import { getEventTypeColor } from './eventTypeColors';
 import { expandRecurringEvents, occurrenceTarget } from './recurrence';
+import { eventBox, gridHoursFor, isSameDay, nowOffset, useNow } from './timeGrid';
 
 interface DayViewProps {
   currentDate: Date;
@@ -15,7 +16,8 @@ interface DayViewProps {
   onCreateEvent?: () => void;
 }
 
-const HOURS = Array.from({ length: 16 }, (_, i) => i + 6); // 6 AM to 9 PM
+const HOUR_PX = 80;
+const DEFAULT_HOURS = { startHour: 6, endHour: 22 }; // 6 AM to 9 PM rows
 
 export function DayView({
   currentDate,
@@ -69,21 +71,13 @@ export function DayView({
     return `${hour} AM`;
   };
 
-  const getEventPosition = (event: Event) => {
-    if (!event.startTime) return null;
-
-    const [startHour = 0, startMin = 0] = event.startTime.split(':').map(Number);
-    const [endHour, endMin] = event.endTime
-      ? event.endTime.split(':').map(Number)
-      : [startHour + 1, startMin];
-    const resolvedEndHour = endHour ?? startHour + 1;
-    const resolvedEndMin = endMin ?? startMin;
-
-    const top = (((startHour - 6) * 60 + startMin) / 60) * 80; // 80px per hour
-    const height = (((resolvedEndHour - startHour) * 60 + (resolvedEndMin - startMin)) / 60) * 80;
-
-    return { top, height: Math.max(height, 40) };
-  };
+  const now = useNow();
+  const hours = useMemo(() => gridHoursFor(dayEvents, DEFAULT_HOURS), [dayEvents]);
+  const hourRows = Array.from(
+    { length: hours.endHour - hours.startHour },
+    (_, i) => i + hours.startHour,
+  );
+  const nowTop = isSameDay(currentDate, now) ? nowOffset(now, hours, HOUR_PX) : null;
 
   const getEventColors = (eventType: string) => {
     const color = getEventTypeColor(eventType);
@@ -280,15 +274,13 @@ export function DayView({
 
       {/* Main: Time grid */}
       <div className="flex-1 overflow-x-auto">
-        <div className="relative min-h-[1280px]">
-          {' '}
-          {/* 16 hours × 80px */}
+        <div className="relative" style={{ minHeight: `${hourRows.length * HOUR_PX}px` }}>
           {/* Hour lines */}
-          {HOURS.map((hour) => (
+          {hourRows.map((hour) => (
             <div
               key={hour}
               className="absolute left-0 right-0 flex items-start border-t border-slate-100 dark:border-slate-700/50"
-              style={{ top: `${(hour - 6) * 80}px`, height: '80px' }}
+              style={{ top: `${(hour - hours.startHour) * HOUR_PX}px`, height: `${HOUR_PX}px` }}
             >
               <div className="-mt-2 w-16 flex-shrink-0 pr-2 text-right text-xs text-slate-400 dark:text-slate-500">
                 {formatHour(hour)}
@@ -298,7 +290,7 @@ export function DayView({
           ))}
           {/* Timed events */}
           {timedEvents.map((event) => {
-            const position = getEventPosition(event);
+            const position = eventBox(event, hours, HOUR_PX, 40);
             if (!position) return null;
 
             const colors = getEventColors(event.type);
@@ -374,14 +366,16 @@ export function DayView({
               </button>
             );
           })}
-          {/* Current time indicator */}
-          <div
-            className="pointer-events-none absolute left-16 right-0 z-20 flex items-center"
-            style={{ top: `${(((9 - 6) * 60 + 30) / 60) * 80}px` }} // 9:30 AM for demo
-          >
-            <div className="-ml-1.5 h-3 w-3 rounded-full bg-rose-500 shadow-lg shadow-rose-500/50" />
-            <div className="h-0.5 flex-1 bg-rose-500 shadow-sm shadow-rose-500/50" />
-          </div>
+          {nowTop !== null && (
+            <div
+              className="pointer-events-none absolute left-16 right-0 z-20 flex items-center"
+              style={{ top: `${nowTop}px` }}
+              data-testid="day-now-line"
+            >
+              <div className="-ml-1.5 h-3 w-3 rounded-full bg-rose-500 shadow-lg shadow-rose-500/50" />
+              <div className="h-0.5 flex-1 bg-rose-500 shadow-sm shadow-rose-500/50" />
+            </div>
+          )}
         </div>
       </div>
     </div>

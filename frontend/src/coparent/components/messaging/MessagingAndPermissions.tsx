@@ -1,5 +1,7 @@
 import { Check, CheckCheck } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+import { apiErrorMessage } from '../../lib/api/errorMessage';
 
 import type { Conversation, Message, PermissionRequest } from '../../lib/api/client';
 
@@ -72,6 +74,8 @@ function DeliveryStatus({ status }: { status: Message['deliveryStatus'] }) {
 export function MessagingAndPermissions({
   conversations,
   currentUserId,
+  selectedConversationId,
+  canCompose = true,
   onViewConversation,
   onSendMessage,
   onMarkAsRead,
@@ -82,9 +86,17 @@ export function MessagingAndPermissions({
   onDenyPermission,
 }: MessagingAndPermissionsProps) {
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
-  const [activeId, setActiveId] = useState<string | null>(conversations[0]?.id ?? null);
+  const [activeId, setActiveId] = useState<string | null>(
+    selectedConversationId ?? conversations[0]?.id ?? null,
+  );
   const [draftMessage, setDraftMessage] = useState('');
   const [responseText, setResponseText] = useState('');
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+
+  // A link to a conversation (or one just created) takes over the selection when it changes.
+  useEffect(() => {
+    if (selectedConversationId) setActiveId(selectedConversationId);
+  }, [selectedConversationId]);
 
   const filteredConversations = useMemo(() => {
     if (filterMode === 'all') return conversations;
@@ -110,15 +122,21 @@ export function MessagingAndPermissions({
     setDraftMessage('');
   };
 
-  const handleApprove = (permissionId: string) => {
-    onApprovePermission?.(permissionId, responseText.trim() || undefined);
-    setResponseText('');
+  const decide = async (
+    handler: MessagingAndPermissionsProps['onApprovePermission'],
+    permissionId: string,
+  ) => {
+    setDecisionError(null);
+    try {
+      await handler?.(permissionId, responseText.trim() || undefined);
+      setResponseText('');
+    } catch (failure) {
+      setDecisionError(apiErrorMessage(failure, 'Your response could not be saved. Try again.'));
+    }
   };
 
-  const handleDeny = (permissionId: string) => {
-    onDenyPermission?.(permissionId, responseText.trim() || undefined);
-    setResponseText('');
-  };
+  const handleApprove = (permissionId: string) => decide(onApprovePermission, permissionId);
+  const handleDeny = (permissionId: string) => decide(onDenyPermission, permissionId);
 
   return (
     <div className="relative min-h-[80vh] bg-gradient-to-br from-slate-50 via-white to-teal-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-teal-950/30">
@@ -138,15 +156,22 @@ export function MessagingAndPermissions({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {!canCompose && (
+              <p className="w-full text-xs text-slate-500 dark:text-slate-400">
+                Invite your co-parent to start conversations and requests.
+              </p>
+            )}
             <button
               onClick={onCreatePermissionRequest}
-              className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-900/30 dark:text-rose-200"
+              disabled={!canCompose}
+              className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 dark:border-rose-900/60 dark:bg-rose-900/30 dark:text-rose-200"
             >
               New permission
             </button>
             <button
               onClick={onCreateMessage}
-              className="inline-flex items-center gap-2 rounded-full bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-teal-500/25 transition hover:-translate-y-0.5 hover:bg-teal-700 active:translate-y-0 dark:bg-teal-500 dark:text-slate-950"
+              disabled={!canCompose}
+              className="inline-flex items-center gap-2 rounded-full bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-teal-500/25 transition hover:-translate-y-0.5 hover:bg-teal-700 active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:bg-teal-500 dark:text-slate-950"
             >
               New message
             </button>
@@ -304,6 +329,8 @@ export function MessagingAndPermissions({
                 ) : (
                   <PermissionPanel
                     conversation={activeConversation}
+                    currentUserId={currentUserId}
+                    error={decisionError}
                     responseText={responseText}
                     onResponseChange={setResponseText}
                     onApprove={handleApprove}
@@ -396,12 +423,16 @@ function MessageThread({
 
 function PermissionPanel({
   conversation,
+  currentUserId,
+  error,
   responseText,
   onResponseChange,
   onApprove,
   onDeny,
 }: {
   conversation: Conversation;
+  currentUserId: string;
+  error: string | null;
   responseText: string;
   onResponseChange: (value: string) => void;
   onApprove: (permissionId: string) => void;
@@ -461,7 +492,15 @@ function PermissionPanel({
         </div>
       )}
 
-      {permission.status === 'pending' && (
+      {/* The requester cannot answer their own request (the API refuses it with a 403), so
+          they are told who it is waiting on instead of being offered buttons that fail. */}
+      {permission.status === 'pending' && permission.requestedBy === currentUserId && (
+        <p className="mt-5 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+          Waiting for {getOtherParentName(conversation, currentUserId)} to respond.
+        </p>
+      )}
+
+      {permission.status === 'pending' && permission.requestedBy !== currentUserId && (
         <div className="mt-5 rounded-2xl border border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
             Your response
@@ -473,6 +512,11 @@ function PermissionPanel({
             placeholder="Share any notes or conditions..."
             className="mt-3 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-teal-400 focus:ring-2 focus:ring-teal-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-teal-500/60 dark:focus:ring-teal-900/40"
           />
+          {error && (
+            <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">
+              {error}
+            </p>
+          )}
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={() => onApprove(permission.id)}

@@ -23,6 +23,8 @@ interface FamilySetupHubProps {
   children: Child[];
   invitations: Invitation[];
   activeFamilyId?: string;
+  /** The signed-in parent; only a primary parent may change somebody else's role. */
+  currentParentId?: string;
   childIdToEdit?: string;
   onCloseChildEditor?: () => void;
   onUpdateFamily?: (id: string, updates: Partial<Family>) => void;
@@ -91,6 +93,7 @@ export function FamilySetupHub({
   children,
   invitations,
   activeFamilyId,
+  currentParentId,
   childIdToEdit,
   onCloseChildEditor,
   onUpdateFamily,
@@ -105,6 +108,8 @@ export function FamilySetupHub({
   const familyParents = parents.filter((p) => p.familyId === activeFamilyId);
   const familyChildren = children.filter((c) => c.familyId === activeFamilyId);
   const familyInvitations = invitations.filter((i) => i.familyId === activeFamilyId);
+  const canAssignRoles =
+    familyParents.find((p) => p.id === currentParentId)?.role === 'primary';
   const pendingInvites = familyInvitations.filter((i) => i.status === 'pending');
   const [childName, setChildName] = useState('');
   const [childDob, setChildDob] = useState('');
@@ -157,8 +162,10 @@ export function FamilySetupHub({
     onUpdateChild?.(editingChild.id, {
       fullName: trimmedName,
       dateOfBirth: editChildDob,
-      school: editChildSchool || undefined,
-      medicalNotes: editChildMedicalNotes || undefined,
+      // An emptied field is sent as '' on purpose: an omitted field means "leave unchanged",
+      // so sending undefined made it impossible to clear a school or medical note.
+      school: editChildSchool.trim(),
+      medicalNotes: editChildMedicalNotes.trim(),
     });
   };
 
@@ -505,30 +512,39 @@ export function FamilySetupHub({
                           >
                             {roleBadge.label}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onAssignRole?.(
-                                parent.id,
-                                parent.role === 'primary' ? 'co-parent' : 'primary',
-                              )
-                            }
-                            className="text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-300"
-                          >
-                            <svg
-                              className="h-4 w-4"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={2}
+                          {/* The API lets only a primary parent change someone else's role; the
+                              pencil used to show on every row and fail silently with a 403. */}
+                          {canAssignRoles && parent.id !== currentParentId && (
+                            <button
+                              type="button"
+                              aria-label={
+                                parent.role === 'primary'
+                                  ? `Make ${parent.fullName} a co-parent`
+                                  : `Make ${parent.fullName} a primary parent`
+                              }
+                              onClick={() =>
+                                onAssignRole?.(
+                                  parent.id,
+                                  parent.role === 'primary' ? 'co-parent' : 'primary',
+                                )
+                              }
+                              className="text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-300"
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
-                              />
-                            </svg>
-                          </button>
+                              <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
+                                />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

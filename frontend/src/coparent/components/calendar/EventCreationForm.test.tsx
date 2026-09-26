@@ -175,7 +175,6 @@ describe('EventCreationForm', () => {
 
     await user.click(screen.getByRole('button', { name: 'Every weekly' }));
     await user.click(screen.getAllByRole('button', { name: 'M' })[0]);
-    await user.click(screen.getByRole('button', { name: 'Theo' }));
 
     const samButtons = screen.getAllByRole('button', { name: /^Sam/ });
     await user.click(samButtons[1]);
@@ -196,7 +195,8 @@ describe('EventCreationForm', () => {
         startTime: '09:30',
         endTime: '10:30',
         parentId: null,
-        childIds: [],
+        parentIds: ['parent-1', 'parent-2'],
+        childIds: ['child-1'],
         location: 'Community Centre',
         notes: 'Bring paperwork',
         recurring: expect.objectContaining({ frequency: 'weekly' }),
@@ -321,5 +321,32 @@ describe('EventCreationForm', () => {
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ endDate: '2026-10-06', recurring: null }),
     );
+  });
+
+  it('selects every child once they load, and will not save an event with none', async () => {
+    const user = userEvent.setup();
+    const onValidationChange = vi.fn();
+    const ref = createRef<EventCreationFormRef>();
+    const onSubmit = vi.fn();
+    const props = {
+      parents,
+      currentParentId: 'parent-1',
+      initialDate: '2026-10-07',
+      onValidationChange,
+      onSubmit,
+    };
+    // The family's children arrive after the drawer has mounted.
+    const { rerender } = render(<EventCreationForm ref={ref} {...props} children={[]} />);
+    rerender(<EventCreationForm ref={ref} {...props} children={children} />);
+    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Dentist');
+
+    expect(onValidationChange).toHaveBeenLastCalledWith(true);
+    await user.click(screen.getByRole('button', { name: 'Theo' }));
+    expect(onValidationChange).toHaveBeenLastCalledWith(false);
+
+    await act(async () => {
+      await ref.current?.submit();
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

@@ -71,3 +71,12 @@ export function useUpdateCurrentUser() {
     },
   });
 }
+
+/**
+ * The signed-in person's parent id within a family. Never "the primary parent": a co-parent
+ * who is signed in must see their own defaults, requests and approvals, not the other side's.
+ */
+export function useCurrentParentId(familyId: string | undefined) {
+  const { data: currentUser } = useCurrentUser();
+  return currentUser?.profiles.find((profile) => profile.familyId === familyId)?.id;
+}

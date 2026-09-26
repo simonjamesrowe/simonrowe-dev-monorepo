@@ -1,7 +1,8 @@
-import { CalendarX, RotateCcw, X } from 'lucide-react';
+import { CalendarX, RotateCcw, Trash2, X } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Drawer } from 'vaul';
 
+import { apiErrorMessage } from '../../lib/api/errorMessage';
 import type { Event, Parent, Child } from '../../types/calendar';
 
 import type { EventCreationFormRef } from './EventCreationForm';
@@ -21,6 +22,8 @@ export interface EventCreationDrawerProps {
   onSkipOccurrence?: (date: string, skip: boolean) => Promise<void>;
   currentParentId: string;
   onSubmit: (eventData: Omit<Event, 'id'>) => Promise<void>;
+  /** Deletes the event being edited (the whole series, for a repeating event). */
+  onDelete?: () => Promise<void>;
 }
 
 const formatOccurrence = (date: string) =>
@@ -43,10 +46,13 @@ export function EventCreationDrawer({
   onSkipOccurrence,
   currentParentId,
   onSubmit,
+  onDelete,
 }: EventCreationDrawerProps) {
   const [isValid, setIsValid] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingDate, setPendingDate] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const skippedDates = event?.recurring?.excludedDates ?? [];
   const occurrenceSkipped = occurrenceDate ? skippedDates.includes(occurrenceDate) : false;
 
@@ -74,8 +80,11 @@ export function EventCreationDrawer({
     if (!isValid || isSubmitting || !formRef.current) return;
 
     setIsSubmitting(true);
+    setError(null);
     try {
-      formRef.current.submit();
+      await formRef.current.submit();
+    } catch (failure) {
+      setError(apiErrorMessage(failure, 'The event could not be saved. Try again.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -84,6 +93,25 @@ export function EventCreationDrawer({
   const handleFormSubmit = async (eventData: Omit<Event, 'id'>) => {
     await onSubmit(eventData);
     onClose();
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete || isSubmitting) return;
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await onDelete();
+      onClose();
+    } catch (failure) {
+      setError(apiErrorMessage(failure, 'The event could not be deleted. Try again.'));
+    } finally {
+      setIsSubmitting(false);
+      setConfirmingDelete(false);
+    }
   };
 
   if (!open) return null;
@@ -194,7 +222,32 @@ export function EventCreationDrawer({
 
               {/* Fixed Footer */}
               <div className="border-t border-slate-200 px-6 py-4 dark:border-slate-700">
+                {error && (
+                  <p
+                    role="alert"
+                    className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300"
+                  >
+                    {error}
+                  </p>
+                )}
                 <div className="flex items-center justify-end gap-3">
+                  {mode === 'edit' && onDelete && (
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      onBlur={() => setConfirmingDelete(false)}
+                      disabled={isSubmitting}
+                      style={{ marginRight: 'auto' }}
+                      className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-red-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 dark:text-red-300 dark:hover:bg-slate-800"
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
+                      {confirmingDelete
+                        ? event?.recurring
+                          ? 'Delete every occurrence?'
+                          : 'Confirm delete'
+                        : 'Delete'}
+                    </button>
+                  )}
                   <button
                     onClick={onClose}
                     className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"

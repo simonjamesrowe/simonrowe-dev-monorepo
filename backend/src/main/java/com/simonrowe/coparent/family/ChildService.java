@@ -91,8 +91,8 @@ public class ChildService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date of birth");
     }
     final Child saved = children.save(new Child(current.id(), current.familyId(), name, birthDate,
-        school == null ? current.school() : school,
-        medicalNotes == null ? current.medicalNotes() : medicalNotes,
+        school == null ? current.school() : blankToNull(school),
+        medicalNotes == null ? current.medicalNotes() : blankToNull(medicalNotes),
         current.avatarUrl(), null, current.createdAt(), Instant.now()));
     audits.record(saved.familyId(), "child", saved.id(), "update",
         Map.of("fullName", name, "dateOfBirth", birthDate.toString()));
@@ -123,5 +123,10 @@ public class ChildService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Child name is required");
     }
     return name.trim();
+  }
+
+  /** A present-but-blank value clears the field; an absent one (null) leaves it unchanged. */
+  private static String blankToNull(final String value) {
+    return value.isBlank() ? null : value.trim();
   }
 }

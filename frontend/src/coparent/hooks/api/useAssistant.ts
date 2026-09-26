@@ -24,7 +24,12 @@ export const assistantKeys = {
 export interface AssistantEventCategory {
   id: string;
   name: string;
-  system: boolean;
+  /**
+   * The API serialises this as `isSystem`. Reading `system` found nothing, so system categories
+   * were offered for editing and then refused.
+   */
+  isSystem: boolean;
+  isDefault: boolean;
 }
 
 export function useAssistantEventCategories(familyId: string | undefined) {

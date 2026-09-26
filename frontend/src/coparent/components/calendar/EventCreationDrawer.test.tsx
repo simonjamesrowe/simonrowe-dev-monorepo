@@ -71,4 +71,55 @@ describe('EventCreationDrawer', () => {
 
     expect(screen.queryByText(/This event repeats/)).not.toBeInTheDocument();
   });
+
+  it('shows why a save failed, keeps the drawer open and saves once per click', async () => {
+    const user = userEvent.setup();
+    let reject: (reason: unknown) => void = () => undefined;
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<void>((_, rejectPromise) => {
+          reject = rejectPromise;
+        }),
+    );
+    const onClose = vi.fn();
+    renderDrawer({
+      onSubmit,
+      onClose,
+      children: [
+        { id: 'child-1', name: 'Ava', fullName: 'Ava Rowe', birthdate: '', avatarUrl: null },
+      ],
+    });
+
+    const save = screen.getByRole('button', { name: 'Save' });
+    await user.click(save);
+    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Saving...' }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    reject({ response: { data: { message: 'At least one valid family child is required' } } });
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'At least one valid family child is required',
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks once more before deleting, and names the whole series', async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+    const onClose = vi.fn();
+    renderDrawer({ onDelete, onClose });
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(onDelete).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Delete every occurrence?' }));
+
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('offers no delete while creating', () => {
+    renderDrawer({ mode: 'create', event: undefined, onDelete: vi.fn() });
+
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
 });

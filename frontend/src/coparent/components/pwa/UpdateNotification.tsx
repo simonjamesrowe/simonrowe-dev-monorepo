@@ -2,12 +2,16 @@
  * Component to show update notification when new version is available
  */
 
+import { useState } from 'react';
+
 import { useServiceWorker } from '../../lib/pwa/useServiceWorker';
 
 export function UpdateNotification() {
   const { updateAvailable, skipWaiting } = useServiceWorker();
+  // "Later" hides the notice for this visit; the waiting update is offered again next load.
+  const [later, setLater] = useState(false);
 
-  if (!updateAvailable) {
+  if (!updateAvailable || later) {
     return null;
   }
 
@@ -46,7 +50,7 @@ export function UpdateNotification() {
                 Update Now
               </button>
               <button
-                onClick={() => {}}
+                onClick={() => setLater(true)}
                 className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
               >
                 Later

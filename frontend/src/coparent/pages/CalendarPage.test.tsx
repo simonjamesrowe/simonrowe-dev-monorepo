@@ -19,6 +19,7 @@ vi.mock('../hooks/api', () => ({
   useUpdateEvent: vi.fn(),
   useDeleteEvent: vi.fn(),
   useSkipOccurrence: vi.fn(),
+  useCurrentParentId: vi.fn(() => 'parent-1'),
   useApproveScheduleChangeRequest: vi.fn(),
   useDeclineScheduleChangeRequest: vi.fn(),
 }));

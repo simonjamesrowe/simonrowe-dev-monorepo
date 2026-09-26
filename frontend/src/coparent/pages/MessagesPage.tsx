@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { MessagingAndPermissions } from '../components/messaging';
+import {
+  ComposeDrawer,
+  type ComposeMode,
+  type ComposeSubmission,
+} from '../components/messaging/ComposeDrawer';
 import {
   useApprovePermission,
   useChildren,
@@ -15,16 +21,13 @@ import {
   useParents,
   useSendMessage,
 } from '../hooks/api';
-import type { PermissionRequestType } from '../lib/api/client';
-
-const permissionTypes: PermissionRequestType[] = [
-  'medical',
-  'travel',
-  'schedule',
-  'extracurricular',
-];
-
 const MessagesPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  // `conversation` is what the dashboard and applied assistant actions link to; `thread` is the
+  // name older links used.
+  const linkedConversationId =
+    searchParams.get('conversation') || searchParams.get('thread') || undefined;
+  const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
   const { data: families = [], isLoading: familiesLoading } = useFamilies();
   const [activeFamilyId, setActiveFamilyId] = useState<string | undefined>();
 
@@ -57,8 +60,12 @@ const MessagesPage = () => {
   const currentUserId = currentProfile?.id;
   const otherParent = parents.find((parent) => parent.id !== currentUserId);
 
+  const openConversation = (conversationId: string) =>
+    setSearchParams({ conversation: conversationId }, { replace: true });
+
   const handleViewConversation = async (conversationId: string) => {
     if (!activeFamilyId) return;
+    openConversation(conversationId);
     const conversation = conversations.find((item) => item.id === conversationId);
     if (conversation?.unreadCount && conversation.unreadCount > 0) {
       await markRead.mutateAsync({ conversationId, familyId: activeFamilyId });
@@ -80,61 +87,26 @@ const MessagesPage = () => {
     await markUnread.mutateAsync({ conversationId, familyId: activeFamilyId });
   };
 
-  const handleCreateMessage = async () => {
-    if (!activeFamilyId || !otherParent) {
-      window.alert('Add a co-parent before starting a new conversation.');
-      return;
-    }
-
-    const subject = window.prompt('Subject for the conversation?');
-    if (!subject?.trim()) return;
-
-    const message = window.prompt('Write the first message to send.');
-    if (!message?.trim()) return;
-
-    await createMessageConversation.mutateAsync({
-      familyId: activeFamilyId,
-      subject: subject.trim(),
-      message: message.trim(),
-      recipientId: otherParent.id,
-    });
-  };
-
-  const handleCreatePermission = async () => {
-    if (!activeFamilyId || !otherParent) {
-      window.alert('Add a co-parent before creating a permission request.');
-      return;
-    }
-
-    const child = children[0];
-    if (!child) {
-      window.alert('Add a child profile before creating a permission request.');
-      return;
-    }
-
-    const typeInput = window.prompt(
-      'Permission type (medical, travel, schedule, extracurricular)',
-      'schedule',
-    );
-    const normalizedType = typeInput?.trim().toLowerCase() as PermissionRequestType | undefined;
-    const type = permissionTypes.includes(normalizedType as PermissionRequestType)
-      ? (normalizedType as PermissionRequestType)
-      : 'schedule';
-
-    const subject =
-      window.prompt('Subject for the request?') ??
-      `${child.fullName} ${type.replace('-', ' ')} request`;
-    const description = window.prompt('Describe the request details.');
-    if (!description?.trim()) return;
-
-    await createPermissionConversation.mutateAsync({
-      familyId: activeFamilyId,
-      subject: subject?.trim() || `${child.fullName} ${type.replace('-', ' ')} request`,
-      type,
-      childId: child.id,
-      childName: child.fullName,
-      description: description.trim(),
-    });
+  const handleCompose = async (submission: ComposeSubmission) => {
+    if (!activeFamilyId || !otherParent) return;
+    const created =
+      submission.mode === 'message'
+        ? await createMessageConversation.mutateAsync({
+            familyId: activeFamilyId,
+            subject: submission.subject,
+            message: submission.message,
+            recipientId: otherParent.id,
+          })
+        : await createPermissionConversation.mutateAsync({
+            familyId: activeFamilyId,
+            subject: submission.subject,
+            type: submission.type,
+            childId: submission.childId,
+            childName:
+              children.find((child) => child.id === submission.childId)?.fullName ?? '',
+            description: submission.description,
+          });
+    openConversation(created.id);
   };
 
   const handleApprovePermission = async (permissionId: string, response?: string) => {
@@ -164,18 +136,29 @@ const MessagesPage = () => {
   }
 
   return (
-    <MessagingAndPermissions
-      conversations={conversations}
-      currentUserId={currentUserId}
-      onViewConversation={handleViewConversation}
-      onSendMessage={handleSendMessage}
-      onMarkAsRead={handleMarkRead}
-      onMarkAsUnread={handleMarkUnread}
-      onCreateMessage={handleCreateMessage}
-      onCreatePermissionRequest={handleCreatePermission}
-      onApprovePermission={handleApprovePermission}
-      onDenyPermission={handleDenyPermission}
-    />
+    <>
+      <MessagingAndPermissions
+        conversations={conversations}
+        currentUserId={currentUserId}
+        selectedConversationId={linkedConversationId}
+        canCompose={Boolean(otherParent)}
+        onViewConversation={handleViewConversation}
+        onSendMessage={handleSendMessage}
+        onMarkAsRead={handleMarkRead}
+        onMarkAsUnread={handleMarkUnread}
+        onCreateMessage={() => setComposeMode('message')}
+        onCreatePermissionRequest={() => setComposeMode('permission')}
+        onApprovePermission={handleApprovePermission}
+        onDenyPermission={handleDenyPermission}
+      />
+      <ComposeDrawer
+        mode={composeMode}
+        recipientName={otherParent?.fullName ?? 'your co-parent'}
+        children={children.map((child) => ({ id: child.id, fullName: child.fullName }))}
+        onClose={() => setComposeMode(null)}
+        onSubmit={handleCompose}
+      />
+    </>
   );
 };
 

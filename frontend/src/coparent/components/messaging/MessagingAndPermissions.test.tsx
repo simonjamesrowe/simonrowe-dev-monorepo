@@ -172,6 +172,7 @@ describe('MessagingAndPermissions', () => {
     render(
       <Wrapper
         initialConversations={[basePermissionConversation, baseMessageConversation]}
+        currentUserId="parent-002"
         onApprovePermission={onApprovePermission}
       />,
     );
@@ -187,6 +188,49 @@ describe('MessagingAndPermissions', () => {
     );
     expect(screen.getAllByText('approved')[0]).toBeInTheDocument();
     expect(screen.getByText(/Resolved/)).toBeInTheDocument();
+  });
+
+  it('tells the requester who the request is waiting on instead of offering to answer it', () => {
+    render(<Wrapper initialConversations={[basePermissionConversation]} />);
+
+    expect(screen.getByText('Waiting for David Martinez to respond.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve request' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Deny request' })).not.toBeInTheDocument();
+  });
+
+  it('shows why a response was refused and keeps what was typed', async () => {
+    const user = userEvent.setup();
+    const onDenyPermission = vi.fn().mockRejectedValue({
+      response: { data: { code: 'CONFLICT', message: 'This request is no longer pending' } },
+    });
+    render(
+      <MessagingAndPermissions
+        conversations={[basePermissionConversation]}
+        currentUserId="parent-002"
+        onDenyPermission={onDenyPermission}
+      />,
+    );
+
+    const responseBox = screen.getByPlaceholderText('Share any notes or conditions...');
+    await user.type(responseBox, 'Not this year');
+    await user.click(screen.getByRole('button', { name: 'Deny request' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('This request is no longer pending');
+    expect(responseBox).toHaveValue('Not this year');
+  });
+
+  it('opens the conversation a link names rather than the first one', () => {
+    render(
+      <MessagingAndPermissions
+        conversations={[basePermissionConversation, baseMessageConversation]}
+        currentUserId={currentUserId}
+        selectedConversationId={baseMessageConversation.id}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: baseMessageConversation.subject }),
+    ).toBeInTheDocument();
   });
 
   it('filters conversations and shows empty states', async () => {

@@ -66,7 +66,7 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
   const editorOptions = useMemo<AssistantEditorOptions>(() => ({
     eventId: events.data?.map((event) => ({ value: event.id, label: event.title })) ?? [],
     originalEventId: events.data?.map((event) => ({ value: event.id, label: event.title })) ?? [],
-    categoryId: categories.data?.filter((category) => !category.system)
+    categoryId: categories.data?.filter((category) => !category.isSystem)
       .map((category) => ({ value: category.id, label: category.name })) ?? [],
     requestId: requests.data?.filter((request) => request.status === 'pending'
       && request.requestedBy === currentParentId)

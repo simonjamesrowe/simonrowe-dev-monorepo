@@ -28,16 +28,6 @@ export function ProfileDrawer({
     });
   }, [parent]);
 
-  const updateNotification = (key: keyof ParentProfileUpdate['notificationPreferences']) => {
-    setFormState((prev) => ({
-      ...prev,
-      notificationPreferences: {
-        ...prev.notificationPreferences,
-        [key]: !prev.notificationPreferences[key],
-      },
-    }));
-  };
-
   const handleSave = () => {
     onSaveProfile?.(parent.id, formState);
   };
@@ -84,6 +74,9 @@ export function ProfileDrawer({
             />
           </div>
 
+          {/* Only the name is stored. Email always comes from the sign-in provider, and phone
+              and notification settings have no storage behind them, so offering them here
+              would accept changes and silently discard them. */}
           <div className="space-y-3">
             <label htmlFor="profile-email" className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
               Email
@@ -91,50 +84,13 @@ export function ProfileDrawer({
             <input
               id="profile-email"
               value={formState.email}
-              onChange={(event) => setFormState((prev) => ({ ...prev, email: event.target.value }))}
-              className="w-full rounded-2xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-sm text-slate-900 focus:border-teal-400 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+              readOnly
+              aria-describedby="profile-email-hint"
+              className="w-full rounded-2xl border border-slate-200/80 bg-slate-100 px-4 py-3 text-sm text-slate-500 focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400"
             />
-          </div>
-
-          <div className="space-y-3">
-            <label htmlFor="profile-phone" className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Phone
-            </label>
-            <input
-              id="profile-phone"
-              value={formState.phone}
-              onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
-              className="w-full rounded-2xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-sm text-slate-900 focus:border-teal-400 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-            />
-          </div>
-
-          <div className="space-y-3 rounded-3xl border border-slate-200/70 bg-white/80 p-4 dark:border-slate-800/70 dark:bg-slate-900/60">
-            <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-white">Notifications</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Choose how you want to stay updated.
-              </p>
-            </div>
-            <div className="space-y-2">
-              {(['email', 'sms', 'push'] as const).map((channel) => (
-                <button
-                  key={channel}
-                  onClick={() => updateNotification(channel)}
-                  className="flex w-full items-center justify-between rounded-2xl border border-slate-200/70 bg-white px-4 py-3 text-sm text-slate-700 transition hover:border-teal-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-                >
-                  <span className="capitalize">{channel}</span>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      formState.notificationPreferences[channel]
-                        ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/40 dark:text-teal-200'
-                        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'
-                    }`}
-                  >
-                    {formState.notificationPreferences[channel] ? 'On' : 'Off'}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <p id="profile-email-hint" className="text-xs text-slate-500 dark:text-slate-400">
+              Your email comes from the account you sign in with.
+            </p>
           </div>
         </div>
 

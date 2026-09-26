@@ -4,6 +4,7 @@ import type { Invitation, CreateInvitationRequest } from '../../lib/api/client';
 import { apiClient } from '../../lib/api/client';
 
 import { familyKeys } from './useFamilies';
+import { parentKeys } from './useParents';
 
 export const invitationKeys = {
   all: ['invitations'] as const,
@@ -86,6 +87,9 @@ export function useAcceptInvitation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invitationKeys.all });
       queryClient.invalidateQueries({ queryKey: familyKeys.all });
+      // Accepting adds a profile to /me; without this, pages keyed on it (Messages) treat the
+      // new family as one the user does not belong to until the cache goes stale.
+      queryClient.invalidateQueries({ queryKey: parentKeys.me() });
     },
   });
 }
