@@ -2,6 +2,7 @@ package com.simonrowe.factory.codereview.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.simonrowe.factory.codereview.domain.MergeDecision;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewFinding;
 import com.simonrowe.factory.codereview.domain.ReviewPhase;
@@ -64,6 +65,50 @@ class ReviewMarkdownRendererTest {
     assertThat(body).contains("### Findings");
     assertThat(body).contains("`src/App.java:12`");
     assertThat(body).contains("Return before dereferencing.");
+  }
+
+  @Test
+  void anArmedSummarySaysGitHubStillWaitsForTheGate() {
+    ReviewReport report = new ReviewReport("Fine.", Verdict.APPROVE, List.of());
+
+    String body =
+        renderer.renderSummary(
+            report, "<!-- marker -->", "head-sha", List.of(), MergeDecision.armed());
+
+    assertThat(body)
+        .contains(
+            "**Auto-merge:** armed. GitHub will squash-merge once every required check passes"
+                + " and every conversation is resolved.");
+  }
+
+  @Test
+  void anUnarmedSummaryNamesTheReason() {
+    ReviewReport report = new ReviewReport("Fine.", Verdict.APPROVE, List.of());
+
+    String body =
+        renderer.renderSummary(
+            report,
+            "<!-- marker -->",
+            "head-sha",
+            List.of(),
+            MergeDecision.ineligible("`scripts/x.sh` needs a human to merge"));
+
+    assertThat(body).contains("**Auto-merge:** not armed: `scripts/x.sh` needs a human to merge.");
+  }
+
+  /** A repository that has not switched auto-merge on sees exactly the summary it always did. */
+  @Test
+  void switchedOffOrUndecidedAddsNothing() {
+    ReviewReport report = new ReviewReport("Fine.", Verdict.APPROVE, List.of());
+    String plain = renderer.renderSummary(report, "<!-- marker -->", "head-sha", List.of());
+
+    assertThat(
+            renderer.renderSummary(
+                report, "<!-- marker -->", "head-sha", List.of(), MergeDecision.off()))
+        .isEqualTo(plain);
+    assertThat(renderer.renderSummary(report, "<!-- marker -->", "head-sha", List.of(), null))
+        .isEqualTo(plain);
+    assertThat(plain).doesNotContain("Auto-merge");
   }
 
   @Test

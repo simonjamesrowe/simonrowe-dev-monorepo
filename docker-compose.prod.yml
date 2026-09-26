@@ -310,6 +310,11 @@ services:
       # The ceiling that refused PR #106 (98 files) at its old value of 80. Declared here so it
       # is tunable from .env without a rebuild, since it is the limit most likely to need it.
       FACTORY_MAX_CHANGED_FILES: ${FACTORY_MAX_CHANGED_FILES:-250}
+      # The reviewer arms squash auto-merge on a pull request that passed review and whose every
+      # path classifies auto-merge; GitHub merges once the ruleset is satisfied. Declared here and
+      # only here: this service has no env_file, so setting it in .env alone does nothing, and
+      # deployer runs no review activity to read it (DeployerCodeReviewGateTest pins both).
+      FACTORY_CODEREVIEW_AUTO_MERGE_ENABLED: ${FACTORY_CODEREVIEW_AUTO_MERGE_ENABLED:-true}
       FACTORY_FEEDBACK_ENABLED: ${FACTORY_FEEDBACK_ENABLED:-true}
       FACTORY_FEEDBACK_HARVEST_MODEL: ${FACTORY_FEEDBACK_HARVEST_MODEL:-haiku}
       FACTORY_FEEDBACK_DISTILL_MODEL: ${FACTORY_FEEDBACK_DISTILL_MODEL:-sonnet}

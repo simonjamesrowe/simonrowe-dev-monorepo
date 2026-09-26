@@ -279,13 +279,24 @@ public class ArtifactCountsReader {
   }
 
   /**
-   * A pull request's mergeable/draft state. GitHub's list endpoint often omits {@code mergeable}
-   * (it is only populated on a single-PR read), so an absent value reports plainly as
-   * {@code "open"} rather than guessing.
+   * A pull request's draft, auto-merge or mergeable state. GitHub's list endpoint often omits
+   * {@code mergeable} (it is only populated on a single-PR read), so an absent value reports
+   * plainly as {@code "open"} rather than guessing.
+   *
+   * <p>Auto-merge outranks mergeability because it is the more useful fact: an armed pull request
+   * will merge on its own the moment the gate opens, and whether the reviewer or a person armed it
+   * says who to ask if it should not. The list endpoint already carries {@code auto_merge}, so this
+   * costs no extra request.
    */
-  private static String pullRequestStatus(final JsonNode item) {
+  static String pullRequestStatus(final JsonNode item) {
     if (item.path("draft").asBoolean(false)) {
       return "draft";
+    }
+    JsonNode autoMerge = item.path("auto_merge");
+    if (autoMerge.isObject()) {
+      return "Bot".equals(autoMerge.path("enabled_by").path("type").asString(""))
+          ? "auto-merge armed"
+          : "auto-merge armed (by a person)";
     }
     JsonNode mergeable = item.path("mergeable");
     if (mergeable.isBoolean()) {

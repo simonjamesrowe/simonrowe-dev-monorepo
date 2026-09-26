@@ -132,6 +132,27 @@ describe('FactoryFlowGraph', () => {
     expect(screen.queryByText(/could not be drawn/i)).not.toBeInTheDocument()
   })
 
+  it('draws the reviewer arming auto-merge as a straight fast-loop arrow into main', () => {
+    // codereview -> main has no reciprocal, so it must be a straight line rather than bowed, and
+    // it wears the fast loop's own class and marker like the review edges beside it.
+    const edges: FactoryFlowEdge[] = [
+      { from: 'codereview', to: 'main', label: 'arms auto-merge', loop: 'FAST' },
+    ]
+
+    const { container } = render(
+      <FactoryFlowGraph
+        flow={flow([node('codereview'), node('main')], edges)}
+        selected={null} onSelect={vi.fn()}
+      />,
+    )
+
+    const paths = Array.from(container.querySelectorAll('.factory-flow__edge'))
+    expect(paths).toHaveLength(1)
+    expect(paths[0].getAttribute('d')).not.toContain('Q')
+    expect(paths[0]).toHaveClass('factory-flow__edge--fast')
+    expect(paths[0].getAttribute('marker-end')).toBe('url(#factory-flow-arrow-fast)')
+  })
+
   it('bows the two reciprocal fast-loop edges to opposite sides of the line between them', () => {
     // pull-request -> codereview and codereview -> pull-request share the same two fixed
     // endpoints. Two straight lines between the same points are geometrically identical with

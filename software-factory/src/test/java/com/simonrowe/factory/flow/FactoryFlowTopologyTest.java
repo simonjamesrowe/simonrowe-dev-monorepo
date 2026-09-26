@@ -142,6 +142,20 @@ class FactoryFlowTopologyTest {
   }
 
   @Test
+  void drawsTheReviewerArmingAutoMergeWhileTheMergeItselfStaysOnThePullRequest() {
+    // The reviewer decides whether; GitHub decides when. The diagram has to say both, or it
+    // claims the reviewer merges, which it never does.
+    assertThat(FactoryFlowTopology.EDGES)
+        .anyMatch(edge -> edge.from().equals("codereview")
+            && edge.to().equals("main")
+            && edge.label().equals("arms auto-merge"));
+    assertThat(FactoryFlowTopology.EDGES)
+        .anyMatch(edge -> edge.from().equals("pull-request")
+            && edge.to().equals("main")
+            && edge.label().equals("merges when green"));
+  }
+
+  @Test
   void closesTheMainLoop() {
     List<String> ring = List.of(
         "linear", "build", "pull-request", "main", "deploy", "production", "logwatch", "linear");

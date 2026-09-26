@@ -268,6 +268,18 @@ describe('SoftwareFactoryAdmin', () => {
     expect(within(drawer).getByLabelText(/Pull request to review/)).toBeInTheDocument()
   })
 
+  it('says that publishing a review can arm auto-merge, and a dry run only reports it', async () => {
+    // A manual review now does more than comment: it is the fallback when the webhook never
+    // arrived, so it arms auto-merge exactly as the webhook's review would. The panel has to say
+    // so before the button is pressed, not after.
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Code review/)
+
+    expect(within(drawer).getByText(/reports whether it would arm auto-merge/)).toBeInTheDocument()
+    expect(within(drawer).getByText(/arms auto-merge when every changed path allows it/))
+      .toBeInTheDocument()
+  })
+
   it('says what the field wants, and which repository it targets', async () => {
     // "Is it the URL or the number?" is the first question the field provokes, and the actions
     // always target the server-configured repository regardless of what a pasted URL says.

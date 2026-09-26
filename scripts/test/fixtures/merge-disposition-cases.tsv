@@ -1,0 +1,50 @@
+# Merge-disposition cases, shared by two implementations of one rule set:
+#
+#   scripts/test/test-classify-change.sh   -> scripts/classify-change.sh
+#   software-factory MergeDispositionTest  -> codereview/domain/MergeDisposition.java
+#
+# The factory arms auto-merge from the Java copy; the pr-review-loop skill and humans run
+# the bash one. Both must answer identically, and this file is the only thing that makes
+# them: add a case here and both test suites run it.
+#
+# Format: one case per line, TAB-separated.
+#   description <TAB> category <TAB> ux_affecting <TAB> space-separated paths (may be empty)
+# A line starting with '#!' is a group heading; any other '#' line is a comment.
+
+#! rule 3 — cannot change a shipped pixel or production infrastructure
+backend source is auto-merge	auto-merge	false	backend/src/main/java/A.java
+software-factory plus docs is auto-merge	auto-merge	false	software-factory/src/main/java/B.java docs/runbooks/x.md
+frontend unit tests ship no pixel	auto-merge	false	frontend/tests/foo.test.ts
+frontend e2e tests ship no pixel	auto-merge	false	frontend/e2e/chat.spec.ts
+root markdown is auto-merge	auto-merge	false	README.md
+a spec directory is auto-merge	auto-merge	false	specs/038-pr-governance/spec.md
+
+#! rule 2 — a visitor can see it
+frontend application source needs visual review	ux-review	true	frontend/src/App.tsx
+public assets need visual review	ux-review	true	frontend/public/logo.svg
+the entry document needs visual review	ux-review	true	frontend/index.html
+
+#! rule 1 — needs a human
+vite config changes the shipped bundle	manual	false	frontend/vite.config.ts
+frontend dependencies change the shipped bundle	manual	false	frontend/package.json
+the production compose file is infrastructure	manual	false	docker-compose.prod.yml
+scripts are infrastructure	manual	false	scripts/monitor-prod.sh
+workflows are infrastructure	manual	false	.github/workflows/ci.yml
+nginx config is infrastructure	manual	false	config/nginx/nginx-proxy.conf
+the gradle wrapper is infrastructure	manual	false	gradlew
+a config file nested under frontend still matches the bundle rule	manual	false	frontend/src/theme.config.ts
+
+#! precedence
+# The one that protects production: an auto-merge to main triggers Publish, which
+# triggers an unattended infrastructure deploy against the Pi.
+rule 1 beats rule 3 — backend plus compose is manual	manual	false	backend/src/A.java docker-compose.prod.yml
+rule 2 beats rule 3 — backend plus frontend source needs visual review	ux-review	true	backend/src/A.java frontend/src/App.tsx
+rule 1 beats rule 2 — frontend source plus a script is manual	manual	false	frontend/src/App.tsx scripts/x.sh
+order does not matter: the script first	manual	false	scripts/x.sh frontend/src/App.tsx
+
+#! rule 4 — the default-deny that stops a new directory inheriting merge rights
+an unrecognised top-level directory is manual	manual	false	newtoplevel/thing.txt
+one unrecognised path is enough to demand a human	manual	false	specs/038-pr-governance/spec.md newtoplevel/x
+an unrecognised root file is manual	manual	false	Makefile
+nested markdown outside a known directory is manual	manual	false	newtoplevel/README.md
+an empty change arms nothing	manual	false

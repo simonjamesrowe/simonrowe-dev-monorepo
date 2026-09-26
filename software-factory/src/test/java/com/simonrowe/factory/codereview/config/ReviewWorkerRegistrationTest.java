@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.simonrowe.factory.codereview.agent.ReviewEngine;
+import com.simonrowe.factory.codereview.github.AutoMergeGateway;
 import com.simonrowe.factory.codereview.github.CheckRunGateway;
 import com.simonrowe.factory.codereview.github.GitHubGateway;
 import com.simonrowe.factory.codereview.workflow.ReviewActivitiesImpl;
@@ -104,6 +105,16 @@ class ReviewWorkerRegistrationTest {
     @Bean
     ReviewEngine reviewEngine() {
       return mock(ReviewEngine.class);
+    }
+
+    @Bean
+    AutoMergeGateway autoMergeGateway() {
+      return mock(AutoMergeGateway.class);
+    }
+
+    @Bean
+    AutoMergeProperties autoMergeProperties() {
+      return new AutoMergeProperties(false);
     }
   }
 }

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 #
-# Classifies a set of changed paths into one merge disposition, so the pr-review-loop
-# skill knows whether it may arm auto-merge, must capture screenshots, or must leave
-# the merge to a human.
+# Classifies a set of changed paths into one merge disposition: auto-merge, needs
+# screenshots, or needs a human.
+#
+# The software factory arms auto-merge from a Java copy of these rules
+# (software-factory/.../codereview/domain/MergeDisposition.java), because the reviewer that
+# decides runs in a container with no checkout to diff. Keep the two in step: both test
+# suites read scripts/test/fixtures/merge-disposition-cases.tsv, so a case added there runs
+# against both, and a rule changed in only one of them fails the other's tests.
 #
 # Usage:
 #   scripts/classify-change.sh [<base-ref>]        # diffs <base-ref>...HEAD (default origin/main)

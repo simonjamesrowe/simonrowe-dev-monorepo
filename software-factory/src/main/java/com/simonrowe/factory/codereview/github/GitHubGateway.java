@@ -6,6 +6,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
+import com.simonrowe.factory.codereview.domain.MergeDecision;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewFinding;
@@ -161,6 +162,18 @@ public class GitHubGateway {
       final PullRequestContext pullRequest,
       final ReviewReport report,
       final String statusCommentId) {
+    publishReview(pullRequest, report, statusCommentId, null);
+  }
+
+  /**
+   * As {@link #publishReview(PullRequestContext, ReviewReport, String)}, with a line in the
+   * summary saying what happened to auto-merge. A null decision adds no line.
+   */
+  public void publishReview(
+      final PullRequestContext pullRequest,
+      final ReviewReport report,
+      final String statusCommentId,
+      final MergeDecision autoMerge) {
     List<ReviewFinding> unanchored = new ArrayList<>();
     String accessToken = requireAccessToken(pullRequest);
 
@@ -192,7 +205,7 @@ public class GitHubGateway {
       }
     }
 
-    publishSummary(pullRequest, report, statusCommentId, unanchored);
+    publishSummary(pullRequest, report, statusCommentId, unanchored, autoMerge);
   }
 
   /**
@@ -217,12 +230,13 @@ public class GitHubGateway {
       final PullRequestContext pullRequest,
       final ReviewReport report,
       final String statusCommentId,
-      final List<ReviewFinding> unanchored) {
+      final List<ReviewFinding> unanchored,
+      final MergeDecision autoMerge) {
     String marker =
         statusMarker(
             pullRequest.owner(), pullRequest.repository(), pullRequest.pullNumber());
     String body =
-        renderer.renderSummary(report, marker, pullRequest.headSha(), unanchored);
+        renderer.renderSummary(report, marker, pullRequest.headSha(), unanchored, autoMerge);
     writeStatusComment(
         pullRequest.owner(), pullRequest.repository(), pullRequest.pullNumber(), statusCommentId,
         body, credentials.commentToken(pullRequest.installationId()));

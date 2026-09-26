@@ -1,16 +1,23 @@
 package com.simonrowe.factory.codereview.workflow;
 
 import com.simonrowe.factory.codereview.agent.ReviewEngine;
+import com.simonrowe.factory.codereview.config.AutoMergeProperties;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.config.CodeReviewTaskQueues;
+import com.simonrowe.factory.codereview.domain.AutoMergePolicy;
+import com.simonrowe.factory.codereview.domain.AutoMergeState;
+import com.simonrowe.factory.codereview.domain.MergeDecision;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
+import com.simonrowe.factory.codereview.github.AutoMergeGateway;
 import com.simonrowe.factory.codereview.github.CheckRunGateway;
 import com.simonrowe.factory.codereview.github.GitHubGateway;
 import io.temporal.activity.Activity;
 import io.temporal.spring.boot.ActivityImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -53,17 +60,25 @@ import org.springframework.stereotype.Component;
     matchIfMissing = true)
 public class ReviewActivitiesImpl implements ReviewActivities {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(ReviewActivitiesImpl.class);
+
   private final GitHubGateway gitHubGateway;
   private final CheckRunGateway checkRunGateway;
   private final ReviewEngine reviewEngine;
+  private final AutoMergeGateway autoMergeGateway;
+  private final AutoMergeProperties autoMergeProperties;
 
   public ReviewActivitiesImpl(
       final GitHubGateway gitHubGateway,
       final CheckRunGateway checkRunGateway,
-      final ReviewEngine reviewEngine) {
+      final ReviewEngine reviewEngine,
+      final AutoMergeGateway autoMergeGateway,
+      final AutoMergeProperties autoMergeProperties) {
     this.gitHubGateway = gitHubGateway;
     this.checkRunGateway = checkRunGateway;
     this.reviewEngine = reviewEngine;
+    this.autoMergeGateway = autoMergeGateway;
+    this.autoMergeProperties = autoMergeProperties;
   }
 
   @Override
@@ -86,8 +101,9 @@ public class ReviewActivitiesImpl implements ReviewActivities {
   public void publishReview(
       final PullRequestContext pullRequest,
       final ReviewReport report,
-      final String statusCommentId) {
-    gitHubGateway.publishReview(pullRequest, report, statusCommentId);
+      final String statusCommentId,
+      final MergeDecision autoMerge) {
+    gitHubGateway.publishReview(pullRequest, report, statusCommentId, autoMerge);
   }
 
   @Override
@@ -115,5 +131,61 @@ public class ReviewActivitiesImpl implements ReviewActivities {
       final String checkRunId,
       final ReviewFailure failure) {
     checkRunGateway.fail(pullRequest, checkRunId, failure);
+  }
+
+  @Override
+  public void withdrawAutoMerge(final PullRequestContext pullRequest) {
+    AutoMergeState state = autoMergeGateway.readState(pullRequest);
+    if (state.autoMergeArmedByBot()) {
+      autoMergeGateway.disable(pullRequest, state.nodeId());
+      LOGGER.info("Withdrew bot-armed auto-merge on {} ahead of re-review", pullRequest.slug());
+    }
+  }
+
+  @Override
+  public MergeDecision decideAutoMerge(
+      final PullRequestContext pullRequest, final ReviewReport report) {
+    return decide(pullRequest, report, autoMergeGateway.readState(pullRequest));
+  }
+
+  @Override
+  public MergeDecision armAutoMerge(
+      final PullRequestContext pullRequest, final ReviewReport report) {
+    AutoMergeState state = autoMergeGateway.readState(pullRequest);
+    MergeDecision decision = decide(pullRequest, report, state);
+    if (decision.outcome() != MergeDecision.Outcome.ELIGIBLE) {
+      return decision;
+    }
+    if (state.autoMergeArmed()) {
+      // This review withdrew any bot arm before it started, so a bot arm now is this activity's
+      // own, from an attempt whose response was lost — GitHub would reject arming it twice. A
+      // person's arm is theirs, and is left exactly as it is.
+      return state.autoMergeArmedByBot()
+          ? MergeDecision.armed()
+          : MergeDecision.ineligible(
+              "a person had already armed it, so the reviewer left it alone");
+    }
+    try {
+      autoMergeGateway.enable(pullRequest, state.nodeId(), pullRequest.headSha());
+    } catch (IllegalStateException exception) {
+      // Reported, not thrown: nothing is armed, which is the safe outcome, and failing the review
+      // over it would turn a merge a human can still perform into a red check.
+      LOGGER.warn("Could not arm auto-merge on {}", pullRequest.slug(), exception);
+      return MergeDecision.armFailed(exception.getMessage());
+    }
+    LOGGER.info("Armed auto-merge on {} at {}", pullRequest.slug(), pullRequest.headSha());
+    return MergeDecision.armed();
+  }
+
+  private MergeDecision decide(
+      final PullRequestContext pullRequest,
+      final ReviewReport report,
+      final AutoMergeState state) {
+    return AutoMergePolicy.decide(
+        autoMergeProperties.enabled(),
+        state,
+        report,
+        pullRequest.headSha(),
+        () -> autoMergeGateway.listFiles(pullRequest, state.changedFiles()));
   }
 }

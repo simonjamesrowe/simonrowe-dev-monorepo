@@ -1,6 +1,7 @@
 package com.simonrowe.factory.codereview.github;
 
 import com.simonrowe.factory.codereview.domain.FindingFingerprint;
+import com.simonrowe.factory.codereview.domain.MergeDecision;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewFinding;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
@@ -56,11 +57,29 @@ public class ReviewMarkdownRenderer {
       final String marker,
       final String headSha,
       final List<ReviewFinding> inlineFallback) {
+    return renderSummary(report, marker, headSha, inlineFallback, null);
+  }
+
+  /**
+   * As {@link #renderSummary(ReviewReport, String, String, List)}, plus one line saying what
+   * happened to auto-merge. Nothing is added when the decision is null or auto-merge is off, so a
+   * repository that has not switched it on sees exactly the summary it always did.
+   */
+  public String renderSummary(
+      final ReviewReport report,
+      final String marker,
+      final String headSha,
+      final List<ReviewFinding> inlineFallback,
+      final MergeDecision autoMerge) {
     StringBuilder body = new StringBuilder();
     body.append(marker).append("\n");
     body.append("## Automated code review\n\n");
     body.append(report.summary()).append("\n\n");
     body.append("**Verdict:** `").append(report.verdict().toJson()).append("`\n");
+    String autoMergeLine = autoMergeLine(autoMerge);
+    if (autoMergeLine != null) {
+      body.append("\n").append(autoMergeLine).append("\n");
+    }
 
     if (!inlineFallback.isEmpty()) {
       body.append("\n### Findings\n");
@@ -85,6 +104,27 @@ public class ReviewMarkdownRenderer {
     body.append(reviewedAt(headSha));
     body.append(ADVISORY);
     return body.toString();
+  }
+
+  /**
+   * The summary's auto-merge line.
+   *
+   * <p>"Armed" is spelled out as a promise about the gate, not a merge: GitHub merges only once
+   * every required check is green and every conversation is resolved, so a reader seeing
+   * "armed" beside an open finding should know the finding still holds it.
+   */
+  static String autoMergeLine(final MergeDecision autoMerge) {
+    if (autoMerge == null) {
+      return null;
+    }
+    return switch (autoMerge.outcome()) {
+      case OFF -> null;
+      case ARMED ->
+          "**Auto-merge:** armed. GitHub will squash-merge once every required check passes and"
+              + " every conversation is resolved.";
+      case ELIGIBLE -> "**Auto-merge:** eligible, not armed (dry run).";
+      case INELIGIBLE, ARM_FAILED -> "**Auto-merge:** " + autoMerge.describe() + ".";
+    };
   }
 
   /**

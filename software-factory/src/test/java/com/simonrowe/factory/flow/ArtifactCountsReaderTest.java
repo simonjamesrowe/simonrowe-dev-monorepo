@@ -205,6 +205,33 @@ class ArtifactCountsReaderTest {
   }
 
   @Test
+  void reportsWhoArmedAutoMergeAheadOfMergeability() {
+    ObjectMapper mapper = new ObjectMapper();
+
+    assertThat(
+            ArtifactCountsReader.pullRequestStatus(
+                mapper.readTree(
+                    "{\"mergeable\":true,\"auto_merge\":{\"enabled_by\":"
+                        + "{\"login\":\"simonrowe-software-factory[bot]\",\"type\":\"Bot\"}}}")))
+        .isEqualTo("auto-merge armed");
+    assertThat(
+            ArtifactCountsReader.pullRequestStatus(
+                mapper.readTree(
+                    "{\"auto_merge\":{\"enabled_by\":"
+                        + "{\"login\":\"simonjamesrowe\",\"type\":\"User\"}}}")))
+        .isEqualTo("auto-merge armed (by a person)");
+    // A draft cannot be armed, and says so first.
+    assertThat(
+            ArtifactCountsReader.pullRequestStatus(
+                mapper.readTree("{\"draft\":true,\"auto_merge\":{}}")))
+        .isEqualTo("draft");
+    assertThat(
+            ArtifactCountsReader.pullRequestStatus(
+                mapper.readTree("{\"mergeable\":true,\"auto_merge\":null}")))
+        .isEqualTo("mergeable");
+  }
+
+  @Test
   void listsRecentMergesToMainFromGitHubsJsonArrayResponse() throws IOException {
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext(
