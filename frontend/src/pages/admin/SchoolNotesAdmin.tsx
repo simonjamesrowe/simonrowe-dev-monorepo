@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CalendarDays, ClipboardPaste, ExternalLink, Link2, Loader2 } from 'lucide-react'
+import {
+  CalendarDays,
+  ClipboardPaste,
+  ExternalLink,
+  ImagePlus,
+  Link2,
+  Loader2,
+} from 'lucide-react'
 
 import { useAuth } from '../../auth/useAuth'
 import {
   createSchoolNote,
   fetchSchoolNote,
   fetchSchoolNotes,
+  transcribeSchoolNoteImage,
   type SchoolNote,
 } from '../../services/adminApi'
+import { prepareSchoolNoteImage } from './schoolNoteImage'
 
 const YEAR_GROUPS = [
   'Reception',
@@ -29,6 +38,7 @@ const YEAR_GROUPS = [
  */
 const POLL_INTERVAL_MS = 3000
 const MAX_POLLS = 60
+const NOTE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 
 const PLACEHOLDER = `Paste the messages here, exactly as they arrived. For example:
 
@@ -59,10 +69,34 @@ export function SchoolNotesAdmin() {
   const [title, setTitle] = useState('')
   const [yearGroups, setYearGroups] = useState<string[]>(['Year 6'])
   const [saving, setSaving] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
   const [note, setNote] = useState<SchoolNote | null>(null)
   const [recent, setRecent] = useState<SchoolNote[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [imageError, setImageError] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [photoName, setPhotoName] = useState('')
   const pollsLeft = useRef(MAX_POLLS)
+  const imageInput = useRef<HTMLInputElement>(null)
+  const previewUrlRef = useRef<string | null>(null)
+
+  const clearPreview = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+      previewUrlRef.current = null
+    }
+    setPreviewUrl(null)
+    setPhotoName('')
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current)
+      }
+    },
+    [],
+  )
 
   const loadRecent = useCallback(async () => {
     try {
@@ -107,11 +141,41 @@ export function SchoolNotesAdmin() {
       setNote(saved)
       setText('')
       setTitle('')
+      clearPreview()
+      if (imageInput.current) imageInput.current.value = ''
       await loadRecent()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save that note')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const readPhoto = async (file: File) => {
+    if (transcribing) return
+    setImageError(null)
+    if (!NOTE_IMAGE_TYPES.has(file.type)) {
+      setImageError('Use a JPEG, PNG, WebP or GIF photo. HEIC files are not supported.')
+      return
+    }
+
+    clearPreview()
+    const objectUrl = URL.createObjectURL(file)
+    previewUrlRef.current = objectUrl
+    setPreviewUrl(objectUrl)
+    setPhotoName(file.name)
+    setTranscribing(true)
+    try {
+      const prepared = await prepareSchoolNoteImage(objectUrl)
+      const transcription = await transcribeSchoolNoteImage(getAccessToken, prepared)
+      setText((current) =>
+        current.trim() ? `${current.trimEnd()}\n\n${transcription.text}` : transcription.text,
+      )
+      setTitle((current) => (current.trim() ? current : transcription.title))
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'Could not read that photo')
+    } finally {
+      setTranscribing(false)
     }
   }
 
@@ -141,9 +205,53 @@ export function SchoolNotesAdmin() {
           void save()
         }}
       >
-        <label className="admin-form__label" htmlFor="note-text">
-          The messages
-        </label>
+        <label className="admin-form__label" htmlFor="note-text">The messages</label>
+        <div
+          className="school-notes__image"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault()
+            const file = event.dataTransfer.files[0]
+            if (file) void readPhoto(file)
+          }}
+        >
+          <input
+            ref={imageInput}
+            className="school-notes__image-input"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            aria-label="Choose a photo to transcribe"
+            disabled={transcribing}
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) void readPhoto(file)
+            }}
+          />
+          {previewUrl && (
+            <img
+              className="school-notes__image-preview"
+              src={previewUrl}
+              alt="Selected page to transcribe"
+            />
+          )}
+          <div className="school-notes__image-copy">
+            <button
+              type="button"
+              className="admin-btn admin-btn--secondary"
+              disabled={transcribing}
+              onClick={() => imageInput.current?.click()}
+            >
+              {transcribing ? (
+                <><Loader2 size={15} className="school-admin__spin" /> Reading the photo…</>
+              ) : (
+                <><ImagePlus size={15} /> Choose a photo</>
+              )}
+            </button>
+            <span>{photoName || 'or drop one here · JPEG, PNG, WebP or GIF'}</span>
+            <small>The photo is used for transcription only and is not saved.</small>
+          </div>
+        </div>
+        {imageError && <div className="school-notes__image-error" role="alert">{imageError}</div>}
         <textarea
           id="note-text"
           className="admin-form__input school-notes__text"
@@ -185,7 +293,11 @@ export function SchoolNotesAdmin() {
           </fieldset>
         </div>
 
-        <button type="submit" className="admin-btn" disabled={saving || !text.trim()}>
+        <button
+          type="submit"
+          className="admin-btn"
+          disabled={saving || transcribing || !text.trim()}
+        >
           {saving ? (
             <>
               <Loader2 size={15} className="school-admin__spin" /> Reading the dates…
@@ -236,7 +348,7 @@ function NoteResult({
       <h3 className="school-admin__links-title">
         <CalendarDays size={14} />
         {note.events.length === 0
-          ? 'No dates found in this note yet'
+          ? 'No dates in this note'
           : `${note.events.length} date${note.events.length === 1 ? '' : 's'} found`}
       </h3>
       {note.events.length > 0 && (

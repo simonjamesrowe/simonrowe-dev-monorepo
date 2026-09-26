@@ -537,6 +537,29 @@ Paste the messages in as they arrived; the dates are read out of the text by the
 There is deliberately no date picker and no per-event form. Retyping four messages into a
 structured form is slower than reading them.
 
+### Reading a photographed page before saving it
+
+The same screen accepts one JPEG, PNG, WebP or GIF and transcribes it into the existing textarea.
+The browser first draws the image through a canvas, preserving its displayed EXIF orientation,
+scales its longest edge to at most 2000 pixels and re-encodes it as JPEG. The transcription and a
+suggested filing title come back to the form; neither is stored until the operator reviews the
+text, edits it if necessary and presses **Save note**. A title already typed by the operator is
+never replaced, and transcribed text is appended to anything already in the textarea.
+
+Only text is retained. The image bytes are neither stored nor served, so an answer can cite the
+saved note but cannot link back to the photograph. HEIC is not accepted directly; the iOS photo
+picker normally supplies browser-readable image data, while a HEIC file dragged from Finder gets
+a readable error. A second photograph is a second note.
+
+Both nginx layers on the main-site route allow 12 MB so the backend's own 10 MB validation is the
+honest limit. The outer `config/nginx/nginx-proxy.conf` is a single-file bind mount, so production
+must recreate the nginx container after this directive changes; a reload against the old inode is
+not enough. This limit also makes the Media Library's existing advertised 10 MB upload work in
+production.
+
+A spelling list is the normal dateless case: saving it embeds the prose for retrieval and yields
+zero events and zero links. That is a useful note, not a failed extraction.
+
 Four decisions in that pipeline are load-bearing.
 
 **A note is public immediately, with no approval.** The queue exists because mail arrives from
@@ -656,8 +679,11 @@ disagree.
 
 ### What it does not do
 
-- **No image paste.** The messages usually arrive as a screenshot; transcribing one is currently
-  manual. The endpoint takes text only.
+- **The original photograph is not kept.** Only reviewed text is saved, so answers cannot link to
+  the source image.
+- **One photograph makes one note.** A second page is transcribed and saved separately.
+- **Mailbox image attachments are still ignored.** Gmail ingestion continues to accept PDF
+  attachments only; photographed pages enter through the admin note screen.
 - **Links are followed one level.** A page that links onward to the real booking form is not
   crawled further.
 - **Duplicate events are possible.** The note and the school's own page produce one row when the

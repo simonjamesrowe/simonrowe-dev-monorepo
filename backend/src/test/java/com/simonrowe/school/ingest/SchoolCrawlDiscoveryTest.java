@@ -57,7 +57,7 @@ class SchoolCrawlDiscoveryTest {
     pdfExtractor = mock(SchoolPdfExtractor.class);
 
     final SchoolProperties properties = new SchoolProperties(
-        true, null, List.of(), List.of(), null, BASE, null, 0, null, null, 0L, null,
+        true, null, List.of(), List.of(), null, BASE, null, 0, null, null, null, 0L, null,
         List.of("/year-six"));
 
     when(crawler.politePause()).thenReturn(true);

@@ -49,7 +49,7 @@ class SchoolWebsiteCrawlerPagesTest {
   private static SchoolProperties propertiesWith(
       final String baseUrl, final List<String> extraPages) {
     return new SchoolProperties(
-        true, null, List.of(), List.of(), null, baseUrl, null, 0, null, null, 0L, null,
+        true, null, List.of(), List.of(), null, baseUrl, null, 0, null, null, null, 0L, null,
         extraPages);
   }
 

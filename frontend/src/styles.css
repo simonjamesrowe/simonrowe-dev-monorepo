@@ -12182,6 +12182,62 @@ body[data-narration-bar] .app-layout__main {
   gap: 0.4rem;
 }
 
+.school-notes__image {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 6.5rem;
+  padding: 0.8rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
+}
+
+.school-notes__image-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.school-notes__image-preview {
+  width: 5rem;
+  height: 5rem;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: 7px;
+  border: 1px solid var(--color-border);
+}
+
+.school-notes__image-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.7rem;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.school-notes__image-copy small {
+  flex-basis: 100%;
+}
+
+.school-notes__image-error {
+  margin-top: -0.45rem;
+  color: #b3541e;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 36rem) {
+  .school-notes__image {
+    align-items: flex-start;
+  }
+}
+
 .school-notes__text {
   width: 100%;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);

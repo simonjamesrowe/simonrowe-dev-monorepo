@@ -29,7 +29,7 @@ class SchoolAuthBoundaryTest {
 
   private static final SchoolProperties ENABLED = new SchoolProperties(
       true, null, List.of("kilmorie.lewisham.sch.uk"), List.of(),
-      null, null, null, 0, null, null, 100, null, null);
+      null, null, null, 0, null, null, null, 100, null, null);
 
   private SchoolAudience audienceFor(final Authentication authentication) {
     final SchoolChatService service = mock(SchoolChatService.class);
@@ -112,7 +112,7 @@ class SchoolAuthBoundaryTest {
   @DisplayName("the endpoint reports 503 rather than answering when the feature is off")
   void disabledReturns503() {
     final SchoolProperties disabled = new SchoolProperties(
-        false, null, null, null, null, null, null, 0, null, null, 0, null, null);
+        false, null, null, null, null, null, null, 0, null, null, null, 0, null, null);
     final SchoolChatService service = mock(SchoolChatService.class);
 
     final var response = new SchoolChatController(service, disabled).chat(

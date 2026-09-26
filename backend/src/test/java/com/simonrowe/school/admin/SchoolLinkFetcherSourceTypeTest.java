@@ -211,6 +211,7 @@ class SchoolLinkFetcherSourceTypeTest {
         "https://www.kilmorieschool.co.uk/calendar",
         "https://www.kilmorieschool.co.uk",
         "https://www.kilmorieschool.co.uk/our-school/our-staff",
-        10, "gpt-5.6-luna", "gpt-5.6-luna", 100000L, "https://simonrowe.dev", List.of());
+        10, "gpt-5.6-luna", "gpt-5.6-luna", "gpt-5.6-luna", 100000L,
+        "https://simonrowe.dev", List.of());
   }
 }

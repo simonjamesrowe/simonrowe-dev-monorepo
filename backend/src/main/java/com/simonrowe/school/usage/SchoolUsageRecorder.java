@@ -86,6 +86,22 @@ public class SchoolUsageRecorder {
         true, null, null);
   }
 
+  /**
+   * Records an estimated call when the estimate is already expressed as tokens.
+   *
+   * <p>Image pricing cannot be represented as character counts. Keeping this separate from
+   * {@link #record} also keeps the stored {@code estimated} flag truthful.
+   *
+   * @param kind what the call was for
+   * @param model the model used
+   * @param inputTokens estimated prompt and image tokens
+   * @param outputTokens estimated completion tokens
+   */
+  public void recordEstimatedTokens(final SchoolUsage.Kind kind, final String model,
+      final long inputTokens, final long outputTokens) {
+    save(kind, model, inputTokens, outputTokens, 0, true, null, null);
+  }
+
   @SuppressWarnings("checkstyle:ParameterNumber")
   private void save(final SchoolUsage.Kind kind, final String model,
       final long inputTokens, final long outputTokens, final long cachedTokens,

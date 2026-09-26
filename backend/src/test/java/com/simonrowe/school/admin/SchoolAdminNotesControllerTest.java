@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.simonrowe.school.ingest.SchoolAttachmentStore;
+import com.simonrowe.school.classify.SchoolNoteTranscriber;
 import com.simonrowe.school.model.SchoolDocument;
 import com.simonrowe.school.model.SchoolEvent;
 import com.simonrowe.school.model.SchoolLink;
@@ -50,7 +51,8 @@ class SchoolAdminNotesControllerTest {
       mock(SchoolAttachmentStore.class),
       mock(SchoolLinkRepository.class),
       mock(SchoolLinkFetcher.class),
-      notes);
+      notes,
+      mock(SchoolNoteTranscriber.class));
 
   @Test
   @DisplayName("saving a note returns what was understood, not just an acknowledgement")

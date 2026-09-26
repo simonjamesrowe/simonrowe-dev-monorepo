@@ -33,6 +33,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 COMPOSE_FILE="$PROJECT_DIR/docker-compose.prod.yml"
 DOCKERFILE="$PROJECT_DIR/Dockerfile.frontend"
 NGINX_CONF="$PROJECT_DIR/frontend/nginx.conf"
+PROXY_CONF="$PROJECT_DIR/config/nginx/nginx-proxy.conf"
 
 # The in-container path nginx actually reads. Anything mounted here shadows the
 # image's copy.
@@ -77,6 +78,7 @@ echo "  the subjects exist"
 check "docker-compose.prod.yml exists" "[[ -f '$COMPOSE_FILE' ]]"
 check "Dockerfile.frontend exists" "[[ -f '$DOCKERFILE' ]]"
 check "frontend/nginx.conf exists" "[[ -f '$NGINX_CONF' ]]"
+check "config/nginx/nginx-proxy.conf exists" "[[ -f '$PROXY_CONF' ]]"
 
 FRONTEND_BLOCK="$(service_block frontend)"
 check "the compose file has a non-empty \`frontend:\` service block" \
@@ -118,6 +120,10 @@ for location in '/api/' '/s/' '/uploads/' '/ws/'; do
 done
 check "frontend/nginx.conf routes the exact path /mcp to the backend" \
   "grep -qF 'location = /mcp' '$NGINX_CONF'"
+check "frontend's /api/ route permits the backend's 10 MB upload limit" \
+  "awk '/location \/api\// { inside = 1 } inside && /}/ { exit } inside { print }' '$NGINX_CONF' | grep -qF 'client_max_body_size 12m;'"
+check "the public www proxy permits the backend's 10 MB upload limit" \
+  "awk '/server_name simonrowe.dev www.simonrowe.dev;/ { www = 1 } www && /location \/ \{/ { inside = 1 } inside && /client_max_body_size 12m;/ { found = 1 } inside && /^    }/ { exit } END { exit !found }' '$PROXY_CONF'"
 
 # ---------------------------------------------------------------------------
 echo

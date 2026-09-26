@@ -122,6 +122,6 @@ class SchoolLinkFetcherTierTest {
   private static SchoolProperties properties() {
     return new SchoolProperties(true, LocalDate.of(2026, 7, 1),
         List.of("kilmorie.lewisham.sch.uk"), List.of(), null,
-        "https://www.kilmorieschool.co.uk", null, 0, null, null, 0, null, null);
+        "https://www.kilmorieschool.co.uk", null, 0, null, null, null, 0, null, null);
   }
 }
