@@ -1695,9 +1695,6 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   until fixed or declined. Deploying needs **both** `software-factory` and `deployer` (same image,
   and `deployer` never recreates itself). Skills (`pr-review-loop`, `code-review-triage`) live in
   `simonjamesrowe/agent-setup` and are follow-up. See `docs/runbooks/pr-governance.md`.
-  **Do not run `.specify/scripts/bash/update-agent-context.sh` on this file** — it fails with
-  `grep: repetition-operator operand invalid` and silently strips the lead line from eight
-  existing entries here.
 - 037-platform-status-page: A public `/status` page reports which commit each first-party
   service runs, the third-party image tags, and a changelog with AI-written release notes.
   Every version fact is **baked into the artifact at build time** (`springBoot { buildInfo }`
@@ -2033,8 +2030,3 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - MongoDB — new `article_summaries` collection (mutable `@Document` class, not a record, because the generation flow transitions it in place); `narrations` changed from `blogId` to `contentType` + `contentId`. Indexes via Mongock change units `V020`/`V021` — `auto-index-creation` is off, so `@Indexed`/`@CompoundIndex` alone are decorative. (034-article-summary-audio)
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16 (web, security OAuth2 resource server, data-mongodb), `MongoTemplate` aggregation, existing `useAuth`/`useEnsureAuthenticated` (Auth0), Lucide React. **No new dependencies in either module.** (035-listen-from-listing)
 - MongoDB — read-only. **No new collection, field, index or Mongock change unit**: the bulk ready-narration aggregation is already ordered by the existing `idx_narration_content_updated` (`{contentType: 1, contentId: 1, updatedAt: -1}`) on `narrations`. (035-listen-from-listing)
-
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-<!-- SPECKIT END -->

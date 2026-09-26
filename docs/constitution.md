@@ -30,10 +30,10 @@
       replaced by a "Deployment" row naming the deployer
       container and the Temporal deploy queue.
 
-  Templates requiring updates:
-    ✅ .specify/templates/plan-template.md — no changes needed
-    ✅ .specify/templates/spec-template.md — no changes needed
-    ✅ .specify/templates/tasks-template.md — no changes needed
+  Templates requiring updates: None. (At 2.0.0 this listed the
+  SpecKit plan/spec/tasks templates; SpecKit has since been
+  removed and this file moved from .specify/memory/ to docs/.
+  No principle changed with the move.)
 
   Follow-up TODOs: None
 -->
