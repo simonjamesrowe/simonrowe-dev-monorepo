@@ -47,10 +47,11 @@ import org.springframework.stereotype.Component;
  *
  * <p>{@code software-factory} and {@code deployer} run the same image. Temporal's Spring Boot
  * auto-discovery scans {@code workers-auto-discovery.workflow-packages} for {@code @WorkflowImpl}
- * classes and creates a worker for every task queue it finds — unconditionally, because those
- * classes are not Spring beans and no condition can gate them. So both containers poll the
- * {@code deploy} queue for <em>workflow</em> tasks, which is harmless: a workflow implementation
- * only schedules activities.
+ * classes and creates a worker for every task queue it finds. That scan cannot be gated by a
+ * condition, because those classes are not Spring beans, so which container polls the {@code
+ * deploy} queue for <em>workflow</em> tasks is decided by the list itself: the deploy package
+ * appears only in {@code application-deployer.yml}. That keeps the orchestration on one build; it
+ * is not what confines the socket.
  *
  * <p>Activity implementations are different. They are discovered as Spring beans, so this
  * condition genuinely removes the bean — and with it every implementation of every side-effecting

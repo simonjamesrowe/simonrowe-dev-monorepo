@@ -2,12 +2,14 @@ package com.simonrowe.factory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.simonrowe.factory.codereview.workflow.CodeReviewWorkflowImpl;
+import com.simonrowe.factory.cvefix.workflow.CveFixWorkflowImpl;
 import com.simonrowe.factory.deploy.api.DeployWorkflowService;
-import com.simonrowe.factory.deploy.config.DeployTaskQueues;
 import com.simonrowe.factory.deploy.persistence.DeployIndexInitializer;
 import com.simonrowe.factory.deploy.workflow.DeployActivitiesImpl;
+import com.simonrowe.factory.feedback.workflow.ReviewFeedbackWorkflowImpl;
+import com.simonrowe.factory.logwatch.workflow.LogWatchWorkflowImpl;
 import io.temporal.spring.boot.autoconfigure.template.WorkersTemplate;
-import io.temporal.worker.Worker;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -65,13 +67,16 @@ class FactoryApplicationTest {
   }
 
   @Test
-  void registersDeployWorkflowPollerEvenWithTheFlagsOff() {
-    // Not a bug, and worth pinning so it is not "fixed". @WorkflowImpl classpath scanning is
-    // unconditional, so this JVM does poll the deploy queue for workflow tasks. That is harmless:
-    // a workflow implementation only schedules activities, and the activity implementations are
-    // absent here (asserted above), so this JVM cannot execute a deploy step.
-    assertThat(workersTemplate.getWorkers())
-        .extracting(Worker::getTaskQueue)
-        .contains(DeployTaskQueues.DEPLOY);
+  void pollsOnlyTheWorkflowsWhoseActivitiesRunInThisContainer() {
+    // The software-factory role (also the default when FACTORY_RUNTIME_ROLE is unset). It used
+    // to poll the deploy and platform-backup queues for workflow tasks as well, because
+    // @WorkflowImpl scanning cannot be gated by a condition. That let a lagging deployer and this
+    // container run one workflow on two builds; see FactoryWorkflowWorkersTest.
+    assertThat(RegisteredWorkflows.in(workersTemplate))
+        .containsExactlyInAnyOrder(
+            CodeReviewWorkflowImpl.class,
+            ReviewFeedbackWorkflowImpl.class,
+            CveFixWorkflowImpl.class,
+            LogWatchWorkflowImpl.class);
   }
 }

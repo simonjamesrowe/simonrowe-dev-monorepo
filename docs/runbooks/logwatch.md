@@ -224,6 +224,10 @@ Two changes close it, and both are mechanical rather than a rule to remember:
 - **Every scheduled workflow has a 22-hour execution timeout** (`ScheduledRuns`), shorter than
   the gap between firings, so a run that is stuck for any reason ends before the next one is due.
 
+A third change followed: **each workflow is now polled by one container only**, chosen by its
+`FACTORY_RUNTIME_ROLE` profile (see "Which container polls which queue" in `software-factory.md`).
+That removes the version mismatch at its source rather than surviving it.
+
 To spot a stuck scheduled run, look at the schedule rather than the workflow list:
 `temporal schedule describe -s logwatch-daily` shows `RunningWorkflows` and a `SkippedOverlap`
 count, and anything above zero means the schedule has been silently skipping.
@@ -344,9 +348,11 @@ and an expected outcome rather than a failure of the design.
 - **Loki timestamps are nanoseconds.** A seconds value is accepted and silently returns an empty
   result for a window about fifty years wide in the wrong place — an empty success, the one shape
   this module must never misread as clean.
-- **Both containers register a *workflow* poller on the `logwatch` queue.** `@WorkflowImpl`
-  scanning is unconditional. Harmless — a workflow only schedules activities — and the same shape
-  as the `deploy` queue. Do not "fix" it. What confines the Grafana credential is
+- **Only `software-factory` polls the `logwatch` queue.** Both containers used to poll it for
+  workflow tasks, which is how a lagging `deployer` wedged `logwatch-daily` for eleven days (see
+  "Muting third-party noise" above). The logwatch workflow package is now listed only for the
+  `software-factory` role. A `deployer` identity among the `logwatch` pollers means its role
+  profile did not activate. What confines the Grafana credential is
   `LogWatchActivitiesImpl`'s class-level `@ConditionalOnProperty`, which is evaluated by the
   **component scanner**: declaring that class through an explicit `@Bean` method would register it
   unconditionally and silently ignore the annotation.

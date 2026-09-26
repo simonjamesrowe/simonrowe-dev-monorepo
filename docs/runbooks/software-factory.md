@@ -565,11 +565,11 @@ to the `publish:false` dry run, which cloned anonymously; the dry run now
 resolves an installation id and so fails the same way.
 
 A third quiet failure, and the hardest of the three to read, is the `deployer`
-executing review Activities. Both containers run the same image, and
-`@WorkflowImpl` classpath scanning is unconditional, so **both register a
-code-review *workflow*-task poller** — that much is harmless and must not be
-"fixed", exactly as for the `deploy` queue. What is not harmless is a shared
-**activity** poller. `ReviewActivitiesImpl` was for a long time the only
+executing review Activities. Both containers run the same image. Until
+2026-09-26 **both also registered a code-review *workflow*-task poller**, which
+this runbook called harmless; it was not (see "Which container polls which
+queue" below), and the `deployer` no longer does. The failure described here is
+the **activity** poller. `ReviewActivitiesImpl` was for a long time the only
 `@ActivityImpl` in the module with no `@ConditionalOnProperty`, so the `deployer`
 polled `code-review` too and Temporal handed it roughly half of every review's
 Activities. It holds no GitHub App credential by design, so its share died at
@@ -588,8 +588,8 @@ Four things make this look like something it is not:
   phase moves: one run fails in `REVIEWING`, the next clears it and fails in
   `PUBLISHING`. Restarting `software-factory` does not help.
 
-Diagnose it by comparing poller identities against container hostnames — two
-activity pollers on this queue is the fault:
+Diagnose it by comparing poller identities against container hostnames. Any
+`deployer` identity on this queue is now the fault:
 
 ```bash
 docker run --rm --network simonrowe-dev-monorepo_default \
@@ -668,6 +668,64 @@ fails the *last* Activity on `GitHub API returned 403 for POST
 request need `pull_requests: write`, not `issues: write`. Note the dry run cannot
 catch this one — `publish:false` never reaches the publish Activity — so a
 webhook delivery remains the only test of the publish path.
+
+## Which container polls which queue
+
+Temporal keeps no record of where workflow code lives. Each worker process
+registers workflow types locally and polls a task queue, and the server hands the
+next task to whichever poller is waiting. So every container that registers a
+workflow can be handed any run of it.
+
+`software-factory` and `deployer` run the same image, and `@WorkflowImpl` classpath
+scanning cannot be gated by a Spring condition, because those classes are not
+beans. Until 2026-09-26 both containers therefore polled every workflow queue.
+That is only safe while both run the same build, and the `deployer` never
+recreates itself, so it routinely lags. On 2026-09-15 it took a log-watch workflow
+task on an older build than the activity that fed it, and the run wedged
+`logwatch-daily` for eleven days (`docs/runbooks/logwatch.md`).
+
+Each container's `FACTORY_RUNTIME_ROLE` (already set on both services in
+`docker-compose.prod.yml`) is now also its Spring profile, and the profile chooses
+its `workflow-packages`:
+
+| Queue | Polled by | Configured in |
+|---|---|---|
+| `code-review`, `review-feedback`, `cve-fix`, `logwatch` | `software-factory` | `application.yml` |
+| `deploy`, `platform-backup` | `deployer` | `application-deployer.yml` (replaces the list) |
+| `linear` (activities only) | `software-factory` | `LinearActivitiesImpl`'s flag, not a package |
+
+What to know when working on it:
+
+- **The role must match the profile name.** A role that stops being exactly
+  `deployer` silently gives the `deployer` the `software-factory` list: it polls the
+  four wrong queues, and nothing polls `deploy`, so no deploy ever starts.
+  `FactoryWorkflowWorkersTest` pins the compose values and fails on any
+  `SPRING_PROFILES_ACTIVE` on either service, since that would replace the role.
+- **Adding a workflow means adding its package to exactly one list.** A package in
+  neither is a queue nothing polls: a healthy container, a schedule that fires,
+  and a run that never starts. `FactoryWorkflowWorkersTest` scans for every
+  `@WorkflowImpl` package and fails on one listed in neither or both.
+- **Keep the list and the activity gate in agreement.** A workflow belongs to the
+  container whose `*ActivitiesImpl` flag is true. The activity gates remain what
+  confines credentials and the Docker socket; the lists only decide where
+  orchestration runs.
+- **Queries go to the owning container.** A run's `progress` query is answered by
+  a workflow worker on its queue, so the progress of a deploy or platform-backup
+  run is unavailable while the `deployer` is down. `FactoryRunService` already
+  reports that as a status with no phase.
+
+To verify, the expected shape is one workflow poller per queue, whose identity
+matches the owning container's hostname:
+
+```bash
+for q in code-review review-feedback cve-fix logwatch deploy platform-backup; do
+  docker run --rm --network simonrowe-dev-monorepo_default \
+    temporalio/admin-tools:1.31.2 temporal task-queue describe \
+    --address temporal:7233 --namespace default --task-queue "$q"
+done
+docker inspect -f '{{.Config.Hostname}}' simonrowe-dev-monorepo-software-factory-1
+docker inspect -f '{{.Config.Hostname}}' simonrowe-dev-monorepo-deployer-1
+```
 
 ## Review feedback loop
 
