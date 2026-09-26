@@ -21,8 +21,9 @@ import org.springframework.context.annotation.Configuration;
  * <p><strong>Do not delete these tests.</strong> Before {@link ReviewActivitiesImpl} carried a
  * {@code @ConditionalOnProperty} it was the only activity implementation in the module without
  * one, so both containers registered a code-review <em>activity</em> poller and Temporal split
- * the work between them. The {@code deployer} holds no GitHub App credential, so its share died
- * at {@code GitHub App token request failed} wrapping a bare {@code UnresolvedAddressException}.
+ * the work between them. The {@code deployer} held no GitHub App credential at the time, so its
+ * share died at {@code GitHub App token request failed} wrapping a bare {@code
+ * UnresolvedAddressException}.
  *
  * <p>Removing the condition again fails in the least diagnosable way available: intermittently
  * (routing is per activity, so one run can clear {@code REVIEWING} and the next fail in {@code

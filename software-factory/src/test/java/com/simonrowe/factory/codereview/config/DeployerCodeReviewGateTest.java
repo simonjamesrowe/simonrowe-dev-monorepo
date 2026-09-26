@@ -17,8 +17,9 @@ import org.junit.jupiter.api.Test;
  * already the safe state and any declaration is the risk. {@code factory.codereview.enabled}
  * defaults to {@code true} instead, for the reason {@code ReviewActivitiesImpl} documents, so here
  * an <em>absent</em> variable is the unsafe state: {@code deployer} would fall back to the default,
- * register the activity bean, and start winning about half of all code-review activities on a
- * container that holds no GitHub App credential.
+ * register the activity bean, and start winning about half of all code-review activities in the
+ * container that holds the Docker socket — where, when this test was written, they also failed
+ * for want of a GitHub App credential.
  *
  * <p>That failure is why this is worth a test rather than a comment. It is intermittent, it is
  * logged only in the other container, it can fail one review in {@code REVIEWING} and the next in

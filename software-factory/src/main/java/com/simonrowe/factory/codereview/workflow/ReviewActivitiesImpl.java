@@ -25,15 +25,19 @@ import org.springframework.stereotype.Component;
  * Spring-managed activity adapter for GitHub and the configured review engine.
  *
  * <p><strong>The condition is what keeps {@code deployer} out of the {@code code-review}
- * queue.</strong> Both containers run this image, and {@code @WorkflowImpl} classpath scanning is
- * unconditional, so both register a code-review <em>workflow</em>-task poller. That much is
- * harmless — a workflow implementation only schedules activities. An <em>activity</em> poller
- * executes them, and {@code deployer} deliberately holds no GitHub App credential.
+ * activity queue.</strong> Both containers run this image. Since #193 only {@code
+ * software-factory} polls the code-review <em>workflow</em> queue (the Spring profile picks the
+ * workflow packages), but activity registration is decided here. An <em>activity</em> poller is
+ * what executes a step, and a review step clones pull request content and runs an agent over it,
+ * which has no business in the one container holding the Docker socket.
  *
- * <p>Without the condition the failure is intermittent rather than loud, because Temporal hands
- * each activity to whichever worker polls first: roughly half of all reviews died at {@code
- * GitHubCredentials.mintInstallationToken} with {@code GitHub App token request failed} wrapping a
- * bare {@code UnresolvedAddressException} — no App configuration means no host to resolve. It
+ * <p>{@code deployer} does hold the GitHub App credential today — {@code DeployReportGateway}
+ * posts deploy write-ups with it. It did not when this condition was added, which is how the
+ * failure below presented. Without the condition the failure is intermittent rather than loud,
+ * because Temporal hands each activity to whichever worker polls first: roughly half of all
+ * reviews died at {@code GitHubCredentials.mintInstallationToken} with {@code GitHub App token
+ * request failed} wrapping a bare {@code UnresolvedAddressException} — no App configuration meant
+ * no host to resolve. It
  * reads as flaky DNS, and it is not. Two things make that especially misleading: the errors appear
  * only in the {@code deployer}'s log and not in {@code software-factory}'s, and {@code getent} and
  * {@code curl} from inside {@code software-factory} succeed the whole time. Because the routing is
@@ -42,10 +46,10 @@ import org.springframework.stereotype.Component;
  *
  * <p><strong>Defaults on, unlike {@code factory.deploy.enabled}, and the asymmetry is
  * deliberate.</strong> That flag guards the Docker socket, so opt-in is the safe default. This one
- * guards nothing: {@code deployer} holds no credential to leak, so a default of off would buy no
- * safety while making a missing or overridden {@code FACTORY_CODEREVIEW_ENABLED} silently disable
- * code review everywhere — with the repository's merge gate requiring the {@code Code Review}
- * check, that would block every pull request and look like an outage. Defaulting on fails toward
+ * guards no credential — the review activities need only what both containers already hold — so a
+ * default of off would buy no safety while making a missing or overridden
+ * {@code FACTORY_CODEREVIEW_ENABLED} silently disable code review everywhere — with the
+ * repository's merge gate requiring the {@code Code Review} check, that would block every pull request and look like an outage. Defaulting on fails toward
  * the visible, already-diagnosed problem instead of the silent one.
  *
  * <p>Deliberately not a field on {@link CodeReviewProperties}: nothing reads this value at

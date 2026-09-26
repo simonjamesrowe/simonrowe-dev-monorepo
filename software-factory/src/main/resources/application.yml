@@ -80,9 +80,10 @@ factory:
   runtime-role: ${FACTORY_RUNTIME_ROLE:software-factory}
   codereview:
     # Registers ReviewActivitiesImpl, and so decides which container executes a review step.
-    # Set false only on `deployer`, which holds no GitHub App credential: without that, both
-    # containers poll the code-review ACTIVITY queue and Temporal splits the work between them,
-    # failing roughly half of all reviews on a missing credential that presents as flaky DNS.
+    # Set false only on `deployer`, the container holding the Docker socket, which must not clone
+    # pull request content or run a review agent. Without it both containers poll the code-review
+    # ACTIVITY queue and Temporal splits one review between them; when this was added the
+    # deployer had no GitHub App credential, and half of all reviews failed on it as flaky DNS.
     #
     # Defaults TRUE, unlike factory.deploy.enabled. That one guards the Docker socket, so opt-in
     # is the safe default; this one guards nothing, and the merge gate requires the `Code Review`
