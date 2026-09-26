@@ -10,11 +10,15 @@ import com.simonrowe.factory.codereview.domain.ChangedFiles;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -34,7 +38,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class AutoMergeGateway {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(AutoMergeGateway.class);
   private static final String API_VERSION = "2026-03-10";
+  private static final String NO_PERMISSION = "none";
   private static final int PAGE_SIZE = 100;
 
   /** GitHub serves at most 3000 files for a pull request; 30 pages of 100 reaches all of them. */
@@ -85,9 +91,52 @@ public class AutoMergeGateway {
             .build();
   }
 
-  /** The pull request as GitHub reports it right now. */
+  /**
+   * The pull request as GitHub reports it right now, with its author's permission on the
+   * repository.
+   */
   public AutoMergeState readState(final PullRequestContext pullRequest) {
-    return toState(getJson(pullRequestPath(pullRequest), token(pullRequest)));
+    String token = token(pullRequest);
+    JsonNode pull = getJson(pullRequestPath(pullRequest), token);
+    String login = pull.path("user").path("login").asText("");
+    return toState(pull, authorPermission(pullRequest, login, token));
+  }
+
+  /**
+   * The author's permission from {@code /collaborators/{login}/permission}, the one read GitHub
+   * answers the same way for every viewer.
+   *
+   * <p>Any failure reads as {@code none}, which can only withhold an arm. It is not thrown: the
+   * same state read decides whether to <em>withdraw</em> an arm, and that must not fail a review
+   * because a permission lookup did.
+   */
+  private String authorPermission(
+      final PullRequestContext pullRequest, final String login, final String token) {
+    if (login.isEmpty()) {
+      return NO_PERMISSION;
+    }
+    try {
+      String permission =
+          getJson(
+                  "/repos/"
+                      + pullRequest.owner()
+                      + "/"
+                      + pullRequest.repository()
+                      + "/collaborators/"
+                      + URLEncoder.encode(login, StandardCharsets.UTF_8)
+                      + "/permission",
+                  token)
+              .path("permission")
+              .asText("");
+      return permission.isEmpty() ? NO_PERMISSION : permission;
+    } catch (IllegalStateException exception) {
+      LOGGER.warn(
+          "Could not read {}'s permission on {}; treating it as none",
+          login,
+          pullRequest.slug(),
+          exception);
+      return NO_PERMISSION;
+    }
   }
 
   /**
@@ -152,7 +201,7 @@ public class AutoMergeGateway {
    * that merges something unreviewed. Matching every bot fails the other way, which is safe: no
    * other bot arms auto-merge on this repository, and one that did would simply be re-decided.
    */
-  static AutoMergeState toState(final JsonNode pullRequest) {
+  static AutoMergeState toState(final JsonNode pullRequest, final String authorPermission) {
     String baseRepository = pullRequest.path("base").path("repo").path("full_name").asText("");
     String headRepository = pullRequest.path("head").path("repo").path("full_name").asText("");
     List<String> labels = new ArrayList<>();
@@ -166,7 +215,7 @@ public class AutoMergeGateway {
         requiredText(pullRequest.path("head"), "sha"),
         pullRequest.path("draft").asBoolean(false),
         headRepository.isEmpty() || !headRepository.equalsIgnoreCase(baseRepository),
-        pullRequest.path("author_association").asText(""),
+        authorPermission,
         labels,
         pullRequest.path("changed_files").asInt(-1),
         armed,

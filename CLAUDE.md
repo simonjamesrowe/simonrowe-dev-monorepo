@@ -252,9 +252,13 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     workspace.** That list is filtered to agent-safe paths and capped at `maxChangedFiles`, so it
     can omit exactly the paths this check exists for. A listing short of GitHub's `changed_files`
     count arms nothing.
-  - **The public-repo rules come first:** no forks, and the author must be
-    `OWNER`/`MEMBER`/`COLLABORATOR`. Without them a stranger's pull request with a clean review
-    would merge itself. `agent-feedback` guidance pull requests are excluded (they touch root
+  - **The public-repo rules come first:** no forks, and the author must have `write`/`admin`
+    permission, read from `/collaborators/{login}/permission`. Without them a stranger's pull
+    request with a clean review would merge itself. **Never decide trust on
+    `author_association`.** It is computed for the viewer, and an App token cannot see a private
+    organisation membership, so the first live pull request (#194) was refused with the repository
+    owner reading as `CONTRIBUTOR`. `simonrowe`'s membership of `simonjamesrowe` is private, which
+    is why it looks correct (`MEMBER`) through a personal token and wrong through the App. `agent-feedback` guidance pull requests are excluded (they touch root
     `*.md`, which the path rules alone would call auto-merge), and `no-auto-merge` is the opt-out.
   - **The classifier exists twice, held together by one fixture.**
     `codereview/domain/MergeDisposition.java` is a port of `scripts/classify-change.sh`, and both
