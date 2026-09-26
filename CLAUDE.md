@@ -194,6 +194,10 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   checks Loki freshness and the public hostnames **from GitHub**, the only alarm the Pi's own
   network cannot silence. A missing `# ExtServers:` line in a container's resolv.conf is the tell.
   See `docs/runbooks/prod-monitoring.md` and `docs/runbooks/prod-heartbeat.md`.
+  When a probe script like this runs a command inside a container image whose toolset it does not
+  control, treat exit codes 126/127 (command not found/not executable) as "cannot probe", not as a
+  failure — and verify the probe's tools actually exist in every target image before trusting the
+  result.
 - **`deployer`** is a second instance of `FACTORY_IMAGE` with no ingress, holding
   `/var/run/docker.sock` and a **read-write** mount of the deploy directory. It executes deploys
   off the `deploy` Temporal queue and is the only container permitted to run
