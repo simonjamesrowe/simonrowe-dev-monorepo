@@ -45,4 +45,22 @@ class AssistantInputValidatorTest {
     assertThatThrownBy(() -> validator.validate(null, spoofed))
         .isInstanceOf(ResponseStatusException.class);
   }
+
+  @Test
+  void comparesImageContentWithoutExposingTransientInputInLogs() {
+    final AssistantInputValidator.ValidatedInput first =
+        new AssistantInputValidator.ValidatedInput(
+            "private note", "image/png", new byte[] {1, 2, 3});
+    final AssistantInputValidator.ValidatedInput same =
+        new AssistantInputValidator.ValidatedInput(
+            "private note", "image/png", new byte[] {1, 2, 3});
+    final AssistantInputValidator.ValidatedInput different =
+        new AssistantInputValidator.ValidatedInput(
+            "private note", "image/png", new byte[] {1, 2, 4});
+
+    assertThat(first).isEqualTo(same).hasSameHashCodeAs(same).isNotEqualTo(different);
+    assertThat(first.toString())
+        .contains("textPresent=true", "imageByteLength=3")
+        .doesNotContain("private note", "[1, 2, 3]");
+  }
 }

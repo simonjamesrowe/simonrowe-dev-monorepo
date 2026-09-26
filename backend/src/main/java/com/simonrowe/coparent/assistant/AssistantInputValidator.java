@@ -3,6 +3,7 @@ package com.simonrowe.coparent.assistant;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
@@ -76,6 +77,31 @@ public class AssistantInputValidator {
     @Override
     public byte[] imageBytes() {
       return imageBytes == null ? null : imageBytes.clone();
+    }
+
+    @Override
+    public boolean equals(final Object candidate) {
+      if (this == candidate) {
+        return true;
+      }
+      if (!(candidate instanceof ValidatedInput other)) {
+        return false;
+      }
+      return Objects.equals(text, other.text)
+          && Objects.equals(imageContentType, other.imageContentType)
+          && Arrays.equals(imageBytes, other.imageBytes);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(text, imageContentType, Arrays.hashCode(imageBytes));
+    }
+
+    @Override
+    public String toString() {
+      return "ValidatedInput[textPresent=" + (text != null)
+          + ", imageContentType=" + imageContentType
+          + ", imageByteLength=" + (imageBytes == null ? 0 : imageBytes.length) + ']';
     }
   }
 }
