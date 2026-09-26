@@ -46,7 +46,8 @@ EOF
 #   exec <nginx> test -f ...           -> no maintenance flag (no deploy running)
 #   compose ... ps ...                 -> nothing, so layer 2 finds nothing to fix
 #   ps --format ...                    -> FAKE_RUNNING (space-separated services)
-#   exec <container> getent hosts ...  -> fails for services in FAKE_DNS_BROKEN
+#   exec <container> getent hosts ...  -> fails for services in FAKE_DNS_BROKEN,
+#                                         exits 126 (not runnable) for FAKE_NO_GETENT
 # Every call is appended to $CALLS so the test can see what was probed.
 cat >"$STUBS/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -57,6 +58,7 @@ case "$1" in
     [[ "$3" == "test" ]] && exit 1
     svc="${container#"$FAKE_PROJECT"-}"
     svc="${svc%-1}"
+    [[ " ${FAKE_NO_GETENT:-} " == *" $svc "* ]] && exit 126
     [[ " ${FAKE_DNS_BROKEN:-} " == *" $svc "* ]] && exit 2
     echo "140.82.121.4 github.com"
     ;;
@@ -158,6 +160,19 @@ state_stopped="$TMP/stopped"
 out_stopped="$(run_tick "$state_stopped" FAKE_RUNNING="backend" FAKE_DNS_BROKEN="alloy")"
 check "alloy is not running, so it is not probed or counted" \
   "! grep -q 'alloy' '$TMP/calls' && ! grep -q 'alloy: cannot resolve' <<<\"\$out_stopped\""
+
+# ---------------------------------------------------------------------------
+echo "  an image with no runnable getent is 'cannot probe', never a DNS failure"
+# ---------------------------------------------------------------------------
+state_noget="$TMP/noget"
+out_noget=""
+for _ in 1 2 3 4; do
+  out_noget+="$(run_tick "$state_noget" FAKE_NO_GETENT="searxng")"$'\n'
+done
+check "says the probe cannot run, naming the exit code" \
+  "grep -q 'searxng: cannot probe DNS - getent is not runnable in the image (exit 126)' <<<\"\$out_noget\""
+check "never counts it or restarts it across four ticks" \
+  "! grep -qE 'searxng: (cannot resolve|restarting)' <<<\"\$out_noget\""
 
 # ---------------------------------------------------------------------------
 echo "  the shared restart budget still applies"

@@ -565,7 +565,19 @@ for svc in "${DNS_EGRESS_SERVICES[@]}"; do
   [[ "$running_containers" == *" $container "* ]] || continue
 
   failures_file="$(dns_failures_file "$svc")"
-  if bounded docker exec "$container" getent hosts "$DNS_PROBE_NAME" >/dev/null 2>&1; then
+  rc=0
+  bounded docker exec "$container" getent hosts "$DNS_PROBE_NAME" >/dev/null 2>&1 || rc=$?
+  if (( rc == 0 )); then
+    echo 0 > "$failures_file"
+    continue
+  fi
+  # 126/127 are docker exec's "could not run the command" codes - the image has
+  # no usable getent. That is not a DNS failure, and counting it would restart
+  # the service on every threshold forever. All eleven images shipped getent
+  # when this was written (checked on the Pi, 2026-09-26); this is for the day
+  # an image update drops it. Deliberately not counted, and said loudly.
+  if (( rc == 126 || rc == 127 )); then
+    log "WARN" "$svc: cannot probe DNS - getent is not runnable in the image (exit $rc); remove it from DNS_EGRESS_SERVICES or pick another probe"
     echo 0 > "$failures_file"
     continue
   fi
