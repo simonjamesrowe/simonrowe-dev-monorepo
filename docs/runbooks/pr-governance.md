@@ -228,7 +228,12 @@ It arms only if **every** rule passes. The first rule to fail is the reason give
 2. The pull request is not a draft.
 3. The head is in this repository, not a fork. The repository is public, so a stranger's pull
    request with a clean review must never merge itself.
-4. The author is `OWNER`, `MEMBER` or `COLLABORATOR`.
+4. The author has `write` or `admin` permission on the repository, read from
+   `GET /repos/{o}/{r}/collaborators/{login}/permission`. It is **not** read from
+   `author_association`: that field is computed for the viewer, and an App token cannot see a
+   private organisation membership. So it reported this repository's owner as `CONTRIBUTOR`, and
+   the first live pull request (#194) was refused. A permission that cannot be read counts as
+   `none`.
 5. It carries neither `no-auto-merge` (a person's opt-out) nor `agent-feedback` (feedback-loop
    guidance edits agent instructions, which a human should merge).
 6. The `Code Review` conclusion is green: no `REQUEST_CHANGES` and no `CRITICAL`, the same rule as

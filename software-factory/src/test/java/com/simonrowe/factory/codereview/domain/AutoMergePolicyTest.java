@@ -18,7 +18,7 @@ class AutoMergePolicyTest {
 
   private static AutoMergeState state() {
     return new AutoMergeState(
-        "PR_node", HEAD, false, false, "OWNER", List.of(), 2, false, false);
+        "PR_node", HEAD, false, false, "admin", List.of(), 2, false, false);
   }
 
   private static MergeDecision decide(final AutoMergeState state, final ReviewReport report) {
@@ -31,10 +31,8 @@ class AutoMergePolicyTest {
   }
 
   @Test
-  void membersAndCollaboratorsAreTrustedToo() {
-    for (String association : List.of("MEMBER", "COLLABORATOR")) {
-      assertThat(decide(withAssociation(association), CLEAN)).isEqualTo(MergeDecision.eligible());
-    }
+  void writeAccessIsTrustedToo() {
+    assertThat(decide(withPermission("write"), CLEAN)).isEqualTo(MergeDecision.eligible());
   }
 
   @Test
@@ -52,7 +50,7 @@ class AutoMergePolicyTest {
   @Test
   void draftIsNotArmed() {
     AutoMergeState draft =
-        new AutoMergeState("PR_node", HEAD, true, false, "OWNER", List.of(), 2, false, false);
+        new AutoMergeState("PR_node", HEAD, true, false, "admin", List.of(), 2, false, false);
     assertThat(decide(draft, CLEAN).reason()).isEqualTo("the pull request is a draft");
   }
 
@@ -60,19 +58,35 @@ class AutoMergePolicyTest {
   @Test
   void forkIsNotArmedEvenWithCleanReview() {
     AutoMergeState fork =
-        new AutoMergeState("PR_node", HEAD, false, true, "OWNER", List.of(), 2, false, false);
+        new AutoMergeState("PR_node", HEAD, false, true, "admin", List.of(), 2, false, false);
     assertThat(decide(fork, CLEAN).reason()).isEqualTo("the change comes from a fork");
   }
 
   @Test
   void anAuthorWithoutWriteAccessIsNotArmed() {
-    for (String association : List.of("CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "NONE", "")) {
-      assertThat(decide(withAssociation(association), CLEAN).outcome())
+    for (String permission : List.of("read", "none", "")) {
+      assertThat(decide(withPermission(permission), CLEAN).outcome())
+          .as(permission)
+          .isEqualTo(MergeDecision.Outcome.INELIGIBLE);
+    }
+    assertThat(decide(withPermission(null), CLEAN).outcome())
+        .isEqualTo(MergeDecision.Outcome.INELIGIBLE);
+    assertThat(decide(withPermission("read"), CLEAN).reason())
+        .isEqualTo("the author has no write access to this repository (`read`)");
+  }
+
+  /**
+   * The regression from #194. {@code author_association} is computed for the viewer, and an App
+   * token cannot see a private organisation membership, so it reported the repository's owner as
+   * {@code CONTRIBUTOR}. Association values must never be what trust is decided on.
+   */
+  @Test
+  void associationValuesAreNotPermissions() {
+    for (String association : List.of("OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR")) {
+      assertThat(decide(withPermission(association), CLEAN).outcome())
           .as(association)
           .isEqualTo(MergeDecision.Outcome.INELIGIBLE);
     }
-    assertThat(decide(withAssociation(null), CLEAN).outcome())
-        .isEqualTo(MergeDecision.Outcome.INELIGIBLE);
   }
 
   @Test
@@ -123,7 +137,7 @@ class AutoMergePolicyTest {
   void headThatMovedOnIsNotArmed() {
     AutoMergeState moved =
         new AutoMergeState(
-            "PR_node", "fedcba9876543210", false, false, "OWNER", List.of(), 2, false, false);
+            "PR_node", "fedcba9876543210", false, false, "admin", List.of(), 2, false, false);
     assertThat(decide(moved, CLEAN).reason())
         .isEqualTo("the pull request moved on to `fedcba9` after `0123456` was reviewed");
   }
@@ -205,7 +219,7 @@ class AutoMergePolicyTest {
   @Test
   void cleanForkWithOnlyDocsIsStillNotArmed() {
     AutoMergeState fork =
-        new AutoMergeState("PR_node", HEAD, false, true, "MEMBER", List.of(), 2, false, false);
+        new AutoMergeState("PR_node", HEAD, false, true, "write", List.of(), 2, false, false);
     assertThat(decide(fork, CLEAN).outcome()).isEqualTo(MergeDecision.Outcome.INELIGIBLE);
   }
 
@@ -232,14 +246,14 @@ class AutoMergePolicyTest {
         .isEqualTo("not armed: arming failed (GraphQL 502)");
   }
 
-  private static AutoMergeState withAssociation(final String association) {
+  private static AutoMergeState withPermission(final String permission) {
     return new AutoMergeState(
-        "PR_node", HEAD, false, false, association, List.of(), 2, false, false);
+        "PR_node", HEAD, false, false, permission, List.of(), 2, false, false);
   }
 
   private static AutoMergeState withLabels(final String... labels) {
     return new AutoMergeState(
-        "PR_node", HEAD, false, false, "OWNER", List.of(labels), 2, false, false);
+        "PR_node", HEAD, false, false, "admin", List.of(labels), 2, false, false);
   }
 
   private static Supplier<ChangedFiles> recording(

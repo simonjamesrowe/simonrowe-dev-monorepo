@@ -89,16 +89,22 @@ class AutoMergeGatewayTest {
     responses.put(
         "GET " + PULL,
         """
-        {"node_id": "PR_node", "draft": false, "author_association": "OWNER",
+        {"node_id": "PR_node", "draft": false, "author_association": "CONTRIBUTOR",
+         "user": {"login": "simonrowe"},
          "changed_files": 3, "labels": [{"name": "backend"}, {"name": "no-auto-merge"}],
          "head": {"sha": "head-sha", "repo": {"full_name": "example/project"}},
          "base": {"repo": {"full_name": "example/project"}},
          "auto_merge": {"enabled_by": {"login": "simonrowe-software-factory[bot]",
                                        "type": "Bot"}}}
         """);
+    responses.put(
+        "GET /repos/example/project/collaborators/simonrowe/permission",
+        "{\"permission\": \"admin\", \"role_name\": \"admin\"}");
 
     AutoMergeState state = gateway().readState(pullRequest());
 
+    // author_association says CONTRIBUTOR, which is what an App token reports for a private
+    // organisation member (#194). The permission API is what decides, and it says admin.
     assertThat(state)
         .isEqualTo(
             new AutoMergeState(
@@ -106,7 +112,7 @@ class AutoMergeGatewayTest {
                 "head-sha",
                 false,
                 false,
-                "OWNER",
+                "admin",
                 List.of("backend", "no-auto-merge"),
                 3,
                 true,
@@ -122,7 +128,7 @@ class AutoMergeGatewayTest {
                 {"node_id": "PR_node", "head": {"sha": "s", "repo": {"full_name": "a/b"}},
                  "base": {"repo": {"full_name": "a/b"}},
                  "auto_merge": {"enabled_by": {"login": "simonjamesrowe", "type": "User"}}}
-                """));
+                """), "admin");
 
     assertThat(state.autoMergeArmed()).isTrue();
     assertThat(state.autoMergeArmedByBot()).isFalse();
@@ -136,7 +142,7 @@ class AutoMergeGatewayTest {
                 """
                 {"node_id": "PR_node", "head": {"sha": "s", "repo": {"full_name": "a/b"}},
                  "base": {"repo": {"full_name": "a/b"}}, "auto_merge": null}
-                """));
+                """), "admin");
 
     assertThat(state.autoMergeArmed()).isFalse();
     assertThat(state.autoMergeArmedByBot()).isFalse();
@@ -150,7 +156,7 @@ class AutoMergeGatewayTest {
                         """
                         {"node_id": "n", "head": {"sha": "s", "repo": {"full_name": "x/b"}},
                          "base": {"repo": {"full_name": "a/b"}}}
-                        """))
+                        """), "admin")
                 .crossRepository())
         .isTrue();
     // A deleted fork leaves head.repo null. A head nobody can name is not one this repo controls.
@@ -160,7 +166,7 @@ class AutoMergeGatewayTest {
                         """
                         {"node_id": "n", "head": {"sha": "s", "repo": null},
                          "base": {"repo": {"full_name": "a/b"}}}
-                        """))
+                        """), "admin")
                 .crossRepository())
         .isTrue();
   }
@@ -173,7 +179,7 @@ class AutoMergeGatewayTest {
                 """
                 {"node_id": "n", "head": {"sha": "s", "repo": {"full_name": "a/b"}},
                  "base": {"repo": {"full_name": "a/b"}}}
-                """));
+                """), "admin");
     assertThat(state.changedFiles()).isEqualTo(-1);
   }
 
@@ -182,9 +188,43 @@ class AutoMergeGatewayTest {
     assertThatThrownBy(
             () ->
                 AutoMergeGateway.toState(
-                    json("{\"head\": {\"sha\": \"s\"}, \"base\": {}}")))
+                    json("{\"head\": {\"sha\": \"s\"}, \"base\": {}}"), "admin"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("node_id");
+  }
+
+  @Test
+  void botLoginIsEncodedIntoThePermissionPath() {
+    responses.put(
+        "GET " + PULL,
+        """
+        {"node_id": "PR_node", "user": {"login": "simonrowe-software-factory[bot]"},
+         "head": {"sha": "head-sha", "repo": {"full_name": "example/project"}},
+         "base": {"repo": {"full_name": "example/project"}}}
+        """);
+
+    gateway().readState(pullRequest());
+
+    assertThat(requests)
+        .contains(
+            "GET /repos/example/project/collaborators/simonrowe-software-factory[bot]/permission");
+  }
+
+  /**
+   * A permission that cannot be read withholds the arm, and is not thrown: the same read decides
+   * whether to withdraw an arm, and a failed lookup must not fail the review.
+   */
+  @Test
+  void permissionThatCannotBeReadIsNone() {
+    responses.put(
+        "GET " + PULL,
+        """
+        {"node_id": "PR_node", "user": {"login": "ghost"},
+         "head": {"sha": "head-sha", "repo": {"full_name": "example/project"}},
+         "base": {"repo": {"full_name": "example/project"}}}
+        """);
+
+    assertThat(gateway().readState(pullRequest()).authorPermission()).isEqualTo("none");
   }
 
   // --- listing files ----------------------------------------------------------------------------

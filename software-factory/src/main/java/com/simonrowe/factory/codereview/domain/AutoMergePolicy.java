@@ -34,10 +34,15 @@ public final class AutoMergePolicy {
   public static final String FEEDBACK_LABEL = "agent-feedback";
 
   /**
-   * Associations that mean the author could have pushed to {@code main} themselves. The repository
-   * is public, so without this a stranger's pull request with a clean review would merge itself.
+   * Permissions that mean the author could have pushed to this repository themselves. The
+   * repository is public, so without this a stranger's pull request with a clean review would merge
+   * itself. The API folds {@code maintain} into {@code write} and {@code triage} into {@code read}.
+   *
+   * <p>Not {@code author_association}: that is computed for the <em>viewer</em>, and a private
+   * organisation membership is invisible to an App token, so the owner of this repository read as
+   * {@code CONTRIBUTOR} and the first live pull request was refused (#194).
    */
-  private static final Set<String> TRUSTED_AUTHORS = Set.of("OWNER", "MEMBER", "COLLABORATOR");
+  private static final Set<String> TRUSTED_PERMISSIONS = Set.of("admin", "write");
 
   private AutoMergePolicy() {
   }
@@ -66,11 +71,11 @@ public final class AutoMergePolicy {
     if (state.crossRepository()) {
       return MergeDecision.ineligible("the change comes from a fork");
     }
-    if (state.authorAssociation() == null
-        || !TRUSTED_AUTHORS.contains(state.authorAssociation())) {
+    if (state.authorPermission() == null
+        || !TRUSTED_PERMISSIONS.contains(state.authorPermission())) {
       return MergeDecision.ineligible(
           "the author has no write access to this repository (`"
-              + state.authorAssociation()
+              + state.authorPermission()
               + "`)");
     }
     if (state.labels().contains(OPT_OUT_LABEL)) {
