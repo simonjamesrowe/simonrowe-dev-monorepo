@@ -10,6 +10,7 @@ import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.logwatch.config.LogWatchProperties;
 import com.simonrowe.factory.logwatch.domain.LogWatchRequest;
 import com.simonrowe.factory.logwatch.domain.Trigger;
+import com.simonrowe.factory.temporal.ScheduledRuns;
 import io.temporal.api.enums.v1.ScheduleOverlapPolicy;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.client.schedules.Schedule;
@@ -102,6 +103,19 @@ class LogWatchScheduleInitializerTest {
     assertThat(action.getWorkflowType()).isEqualTo("LogWatchWorkflow");
     assertThat(action.getOptions().getTaskQueue()).isEqualTo("logwatch");
     assertThat(action.getOptions().getWorkflowId()).isEqualTo("logwatch");
+  }
+
+  @Test
+  @DisplayName("a stuck run ends before the next firing instead of skipping it forever")
+  void boundsEachRunBelowTheGapBetweenFirings() {
+    initializer(true).run(null);
+
+    ScheduleActionStartWorkflow action =
+        (ScheduleActionStartWorkflow) createdSchedule().getAction();
+    assertThat(action.getOptions().getWorkflowExecutionTimeout())
+        .isEqualTo(ScheduledRuns.EXECUTION_TIMEOUT)
+        // Strictly under the gap between firings.
+        .isLessThan(LogWatchScheduleInitializer.INTERVAL);
   }
 
   @Test

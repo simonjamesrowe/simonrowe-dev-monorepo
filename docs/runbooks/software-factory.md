@@ -891,9 +891,11 @@ factory workflow exposes a query method named `progress` returning an object wit
 `phase` and `detail`, so an **untyped** Temporal query serves all of them and a
 new module gets progress reporting for free. It is read as a `JsonNode`, not a
 narrow record — each module adds a third field of its own (`count`,
-`lessonCount`, `sha`, `dryRun`) and Temporal's Jackson converter does **not**
-disable `FAIL_ON_UNKNOWN_PROPERTIES`, so a typed read of one module's shape would
-throw on another's.
+`lessonCount`, `sha`, `dryRun`) and Temporal's stock Jackson converter does
+**not** disable `FAIL_ON_UNKNOWN_PROPERTIES`, so a typed read of one module's shape
+would throw on another's. The factory's own converter has ignored unknown
+properties since 2026-09-26 (see `docs/runbooks/logwatch.md`), but the untyped read
+stays: it is still the only shape that fits every module.
 
 Two facts are reported separately: Temporal's `executionStatus`, which is the only
 thing that can say a run stopped, and the workflow's self-reported `phase`, which

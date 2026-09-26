@@ -203,12 +203,30 @@ production lines** from all six tickets through `SignatureExtractor` and the rul
 asserts that Alloy's `final error sending batch` (the SIM-29 ingest-failure signal, and the one
 thing this module must never stop hearing) is still audible from the same container.
 
-`ScanObservation` gained two fields for this, and Temporal's `JacksonJsonPayloadConverter` leaves
-`FAIL_ON_UNKNOWN_PROPERTIES` on. A result serialized by the **old** worker and replayed by the
-new one is fine — the absent fields default, and the compact constructor handles the null list.
-The reverse would fail, so a workflow started by the new worker and replayed by the old one after
-a rollback would not deserialize. The window is one nightly scan; this repository has the same
-tolerance recorded for `IssueFiling` in 046.
+`ScanObservation` gained two fields for this. That broke the scheduled scan for eleven days, and
+not in the way this paragraph originally predicted. The prediction was that a newer result read by
+an older build would fail only after a rollback, for one nightly scan. What actually happened:
+`deployer` runs the same image and registers a workflow poller on `logwatch` too, and it is
+updated separately from `software-factory`. On 2026-09-15 at 00:00 the two were on different
+builds. `observe` ran on the newer one and returned `mutedSignatures`; the workflow task landed on
+the older one, whose strict reader threw `UnrecognizedPropertyException`. The workflow's catch
+block recorded the run (`RecordRun`) and rethrew a plain `RuntimeException`, which Temporal treats
+as a failed *workflow task* and retries forever. Every retry replayed on the newer build, parsed
+the result, took the filing path, scheduled `FileIssue` where the history had `RecordRun`, and hit
+`NonDeterministicException`. The run never closed, so `logwatch-daily` (overlap `SKIP`) skipped
+eleven nights until it was terminated on 2026-09-26.
+
+Two changes close it, and both are mechanical rather than a rule to remember:
+
+- **Every Temporal payload now ignores unknown properties** (`TemporalPayloadConfiguration`), so
+  an additive field can never break a reader on an older build. Removing or renaming a field is
+  still breaking.
+- **Every scheduled workflow has a 22-hour execution timeout** (`ScheduledRuns`), shorter than
+  the gap between firings, so a run that is stuck for any reason ends before the next one is due.
+
+To spot a stuck scheduled run, look at the schedule rather than the workflow list:
+`temporal schedule describe -s logwatch-daily` shows `RunningWorkflows` and a `SkippedOverlap`
+count, and anything above zero means the schedule has been silently skipping.
 
 ## The part that matters most: it knows when it cannot see
 

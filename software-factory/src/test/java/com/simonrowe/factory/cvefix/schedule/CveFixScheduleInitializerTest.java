@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.simonrowe.factory.cvefix.config.CveFixProperties;
 import com.simonrowe.factory.cvefix.domain.CveFixRequest;
 import com.simonrowe.factory.linear.config.LinearProperties;
+import com.simonrowe.factory.temporal.ScheduledRuns;
 import io.temporal.api.enums.v1.ScheduleOverlapPolicy;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.client.schedules.Schedule;
@@ -29,6 +30,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -126,6 +128,19 @@ class CveFixScheduleInitializerTest {
         .isEqualTo(ScheduleOverlapPolicy.SCHEDULE_OVERLAP_POLICY_SKIP);
     // Creating the schedule must not fire a run immediately either.
     assertThat(optionsCaptor.getValue().isTriggerImmediately()).isFalse();
+  }
+
+  @Test
+  @DisplayName("a stuck run ends before the next firing instead of skipping it forever")
+  void boundsEachRunBelowTheGapBetweenFirings() {
+    initializer.run(null);
+
+    ScheduleActionStartWorkflow action =
+        (ScheduleActionStartWorkflow) createdSchedule().getAction();
+    assertThat(action.getOptions().getWorkflowExecutionTimeout())
+        .isEqualTo(ScheduledRuns.EXECUTION_TIMEOUT)
+        // Strictly under the gap between firings.
+        .isLessThan(CveFixScheduleInitializer.INTERVAL);
   }
 
   @Test
