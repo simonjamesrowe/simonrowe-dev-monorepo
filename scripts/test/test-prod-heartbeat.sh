@@ -24,6 +24,7 @@ mkdir -p "$STUBS"
 #   FAKE_OIDC    = true (default) | false
 #   FAKE_DOWN    = substring of a URL that returns 503
 #   FAKE_RECOVER = after this many calls to a FAKE_DOWN url, it serves again
+#   FAKE_TIMEOUT = substring of a URL that times out: writes nothing, prints 000
 # Every URL requested is appended to $CALLS.
 cat >"$STUBS/curl" <<'EOF'
 #!/usr/bin/env bash
@@ -36,6 +37,9 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 echo "$url" >> "$CALLS"
+if [[ -n "${FAKE_TIMEOUT:-}" && "$url" == *"$FAKE_TIMEOUT"* ]]; then
+  printf 000; exit 28
+fi
 if [[ "$url" == */loki/api/v1/query ]]; then
   case "${FAKE_LOKI:-42}" in
     empty)  echo '{"status":"success","data":{"resultType":"vector","result":[]}}' >"$out"; printf 200 ;;
@@ -121,6 +125,10 @@ echo "  Dependency-Track's sign-in check reads the body, not the status"
 run FAKE_OIDC=false
 check "200 with 'false' fails - the 2026-09 DNS outage's exact symptom" \
   "[[ $rc -ne 0 ]] && grep -q 'dependency-track sign-in: HTTP 200, body .false.' <<<\"\$out\""
+
+run FAKE_TIMEOUT=oidc/available
+check "a timeout reports an empty body, not the previous probe's page" \
+  "[[ $rc -ne 0 ]] && grep -q \"dependency-track sign-in: HTTP 000, body '' (want 'true')\" <<<\"\$out\""
 
 # ---------------------------------------------------------------------------
 echo "  retries: a deploy's maintenance page is not an alarm, a stuck one is"

@@ -141,6 +141,9 @@ PY
 # Prints "ok" or a short description of what was wrong.
 probe() {
   local url="$1" expect="$2" code body
+  # Cleared first: curl writes nothing on a timeout, and a stale body left by the
+  # previous probe would be reported as this URL's answer.
+  : > "$TMP/body"
   code=$(curl -s -o "$TMP/body" -w '%{http_code}' -m 20 "$url") || true
   [[ -z "$code" ]] && code="000"
   if [[ "$expect" == body=* ]]; then
