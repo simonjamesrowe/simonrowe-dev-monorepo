@@ -21,6 +21,7 @@ public record Conversation(
     PermissionRequest permissionRequest,
     Map<String, Integer> unreadCounts,
     Instant lastMessageAt,
+    ObjectId assistantActionId,
     Instant deletedAt,
     Instant createdAt,
     Instant updatedAt

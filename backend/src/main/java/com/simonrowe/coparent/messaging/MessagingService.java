@@ -71,6 +71,19 @@ public class MessagingService {
       final ObjectId recipientId,
       final String subject,
       final String rawMessage) {
+    return createMessage(familyId, recipientId, subject, rawMessage,
+        null, null, null);
+  }
+
+  /** Starts a message thread with preallocated assistant identifiers. */
+  public ConversationView createMessage(
+      final ObjectId familyId,
+      final ObjectId recipientId,
+      final String subject,
+      final String rawMessage,
+      final ObjectId conversationId,
+      final ObjectId messageId,
+      final ObjectId assistantActionId) {
     final Parent actor = access.requireMember(familyId);
     final Map<ObjectId, Parent> familyParents = parentMap(familyId);
     final Parent recipient = recipientId == null
@@ -84,12 +97,14 @@ public class MessagingService {
     final String content = requireText(rawMessage, "Message content is required");
     final Instant now = Instant.now();
     final Conversation.Message message = new Conversation.Message(
-        new ObjectId(), actor.id(), content, now, List.of(actor.id()));
-    final Conversation saved = conversations.save(new Conversation(null, familyId, "message",
+        messageId == null ? new ObjectId() : messageId,
+        actor.id(), content, now, List.of(actor.id()));
+    final Conversation saved = conversations.save(new Conversation(
+        conversationId, familyId, "message",
         subject == null || subject.isBlank() ? "New conversation" : subject.trim(), actor.id(),
         recipient.id(), List.of(message), null,
         Map.of(actor.id().toHexString(), 0, recipient.id().toHexString(), 1),
-        now, null, now, now));
+        now, assistantActionId, null, now, now));
     audits.record(familyId, "conversation", saved.id(), "create-message-thread",
         Map.of("subject", saved.subject(), "recipientId", recipient.id().toHexString()));
     return view(saved, actor.id(), familyParents);
@@ -102,6 +117,20 @@ public class MessagingService {
       final String type,
       final ObjectId childId,
       final String rawDescription) {
+    return createPermission(familyId, subject, type, childId, rawDescription,
+        null, null, null);
+  }
+
+  /** Starts a permission thread with preallocated assistant identifiers. */
+  public ConversationView createPermission(
+      final ObjectId familyId,
+      final String subject,
+      final String type,
+      final ObjectId childId,
+      final String rawDescription,
+      final ObjectId conversationId,
+      final ObjectId permissionId,
+      final ObjectId assistantActionId) {
     final Parent actor = access.requireMember(familyId);
     final Map<ObjectId, Parent> familyParents = parentMap(familyId);
     final Parent recipient = familyParents.values().stream()
@@ -118,13 +147,15 @@ public class MessagingService {
         "Permission request description is required");
     final Instant now = Instant.now();
     final Conversation.PermissionRequest permission = new Conversation.PermissionRequest(
-        new ObjectId(), type, child.id(), child.fullName(), description, actor.id(), "pending",
+        permissionId == null ? new ObjectId() : permissionId,
+        type, child.id(), child.fullName(), description, actor.id(), "pending",
         now, null, null);
-    final Conversation saved = conversations.save(new Conversation(null, familyId, "permission",
+    final Conversation saved = conversations.save(new Conversation(
+        conversationId, familyId, "permission",
         subject == null || subject.isBlank() ? "Permission request" : subject.trim(), actor.id(),
         recipient.id(), List.of(), permission,
         Map.of(actor.id().toHexString(), 0, recipient.id().toHexString(), 1),
-        now, null, now, now));
+        now, assistantActionId, null, now, now));
     audits.record(familyId, "permission-request", permission.id(), "create",
         Map.of("type", type, "childId", child.id().toHexString()));
     return view(saved, actor.id(), familyParents);
@@ -132,22 +163,47 @@ public class MessagingService {
 
   /** Appends a message and updates both unread counters in the owning document atomically. */
   public ConversationView sendMessage(final ObjectId conversationId, final String rawContent) {
+    return sendMessage(conversationId, rawContent, null, null);
+  }
+
+  /** Appends an assistant message once using its preallocated embedded identifier. */
+  public ConversationView sendMessage(
+      final ObjectId conversationId,
+      final String rawContent,
+      final ObjectId suppliedMessageId,
+      final ObjectId assistantActionId) {
     final String content = requireText(rawContent, "Message content is required");
     final Conversation current = requireConversation(conversationId);
     final Parent actor = access.requireMember(current.familyId());
     requireParticipant(current, actor.id());
     final ObjectId recipientId = otherParent(current, actor.id());
     final Instant now = Instant.now();
+    final ObjectId messageId = suppliedMessageId == null ? new ObjectId() : suppliedMessageId;
+    if (suppliedMessageId != null && current.messages().stream()
+        .anyMatch(existing -> messageId.equals(existing.id()))) {
+      return view(current, actor.id(), parentMap(current.familyId()));
+    }
     final Conversation.Message message = new Conversation.Message(
-        new ObjectId(), actor.id(), content, now, List.of(actor.id()));
+        messageId, actor.id(), content, now, List.of(actor.id()));
+    final Update update = new Update()
+        .push("messages", message)
+        .set("lastMessageAt", now)
+        .set("updatedAt", now)
+        .set("unreadCounts." + actor.id().toHexString(), 0)
+        .inc("unreadCounts." + recipientId.toHexString(), 1);
+    if (assistantActionId != null) {
+      update.set("assistantActionId", assistantActionId);
+    }
     final Conversation saved = mongoTemplate.findAndModify(
         Query.query(Criteria.where("_id").is(conversationId).and("familyId").is(current.familyId())
-            .and("deletedAt").is(null)),
-        new Update().push("messages", message).set("lastMessageAt", now).set("updatedAt", now)
-            .set("unreadCounts." + actor.id().toHexString(), 0)
-            .inc("unreadCounts." + recipientId.toHexString(), 1),
+            .and("deletedAt").is(null).and("messages._id").ne(messageId)),
+        update,
         FindAndModifyOptions.options().returnNew(true), Conversation.class);
     if (saved == null) {
+      final Conversation reconciled = requireConversation(conversationId);
+      if (reconciled.messages().stream().anyMatch(existing -> messageId.equals(existing.id()))) {
+        return view(reconciled, actor.id(), parentMap(current.familyId()));
+      }
       throw notFound();
     }
     audits.record(current.familyId(), "message", saved.id(), "send",
@@ -260,7 +316,8 @@ public class MessagingService {
     unread.put(actorId.toHexString(), unreadCount);
     return new Conversation(current.id(), current.familyId(), current.type(), current.subject(),
         current.parent1Id(), current.parent2Id(), messages, current.permissionRequest(), unread,
-        current.lastMessageAt(), current.deletedAt(), current.createdAt(), Instant.now());
+        current.lastMessageAt(), current.assistantActionId(), current.deletedAt(),
+        current.createdAt(), Instant.now());
   }
 
   private static void requireParticipant(

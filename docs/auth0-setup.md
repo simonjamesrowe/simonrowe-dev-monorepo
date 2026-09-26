@@ -67,7 +67,7 @@ claim `https://simonrowe.dev/roles`.
 > **Lockout warning:** assign the role to your own user **before** deploying
 > the backend role check, otherwise you will lose access to the admin panel.
 
-### 5c. Add a Post-Login Action that injects roles into the tokens
+### 5c. Add a Post-Login Action that injects required claims
 
 Auth0 does not include role names in tokens by default. Add an Action:
 
@@ -80,6 +80,20 @@ Auth0 does not include role names in tokens by default. Add an Action:
      const roles = event.authorization?.roles ?? [];
      api.accessToken.setCustomClaim('https://simonrowe.dev/roles', roles);
      api.idToken.setCustomClaim('https://simonrowe.dev/roles', roles);
+
+     // Auth0's `email` scope adds email to the ID token, not a custom API access
+     // token. Limit this extra personal-data claim to the CoParent browser client.
+     const verifiedEmailClientIds = [event.secrets.COPARENT_CLIENT_ID].filter(Boolean);
+     if (
+       verifiedEmailClientIds.includes(event.client.client_id) &&
+       event.user.email_verified &&
+       event.user.email
+     ) {
+       api.accessToken.setCustomClaim(
+         'https://coparents.simonrowe.dev/email',
+         event.user.email,
+       );
+     }
 
      // Deny access to protected applications unless user has DEV_PORTAL_ADMIN role
      const protectedClientIds = [
@@ -104,6 +118,8 @@ Auth0 does not include role names in tokens by default. Add an Action:
    >   created in the [Dependency-Track SSO](#dependency-track-single-sign-on-sso) section.
    > - `TEMPORAL_UI_CLIENT_ID` — Client ID of the Temporal UI application
    >   created in the [Temporal UI SSO](#temporal-ui-single-sign-on-sso) section.
+   > - `COPARENT_CLIENT_ID` — public Client ID of the CoParent SPA. This scopes its
+   >   verified-email access-token claim to that browser application.
    >
    > This avoids hardcoding Client IDs in the Action code. A secret referenced in the
    > code but not defined here evaluates to `undefined`, which silently drops that
@@ -120,6 +136,9 @@ Auth0 does not include role names in tokens by default. Add an Action:
    ```json
    "https://simonrowe.dev/roles": ["DEV_PORTAL_ADMIN"]
    ```
+
+   A token requested by the CoParent SPA should also contain
+   `https://coparents.simonrowe.dev/email`; tokens for unrelated clients should not.
 
 3. Confirm `/admin` loads the dashboard for your user, and that any user *without* the role sees the "Access denied" screen.
 

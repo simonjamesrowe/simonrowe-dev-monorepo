@@ -12,7 +12,13 @@ export function AuthCallback() {
   const [shouldFetchUser, setShouldFetchUser] = useState(false);
 
   // Only fetch user data after authentication is confirmed
-  const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser(shouldFetchUser);
+  const {
+    data: currentUser,
+    isLoading: isLoadingUser,
+    isFetching: isFetchingUser,
+    isError: isUserError,
+    refetch: refetchUser,
+  } = useCurrentUser(shouldFetchUser);
 
   useEffect(() => {
     if (!isLoading) {
@@ -48,48 +54,29 @@ export function AuthCallback() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-teal-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-teal-950/20">
-        <div className="mx-auto max-w-md p-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-100 dark:bg-rose-900/20">
-            <svg
-              className="h-8 w-8 text-rose-600 dark:text-rose-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-              />
-            </svg>
-          </div>
-          <h2 className="mb-2 text-xl font-bold text-slate-900 dark:text-white">
-            Authentication Error
-          </h2>
-          <p className="mb-6 text-slate-500 dark:text-slate-400">
-            {error.message || 'An error occurred during authentication'}
-          </p>
-          <div className="flex flex-col justify-center gap-3 sm:flex-row">
-            <button
-              onClick={() => navigate('/login', { replace: true })}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            >
-              Return to Login
-            </button>
-            <button
-              onClick={() => {
-                clearAuth0Cache();
-                window.location.assign('/login');
-              }}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-6 py-3 font-semibold text-white shadow-lg shadow-teal-500/25 transition-all hover:bg-teal-700"
-            >
-              Clear login cache
-            </button>
-          </div>
-        </div>
-      </div>
+      <CallbackError
+        title="Authentication Error"
+        message={error.message || 'An error occurred during authentication'}
+        secondaryLabel="Return to Login"
+        onSecondary={() => navigate('/login', { replace: true })}
+      />
+    );
+  }
+
+  if (shouldFetchUser && isUserError) {
+    return (
+      <CallbackError
+        title="We couldn't finish signing you in"
+        message="Your login succeeded, but we couldn't load your CoParent profile. You can retry without signing in again."
+        primaryLabel={isFetchingUser ? 'Trying again...' : 'Try again'}
+        primaryDisabled={isFetchingUser}
+        onPrimary={() => void refetchUser()}
+        secondaryLabel="Start a fresh login"
+        onSecondary={() => {
+          clearAuth0Cache();
+          window.location.assign('/login');
+        }}
+      />
     );
   }
 
@@ -112,6 +99,70 @@ export function AuthCallback() {
           </svg>
         </div>
         <p className="text-slate-500 dark:text-slate-400">Completing authentication...</p>
+      </div>
+    </div>
+  );
+}
+
+interface CallbackErrorProps {
+  title: string;
+  message: string;
+  primaryLabel?: string;
+  primaryDisabled?: boolean;
+  onPrimary?: () => void;
+  secondaryLabel: string;
+  onSecondary: () => void;
+}
+
+function CallbackError({
+  title,
+  message,
+  primaryLabel,
+  primaryDisabled = false,
+  onPrimary,
+  secondaryLabel,
+  onSecondary,
+}: CallbackErrorProps) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-teal-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-teal-950/20">
+      <div className="mx-auto max-w-md p-8 text-center" role="alert">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-100 dark:bg-rose-900/20">
+          <svg
+            className="h-8 w-8 text-rose-600 dark:text-rose-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+            />
+          </svg>
+        </div>
+        <h2 className="mb-2 text-xl font-bold text-slate-900 dark:text-white">{title}</h2>
+        <p className="mb-6 text-slate-500 dark:text-slate-400">{message}</p>
+        <div className="flex flex-col justify-center gap-3 sm:flex-row">
+          {primaryLabel && onPrimary && (
+            <button
+              type="button"
+              onClick={onPrimary}
+              disabled={primaryDisabled}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-6 py-3 font-semibold text-white shadow-lg shadow-teal-500/25 transition-all hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {primaryLabel}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onSecondary}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          >
+            {secondaryLabel}
+          </button>
+        </div>
       </div>
     </div>
   );

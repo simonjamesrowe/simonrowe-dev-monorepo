@@ -2,7 +2,7 @@ server:
   port: 8080
 
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://coparents.localhost:5173}
 
 uploads:
   path: ${UPLOADS_PATH:backend/uploads/}
@@ -27,6 +27,9 @@ coparent:
   email-from: ${COPARENT_EMAIL_FROM:noreply@simonrowe.dev}
   email-enabled: ${COPARENT_EMAIL_ENABLED:false}
   source-database: ${COPARENT_SOURCE_DATABASE:coparent_legacy}
+  assistant:
+    enabled: ${COPARENT_ASSISTANT_ENABLED:false}
+    model: ${COPARENT_ASSISTANT_MODEL:gpt-5.4-nano}
 
 mongock:
   enabled: ${MONGOCK_ENABLED:true}
@@ -161,7 +164,8 @@ spring:
   servlet:
     multipart:
       max-file-size: 10MB
-      max-request-size: 10MB
+      # Allows one full-size image plus multipart framing and the 20 KB text field.
+      max-request-size: 11MB
   # Boot 4 moved the Mongo CONNECTION settings out of spring.data.mongodb into their own
   # spring.mongodb namespace (spring-boot-mongodb); spring.data.mongodb.* now carries only
   # Spring Data specifics such as gridfs and repositories. The old key is not an error — it

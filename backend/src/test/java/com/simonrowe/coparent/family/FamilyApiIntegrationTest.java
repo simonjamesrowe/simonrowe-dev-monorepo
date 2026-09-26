@@ -13,8 +13,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.simonrowe.AbstractIntegrationTest;
+import com.simonrowe.coparent.model.Parent;
+import com.simonrowe.coparent.persistence.ParentRepository;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
+import java.time.Instant;
 import java.util.List;
+import org.bson.types.ObjectId;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +49,9 @@ class FamilyApiIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   @Qualifier("coparentMongoTemplate")
   private MongoTemplate mongoTemplate;
+
+  @Autowired
+  private ParentRepository parents;
 
   @BeforeEach
   @AfterEach
@@ -91,6 +98,19 @@ class FamilyApiIntegrationTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/coparent/families").with(user("alice")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].childIds", contains(childId)));
+  }
+
+  @Test
+  void existingProfileCanSignInWhenAccessTokenOmitsEmailClaim() throws Exception {
+    final Instant now = Instant.now();
+    parents.save(new Parent(new ObjectId(), "auth0|alice", null, "Alice",
+        "alice@example.com", "primary", "active", null, null, now, now, now));
+
+    mockMvc.perform(get("/api/coparent/me").with(jwt().jwt(token -> token
+            .subject("auth0|alice"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email", is("alice@example.com")))
+        .andExpect(jsonPath("$.profiles", hasSize(1)));
   }
 
   @Test

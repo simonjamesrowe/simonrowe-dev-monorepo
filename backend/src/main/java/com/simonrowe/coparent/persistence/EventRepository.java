@@ -11,4 +11,6 @@ public interface EventRepository extends MongoRepository<CalendarEvent, ObjectId
   List<CalendarEvent> findByFamilyIdAndDeletedAtIsNullOrderByStartDateAsc(ObjectId familyId);
 
   Optional<CalendarEvent> findByIdAndFamilyIdAndDeletedAtIsNull(ObjectId id, ObjectId familyId);
+
+  Optional<CalendarEvent> findByAssistantActionId(ObjectId assistantActionId);
 }

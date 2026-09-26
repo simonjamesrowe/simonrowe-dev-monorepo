@@ -20,7 +20,7 @@ import {
 import { UpdateNotification, OfflineIndicator, InstallPrompt } from './components/pwa';
 import type { NavigationItem } from './components/shell';
 import { AppShell } from './components/shell';
-import { useApiClient } from './hooks/api';
+import { useApiClient, useAssistantConfig } from './hooks/api';
 import { useIdleTimeout } from './hooks/useIdleTimeout';
 import { initDB, initSync } from './lib/pwa';
 import { clearIdleActivity } from './lib/auth/idleActivity';
@@ -53,6 +53,7 @@ const App = () => {
 
   const { user: authUser, logout, isAuthenticated } = useAuth0();
   useApiClient();
+  const assistantConfig = useAssistantConfig(isAuthenticated);
 
   const user = authUser
     ? {
@@ -69,9 +70,7 @@ const App = () => {
   const configuredTimeoutMinutes = Number(import.meta.env.VITE_IDLE_TIMEOUT_MINUTES);
   const idleTimeoutMinutes = Number.isFinite(configuredTimeoutMinutes)
     ? Math.max(1, configuredTimeoutMinutes)
-    : import.meta.env.DEV
-      ? 3
-      : 30;
+    : 30;
   const idleTimeoutMs = idleTimeoutMinutes * 60 * 1000;
   const warningTimeMs = 60 * 1000;
   const showIdleCountdown =
@@ -151,6 +150,7 @@ const App = () => {
                   onLogout={handleLogout}
                   showIdleCountdown={showIdleCountdown}
                   idleCountdownSeconds={remainingSeconds}
+                  assistantEnabled={assistantConfig.data?.enabled}
                 >
                   <Routes>
                     <Route path="/" element={<DashboardPage />} />

@@ -1,7 +1,9 @@
 'use client';
 
-import { Menu, X } from 'lucide-react';
+import { ListPlus, Menu, X } from 'lucide-react';
 import { useState } from 'react';
+
+import { QuickAddDrawer } from '../assistant';
 
 import { MainNav } from './MainNav';
 import { UserMenu } from './UserMenu';
@@ -24,6 +26,7 @@ export interface AppShellProps {
   onLogout?: () => void;
   showIdleCountdown?: boolean;
   idleCountdownSeconds?: number;
+  assistantEnabled?: boolean;
 }
 
 function formatCountdown(seconds: number): string {
@@ -41,8 +44,10 @@ export function AppShell({
   onLogout,
   showIdleCountdown,
   idleCountdownSeconds,
+  assistantEnabled = false,
 }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const shouldShowCountdown =
     showIdleCountdown && typeof idleCountdownSeconds === 'number' && idleCountdownSeconds >= 0;
   const countdownLabel = shouldShowCountdown ? formatCountdown(idleCountdownSeconds) : null;
@@ -67,17 +72,24 @@ export function AppShell({
             )}
           </div>
         </div>
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="rounded-lg p-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
-          aria-label="Toggle menu"
-        >
-          {sidebarOpen ? (
-            <X className="h-6 w-6 text-slate-600 dark:text-slate-300" />
-          ) : (
-            <Menu className="h-6 w-6 text-slate-600 dark:text-slate-300" />
+        <div className="assistant-launcher__mobile-controls">
+          {assistantEnabled && (
+            <button type="button" className="assistant-launcher assistant-launcher--mobile" onClick={() => setQuickAddOpen(true)}>
+              <ListPlus size={18} /> <span>Quick add</span>
+            </button>
           )}
-        </button>
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="rounded-lg p-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
+            aria-label="Toggle menu"
+          >
+            {sidebarOpen ? (
+              <X className="h-6 w-6 text-slate-600 dark:text-slate-300" />
+            ) : (
+              <Menu className="h-6 w-6 text-slate-600 dark:text-slate-300" />
+            )}
+          </button>
+        </div>
       </header>
 
       {/* Mobile overlay */}
@@ -122,12 +134,22 @@ export function AppShell({
           }}
         />
 
+        {assistantEnabled && (
+          <button type="button" className="assistant-launcher assistant-launcher--desktop" onClick={() => setQuickAddOpen(true)}>
+            <ListPlus size={18} />
+            <span><strong>Quick add</strong><small>Turn a note into actions</small></span>
+          </button>
+        )}
+
         {/* User Menu */}
         <UserMenu user={user} onLogout={onLogout} />
       </aside>
 
       {/* Main content */}
       <main className="min-h-screen pt-16 lg:ml-[260px] lg:pt-0">{children}</main>
+      {assistantEnabled && quickAddOpen && (
+        <QuickAddDrawer open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
+      )}
     </div>
   );
 }

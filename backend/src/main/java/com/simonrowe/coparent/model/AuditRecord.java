@@ -18,7 +18,8 @@ public record AuditRecord(
     Map<String, Object> changes,
     Instant timestamp,
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    ObjectId assistantActionId
 ) {
   public AuditRecord {
     changes = changes == null ? Map.of() : Map.copyOf(changes);

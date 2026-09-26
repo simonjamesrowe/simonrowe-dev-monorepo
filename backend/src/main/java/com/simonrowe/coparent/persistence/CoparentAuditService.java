@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 import org.bson.types.ObjectId;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -42,6 +43,24 @@ public class CoparentAuditService {
       final Map<String, Object> safeChanges) {
     final Instant now = clock.instant();
     audits.save(new AuditRecord(null, familyId, entityType, entityId.toHexString(), action,
-        identity.subject(), safeChanges, now, now, now));
+        identity.subject(), safeChanges, now, now, now, null));
+  }
+
+  /** Writes the single redacted receipt for an assistant action, safely across retries. */
+  public void recordAssistantReceipt(
+      final ObjectId familyId,
+      final ObjectId assistantActionId,
+      final Map<String, Object> safeChanges) {
+    if (audits.existsByAssistantActionId(assistantActionId)) {
+      return;
+    }
+    final Instant now = clock.instant();
+    try {
+      audits.save(new AuditRecord(null, familyId, "assistant_action",
+          assistantActionId.toHexString(), "apply", identity.subject(), safeChanges,
+          now, now, now, assistantActionId));
+    } catch (DuplicateKeyException ignored) {
+      // A retry reconciled the same committed action; the first receipt is authoritative.
+    }
   }
 }

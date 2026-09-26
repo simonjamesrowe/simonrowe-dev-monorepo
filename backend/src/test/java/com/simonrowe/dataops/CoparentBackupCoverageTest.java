@@ -3,6 +3,7 @@ package com.simonrowe.dataops;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.simonrowe.AbstractIntegrationTest;
+import com.simonrowe.coparent.assistant.AssistantProposalBatch;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
@@ -58,6 +59,10 @@ class CoparentBackupCoverageTest extends AbstractIntegrationTest {
         .containsAll(COLLECTIONS);
     assertThat(collections(RestoreService.class, "COPARENT_IMPORT_ORDER"))
         .containsAll(COLLECTIONS);
+    assertThat(collections(BackupService.class, "COPARENT_BACKUP_COLLECTIONS"))
+        .doesNotContain(AssistantProposalBatch.COLLECTION);
+    assertThat(collections(RestoreService.class, "COPARENT_IMPORT_ORDER"))
+        .doesNotContain(AssistantProposalBatch.COLLECTION);
   }
 
   @Test
@@ -108,6 +113,8 @@ class CoparentBackupCoverageTest extends AbstractIntegrationTest {
         .contains("idx_coparent_invitation_token");
     assertThat(indexNames(V043CreateCoparentCollections.CONVERSATIONS))
         .contains("idx_coparent_permission_id");
+    assertThat(indexNames(AssistantProposalBatch.COLLECTION))
+        .contains("idx_coparent_assistant_owner_recent", "idx_coparent_assistant_expiry");
   }
 
   private List<String> indexNames(final String collection) {
