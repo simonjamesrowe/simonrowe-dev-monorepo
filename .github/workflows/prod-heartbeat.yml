@@ -1,0 +1,39 @@
+# Off-Pi production heartbeat. See scripts/prod-heartbeat.sh for what it checks
+# and docs/runbooks/prod-heartbeat.md for what a failure usually means.
+#
+# It runs HERE rather than on the Pi because every alarm on the Pi needs the Pi's
+# own outbound network, so a Wi-Fi outage or a container DNS failure silences all
+# of them at once - which is how the 2026-09-24 DNS outage went unreported for
+# ~34 hours. A failed scheduled run is emailed by GitHub to whoever last changed
+# the `cron` line below, so the notification needs no extra service or secret.
+name: Production heartbeat
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never overlap: a failing run retries hostnames for ~5 minutes, and two runs
+# alarming about the same outage add nothing.
+concurrency:
+  group: prod-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check production from outside
+        env:
+          # Read access to Grafana Cloud Loki. The same values alloy uses, from the
+          # shared env file; see the runbook for rotating them.
+          GRAFANA_CLOUD_LOKI_ENDPOINT: ${{ secrets.GRAFANA_CLOUD_LOKI_ENDPOINT }}
+          GRAFANA_CLOUD_LOKI_USER: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
+          GRAFANA_CLOUD_API_KEY: ${{ secrets.GRAFANA_CLOUD_API_KEY }}
+        run: ./scripts/prod-heartbeat.sh
