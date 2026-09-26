@@ -1,4 +1,4 @@
-import { CalendarX, RotateCcw, Trash2, X } from 'lucide-react';
+import { ArrowLeftRight, CalendarX, RotateCcw, Trash2, X } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Drawer } from 'vaul';
 
@@ -24,6 +24,11 @@ export interface EventCreationDrawerProps {
   onSubmit: (eventData: Omit<Event, 'id'>) => Promise<void>;
   /** Deletes the event being edited (the whole series, for a repeating event). */
   onDelete?: () => Promise<void>;
+  /**
+   * Asks the other parent to agree a change (for a repeating event, to the opened occurrence).
+   * Unlike an edit, it changes nothing until they approve.
+   */
+  onRequestChange?: () => void;
 }
 
 const formatOccurrence = (date: string) =>
@@ -47,6 +52,7 @@ export function EventCreationDrawer({
   currentParentId,
   onSubmit,
   onDelete,
+  onRequestChange,
 }: EventCreationDrawerProps) {
   const [isValid, setIsValid] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -231,6 +237,17 @@ export function EventCreationDrawer({
                   </p>
                 )}
                 <div className="flex items-center justify-end gap-3">
+                  {mode === 'edit' && onRequestChange && (
+                    <button
+                      type="button"
+                      onClick={onRequestChange}
+                      disabled={isSubmitting}
+                      className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-teal-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 dark:text-teal-300 dark:hover:bg-slate-800"
+                    >
+                      <ArrowLeftRight size={16} aria-hidden="true" />
+                      Request a change
+                    </button>
+                  )}
                   {mode === 'edit' && onDelete && (
                     <button
                       type="button"

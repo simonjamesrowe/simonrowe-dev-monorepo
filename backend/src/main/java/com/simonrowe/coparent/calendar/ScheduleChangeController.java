@@ -20,9 +20,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class ScheduleChangeController {
 
   private final CalendarService service;
+  private final ScheduleChangeDecisions decisions;
 
-  public ScheduleChangeController(final CalendarService service) {
+  public ScheduleChangeController(
+      final CalendarService service, final ScheduleChangeDecisions decisions) {
     this.service = service;
+    this.decisions = decisions;
   }
 
   @PostMapping
@@ -78,7 +81,7 @@ public class ScheduleChangeController {
       final String requestId,
       final String decision,
       final DecisionRequest request) {
-    return ChangeResponse.from(service.resolveChange(CoparentIds.parse(familyId),
+    return ChangeResponse.from(decisions.resolve(CoparentIds.parse(familyId),
         CoparentIds.parse(requestId), decision, request == null ? null : request.responseNote()));
   }
 

@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+import { apiErrorMessage } from '../../lib/api/errorMessage';
 
 import type {
   CalendarSchedulingProps,
@@ -24,28 +26,17 @@ const STATUS_DOT: Record<ScheduleChangeRequest['status'], string> = {
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '—';
   const date = new Date(dateStr + 'T12:00:00');
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString('en-GB', {
     month: 'short',
     day: 'numeric',
     weekday: 'short',
   });
 }
 
-function formatDateLong(dateStr?: string | null): string {
-  if (!dateStr) return '—';
-  const date = new Date(dateStr + 'T12:00:00');
-  return date.toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-    weekday: 'long',
-  });
-}
-
 function formatDateTime(dateStr?: string | null): string {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
-  return date.toLocaleString('en-US', {
+  return date.toLocaleString('en-GB', {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -70,6 +61,37 @@ function getRequestLabel(request: ScheduleChangeRequest): string {
   return typeMap[request.proposedChange.type];
 }
 
+/** What approving will do to the calendar, so the approver knows before pressing the button. */
+function describeApplication(request: ScheduleChangeRequest, event: Event | null): string {
+  const { type, originalStartDate, newStartDate, newEndDate } = request.proposedChange;
+  const range =
+    newStartDate === newEndDate
+      ? formatDate(newStartDate)
+      : `${formatDate(newStartDate)} – ${formatDate(newEndDate)}`;
+  if (!event) {
+    return type === 'add'
+      ? `Approving adds a custody block for the requester on ${range}.`
+      : 'Approving records the decision; this request names no event to change.';
+  }
+  const occurrence = event.recurring ? ` on ${formatDate(originalStartDate)}` : '';
+  if (type === 'remove') {
+    return event.recurring
+      ? `Approving removes "${event.title}"${occurrence}; the rest of the series is unchanged.`
+      : `Approving deletes "${event.title}".`;
+  }
+  if (type === 'add') return `Approving adds a copy of "${event.title}" on ${range}.`;
+  return event.recurring
+    ? `Approving moves "${event.title}"${occurrence} to ${range}; other weeks are unchanged.`
+    : `Approving moves "${event.title}" to ${range}.`;
+}
+
+export interface ScheduleChangeApprovalProps extends CalendarSchedulingProps {
+  /** A request to show first, e.g. from a `?request=` link. */
+  initialRequestId?: string;
+  /** Withdraws the signed-in parent's own pending request. */
+  onWithdrawRequest?: (requestId: string) => void | Promise<void>;
+}
+
 function getEventOwner(event: Event | null, parentsMap: Record<string, Parent>): Parent | null {
   if (!event?.parentId) return null;
   return parentsMap[event.parentId] || null;
@@ -85,7 +107,9 @@ export function ScheduleChangeApproval({
   onApproveRequest,
   onDeclineRequest,
   onViewRequest,
-}: CalendarSchedulingProps) {
+  initialRequestId,
+  onWithdrawRequest,
+}: ScheduleChangeApprovalProps) {
   const parentsMap = useMemo(() => {
     const map: Record<string, Parent> = {};
     parents.forEach((parent) => {
@@ -104,12 +128,37 @@ export function ScheduleChangeApproval({
 
   const [filter, setFilter] = useState<FilterMode>('all');
   const [selectedId, setSelectedId] = useState(() => {
+    if (initialRequestId) return initialRequestId;
     const incomingPending = scheduleChangeRequests.find(
       (request) => request.status === 'pending' && request.requestedBy !== currentParentId,
     );
     return incomingPending?.id || scheduleChangeRequests[0]?.id || '';
   });
   const [responseNote, setResponseNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialRequestId) setSelectedId(initialRequestId);
+  }, [initialRequestId]);
+
+  useEffect(() => {
+    setDecisionError(null);
+  }, [selectedId]);
+
+  const act = async (action: () => void | Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setDecisionError(null);
+    try {
+      await action();
+      setResponseNote('');
+    } catch (failure) {
+      setDecisionError(apiErrorMessage(failure, 'That could not be saved. Try again.'));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const filteredRequests = useMemo(() => {
     if (filter === 'all') return scheduleChangeRequests;
@@ -123,8 +172,15 @@ export function ScheduleChangeApproval({
   const requestingParent = selectedRequest ? parentsMap[selectedRequest.requestedBy] : null;
   const eventOwner = getEventOwner(selectedEvent, parentsMap);
 
+  // The dates the request is about, not the event's own: for a repeating event those are the
+  // series' first date and its end, which is not the occurrence being changed.
+  const originalStart =
+    selectedRequest?.proposedChange.originalStartDate ?? selectedEvent?.startDate;
+  const originalEnd =
+    selectedRequest?.proposedChange.originalEndDate ??
+    (selectedEvent ? selectedEvent.endDate || selectedEvent.startDate : undefined);
   const originalDays = selectedEvent
-    ? getDaysBetween(selectedEvent.startDate, selectedEvent.endDate || selectedEvent.startDate)
+    ? getDaysBetween(originalStart, originalEnd)
     : 0;
   const proposedDays = selectedRequest
     ? getDaysBetween(
@@ -271,7 +327,7 @@ export function ScheduleChangeApproval({
                       {getRequestLabel(selectedRequest)} · {requestingParent?.name || 'Parent'}
                     </h2>
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      Requested {formatDateLong(selectedRequest.proposedChange.newStartDate)}
+                      Requested {formatDateTime(selectedRequest.requestedAt)}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -309,8 +365,7 @@ export function ScheduleChangeApproval({
                     {selectedEvent ? (
                       <>
                         <p className="text-base font-semibold text-slate-800 dark:text-slate-100">
-                          {formatDate(selectedEvent.startDate)} →{' '}
-                          {formatDate(selectedEvent.endDate || selectedEvent.startDate)}
+                          {formatDate(originalStart)} → {formatDate(originalEnd)}
                         </p>
                         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                           {selectedEvent.title} · {children.map((child) => child.name).join(' & ')}
@@ -414,9 +469,41 @@ export function ScheduleChangeApproval({
                   </div>
                 </div>
 
+                {decisionError && (
+                  <p
+                    role="alert"
+                    className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300"
+                  >
+                    {decisionError}
+                  </p>
+                )}
+
+                {selectedRequest.status === 'pending' &&
+                  selectedRequest.requestedBy === currentParentId && (
+                    <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/60 bg-slate-50/80 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700/60 dark:bg-slate-800/50">
+                      <p className="text-sm text-slate-600 dark:text-slate-300">
+                        Waiting for the other parent to respond.{' '}
+                        {describeApplication(selectedRequest, selectedEvent)}
+                      </p>
+                      {onWithdrawRequest && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => act(() => onWithdrawRequest(selectedRequest.id))}
+                          className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                          Withdraw request
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                 {selectedRequest.status === 'pending' &&
                   selectedRequest.requestedBy !== currentParentId && (
                     <div className="rounded-2xl border border-slate-200/60 bg-slate-50/80 p-4 dark:border-slate-700/60 dark:bg-slate-800/50">
+                      <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
+                        {describeApplication(selectedRequest, selectedEvent)}
+                      </p>
                       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div className="flex-1">
                           <label htmlFor="schedule-response-note" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -433,10 +520,13 @@ export function ScheduleChangeApproval({
                         </div>
                         <div className="flex flex-col gap-3 sm:flex-row">
                           <button
+                            disabled={busy}
                             onClick={() =>
-                              onDeclineRequest?.(
-                                selectedRequest.id,
-                                responseNote.trim() || undefined,
+                              act(() =>
+                                onDeclineRequest?.(
+                                  selectedRequest.id,
+                                  responseNote.trim() || undefined,
+                                ),
                               )
                             }
                             className="rounded-xl border border-rose-200 px-5 py-2.5 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:hover:bg-rose-900/20"
@@ -444,10 +534,13 @@ export function ScheduleChangeApproval({
                             Decline
                           </button>
                           <button
+                            disabled={busy}
                             onClick={() =>
-                              onApproveRequest?.(
-                                selectedRequest.id,
-                                responseNote.trim() || undefined,
+                              act(() =>
+                                onApproveRequest?.(
+                                  selectedRequest.id,
+                                  responseNote.trim() || undefined,
+                                ),
                               )
                             }
                             className="rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition-all hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30"
