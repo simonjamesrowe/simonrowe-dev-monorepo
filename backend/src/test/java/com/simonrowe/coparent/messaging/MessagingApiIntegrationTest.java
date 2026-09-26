@@ -1,5 +1,6 @@
 package com.simonrowe.coparent.messaging;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -15,6 +16,7 @@ import com.simonrowe.coparent.persistence.InvitationRepository;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
 import java.util.List;
 import org.bson.Document;
+import org.bson.types.ObjectId;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,6 +72,10 @@ class MessagingApiIntegrationTest extends AbstractIntegrationTest {
         .andReturn();
     final String conversationId = JsonPath.read(
         created.getResponse().getContentAsString(), "$.id");
+    final ObjectId assistantActionId = new ObjectId();
+    mongoTemplate.updateFirst(Query.query(Criteria.where("_id").is(new ObjectId(conversationId))),
+        Update.update("assistantActionId", assistantActionId),
+        V043CreateCoparentCollections.CONVERSATIONS);
 
     mockMvc.perform(get("/api/coparent/families/{familyId}/conversations", fixture.familyId())
             .with(user("bob")))
@@ -94,6 +100,11 @@ class MessagingApiIntegrationTest extends AbstractIntegrationTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.messages[1].senderId").exists())
         .andExpect(jsonPath("$.messages[1].deliveryStatus", is("delivered")));
+    final Document storedConversation = mongoTemplate.getCollection(
+            V043CreateCoparentCollections.CONVERSATIONS)
+        .find(new Document("_id", new ObjectId(conversationId))).first();
+    assertThat(storedConversation).isNotNull();
+    assertThat(storedConversation.getObjectId("assistantActionId")).isEqualTo(assistantActionId);
     mockMvc.perform(get("/api/coparent/families/{familyId}/conversations", fixture.familyId())
             .with(user("alice")))
         .andExpect(jsonPath("$[0].unreadCount", is(1)));

@@ -185,13 +185,19 @@ public class MessagingService {
     }
     final Conversation.Message message = new Conversation.Message(
         messageId, actor.id(), content, now, List.of(actor.id()));
+    final Update update = new Update()
+        .push("messages", message)
+        .set("lastMessageAt", now)
+        .set("updatedAt", now)
+        .set("unreadCounts." + actor.id().toHexString(), 0)
+        .inc("unreadCounts." + recipientId.toHexString(), 1);
+    if (assistantActionId != null) {
+      update.set("assistantActionId", assistantActionId);
+    }
     final Conversation saved = mongoTemplate.findAndModify(
         Query.query(Criteria.where("_id").is(conversationId).and("familyId").is(current.familyId())
             .and("deletedAt").is(null).and("messages._id").ne(messageId)),
-        new Update().push("messages", message).set("lastMessageAt", now).set("updatedAt", now)
-            .set("assistantActionId", assistantActionId)
-            .set("unreadCounts." + actor.id().toHexString(), 0)
-            .inc("unreadCounts." + recipientId.toHexString(), 1),
+        update,
         FindAndModifyOptions.options().returnNew(true), Conversation.class);
     if (saved == null) {
       final Conversation reconciled = requireConversation(conversationId);
