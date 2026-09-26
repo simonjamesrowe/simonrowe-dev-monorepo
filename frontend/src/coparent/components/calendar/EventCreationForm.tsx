@@ -20,13 +20,14 @@ export interface EventCreationFormProps {
   currentParentId: string;
   initialDate?: string;
   initialEvent?: Partial<Event>;
-  onSubmit?: (data: Omit<Event, 'id'>) => void;
+  onSubmit?: (data: Omit<Event, 'id'>) => void | Promise<void>;
   onCancel?: () => void;
   onValidationChange?: (isValid: boolean) => void;
 }
 
 export interface EventCreationFormRef {
-  submit: () => void;
+  /** Resolves once the save settles, so the caller can report a failure and block resubmits. */
+  submit: () => Promise<void>;
 }
 
 const TYPE_OPTIONS = DEFAULT_EVENT_TYPES;
@@ -91,8 +92,23 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
       : recurrence
         ? undefined
         : normalizedStartDate;
+    // The backend refuses an event with no child, so an empty selection is not a valid form.
     const isValid =
-      title.trim().length > 0 && normalizedStartDate.length > 0 && resolvedType.length > 0;
+      title.trim().length > 0 &&
+      normalizedStartDate.length > 0 &&
+      resolvedType.length > 0 &&
+      selectedChildIds.length > 0;
+
+    // Children arrive after the form mounts, so the "every child" default is applied once they
+    // do, never over a selection the user has already made or an event being edited.
+    const childrenDefaulted = useRef(false);
+    useEffect(() => {
+      if (childrenDefaulted.current || initialEvent || children.length === 0) return;
+      childrenDefaulted.current = true;
+      setSelectedChildIds((current) =>
+        current.length > 0 ? current : children.map((child) => child.id),
+      );
+    }, [children, initialEvent]);
 
     useEffect(() => {
       if (!startDate || !endDate) return;
@@ -218,9 +234,9 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
       setRecurrence({ ...recurrence, days: nextDays });
     };
 
-    const handleSubmit = useCallback(() => {
+    const handleSubmit = useCallback(async () => {
       if (!isValid) return;
-      onSubmit?.({
+      await onSubmit?.({
         type: previewEvent.type,
         title: previewEvent.title,
         startDate: previewEvent.startDate,
@@ -229,6 +245,8 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
         endTime: previewEvent.endTime,
         allDay: previewEvent.allDay,
         parentId: previewEvent.parentId,
+        // The update API replaces the whole event, so a field left out here is erased.
+        parentIds: previewEvent.parentIds,
         childIds: previewEvent.childIds,
         location: previewEvent.location,
         notes: previewEvent.notes,

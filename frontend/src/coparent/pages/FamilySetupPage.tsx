@@ -14,12 +14,14 @@ import {
   useResendInvitation,
   useCancelInvitation,
   useUpdateParentRole,
+  useCurrentParentId,
 } from '../hooks/api';
 
 const FamilySetupPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: families = [], isLoading: familiesLoading } = useFamilies();
   const [activeFamilyId, setActiveFamilyId] = useState<string | undefined>();
+  const currentParentId = useCurrentParentId(activeFamilyId);
 
   const { data: parents = [] } = useParents(activeFamilyId);
   const { data: children = [] } = useChildren(activeFamilyId);
@@ -113,6 +115,7 @@ const FamilySetupPage = () => {
       children={children}
       invitations={invitations}
       activeFamilyId={activeFamilyId}
+      currentParentId={currentParentId}
       childIdToEdit={childIdToEdit}
       onCloseChildEditor={() => setSearchParams({}, { replace: true })}
       onUpdateFamily={handleUpdateFamily}

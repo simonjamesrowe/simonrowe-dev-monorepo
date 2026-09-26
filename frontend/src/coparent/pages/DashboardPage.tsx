@@ -7,6 +7,7 @@ import {
   InvitationsDrawer,
   ProfileDrawer,
 } from '../components/dashboard';
+import { dateToYmd, expandRecurringEvents } from '../components/calendar/recurrence';
 import { useToast } from '../components/ui/ToastProvider';
 import {
   useCancelInvitation,
@@ -19,6 +20,7 @@ import {
   useResendInvitation,
   useUpdateCurrentUser,
   useCurrentUser,
+  useCurrentParentId,
 } from '../hooks/api';
 import type {
   ApprovalsSummary,
@@ -69,6 +71,7 @@ const DashboardPage = () => {
   const [activeFamilyId, setActiveFamilyId] = useState<string | undefined>();
 
   const { data: currentUser } = useCurrentUser();
+  const currentParentId = useCurrentParentId(activeFamilyId);
   const { data: parents = [], isLoading: parentsLoading } = useParents(activeFamilyId);
   const { data: children = [], isLoading: childrenLoading } = useChildren(activeFamilyId);
   const { data: invitations = [], isLoading: invitationsLoading } = useInvitations(activeFamilyId);
@@ -187,7 +190,14 @@ const DashboardPage = () => {
     const now = Date.now();
     const horizon = now + 14 * 24 * 60 * 60 * 1000;
 
-    return calendarEvents
+    // A repeating event is one stored row; what is upcoming is its occurrences in the window.
+    // Each occurrence keeps the `<eventId>:<date>` id the calendar gives it, so a click can
+    // open that date rather than the series' first one.
+    return expandRecurringEvents(
+      calendarEvents,
+      dateToYmd(new Date(now)),
+      dateToYmd(new Date(horizon)),
+    )
       .map((event) => ({
         id: event.id,
         title: event.title,
@@ -299,8 +309,8 @@ const DashboardPage = () => {
       {
         id: 'wid-spend',
         title: 'Monthly Spend',
-        value: '$0',
-        description: '$0 remaining',
+        value: '£0',
+        description: '£0 remaining',
         trend: 'flat',
         delta: '0%',
         size: 'md',
@@ -395,8 +405,10 @@ const DashboardPage = () => {
     );
   }
 
+  // The profile drawer edits the signed-in person, never "the primary parent": PATCH /me
+  // renames the caller, so showing somebody else's name there renamed you to them on Save.
   const currentParent =
-    dashboardParents.find((p) => p.id === family.primaryParentId) ?? dashboardParents[0];
+    dashboardParents.find((p) => p.id === currentParentId) ?? dashboardParents[0];
 
   const handleSaveProfile = async (_parentId: string, update: ParentProfileUpdate) => {
     await updateCurrentUser.mutateAsync({ fullName: update.fullName });
@@ -489,10 +501,23 @@ const DashboardPage = () => {
           const conversation = conversations.find(
             (entry) => entry.permissionRequest?.id === permissionId,
           );
-          navigate(conversation ? `/messages?thread=${conversation.id}` : '/messages');
+          navigate(
+            conversation
+              ? `/messages?conversation=${encodeURIComponent(conversation.id)}`
+              : '/messages',
+          );
         }}
-        onViewEvent={(eventId) => navigate(`/calendar?event=${encodeURIComponent(eventId)}`)}
-        onOpenMessageThread={(threadId) => navigate(`/messages?thread=${threadId}`)}
+        onViewEvent={(eventId) => {
+          const [sourceId, occurrence] = eventId.split(':');
+          navigate(
+            occurrence
+              ? `/calendar?edit=${encodeURIComponent(sourceId)}&occurrence=${occurrence}`
+              : `/calendar?event=${encodeURIComponent(eventId)}`,
+          );
+        }}
+        onOpenMessageThread={(threadId) =>
+          navigate(`/messages?conversation=${encodeURIComponent(threadId)}`)
+        }
         onQuickAddExpense={() => navigate('/expenses')}
         onQuickCreateEvent={() => navigate('/calendar')}
         onQuickSendMessage={() => navigate('/messages')}

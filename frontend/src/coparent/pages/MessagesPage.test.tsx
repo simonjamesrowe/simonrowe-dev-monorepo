@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -116,6 +116,12 @@ describe('MessagesPage', () => {
           fullName: 'Theo Rowe',
           dateOfBirth: '2016-04-22',
         },
+        {
+          id: 'child-2',
+          familyId: 'fam-1',
+          fullName: 'Mia Rowe',
+          dateOfBirth: '2019-02-11',
+        },
       ],
     } as unknown as ReturnType<typeof apiHooks.useChildren>);
 
@@ -176,17 +182,9 @@ describe('MessagesPage', () => {
     });
   });
 
-  it('creates new message and permission conversations', async () => {
+  it('starts a message from a drawer and opens the new conversation', async () => {
     const user = userEvent.setup();
-
-    const promptMock = vi
-      .spyOn(window, 'prompt')
-      .mockImplementationOnce(() => 'School update')
-      .mockImplementationOnce(() => 'Can you handle Thursday pickup?')
-      .mockImplementationOnce(() => 'schedule')
-      .mockImplementationOnce(() => 'Permission subject')
-      .mockImplementationOnce(() => 'Please approve the schedule change.');
-
+    const promptMock = vi.spyOn(window, 'prompt');
     render(
       <MemoryRouter>
         <MessagesPage />
@@ -194,28 +192,79 @@ describe('MessagesPage', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'New message' }));
-    await user.click(screen.getByRole('button', { name: 'New permission' }));
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getByText('To Sam Rowe')).toBeInTheDocument();
+    const send = within(drawer).getByRole('button', { name: 'Send message' });
+    expect(send).toBeDisabled();
+
+    await user.type(within(drawer).getByLabelText('Subject'), 'School update');
+    await user.type(within(drawer).getByLabelText('Message'), 'Can you handle Thursday pickup?');
+    await user.click(send);
 
     await waitFor(() => {
-      expect(createMessageMutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          familyId: 'fam-1',
-          subject: 'School update',
-          message: 'Can you handle Thursday pickup?',
-          recipientId: 'parent-2',
-        }),
-      );
-    });
-
-    expect(createPermissionMutate).toHaveBeenCalledWith(
-      expect.objectContaining({
+      expect(createMessageMutate).toHaveBeenCalledWith({
         familyId: 'fam-1',
-        subject: 'Permission subject',
-        type: 'schedule',
-        childId: 'child-1',
-      }),
+        subject: 'School update',
+        message: 'Can you handle Thursday pickup?',
+        recipientId: 'parent-2',
+      });
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(promptMock).not.toHaveBeenCalled();
+    promptMock.mockRestore();
+  });
+
+  it('files a permission request against the child that was chosen, not the first', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <MessagesPage />
+      </MemoryRouter>,
     );
 
-    promptMock.mockRestore();
+    await user.click(screen.getByRole('button', { name: 'New permission' }));
+    const drawer = await screen.findByRole('dialog');
+    const send = within(drawer).getByRole('button', { name: 'Send request' });
+    await user.type(within(drawer).getByLabelText('What are you asking for?'), 'Trip to Cornwall');
+    // Without a child the request is not valid, rather than defaulting to the first child.
+    expect(send).toBeDisabled();
+
+    await user.selectOptions(within(drawer).getByLabelText('Type'), 'travel');
+    await user.selectOptions(within(drawer).getByLabelText('Child'), 'child-2');
+    await user.click(send);
+
+    await waitFor(() => {
+      expect(createPermissionMutate).toHaveBeenCalledWith({
+        familyId: 'fam-1',
+        subject: 'Mia Rowe — travel',
+        type: 'travel',
+        childId: 'child-2',
+        childName: 'Mia Rowe',
+        description: 'Trip to Cornwall',
+      });
+    });
+  });
+
+  it('shows the server message when sending fails and keeps the drawer open', async () => {
+    const user = userEvent.setup();
+    createMessageMutate.mockRejectedValueOnce({
+      response: { data: { code: 'BAD_REQUEST', message: 'Recipient is not in this family' } },
+    });
+    render(
+      <MemoryRouter>
+        <MessagesPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'New message' }));
+    const drawer = await screen.findByRole('dialog');
+    await user.type(within(drawer).getByLabelText('Subject'), 'Hi');
+    await user.type(within(drawer).getByLabelText('Message'), 'Hello');
+    await user.click(within(drawer).getByRole('button', { name: 'Send message' }));
+
+    expect(await within(drawer).findByRole('alert')).toHaveTextContent(
+      'Recipient is not in this family',
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

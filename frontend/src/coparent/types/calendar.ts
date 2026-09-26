@@ -85,7 +85,7 @@ export interface CalendarSchedulingProps {
   /** Called when user wants to view event details; a repeating event also names the date */
   onViewEvent?: (eventId: string, occurrenceDate?: string) => void;
   /** Called when user wants to create a new event */
-  onCreateEvent?: () => void;
+  onCreateEvent?: (date?: string) => void;
   /** Called when user wants to edit an event */
   onEditEvent?: (eventId: string) => void;
   /** Called when user wants to delete an event */
