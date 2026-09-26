@@ -854,10 +854,11 @@ What matters when debugging the reviewer itself:
 - **Reading a decision:** the run banner on `/admin/software-factory` and
   `GET /api/reviews/{workflowId}` both carry it (`progress.autoMerge`, and the `COMPLETED`
   detail). On GitHub, `gh pr view <n> --json autoMergeRequest` shows who armed it.
-- **Deploying it needs the `deployer` recreated by hand** as well as `software-factory`. Both
-  register workflow pollers on `code-review`. A workflow task that lands on a stale `deployer`
-  runs the old workflow code against a history the new code wrote, which is a
-  `NonDeterministicException`.
+- **Only `software-factory` polls the `code-review` workflow queue** (since #193), so the new
+  workflow code runs in one build. A `deployer` still on an image older than #193 polls it too,
+  and a workflow task landing there would run the old workflow code against a history the new
+  code wrote, which is a `NonDeterministicException`. So if that is the deployer's state, recreate
+  it by hand as part of this deploy.
 
 ### Thread reconciliation
 
