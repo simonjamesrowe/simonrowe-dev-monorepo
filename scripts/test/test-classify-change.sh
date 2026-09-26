@@ -64,70 +64,20 @@ else
   failures=$((failures + 1))
 fi
 
-echo
-echo "  rule 3 — cannot change a shipped pixel or production infrastructure"
-expect "backend source is auto-merge" \
-  auto-merge false "backend/src/main/java/A.java"
-expect "software-factory plus docs is auto-merge" \
-  auto-merge false "software-factory/src/main/java/B.java" "docs/runbooks/x.md"
-expect "frontend unit tests ship no pixel" \
-  auto-merge false "frontend/tests/foo.test.ts"
-expect "frontend e2e tests ship no pixel" \
-  auto-merge false "frontend/e2e/chat.spec.ts"
-expect "root markdown is auto-merge" \
-  auto-merge false "README.md"
-expect "a spec directory is auto-merge" \
-  auto-merge false "specs/038-pr-governance/spec.md"
+# The cases live in a fixture shared with the software factory's Java twin of the
+# classifier (codereview/domain/MergeDisposition.java, tested by MergeDispositionTest), so
+# the rules the factory arms auto-merge from cannot drift from the ones this script applies.
+FIXTURE="$SCRIPT_DIR/fixtures/merge-disposition-cases.tsv"
 
-echo
-echo "  rule 2 — a visitor can see it"
-expect "frontend application source needs visual review" \
-  ux-review true "frontend/src/App.tsx"
-expect "public assets need visual review" \
-  ux-review true "frontend/public/logo.svg"
-expect "the entry document needs visual review" \
-  ux-review true "frontend/index.html"
-
-echo
-echo "  rule 1 — needs a human"
-expect "vite config changes the shipped bundle" \
-  manual false "frontend/vite.config.ts"
-expect "frontend dependencies change the shipped bundle" \
-  manual false "frontend/package.json"
-expect "the production compose file is infrastructure" \
-  manual false "docker-compose.prod.yml"
-expect "scripts are infrastructure" \
-  manual false "scripts/monitor-prod.sh"
-expect "workflows are infrastructure" \
-  manual false ".github/workflows/ci.yml"
-expect "nginx config is infrastructure" \
-  manual false "config/nginx/nginx-proxy.conf"
-expect "the gradle wrapper is infrastructure" \
-  manual false "gradlew"
-
-echo
-echo "  precedence"
-# The one that protects production: an auto-merge to main triggers Publish, which
-# triggers an unattended infrastructure deploy against the Pi.
-expect "rule 1 beats rule 3 — backend plus compose is manual" \
-  manual false "backend/src/A.java" "docker-compose.prod.yml"
-expect "rule 2 beats rule 3 — backend plus frontend source needs visual review" \
-  ux-review true "backend/src/A.java" "frontend/src/App.tsx"
-expect "rule 1 beats rule 2 — frontend source plus a script is manual" \
-  manual false "frontend/src/App.tsx" "scripts/x.sh"
-expect "order does not matter: the script first" \
-  manual false "scripts/x.sh" "frontend/src/App.tsx"
-
-echo
-echo "  rule 4 — the default-deny that stops a new directory inheriting merge rights"
-expect "an unrecognised top-level directory is manual" \
-  manual false "newtoplevel/thing.txt"
-expect "one unrecognised path is enough to demand a human" \
-  manual false "specs/038-pr-governance/spec.md" "newtoplevel/x"
-expect "an unrecognised root file is manual" \
-  manual false "Makefile"
-expect "an empty change arms nothing" \
-  manual false
+while IFS=$'\t' read -r description category ux paths || [[ -n "$description" ]]; do
+  case "$description" in
+    '#!'*) echo; echo "  ${description#\#! }"; continue ;;
+    '#'*|'') continue ;;
+  esac
+  # Word-splitting the path list is the intent: paths in the fixture contain no spaces.
+  # shellcheck disable=SC2086
+  expect "$description" "$category" "$ux" $paths
+done < "$FIXTURE"
 
 echo
 echo "  $checks checks, $failures failures"

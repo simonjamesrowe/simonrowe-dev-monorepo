@@ -826,6 +826,40 @@ appearing, that is the fail-closed path working — the reviewer is not running.
 poller on the `code-review` task queue, not just the container healthcheck: a container can be
 `healthy` with no poller registered, in which case webhooks return `202` and nothing ever reviews.
 
+### Auto-merge: the reviewer arms, GitHub merges
+
+A published review ends by deciding whether to arm GitHub squash auto-merge on the reviewed
+commit. The rules, the opt-out label and the classifier fixture shared with
+`scripts/classify-change.sh` are in [pr-governance.md](pr-governance.md#auto-merge-policy).
+What matters when debugging the reviewer itself:
+
+- **The order in the workflow is load-bearing:** `openCheckRun` → **`withdrawAutoMerge`** →
+  `runReview` → **`armAutoMerge`** → `publishReview` → `completeCheckRun`.
+  - **Withdraw is fail-closed.** If a bot arm cannot be withdrawn, the review fails and its check
+    goes red.
+  - **Arm is best-effort.** A failure is reported as `ARM_FAILED` in the summary and progress,
+    and the review stands, because nothing armed is the safe outcome.
+  - **Arming happens while `Code Review` is still in progress.** GitHub rejects arming a pull
+    request that is already mergeable, and nothing can merge before `completeCheckRun` anyway.
+- **`FACTORY_CODEREVIEW_AUTO_MERGE_ENABLED`** is declared on `software-factory` only, since it has
+  no `env_file`. `DeployerCodeReviewGateTest` pins both the declaration and its absence from
+  `deployer`. It lives in its own `AutoMergeProperties` record, not in `CodeReviewProperties`.
+- **No new App permission.** Arming uses GraphQL `enablePullRequestAutoMerge` with
+  `expectedHeadOid`, which needs only `contents: write` + `pull_requests: write`, both already
+  required on every token. The repository's "Allow auto-merge" setting must stay on.
+- **The workflow change is versioned** (`Workflow.getVersion("auto-merge", …)`). A review in flight
+  across the deploy replays without the new steps. A `publishReview` task scheduled by the old
+  image with three arguments still runs: Temporal fills the missing decision with `null`, which
+  a test pins.
+- **Reading a decision:** the run banner on `/admin/software-factory` and
+  `GET /api/reviews/{workflowId}` both carry it (`progress.autoMerge`, and the `COMPLETED`
+  detail). On GitHub, `gh pr view <n> --json autoMergeRequest` shows who armed it.
+- **Only `software-factory` polls the `code-review` workflow queue** (since #193), so the new
+  workflow code runs in one build. A `deployer` still on an image older than #193 polls it too,
+  and a workflow task landing there would run the old workflow code against a history the new
+  code wrote, which is a `NonDeterministicException`. So if that is the deployer's state, recreate
+  it by hand as part of this deploy.
+
 ### Thread reconciliation
 
 Findings are no longer deleted and reposted on every push. Each inline comment carries a

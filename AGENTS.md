@@ -1,9 +1,3 @@
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan:
-specs/049-coparent-assistant/plan.md
-<!-- SPECKIT END -->
-
 # simonrowe-dev-monorepo — agent guidelines
 
 ## Read these first
@@ -14,7 +8,7 @@ specs/049-coparent-assistant/plan.md
 | [README.md](README.md) | What the project is, its modules, and an index of every doc |
 | [docs/architecture.md](docs/architecture.md) | System map, data stores, request paths, async flows |
 | [docs/software-factory.md](docs/software-factory.md) | The agents that review, patch and deploy this repo |
-| [.specify/memory/constitution.md](.specify/memory/constitution.md) | Project constitution — binding principles |
+| [docs/constitution.md](docs/constitution.md) | Project constitution — binding principles |
 
 This file exists so agents that read `AGENTS.md` rather than `CLAUDE.md` find
 their way. It deliberately does not duplicate CLAUDE.md; where the two disagree,
@@ -42,7 +36,7 @@ software-factory/   Temporal-backed agents: code review, cvefix, deploy, feedbac
 scripts/            Local dev, backup/restore, production operations, monitoring
 config/             nginx, checkstyle, Grafana Alloy, OTel, SearXNG, Temporal
 docs/               Architecture, setup guides, production runbooks
-specs/              Spec-driven feature folders (spec, plan, tasks, research)
+specs/              Read-only record of earlier SpecKit-planned features
 ```
 
 ## Commands
@@ -70,8 +64,9 @@ Actuator is on **8082** locally and **8081** in production.
 
 - **Conventional commits and branch prefixes** (`feat/`, `fix/`, `chore/`). No
   Jira tickets in this repo. Do not attribute agents in commits or PRs.
-- **Features are spec-first.** Work under `specs/<nnn>-<slug>/`; keep
-  `.specify/feature.json` pointing at the active feature.
+- **Plan before building.** Pin down work that is not yet settled before writing
+  code. `specs/<nnn>-<slug>/` is a read-only record of features planned with
+  SpecKit, which has been removed from this repo — cite it, don't extend it.
 - **Data changes ship as Mongock change units** in `com.simonrowe.migration`,
   never as ad-hoc scripts. Automatic index creation is off, so indexes must come
   from a change unit — `@CompoundIndex` alone does nothing.

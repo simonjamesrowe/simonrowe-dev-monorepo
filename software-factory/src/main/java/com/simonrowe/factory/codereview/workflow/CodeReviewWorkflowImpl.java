@@ -1,6 +1,7 @@
 package com.simonrowe.factory.codereview.workflow;
 
 import com.simonrowe.factory.codereview.config.CodeReviewTaskQueues;
+import com.simonrowe.factory.codereview.domain.MergeDecision;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewPhase;
@@ -62,20 +63,33 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
               .setRetryOptions(RetryOptions.newBuilder().setMaximumAttempts(1).build())
               .build());
 
+  /**
+   * The {@link Workflow#getVersion} change id guarding the auto-merge steps.
+   *
+   * <p>They add activity calls to a workflow that may be mid-flight when the image changes, and a
+   * replay that meets a command its history does not contain fails with a non-determinism error.
+   * A run started before this change replays as {@link Workflow#DEFAULT_VERSION} and never
+   * reaches any of them.
+   */
+  static final String AUTO_MERGE_CHANGE = "auto-merge";
+
   private ReviewProgress current = ReviewProgress.accepted();
 
   @Override
   public ReviewResult review(final ReviewRequest request) {
+    boolean autoMergeSteps =
+        Workflow.getVersion(AUTO_MERGE_CHANGE, Workflow.DEFAULT_VERSION, 1) >= 1;
     String statusCommentId = request.publish() ? openStatusComment(request) : null;
     // Held outside the try so the catch block can tell "the check run exists and must be failed"
     // apart from "no check run was ever created". Those are different outcomes, and the second one
     // is load-bearing: an absent required check blocks the merge.
     String checkRunId = null;
     PullRequestContext pullRequest = null;
+    MergeDecision autoMerge = null;
     try {
       current =
           new ReviewProgress(
-              ReviewPhase.LOADING_PULL_REQUEST, "Loading GitHub metadata", null, null);
+              ReviewPhase.LOADING_PULL_REQUEST, "Loading GitHub metadata", null, null, null);
       pullRequest = networkActivities.loadPullRequest(request);
 
       if (request.publish()) {
@@ -83,36 +97,66 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
         // head SHA is only certain now. `ReviewRequest.expectedHeadSha` is nullable on the manual
         // path, so there is nothing to attach a check to before this point.
         checkRunId = openCheckRun(pullRequest);
-      }
-
-      current =
-          new ReviewProgress(
-              ReviewPhase.REVIEWING, "Running read-only agent", pullRequest.headSha(), null);
-      ReviewReport report = agentActivities.runReview(pullRequest);
-
-      if (request.publish()) {
-        current =
-            new ReviewProgress(
-                ReviewPhase.PUBLISHING,
-                "Publishing review",
-                pullRequest.headSha(),
-                report);
-        networkActivities.publishReview(pullRequest, report, statusCommentId);
-        if (checkRunId != null) {
-          networkActivities.completeCheckRun(pullRequest, checkRunId, report);
+        if (autoMergeSteps) {
+          // Not best-effort, unlike the check run above. An arm left over from an earlier commit
+          // would merge this one on the strength of a decision about different paths, so if it
+          // cannot be withdrawn the review fails and the red check holds the merge instead.
+          current =
+              new ReviewProgress(
+                  ReviewPhase.LOADING_PULL_REQUEST,
+                  "Withdrawing auto-merge armed on an earlier commit",
+                  pullRequest.headSha(),
+                  null,
+                  null);
+          networkActivities.withdrawAutoMerge(pullRequest);
         }
       }
 
       current =
           new ReviewProgress(
-              ReviewPhase.COMPLETED, "Review completed", pullRequest.headSha(), report);
+              ReviewPhase.REVIEWING, "Running read-only agent", pullRequest.headSha(), null, null);
+      ReviewReport report = agentActivities.runReview(pullRequest);
+
+      if (request.publish()) {
+        current =
+            new ReviewProgress(
+                ReviewPhase.PUBLISHING, "Publishing review", pullRequest.headSha(), report, null);
+        if (autoMergeSteps) {
+          // Armed before the check run completes, deliberately. GitHub refuses to arm a pull
+          // request that is already mergeable, and while this review's own required check is
+          // still in progress this one cannot be. It is also why arming cannot race the merge:
+          // nothing merges until completeCheckRun below turns the check green.
+          autoMerge = armAutoMerge(pullRequest, report);
+        }
+        networkActivities.publishReview(pullRequest, report, statusCommentId, autoMerge);
+        if (checkRunId != null) {
+          networkActivities.completeCheckRun(pullRequest, checkRunId, report);
+        }
+      } else if (autoMergeSteps) {
+        // A dry run decides but never acts, so the console can show what a real run would do.
+        autoMerge = decideAutoMerge(pullRequest, report);
+      }
+
+      current =
+          new ReviewProgress(
+              ReviewPhase.COMPLETED,
+              completedDetail(autoMerge),
+              pullRequest.headSha(),
+              report,
+              autoMerge);
       return new ReviewResult(
-          Workflow.getInfo().getWorkflowId(), pullRequest.headSha(), request.publish(), report);
+          Workflow.getInfo().getWorkflowId(),
+          pullRequest.headSha(),
+          request.publish(),
+          report,
+          autoMerge);
     } catch (RuntimeException exception) {
       // Capture the phase before overwriting it — FAILED says nothing about where it died.
       ReviewPhase failedIn = current.phase();
       String reason = safeFailureMessage(exception);
-      current = new ReviewProgress(ReviewPhase.FAILED, reason, current.headSha(), current.report());
+      current =
+          new ReviewProgress(
+              ReviewPhase.FAILED, reason, current.headSha(), current.report(), autoMerge);
       if (request.publish()) {
         ReviewFailure failure =
             new ReviewFailure(failedIn, reason, Workflow.getInfo().getWorkflowId());
@@ -124,8 +168,53 @@ public class CodeReviewWorkflowImpl implements CodeReviewWorkflow {
         if (checkRunId != null) {
           failCheckRun(pullRequest, checkRunId, failure);
         }
+        if (autoMerge != null && autoMerge.outcome() == MergeDecision.Outcome.ARMED) {
+          // The red check already holds the merge; this withdraws the arm itself, so nothing is
+          // left waiting for a check that someone might later re-run green.
+          withdrawAfterFailure(pullRequest);
+        }
       }
       throw exception;
+    }
+  }
+
+  private static String completedDetail(final MergeDecision autoMerge) {
+    String described = autoMerge == null ? null : autoMerge.describe();
+    return described == null ? "Review completed" : "Review completed; auto-merge " + described;
+  }
+
+  /**
+   * Decides and arms. A failure is reported as the decision, never thrown: nothing is armed, which
+   * is the safe outcome, and a human can still merge.
+   */
+  private MergeDecision armAutoMerge(
+      final PullRequestContext pullRequest, final ReviewReport report) {
+    try {
+      return networkActivities.armAutoMerge(pullRequest, report);
+    } catch (RuntimeException exception) {
+      Workflow.getLogger(CodeReviewWorkflowImpl.class)
+          .warn("Could not decide or arm auto-merge", exception);
+      return MergeDecision.armFailed(safeFailureMessage(exception));
+    }
+  }
+
+  private MergeDecision decideAutoMerge(
+      final PullRequestContext pullRequest, final ReviewReport report) {
+    try {
+      return networkActivities.decideAutoMerge(pullRequest, report);
+    } catch (RuntimeException exception) {
+      Workflow.getLogger(CodeReviewWorkflowImpl.class)
+          .warn("Could not decide auto-merge", exception);
+      return MergeDecision.ineligible("the decision failed: " + safeFailureMessage(exception));
+    }
+  }
+
+  private void withdrawAfterFailure(final PullRequestContext pullRequest) {
+    try {
+      networkActivities.withdrawAutoMerge(pullRequest);
+    } catch (RuntimeException exception) {
+      Workflow.getLogger(CodeReviewWorkflowImpl.class)
+          .warn("Could not withdraw auto-merge after a failed review", exception);
     }
   }
 

@@ -35,6 +35,7 @@ class DeployerCodeReviewGateTest {
 
   private static final String DEPLOYER_SERVICE = "deployer";
   private static final String FLAG = "FACTORY_CODEREVIEW_ENABLED";
+  private static final String AUTO_MERGE_FLAG = "FACTORY_CODEREVIEW_AUTO_MERGE_ENABLED";
 
   @Test
   void deployerServiceDisablesCodeReviewActivities() throws IOException {
@@ -72,6 +73,32 @@ class DeployerCodeReviewGateTest {
                 + "requests, and the required `Code Review` check would never go green again.",
             FLAG)
         .isNotEqualTo(Optional.of("false"));
+  }
+
+  /**
+   * Auto-merge is read by {@code ReviewActivitiesImpl}, which only {@code software-factory} runs.
+   * That service has no {@code env_file}, so a flag set in {@code .env} alone would never reach
+   * it: the declaration here is the whole switch, and its compose default is what production does
+   * after a plain deploy.
+   */
+  @Test
+  void softwareFactoryDeclaresAutoMergeOnByDefault() throws IOException {
+    Optional<String> value =
+        declaredValue(
+            ComposeFile.serviceBlock(ComposeFile.lines(), "software-factory"), AUTO_MERGE_FLAG);
+
+    assertThat(value)
+        .as("%s must be declared on `software-factory`, which has no env_file", AUTO_MERGE_FLAG)
+        .isPresent();
+    assertThat(value.orElseThrow().trim())
+        .isEqualTo("${" + AUTO_MERGE_FLAG + ":-true}");
+  }
+
+  @Test
+  void deployerDoesNotDeclareAutoMerge() throws IOException {
+    // Inert there, since deployer registers no review activity, but a declaration would suggest
+    // otherwise to the next person reading the compose file.
+    assertThat(declaredValue(deployerBlock(), AUTO_MERGE_FLAG)).isEmpty();
   }
 
   @Test

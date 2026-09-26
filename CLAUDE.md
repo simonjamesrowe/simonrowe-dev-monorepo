@@ -231,6 +231,47 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- factory-auto-merge: **The reviewer now arms auto-merge; GitHub performs the merge.** Until now
+  auto-merge was armed by the `pr-review-loop` skill, from the same agent session that wrote the
+  code. The decision now sits at the end of the code-review workflow, where the factory already
+  owns the right moment. There is no "all required checks passed" webhook to wait for, and no
+  need for one: the reviewer's own required `Code Review` check is still in progress while it
+  arms, so nothing merges until it completes, and GitHub then merges as soon as the ruleset is
+  satisfied. `FACTORY_CODEREVIEW_AUTO_MERGE_ENABLED` is declared on `software-factory` (default
+  `true` in compose, `false` in `application.yml`). The rules and the one-line summary are in
+  `docs/runbooks/pr-governance.md` ("Auto-merge policy"). Load-bearing bits:
+  - **Withdraw before every review, fail-closed.** GitHub keeps auto-merge armed across pushes by
+    anyone with write access. So a "yes" for a docs-only commit would otherwise merge a later push
+    to `docker-compose.prod.yml`. A bot arm that cannot be withdrawn fails the review, and the red
+    check holds the merge. **A person's arm is never touched**, and "a bot" is read from
+    `enabled_by.type`, never a configured login, because a mistyped login would silently disable
+    the withdraw. Arming is the opposite: best-effort, reported as `ARM_FAILED`, never thrown.
+  - **`expectedHeadOid` on the arm** makes a slow or stale concurrent review harmless: GitHub
+    refuses to arm if anything was pushed after the reviewed commit.
+  - **Paths come from `/pulls/{n}/files`, both sides of every rename, never from the review
+    workspace.** That list is filtered to agent-safe paths and capped at `maxChangedFiles`, so it
+    can omit exactly the paths this check exists for. A listing short of GitHub's `changed_files`
+    count arms nothing.
+  - **The public-repo rules come first:** no forks, and the author must be
+    `OWNER`/`MEMBER`/`COLLABORATOR`. Without them a stranger's pull request with a clean review
+    would merge itself. `agent-feedback` guidance pull requests are excluded (they touch root
+    `*.md`, which the path rules alone would call auto-merge), and `no-auto-merge` is the opt-out.
+  - **The classifier exists twice, held together by one fixture.**
+    `codereview/domain/MergeDisposition.java` is a port of `scripts/classify-change.sh`, and both
+    test suites read `scripts/test/fixtures/merge-disposition-cases.tsv`. Its glob copies bash
+    `case` semantics, where `*` crosses `/`.
+  - **Versioned with `Workflow.getVersion("auto-merge", …)`**, and a `publishReview` task
+    scheduled by the old image with three arguments still runs, because Temporal passes `null` for
+    the missing decision. That is pinned by a test, not assumed. Since
+    `factory-workflow-workers-per-role` (#193) only `software-factory` polls `code-review`, so
+    the new workflow code runs in one build; a `deployer` older than #193 still polls it until
+    it is recreated.
+  - **Console:** a new fast-loop arrow `codereview → main` ("arms auto-merge"), the pull request
+    drawer shows `auto-merge armed` / `auto-merge armed (by a person)`, and the run banner names
+    the decision. Edge labels are API data only; the SVG draws no edge text.
+  - **Outstanding in `agent-setup`:** `pr-review-loop` step 7 still runs `gh pr merge --auto`,
+    which arms as a person and so is never withdrawn. It should report the reviewer's decision
+    instead.
 - factory-workflow-workers-per-role: **Each Temporal workflow is now polled by one container.**
   `software-factory` and `deployer` run the same image, and `@WorkflowImpl` classpath scanning
   cannot be gated by a Spring condition, since those classes are not beans. So both used to poll
@@ -1769,9 +1810,6 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   until fixed or declined. Deploying needs **both** `software-factory` and `deployer` (same image,
   and `deployer` never recreates itself). Skills (`pr-review-loop`, `code-review-triage`) live in
   `simonjamesrowe/agent-setup` and are follow-up. See `docs/runbooks/pr-governance.md`.
-  **Do not run `.specify/scripts/bash/update-agent-context.sh` on this file** — it fails with
-  `grep: repetition-operator operand invalid` and silently strips the lead line from eight
-  existing entries here.
 - 037-platform-status-page: A public `/status` page reports which commit each first-party
   service runs, the third-party image tags, and a changelog with AI-written release notes.
   Every version fact is **baked into the artifact at build time** (`springBoot { buildInfo }`
@@ -2108,8 +2146,3 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 - MongoDB — new `article_summaries` collection (mutable `@Document` class, not a record, because the generation flow transitions it in place); `narrations` changed from `blogId` to `contentType` + `contentId`. Indexes via Mongock change units `V020`/`V021` — `auto-index-creation` is off, so `@Indexed`/`@CompoundIndex` alone are decorative. (034-article-summary-audio)
 - Java 21 (backend), TypeScript 5.x / React 19 (frontend) + Spring Boot 3.5.16 (web, security OAuth2 resource server, data-mongodb), `MongoTemplate` aggregation, existing `useAuth`/`useEnsureAuthenticated` (Auth0), Lucide React. **No new dependencies in either module.** (035-listen-from-listing)
 - MongoDB — read-only. **No new collection, field, index or Mongock change unit**: the bulk ready-narration aggregation is already ordered by the existing `idx_narration_content_updated` (`{contentType: 1, contentId: 1, updatedAt: -1}`) on `narrations`. (035-listen-from-listing)
-
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-<!-- SPECKIT END -->

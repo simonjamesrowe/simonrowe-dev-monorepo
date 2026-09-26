@@ -291,7 +291,7 @@ export function SoftwareFactoryAdmin() {
     switch (key) {
       case 'codereview':
         return (
-          <ActionPanel title="Code review" description="Re-review a pull request the webhook could not. A dry run reviews without posting anything; publishing comments on the pull request as the reviewer bot.">
+          <ActionPanel title="Code review" description="Re-review a pull request the webhook could not. A dry run reviews without posting anything and reports whether it would arm auto-merge; publishing comments on the pull request as the reviewer bot and arms auto-merge when every changed path allows it.">
             <label className="factory-console__field">
               Pull request to review
               <input

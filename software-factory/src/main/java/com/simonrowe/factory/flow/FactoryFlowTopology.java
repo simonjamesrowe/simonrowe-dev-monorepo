@@ -56,6 +56,10 @@ public final class FactoryFlowTopology {
       List.of(
           new FlowEdge("pull-request", "codereview", "push webhook", Loop.FAST),
           new FlowEdge("codereview", "pull-request", "findings and check run", Loop.FAST),
+          // The reviewer arms GitHub auto-merge; GitHub performs the merge once the ruleset is
+          // satisfied. So this edge is "arms", never "merges", and `pull-request -> main` below
+          // stays the edge a merge actually travels.
+          new FlowEdge("codereview", "main", "arms auto-merge", Loop.FAST),
 
           new FlowEdge("production", "logwatch", "reads Loki", Loop.MAIN),
           new FlowEdge("logwatch", LINEAR_NODE, "files signature", Loop.MAIN),
@@ -63,7 +67,7 @@ public final class FactoryFlowTopology {
           new FlowEdge("cvefix", LINEAR_NODE, "files vulnerabilities", Loop.MAIN),
           new FlowEdge(LINEAR_NODE, BUILD, "approved: factory:build", Loop.MAIN),
           new FlowEdge(BUILD, "pull-request", "opens", Loop.MAIN),
-          new FlowEdge("pull-request", "main", "merge", Loop.MAIN),
+          new FlowEdge("pull-request", "main", "merges when green", Loop.MAIN),
           new FlowEdge("main", "deploy", "Publish webhook", Loop.MAIN),
           new FlowEdge("deploy", "production", "recreates", Loop.MAIN),
           new FlowEdge("deploy", "logwatch", "scan after five minutes", Loop.MAIN),

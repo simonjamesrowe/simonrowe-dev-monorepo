@@ -13,10 +13,11 @@ the model grading severity correctly.
 
 ```
 push → CI (3 build checks) ───────────────┐
-                                          ├→ ruleset on main → auto-merge (backend-only)
+                                          ├→ ruleset on main → GitHub merges an armed PR
 webhook → software-factory review ────────┤
    ├→ inline threads (reconciled)              → require conversation resolution
-   └→ Code Review check run                    → required check
+   ├→ Code Review check run                    → required check
+   └→ arms auto-merge if every path allows it  (MergeDisposition = classify-change.sh rules)
                                           │
 classify-change.sh → UX-affecting? ───────┴→ screenshots (manual merge, no gate)
 ```
@@ -207,14 +208,74 @@ nothing at all, so the signal that most needed to block a merge was the one that
 
 ## Auto-merge policy
 
-`scripts/classify-change.sh` maps the changed paths to one disposition. The `pr-review-loop` skill
-runs it after `gh pr create`.
+**The reviewer arms auto-merge, and GitHub performs the merge.** At the end of every published
+review, `software-factory` decides whether the pull request may merge unattended and, if so,
+arms GitHub's native squash auto-merge on the reviewed commit. GitHub then merges it the moment
+the ruleset is satisfied: all four required checks green and every conversation resolved. No
+webhook tells the factory "all checks passed", and none is needed. The reviewer owns the one
+moment that matters, because its own `Code Review` check is still in progress while it arms, and
+nothing can merge until that check completes.
 
-| Category | What the skill does |
+Switched by `FACTORY_CODEREVIEW_AUTO_MERGE_ENABLED`, declared on `software-factory` in
+`docker-compose.prod.yml` with a default of `true` (off in `application.yml`, so tests and local
+runs arm nothing). The review summary comment gets one line saying what happened, e.g.
+**Auto-merge:** not armed: `` `scripts/x.sh` needs a human to merge ``.
+
+It arms only if **every** rule passes. The first rule to fail is the reason given
+(`AutoMergePolicy`):
+
+1. The flag is on.
+2. The pull request is not a draft.
+3. The head is in this repository, not a fork. The repository is public, so a stranger's pull
+   request with a clean review must never merge itself.
+4. The author is `OWNER`, `MEMBER` or `COLLABORATOR`.
+5. It carries neither `no-auto-merge` (a person's opt-out) nor `agent-feedback` (feedback-loop
+   guidance edits agent instructions, which a human should merge).
+6. The `Code Review` conclusion is green: no `REQUEST_CHANGES` and no `CRITICAL`, the same rule as
+   the check run.
+7. The live head is still the commit that was reviewed.
+8. **Every** changed path classifies `auto-merge`, including the old side of every rename, read
+   from GitHub's `/pulls/{n}/files`. It is not read from the review workspace, whose list is
+   filtered and capped. A listing that falls short of GitHub's `changed_files` count arms nothing.
+
+Open `SUGGESTION` threads are deliberately not a rule. Required conversation resolution already
+holds the merge until each one is fixed or declined.
+
+Three mechanisms keep a "yes" from outliving the commit it was about:
+
+- **Withdraw before every review.** GitHub keeps auto-merge armed across pushes from anyone with
+  write access. So each published review first withdraws any arm a *bot* made, and fails the
+  review, turning its check red, if it cannot. Otherwise a "yes" for a docs-only commit would
+  merge a later push that edits `docker-compose.prod.yml`. An arm a *person* made is never
+  touched. "A bot" is read from `enabled_by.type`, not a configured login: a mistyped login would
+  silently stop the withdraw, and that is the one failure here that merges something unreviewed.
+- **`expectedHeadOid`.** The arm names the reviewed commit, and GitHub refuses it if anything has
+  been pushed since.
+- **Withdraw on failure.** A review that fails after arming (say, publishing the summary 500s)
+  withdraws the arm as well as turning the check red.
+
+Switching the flag off stops new arms but still withdraws the reviewer's own arms on re-review.
+Adding `no-auto-merge` takes effect at the next review, i.e. the next push. To stop an armed pull
+request *now*, disable auto-merge on it in GitHub as well.
+
+A **dry run** from `/admin/software-factory` decides but never withdraws or arms. The run banner
+reads "auto-merge would arm (dry run)" or names the rule that failed.
+
+### The classifier has two implementations, held together by one fixture
+
+`scripts/classify-change.sh` is what a human or the `pr-review-loop` skill runs.
+`software-factory/.../codereview/domain/MergeDisposition.java` is what the reviewer arms from,
+because the container has no checkout to diff. **Both test suites read
+`scripts/test/fixtures/merge-disposition-cases.tsv`**, so a rule changed in one and not the other
+fails a build. Add new cases there, not in either test. The Java glob copies the script's
+`case` semantics exactly: `*` crosses `/`, so `frontend/*.config.*` matches
+`frontend/src/theme.config.ts`.
+
+| Category | What happens |
 | --- | --- |
-| `auto-merge` | `gh pr merge --auto --squash`, and records that in the pull request body |
-| `ux-review` | no auto-merge; captures screenshots; states why in the body |
-| `manual` | no auto-merge; states why in the body |
+| `auto-merge` | the reviewer arms squash auto-merge; GitHub merges when the gate opens |
+| `ux-review` | not armed; the skill captures screenshots and a human merges |
+| `manual` | not armed; the summary names the path that forced it |
 
 Precedence, highest first:
 
@@ -242,10 +303,10 @@ printf 'backend/src/A.java\ndocker-compose.prod.yml\n' | scripts/classify-change
 # category=manual        <- rule 1 outranks rule 3
 ```
 
-### `--auto` is not permission to stop watching
+### Armed is not permission to stop watching
 
-The agent still waits on every signal and reports the outcome. If `Code Review` goes red or a
-thread is open, the merge does not fire and someone must act.
+An armed pull request still needs someone watching every signal and reporting the outcome. If
+`Code Review` goes red or a thread is open, the merge does not fire and someone must act.
 
 ### Expect fewer unattended merges than "backend-only ⇒ auto-merge" implies
 
@@ -311,7 +372,11 @@ Live in `simonjamesrowe/agent-setup` under `components/skills/` — the **source
 `~/.claude/skills` copy.
 
 - **`pr-review-loop`** — reads the `Code Review` **check run** rather than an issue comment; covers
-  thread resolution, classification, auto-merge and screenshots. Also: remove the stale claim that
+  thread resolution, classification, auto-merge and screenshots. **Outstanding since the reviewer
+  began arming auto-merge:** its step 7 still runs `gh pr merge --auto`. That arms as the person
+  running the skill, and the reviewer never withdraws a person's arm, so the skill's arm would
+  outlive every later push. The skill should read and report the reviewer's decision instead of
+  making its own. Also: remove the stale claim that
   `Static Analysis` fails on every pull request because SonarCloud Automatic Analysis is enabled.
   That is out of date — PR 122 shows `Static Analysis` and `SonarCloud Code Analysis` both green,
   so the project is on CI-based analysis.
