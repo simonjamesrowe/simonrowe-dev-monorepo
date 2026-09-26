@@ -124,6 +124,10 @@ check "frontend's /api/ route permits the backend's 10 MB upload limit" \
   "awk '/location \/api\// { inside = 1 } inside && /}/ { exit } inside { print }' '$NGINX_CONF' | grep -qF 'client_max_body_size 12m;'"
 check "the public www proxy permits the backend's 10 MB upload limit" \
   "awk '/server_name simonrowe.dev www.simonrowe.dev;/ { www = 1 } www && /location \/ \{/ { inside = 1 } inside && /client_max_body_size 12m;/ { found = 1 } inside && /^    }/ { exit } END { exit !found }' '$PROXY_CONF'"
+check "the production API proxy permits the backend's 10 MB upload limit" \
+  "awk '/server_name api.simonrowe.dev;/ { api = 1 } api && /location \/ \{/ { inside = 1 } inside && /client_max_body_size 12m;/ { found = 1 } inside && /^    }/ { exit } END { exit !found }' '$PROXY_CONF'"
+check "the Term Time API proxy permits the backend's 10 MB upload limit" \
+  "awk '/server_name term-time.simonrowe.dev;/ { term = 1 } term && /location \/api\// { inside = 1 } inside && /client_max_body_size 12m;/ { found = 1 } inside && /^    }/ { exit } END { exit !found }' '$PROXY_CONF'"
 
 # ---------------------------------------------------------------------------
 echo

@@ -14,14 +14,17 @@ describe('prepareSchoolNoteImage', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
       .mockReturnValue({ drawImage } as unknown as CanvasRenderingContext2D)
     const prepared = new Blob(['jpeg'], { type: 'image/jpeg' })
+    let encodedSize: { width: number; height: number } | undefined
     const toBlob = vi.spyOn(HTMLCanvasElement.prototype, 'toBlob')
-      .mockImplementation((callback) => callback(prepared))
+      .mockImplementation(function (this: HTMLCanvasElement, callback) {
+        encodedSize = { width: this.width, height: this.height }
+        callback(prepared)
+      })
 
     await expect(prepareSchoolNoteImage('blob:photo')).resolves.toBe(prepared)
 
-    const canvas = toBlob.mock.instances[0]
-    expect(canvas.width).toBe(2000)
-    expect(canvas.height).toBe(500)
+    expect(encodedSize?.width).toBe(2000)
+    expect(encodedSize?.height).toBe(500)
     expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 2000, 500)
     expect(toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/jpeg', 0.85)
   })
@@ -30,13 +33,17 @@ describe('prepareSchoolNoteImage', () => {
     installImage(1200, 1600)
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
       .mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D)
-    const toBlob = vi.spyOn(HTMLCanvasElement.prototype, 'toBlob')
-      .mockImplementation((callback) => callback(new Blob(['jpeg'])))
+    let encodedSize: { width: number; height: number } | undefined
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation(function (this: HTMLCanvasElement, callback) {
+        encodedSize = { width: this.width, height: this.height }
+        callback(new Blob(['jpeg']))
+      })
 
     await prepareSchoolNoteImage('blob:small')
 
-    expect(toBlob.mock.instances[0].width).toBe(1200)
-    expect(toBlob.mock.instances[0].height).toBe(1600)
+    expect(encodedSize?.width).toBe(1200)
+    expect(encodedSize?.height).toBe(1600)
   })
 
   it('rejects when the browser cannot create a drawing context', async () => {
