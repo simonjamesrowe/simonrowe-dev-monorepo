@@ -4,17 +4,19 @@ import type { Event, Parent } from '../../types/calendar';
 
 import { EventPill } from './EventPill';
 import { getEventOwnerLabel } from './eventOwners';
-import { expandRecurringEvents } from './recurrence';
+import { dateToYmd as toYmd, expandRecurringEvents, occurrenceTarget } from './recurrence';
+import { eventBox, gridHoursFor, isSameDay, nowOffset, useNow } from './timeGrid';
 
 interface WeekViewProps {
   currentDate: Date;
   events: Event[];
   parents: Record<string, Parent>;
   onDayClick: (date: Date) => void;
-  onEventClick?: (eventId: string) => void;
+  onEventClick?: (eventId: string, occurrenceDate?: string) => void;
 }
 
-const HOURS = Array.from({ length: 14 }, (_, i) => i + 7); // 7 AM to 8 PM
+const HOUR_PX = 64;
+const DEFAULT_HOURS = { startHour: 7, endHour: 21 }; // 7 AM to 8 PM rows
 
 export function WeekView({
   currentDate,
@@ -47,9 +49,10 @@ export function WeekView({
     return days;
   }, [currentDate]);
 
-  const today = new Date(2025, 0, 6); // Sample "today"
+  const now = useNow();
 
   const formatHour = (hour: number) => {
+    if (hour === 0) return '12 AM';
     if (hour === 12) return '12 PM';
     if (hour > 12) return `${hour - 12} PM`;
     return `${hour} AM`;
@@ -71,28 +74,31 @@ export function WeekView({
     });
   };
 
-  const getEventPosition = (event: Event) => {
-    if (!event.startTime) return null;
-
-    const [startHour = 0, startMin = 0] = event.startTime.split(':').map(Number);
-    const [endHour, endMin] = event.endTime
-      ? event.endTime.split(':').map(Number)
-      : [startHour + 1, startMin];
-    const resolvedEndHour = endHour ?? startHour + 1;
-    const resolvedEndMin = endMin ?? startMin;
-
-    const top = (((startHour - 7) * 60 + startMin) / 60) * 64; // 64px per hour
-    const height = (((resolvedEndHour - startHour) * 60 + (resolvedEndMin - startMin)) / 60) * 64;
-
-    return { top, height: Math.max(height, 24) };
-  };
-
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const expandedEvents = useMemo(() => {
     const rangeStart = weekDays[0] ?? currentDate;
     const rangeEnd = weekDays[6] ?? currentDate;
     return expandRecurringEvents(events, dateToYmd(rangeStart), dateToYmd(rangeEnd));
   }, [events, weekDays]);
+
+  const weekYmds = useMemo(() => new Set(weekDays.map(toYmd)), [weekDays]);
+  const hours = useMemo(
+    () =>
+      gridHoursFor(
+        expandedEvents.filter(
+          (e) => weekYmds.has(e.startDate) && e.type.trim().toLowerCase() !== 'custody',
+        ),
+        DEFAULT_HOURS,
+      ),
+    [expandedEvents, weekYmds],
+  );
+  const hourRows = Array.from(
+    { length: hours.endHour - hours.startHour },
+    (_, i) => i + hours.startHour,
+  );
+  const nowTop = weekDays.some((date) => isSameDay(date, now))
+    ? nowOffset(now, hours, HOUR_PX)
+    : null;
 
   return (
     <div className="overflow-x-auto">
@@ -105,7 +111,7 @@ export function WeekView({
             const custodyParent = custodyEvent?.parentId
               ? (parents[custodyEvent.parentId] ?? null)
               : null;
-            const isToday = date.getTime() === today.getTime();
+            const isToday = isSameDay(date, now);
 
             return (
               <div
@@ -158,13 +164,19 @@ export function WeekView({
       </div>
 
       {/* Time grid */}
-      <div className="relative grid min-h-[896px] grid-cols-[60px_repeat(7,1fr)]">
+      <div
+        className="relative grid grid-cols-[60px_repeat(7,1fr)]"
+        style={{ minHeight: `${hourRows.length * HOUR_PX}px` }}
+      >
         {/* Time labels */}
         <div className="border-r border-slate-200 dark:border-slate-700">
-          {HOURS.map((hour) => (
+          {hourRows.map((hour) => (
+            // Nudged up with a transform, not a negative margin: margins accumulate down the
+            // column, so each label drifted 8px further from its line and 6 PM sat over 8 PM.
             <div
               key={hour}
-              className="-mt-2 h-16 pr-2 text-right text-xs text-slate-500 dark:text-slate-400"
+              className="pr-2 text-right text-xs text-slate-500 dark:text-slate-400"
+              style={{ height: `${HOUR_PX}px`, transform: 'translateY(-0.5rem)' }}
             >
               {formatHour(hour)}
             </div>
@@ -183,10 +195,11 @@ export function WeekView({
               className={`relative ${dayIndex < 6 ? 'border-r border-slate-200 dark:border-slate-700' : ''} `}
             >
               {/* Hour lines */}
-              {HOURS.map((hour) => (
+              {hourRows.map((hour) => (
                 <div
                   key={hour}
-                  className="h-16 border-b border-slate-100 dark:border-slate-700/50"
+                  className="border-b border-slate-100 dark:border-slate-700/50"
+                  style={{ height: `${HOUR_PX}px` }}
                 />
               ))}
 
@@ -198,7 +211,7 @@ export function WeekView({
                       key={event.id}
                       event={event}
                       ownerLabel={getEventOwnerLabel(event, parents)}
-                      onClick={() => onEventClick?.(event.sourceId ?? event.id)}
+                      onClick={() => onEventClick?.(...occurrenceTarget(event))}
                       compact
                     />
                   ))}
@@ -207,7 +220,7 @@ export function WeekView({
 
               {/* Timed events */}
               {timedEvents.map((event) => {
-                const position = getEventPosition(event);
+                const position = eventBox(event, hours, HOUR_PX, 24);
                 if (!position) return null;
 
                 return (
@@ -222,7 +235,7 @@ export function WeekView({
                     <EventPill
                       event={event}
                       ownerLabel={getEventOwnerLabel(event, parents)}
-                      onClick={() => onEventClick?.(event.sourceId ?? event.id)}
+                      onClick={() => onEventClick?.(...occurrenceTarget(event))}
                       showTime
                     />
                   </div>
@@ -232,14 +245,16 @@ export function WeekView({
           );
         })}
 
-        {/* Current time indicator */}
-        <div
-          className="pointer-events-none absolute left-[60px] right-0 z-20 flex items-center"
-          style={{ top: `${(((9 - 7) * 60 + 30) / 60) * 64}px` }} // 9:30 AM for demo
-        >
-          <div className="-ml-1 h-2 w-2 rounded-full bg-rose-500" />
-          <div className="h-0.5 flex-1 bg-rose-500" />
-        </div>
+        {nowTop !== null && (
+          <div
+            className="pointer-events-none absolute left-[60px] right-0 z-20 flex items-center"
+            style={{ top: `${nowTop}px` }}
+            data-testid="week-now-line"
+          >
+            <div className="-ml-1 h-2 w-2 rounded-full bg-rose-500" />
+            <div className="h-0.5 flex-1 bg-rose-500" />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -5,6 +5,10 @@ export interface MessagingAndPermissionsProps {
   conversations: Conversation[];
   /** The ID of the current user viewing the interface */
   currentUserId: string;
+  /** A conversation to show first, e.g. from a `?conversation=` link */
+  selectedConversationId?: string;
+  /** False when there is nobody to write to yet (no co-parent has joined) */
+  canCompose?: boolean;
   /** Called when user wants to view a conversation's details */
   onViewConversation?: (id: string) => void;
   /** Called when user wants to send a new message in a conversation */
@@ -18,7 +22,7 @@ export interface MessagingAndPermissionsProps {
   /** Called when user wants to create a new permission request */
   onCreatePermissionRequest?: () => void;
   /** Called when user approves a permission request */
-  onApprovePermission?: (permissionId: string, response?: string) => void;
+  onApprovePermission?: (permissionId: string, response?: string) => void | Promise<void>;
   /** Called when user denies a permission request */
-  onDenyPermission?: (permissionId: string, response?: string) => void;
+  onDenyPermission?: (permissionId: string, response?: string) => void | Promise<void>;
 }

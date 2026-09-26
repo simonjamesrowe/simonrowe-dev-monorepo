@@ -119,3 +119,35 @@ export function useDeleteEvent() {
     },
   });
 }
+
+/**
+ * Skips or restores one occurrence of a repeating event. A dedicated endpoint rather than a
+ * whole-event PUT, so cancelling one week cannot drop a field the edit form does not send.
+ */
+export function useSkipOccurrence() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      familyId,
+      date,
+      skip,
+    }: {
+      id: string;
+      familyId: string;
+      date: string;
+      skip: boolean;
+    }) => {
+      const path = `/families/${familyId}/events/${id}/skipped-dates/${date}`;
+      const { data } = skip
+        ? await apiClient.put<Event>(path)
+        : await apiClient.delete<Event>(path);
+      return data;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: eventKeys.list(variables.familyId) });
+      queryClient.setQueryData(eventKeys.detail(data.id), data);
+    },
+  });
+}

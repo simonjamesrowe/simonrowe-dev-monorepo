@@ -91,7 +91,7 @@ describe('assistant decisions', () => {
     vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
       if (url === '/assistant/config') return { data: { enabled: true } };
       if (url.endsWith('/event-categories')) {
-        return { data: [{ id: 'category-1', name: 'School', system: false }] };
+        return { data: [{ id: 'category-1', name: 'School', isSystem: false, isDefault: false }] };
       }
       if (url.endsWith('/assistant/batches/batch-1')) {
         return { data: { id: 'batch-1', actions: [] } };
@@ -108,7 +108,7 @@ describe('assistant decisions', () => {
 
     await waitFor(() => expect(config.result.current.data).toEqual({ enabled: true }));
     await waitFor(() => expect(categories.result.current.data).toEqual([
-      { id: 'category-1', name: 'School', system: false },
+      { id: 'category-1', name: 'School', isSystem: false, isDefault: false },
     ]));
     await waitFor(() => expect(batches.result.current.data).toEqual([
       { id: 'batch-1', actionCount: 0 },

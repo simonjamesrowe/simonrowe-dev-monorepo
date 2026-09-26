@@ -1,6 +1,7 @@
 package com.simonrowe.coparent.assistant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -171,8 +172,8 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
         {"type":"activity","title":"Dance class","startDate":"2026-10-03",
         "endDate":"2026-10-03","startTime":"11:00","endTime":"13:45",
         "allDay":false,"parentId":"%s","parentIds":null,"childIds":["%s"],
-        "location":null,"notes":null,"recurringFrequency":"weekly",
-        "recurringDays":["Saturday"]}
+        "location":null,"notes":null,"recurringFrequency":"WEEKLY",
+        "recurringDays":["Saturday","SA"]}
         """.formatted(fixture.aliceId(), fixture.childId());
     when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))
         .thenReturn(new ChatResponse(List.of(new Generation(AssistantMessage.builder()
@@ -186,6 +187,8 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
             .with(user("alice")))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.actions[0].status", is("PENDING")))
+        .andExpect(jsonPath("$.actions[0].payload.recurringFrequency", is("weekly")))
+        .andExpect(jsonPath("$.actions[0].payload.recurringDays", contains("saturday")))
         .andReturn();
     final String body = created.getResponse().getContentAsString();
 
@@ -201,6 +204,9 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
         .satisfies(event -> {
           assertThat(event.startDate()).isEqualTo(Instant.parse("2026-10-03T00:00:00Z"));
           assertThat(event.startTime()).isEqualTo("11:00");
+          // The calendar only renders canonical names; "Saturday" was stored and never shown.
+          assertThat(event.recurring())
+              .isEqualTo(new CalendarEvent.Recurring("weekly", List.of("saturday")));
         });
   }
 
@@ -247,8 +253,12 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
         assertThat(action.status()).isEqualTo(AssistantProposalBatch.ActionStatus.APPLIED));
     assertThat(mongoTemplate.getCollection("audits")
         .countDocuments(new Document("entityType", "assistant_action"))).isEqualTo(11);
-    assertThat(events.findById(targets.updateEventId()).orElseThrow().title())
-        .isEqualTo("Updated appointment");
+    assertThat(events.findById(targets.updateEventId()).orElseThrow())
+        .satisfies(updated -> {
+          assertThat(updated.title()).isEqualTo("Updated appointment");
+          // The assistant never sees skipped dates, so an update must not erase them.
+          assertThat(updated.recurring()).isEqualTo(SKIPPING_SERIES);
+        });
     assertThat(events.findById(targets.deleteEventId()).orElseThrow().deletedAt()).isNotNull();
     assertThat(categories.findById(targets.updateCategoryId()).orElseThrow().name())
         .isEqualTo("Updated category");
@@ -434,14 +444,20 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
         childId.toHexString());
   }
 
+  private static final CalendarEvent.Recurring SKIPPING_SERIES = new CalendarEvent.Recurring(
+      "weekly", List.of("saturday"), List.of("2026-10-10"));
+
   private ActionTargets actionTargets(final Fixture fixture) {
     final ObjectId familyId = new ObjectId(fixture.familyId());
     final ObjectId aliceId = new ObjectId(fixture.aliceId());
     final ObjectId bobId = new ObjectId(fixture.bobId());
     final ObjectId childId = new ObjectId(fixture.childId());
     final Instant now = Instant.parse("2026-09-22T10:00:00Z");
-    final CalendarEvent updateEvent = events.save(event(familyId, childId,
-        "Appointment", Instant.parse("2026-10-03T09:00:00Z"), now));
+    final CalendarEvent seeded = event(familyId, childId,
+        "Appointment", Instant.parse("2026-10-03T09:00:00Z"), now);
+    final CalendarEvent updateEvent = events.save(new CalendarEvent(null, familyId,
+        seeded.type(), seeded.title(), seeded.startDate(), seeded.endDate(), null, null, false,
+        null, List.of(), List.of(childId), null, null, SKIPPING_SERIES, null, null, now, now));
     final CalendarEvent deleteEvent = events.save(event(familyId, childId,
         "Old event", Instant.parse("2026-10-04T09:00:00Z"), now));
     final EventCategory updateCategory = categories.save(new EventCategory(null, familyId,

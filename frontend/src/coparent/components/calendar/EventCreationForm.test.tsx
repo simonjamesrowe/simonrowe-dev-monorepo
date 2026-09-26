@@ -175,7 +175,6 @@ describe('EventCreationForm', () => {
 
     await user.click(screen.getByRole('button', { name: 'Every weekly' }));
     await user.click(screen.getAllByRole('button', { name: 'M' })[0]);
-    await user.click(screen.getByRole('button', { name: 'Theo' }));
 
     const samButtons = screen.getAllByRole('button', { name: /^Sam/ });
     await user.click(samButtons[1]);
@@ -196,11 +195,158 @@ describe('EventCreationForm', () => {
         startTime: '09:30',
         endTime: '10:30',
         parentId: null,
-        childIds: [],
+        parentIds: ['parent-1', 'parent-2'],
+        childIds: ['child-1'],
         location: 'Community Centre',
         notes: 'Bring paperwork',
         recurring: expect.objectContaining({ frequency: 'weekly' }),
       }),
     );
+  });
+
+  it('keeps an open-ended series open-ended when it is edited', async () => {
+    const onSubmit = vi.fn();
+    const ref = createRef<EventCreationFormRef>();
+    render(
+      <EventCreationForm
+        ref={ref}
+        parents={parents}
+        children={children}
+        currentParentId="parent-1"
+        initialEvent={{
+          id: 'series',
+          title: 'Football training',
+          type: 'activity',
+          startDate: '2026-09-29',
+          startTime: '18:00',
+          endTime: '19:00',
+          allDay: false,
+          childIds: ['child-1'],
+          recurring: { frequency: 'weekly', days: ['tuesday'], excludedDates: ['2026-10-27'] },
+        }}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(screen.getByText('Repeat until')).toBeInTheDocument();
+    expect(screen.getByText('No end date — keeps repeating.')).toBeInTheDocument();
+
+    await act(async () => {
+      ref.current?.submit();
+    });
+
+    const [[submitted]] = onSubmit.mock.calls;
+    expect(submitted.endDate).toBeUndefined();
+    expect(submitted.recurring).toEqual({
+      frequency: 'weekly',
+      days: ['tuesday'],
+      excludedDates: ['2026-10-27'],
+    });
+  });
+
+  it('sends the latest skipped dates rather than the ones loaded when the form opened', async () => {
+    const onSubmit = vi.fn();
+    const ref = createRef<EventCreationFormRef>();
+    const series = {
+      id: 'series',
+      title: 'Swimming',
+      type: 'activity',
+      startDate: '2026-09-28',
+      allDay: false,
+      childIds: ['child-1'],
+      recurring: {
+        frequency: 'weekly' as const,
+        days: ['monday'],
+        excludedDates: ['2026-10-26'],
+      },
+    };
+    const { rerender } = render(
+      <EventCreationForm
+        ref={ref}
+        parents={parents}
+        children={children}
+        currentParentId="parent-1"
+        initialEvent={series}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    // A date was restored in the drawer while the form stayed open.
+    rerender(
+      <EventCreationForm
+        ref={ref}
+        parents={parents}
+        children={children}
+        currentParentId="parent-1"
+        initialEvent={{ ...series, recurring: { ...series.recurring, excludedDates: [] } }}
+        onSubmit={onSubmit}
+      />,
+    );
+    await act(async () => {
+      ref.current?.submit();
+    });
+
+    expect(onSubmit.mock.calls[0][0].recurring.excludedDates).toEqual([]);
+  });
+
+  it('starts a new series with no end date and restores one when repeating is turned off', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const ref = createRef<EventCreationFormRef>();
+    const { container } = render(
+      <EventCreationForm
+        ref={ref}
+        parents={parents}
+        children={children}
+        currentParentId="parent-1"
+        initialDate="2026-10-06"
+        onSubmit={onSubmit}
+      />,
+    );
+    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Cricket');
+    const endDate = () => container.querySelectorAll<HTMLInputElement>('input[type="date"]')[1];
+
+    await user.click(screen.getByRole('button', { name: 'Every weekly' }));
+    expect(endDate().value).toBe('');
+
+    await user.type(endDate(), '2026-12-18');
+    await user.click(screen.getByRole('button', { name: 'Remove end date' }));
+    expect(endDate().value).toBe('');
+
+    await user.click(screen.getByRole('button', { name: 'Does not repeat' }));
+    expect(endDate().value).toBe('2026-10-06');
+    await act(async () => {
+      ref.current?.submit();
+    });
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ endDate: '2026-10-06', recurring: null }),
+    );
+  });
+
+  it('selects every child once they load, and will not save an event with none', async () => {
+    const user = userEvent.setup();
+    const onValidationChange = vi.fn();
+    const ref = createRef<EventCreationFormRef>();
+    const onSubmit = vi.fn();
+    const props = {
+      parents,
+      currentParentId: 'parent-1',
+      initialDate: '2026-10-07',
+      onValidationChange,
+      onSubmit,
+    };
+    // The family's children arrive after the drawer has mounted.
+    const { rerender } = render(<EventCreationForm ref={ref} {...props} children={[]} />);
+    rerender(<EventCreationForm ref={ref} {...props} children={children} />);
+    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Dentist');
+
+    expect(onValidationChange).toHaveBeenLastCalledWith(true);
+    await user.click(screen.getByRole('button', { name: 'Theo' }));
+    expect(onValidationChange).toHaveBeenLastCalledWith(false);
+
+    await act(async () => {
+      await ref.current?.submit();
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

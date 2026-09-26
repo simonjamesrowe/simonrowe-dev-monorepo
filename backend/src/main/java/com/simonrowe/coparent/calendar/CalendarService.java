@@ -33,6 +33,9 @@ public class CalendarService {
 
   private static final String ACTIVE = CoparentAccessPolicy.ACTIVE;
 
+  /** Roughly two years of weekly cancellations; bounds a document that grows by user action. */
+  static final int MAX_EXCLUDED_DATES = 104;
+
   private final EventRepository events;
   private final EventCategoryRepository categories;
   private final ScheduleChangeRepository changes;
@@ -143,6 +146,53 @@ public class CalendarService {
         assistantActionId == null ? current.assistantActionId() : assistantActionId,
         now, current.createdAt(), now));
     audits.record(familyId, "event", eventId, "delete", Map.of("deletedAt", now));
+  }
+
+  /**
+   * Skips one occurrence of a repeating event. Written as a single atomic update of the
+   * skipped-dates set rather than a whole-event replacement, so skipping a week can never
+   * overwrite a concurrent edit or drop a field the caller did not send.
+   */
+  public CalendarEvent skipOccurrence(
+      final ObjectId familyId, final ObjectId eventId, final String date) {
+    return changeOccurrence(familyId, eventId, date, true);
+  }
+
+  /** Restores a previously skipped occurrence of a repeating event. */
+  public CalendarEvent restoreOccurrence(
+      final ObjectId familyId, final ObjectId eventId, final String date) {
+    return changeOccurrence(familyId, eventId, date, false);
+  }
+
+  private CalendarEvent changeOccurrence(
+      final ObjectId familyId, final ObjectId eventId, final String date, final boolean skip) {
+    access.requireMember(familyId);
+    final String day = parseOccurrenceDate(date).toString();
+    final Criteria target = Criteria.where("_id").is(eventId).and("familyId").is(familyId)
+        .and("deletedAt").is(null).and("recurring").ne(null);
+    if (skip) {
+      // The cap is enforced in the same atomic write; re-skipping a date is always a no-op.
+      target.orOperator(Criteria.where("recurring.excludedDates").is(day),
+          Criteria.where("recurring.excludedDates." + (MAX_EXCLUDED_DATES - 1)).exists(false));
+    }
+    final Update update = skip
+        ? new Update().addToSet("recurring.excludedDates", day)
+        : new Update().pull("recurring.excludedDates", day);
+    final CalendarEvent saved = mongoTemplate.findAndModify(Query.query(target),
+        update.set("updatedAt", Instant.now()),
+        FindAndModifyOptions.options().returnNew(true), CalendarEvent.class);
+    if (saved == null) {
+      final CalendarEvent current = getEvent(familyId, eventId);
+      if (current.recurring() == null) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Only a repeating event has occurrences to skip");
+      }
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "A series can skip at most " + MAX_EXCLUDED_DATES + " dates");
+    }
+    audits.record(familyId, "event", eventId, skip ? "skip_occurrence" : "restore_occurrence",
+        Map.of("date", day));
+    return saved;
   }
 
   /** Creates a family-defined event category. */
@@ -256,8 +306,18 @@ public class CalendarService {
           "A proposed change and reason are required");
     }
     validateProposedChange(proposedChange);
+    // Approval applies the change to the calendar, so a request must say which event (and, for
+    // a repeating one, which occurrence) it changes; only "add" can stand on its own.
+    if (originalEventId == null && !"add".equals(proposedChange.type())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Choose the event this request changes");
+    }
     if (originalEventId != null) {
-      getEvent(familyId, originalEventId);
+      final CalendarEvent original = getEvent(familyId, originalEventId);
+      if (original.recurring() != null && !"add".equals(proposedChange.type())) {
+        requireDate(proposedChange.originalStartDate(),
+            "Choose which occurrence of the repeating event this request changes");
+      }
     }
     final Instant now = Instant.now();
     final ScheduleChangeRequest saved = changes.save(new ScheduleChangeRequest(requestId, familyId,
@@ -311,6 +371,22 @@ public class CalendarService {
     }
     audits.record(familyId, "schedule_change_request", requestId, decision, Map.of());
     return saved;
+  }
+
+  /**
+   * Puts an approval that could not be applied back to pending. The claim and the calendar
+   * writes are separate operations (the database runs without transactions), so this is the
+   * compensation that keeps an "approved" status meaning "the calendar was changed". Matched on
+   * the approver as well as the status, so it can never reopen somebody else's decision.
+   */
+  void reopenChange(final ObjectId familyId, final ObjectId requestId, final ObjectId approver) {
+    mongoTemplate.findAndModify(
+        Query.query(Criteria.where("_id").is(requestId).and("familyId").is(familyId)
+            .and("status").is("approved").and("resolvedBy").is(approver)),
+        new Update().set("status", "pending").unset("resolvedBy").unset("resolvedAt")
+            .unset("responseNote").set("updatedAt", Instant.now()),
+        ScheduleChangeRequest.class);
+    audits.record(familyId, "schedule_change_request", requestId, "approval_reverted", Map.of());
   }
 
   /** Lets only the original requester withdraw a still-pending request. */
@@ -369,8 +445,37 @@ public class CalendarService {
           "One or more parent identifiers are invalid");
     }
     if (values.recurring() != null
-        && !List.of("daily", "weekly").contains(values.recurring().frequency())) {
+        && !Recurrence.FREQUENCIES.contains(values.recurring().frequency())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid recurrence frequency");
+    }
+    if (values.recurring() != null
+        && !Recurrence.DAYS.containsAll(values.recurring().days())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Recurring days must be lowercase weekday names such as monday");
+    }
+    if (values.recurring() != null) {
+      if (values.recurring().excludedDates().size() > MAX_EXCLUDED_DATES) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "A series can skip at most " + MAX_EXCLUDED_DATES + " dates");
+      }
+      values.recurring().excludedDates().forEach(CalendarService::parseOccurrenceDate);
+    }
+  }
+
+  private static void requireDate(final String value, final String message) {
+    try {
+      LocalDate.parse(value == null ? "" : value);
+    } catch (java.time.format.DateTimeParseException exception) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message, exception);
+    }
+  }
+
+  private static LocalDate parseOccurrenceDate(final String value) {
+    try {
+      return LocalDate.parse(value);
+    } catch (java.time.format.DateTimeParseException exception) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Skipped dates must use YYYY-MM-DD", exception);
     }
   }
 

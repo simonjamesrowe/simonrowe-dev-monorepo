@@ -18,6 +18,10 @@ vi.mock('../hooks/api', () => ({
   useCreateEvent: vi.fn(),
   useUpdateEvent: vi.fn(),
   useDeleteEvent: vi.fn(),
+  useSkipOccurrence: vi.fn(),
+  useCurrentParentId: vi.fn(() => 'parent-1'),
+  useCreateScheduleChangeRequest: vi.fn(() => ({ mutateAsync: vi.fn() })),
+  useDeleteScheduleChangeRequest: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useApproveScheduleChangeRequest: vi.fn(),
   useDeclineScheduleChangeRequest: vi.fn(),
 }));
@@ -30,6 +34,7 @@ const mockedUseScheduleChangeRequests = vi.mocked(apiHooks.useScheduleChangeRequ
 const mockedUseCreateEvent = vi.mocked(apiHooks.useCreateEvent);
 const mockedUseUpdateEvent = vi.mocked(apiHooks.useUpdateEvent);
 const mockedUseDeleteEvent = vi.mocked(apiHooks.useDeleteEvent);
+const mockedUseSkipOccurrence = vi.mocked(apiHooks.useSkipOccurrence);
 const mockedUseApproveScheduleChangeRequest = vi.mocked(apiHooks.useApproveScheduleChangeRequest);
 const mockedUseDeclineScheduleChangeRequest = vi.mocked(apiHooks.useDeclineScheduleChangeRequest);
 
@@ -103,6 +108,10 @@ describe('CalendarPage', () => {
     mockedUseDeleteEvent.mockReturnValue({
       mutateAsync: vi.fn(),
     } as unknown as ReturnType<typeof apiHooks.useDeleteEvent>);
+
+    mockedUseSkipOccurrence.mockReturnValue({
+      mutateAsync: vi.fn(),
+    } as unknown as ReturnType<typeof apiHooks.useSkipOccurrence>);
 
     mockedUseApproveScheduleChangeRequest.mockReturnValue({
       mutateAsync: vi.fn(),

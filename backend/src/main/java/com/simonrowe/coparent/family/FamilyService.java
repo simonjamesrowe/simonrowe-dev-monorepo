@@ -11,7 +11,6 @@ import com.simonrowe.coparent.shared.CoparentAccessPolicy;
 import com.simonrowe.coparent.shared.CoparentIdentity;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.zone.ZoneRulesException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -227,7 +226,9 @@ public class FamilyService {
   private static void validateTimeZone(final String timeZone) {
     try {
       ZoneId.of(timeZone);
-    } catch (ZoneRulesException | NullPointerException exception) {
+    } catch (java.time.DateTimeException | NullPointerException exception) {
+      // DateTimeException covers both an unknown region (ZoneRulesException) and a malformed
+      // id such as "Europe/", which previously escaped as a 500.
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid time zone", exception);
     }
   }

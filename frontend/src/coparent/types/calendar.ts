@@ -22,6 +22,8 @@ export interface Child {
 export interface RecurringPattern {
   frequency: 'daily' | 'weekly';
   days?: string[];
+  /** YYYY-MM-DD dates on which one occurrence is skipped, e.g. a cancelled week. */
+  excludedDates?: string[];
 }
 
 export interface Event {
@@ -80,10 +82,10 @@ export interface CalendarSchedulingProps {
   currentParentId: string;
 
   // Event actions
-  /** Called when user wants to view event details */
-  onViewEvent?: (eventId: string) => void;
+  /** Called when user wants to view event details; a repeating event also names the date */
+  onViewEvent?: (eventId: string, occurrenceDate?: string) => void;
   /** Called when user wants to create a new event */
-  onCreateEvent?: () => void;
+  onCreateEvent?: (date?: string) => void;
   /** Called when user wants to edit an event */
   onEditEvent?: (eventId: string) => void;
   /** Called when user wants to delete an event */
@@ -93,11 +95,11 @@ export interface CalendarSchedulingProps {
   /** Called when user wants to request a schedule change */
   onRequestScheduleChange?: (eventId: string) => void;
   /** Called when user approves a schedule change request */
-  onApproveRequest?: (requestId: string, responseNote?: string) => void;
+  onApproveRequest?: (requestId: string, responseNote?: string) => void | Promise<void>;
   /** Called when user declines a schedule change request */
-  onDeclineRequest?: (requestId: string, responseNote?: string) => void;
+  onDeclineRequest?: (requestId: string, responseNote?: string) => void | Promise<void>;
   /** Called when user wants to view request details */
-  onViewRequest?: (requestId: string) => void;
+  onViewRequest?: (requestId?: string) => void;
 
   // View actions
   /** Called when user changes the calendar view */

@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 
 import { CalendarView } from '../components/calendar/CalendarView';
 import { EventCreationDrawer } from '../components/calendar/EventCreationDrawer';
+import { ScheduleChangeDrawer } from '../components/calendar/ScheduleChangeDrawer';
+import { ScheduleChangeRequestModal } from '../components/calendar/ScheduleChangeRequestModal';
 import {
   useFamilies,
   useParents,
@@ -12,8 +14,12 @@ import {
   useCreateEvent,
   useUpdateEvent,
   useDeleteEvent,
+  useSkipOccurrence,
+  useCurrentParentId,
   useApproveScheduleChangeRequest,
   useDeclineScheduleChangeRequest,
+  useCreateScheduleChangeRequest,
+  useDeleteScheduleChangeRequest,
 } from '../hooks/api';
 import type { Event, ScheduleChangeRequest, Parent, Child } from '../types/calendar';
 
@@ -82,7 +88,14 @@ const CalendarPage = () => {
 
   // Get drawer state from URL
   const isCreating = searchParams.get('create') === 'true';
-  const editingEventId = searchParams.get('edit') || undefined;
+  // `event` is the link other screens hand out (the dashboard, an applied assistant action);
+  // it opens the same drawer as `edit`.
+  const editingEventId = searchParams.get('edit') || searchParams.get('event') || undefined;
+  const occurrenceDate = searchParams.get('occurrence') || undefined;
+  // `request` is what an applied assistant action links to; `requests` opens the list.
+  const linkedRequestId = searchParams.get('request') || undefined;
+  const requestsOpen = Boolean(linkedRequestId) || searchParams.get('requests') === '1';
+  const [changeTarget, setChangeTarget] = useState<Event | null>(null);
   const isEditing = Boolean(editingEventId);
   const initialDate = searchParams.get('date') || todayYmd;
 
@@ -94,8 +107,11 @@ const CalendarPage = () => {
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
   const deleteEvent = useDeleteEvent();
+  const skipOccurrence = useSkipOccurrence();
   const approveScheduleChangeRequest = useApproveScheduleChangeRequest();
   const declineScheduleChangeRequest = useDeclineScheduleChangeRequest();
+  const createScheduleChangeRequest = useCreateScheduleChangeRequest();
+  const withdrawScheduleChangeRequest = useDeleteScheduleChangeRequest();
 
   useEffect(() => {
     const [firstFamily] = families;
@@ -104,9 +120,7 @@ const CalendarPage = () => {
     }
   }, [activeFamilyId, families]);
 
-  // Get current parent (the logged-in user)
-  const currentParent = parents.find((p) => p.role === 'primary') || parents[0];
-  const currentParentId = currentParent?.id || '';
+  const currentParentId = useCurrentParentId(activeFamilyId) ?? '';
 
   // Transform data to match component expectations
   const transformedParents: Parent[] = parents.map((p) => ({
@@ -194,8 +208,13 @@ const CalendarPage = () => {
     await updateEvent.mutateAsync({ id: eventId, familyId: activeFamilyId, ...eventData });
   };
 
-  const handleViewEvent = async (eventId: string) => {
-    setSearchParams({ edit: eventId });
+  const handleViewEvent = async (eventId: string, occurrence?: string) => {
+    setSearchParams(occurrence ? { edit: eventId, occurrence } : { edit: eventId });
+  };
+
+  const handleSkipOccurrence = async (date: string, skip: boolean) => {
+    if (!activeFamilyId || !editingEventId) return;
+    await skipOccurrence.mutateAsync({ id: editingEventId, familyId: activeFamilyId, date, skip });
   };
 
   const handleEditEvent = async (eventId: string) => {
@@ -207,8 +226,37 @@ const CalendarPage = () => {
     await deleteEvent.mutateAsync({ id: eventId, familyId: activeFamilyId });
   };
 
-  const handleRequestScheduleChange = async (eventId: string) => {
-    console.log('Request schedule change for event:', eventId);
+  // A request about a repeating event is about one occurrence of it, so the target the form
+  // proposes changes to is that occurrence, not the series' first date.
+  const handleRequestChange = () => {
+    if (!editingEvent) return;
+    const target =
+      editingEvent.recurring && occurrenceDate
+        ? { ...editingEvent, startDate: occurrenceDate, endDate: occurrenceDate }
+        : editingEvent;
+    setChangeTarget(target);
+    setSearchParams({});
+  };
+
+  const handleSubmitChange = async ({
+    proposedChange,
+    reason,
+  }: {
+    proposedChange: ScheduleChangeRequest['proposedChange'];
+    reason: string;
+  }) => {
+    if (!activeFamilyId || !changeTarget) return;
+    await createScheduleChangeRequest.mutateAsync({
+      familyId: activeFamilyId,
+      originalEventId: changeTarget.id,
+      proposedChange,
+      reason,
+    });
+  };
+
+  const handleWithdrawRequest = async (requestId: string) => {
+    if (!activeFamilyId) return;
+    await withdrawScheduleChangeRequest.mutateAsync({ id: requestId, familyId: activeFamilyId });
   };
 
   const handleApproveRequest = async (requestId: string, responseNote?: string) => {
@@ -229,8 +277,8 @@ const CalendarPage = () => {
     });
   };
 
-  const handleViewRequest = async (requestId: string) => {
-    console.log('View request:', requestId);
+  const handleViewRequest = (requestId?: string) => {
+    setSearchParams(requestId ? { request: requestId } : { requests: '1' });
   };
 
   const handleChangeView = (view: 'month' | 'week' | 'day') => {
@@ -268,10 +316,9 @@ const CalendarPage = () => {
         scheduleChangeRequests={transformedRequests}
         currentParentId={currentParentId}
         onViewEvent={handleViewEvent}
-        onCreateEvent={() => handleOpenDrawer()}
+        onCreateEvent={(date) => handleOpenDrawer(date)}
         onEditEvent={handleEditEvent}
         onDeleteEvent={handleDeleteEvent}
-        onRequestScheduleChange={handleRequestScheduleChange}
         onApproveRequest={handleApproveRequest}
         onDeclineRequest={handleDeclineRequest}
         onViewRequest={handleViewRequest}
@@ -287,6 +334,10 @@ const CalendarPage = () => {
         children={transformedChildren}
         event={editingEvent}
         mode={drawerMode}
+        occurrenceDate={editingEvent?.recurring ? occurrenceDate : undefined}
+        onSkipOccurrence={handleSkipOccurrence}
+        onDelete={editingEventId ? () => handleDeleteEvent(editingEventId) : undefined}
+        onRequestChange={handleRequestChange}
         currentParentId={currentParentId}
         onSubmit={(eventData) => {
           if (drawerMode === 'edit' && editingEventId) {
@@ -294,6 +345,30 @@ const CalendarPage = () => {
           }
           return handleCreateEvent(eventData);
         }}
+      />
+
+      <ScheduleChangeRequestModal
+        isOpen={changeTarget !== null}
+        originalEvent={changeTarget}
+        parents={Object.fromEntries(transformedParents.map((parent) => [parent.id, parent]))}
+        currentParentId={currentParentId}
+        onClose={() => setChangeTarget(null)}
+        onSubmit={handleSubmitChange}
+      />
+
+      <ScheduleChangeDrawer
+        open={requestsOpen}
+        onClose={() => setSearchParams({})}
+        initialRequestId={linkedRequestId}
+        parents={transformedParents}
+        children={transformedChildren}
+        events={transformedEvents}
+        scheduleChangeRequests={transformedRequests}
+        currentParentId={currentParentId}
+        onApproveRequest={handleApproveRequest}
+        onDeclineRequest={handleDeclineRequest}
+        onWithdrawRequest={handleWithdrawRequest}
+        onViewEvent={(eventId) => setSearchParams({ edit: eventId })}
       />
     </div>
   );

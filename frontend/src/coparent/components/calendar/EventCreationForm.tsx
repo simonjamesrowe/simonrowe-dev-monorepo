@@ -20,13 +20,14 @@ export interface EventCreationFormProps {
   currentParentId: string;
   initialDate?: string;
   initialEvent?: Partial<Event>;
-  onSubmit?: (data: Omit<Event, 'id'>) => void;
+  onSubmit?: (data: Omit<Event, 'id'>) => void | Promise<void>;
   onCancel?: () => void;
   onValidationChange?: (isValid: boolean) => void;
 }
 
 export interface EventCreationFormRef {
-  submit: () => void;
+  /** Resolves once the save settles, so the caller can report a failure and block resubmits. */
+  submit: () => Promise<void>;
 }
 
 const TYPE_OPTIONS = DEFAULT_EVENT_TYPES;
@@ -84,9 +85,30 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
     const isCustody = normalizedType === 'custody';
     const normalizeDate = (value: string) => (value.includes('T') ? value.slice(0, 10) : value);
     const normalizedStartDate = normalizeDate(startDate);
-    const normalizedEndDate = normalizeDate(endDate || startDate);
+    // A repeating event's end date is when the series stops; leaving it empty means it keeps
+    // repeating. Only a one-off event falls back to ending on the day it starts.
+    const normalizedEndDate = endDate
+      ? normalizeDate(endDate)
+      : recurrence
+        ? undefined
+        : normalizedStartDate;
+    // The backend refuses an event with no child, so an empty selection is not a valid form.
     const isValid =
-      title.trim().length > 0 && normalizedStartDate.length > 0 && resolvedType.length > 0;
+      title.trim().length > 0 &&
+      normalizedStartDate.length > 0 &&
+      resolvedType.length > 0 &&
+      selectedChildIds.length > 0;
+
+    // Children arrive after the form mounts, so the "every child" default is applied once they
+    // do, never over a selection the user has already made or an event being edited.
+    const childrenDefaulted = useRef(false);
+    useEffect(() => {
+      if (childrenDefaulted.current || initialEvent || children.length === 0) return;
+      childrenDefaulted.current = true;
+      setSelectedChildIds((current) =>
+        current.length > 0 ? current : children.map((child) => child.id),
+      );
+    }, [children, initialEvent]);
 
     useEffect(() => {
       if (!startDate || !endDate) return;
@@ -106,7 +128,9 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
       setTitle(initialEvent.title ?? '');
       setType(initialEvent.type ?? 'activity');
       setStartDate(initialEvent.startDate ?? today);
-      setEndDate(initialEvent.endDate ?? initialEvent.startDate ?? today);
+      setEndDate(
+        initialEvent.endDate ?? (initialEvent.recurring ? '' : (initialEvent.startDate ?? today)),
+      );
       setStartTime(initialEvent.startTime ?? '16:00');
       setEndTime(initialEvent.endTime ?? '17:30');
       setAllDay(initialEvent.allDay ?? false);
@@ -189,8 +213,11 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
     const handleRecurrence = (frequency: RecurringPattern['frequency'] | 'none') => {
       if (frequency === 'none') {
         setRecurrence(null);
+        if (!endDate) setEndDate(startDate);
         return;
       }
+      // Starting a series whose end is still the start date would repeat exactly once.
+      if (!recurrence && !isCustody && endDate === startDate) setEndDate('');
       if (frequency === 'weekly') {
         const dayIndex = new Date(`${startDate}T12:00:00`).getDay();
         const defaultDay = WEEKDAYS[dayIndex]?.value || 'monday';
@@ -207,9 +234,9 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
       setRecurrence({ ...recurrence, days: nextDays });
     };
 
-    const handleSubmit = useCallback(() => {
+    const handleSubmit = useCallback(async () => {
       if (!isValid) return;
-      onSubmit?.({
+      await onSubmit?.({
         type: previewEvent.type,
         title: previewEvent.title,
         startDate: previewEvent.startDate,
@@ -218,12 +245,21 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
         endTime: previewEvent.endTime,
         allDay: previewEvent.allDay,
         parentId: previewEvent.parentId,
+        // The update API replaces the whole event, so a field left out here is erased.
+        parentIds: previewEvent.parentIds,
         childIds: previewEvent.childIds,
         location: previewEvent.location,
         notes: previewEvent.notes,
-        recurring: previewEvent.recurring,
+        // Skipped dates are changed one at a time through their own endpoint, so the latest
+        // saved list is sent back rather than whatever this form loaded when it opened.
+        recurring: previewEvent.recurring
+          ? {
+              ...previewEvent.recurring,
+              excludedDates: initialEvent?.recurring?.excludedDates ?? [],
+            }
+          : null,
       });
-    }, [isValid, onSubmit, previewEvent]);
+    }, [isValid, onSubmit, previewEvent, initialEvent]);
 
     // Notify parent of validation state changes
     useEffect(() => {
@@ -438,7 +474,7 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
               </div>
               <div>
                 <label htmlFor="event-end-date" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  End date
+                  {recurrence ? 'Repeat until' : 'End date'}
                 </label>
                 <input
                   id="event-end-date"
@@ -450,6 +486,21 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
                   onMouseDownCapture={stopDrawerDrag}
                   className="w-full rounded-xl border border-slate-200 bg-white/70 px-4 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
+                {recurrence && (
+                  <p className="mt-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    {endDate ? (
+                      <button
+                        type="button"
+                        onClick={() => setEndDate('')}
+                        className="font-medium text-teal-700 hover:underline dark:text-teal-300"
+                      >
+                        Remove end date
+                      </button>
+                    ) : (
+                      'No end date — keeps repeating.'
+                    )}
+                  </p>
+                )}
               </div>
             </div>
 

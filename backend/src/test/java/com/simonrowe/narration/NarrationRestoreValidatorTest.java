@@ -13,12 +13,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.test.context.TestPropertySource;
 
+// A private uploads root, as NarrationBackupCoverageTest has: test classes run in parallel forks
+// that share the filesystem, so on the shared target/test-uploads another class's cleanup could
+// delete this test's "valid" file mid-test and it reported zero ready narrations.
+@TestPropertySource(properties = "uploads.path=target/test-narration-restore-uploads")
 class NarrationRestoreValidatorTest extends AbstractIntegrationTest {
 
   private static final byte[] MP3 = new byte[]{'I', 'D', '3', 4, 5, 6, 7, 8};
   private static final Path NARRATION_UPLOADS =
-      Path.of("target/test-uploads/narrations");
+      Path.of("target/test-narration-restore-uploads/narrations");
 
   @Autowired private NarrationRepository repository;
   @Autowired private NarrationStorage storage;

@@ -4,14 +4,15 @@ import type { Event, Parent } from '../../types/calendar';
 
 import { EventPill } from './EventPill';
 import { getEventOwnerLabel } from './eventOwners';
-import { expandRecurringEvents } from './recurrence';
+import { expandRecurringEvents, occurrenceTarget } from './recurrence';
+import { useNow } from './timeGrid';
 
 interface MonthViewProps {
   currentDate: Date;
   events: Event[];
   parents: Record<string, Parent>;
   onDayClick: (date: Date) => void;
-  onEventClick?: (eventId: string) => void;
+  onEventClick?: (eventId: string, occurrenceDate?: string) => void;
 }
 
 interface DayData {
@@ -43,6 +44,8 @@ export function MonthView({
     return `${year}-${month}-${day}`;
   };
 
+  // Keyed on the date, so the grid recomputes when the day changes rather than every minute.
+  const todayKey = useNow().toDateString();
   const calendarDays = useMemo(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -62,7 +65,6 @@ export function MonthView({
 
     const days: DayData[] = [];
     const current = new Date(startDate);
-    const today = new Date(2025, 0, 6); // Sample "today" for demo
 
     const expandedEvents = expandRecurringEvents(events, dateToYmd(startDate), dateToYmd(endDate));
 
@@ -88,7 +90,7 @@ export function MonthView({
       days.push({
         date: new Date(current),
         isCurrentMonth: current.getMonth() === month,
-        isToday: current.getTime() === today.getTime(),
+        isToday: current.toDateString() === todayKey,
         custodyParent: custodyEvent?.parentId ? (parents[custodyEvent.parentId] ?? null) : null,
         custodyEventId: custodyEvent?.id ?? null,
         events: dayEvents,
@@ -98,7 +100,7 @@ export function MonthView({
     }
 
     return days;
-  }, [currentDate, events, parents]);
+  }, [currentDate, events, parents, todayKey]);
 
   const getCustodyGradient = (
     parent: Parent | null,
@@ -223,7 +225,7 @@ export function MonthView({
                     ownerLabel={getEventOwnerLabel(event, parents)}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onEventClick?.(event.sourceId ?? event.id);
+                      onEventClick?.(...occurrenceTarget(event));
                     }}
                     compact
                   />

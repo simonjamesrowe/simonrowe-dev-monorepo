@@ -85,7 +85,17 @@ class FamilyApiIntegrationTest extends AbstractIntegrationTest {
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"school\":\"New School\"}"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.school", is("New School")));
+        .andExpect(jsonPath("$.school", is("New School")))
+        .andExpect(jsonPath("$.medicalNotes", is("Private")));
+
+    // An omitted field is left alone; a blank one clears it, so a note can be removed.
+    mockMvc.perform(patch("/api/coparent/children/{childId}", childId)
+            .with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"school\":\"\",\"medicalNotes\":\"  \"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.school").doesNotExist())
+        .andExpect(jsonPath("$.medicalNotes").doesNotExist());
 
     mockMvc.perform(post("/api/coparent/onboarding/{familyId}/complete-step", familyId)
             .with(user("alice"))
@@ -162,6 +172,13 @@ class FamilyApiIntegrationTest extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.name", is("Updated Family")))
         .andExpect(jsonPath("$.timeZone", is("Europe/Paris")));
+
+    // A malformed zone id is a client error, not a 500.
+    mockMvc.perform(patch("/api/coparent/families/{familyId}", familyId)
+            .with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"timeZone\":\"Europe/\"}"))
+        .andExpect(status().isBadRequest());
 
     mockMvc.perform(patch("/api/coparent/onboarding/{familyId}", familyId)
             .with(user("alice"))

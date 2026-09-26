@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 
+import { apiErrorMessage } from '../../lib/api/errorMessage';
 import type { Event, Parent, ProposedChange } from '../../types/calendar';
 
 import { Icon } from './Icon';
@@ -16,12 +17,12 @@ export interface ScheduleChangeRequestModalProps {
   /** Called when the modal should close */
   onClose?: () => void;
   /** Called when the user submits the request */
-  onSubmit?: (data: { proposedChange: ProposedChange; reason: string }) => void;
+  onSubmit?: (data: { proposedChange: ProposedChange; reason: string }) => void | Promise<void>;
 }
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + 'T12:00:00');
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString('en-GB', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -47,16 +48,20 @@ export function ScheduleChangeRequestModal({
   const [newEndDate, setNewEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Keyed on the occurrence as well as the event: two weeks of one series are different requests.
+  const eventKey = originalEvent ? `${originalEvent.id}:${originalEvent.startDate}` : '';
 
-  // Reset form when modal opens with new event
-  useMemo(() => {
-    if (originalEvent) {
-      setNewStartDate(originalEvent.startDate);
-      setNewEndDate(originalEvent.endDate || originalEvent.startDate);
-      setChangeType('swap');
-      setReason('');
-    }
-  }, [originalEvent?.id]);
+  // Reset the form whenever it opens for a different event or occurrence.
+  useEffect(() => {
+    if (!originalEvent) return;
+    setNewStartDate(originalEvent.startDate);
+    setNewEndDate(originalEvent.endDate || originalEvent.startDate);
+    setChangeType('swap');
+    setReason('');
+    setError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the target changes
+  }, [eventKey]);
 
   if (!isOpen || !originalEvent) return null;
 
@@ -70,30 +75,35 @@ export function ScheduleChangeRequestModal({
   const newDays = newStartDate && newEndDate ? getDaysBetween(newStartDate, newEndDate) : 0;
   const daysDiff = newDays - originalDays;
 
-  const handleSubmit = () => {
-    if (!newStartDate || !newEndDate || !reason.trim()) return;
+  const isRemoval = changeType === 'remove';
+  const originalEnd = originalEvent.endDate || originalEvent.startDate;
 
+  const handleSubmit = async () => {
+    if (!isFormValid || isSubmitting) return;
     setIsSubmitting(true);
-
-    onSubmit?.({
-      proposedChange: {
-        type: changeType,
-        originalStartDate: originalEvent.startDate,
-        originalEndDate: originalEvent.endDate,
-        newStartDate,
-        newEndDate,
-      },
-      reason: reason.trim(),
-    });
-
-    // Simulate submission delay
-    setTimeout(() => {
-      setIsSubmitting(false);
+    setError(null);
+    try {
+      await onSubmit?.({
+        proposedChange: {
+          type: changeType,
+          originalStartDate: originalEvent.startDate,
+          originalEndDate: originalEnd,
+          // Cancelling proposes no new dates; the original ones say what is being called off.
+          newStartDate: isRemoval ? originalEvent.startDate : newStartDate,
+          newEndDate: isRemoval ? originalEnd : newEndDate,
+        },
+        reason: reason.trim(),
+      });
       onClose?.();
-    }, 500);
+    } catch (failure) {
+      setError(apiErrorMessage(failure, 'The request could not be sent. Try again.'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const isFormValid = newStartDate && newEndDate && reason.trim().length >= 10;
+  const isFormValid =
+    (isRemoval || (newStartDate && newEndDate)) && reason.trim().length >= 10;
 
   return (
     <>
@@ -202,10 +212,11 @@ export function ScheduleChangeRequestModal({
               <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Type of Change
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {[
-                  { value: 'swap', label: 'Swap Days', icon: '↔️', desc: 'Trade days' },
-                  { value: 'extend', label: 'Adjust Time', icon: '📅', desc: 'Change dates' },
+                  { value: 'swap', label: 'Swap Days', icon: 'users', desc: 'Trade days' },
+                  { value: 'extend', label: 'Adjust Time', icon: 'calendar-days', desc: 'Change dates' },
+                  { value: 'remove', label: 'Cancel date', icon: 'x', desc: 'Call it off' },
                 ].map((option) => (
                   <button
                     key={option.value}
@@ -255,83 +266,85 @@ export function ScheduleChangeRequestModal({
               </div>
             </div>
 
-            {/* Proposed New Dates */}
-            <div className="relative">
-              <div className="absolute -left-3 bottom-0 top-0 w-1 rounded-full bg-teal-500" />
-              <div className="rounded-xl border border-teal-200/60 bg-teal-50 p-4 dark:border-teal-700/60 dark:bg-teal-900/20">
-                <div className="mb-3 flex items-center gap-2">
-                  <svg
-                    className="h-4 w-4 text-teal-600 dark:text-teal-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
-                  <span className="text-xs font-medium uppercase tracking-wide text-teal-700 dark:text-teal-300">
-                    Proposed Schedule
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="schedule-new-start-date" className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
-                      Start Date
-                    </label>
-                    <input
-                      id="schedule-new-start-date"
-                      type="date"
-                      value={newStartDate}
-                      onChange={(e) => setNewStartDate(e.target.value)}
-                      className="w-full rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-teal-700 dark:bg-slate-800 dark:text-slate-100"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="schedule-new-end-date" className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
-                      End Date
-                    </label>
-                    <input
-                      id="schedule-new-end-date"
-                      type="date"
-                      value={newEndDate}
-                      onChange={(e) => setNewEndDate(e.target.value)}
-                      className="w-full rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-teal-700 dark:bg-slate-800 dark:text-slate-100"
-                    />
-                  </div>
-                </div>
-
-                {/* Days difference indicator */}
-                {newDays > 0 && (
-                  <div className="mt-3 flex items-center justify-between text-sm">
-                    <span className="text-teal-600 dark:text-teal-400">
-                      {formatDate(newStartDate)} → {formatDate(newEndDate)}
-                    </span>
-                    <span
-                      className={`font-semibold ${
-                        daysDiff === 0
-                          ? 'text-teal-600 dark:text-teal-400'
-                          : daysDiff > 0
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-rose-600 dark:text-rose-400'
-                      }`}
+            {/* Proposed New Dates (a cancellation proposes none) */}
+            {!isRemoval && (
+              <div className="relative">
+                <div className="absolute -left-3 bottom-0 top-0 w-1 rounded-full bg-teal-500" />
+                <div className="rounded-xl border border-teal-200/60 bg-teal-50 p-4 dark:border-teal-700/60 dark:bg-teal-900/20">
+                  <div className="mb-3 flex items-center gap-2">
+                    <svg
+                      className="h-4 w-4 text-teal-600 dark:text-teal-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
                     >
-                      {newDays} {newDays === 1 ? 'day' : 'days'}
-                      {daysDiff !== 0 && (
-                        <span className="ml-1 text-xs">
-                          ({daysDiff > 0 ? '+' : ''}
-                          {daysDiff})
-                        </span>
-                      )}
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <span className="text-xs font-medium uppercase tracking-wide text-teal-700 dark:text-teal-300">
+                      Proposed Schedule
                     </span>
                   </div>
-                )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="schedule-new-start-date" className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
+                        Start Date
+                      </label>
+                      <input
+                        id="schedule-new-start-date"
+                        type="date"
+                        value={newStartDate}
+                        onChange={(e) => setNewStartDate(e.target.value)}
+                        className="w-full rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-teal-700 dark:bg-slate-800 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="schedule-new-end-date" className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
+                        End Date
+                      </label>
+                      <input
+                        id="schedule-new-end-date"
+                        type="date"
+                        value={newEndDate}
+                        onChange={(e) => setNewEndDate(e.target.value)}
+                        className="w-full rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-teal-700 dark:bg-slate-800 dark:text-slate-100"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Days difference indicator */}
+                  {newDays > 0 && (
+                    <div className="mt-3 flex items-center justify-between text-sm">
+                      <span className="text-teal-600 dark:text-teal-400">
+                        {formatDate(newStartDate)} → {formatDate(newEndDate)}
+                      </span>
+                      <span
+                        className={`font-semibold ${
+                          daysDiff === 0
+                            ? 'text-teal-600 dark:text-teal-400'
+                            : daysDiff > 0
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-rose-600 dark:text-rose-400'
+                        }`}
+                      >
+                        {newDays} {newDays === 1 ? 'day' : 'days'}
+                        {daysDiff !== 0 && (
+                          <span className="ml-1 text-xs">
+                            ({daysDiff > 0 ? '+' : ''}
+                            {daysDiff})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Reason Field */}
             <div>
@@ -383,6 +396,11 @@ export function ScheduleChangeRequestModal({
 
           {/* Footer */}
           <div className="rounded-b-2xl border-t border-slate-200 bg-slate-50 px-6 py-4 dark:border-slate-700 dark:bg-slate-800/50">
+            {error && (
+              <p role="alert" className="mb-3 text-sm text-red-700 dark:text-red-300">
+                {error}
+              </p>
+            )}
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={onClose}

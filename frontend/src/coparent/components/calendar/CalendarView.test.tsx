@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CalendarView } from './CalendarView';
 
@@ -34,6 +34,10 @@ const children = [
 ];
 
 describe('CalendarView', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders calendar shell with empty events', () => {
     render(
       <CalendarView
@@ -117,5 +121,62 @@ describe('CalendarView', () => {
     expect(onChangeView).toHaveBeenCalledWith('week');
     expect(onChangeView).toHaveBeenCalledWith('day');
     expect(onNavigateDate).toHaveBeenCalledTimes(2);
+  });
+
+  it('counts this month by occurrence, so a series that started last month still counts', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 10, 12, 0)); // October 2026
+    render(
+      <CalendarView
+        parents={parents}
+        children={children}
+        scheduleChangeRequests={[]}
+        currentParentId="parent-1"
+        events={[
+          {
+            id: 'football',
+            type: 'activity',
+            title: 'Football training',
+            startDate: '2026-09-08',
+            startTime: '18:00',
+            endTime: '19:00',
+            allDay: false,
+            parentId: null,
+            childIds: ['child-1'],
+            notes: null,
+            recurring: { frequency: 'weekly', days: ['tuesday'], excludedDates: ['2026-10-13'] },
+          },
+          {
+            id: 'dentist',
+            type: 'medical',
+            title: 'Dentist',
+            startDate: '2026-10-07',
+            allDay: true,
+            parentId: null,
+            childIds: ['child-1'],
+            notes: null,
+            recurring: null,
+          },
+          {
+            id: 'old-appointment',
+            type: 'medical',
+            title: 'Last month',
+            startDate: '2026-09-02',
+            allDay: true,
+            parentId: null,
+            childIds: ['child-1'],
+            notes: null,
+            recurring: null,
+          },
+        ]}
+      />,
+    );
+
+    // Tuesdays in October 2026: 6, 13 (skipped), 20, 27, plus the dentist on the 7th.
+    const stat = (label: string) =>
+      screen.getByText(label).parentElement?.textContent?.replace(label, '').trim();
+    expect(stat('This Month')).toBe('4 events');
+    expect(stat('Activities')).toBe('3 scheduled');
+    expect(stat('Medical')).toBe('1 appointments');
   });
 });
