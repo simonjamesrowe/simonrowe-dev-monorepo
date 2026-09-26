@@ -303,7 +303,10 @@ public class AssistantActionExecutor {
         ids(payload, "childIds", current == null ? List.of() : current.childIds()),
         string(payload, "location", current == null ? null : current.location()),
         string(payload, "notes", current == null ? null : current.notes()),
-        recurrence == null ? null : new CalendarEvent.Recurring(recurrence, recurringDays));
+        recurrence == null ? null : new CalendarEvent.Recurring(recurrence, recurringDays,
+            // The assistant cannot see or propose skipped dates, so an update keeps them.
+            current == null || current.recurring() == null
+                ? List.of() : current.recurring().excludedDates()));
   }
 
   private static CalendarService.CategoryValues categoryValues(

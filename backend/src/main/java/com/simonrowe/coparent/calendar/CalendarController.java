@@ -69,6 +69,24 @@ public class CalendarController {
     service.deleteEvent(CoparentIds.parse(familyId), CoparentIds.parse(eventId));
   }
 
+  @PutMapping("/events/{eventId}/skipped-dates/{date}")
+  EventResponse skipOccurrence(
+      @PathVariable final String familyId,
+      @PathVariable final String eventId,
+      @PathVariable final String date) {
+    return EventResponse.from(service.skipOccurrence(CoparentIds.parse(familyId),
+        CoparentIds.parse(eventId), date));
+  }
+
+  @DeleteMapping("/events/{eventId}/skipped-dates/{date}")
+  EventResponse restoreOccurrence(
+      @PathVariable final String familyId,
+      @PathVariable final String eventId,
+      @PathVariable final String date) {
+    return EventResponse.from(service.restoreOccurrence(CoparentIds.parse(familyId),
+        CoparentIds.parse(eventId), date));
+  }
+
   @PostMapping("/event-categories")
   @ResponseStatus(HttpStatus.CREATED)
   CategoryResponse createCategory(

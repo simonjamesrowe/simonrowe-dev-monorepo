@@ -4,14 +4,14 @@ import type { Event, Parent } from '../../types/calendar';
 
 import { EventPill } from './EventPill';
 import { getEventOwnerLabel } from './eventOwners';
-import { expandRecurringEvents } from './recurrence';
+import { expandRecurringEvents, occurrenceTarget } from './recurrence';
 
 interface MonthViewProps {
   currentDate: Date;
   events: Event[];
   parents: Record<string, Parent>;
   onDayClick: (date: Date) => void;
-  onEventClick?: (eventId: string) => void;
+  onEventClick?: (eventId: string, occurrenceDate?: string) => void;
 }
 
 interface DayData {
@@ -223,7 +223,7 @@ export function MonthView({
                     ownerLabel={getEventOwnerLabel(event, parents)}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onEventClick?.(event.sourceId ?? event.id);
+                      onEventClick?.(...occurrenceTarget(event));
                     }}
                     compact
                   />

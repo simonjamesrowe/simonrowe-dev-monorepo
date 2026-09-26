@@ -1,6 +1,7 @@
 package com.simonrowe.coparent.assistant;
 
 import com.simonrowe.coparent.assistant.AssistantInferenceService.ProposedCall;
+import com.simonrowe.coparent.calendar.Recurrence;
 import com.simonrowe.coparent.config.CoparentProperties;
 import com.simonrowe.coparent.model.CalendarEvent;
 import com.simonrowe.coparent.model.EventCategory;
@@ -436,9 +437,27 @@ public class AssistantProposalService {
           "Event end cannot precede its start"));
     }
     final String frequency = text(payload.get("recurringFrequency"));
-    if (frequency != null && !Set.of("daily", "weekly").contains(frequency)) {
-      errors.add(new AssistantProposalBatch.FieldError("recurringFrequency",
-          "Choose daily or weekly recurrence"));
+    if (frequency != null) {
+      Recurrence.canonicalFrequency(frequency).ifPresentOrElse(
+          canonical -> payload.put("recurringFrequency", canonical),
+          () -> errors.add(new AssistantProposalBatch.FieldError("recurringFrequency",
+              "Choose daily or weekly recurrence")));
+    }
+    if (payload.get("recurringDays") instanceof List<?> days) {
+      final List<String> canonical = new ArrayList<>();
+      for (final Object day : days) {
+        final String name = Recurrence.canonicalDay(day instanceof String value ? value : null)
+            .orElse(null);
+        if (name == null) {
+          errors.add(new AssistantProposalBatch.FieldError("recurringDays",
+              "Use weekday names such as monday"));
+          return;
+        }
+        if (!canonical.contains(name)) {
+          canonical.add(name);
+        }
+      }
+      payload.put("recurringDays", List.copyOf(canonical));
     }
   }
 

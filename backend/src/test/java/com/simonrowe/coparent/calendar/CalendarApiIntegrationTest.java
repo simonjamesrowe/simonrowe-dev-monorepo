@@ -1,5 +1,6 @@
 package com.simonrowe.coparent.calendar;
 
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -31,6 +32,9 @@ import org.springframework.test.web.servlet.MvcResult;
 /** Calendar, recurrence, category and schedule-decision contracts against real MongoDB. */
 @TestPropertySource(properties = "coparent.enabled=true")
 class CalendarApiIntegrationTest extends AbstractIntegrationTest {
+
+  private static final String SKIPPED_DATE =
+      "/api/coparent/families/{familyId}/events/{eventId}/skipped-dates/{date}";
 
   private static final List<String> COLLECTIONS = List.of(
       V043CreateCoparentCollections.FAMILIES,
@@ -87,6 +91,110 @@ class CalendarApiIntegrationTest extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/coparent/families/{familyId}/events", fixture.familyId())
             .with(user("alice")))
         .andExpect(jsonPath("$", hasSize(0)));
+  }
+
+  @Test
+  void skipsAndRestoresSingleOccurrencesOfOpenEndedSeries() throws Exception {
+    final Fixture fixture = familyWithTwoParentsAndChild();
+    final MvcResult created = mockMvc.perform(post(
+            "/api/coparent/families/{familyId}/events", fixture.familyId())
+            .with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"type":"activity","title":"Swimming","startDate":"2026-09-28T00:00:00Z",
+                 "startTime":"18:30","endTime":"19:00","allDay":false,"childIds":["%s"],
+                 "recurring":{"frequency":"weekly","days":["monday"]}}
+                """.formatted(fixture.childId())))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.endDate").doesNotExist())
+        .andExpect(jsonPath("$.recurring.excludedDates", hasSize(0)))
+        .andReturn();
+    final String eventId = JsonPath.read(created.getResponse().getContentAsString(), "$.id");
+    final String skipped = SKIPPED_DATE;
+
+    mockMvc.perform(put(skipped, fixture.familyId(), eventId, "2026-11-02").with(user("bob")))
+        .andExpect(status().isOk());
+    mockMvc.perform(put(skipped, fixture.familyId(), eventId, "2026-10-26").with(user("alice")))
+        .andExpect(status().isOk());
+    mockMvc.perform(put(skipped, fixture.familyId(), eventId, "2026-10-26").with(user("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.recurring.excludedDates",
+            contains("2026-10-26", "2026-11-02")));
+
+    // A whole-event edit that carries the skipped dates back keeps them.
+    mockMvc.perform(put("/api/coparent/families/{familyId}/events/{eventId}",
+            fixture.familyId(), eventId)
+            .with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"type":"activity","title":"Swimming lessons",
+                 "startDate":"2026-09-28T00:00:00Z","startTime":"18:30","endTime":"19:00",
+                 "allDay":false,"childIds":["%s"],"recurring":{"frequency":"weekly",
+                 "days":["monday"],"excludedDates":["2026-11-02","2026-10-26"]}}
+                """.formatted(fixture.childId())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.endDate").doesNotExist())
+        .andExpect(jsonPath("$.recurring.excludedDates",
+            contains("2026-10-26", "2026-11-02")));
+
+    mockMvc.perform(delete(skipped, fixture.familyId(), eventId, "2026-11-02")
+            .with(user("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.title", is("Swimming lessons")))
+        .andExpect(jsonPath("$.recurring.excludedDates", contains("2026-10-26")));
+
+    mockMvc.perform(put(skipped, fixture.familyId(), eventId, "2026-13-40").with(user("alice")))
+        .andExpect(status().isBadRequest());
+    mockMvc.perform(put(skipped, fixture.familyId(), eventId, "2026-10-19")
+            .with(user("mallory")))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void refusesToSkipAnOccurrenceOfOneOffEvent() throws Exception {
+    final Fixture fixture = familyWithTwoParentsAndChild();
+    final MvcResult created = mockMvc.perform(post(
+            "/api/coparent/families/{familyId}/events", fixture.familyId())
+            .with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"type":"school","title":"Photo day","startDate":"2026-10-02T00:00:00Z",
+                 "allDay":true,"childIds":["%s"]}
+                """.formatted(fixture.childId())))
+        .andExpect(status().isCreated()).andReturn();
+    final String eventId = JsonPath.read(created.getResponse().getContentAsString(), "$.id");
+
+    mockMvc.perform(put(SKIPPED_DATE, fixture.familyId(), eventId, "2026-10-02")
+            .with(user("alice")))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void capsSkippedDatesInTheSameWriteThatAddsThem() throws Exception {
+    final Fixture fixture = familyWithTwoParentsAndChild();
+    final MvcResult created = mockMvc.perform(post(
+            "/api/coparent/families/{familyId}/events", fixture.familyId())
+            .with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(eventJson(fixture.childId(), "School pickup")))
+        .andExpect(status().isCreated()).andReturn();
+    final String eventId = JsonPath.read(created.getResponse().getContentAsString(), "$.id");
+    final List<String> full = java.util.stream.IntStream.range(0,
+            CalendarService.MAX_EXCLUDED_DATES)
+        .mapToObj(week -> java.time.LocalDate.of(2026, 10, 2).plusWeeks(week).toString())
+        .toList();
+    mongoTemplate.getCollection(V043CreateCoparentCollections.EVENTS).updateOne(
+        new Document("_id", new org.bson.types.ObjectId(eventId)),
+        new Document("$set", new Document("recurring.excludedDates", full)));
+
+    mockMvc.perform(put(SKIPPED_DATE, fixture.familyId(), eventId, "2030-01-04")
+            .with(user("alice")))
+        .andExpect(status().isBadRequest());
+    mockMvc.perform(put(SKIPPED_DATE, fixture.familyId(), eventId, full.getFirst())
+            .with(user("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.recurring.excludedDates",
+            hasSize(CalendarService.MAX_EXCLUDED_DATES)));
   }
 
   @Test

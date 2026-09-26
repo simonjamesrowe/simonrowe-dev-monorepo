@@ -12,6 +12,7 @@ import {
   useCreateEvent,
   useUpdateEvent,
   useDeleteEvent,
+  useSkipOccurrence,
   useApproveScheduleChangeRequest,
   useDeclineScheduleChangeRequest,
 } from '../hooks/api';
@@ -83,6 +84,7 @@ const CalendarPage = () => {
   // Get drawer state from URL
   const isCreating = searchParams.get('create') === 'true';
   const editingEventId = searchParams.get('edit') || undefined;
+  const occurrenceDate = searchParams.get('occurrence') || undefined;
   const isEditing = Boolean(editingEventId);
   const initialDate = searchParams.get('date') || todayYmd;
 
@@ -94,6 +96,7 @@ const CalendarPage = () => {
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
   const deleteEvent = useDeleteEvent();
+  const skipOccurrence = useSkipOccurrence();
   const approveScheduleChangeRequest = useApproveScheduleChangeRequest();
   const declineScheduleChangeRequest = useDeclineScheduleChangeRequest();
 
@@ -194,8 +197,13 @@ const CalendarPage = () => {
     await updateEvent.mutateAsync({ id: eventId, familyId: activeFamilyId, ...eventData });
   };
 
-  const handleViewEvent = async (eventId: string) => {
-    setSearchParams({ edit: eventId });
+  const handleViewEvent = async (eventId: string, occurrence?: string) => {
+    setSearchParams(occurrence ? { edit: eventId, occurrence } : { edit: eventId });
+  };
+
+  const handleSkipOccurrence = async (date: string, skip: boolean) => {
+    if (!activeFamilyId || !editingEventId) return;
+    await skipOccurrence.mutateAsync({ id: editingEventId, familyId: activeFamilyId, date, skip });
   };
 
   const handleEditEvent = async (eventId: string) => {
@@ -287,6 +295,8 @@ const CalendarPage = () => {
         children={transformedChildren}
         event={editingEvent}
         mode={drawerMode}
+        occurrenceDate={editingEvent?.recurring ? occurrenceDate : undefined}
+        onSkipOccurrence={handleSkipOccurrence}
         currentParentId={currentParentId}
         onSubmit={(eventData) => {
           if (drawerMode === 'edit' && editingEventId) {

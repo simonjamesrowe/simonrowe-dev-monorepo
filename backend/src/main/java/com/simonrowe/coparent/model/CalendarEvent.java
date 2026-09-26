@@ -2,6 +2,7 @@ package com.simonrowe.coparent.model;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import org.bson.types.ObjectId;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -34,9 +35,19 @@ public record CalendarEvent(
     childIds = childIds == null ? List.of() : List.copyOf(childIds);
   }
 
-  public record Recurring(String frequency, List<String> days) {
+  /**
+   * How an event repeats. {@code excludedDates} are {@code YYYY-MM-DD} dates on which a single
+   * occurrence is skipped (a cancelled week) without touching the rest of the series.
+   */
+  public record Recurring(String frequency, List<String> days, List<String> excludedDates) {
     public Recurring {
       days = days == null ? List.of() : List.copyOf(days);
+      excludedDates = excludedDates == null ? List.of()
+          : excludedDates.stream().filter(Objects::nonNull).distinct().sorted().toList();
+    }
+
+    public Recurring(final String frequency, final List<String> days) {
+      this(frequency, days, List.of());
     }
   }
 }
