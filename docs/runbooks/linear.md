@@ -303,11 +303,16 @@ every one of that producer's fingerprints whose `lastSeenAt` is older than the q
 
 Load-bearing details:
 
-- **There is no "what is still present" list.** A sweep always runs *after* the producer has
-  finished filing, and every filing advances that fingerprint's `lastSeenAt`. "Still happening"
-  and "recently seen" are therefore the same fact, and the quiet period is the only input needed.
-  Passing a present-set as well would introduce a second, independently-wrong answer to one
-  question.
+- **"Recently seen" is the answer to "still present", with one narrow exception.** A sweep
+  always runs *after* the producer has finished filing, and every filing advances that
+  fingerprint's `lastSeenAt`. For everything filed, "still happening" and "recently seen" are
+  therefore the same fact, and the quiet period is the only input needed. The exception is a
+  problem the producer *saw* but could not file because its own per-run cap was full: nothing
+  advanced that fingerprint. `AbsenceSweep.presentKeyParts` names exactly those, as key parts, and
+  the sink fingerprints them with `Fingerprint.of` and the sweep's own producer (the same
+  computation as for an `IssueFiling`) and leaves them open. It is not a general "what I believe
+  is live" list, and a producer must not put deliberately excluded findings in it (log watch's
+  muted noise is meant to close). Absent means empty, which excludes nothing.
 - **`lastSeenAt` is deliberately not advanced by a close.** It means "when this problem was last
   observed", and the sweep observed its *absence*.
 - **Done, never Cancelled.** The sink reads a cancelled issue as "never tell me again", so an

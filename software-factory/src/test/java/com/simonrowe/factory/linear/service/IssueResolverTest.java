@@ -3,6 +3,7 @@ package com.simonrowe.factory.linear.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.endsWith;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -16,6 +17,7 @@ import com.simonrowe.factory.linear.domain.FilingDecision;
 import com.simonrowe.factory.linear.domain.Fingerprint;
 import com.simonrowe.factory.linear.domain.IssueStateType;
 import com.simonrowe.factory.linear.domain.SweepReport;
+import com.simonrowe.factory.linear.domain.SweptIssue;
 import com.simonrowe.factory.linear.domain.TrackedIssue;
 import com.simonrowe.factory.linear.linear.LinearGateway;
 import com.simonrowe.factory.linear.persistence.LinearIssueRecord;
@@ -242,7 +244,8 @@ class IssueResolverTest {
         resolver()
             .sweep(
                 new AbsenceSweep(
-                    PRODUCER, QUIET_FOR, "run-9", "logwatch-manual", "no longer seen", true));
+                    PRODUCER, QUIET_FOR, "run-9", "logwatch-manual", "no longer seen", true,
+                    List.of()));
 
     assertThat(report.resolved()).hasSize(1);
     verify(gateway, never()).addComment(anyString(), anyString());
@@ -280,6 +283,75 @@ class IssueResolverTest {
   }
 
   /**
+   * The cap limits what a scan files, not what it sees. A signature the cap dropped was seen this
+   * very run, but nothing advanced its lastSeenAt, so by the quiet period alone it is
+   * indistinguishable from a problem that stopped. Naming it must keep exactly that ticket open
+   * while every other stale ticket still closes.
+   */
+  @Test
+  @DisplayName("a problem named as present is left open while the other stale ones close")
+  void leavesPresentProblemsOpenAndClosesTheRest() {
+    LinearIssueRecord dropped = record("dropped", NOW.minus(Duration.ofDays(9)));
+    LinearIssueRecord stopped = record("stopped", NOW.minus(Duration.ofDays(9)));
+    when(records.findByProducerOrderByLastSeenAtDesc(PRODUCER))
+        .thenReturn(List.of(dropped, stopped));
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenAnswer(
+            invocation ->
+                List.of(
+                    open(
+                        invocation.getArgument(0, String.class).endsWith(dropped.id())
+                            ? dropped.issueId()
+                            : stopped.issueId(),
+                        IssueStateType.TRIAGE)));
+
+    SweepReport report = resolver().sweep(sweepWithPresent(List.of(keyParts("dropped"))));
+
+    assertThat(report.considered()).isEqualTo(1);
+    assertThat(report.resolved())
+        .extracting(SweptIssue::fingerprint)
+        .containsExactly(stopped.id());
+    verify(gateway).updateIssue("issue-stopped", null, "done-state");
+    verify(gateway, never()).updateIssue(eq("issue-dropped"), any(), anyString());
+    verify(gateway, never()).addComment(eq("issue-dropped"), anyString());
+    // Not even looked up: an excluded fingerprint is no candidate at all.
+    verify(gateway, never()).issuesForFingerprint(endsWith(dropped.id()));
+  }
+
+  /**
+   * The exclusion is by fingerprint, which includes the producer. Key parts that coincide with
+   * another producer's must not protect anything here, and the same key parts under a different
+   * severity are a different problem.
+   */
+  @Test
+  @DisplayName("present key parts protect only the fingerprint they hash to")
+  void presentKeyPartsMatchOnlyTheirOwnFingerprint() {
+    LinearIssueRecord quiet = record("boom", NOW.minus(Duration.ofDays(9)));
+    when(records.findByProducerOrderByLastSeenAtDesc(PRODUCER)).thenReturn(List.of(quiet));
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(open(quiet.issueId(), IssueStateType.TRIAGE)));
+
+    SweepReport report =
+        resolver().sweep(sweepWithPresent(List.of(List.of("backend", "WARN", "boom"))));
+
+    assertThat(report.resolved()).hasSize(1);
+    verify(gateway).updateIssue("issue-boom", null, "done-state");
+  }
+
+  @Test
+  @DisplayName("a sweep from an older caller, with no present list, excludes nothing")
+  void absentPresentListExcludesNothing() {
+    LinearIssueRecord quiet = record("boom", NOW.minus(Duration.ofDays(9)));
+    when(records.findByProducerOrderByLastSeenAtDesc(PRODUCER)).thenReturn(List.of(quiet));
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(open(quiet.issueId(), IssueStateType.TRIAGE)));
+
+    SweepReport report = resolver().sweep(sweepWithPresent(null));
+
+    assertThat(report.resolved()).hasSize(1);
+  }
+
+  /**
    * A sweep must never reach outside the producer that asked for it: an absent {@code cvefix}
    * finding means the CVE was patched, an absent {@code deploy} failure means nothing at all, and
    * neither is log watch's to decide.
@@ -301,12 +373,25 @@ class IssueResolverTest {
   }
 
   private static AbsenceSweep sweep() {
-    return new AbsenceSweep(
-        PRODUCER, QUIET_FOR, "run-9", "logwatch-nightly", "no longer seen", false);
+    return sweepWithPresent(List.of());
   }
 
+  private static AbsenceSweep sweepWithPresent(final List<List<String>> present) {
+    return new AbsenceSweep(
+        PRODUCER, QUIET_FOR, "run-9", "logwatch-nightly", "no longer seen", false, present);
+  }
+
+  private static List<String> keyParts(final String key) {
+    return List.of("backend", "ERROR", key);
+  }
+
+  /**
+   * The record id is computed with the real {@link Fingerprint}, exactly as {@code IssueFiler}
+   * computes it, so a test naming key parts in the sweep can only match if the resolver
+   * fingerprints them the same way — never because the test wrote the same literal twice.
+   */
   private static LinearIssueRecord record(final String key, final Instant lastSeen) {
-    List<String> keyParts = List.of("backend", "ERROR", key);
+    List<String> keyParts = keyParts(key);
     return LinearIssueRecord.first(
             Fingerprint.of(PRODUCER, keyParts), PRODUCER, keyParts, lastSeen)
         .withIssue("issue-" + key, "SIM-30", "https://linear.app/SIM-30");
