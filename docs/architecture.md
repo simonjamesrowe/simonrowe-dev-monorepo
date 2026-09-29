@@ -165,8 +165,10 @@ frontend/src/
   styles.css       All styling: plain CSS, BEM, custom properties for theming
 ```
 
-Public routes: `/`, `/profile`, `/experience`, `/blogs`, `/blogs/:id`,
-`/news-events`, `/mcp`. The admin CMS lives under `/admin/*` behind Auth0 and
+Public routes: `/`, `/about` (profile, then roles, then skills), `/blogs`,
+`/blogs/:id`, `/news-events`, `/mcp`, `/status`. The retired `/profile` and
+`/experience` redirect to `/about`, keeping the query string and hash, because
+posted chat answers and shared links still carry them. The admin CMS lives under `/admin/*` behind Auth0 and
 covers blogs, jobs, skills, tags, profile, media, code examples, tour steps,
 aggregated content, content sources and data operations.
 

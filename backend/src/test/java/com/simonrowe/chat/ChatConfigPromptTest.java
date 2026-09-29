@@ -20,8 +20,12 @@ class ChatConfigPromptTest {
     assertThat(guidance).doesNotContain("unless the visitor has sent a new prompt");
     // Rich, safe link/image guidance (US3).
     assertThat(guidance).contains("/blogs/");
-    assertThat(guidance).contains("/experience?job=");
-    assertThat(guidance).contains("/experience?skillGroup=");
+    assertThat(guidance).contains("/about?job=");
+    assertThat(guidance).contains("/about?skillGroup=");
+    assertThat(guidance).contains("/about#roles");
+    // Profile and Experience merged into /about; the retired paths only redirect now.
+    assertThat(guidance).doesNotContain("/experience");
+    assertThat(guidance).doesNotContain("(/profile");
     assertThat(guidance).contains("Never invent");
   }
 }

@@ -29,8 +29,7 @@ import { HomePage } from './pages/HomePage'
 const named = <M, K extends keyof M>(loader: () => Promise<M>, key: K) =>
   lazy(() => loader().then((m) => ({ default: m[key] as React.ComponentType })))
 
-const ProfilePage = named(() => import('./pages/ProfilePage'), 'ProfilePage')
-const ExperiencePage = named(() => import('./pages/ExperiencePage'), 'ExperiencePage')
+const AboutPage = named(() => import('./pages/AboutPage'), 'AboutPage')
 const BlogListingPage = named(() => import('./pages/BlogListingPage'), 'BlogListingPage')
 const BlogDetailPage = named(() => import('./pages/BlogDetailPage'), 'BlogDetailPage')
 const NewsEventsPage = named(() => import('./pages/NewsEventsPage'), 'NewsEventsPage')
@@ -142,6 +141,20 @@ function LegacyBlogDetailRedirect() {
   return <Navigate replace to={id === undefined ? '/blogs' : `/blogs/${id}`} />
 }
 
+/**
+ * Redirects a retired page address to its replacement, carrying the query string and hash
+ * across — `?job=` / `?skillGroup=` open drawers and `#contact` opens the contact drawer, so
+ * dropping either would land a shared link on the right page but the wrong thing.
+ *
+ * `defaultHash` applies only when the old URL had none, so a bare old "Experience" link
+ * still lands on the roles rather than the top of the profile. `replace`, as in
+ * `LegacyBlogDetailRedirect`, keeps the stale address out of history.
+ */
+function RedirectPreservingLocation({ to, defaultHash = '' }: { to: string; defaultHash?: string }) {
+  const { search, hash } = useLocation()
+  return <Navigate replace to={`${to}${search}${hash || defaultHash}`} />
+}
+
 function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <ChatProvider>
@@ -187,8 +200,7 @@ function App() {
       <Suspense fallback={<LoadingIndicator />}>
       <Routes>
         <Route element={<PublicLayout><HomePage /></PublicLayout>} path="/" />
-        <Route element={<PublicLayout><ProfilePage /></PublicLayout>} path="/profile" />
-        <Route element={<PublicLayout><ExperiencePage /></PublicLayout>} path="/experience" />
+        <Route element={<PublicLayout><AboutPage /></PublicLayout>} path="/about" />
         <Route element={<PublicLayout><BlogListingPage /></PublicLayout>} path="/blogs" />
         <Route element={<PublicLayout><BlogDetailPage /></PublicLayout>} path="/blogs/:id" />
         <Route element={<PublicLayout><NewsEventsPage /></PublicLayout>} path="/news-events" />
@@ -197,6 +209,10 @@ function App() {
         {/* Legacy singular paths, still shared externally. */}
         <Route element={<Navigate replace to="/blogs" />} path="/blog" />
         <Route element={<LegacyBlogDetailRedirect />} path="/blog/:id" />
+        {/* Profile and Experience merged into /about. Posted chat answers and shared links
+            still carry the old addresses, including ?job= / ?skillGroup= deep links. */}
+        <Route element={<RedirectPreservingLocation to="/about" />} path="/profile" />
+        <Route element={<RedirectPreservingLocation defaultHash="#roles" to="/about" />} path="/experience" />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardAdmin />} />

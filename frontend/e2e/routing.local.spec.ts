@@ -31,6 +31,36 @@ test.describe('routing', () => {
     await expect(page).toHaveURL(new RegExp(`/blogs/${id}$`))
   })
 
+  // Profile and Experience merged into /about. Posted chat answers and shared links still
+  // carry the old addresses, so each must land on the same thing it used to open.
+  test('the retired /profile#contact redirects to /about and opens the contact drawer', async ({ page }) => {
+    await page.goto('/profile#contact')
+
+    await expect(page).toHaveURL(/\/about#contact$/)
+    await expect(page.locator('.contact-drawer--open')).toBeVisible()
+  })
+
+  test('a retired /experience?job= deep link redirects to /about and opens that role', async ({ page }) => {
+    const response = await page.request.get('/api/jobs')
+    expect(response.ok()).toBeTruthy()
+    const jobs = (await response.json()) as Array<{ id: string }>
+    expect(jobs.length).toBeGreaterThan(0)
+    const { id } = jobs[0]
+
+    await page.goto(`/experience?job=${id}`)
+
+    await expect(page).toHaveURL(new RegExp(`/about\\?job=${id}#roles$`))
+    await expect(page.locator('.tour-profile')).toBeVisible()
+    await expect(page.getByRole('dialog')).toBeVisible()
+  })
+
+  test('a retired /experience#skills link redirects to the skills on /about', async ({ page }) => {
+    await page.goto('/experience#skills')
+
+    await expect(page).toHaveURL(/\/about#skills$/)
+    await expect(page.locator('#skills')).toBeInViewport()
+  })
+
   test('an unknown URL renders the not-found page inside the site chrome', async ({ page }) => {
     await page.goto('/this-page-does-not-exist')
 
@@ -44,7 +74,7 @@ test.describe('routing', () => {
   })
 
   test('every public page ends in the site footer', async ({ page }) => {
-    for (const path of ['/', '/profile', '/experience', '/blogs', '/news-events', '/mcp']) {
+    for (const path of ['/', '/about', '/blogs', '/news-events', '/mcp']) {
       await page.goto(path)
       await expect(page.locator('footer.footer'), `footer missing on ${path}`).toBeVisible()
     }

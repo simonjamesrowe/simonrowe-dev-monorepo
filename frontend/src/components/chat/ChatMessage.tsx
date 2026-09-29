@@ -56,7 +56,7 @@ function createMarkdownComponents(
       const classification = classifyLink(href, allowlist, allowedPrefixes)
       // Both internal (in-site route) and allowlisted external links open in a NEW TAB
       // so the visitor never loses their chat conversation. Internal hrefs are relative
-      // (e.g. /blogs/:id, /experience?job=:id) and resolve against our own origin, so the
+      // (e.g. /blogs/:id, /about?job=:id) and resolve against our own origin, so the
       // SPA loads fresh at that route (drawer deep links included). Fabricated/unsafe
       // links fall through to plain text.
       if ((classification === 'internal' || classification === 'external-allowed') && href) {

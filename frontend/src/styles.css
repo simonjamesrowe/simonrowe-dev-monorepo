@@ -1544,15 +1544,31 @@ a:hover {
   }
 }
 
-/* ==================== Experience Page ==================== */
+/* ==================== About Page ==================== */
 
-.experience-page {
+/* Profile, then roles, then skills — the former Profile and Experience pages. The
+   container is the wide one the timeline needs; the profile keeps its reading width
+   inside it. */
+.about-page {
   max-width: 100rem;
   margin: 0 auto;
   padding: 1.5rem 2.5rem 6rem;
 }
 
-.experience-page__heading {
+.about-page__profile {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* The shared loading and error frames fill the viewport, which is right when they are the
+   whole page. Here they stand in for one section, and a full screen of spinner above the
+   roles would read as the page failing — the thing section-level failure exists to avoid. */
+.about-page__profile .loading-state,
+.about-page__profile .error-state {
+  min-height: 24rem;
+}
+
+.about-page__heading {
   font-family: var(--font-heading);
   font-size: 2rem;
   font-weight: 700;
@@ -1563,27 +1579,37 @@ a:hover {
   display: inline-block;
 }
 
-.experience-page__hero {
-  padding: 3rem 0 4rem;
-}
-
-.experience-page__title {
-  color: var(--on-surface);
-  margin: 0;
-}
-
-.experience-page__title-accent {
-  color: var(--primary);
-}
-
-.experience-page__subtitle {
-  color: var(--on-surface-variant);
-  margin-top: 1rem;
-  max-width: 60rem;
-}
-
-.experience-page__section {
+.about-page__section {
   margin-bottom: 4rem;
+}
+
+/* The hand-over from the person to the record: a hairline across the page with a node
+   on the timeline's own axis, so the rule reads as where the timeline's spine begins
+   rather than as a gap between two stacked pages. The node tracks the spine, which
+   moves to the left edge at <=1024px (see "Experience Responsive"). */
+.about-page__section--roles {
+  position: relative;
+  margin-top: 1rem;
+  padding-top: 4rem;
+  border-top: 1px solid var(--outline-variant);
+}
+
+.about-page__section--roles::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  /* A ring of page colour cuts the node out of the rule. */
+  box-shadow: 0 0 0 6px var(--surface);
+  transform: translate(-50%, -50%);
+}
+
+.about-page__roles-header {
+  text-align: center;
 }
 
 /* ==================== Role Timeline ==================== */
@@ -2051,15 +2077,22 @@ a:hover {
     margin-left: auto;
     margin-right: 0;
   }
+
+  /* The spine is on the left now, so the node and the heading follow it: the heading
+     lines up with the cards, which start 48px in. */
+  .about-page__section--roles::before {
+    left: 20px;
+  }
+
+  .about-page__roles-header {
+    text-align: left;
+    padding-left: 48px;
+  }
 }
 
 @media (max-width: 768px) {
-  .experience-page {
-    padding: 2rem 1rem 4rem;
-  }
-
-  .experience-page__title {
-    font-size: 2.5rem;
+  .about-page {
+    padding: 1rem 1rem 4rem;
   }
 
   .expertise-grid__categories {
@@ -7967,19 +8000,9 @@ a:hover {
   }
 }
 
-
 /* ============================================================
-   PROFILE PAGE
+   PROFILE COMPONENTS (About page and contact drawer)
    ============================================================ */
-
-.profile-page {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
-}
-
-/* --- Connect Section --- */
-
 
 /* --- Social Links --- */
 

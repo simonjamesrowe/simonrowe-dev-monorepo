@@ -2,10 +2,11 @@ import { visit } from 'unist-util-visit'
 import type { Root, Text } from 'mdast'
 
 // Matches a bare internal SPA path (home-relative) that we know how to route, e.g.
-// /experience, /experience?job=ID, /experience#roles, /blogs/ID, /news-events, /profile.
+// /about, /about?job=ID, /about#roles, /blogs/ID, /news-events, and the legacy /experience
+// and /profile, which redirect to /about.
 // The trailing char class stops at whitespace and common punctuation so a trailing
 // period/comma/paren in prose is not swallowed into the URL.
-const INTERNAL_URL = /\/(?:experience|blogs|news-events|profile)(?:[/?#][^\s)<>\]]*)?/g
+const INTERNAL_URL = /\/(?:about|experience|blogs|news-events|profile)(?:[/?#][^\s)<>\]]*)?/g
 
 // Matches a bare absolute http(s) URL.
 const EXTERNAL_URL = /https?:\/\/[^\s)<>\]]+/g

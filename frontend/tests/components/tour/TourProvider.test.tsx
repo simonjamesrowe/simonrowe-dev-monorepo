@@ -1,5 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TourProvider } from '../../../src/components/tour/TourProvider'
@@ -45,7 +45,7 @@ const stepTwo: TourStep = {
   titleImage: null,
   description: 'Skills section description.',
   position: 'right',
-  route: '/experience',
+  route: '/about',
   autoAdvanceMs: null,
 }
 
@@ -78,6 +78,16 @@ function TourStateDisplay() {
         Set Search
       </button>
     </div>
+  )
+}
+
+function LocationProbe() {
+  const location = useLocation()
+  return (
+    <>
+      <div data-testid="location-path">{location.pathname}</div>
+      <div data-testid="location-key">{location.key}</div>
+    </>
   )
 }
 
@@ -287,5 +297,51 @@ describe('TourProvider', () => {
     })
 
     expect(screen.getByTestId('is-active')).toHaveTextContent('false')
+  })
+  /**
+   * The profile and experience steps both live on /about since the pages merged. Advancing
+   * between them must not navigate — a navigation to the same path would push a duplicate
+   * history entry and remount nothing useful — so the only thing that moves is the target.
+   */
+  it('next() and prev() between two steps on the same route do not navigate', async () => {
+    const profileStep: TourStep = { ...stepOne, id: 'profile', route: '/about', targetSelector: '.tour-about' }
+    const experienceStep: TourStep = {
+      ...stepTwo,
+      id: 'experience',
+      route: '/about',
+      targetSelector: '.tour-experience-highlight',
+    }
+    vi.mocked(fetchTourSteps).mockResolvedValue([profileStep, experienceStep])
+
+    render(
+      <MemoryRouter initialEntries={['/about']}>
+        <TourProvider>
+          <TourStateDisplay />
+          <LocationProbe />
+        </TourProvider>
+      </MemoryRouter>,
+    )
+    const initialKey = screen.getByTestId('location-key').textContent
+
+    act(() => {
+      screen.getByTestId('btn-start').click()
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('is-active')).toHaveTextContent('true')
+    })
+
+    act(() => {
+      screen.getByTestId('btn-next').click()
+    })
+    expect(screen.getByTestId('step-index')).toHaveTextContent('1')
+    expect(screen.getByTestId('location-key')).toHaveTextContent(initialKey!)
+
+    act(() => {
+      screen.getByTestId('btn-prev').click()
+    })
+    expect(screen.getByTestId('step-index')).toHaveTextContent('0')
+    expect(screen.getByTestId('location-path')).toHaveTextContent('/about')
+    // Every navigation mints a new location key, so an unchanged key means none happened.
+    expect(screen.getByTestId('location-key')).toHaveTextContent(initialKey!)
   })
 })

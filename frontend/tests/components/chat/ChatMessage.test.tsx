@@ -57,25 +57,38 @@ describe('ChatMessage link/image policy', () => {
 
   it('linkifies a BARE internal URL in prose (safety net when the model forgets markdown syntax)', () => {
     const blocks: ChatBlock[] = [
-      { kind: 'text', content: 'See the Y-Tree role — /experience?job=5eedd4803c8d74001e4497f5' },
+      { kind: 'text', content: 'See the Y-Tree role — /about?job=5eedd4803c8d74001e4497f5' },
     ]
     renderMessage(blocks)
 
     const link = screen.getByRole('link')
-    expect(link.getAttribute('href')).toBe('/experience?job=5eedd4803c8d74001e4497f5')
+    expect(link.getAttribute('href')).toBe('/about?job=5eedd4803c8d74001e4497f5')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
   it('does not double-wrap a URL the model already put in markdown link syntax', () => {
     const blocks: ChatBlock[] = [
-      { kind: 'text', content: 'See [Y-Tree](/experience?job=5eedd4803c8d74001e4497f5).' },
+      { kind: 'text', content: 'See [Y-Tree](/about?job=5eedd4803c8d74001e4497f5).' },
     ]
     renderMessage(blocks)
 
     const links = screen.getAllByRole('link')
     expect(links).toHaveLength(1)
     expect(links[0]).toHaveTextContent('Y-Tree')
-    expect(links[0].getAttribute('href')).toBe('/experience?job=5eedd4803c8d74001e4497f5')
+    expect(links[0].getAttribute('href')).toBe('/about?job=5eedd4803c8d74001e4497f5')
+  })
+
+  it('still links a legacy /experience deep link from an older answer (it redirects to /about)', () => {
+    const blocks: ChatBlock[] = [
+      { kind: 'text', content: 'See [Y-Tree](/experience?job=5eedd4803c8d74001e4497f5) and /experience#skills.' },
+    ]
+    renderMessage(blocks)
+
+    const links = screen.getAllByRole('link')
+    expect(links.map((l) => l.getAttribute('href'))).toEqual([
+      '/experience?job=5eedd4803c8d74001e4497f5',
+      '/experience#skills',
+    ])
   })
 
   it('hides every widget card, including the code example', () => {

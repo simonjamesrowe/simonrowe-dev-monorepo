@@ -242,6 +242,21 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- merge-profile-experience-about: **Profile and Experience are one page, `/about`** (profile,
+  then roles, then skills), freeing a nav slot. Load-bearing bits:
+  - **`/profile` and `/experience` redirect and must keep doing so**, carrying the query string
+    and hash (`RedirectPreservingLocation` in `App.tsx`): posted chat answers and shared links
+    hold `/experience?job=…` and `/profile#contact`. A bare `/experience` lands on `#roles`.
+    `linkPolicy.ts` keeps both as legacy internal routes so old conversation history still
+    renders them as in-site links.
+  - **A tour step cannot follow that redirect.** `TourProvider` compares
+    `route.split('#')[0]` with `location.pathname`, so a step left on `/experience` lands on
+    `/about` and never resolves its target — silently. `V047RerouteAboutTourSteps` therefore
+    rewrites *every* step on the retired paths, operator-edited ones included, not only the
+    defaults. Steps 5 and 6 now share `/about`, so advancing between them only scrolls.
+  - **The profile's loading and error states are inline in its slot**, never page-level: a
+    profile outage must not blank the roles and skills below it. `useScrollToHash` waits for
+    the profile to settle, since it renders above `#roles`/`#skills`.
 - prod-disk-image-cleanup: **Production now deletes the images it stops using.** On 2026-09-28
   the Pi's root filesystem (`/dev/sda2`, 117G) reached 100% between about 19:50 and 20:08 UTC,
   and the API was down for about six hours. Kafka died with `SIGBUS` (the JVM mmaps its files),
@@ -2186,7 +2201,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   authoritative `fullResponse` + single initial-query send guard), contextual tool labels
   (dropped "Used 1 tool" expander), safe allowlisted link/image rendering in answers
   (`chat/linkPolicy.ts`, custom react-markdown `a`/`img` renderers, no `rehype-raw`),
-  item-level deep links (`/experience?job=`/`?skillGroup=` via `useDrawer` + `useScrollToHash`,
+  item-level deep links (`/experience?job=`/`?skillGroup=` via `useDrawer` + `useScrollToHash`;
+  now `/about?job=`/`?skillGroup=` since `merge-profile-experience-about`,
   job/skill-group ids added to widget payloads), Playwright e2e (`frontend/e2e/`), and
   deterministic Langfuse bootstrap (`LANGFUSE_INIT_*` in `docker-compose.prod.yml`,
   `scripts/verify-langfuse-trace.sh`, `docs/runbooks/langfuse-observability.md`).

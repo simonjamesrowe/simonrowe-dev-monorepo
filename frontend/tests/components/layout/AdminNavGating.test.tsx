@@ -24,7 +24,7 @@ vi.mock('../../../src/components/search/SiteSearch', () => ({
   SiteSearch: () => null,
 }))
 
-const PUBLIC_LINKS = ['Home', 'Profile', 'Experience', 'Blog', 'News & Events', 'MCP']
+const PUBLIC_LINKS = ['Home', 'About', 'Blog', 'News & Events', 'MCP']
 
 describe('admin navigation gating', () => {
   beforeEach(() => {

@@ -261,7 +261,7 @@ describe('HomePage', () => {
     expect(screen.getByText('Event Sourcing With Kafka')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Get in touch' })).toHaveAttribute(
       'href',
-      '/profile#contact',
+      '/about#contact',
     )
     expect(screen.getByRole('link', { name: /Download CV/i })).toBeInTheDocument()
   })
@@ -346,16 +346,15 @@ describe('HomePage', () => {
 
     renderLandingShell()
 
-    expect(screen.getAllByRole('link', { name: /Experience/i })[0]).toHaveAttribute(
-      'href',
-      '/experience',
-    )
+    expect(screen.getAllByRole('link', { name: /^About$/ })[0]).toHaveAttribute('href', '/about')
+    // Profile and Experience merged into About, so neither has a nav entry of its own.
+    expect(screen.queryByRole('link', { name: /^Profile$/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^Experience$/ })).not.toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: /Blog/i })[0]).toHaveAttribute('href', '/blogs')
     expect(screen.getAllByRole('link', { name: /News & Events/i })[0]).toHaveAttribute(
       'href',
       '/news-events',
     )
-    expect(screen.getAllByRole('link', { name: /Profile/i })[0]).toHaveAttribute('href', '/profile')
 
     // The footer lives in the layout, not the page, so there is no footer landmark here.
     expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()

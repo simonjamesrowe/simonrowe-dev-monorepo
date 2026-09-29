@@ -11,6 +11,9 @@ import type {
 // "/experience Macquarie Group," does not slip through as an internal route.
 const INTERNAL_PATH_PATTERNS: RegExp[] = [
   /^\/$/,
+  /^\/about$/,
+  // Legacy: both merged into /about and now redirect there (query and hash kept), but
+  // conversation history and older answers still carry them, so they stay in-site links.
   /^\/profile$/,
   /^\/experience$/,
   /^\/blogs$/,
