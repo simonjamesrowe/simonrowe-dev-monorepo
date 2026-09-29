@@ -113,7 +113,7 @@
 
 ## Final
 
-- [ ] T034 Update `CLAUDE.md` "Recent Changes", the `docs/runbooks` note on hero and portfolio content, and
+- [x] T034 Update `CLAUDE.md` "Recent Changes", the `docs/runbooks` note on hero and portfolio content, and
   the README's frontend section.
 - [ ] T035 A manual pass against restored prod data at 1440, 1024 and 390px in light and dark mode, covering
   the tour end to end.
