@@ -23,7 +23,7 @@ export function CTASection() {
         Let&apos;s build the <em className="cta-section__emphasis">impossible</em> together.
       </h2>
       <div className="cta-section__actions">
-        <Link className="button button--primary button--lg" to="/profile#contact">
+        <Link className="button button--primary button--lg" to="/about#contact">
           Get in touch
         </Link>
         <a

@@ -74,15 +74,15 @@ describe('Footer', () => {
     expect(screen.queryByRole('link', { name: 'MCP' })).not.toBeInTheDocument()
   })
 
-  it('sends Get in touch to the contact drawer on the profile page', async () => {
+  it('sends Get in touch to the contact drawer on the about page', async () => {
     vi.mocked(fetchProfile).mockResolvedValue(profile)
 
     renderFooter()
 
-    // ProfilePage opens its drawer when the hash is #contact.
+    // AboutPage opens its drawer when the hash is #contact.
     expect(screen.getByRole('link', { name: 'Get in touch' })).toHaveAttribute(
       'href',
-      '/profile#contact',
+      '/about#contact',
     )
 
     await waitFor(() => expect(vi.mocked(fetchProfile)).toHaveBeenCalled())

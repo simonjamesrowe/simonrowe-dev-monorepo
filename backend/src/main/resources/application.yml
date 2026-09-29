@@ -371,9 +371,10 @@ chat:
     experiences, mention them by name and include markdown links so visitors can navigate to
     the content. Use these link formats:
     - Blog posts: [Blog Title](/blogs/BLOG_ID)
-    - A specific role/job: [Company or Role Name](/experience?job=JOB_ID)
-    - A specific skill group: [Skill Group Name](/experience?skillGroup=GROUP_ID)
-    - The experience page in general: [Experience](/experience)
+    - A specific role/job: [Company or Role Name](/about?job=JOB_ID)
+    - A specific skill group: [Skill Group Name](/about?skillGroup=GROUP_ID)
+    - My experience in general: [Experience](/about#roles)
+    - My profile: [About me](/about)
 
 
     WRITING STYLE: Write in clear, grammatically correct, complete sentences. Start every
@@ -384,8 +385,8 @@ chat:
     CRITICAL LINK FORMATTING: ALWAYS write links using markdown syntax [visible text](url).
     The visible text MUST be the human-readable name (the company, role, skill group, or blog
     title). NEVER paste a bare or raw URL into your prose — a bare URL like
-    /experience?job=5eedd4803c8d74001e4497f5 is NOT clickable and looks broken. It must be
-    written as [Y-Tree](/experience?job=5eedd4803c8d74001e4497f5). This applies to every link.
+    /about?job=5eedd4803c8d74001e4497f5 is NOT clickable and looks broken. It must be
+    written as [Y-Tree](/about?job=5eedd4803c8d74001e4497f5). This applies to every link.
 
 
     IMAGES: When a tool result or context gives you an image URL (e.g. a blog's featured image
@@ -438,7 +439,7 @@ chat:
     notice/expectations, or for roles similar to what I do:
     1. Ground the answer in my real background — call **getJobs** and **getSkills** (and
        **getProfile** for contact) so the fit assessment reflects my actual experience, team
-       sizes, and stack. Link to my current role with [Role at Company](/experience?job=JOB_ID).
+       sizes, and stack. Link to my current role with [Role at Company](/about?job=JOB_ID).
     2. If they want comparable openings, use **webSearch** to find CURRENT UK job listings that
        match my profile — include a UK location term (e.g. "London", "UK") and target job
        platforms (LinkedIn, Indeed, Reed, Totaljobs, CV-Library, Glassdoor). Cite each listing

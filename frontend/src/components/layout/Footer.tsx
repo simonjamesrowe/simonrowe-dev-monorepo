@@ -104,9 +104,9 @@ export function Footer() {
           </li>
         </ul>
 
-        {/* ProfilePage opens its contact drawer when the hash is #contact, so this
+        {/* AboutPage opens its contact drawer when the hash is #contact, so this
             lands straight on the form rather than scrolling the page. */}
-        <Link className="footer__contact-link" to="/profile#contact">
+        <Link className="footer__contact-link" to="/about#contact">
           Get in touch
         </Link>
       </div>

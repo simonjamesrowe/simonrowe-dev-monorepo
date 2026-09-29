@@ -12,6 +12,12 @@ describe('linkPolicy', () => {
   describe('isInternalRoute', () => {
     it.each([
       '/',
+      '/about',
+      '/about?job=job-1',
+      '/about?skillGroup=group-1',
+      '/about#roles',
+      '/about#contact',
+      // Legacy addresses: they redirect to /about, and conversation history still carries them.
       '/profile',
       '/experience',
       '/experience?job=job-1',
@@ -27,6 +33,8 @@ describe('linkPolicy', () => {
 
     it.each([
       '/experience Macquarie Group,',
+      '/about Macquarie Group,',
+      '/aboutx',
       '/unknown',
       '/blogs/one/two',
       'https://example.com',
@@ -40,6 +48,10 @@ describe('linkPolicy', () => {
     const allowlist = new Set<string>(['https://spring.io/blog/advisors'])
 
     it('classifies internal routes as internal', () => {
+      expect(classifyLink('/about?job=job-1', allowlist)).toBe('internal')
+    })
+
+    it('still classifies a legacy /experience deep link from an older answer as internal', () => {
       expect(classifyLink('/experience?job=job-1', allowlist)).toBe('internal')
     })
 

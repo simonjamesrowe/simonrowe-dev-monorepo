@@ -34,8 +34,9 @@ class TourSeedDefaultsTest {
             "/",
             "/",
             "/",
-            "/profile",
-            "/experience",
+            // Profile and experience share one page; advancing between them only scrolls.
+            "/about",
+            "/about",
             "/blogs",
             "/news-events",
             "/mcp",

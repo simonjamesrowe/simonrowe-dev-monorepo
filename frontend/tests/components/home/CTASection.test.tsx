@@ -21,11 +21,11 @@ describe('CTASection', () => {
     expect(root).toHaveClass('tour-contact')
   })
 
-  it('links "Get in touch" to the profile contact section', () => {
+  it('links "Get in touch" to the contact drawer on the about page', () => {
     renderCta()
 
     const contact = screen.getByRole('link', { name: 'Get in touch' })
-    expect(contact).toHaveAttribute('href', '/profile#contact')
+    expect(contact).toHaveAttribute('href', '/about#contact')
   })
 
   it('links "Download CV" to the resume endpoint', () => {

@@ -24,7 +24,7 @@ export function HomePage() {
   const [jobs, setJobs] = useState<IJob[]>([])
   const [latestPosts, setLatestPosts] = useState<BlogSummary[]>([])
   // The job drawer is rendered globally by PublicLayout, so a logo can open a role in
-  // place instead of sending the visitor off to /experience.
+  // place instead of sending the visitor off to /about.
   const { openJob } = useDrawer()
 
   usePageTitle()

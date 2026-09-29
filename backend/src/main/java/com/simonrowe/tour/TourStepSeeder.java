@@ -105,7 +105,7 @@ public class TourStepSeeder implements ApplicationRunner {
             "See the path from hands-on engineering to leading teams through complex change.",
             "bottom",
             5,
-            "/profile",
+            "/about",
             null,
             timestamp
         ),
@@ -116,7 +116,7 @@ public class TourStepSeeder implements ApplicationRunner {
             "Follow the roles, teams, systems, and delivery outcomes that shaped the work.",
             "top",
             6,
-            "/experience",
+            "/about",
             null,
             timestamp
         ),

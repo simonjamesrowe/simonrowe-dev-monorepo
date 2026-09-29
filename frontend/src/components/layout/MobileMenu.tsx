@@ -7,8 +7,7 @@ import { useTheme } from '../../contexts/ThemeContext'
 
 const publicNavItems = [
   { label: 'Home', to: '/' },
-  { label: 'Profile', to: '/profile' },
-  { label: 'Experience', to: '/experience' },
+  { label: 'About', to: '/about' },
   { label: 'Blog', to: '/blogs' },
   { label: 'News & Events', to: '/news-events' },
   { label: 'MCP', to: '/mcp' },

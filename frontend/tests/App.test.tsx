@@ -7,8 +7,8 @@ vi.mock('../src/pages/HomePage', () => ({
   HomePage: () => <h1>Homepage</h1>,
 }))
 
-vi.mock('../src/pages/ProfilePage', () => ({
-  ProfilePage: () => <h1>Profile</h1>,
+vi.mock('../src/pages/AboutPage', () => ({
+  AboutPage: () => <h1>About</h1>,
 }))
 
 vi.mock('../src/hooks/useProfile', () => ({
@@ -70,12 +70,30 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Homepage')
   })
 
-  it('routes /profile to ProfilePage', async () => {
-    window.history.pushState({}, '', '/profile')
+  it('routes /about to AboutPage', async () => {
+    window.history.pushState({}, '', '/about')
     render(<App />)
 
-    // ProfilePage is lazy-loaded, so it resolves via Suspense on the next tick.
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Profile')
+    // AboutPage is lazy-loaded, so it resolves via Suspense on the next tick.
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('About')
+  })
+
+  // Profile and Experience merged into /about; posted chat answers and shared links still
+  // carry the old addresses, so each must land on the same thing it used to open.
+  it.each([
+    ['/profile', '/about'],
+    ['/profile#contact', '/about#contact'],
+    ['/experience', '/about#roles'],
+    ['/experience?job=x', '/about?job=x#roles'],
+    ['/experience?skillGroup=g', '/about?skillGroup=g#roles'],
+    ['/experience#skills', '/about#skills'],
+  ])('redirects %s to %s', async (from, to) => {
+    window.history.pushState({}, '', from)
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('About')
+    const { pathname, search, hash } = window.location
+    expect(`${pathname}${search}${hash}`).toBe(to)
   })
 
   it('renders the site footer inside the public layout', () => {

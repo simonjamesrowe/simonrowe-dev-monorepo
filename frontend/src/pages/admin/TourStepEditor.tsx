@@ -235,9 +235,8 @@ export function TourStepEditor() {
               value={form.route}
             >
               <option value="/">/</option>
-              <option value="/profile">/profile</option>
-              <option value="/profile#contact">/profile#contact</option>
-              <option value="/experience">/experience</option>
+              <option value="/about">/about</option>
+              <option value="/about#contact">/about#contact</option>
               <option value="/blogs">/blogs</option>
               <option value="/news-events">/news-events</option>
               <option value="/mcp">/mcp</option>
