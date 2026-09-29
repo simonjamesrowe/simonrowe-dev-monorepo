@@ -1,0 +1,144 @@
+openapi: 3.0.3
+info:
+  title: Home page hero and portfolio
+  version: 1.0.0
+paths:
+  /api/home-page:
+    get:
+      summary: Public hero content (seeded defaults when never edited)
+      security: []
+      responses:
+        '200':
+          description: Hero content
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomePage' }
+  /api/admin/home-page:
+    get:
+      summary: Hero content for the editor
+      responses:
+        '200': { description: Hero content, content: { application/json: { schema: { $ref: '#/components/schemas/HomePage' } } } }
+    put:
+      summary: Replace hero content (every field round-trips)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/HomePage' } } }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/HomePage' } } } }
+        '400': { description: Validation failure naming the field, content: { application/json: { schema: { $ref: '#/components/schemas/ValidationError' } } } }
+  /api/portfolio:
+    get:
+      summary: Published projects in display order
+      security: []
+      responses:
+        '200':
+          description: Projects (Coming soon rows use the reduced shape)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/PublicProject' } }
+  /api/portfolio/{slug}:
+    get:
+      summary: One published, non-Coming-soon project
+      security: []
+      parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Project, content: { application/json: { schema: { $ref: '#/components/schemas/PublicProject' } } } }
+        '404': { description: Unknown, unpublished or Coming soon }
+  /api/admin/portfolio:
+    get:
+      summary: All projects, published or not, in display order
+      responses:
+        '200': { description: Projects, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AdminProject' } } } } }
+    post:
+      summary: Create a project
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AdminProject' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/AdminProject' } } } }
+        '400': { description: Validation failure }
+        '409': { description: Slug already in use }
+  /api/admin/portfolio/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      responses:
+        '200': { description: Project, content: { application/json: { schema: { $ref: '#/components/schemas/AdminProject' } } } }
+        '404': { description: Not found }
+    put:
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AdminProject' } } } }
+      responses:
+        '200': { description: Saved }
+        '400': { description: Validation failure }
+        '404': { description: Not found }
+        '409': { description: Slug already in use }
+    delete:
+      responses:
+        '204': { description: Deleted }
+        '404': { description: Not found }
+  /api/admin/portfolio/reorder:
+    patch:
+      summary: Reorder (same ReorderRequest shape as tour steps and skills); lists every project id in order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [orderedIds], properties: { orderedIds: { type: array, items: { type: string } } } }
+      responses:
+        '204': { description: Reordered }
+        '400': { description: Ids missing, duplicated or unknown }
+components:
+  schemas:
+    Cta:
+      type: object
+      properties:
+        label: { type: string, maxLength: 32 }
+        href: { type: string, description: 'Site path (/…, not //) or absolute https URL' }
+    HomePage:
+      type: object
+      required: [headlineLine1, headlineLine2, primaryCta, askPill, showTourLink, tourLinkLabel]
+      properties:
+        headlineLine1: { type: string, maxLength: 60 }
+        headlineLine2: { type: string, maxLength: 60 }
+        lede: { type: string, maxLength: 240, nullable: true }
+        primaryCta: { $ref: '#/components/schemas/Cta' }
+        secondaryCta: { allOf: [{ $ref: '#/components/schemas/Cta' }], nullable: true }
+        showTourLink: { type: boolean }
+        tourLinkLabel: { type: string, maxLength: 32 }
+        askPill:
+          type: object
+          required: [label, buttonLabel]
+          properties:
+            lead: { type: string, maxLength: 40, nullable: true }
+            label: { type: string, maxLength: 40 }
+            buttonLabel: { type: string, maxLength: 20 }
+        updatedAt: { type: string, format: date-time, readOnly: true, nullable: true }
+    ImageAsset:
+      type: object
+      properties:
+        url: { type: string }
+        name: { type: string }
+    PublicProject:
+      type: object
+      required: [slug, name, tagline, status, accentHue, displayOrder]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        tagline: { type: string }
+        status: { type: string, enum: [LIVE, BETA, IN_DEVELOPMENT, COMING_SOON] }
+        accentHue: { type: integer, minimum: 0, maximum: 359 }
+        displayOrder: { type: integer }
+        description: { type: string, nullable: true, description: 'Absent for COMING_SOON' }
+        image: { allOf: [{ $ref: '#/components/schemas/ImageAsset' }], nullable: true }
+        liveUrl: { type: string, nullable: true }
+    AdminProject:
+      allOf:
+        - $ref: '#/components/schemas/PublicProject'
+        - type: object
+          properties:
+            id: { type: string, readOnly: true }
+            published: { type: boolean }
+            createdAt: { type: string, format: date-time, readOnly: true }
+            updatedAt: { type: string, format: date-time, readOnly: true }
+    ValidationError:
+      type: object
+      properties:
+        field: { type: string }
+        message: { type: string }
