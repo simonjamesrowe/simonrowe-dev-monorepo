@@ -14,6 +14,12 @@ const mockUseProfile = vi.fn()
 const openChat = vi.fn()
 const startTour = vi.fn()
 
+// No network: the header's Portfolio menu and the home carousel both read this.
+vi.mock('../../src/services/portfolioApi', () => ({
+  fetchPortfolio: vi.fn().mockResolvedValue([]),
+  fetchPortfolioProject: vi.fn().mockResolvedValue(null),
+}))
+
 vi.mock('../../src/hooks/useProfile', () => ({
   useProfile: () => mockUseProfile(),
 }))

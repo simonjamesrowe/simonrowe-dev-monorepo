@@ -82,34 +82,34 @@
 
 ## Phase 4 — Portfolio (PR 4, Story 5)
 
-- [ ] T022 `com.simonrowe.portfolio`: the `PortfolioProject` record (`@Document("portfolio_projects")`), the
+- [x] T022 `com.simonrowe.portfolio`: the `PortfolioProject` record (`@Document("portfolio_projects")`), the
   `ProjectStatus` enum, the repository (`findByPublishedTrueOrderByDisplayOrderAscNameAsc`,
   `findBySlugAndPublishedTrue`) and the service.
-- [ ] T023 `PortfolioController`: `GET /api/portfolio` (reduced shape for Coming soon) and `GET
+- [x] T023 `PortfolioController`: `GET /api/portfolio` (reduced shape for Coming soon) and `GET
   /api/portfolio/{slug}` (404 for Coming soon, unpublished or unknown). Images are hydrated.
-- [ ] T024 `PortfolioAdminController`: list, create (409 on a duplicate slug, caught as
+- [x] T024 `PortfolioAdminController`: list, create (409 on a duplicate slug, caught as
   `DuplicateKeyException` with no read-before-write), get, update, delete, and `PATCH /reorder`.
-- [ ] T025 Change unit `V048CreatePortfolioProjects`:
+- [x] T025 Change unit `V048CreatePortfolioProjects`:
   - A static `createIndexes` creating `idx_portfolio_slug` (unique) and `idx_portfolio_published_order`.
   - Seed the four projects only for slugs that are absent.
   - Integration test: boot run, idempotence, duplicate-slug rejection, multi-row insert still fine.
-- [ ] T026 Backup/restore: add the collection to both lists and a `postImportIndexHooks` entry calling
+- [x] T026 Backup/restore: add the collection to both lists and a `postImportIndexHooks` entry calling
   `createIndexes`. Test that a restore re-creates the unique index.
-- [ ] T027 [P] Frontend `types/portfolio.ts`, `services/portfolioApi.ts` and `hooks/usePortfolio.ts`, which
+- [x] T027 [P] Frontend `types/portfolio.ts`, `services/portfolioApi.ts` and `hooks/usePortfolio.ts`, which
   is shared by the header and the home page so both make one request.
-- [ ] T028 [P] `components/portfolio/ProjectSilhouette.tsx` (hue-tinted, `aria-hidden`) and
+- [x] T028 [P] `components/portfolio/ProjectSilhouette.tsx` (hue-tinted, `aria-hidden`) and
   `ProjectCard.tsx`.
-- [ ] T029 `components/home/PortfolioCarousel.tsx`: numbered 01…, arrows and scroll-snap on the same pattern
+- [x] T029 `components/home/PortfolioCarousel.tsx`: numbered 01…, arrows and scroll-snap on the same pattern
   as `FeaturedWriting`, placed after `EmployerLogoStrip`, and renders nothing when the list is empty.
-- [ ] T030 `pages/PortfolioPage.tsx` (`/portfolio`) and `pages/PortfolioProjectPage.tsx`
+- [x] T030 `pages/PortfolioPage.tsx` (`/portfolio`) and `pages/PortfolioProjectPage.tsx`
   (`/portfolio/:slug`, not found otherwise). Add the routes and `linkPolicy` internal routes.
-- [ ] T031 The Portfolio menu lists projects from `usePortfolio` with a "Soon" badge; the phone sheet does the
+- [x] T031 The Portfolio menu lists projects from `usePortfolio` with a "Soon" badge; the phone sheet does the
   same.
-- [ ] T032 `pages/admin/PortfolioAdmin.tsx`: the list with `CheckCircle`/`XCircle` published, `Pencil`/`Trash2`
+- [x] T032 `pages/admin/PortfolioAdmin.tsx`: the list with `CheckCircle`/`XCircle` published, `Pencil`/`Trash2`
   actions, and drag-and-drop reorder calling `PATCH /reorder`. `PortfolioProjectEditor.tsx`: a two-column top
   (name, slug, tagline | `ImagePicker`), status, published, live URL, hue slider with a live silhouette
   preview, and a markdown description at 250px min-height. Plus the sidebar entry and routes.
-- [ ] T033 Tests: backend controller and round-trip tests, plus frontend carousel, pages, menu and admin tests.
+- [x] T033 Tests: backend controller and round-trip tests, plus frontend carousel, pages, menu and admin tests.
 
 ## Final
 

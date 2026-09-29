@@ -19,6 +19,8 @@ const INTERNAL_PATH_PATTERNS: RegExp[] = [
   /^\/blogs$/,
   /^\/blogs\/[^/?#\s]+$/,
   /^\/news-events$/,
+  /^\/portfolio$/,
+  /^\/portfolio\/[a-z0-9-]+$/,
 ]
 
 export type LinkClassification = 'internal' | 'external-allowed' | 'strip'

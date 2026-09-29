@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '../config/api'
 import type { BlogContentType } from '../types/blog'
 import type { HomePageContent } from '../types/homePage'
+import type { ProjectStatus } from '../types/portfolio'
 
 const ADMIN_URL = `${API_BASE_URL}/api/admin`
 
@@ -248,6 +249,15 @@ async function handleResponse<T>(response: Response): Promise<T> {
     throw new Error(message)
   }
   return (await response.json()) as T
+}
+
+/**
+ * For endpoints that answer 204 with no body, which `handleResponse` would try to parse as
+ * JSON and reject on. Errors still go through `handleResponse` for their message.
+ */
+async function handleNoContent(response: Response): Promise<void> {
+  if (response.ok) return
+  await handleResponse<never>(response)
 }
 
 function jsonOptions(data: Record<string, unknown>, method: string): RequestInit {
@@ -555,6 +565,84 @@ export async function updateAdminHomePage(
     jsonOptions(data as unknown as Record<string, unknown>, 'PUT'),
   )
   return handleResponse<HomePageContent>(response)
+}
+
+// ---------------------------------------------------------------------------
+// Portfolio
+// ---------------------------------------------------------------------------
+
+export interface AdminPortfolioProject {
+  id: string
+  slug: string
+  name: string
+  tagline: string
+  description: string | null
+  status: ProjectStatus
+  displayOrder: number
+  published: boolean
+  image: { url: string } | null
+  liveUrl: string | null
+  accentHue: number
+  createdAt: string
+  updatedAt: string
+}
+
+/** Every editable field; `displayOrder` null on create appends the project to the end. */
+export type AdminPortfolioProjectInput = Omit<
+  AdminPortfolioProject, 'id' | 'createdAt' | 'updatedAt' | 'displayOrder'
+> & { displayOrder: number | null }
+
+export async function fetchAdminPortfolio(getAccessToken: GetAccessToken): Promise<AdminPortfolioProject[]> {
+  const token = await getAccessToken()
+  return handleResponse<AdminPortfolioProject[]>(await authFetch(`${ADMIN_URL}/portfolio`, token))
+}
+
+export async function fetchAdminPortfolioProject(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<AdminPortfolioProject> {
+  const token = await getAccessToken()
+  return handleResponse<AdminPortfolioProject>(await authFetch(`${ADMIN_URL}/portfolio/${id}`, token))
+}
+
+export async function createAdminPortfolioProject(
+  getAccessToken: GetAccessToken,
+  data: AdminPortfolioProjectInput,
+): Promise<AdminPortfolioProject> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/portfolio`, token, jsonOptions(data as unknown as Record<string, unknown>, 'POST'),
+  )
+  return handleResponse<AdminPortfolioProject>(response)
+}
+
+export async function updateAdminPortfolioProject(
+  getAccessToken: GetAccessToken,
+  id: string,
+  data: AdminPortfolioProjectInput,
+): Promise<AdminPortfolioProject> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/portfolio/${id}`, token, jsonOptions(data as unknown as Record<string, unknown>, 'PUT'),
+  )
+  return handleResponse<AdminPortfolioProject>(response)
+}
+
+export async function deleteAdminPortfolioProject(getAccessToken: GetAccessToken, id: string): Promise<void> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/portfolio/${id}`, token, { method: 'DELETE' })
+  return handleNoContent(response)
+}
+
+export async function reorderAdminPortfolio(
+  getAccessToken: GetAccessToken,
+  orderedIds: string[],
+): Promise<void> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/portfolio/reorder`, token, jsonOptions({ orderedIds }, 'PATCH'),
+  )
+  return handleNoContent(response)
 }
 
 // ---------------------------------------------------------------------------

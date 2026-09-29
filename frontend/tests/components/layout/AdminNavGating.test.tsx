@@ -7,6 +7,12 @@ import { SiteHeader } from '../../../src/components/layout/SiteHeader'
 
 const isAdmin = vi.fn<() => boolean>()
 
+// No network: the header's Portfolio menu and the home carousel both read this.
+vi.mock('../../../src/services/portfolioApi', () => ({
+  fetchPortfolio: vi.fn().mockResolvedValue([]),
+  fetchPortfolioProject: vi.fn().mockResolvedValue(null),
+}))
+
 vi.mock('../../../src/auth/useAdminRole', () => ({
   useAdminRole: () => isAdmin(),
 }))

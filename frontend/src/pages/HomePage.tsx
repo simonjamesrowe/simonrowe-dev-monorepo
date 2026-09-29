@@ -5,10 +5,12 @@ import { CurrentlyStrip } from '../components/home/CurrentlyStrip'
 import { EmployerLogoStrip } from '../components/home/EmployerLogoStrip'
 import { FeaturedWriting } from '../components/home/FeaturedWriting'
 import { LandingHero } from '../components/home/LandingHero'
+import { PortfolioCarousel } from '../components/home/PortfolioCarousel'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { useDrawer } from '../hooks/useDrawer'
 import { useHomePage } from '../hooks/useHomePage'
+import { usePortfolio } from '../hooks/usePortfolio'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useProfile } from '../hooks/useProfile'
 import { trackPageView } from '../services/analytics'
@@ -25,6 +27,8 @@ export function HomePage() {
   const { profile, loading: profileLoading, error: profileError, retry } = useProfile()
   // Never rejects — a failed fetch resolves to the built-in copy — so it only ever delays.
   const homePage = useHomePage()
+  // Shares its request with the header's Portfolio menu. A failure just omits the section.
+  const { projects } = usePortfolio()
   const [jobs, setJobs] = useState<IJob[]>([])
   const [latestPosts, setLatestPosts] = useState<BlogSummary[]>([])
   // The job drawer is rendered globally by PublicLayout, so a logo can open a role in
@@ -86,6 +90,7 @@ export function HomePage() {
       <LandingHero content={homePage ?? DEFAULT_HOME_PAGE} profile={profile} />
       <CurrentlyStrip jobs={jobs} />
       <EmployerLogoStrip jobs={jobs} onEmployerClick={openJob} />
+      <PortfolioCarousel projects={projects} />
       <FeaturedWriting blogs={latestPosts} />
       <CTASection />
     </>

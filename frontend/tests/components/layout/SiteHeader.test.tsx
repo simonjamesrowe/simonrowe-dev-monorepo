@@ -8,6 +8,9 @@ import { groupIsActive, NAV_GROUPS, visibleGroups } from '../../../src/component
 
 const openChat = vi.fn()
 const startTour = vi.fn()
+const portfolioState = vi.fn()
+
+vi.mock('../../../src/hooks/usePortfolio', () => ({ usePortfolio: () => portfolioState() }))
 
 vi.mock('../../../src/auth/useAdminRole', () => ({ useAdminRole: () => false }))
 vi.mock('../../../src/contexts/ChatContext', () => ({ useChat: () => ({ openChat }) }))
@@ -44,6 +47,7 @@ describe('SiteHeader', () => {
   beforeEach(() => {
     openChat.mockReset()
     startTour.mockReset()
+    portfolioState.mockReturnValue({ projects: [], loading: false, error: null })
   })
 
   it('renders the three populated menus and no empty Portfolio menu', () => {
@@ -148,6 +152,47 @@ describe('SiteHeader', () => {
     notes.focus()
     fireEvent.keyDown(notes, { key: '/' })
     expect(notes).toHaveFocus()
+  })
+})
+
+describe('SiteHeader Portfolio menu', () => {
+  beforeEach(() => {
+    portfolioState.mockReset()
+  })
+
+  it('lists published projects from the CMS, marks Coming soon ones, and ends with All projects', async () => {
+    portfolioState.mockReturnValue({
+      loading: false,
+      error: null,
+      projects: [
+        { slug: 'term-time', name: 'Term Time', tagline: 'For parents', status: 'LIVE', accentHue: 1, displayOrder: 0 },
+        { slug: 'co-parents', name: 'Co-Parents', tagline: 'Two homes', status: 'COMING_SOON', accentHue: 2, displayOrder: 1 },
+      ],
+    })
+    const user = userEvent.setup()
+    renderAt('/')
+    await user.click(screen.getByRole('button', { name: 'Portfolio' }))
+
+    const panel = document.getElementById('header-menu-portfolio')!
+    const links = within(panel).getAllByRole('link')
+    expect(links.map(link => link.getAttribute('href'))).toEqual(['/portfolio/term-time', '/portfolio', '/portfolio'])
+    expect(links[1]).toHaveTextContent('Soon')
+    expect(links[2]).toHaveTextContent('All projects')
+  })
+
+  it('still offers All projects when the list could not be loaded', async () => {
+    portfolioState.mockReturnValue({ projects: [], loading: false, error: 'down' })
+    const user = userEvent.setup()
+    renderAt('/')
+    await user.click(screen.getByRole('button', { name: 'Portfolio' }))
+    expect(within(document.getElementById('header-menu-portfolio')!).getByRole('link', { name: /All projects/ }))
+      .toHaveAttribute('href', '/portfolio')
+  })
+
+  it('lights Portfolio on a project page', () => {
+    portfolioState.mockReturnValue({ projects: [], loading: false, error: 'down' })
+    renderAt('/portfolio/term-time')
+    expect(screen.getByRole('button', { name: 'Portfolio' })).toHaveClass('header-menu__trigger--active')
   })
 })
 

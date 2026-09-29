@@ -1,6 +1,8 @@
 import {
   Activity,
+  Box,
   Briefcase,
+  LayoutGrid,
   Layers,
   Mail,
   Newspaper,
@@ -9,6 +11,8 @@ import {
   UserRound,
   type LucideIcon,
 } from 'lucide-react'
+
+import { hasDetailPage, type PortfolioProject } from '../../types/portfolio'
 
 export interface NavItem {
   label: string
@@ -89,4 +93,32 @@ export function groupIsActive(group: NavGroup, pathname: string): boolean {
 /** Groups with at least one destination; an empty group would open an empty panel. */
 export function visibleGroups(groups: NavGroup[] = NAV_GROUPS): NavGroup[] {
   return groups.filter(group => group.items.length > 0)
+}
+
+const ALL_PROJECTS: NavItem = {
+  label: 'All projects',
+  to: '/portfolio',
+  description: 'Everything I am building',
+  icon: LayoutGrid,
+}
+
+/**
+ * The menu with the Portfolio group filled from the CMS: one item per published project (a
+ * Coming soon one points at the Portfolio page, since it has no page of its own), then
+ * "All projects". With no published projects the group stays empty and so is hidden; if the
+ * list could not be loaded it still offers "All projects", which will explain itself.
+ */
+export function navGroupsWithPortfolio(
+  projects: PortfolioProject[],
+  loadFailed = false,
+): NavGroup[] {
+  const items: NavItem[] = projects.map(project => ({
+    label: project.name,
+    to: hasDetailPage(project) ? `/portfolio/${project.slug}` : '/portfolio',
+    description: project.tagline,
+    icon: Box,
+    comingSoon: project.status === 'COMING_SOON',
+  }))
+  const portfolioItems = items.length > 0 || loadFailed ? [...items, ALL_PROJECTS] : []
+  return NAV_GROUPS.map(group => (group.key === 'portfolio' ? { ...group, items: portfolioItems } : group))
 }

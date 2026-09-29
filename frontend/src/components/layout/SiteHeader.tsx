@@ -5,11 +5,12 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useAdminRole } from '../../auth/useAdminRole'
 import { useChat } from '../../contexts/ChatContext'
 import { useTheme } from '../../contexts/ThemeContext'
+import { usePortfolio } from '../../hooks/usePortfolio'
 import { useTour } from '../../hooks/useTour'
 import { SiteSearch } from '../search/SiteSearch'
 import { HeaderMenu } from './HeaderMenu'
 import { MobileNavSheet } from './MobileNavSheet'
-import { groupIsActive, visibleGroups, type NavGroup } from './navModel'
+import { groupIsActive, navGroupsWithPortfolio, visibleGroups, type NavGroup } from './navModel'
 
 /** True when a key press belongs to whatever the user is typing into, not to the page. */
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -42,7 +43,8 @@ export function SiteHeader({ groups }: SiteHeaderProps) {
   const { theme, toggleTheme } = useTheme()
   const { start: startTour } = useTour()
   const isAdmin = useAdminRole()
-  const menus = visibleGroups(groups)
+  const portfolio = usePortfolio()
+  const menus = visibleGroups(groups ?? navGroupsWithPortfolio(portfolio.projects, portfolio.error !== null))
 
   useEffect(() => {
     setOpenGroup(null)
