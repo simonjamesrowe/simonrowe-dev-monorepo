@@ -121,6 +121,17 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   `unhealthy` container** — `restart: unless-stopped` only fires on process *exit*, so a
   container that is up but failing its healthcheck stays broken forever unless something
   external restarts it. See `docs/runbooks/prod-monitoring.md`.
+- **Images pile up unless something deletes them, and a full disk takes the datastores down
+  with it.** Every deploy pulls three new images (backend, frontend, software-factory). Until
+  `prod-disk-image-cleanup` nothing removed the old ones: on 2026-09-28 there were 217 images
+  (45GB reclaimable) and `/dev/sda2` hit 100%. Kafka died with `SIGBUS`, `langfuse-db` failed
+  crash recovery, Mongo hit a fatal error, and Docker could not write its own state to restart
+  them. `restart-prod.sh` now prunes after every verified deploy, and `monitor-prod.sh` prunes
+  above 85% disk. Both use `scripts/lib/image-prune.sh`. `docker image prune --filter until=`
+  reads the image's **build** time, and bootBuildImage stamps 1980 unless `createdDate` is set
+  (it now is). Never prune containers or volumes on this host: the `exited` datastores are what
+  recovery `docker start`s. The next unbounded grower is the `langfuse-clickhouse-data` volume
+  (17.68GB, no TTL on traces). Recovery order: `docs/runbooks/prod-monitoring.md` ("Disk full").
 - **A `healthy` container is not proof a service is serving.** On 2026-08-14 a host reboot
   cold-started all 21 containers at once and two came back broken *and invisible* for 10 days:
   `dependencytrack-apiserver` reported `healthy` while its API port was dead (its healthcheck
@@ -231,6 +242,58 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- prod-disk-image-cleanup: **Production now deletes the images it stops using.** On 2026-09-28
+  the Pi's root filesystem (`/dev/sda2`, 117G) reached 100% between about 19:50 and 20:08 UTC,
+  and the API was down for about six hours. Kafka died with `SIGBUS` (the JVM mmaps its files),
+  `langfuse-db` failed crash recovery, and Mongo hit a fatal error. Docker's own restarts then
+  failed writing under `/var/lib/docker`, so all three stayed `exited`. The backend exited 82 on
+  every restart with `pkcs12 ... data truncated`, because its buildpack `cacerts` had been cut
+  off mid-write in the container's writable layer. Only `up -d --force-recreate --no-deps backend`
+  cleared it. `docker system df` showed 217 images, 25 in use and 45.25GB reclaimable. Nothing had
+  ever deleted an image, and `docker image prune -af` got back 49.64GB. No deploy ran on 09-27 or
+  09-28: the dead images had used up the headroom, and ordinary growth filled the rest.
+  Load-bearing bits:
+  - **The deploy prune sits at the end of `verify-public`, not in a new phase.** A new phase is a
+    new activity call in `DeployWorkflowImpl`, which changes its command sequence and would need
+    `Workflow.getVersion`. No workflow code changed. It runs only once the public check has
+    passed, so the rollback a failure enters still has the pre-deploy images from
+    `rollback-images`. `rollback` writes `rollback-taken` before anything else, and
+    `verify-public` does not prune while that file exists. That matters because the rollback path
+    re-runs `verify-public` to check the restored version. `pull` clears it. A bare `all` prunes
+    once it has verified.
+  - **Best-effort, and bounded.** A failed prune logs a warning and the phase still exits 0.
+    `IMAGE_PRUNE_TIMEOUT` (600s) exists because a phase that outruns the 30m `phase-timeout`
+    fails, and a failed `verify-public` rolls back a deploy that worked.
+  - **`until=72h` is build time, not pull time.** Spring Boot's `bootBuildImage` stamps a fixed
+    1980-01-01 unless `createdDate` is set, so every unused backend image looked 46 years old and
+    no window could keep one. `backend/build.gradle.kts` now sets `createdDate.set("now")`. Backend
+    images pulled before this still say 1980 and go as soon as nothing uses them. Frontend and
+    software-factory are built by buildx, which already records the build time.
+  - **Watchdog disk check, before layer 1.** It watches the filesystem holding `/var/lib/docker`.
+    At 85% (`DISK_WARN_PERCENT`) it runs the same prune. At 95% (`DISK_CRIT_PERCENT`) it prunes
+    every unused image with no window. Each level has its own stamp in `STATE_DIR` and runs at
+    most once an hour. It honours `DRY_RUN`. It runs before anything else in the script writes a
+    file, and inside `|| true`, because on a full disk `prune_old_restarts`' `mktemp` used to end
+    the tick under `set -e` before anything had been freed.
+  - **The watchdog never prunes a live rollback target.** It already stands down while the
+    maintenance flag is set. It also skips pruning for `DISK_PRUNE_DEPLOY_GRACE` (1h) after a
+    deploy's `pull`, which it reads as the mtime of `rollback-images` through nginx. The flag
+    alone left a gap: `verify-public` runs after the page comes down, and the rollback starts
+    from there.
+  - **`docker image prune`, not a list-then-`rmi` loop.** The daemon checks whether an image is in
+    use at the moment it deletes it. A list goes stale as soon as compose creates a container, and
+    the `rmi -f` a multi-tagged image needs would untag one that had just come into use. Builder
+    prune was left out because nothing builds on the Pi. A dangling-only first pass was left out
+    too: it would delete the previous `:latest` of a human `all` deploy whatever its age.
+  - `scripts/test/test-disk-image-prune.sh` (63 checks) stubs `docker`, `df` and `curl`, and
+    asserts the exact arguments docker receives. Its no-`DRY_RUN` cases run only after proving
+    `docker` resolves to the stub. Mutation-checked: pruning on a failed `verify-public`, ignoring
+    `rollback-taken`, dropping the grace or the rate limit, and making a prune failure fatal each
+    fail it.
+  - **Not fixed:** the `langfuse-clickhouse-data` volume (17.68GB on 2026-09-28) grows without
+    bound, since Langfuse traces have no TTL. It is the next thing that will fill this disk.
+  See `docs/runbooks/prod-monitoring.md` ("Disk full") and `docs/runbooks/deploy.md`
+  ("Image cleanup").
 - factory-auto-merge: **The reviewer now arms auto-merge; GitHub performs the merge.** Until now
   auto-merge was armed by the `pr-review-loop` skill, from the same agent session that wrote the
   code. The decision now sits at the end of the code-review workflow, where the factory already

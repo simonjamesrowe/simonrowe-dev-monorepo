@@ -21,6 +21,9 @@
 #   2   the phase declined, with no side effects (sync-config only)
 #  64   usage error
 #
+# The image prune at the end of verify-public and all never changes the exit
+# code: see prune_after_deploy.
+#
 # TESTING: set DRY_RUN=1. Every mutating docker/git command goes through run_cmd,
 # which echoes instead of executing. Without it, merely running this script
 # performs real restarts and can recreate containers if the compose file has been
@@ -60,6 +63,26 @@ IMAGE_PREFIX="${IMAGE_PREFIX:-ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-}"
 STATE_DIR="${STATE_DIR:-/var/run/deploy-state}"
 MAINTENANCE_FLAG="$STATE_DIR/maintenance.on"
 ROLLBACK_FILE="$STATE_DIR/rollback-images"
+# Set by `rollback`, cleared by `pull`: "the deploy that pulled last has rolled
+# back". verify-public runs on the rollback path too (DeployWorkflowImpl checks the
+# restored version with it), and must not prune there - see prune_after_deploy.
+ROLLBACK_TAKEN_FLAG="$STATE_DIR/rollback-taken"
+
+# prune_unused_images and IMAGE_PRUNE_KEEP, shared with monitor-prod.sh.
+#
+# Guarded rather than a bare `source`: under `set -e` a missing file would fail
+# EVERY invocation of this script, and the prune is the one thing here that is
+# allowed to fail. A missing lib degrades to "no prune", loudly.
+if [[ -r "$SCRIPT_DIR/lib/image-prune.sh" ]]; then
+  # shellcheck source=lib/image-prune.sh
+  source "$SCRIPT_DIR/lib/image-prune.sh"
+else
+  IMAGE_PRUNE_KEEP="${IMAGE_PRUNE_KEEP:-72h}"
+  prune_unused_images() {
+    echo "image prune unavailable: $SCRIPT_DIR/lib/image-prune.sh is missing"
+    return 1
+  }
+fi
 
 # Never behind the maintenance flag: these are how a failing deploy gets fixed,
 # so `verify` can check them while the page is up.
@@ -276,6 +299,8 @@ phase_pull() {
   # STATE_DIR, not a change to the running stack, and the rollback assertions read
   # it back.
   : >"$ROLLBACK_FILE"
+  # A new deploy's images: whatever the last one did, this one has not rolled back.
+  rm -f "$ROLLBACK_TAKEN_FLAG"
 
   local service image id
   for service in $SERVICES; do
@@ -439,7 +464,55 @@ phase_verify_public() {
   # public hostnames.
   echo
   echo "Checking public hostnames..."
-  check_hosts "${PUBLIC_HOSTS[@]}"
+  check_hosts "${PUBLIC_HOSTS[@]}" || return 1
+
+  prune_after_deploy
+}
+
+# ---------------------------------------------------------------------------
+# Image cleanup, the last thing a successful deploy does.
+#
+# Without it every deploy leaves three images behind forever: on 2026-09-28 that
+# was 217 images and 45GB reclaimable on a 117GB disk, which filled and took the
+# datastores down (docs/runbooks/prod-monitoring.md, "Disk full").
+#
+# It lives at the end of verify-public, the deploy's last phase, rather than in a
+# phase of its own. A new phase would be a new activity call in DeployWorkflowImpl,
+# which changes the workflow's command sequence and needs a Workflow.getVersion
+# gate to replay. Folding it in here changes no workflow code at all.
+#
+# ORDERING IS THE SAFETY ARGUMENT. `rollback` re-tags the pre-deploy images
+# recorded in rollback-images, and from `recreate` onwards no container uses them,
+# so a prune any earlier would delete what a failed deploy needs to recover. Here
+# the deploy has verified end to end and there is nothing left to roll back to.
+# Two further rules:
+#   - only on success: a failing check_hosts returns before this runs, so the
+#     rollback path the failure enters starts with every image still present.
+#   - never after a rollback: DeployWorkflowImpl re-runs verify-public to check the
+#     restored version, and that success must not prune. The failed images are
+#     the evidence for whoever investigates, and ROLLBACK_TAKEN_FLAG says so.
+#
+# BEST-EFFORT: nothing here can fail the phase. A failed prune costs disk space;
+# a failed verify-public costs a rollback of a deploy that worked.
+# ---------------------------------------------------------------------------
+prune_after_deploy() {
+  if [[ -f "$ROLLBACK_TAKEN_FLAG" ]]; then
+    echo
+    echo "Not pruning images: this deploy rolled back ($ROLLBACK_TAKEN_FLAG), and the"
+    echo "images it rolled back from are the evidence. The next deploy's pull clears it."
+    return 0
+  fi
+  best_effort_prune
+}
+
+best_effort_prune() {
+  echo
+  echo "Pruning images no container uses, built more than ${IMAGE_PRUNE_KEEP} ago (best-effort)..."
+  if ! prune_unused_images; then
+    echo "WARNING: the image prune failed. The deploy is unaffected; monitor-prod.sh"
+    echo "         prunes on its own once the disk crosses its threshold."
+  fi
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -714,6 +787,11 @@ phase_commit_range() {
 # Re-tag :latest back to the image ids recorded before the pull, then recreate
 # with --pull never. Same mechanism as the deploy, in the other direction.
 phase_rollback() {
+  # FIRST, before anything can fail: a rollback that was attempted at all means the
+  # verify-public that follows it must not prune (see prune_after_deploy).
+  mkdir -p "$STATE_DIR"
+  touch "$ROLLBACK_TAKEN_FLAG"
+
   if [[ ! -s "$ROLLBACK_FILE" ]]; then
     echo "No recorded rollback images at $ROLLBACK_FILE - nothing to roll back." >&2
     return 1
@@ -761,6 +839,10 @@ phase_all() {
   fi
 
   echo "Production services refreshed and verified."
+
+  # The human path pulls :latest too, so it leaves images behind exactly like the
+  # deployer does. It has no rollback, so only "verified" gates this.
+  best_effort_prune
   return 0
 }
 
@@ -769,7 +851,8 @@ usage() {
 Usage: restart-prod.sh [PHASE] [TARGET_SHA]
 
 Phases:
-  all (default)      pull -> recreate -> verify -> verify-public, as today
+  all (default)      pull -> recreate -> verify -> verify-public, as today, then
+                     the same best-effort image prune once everything verified
                      (deliberately NOT sync-config: bare invocation never moves HEAD)
   sync-config <sha>  fast-forward the deploy directory to <sha>, if that is safe
   rollback-config <sha>
@@ -779,7 +862,9 @@ Phases:
   pull               record current image ids, pull IMAGE_TAG, re-tag to :latest
   recreate           up -d --no-deps --pull never each SERVICE, restart nginx, reconcile
   verify             container settle loop + the four ops hostnames
-  verify-public      www + api (run only after maintenance-off)
+  verify-public      www + api (run only after maintenance-off); on success, prune
+                     unused images older than IMAGE_PRUNE_KEEP unless this deploy
+                     rolled back (best-effort, never fails the phase)
   rollback           re-tag :latest back to the recorded image ids and recreate
 
 Read-only evidence gathering, for the failure path:
