@@ -215,6 +215,14 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("boot
     //
     // Keep this in step with the toolchain's languageVersion in the root build file.
     environment.put("BP_JVM_VERSION", "25")
+    // The build time, not the plugin's default of a fixed 1980-01-01 (chosen for
+    // reproducible image ids). Production prunes unused images with
+    // `docker image prune --filter until=72h`, and `until` reads this field: with
+    // the fixed date every backend image looks 46 years old, so the keep window
+    // that holds recent images for a manual rollback never applied to this one.
+    // Each commit already builds a different image (the jar embeds build info),
+    // so a reproducible id bought nothing. See scripts/lib/image-prune.sh.
+    createdDate.set("now")
 }
 
 dependencies {

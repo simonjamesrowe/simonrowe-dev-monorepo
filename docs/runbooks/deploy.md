@@ -34,8 +34,8 @@ from a service that has already verified an HMAC signature.
 | `pull` | Records the current image ID of each target service, then pulls the head SHA and re-tags it to `:latest` |
 | `recreate` | `up -d --no-deps --pull never` each target, `restart nginx`, then a full `up -d` reconcile |
 | `verify` | The container settle loop, plus the four ops hostnames |
-| `verify-public` | `www` and `api` — only after the page comes down |
-| `rollback` | Re-tags `:latest` back to the recorded image IDs and recreates |
+| `verify-public` | `www` and `api` — only after the page comes down. On success, prunes unused images ([below](#image-cleanup)) |
+| `rollback` | Re-tags `:latest` back to the recorded image IDs and recreates. Marks the deploy `rollback-taken` first |
 
 Two things about this list are load-bearing and easy to "tidy" into bugs:
 
@@ -78,6 +78,37 @@ either never return anyone or return them into a still-broken site. Its
 
 Full contract:
 `specs/036-auto-deploy-on-merge/contracts/restart-prod-phases.md`.
+
+### Image cleanup
+
+The last thing a successful deploy does is
+`docker image prune -af --filter until=72h`, at the end of `verify-public`.
+Before this, every deploy left three images behind forever, and on 2026-09-28
+they filled the disk (see
+[prod-monitoring.md](prod-monitoring.md#disk-full-2026-09-28-outage)). The prune
+lives in `scripts/lib/image-prune.sh`, shared with the watchdog.
+
+- **It is not a phase of its own.** A new phase would be a new activity call in
+  `DeployWorkflowImpl`, which changes the workflow's command sequence and would
+  need a `Workflow.getVersion` gate. Folding it into `verify-public` changes no
+  workflow code.
+- **Only after success.** `rollback` re-tags the pre-deploy images recorded in
+  `rollback-images`, and no container uses them from `recreate` onwards. A prune
+  any earlier would delete what a failed deploy needs. A failing `verify-public`
+  returns before the prune, so the rollback it enters finds every image in place.
+- **Never after a rollback.** The rollback path re-runs `verify-public` to check
+  the restored version. `rollback` writes `rollback-taken` to the state directory
+  first, and `verify-public` skips the prune while it exists: the images the
+  deploy rolled back from are the evidence. The next deploy's `pull` clears it.
+- **Best-effort.** A failed prune logs a warning and the phase still exits 0.
+  The prune is bounded by `IMAGE_PRUNE_TIMEOUT` (600s) because a phase that
+  outruns the 30m `phase-timeout` fails, and a failed `verify-public` would roll
+  back a deploy that worked.
+- **72h is creation time, not pull time.** `until` reads when an image was
+  *built*. A manual rollback to anything built in the last three days can re-tag
+  a local image. Anything older can be re-pulled by its sha tag from ghcr.
+- A bare `./scripts/restart-prod.sh` (`all`) prunes the same way once everything
+  has verified.
 
 ## Turning it off
 

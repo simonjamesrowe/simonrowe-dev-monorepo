@@ -15,6 +15,10 @@ set -euo pipefail
 #   4. DNS    - each container that talks to the internet can resolve an external
 #               name while the host can. If one cannot, restart just that container.
 #
+# Before all four, a DISK check: if the filesystem holding /var/lib/docker is above
+# DISK_WARN_PERCENT, prune unused images (rate-limited), then carry on to layer 1.
+# See the disk section below for the 2026-09-28 outage it exists for.
+#
 # Layer 2 exists because *Docker never restarts an unhealthy container*.
 # `restart: unless-stopped` only fires when the process exits; a container whose
 # healthcheck fails forever is left running untouched. On 2026-08-14 the
@@ -134,6 +138,37 @@ DNS_PROBE_NAME=${DNS_PROBE_NAME:-github.com}
 # makes getent wait out resolv.conf's timeout x attempts. Bound each probe so a
 # bad tick cannot run into the next cron minute.
 DNS_PROBE_TIMEOUT=${DNS_PROBE_TIMEOUT:-5}
+
+# Disk layer. The filesystem to watch is the one holding Docker's data root; a host
+# without /var/lib/docker (a laptop, CI) falls back to `/`.
+DISK_CHECK_PATH=${DISK_CHECK_PATH:-/var/lib/docker}
+# At or above WARN: prune unused images older than IMAGE_PRUNE_KEEP (the same prune
+# a successful deploy runs). At or above CRIT: prune EVERY unused image - at that
+# point disk beats the convenience of a local rollback image, and a rollback can
+# still re-pull the sha tag from ghcr.
+DISK_WARN_PERCENT=${DISK_WARN_PERCENT:-85}
+DISK_CRIT_PERCENT=${DISK_CRIT_PERCENT:-95}
+# At most one prune per level per interval. A prune that did not help will not
+# help a minute later either, and this keeps the log to one line an hour.
+DISK_PRUNE_INTERVAL=${DISK_PRUNE_INTERVAL:-3600}
+# No prune within this long of a deploy's `pull`. See check_disk.
+DISK_PRUNE_DEPLOY_GRACE=${DISK_PRUNE_DEPLOY_GRACE:-3600}
+
+# prune_unused_images and IMAGE_PRUNE_KEEP, shared with restart-prod.sh.
+#
+# Guarded rather than a bare `source`: under `set -e` a missing file would fail
+# EVERY invocation of this script, and the prune is the one thing here that is
+# allowed to fail. A missing lib degrades to "no prune", loudly.
+if [[ -r "$SCRIPT_DIR/lib/image-prune.sh" ]]; then
+  # shellcheck source=lib/image-prune.sh
+  source "$SCRIPT_DIR/lib/image-prune.sh"
+else
+  IMAGE_PRUNE_KEEP="${IMAGE_PRUNE_KEEP:-72h}"
+  prune_unused_images() {
+    echo "image prune unavailable: $SCRIPT_DIR/lib/image-prune.sh is missing"
+    return 1
+  }
+fi
 
 mkdir -p "$STATE_DIR"
 
@@ -287,8 +322,6 @@ svc_restart() {
   return 1
 }
 
-prune_old_restarts
-
 # ---------------------------------------------------------------------------
 # Layer 0: is a deploy in progress?
 # ---------------------------------------------------------------------------
@@ -322,6 +355,157 @@ if deploy_in_progress; then
   set_failure_count 0
   exit 0
 fi
+
+# ---------------------------------------------------------------------------
+# Disk: is the filesystem holding /var/lib/docker filling up?
+#
+# On 2026-09-28 the Pi's root filesystem reached 100%. Kafka died with SIGBUS (the
+# JVM mmaps on a full disk), Postgres failed crash recovery, Mongo hit a fatal
+# error, and Docker's own restart attempts then failed to write its state, so all
+# three stayed `exited`. The backend's cacerts was truncated mid-write in its
+# writable layer and it failed on every restart until it was recreated. The API was
+# down for about six hours. `docker image prune -af` reclaimed 49.64GB: every
+# deploy pulls three new images, nothing deleted the old ones, and once the dead
+# images had eaten the headroom, ordinary growth filled the rest.
+#
+# restart-prod.sh now prunes after every successful deploy, which removes the
+# cause. This is the backstop, for everything that route misses: deploys that
+# failed or rolled back, a human `docker pull`, image bumps of third-party services.
+# It does the remediation itself rather than raising an alert someone has to act
+# on - by the time a human reads a disk alert on this box, Kafka is already dead.
+#
+# It runs BEFORE layer 1 and before anything else here writes a file, because on a
+# full disk every write fails and `set -e` would end the tick before it freed
+# anything - the prune_old_restarts mktemp used to be the first thing this script
+# did. It never exits the script: the layers below still run on the same tick, and
+# layer 2's `up -d` is what starts the datastores Docker gave up on once there is
+# room again.
+#
+# It does not run during a deploy (layer 0 exited above), and it does not run for
+# DISK_PRUNE_DEPLOY_GRACE after one pulled. Both are about the same image: the
+# pre-deploy image recorded in rollback-images, which no container uses from
+# `recreate` until the deploy finishes, and which a rollback re-tags. The
+# maintenance flag covers most of that window but not verify-public: that runs
+# with the flag already down, and if it fails the rollback starts from there. The
+# grace reads the rollback file's mtime through nginx, the same way layer 0 reads
+# the flag. A successful deploy has already pruned by then, so waiting costs
+# nothing.
+# ---------------------------------------------------------------------------
+
+disk_check_path() {
+  if [[ -e "$DISK_CHECK_PATH" ]]; then
+    echo "$DISK_CHECK_PATH"
+  else
+    echo /
+  fi
+}
+
+disk_used_percent() {
+  # -P: POSIX output, one line per filesystem even for a long device name, on both
+  # GNU and BSD df. Field 5 is "Use%".
+  df -P "$(disk_check_path)" 2>/dev/null | awk 'NR == 2 { sub("%", "", $5); print $5 }'
+}
+
+is_number() {
+  case "$1" in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  return 0
+}
+
+# Seconds since the last deploy's `pull` wrote rollback-images, or failure if that
+# cannot be read (no nginx, no deploy yet). Failing open is deliberate and matches
+# layer 0: on a full disk nginx may well be what is down, and not pruning then
+# would leave the watchdog unable to help in exactly the case it exists for.
+seconds_since_deploy_pull() {
+  local mtime
+  mtime="$(docker exec "${COMPOSE_PROJECT}-nginx-1" \
+    stat -c %Y /var/run/deploy-state/rollback-images 2>/dev/null)" || return 1
+  is_number "$mtime" || return 1
+  echo $(( $(date +%s) - mtime ))
+}
+
+check_disk() {
+  local used
+  used="$(disk_used_percent)"
+  if ! is_number "$used"; then
+    log "WARN" "disk: could not read usage of $(disk_check_path) - skipping the disk check"
+    return 0
+  fi
+  (( used < DISK_WARN_PERCENT )) && return 0
+
+  local level="WARN" keep="$IMAGE_PRUNE_KEEP" stamp="$STATE_DIR/disk_prune_warn.last"
+  if (( used >= DISK_CRIT_PERCENT )); then
+    level="CRIT"
+    keep="all"
+    # Its own stamp, so an hourly WARN prune never delays the aggressive one.
+    stamp="$STATE_DIR/disk_prune_crit.last"
+  fi
+  local summary="disk: ${used}% used on the filesystem holding $(disk_check_path) (warn ${DISK_WARN_PERCENT}%, crit ${DISK_CRIT_PERCENT}%)"
+
+  local now last
+  now=$(date +%s)
+  last=$(cat "$stamp" 2>/dev/null || echo 0)
+  is_number "$last" || last=0
+  if (( now - last < DISK_PRUNE_INTERVAL )); then
+    # One line per tick while the disk stays high, not three.
+    log "$level" "$summary - last $level prune $(( now - last ))s ago, rate-limited to one per ${DISK_PRUNE_INTERVAL}s"
+    return 0
+  fi
+  log "$level" "$summary"
+
+  local since
+  if since="$(seconds_since_deploy_pull)" && (( since < DISK_PRUNE_DEPLOY_GRACE )); then
+    log "$level" "disk: a deploy pulled images ${since}s ago - not pruning within ${DISK_PRUNE_DEPLOY_GRACE}s of a pull, its rollback target may be unused right now"
+    return 0
+  fi
+
+  # Stamped BEFORE pruning, so a prune that outlasts the minute cannot be joined by
+  # a second one from the next tick. Not under DRY_RUN, for the same reason
+  # record_restart is not: a validation run must not arm a real rate limit. The
+  # write fails on a full disk; that must not stop the prune that would fix it.
+  if [[ "$DRY_RUN" == "0" ]]; then
+    { echo "$now" > "$stamp"; } 2>/dev/null || true
+  fi
+
+  if [[ "$keep" == "all" ]]; then
+    log "$level" "disk: pruning EVERY image no container uses"
+  else
+    log "$level" "disk: pruning images no container uses, built more than ${keep} ago"
+  fi
+  local output rc=0
+  output="$(prune_unused_images "$keep")" || rc=$?
+  # A pipe, not a here-string: older bash backs a here-string with a temp file,
+  # which cannot be created on the full disk this is running to fix.
+  printf '%s\n' "$output" | while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    if [[ "$DRY_RUN" != "0" ]]; then
+      # Already a log line: run_cmd's own "[DRYRUN] would run: ...".
+      echo "$line"
+    else
+      log "INFO" "disk: $line"
+    fi
+  done
+  if (( rc != 0 )); then
+    log "ERROR" "disk: image prune failed (exit $rc)"
+    return 0
+  fi
+  [[ "$DRY_RUN" != "0" ]] && return 0
+
+  used="$(disk_used_percent)"
+  is_number "$used" || return 0
+  if (( used >= DISK_CRIT_PERCENT )); then
+    log "CRIT" "disk: still ${used}% used after the prune - images are not what is filling it. Needs a human: docker system df -v (langfuse-clickhouse-data is the next-largest grower)"
+  else
+    log "INFO" "disk: ${used}% used after the prune"
+  fi
+}
+
+# `|| true` is what makes every failure inside non-fatal: bash suspends `set -e`
+# for a function called on the left of `||`. On a full disk even `log` can fail.
+check_disk || true
+
+prune_old_restarts
 
 # ---------------------------------------------------------------------------
 # Layer 1: is the public site up at all?

@@ -14,7 +14,10 @@ crontab -l | grep monitor-prod
 tail -50 /var/log/prod-health/monitor.log
 ```
 
-It runs four layers, cheapest first, and stops after the first one that acts.
+Before the layers it checks the disk (see [Disk full](#disk-full-2026-09-28-outage)):
+above 85% used on the filesystem holding `/var/lib/docker` it prunes unused images
+itself, then carries on. It then runs four layers, cheapest first, and stops after
+the first one that acts.
 
 | Layer | Question | Remedy |
 | --- | --- | --- |
@@ -244,6 +247,13 @@ set it inline in the crontab entry.
 | `DRY_RUN` | `0` | `1` logs intended commands and skips all remediation |
 | `DNS_PROBE_NAME` | `github.com` | External name layer 4 resolves, on the host and in each container |
 | `DNS_PROBE_TIMEOUT` | `5` | Seconds allowed per layer-4 probe |
+| `DISK_CHECK_PATH` | `/var/lib/docker` | The disk check watches the filesystem holding this path (`/` if it does not exist) |
+| `DISK_WARN_PERCENT` | `85` | At or above: log `WARN`, prune unused images built more than `IMAGE_PRUNE_KEEP` ago |
+| `DISK_CRIT_PERCENT` | `95` | At or above: log `CRIT`, prune **every** unused image |
+| `DISK_PRUNE_INTERVAL` | `3600` | At most one prune per level per this many seconds |
+| `DISK_PRUNE_DEPLOY_GRACE` | `3600` | No prune within this many seconds of a deploy's `pull` |
+| `IMAGE_PRUNE_KEEP` | `72h` | The `until` window of the ordinary prune (shared with `restart-prod.sh`) |
+| `IMAGE_PRUNE_TIMEOUT` | `600` | Seconds a single prune may run |
 
 Per-service remediation is deliberately less trigger-happy than the whole-stack
 path: a container restart is cheap, but a restart *loop* is worse than one bad
@@ -256,6 +266,7 @@ In `STATE_DIR`:
 - `failure_count` — consecutive layer-1 failures, reset on success or reconcile
 - `restart_timestamps` — epoch times of recent whole-stack reconciles, pruned each run
 - `svc_<service>.failures` / `.dns-failures` / `.restarts` — per-service failure counters (layers 2-3 and layer 4) and restart history
+- `disk_prune_warn.last` / `disk_prune_crit.last` — epoch time of the last disk-check prune at each level (the rate limit)
 
 They live in `/tmp`, so a reboot clears them. That is the wanted behaviour: after
 a reboot the stack needs starting fresh anyway, and a stale backoff window would
@@ -278,6 +289,100 @@ host connectivity (`curl -I https://google.com`), container states
 `Restarting`), the pinggy token (`docker compose -f docker-compose.prod.yml logs pinggy`;
 one token allows one active tunnel, reclaim with `PINGGY_TOKEN=<token>+force`), and
 [status.pinggy.io](https://status.pinggy.io).
+
+## Disk full (2026-09-28 outage)
+
+### What it looks like
+
+On 2026-09-28, between about 19:50 and 20:08 UTC, `/dev/sda2` (the Pi's 117G
+root filesystem, which holds `/var/lib/docker`) reached 100%. The API was down
+for about six hours. In the order it happened:
+
+- **Kafka** died with `SIGBUS`. The JVM mmaps its files, and on a full disk a page
+  fault on an mmapped write kills the process.
+- **Postgres** (`langfuse-db`) failed crash recovery with
+  `No space left on device`. Langfuse and Dependency-Track went with it.
+- **Mongo** hit a fatal error.
+- **Docker's own restart attempts then failed** with
+  `failed to set up container networking: write /var/lib/docker/...`, so those
+  three containers stayed `exited`. `restart: unless-stopped` does not try again
+  once the daemon itself has failed to restart a container.
+- **The backend** failed on every restart with exit code 82 and
+  `pkcs12: error reading P12 data: asn1: syntax error: data truncated`. The
+  buildpack launcher had been writing
+  `/layers/paketo-buildpacks_bellsoft-liberica/jre/lib/security/cacerts` in the
+  container's writable layer when the disk filled, so that file was truncated. A
+  restart reuses the same writable layer. Only recreating the container fixes it.
+
+`docker system df` showed **217 images, 25 in use, 65.79GB, 45.25GB
+reclaimable**. Every deploy pulls new backend, frontend and software-factory
+images (six deploys on 2026-09-26 alone), and nothing ever deleted the old ones.
+No deploy ran on 09-27 or 09-28. The dead images had used up the headroom, and
+ordinary growth filled the rest. `docker image prune -af` reclaimed 49.64GB
+(100% to 67%).
+
+### What now stops it
+
+- **Every successful deploy prunes.** `restart-prod.sh` runs
+  `docker image prune -af --filter until=72h` at the end of `verify-public` (and
+  at the end of a verified bare `all`). It never prunes on a failure or after a
+  rollback, and a prune failure never fails the deploy. See
+  [deploy.md](deploy.md#image-cleanup).
+- **The watchdog prunes when the disk is high.** Above `DISK_WARN_PERCENT` (85%)
+  it runs the same prune, at most once an hour. Above `DISK_CRIT_PERCENT` (95%) it
+  runs `docker image prune -af` with no window, also at most once an hour. At that
+  point disk space matters more than keeping a local image for a manual rollback,
+  and a rollback can still pull the image's sha tag from ghcr. It stands down during a deploy (the
+  maintenance flag) and for an hour after a deploy's `pull`, because the
+  pre-deploy image a rollback re-tags is unused from `recreate` onwards. It runs
+  before layer 1 and before anything else writes a file, so it still works on a
+  disk that is completely full.
+- **`until` means built, not pulled.** The window keeps images *built* in the
+  last 72h. The backend image used to carry Spring Boot's fixed 1980-01-01
+  creation date, which made every unused backend image look ancient. It is now
+  stamped with the build time (`createdDate` in `backend/build.gradle.kts`).
+  Backend images pulled before that change still say 1980, so they are removed
+  as soon as nothing uses them.
+
+It only ever removes **images no container uses**. It never removes containers,
+volumes or networks. A stopped container keeps its image, so the `exited`
+datastores below are never pruned.
+
+If the watchdog logs `CRIT disk: still NN% used after the prune`, images are not
+what is filling the disk. Run `docker system df -v`. The next-largest thing that
+grows without bound is the **`langfuse-clickhouse-data` volume (17.68GB on
+2026-09-28)**. Langfuse traces have no TTL. It is not fixed here.
+
+### Recovery, in this order
+
+Verified on 2026-09-28. Run these from the deploy directory.
+
+1. **Free space.** `docker image prune -af`, then `df -h /` to confirm there is
+   room. (The watchdog does this itself above 95% when it can run. Do it by hand
+   if cron was not running, or if you got there first.)
+2. **Start the datastores Docker gave up on.** They are `exited`, and nothing
+   retries them:
+   ```bash
+   docker start simonrowe-dev-monorepo-mongodb-1 \
+     simonrowe-dev-monorepo-langfuse-db-1 simonrowe-dev-monorepo-kafka-1
+   ```
+   (The watchdog's layer 2 also runs `up -d` on the next tick once there is space,
+   and that starts `exited` containers too.)
+3. **Wait until they are healthy.** Check
+   `docker compose -f docker-compose.prod.yml ps mongodb langfuse-db kafka`. Kafka's
+   `start_period` is 180s.
+4. **Restart the backend:** `docker restart simonrowe-dev-monorepo-backend-1`. Its
+   Kafka consumers do not recover from a long broker outage on their own (see the
+   Kafka bullet in `CLAUDE.md`).
+5. **If the backend exits 82** and its log shows
+   `pkcs12: error reading P12 data: asn1: syntax error: data truncated`, its
+   writable layer is corrupt, and restarting will not help. Recreate it:
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps backend
+   ```
+   Any other container whose logs show a truncated file after a disk-full needs
+   the same fix.
+6. **Curl the public hostnames.** Do not rely on a green `docker compose ps`.
 
 ## Host defect: the memory cgroup is disabled
 
@@ -420,6 +525,7 @@ curl -s -o /dev/null -w '%{redirect_url}\n' https://temporal.simonrowe.dev/auth/
 | `scripts/restart-prod.sh` | Phased restart; also the script the `deployer` runs — see [deploy.md](deploy.md) |
 | `scripts/status-prod.sh` | Health of every service plus external reachability |
 | `scripts/monitor-prod.sh` | Single-run watchdog check (designed for cron) |
+| `scripts/lib/image-prune.sh` | The unused-image prune shared by `restart-prod.sh` (after a deploy) and `monitor-prod.sh` (disk check); sourced, not run |
 | `scripts/install-prod-monitoring.sh` | Install the cron job, log file and logrotate config |
 | `scripts/enable-memory-cgroup.sh` | Report/apply/revert the kernel memory-cgroup fix |
 | `scripts/enable-docker-dns.sh` | Report/apply/revert pinned upstream DNS for containers; `--verify` lists containers with none |
