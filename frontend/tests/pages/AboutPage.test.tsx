@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 
 import { AboutPage } from '../../src/pages/AboutPage'
@@ -89,6 +89,23 @@ function renderAt(initialPath = '/about') {
       <AboutPage />
     </MemoryRouter>,
   )
+}
+
+function LocationProbe() {
+  const { search, hash } = useLocation()
+  return <div data-testid="location">{`${search}${hash}`}</div>
+}
+
+/** Renders at `path`, then lets the test open and close the (mocked) drawer by rerendering. */
+function renderWithDrawerAt(path: string) {
+  const tree = () => (
+    <MemoryRouter initialEntries={[path]}>
+      <AboutPage />
+      <LocationProbe />
+    </MemoryRouter>
+  )
+  const view = render(tree())
+  return { rerender: () => view.rerender(tree()) }
 }
 
 function loaded() {
@@ -260,6 +277,38 @@ describe('AboutPage experience deep links', () => {
     renderAt('/about#skills')
 
     expect(document.getElementById('skills')!.scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('clears ?job= once the deep-linked job drawer is closed', () => {
+    const { rerender } = renderWithDrawerAt('/about?job=job-1')
+    drawerState.selectedJobId = 'job-1'
+    rerender()
+    expect(screen.getByTestId('location')).toHaveTextContent('?job=job-1')
+
+    drawerState.selectedJobId = null
+    rerender()
+
+    expect(screen.getByTestId('location')).toHaveTextContent(/^$/)
+  })
+
+  it('clears ?skillGroup= once the deep-linked skill-group drawer is closed', () => {
+    const { rerender } = renderWithDrawerAt('/about?skillGroup=group-1&keep=1')
+    drawerState.selectedGroupId = 'group-1'
+    rerender()
+
+    drawerState.selectedGroupId = null
+    rerender()
+
+    // Only the drawer's own param goes; anything else in the query survives.
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\?keep=1$/)
+  })
+
+  it('does not clear ?job= before the drawer has opened', () => {
+    const { rerender } = renderWithDrawerAt('/about?job=job-1')
+    rerender()
+
+    // The drawer has not reported itself open yet, so a null selection is not a close.
+    expect(screen.getByTestId('location')).toHaveTextContent('?job=job-1')
   })
 
   it('renders the profile before the roles, and the roles before the skills', () => {
