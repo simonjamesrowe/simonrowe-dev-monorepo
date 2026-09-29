@@ -242,6 +242,39 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- logwatch-sweep-past-cap: **The absence sweep now runs on a scan that hit the per-run cap.**
+  Until now any dropped signature vetoed the whole sweep, because a dropped signature is seen but
+  not filed, so its `lastSeenAt` never advances. By late September 2026 every nightly scan hit the
+  cap (09-27 and 09-28 each touched exactly five tickets), so the sweep had never closed a ticket,
+  and about 16 tickets untouched since 09-10..09-20 would have stayed open for ever. The scan
+  already knows *which* signatures it dropped. `observe` now reports their key parts as
+  `ScanObservation.droppedKeyParts`, the workflow passes them as `AbsenceSweep.presentKeyParts`,
+  and `IssueResolver` fingerprints them and leaves exactly those open while closing every other
+  stale one. Load-bearing bits:
+  - **One key-parts builder.** `SignatureKeyParts.of` is used by filing and by `observe`. If the
+    two ever differed, a dropped signature would protect a fingerprint no ticket carries, and the
+    sweep would close a live problem. The sink computes the fingerprint (`Fingerprint.of` with the
+    sweep's producer), never the producer. `Fingerprint.VERSION` is unchanged.
+  - **The other three vetoes are unchanged.** Truncation still stops the whole sweep: unseen lines
+    have nothing to name. Muted signatures are **not** named. Their tickets are meant to close,
+    which is how a mute rule retires them (049/050).
+  - **Fallback: can't name everything, close nothing.** If `droppedKeyParts` does not hold exactly
+    `signaturesDropped` entries, the old veto applies. A result from the previous build has no
+    such field and reads back empty (null means empty in the compact constructor), so it keeps the
+    old behaviour. This is a size check, not a null test.
+  - **Gated by `Workflow.getVersion("sweep-despite-cap", …)`**, called only when the cap dropped
+    something. A capped run used to schedule no `SweepResolved`, and now it does, so the command
+    sequence changed. The data fallback alone is not enough: a `deployer` older than #193 polls
+    `logwatch` too until it is recreated, so a result carrying the new field can still be
+    consumed by the old workflow code. `LogWatchWorkflowReplayTest` replays two histories recorded on the previous
+    build. One is untouched. The other has `droppedKeyParts` injected into the `Observe` result.
+    Mutation-checked: deleting the gate fails the second replay, and deleting the size check as
+    well fails both. `LogWatchSweepPastTheCapTest` runs real `observe`, the real workflow and the
+    real `IssueResolver` end to end, and takes its fingerprints from real filings.
+  - **Expect the first capped scan after deploy to close the stale backlog in one go**, minus
+    anything dropped that night or started by a human. A wrong close comes back as a linked
+    `FILED_REGRESSION`.
+  See `docs/runbooks/logwatch.md` ("Sweeping past the cap").
 - prod-disk-image-cleanup: **Production now deletes the images it stops using.** On 2026-09-28
   the Pi's root filesystem (`/dev/sda2`, 117G) reached 100% between about 19:50 and 20:08 UTC,
   and the API was down for about six hours. Kafka died with `SIGBUS` (the JVM mmaps its files),
@@ -716,13 +749,14 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
       ride out of sight inside a group whose most frequent message is noise.
     - **A group whose variants were capped is never muted**, however well the visible ones match:
       `MAX_VARIANTS` limits what is *listed*, not what was *seen*. Same distinction, and the same
-      reason, as the per-run cap's veto over the absence sweep.
+      reason, as the per-run cap naming what it dropped to the absence sweep.
     - **Muting runs before the occurrence floor and the cap.** Third-party noise is high-volume by
       nature, so muting last would let it occupy the five slots it is being muted from.
     - **`mutedSignatures` is counted separately from `signaturesDropped` and must never be folded
-      into it.** Dropped means "could not fit", which is why it vetoes the absence sweep; muted
-      means "excluded on purpose, every run". Collapsing them makes the sweep permanently inert on
-      any stack that mutes anything.
+      into it.** Dropped means "seen, could not fit", which is why the absence sweep keeps its
+      ticket open (since `logwatch-sweep-past-cap`; before that it vetoed the whole sweep); muted
+      means "excluded on purpose, every run", and its ticket is meant to close. Collapsing them
+      would keep every muted ticket open for ever.
     - **Every run's detail names the rules, not just a count.** An over-broad rule is invisible in
       the tickets by definition, so the run detail is the only place it can be seen.
     - **In `application.yml`, not behind an env var.** A rule is a statement that a class of log
@@ -867,7 +901,9 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   fingerprint unreported for `factory.logwatch.resolve-after` (**7d**) gets a comment and is moved
   to Done. `FACTORY_LOGWATCH_RESOLVE_WHEN_CLEAR` is the **only flag in that module that defaults
   ON**. Load-bearing bits:
-  - **The sweep takes no "what is still present" list, on purpose.** It always runs *after*
+  - **The sweep takes no "what is still present" list, on purpose.** (Narrowed by
+    `logwatch-sweep-past-cap`: it now takes the key parts of what the cap *dropped*, and only
+    those.) It always runs *after*
     filing, and every filing advances that fingerprint's `lastSeenAt` — so "still happening" and
     "recently seen" are the same fact and the quiet period is the only input. A present-set would
     be a second, independently-wrong answer to one question.
@@ -880,8 +916,9 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     dropped by the per-run cap** — the subtle one, because the cap limits what is *filed*, not
     what was *seen*, so with more live problems than the cap the overflow never reaches the sink,
     its `lastSeenAt` never advances, and a busy stack closes the tickets about its own busiest
-    failures. Useful consequence: the sweep is inert while the backlog exceeds `max-per-run` and
-    comes into effect as it shrinks.
+    failures. **Superseded by `logwatch-sweep-past-cap`:** this used to read "the sweep is inert
+    while the backlog exceeds `max-per-run`", and in September 2026 that meant it never ran. A
+    capped run now names what it dropped and sweeps everything else.
   - **Done, never Cancelled.** The sink reads a cancelled issue as "never tell me again", so an
     automatic cancel would permanently suppress a problem that had merely paused. Closing as
     completed leaves the fingerprint attachment in place, so a recurrence files a linked

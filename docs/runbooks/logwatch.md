@@ -149,8 +149,8 @@ Two constraints make this safe to leave on:
   that by summing the attributions.
 - **A group whose variants were capped is never muted**, however well the visible ones match.
   `MAX_VARIANTS` limits what is *listed*, not what was *seen*, so past that point a rule cannot
-  vouch for the group. Same distinction, and the same reason, as the per-run cap's veto over the
-  absence sweep.
+  vouch for the group. Same distinction, and the same reason, as the per-run cap naming what it
+  dropped to the absence sweep.
 
 ### When a rule cannot reach it: silence the logger instead
 
@@ -189,9 +189,10 @@ That string is the only place an over-broad rule is visible, because the whole p
 ticket is filed — hence the reasons, not just a count.
 
 `mutedSignatures` is counted separately from `signaturesDropped` and **must never be folded into
-it**. A dropped signature is one the run could not fit, which is why it vetoes the absence sweep;
-a muted one is excluded on purpose on every run. Collapsing them would make the sweep permanently
-inert on any stack that mutes anything at all.
+it**. A dropped signature is one the run saw but could not fit, which is why the absence sweep
+keeps its ticket open; a muted one is excluded on purpose on every run, and its ticket is meant to
+close. Collapsing them would keep every muted ticket open for ever (and, before the cap stopped
+vetoing the whole sweep, made the sweep permanently inert on any stack that muted anything).
 
 What happens to the existing tickets: nothing files against those fingerprints any more, so
 `lastSeenAt` stops advancing and the absence sweep closes them after `resolve-after` (7d) — the
@@ -402,15 +403,48 @@ could otherwise close a ticket about a problem that is still happening:
 | --- | --- |
 | The source was healthy | An ingest outage reads as universal success, and the sweep closes the whole backlog — including the ticket the same run just filed to say the module cannot see |
 | The read was not truncated | A read that hit its line budget examined an unknown part of the window, so a missing signature is missing for want of looking |
-| Nothing was dropped by the per-run cap | **The subtle one.** The cap (default 5) limits how many signatures are *filed*, not how many were *seen*. With six live problems the sixth never reaches the sink, its `lastSeenAt` never advances, and it looks exactly like a problem that stopped — so a busy stack closes the tickets about its own busiest failures |
+| Every signature the per-run cap dropped is named | **The subtle one.** The cap (default 5) limits how many signatures are *filed*, not how many were *seen*. With six live problems the sixth never reaches the sink, its `lastSeenAt` never advances, and it looks exactly like a problem that stopped — so a busy stack would close the tickets about its own busiest failures. The scan did see it, so it names it (see below) and the sweep leaves exactly that ticket open. Only when a capped run cannot name everything it dropped does the whole sweep stand down |
 | The window is at least an hour | The post-deploy scan covers about five minutes, in which almost every known problem is absent purely because five minutes is short |
-
-The cap condition has a useful consequence: **while the backlog is over `max-per-run`, the sweep
-is inert**, and it comes into effect as the backlog shrinks. That is the right way round.
 
 The window condition is enforced structurally in `LogWatchWorkflowImpl`, not just by the
 post-deploy caller passing `resolveWhenClear = false` — so a future trigger added by someone who
 has not read that comment still gets the safe behaviour.
+
+### Sweeping past the cap
+
+The cap condition used to be all-or-nothing: any dropped signature vetoed the whole sweep. That
+kept it inert for as long as the backlog stayed over `max-per-run`. By late September 2026 every
+nightly scan hit the cap (09-27 and 09-28 each touched exactly five tickets), so the sweep had
+never closed a ticket, and tickets untouched since mid-September would have stayed open for ever.
+
+The veto is now exact rather than blanket. `observe` already grouped and sorted the dropped tail
+before cutting it, so it reports each dropped signature's key parts as
+`ScanObservation.droppedKeyParts`, built by the same `SignatureKeyParts` that filing uses. The
+workflow passes them to the sink as `AbsenceSweep.presentKeyParts`. The sink fingerprints them
+exactly as it fingerprints a filing, and treats those fingerprints as seen this run: it never
+closes them, and sweeps every other stale fingerprint as usual.
+
+What did not change:
+
+- **Truncation still vetoes the whole sweep.** A truncated read has lines it never examined, so
+  unlike the cap there is nothing to name.
+- **Muted signatures are not named.** They are excluded on purpose, and the sweep closing their
+  old tickets is how an adopted mute rule retires them. The occurrence floor is not named either:
+  a group below `minimum-occurrences` is, by that setting's definition, not a problem this run.
+- **The unhealthy-source and short-window vetoes** are untouched.
+
+**The fallback keeps the old veto.** If a capped run cannot name *every* signature it dropped
+(`droppedKeyParts` does not hold exactly `signaturesDropped` entries), it closes nothing, as
+before. That covers a result recorded by the previous build, which has no such field and reads
+back empty. The change is also gated by `Workflow.getVersion("sweep-despite-cap", …)`, so a
+capped run whose history was written by the previous workflow code replays with the old veto
+instead of failing non-deterministically. `LogWatchWorkflowReplayTest` replays two real histories
+recorded on the previous build to pin that.
+
+**Expect the first capped scan after the change to close the stale backlog in one go**: every
+`logwatch` ticket unreported for `resolve-after` that the scan neither filed nor dropped, minus
+any a human has started. Each close carries the usual comment, and a wrong one comes back as a
+linked `FILED_REGRESSION` on its next occurrence.
 
 ### What it will not touch
 
@@ -451,8 +485,11 @@ Read the run detail, which distinguishes four cases that all look like "nothing 
 - silence — nothing was quiet long enough, or everything quiet is already closed;
 - `N ticket(s) look resolved but someone is working on them` — the started-state rule;
 - `... but the Linear team has no Done state to close them into` — a real misconfiguration;
-- `the per-run cap dropped N signature(s), so no ticket was closed as resolved` — the backlog is
-  over the cap.
+- `the per-run cap dropped N signature(s) without naming them, so no ticket was closed as
+  resolved`. The capped result could not identify everything it dropped, which in practice means
+  it was recorded by a build older than the cap exclusion (see "Sweeping past the cap"). A capped
+  run on the current build names what it dropped and sweeps everything else, and its detail reads
+  `N more were dropped by the per-run cap` alongside any closures.
 
 ## What it deliberately does not do
 

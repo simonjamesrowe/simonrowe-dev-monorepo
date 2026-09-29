@@ -100,6 +100,55 @@ class LogWatchActivitiesImplTest {
     assertThat(observation.signatures().getFirst().severity()).isEqualTo(Severity.ERROR);
   }
 
+  /**
+   * The absence sweep leaves the dropped signatures' tickets open only if it is told exactly
+   * which they were: one name per dropped signature, none of them a signature that was filed.
+   * Checked against an uncapped read of the same lines, so the expected names come from the real
+   * grouping rather than being written out here.
+   */
+  @Test
+  @DisplayName("the cap names exactly the signatures it dropped, and none it kept")
+  void namesExactlyWhatTheCapDropped() {
+    List<LogLine> lines = new ArrayList<>();
+    for (int problem = 0; problem < 3; problem++) {
+      lines.add(line("backend", "WARN thing " + (char) ('a' + problem) + " failed"));
+      lines.add(line("backend", "WARN thing " + (char) ('a' + problem) + " failed"));
+    }
+    lines.add(line("backend", "ERROR the important one"));
+    lines.add(line("backend", "ERROR the important one"));
+    when(loki.linesIn(any(), any(), anyInt())).thenReturn(lines);
+    when(loki.distinctContainers(any(), any())).thenReturn(5);
+
+    List<List<String>> everything =
+        activities(2, 50, 5000).observe(FROM, TO).signatures().stream()
+            .map(SignatureKeyParts::of)
+            .toList();
+    ScanObservation observation = activities(2, 2, 5000).observe(FROM, TO);
+    List<List<String>> filed =
+        observation.signatures().stream().map(SignatureKeyParts::of).toList();
+
+    assertThat(observation.droppedKeyParts()).hasSize(observation.signaturesDropped());
+    assertThat(observation.droppedKeyParts()).doesNotContainAnyElementsOf(filed);
+    // Kept and dropped together are everything the scan saw, in the cap's own order.
+    assertThat(concat(filed, observation.droppedKeyParts())).isEqualTo(everything);
+  }
+
+  @Test
+  @DisplayName("a run inside the cap names nothing as dropped")
+  void namesNothingWhenNothingWasDropped() {
+    when(loki.linesIn(any(), any(), anyInt()))
+        .thenReturn(
+            List.of(
+                line("backend", "level=error msg=\"twice\" id=1"),
+                line("backend", "level=error msg=\"twice\" id=2")));
+    when(loki.distinctContainers(any(), any())).thenReturn(5);
+
+    ScanObservation observation = activities(2, 5, 5000).observe(FROM, TO);
+
+    assertThat(observation.signaturesDropped()).isZero();
+    assertThat(observation.droppedKeyParts()).isEmpty();
+  }
+
   @Test
   @DisplayName("hitting the line budget is reported as truncation, never as a complete read")
   void reportsTruncation() {
@@ -201,9 +250,9 @@ class LogWatchActivitiesImplTest {
 
   /**
    * The cap is what the module reports as "I could not fit everything", and the absence sweep
-   * refuses to close anything when it is non-zero. A muted group is not that: it is excluded on
-   * purpose on every run, so counting it as dropped would make the sweep permanently inert on any
-   * stack that mutes anything at all.
+   * keeps the tickets of whatever it dropped open. A muted group is not that: it is excluded on
+   * purpose on every run and its old ticket is meant to close, so counting it as dropped would
+   * keep every muted ticket open for ever.
    */
   @Test
   @DisplayName("a muted group is not counted as dropped by the per-run cap")
@@ -219,6 +268,7 @@ class LogWatchActivitiesImplTest {
         activities(2, 5, 5000, List.of(temporalCancelNoise())).observe(FROM, TO);
 
     assertThat(observation.signaturesDropped()).isZero();
+    assertThat(observation.droppedKeyParts()).isEmpty();
     assertThat(observation.mutedSignatures()).isEqualTo(1);
   }
 
@@ -320,6 +370,42 @@ class LogWatchActivitiesImplTest {
         .containsExactly("backend");
     assertThat(observation.signaturesDropped()).isZero();
     assertThat(observation.mutedSignatures()).isEqualTo(3);
+  }
+
+  /**
+   * Muted groups are withheld before the cap is applied, so even on a run the cap overflows they
+   * are never among the signatures it names as dropped — naming them would keep their tickets
+   * open for ever.
+   */
+  @Test
+  @DisplayName("a capped run never names a muted group among what it dropped")
+  void mutedGroupsAreNeverNamedAsDropped() {
+    List<LogLine> lines = new ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      lines.add(line("temporal", temporalJson("Poll failed.", "context canceled")));
+    }
+    lines.add(line("backend", "ERROR ours broke id=1"));
+    lines.add(line("backend", "ERROR ours broke id=2"));
+    lines.add(line("backend", "WARN ours wobbled id=1"));
+    lines.add(line("backend", "WARN ours wobbled id=2"));
+    when(loki.linesIn(any(), any(), anyInt())).thenReturn(lines);
+    when(loki.distinctContainers(any(), any())).thenReturn(5);
+
+    ScanObservation observation =
+        activities(2, 1, 5000, List.of(temporalCancelNoise())).observe(FROM, TO);
+
+    assertThat(observation.mutedSignatures()).isEqualTo(1);
+    assertThat(observation.signaturesDropped()).isEqualTo(1);
+    assertThat(observation.droppedKeyParts())
+        .singleElement()
+        .satisfies(keyParts -> assertThat(keyParts).startsWith("backend", "WARN"));
+  }
+
+  private static List<List<String>> concat(
+      final List<List<String>> first, final List<List<String>> second) {
+    List<List<String>> all = new ArrayList<>(first);
+    all.addAll(second);
+    return all;
   }
 
   private static LogWatchProperties.Ignore temporalCancelNoise() {
