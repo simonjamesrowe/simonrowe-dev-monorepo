@@ -21,6 +21,8 @@ import { ChatProvider, useChat } from './contexts/ChatContext'
 import { DrawerProvider, useDrawer } from './hooks/useDrawer'
 import { useProfile } from './hooks/useProfile'
 import { HomePage } from './pages/HomePage'
+import { PrototypeHeader, PrototypePortfolioPage, usePrototypeLayoutClass } from './prototype/nav-redesign/PrototypeChrome'
+import { PrototypeSwitcher } from './prototype/nav-redesign/PrototypeSwitcher'
 
 // The landing page (HomePage) stays in the initial bundle so it renders
 // instantly. Every other route is code-split so its dependencies — the
@@ -156,14 +158,21 @@ function RedirectPreservingLocation({ to, defaultHash = '' }: { to: string; defa
 }
 
 function PublicLayout({ children }: { children: React.ReactNode }) {
+  // PROTOTYPE (nav redesign): a ?variant= swaps the header. Remove with src/prototype/.
+  const { variant, className: prototypeClass } = usePrototypeLayoutClass()
   return (
     <ChatProvider>
       <DrawerProvider>
         <TourProvider>
-          <div className="app-layout">
+          <div className={`app-layout${prototypeClass}`}>
             <ScrollToTop />
-            <TopNav />
-            <MobileMenu />
+            {variant === 'current' ? (
+              <>
+                <TopNav />
+                <MobileMenu />
+              </>
+            ) : <PrototypeHeader variant={variant} />}
+            <PrototypeSwitcher />
             <main className="app-layout__main">
               {children}
             </main>
@@ -206,6 +215,7 @@ function App() {
         <Route element={<PublicLayout><NewsEventsPage /></PublicLayout>} path="/news-events" />
         <Route element={<PublicLayout><McpPage /></PublicLayout>} path="/mcp" />
         <Route element={<PublicLayout><StatusPage /></PublicLayout>} path="/status" />
+        <Route element={<PublicLayout><PrototypePortfolioPage /></PublicLayout>} path="/prototype/portfolio" />
         {/* Legacy singular paths, still shared externally. */}
         <Route element={<Navigate replace to="/blogs" />} path="/blog" />
         <Route element={<LegacyBlogDetailRedirect />} path="/blog/:id" />

@@ -16,6 +16,9 @@ export default defineConfig(({ mode }) => {
   // silent move produces confusing failures later rather than an obvious one now.
   const env = loadEnv(mode, '.', '')
   const devPort = Number(env.VITE_DEV_PORT) || 5173
+  // PROTOTYPE (nav-redesign mockups): VITE_PROXY_TARGET=https://api.simonrowe.dev points the
+  // dev proxy at production so the mockups render real content without a local backend.
+  const apiTarget = env.VITE_PROXY_TARGET || 'http://localhost:8080'
 
   return {
   plugins: [
@@ -72,11 +75,11 @@ export default defineConfig(({ mode }) => {
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/mcp': {
-        target: 'http://localhost:8080',
+        target: apiTarget,
         changeOrigin: true,
         // The SPA route /mcp and the backend MCP endpoint /mcp share a path.
         // Browser page navigation is a GET for HTML — let it fall through to the
@@ -94,19 +97,19 @@ export default defineConfig(({ mode }) => {
       // `startsWith`, so a bare '/s' also captures '/src/**' — every module the dev
       // server serves — and the whole SPA 404s with only a blank page to show for it.
       '/s/': {
-        target: 'http://localhost:8080',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://localhost:8080',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/images': {
-        target: 'http://localhost:8080',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/ws': {
-        target: 'http://localhost:8080',
+        target: apiTarget,
         changeOrigin: true,
         ws: true,
       },

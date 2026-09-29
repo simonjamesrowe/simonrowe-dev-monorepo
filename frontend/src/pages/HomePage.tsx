@@ -5,6 +5,7 @@ import { CurrentlyStrip } from '../components/home/CurrentlyStrip'
 import { EmployerLogoStrip } from '../components/home/EmployerLogoStrip'
 import { FeaturedWriting } from '../components/home/FeaturedWriting'
 import { HeroSection } from '../components/home/HeroSection'
+import { PrototypePortfolioSection } from '../prototype/nav-redesign/PrototypeChrome'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { useDrawer } from '../hooks/useDrawer'
@@ -87,6 +88,7 @@ export function HomePage() {
       />
       <CurrentlyStrip jobs={jobs} />
       <EmployerLogoStrip jobs={jobs} onEmployerClick={openJob} />
+      <PrototypePortfolioSection />
       <FeaturedWriting blogs={latestPosts} />
       <CTASection />
     </>
