@@ -93,6 +93,7 @@ public class LogWatchActivitiesImpl implements LogWatchActivities {
           0,
           0,
           0,
+          List.of(),
           List.of());
     }
 
@@ -143,6 +144,11 @@ public class LogWatchActivitiesImpl implements LogWatchActivities {
     // tail - which is the whole contract of the cap (FR-005).
     int dropped = Math.max(0, grouped.size() - properties.maxPerRun());
     List<LogSignature> capped = grouped.stream().limit(properties.maxPerRun()).toList();
+    // The tail the cap discarded, by identity. These were seen, so their tickets must survive the
+    // absence sweep even though nothing files against them this run. Built from the same list and
+    // the same limit as `capped`, so the two partition `grouped` by construction.
+    List<List<String>> droppedKeyParts =
+        grouped.stream().skip(properties.maxPerRun()).map(SignatureKeyParts::of).toList();
 
     List<String> reasons =
         mutedByReason.entrySet().stream()
@@ -151,7 +157,15 @@ public class LogWatchActivitiesImpl implements LogWatchActivities {
             .toList();
 
     return new ScanObservation(
-        health, capped, lines.size(), truncated, containers, dropped, muted, reasons);
+        health,
+        capped,
+        lines.size(),
+        truncated,
+        containers,
+        dropped,
+        muted,
+        reasons,
+        droppedKeyParts);
   }
 
   @Override

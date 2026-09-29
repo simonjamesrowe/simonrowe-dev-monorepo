@@ -22,12 +22,19 @@ import java.util.List;
  * @param signaturesDropped how many signatures the per-run cap discarded
  * @param mutedSignatures how many signatures a {@code factory.logwatch.ignore} rule withheld.
  *     Counted separately from {@code signaturesDropped} and never folded into it: a dropped
- *     signature is one this run could not fit and so cannot stand behind its own silence about —
- *     which is why it vetoes the absence sweep — while a muted one is a group the configuration
- *     says is somebody else's, deliberately, every run. Collapsing the two would make the sweep
- *     permanently inert on a stack that mutes anything at all
+ *     signature is one this run saw but could not fit — which is why the absence sweep treats it
+ *     as present — while a muted one is a group the configuration says is somebody else's,
+ *     deliberately, every run, and whose ticket the sweep is <em>meant</em> to close. Collapsing
+ *     the two would keep every muted ticket open for ever
  * @param mutedBy the {@code reason} of each rule that muted something, most-muted first, so a
  *     run that withheld findings says which rules did it rather than merely how many
+ * @param droppedKeyParts the fingerprint key parts of each signature the per-run cap discarded,
+ *     one entry per dropped signature, built by {@link SignatureKeyParts} exactly as filing builds
+ *     them. The cap limits what is <em>filed</em>, not what was <em>seen</em>, and this is what
+ *     lets the absence sweep leave exactly those tickets open instead of refusing to run at all.
+ *     Its size is expected to equal {@code signaturesDropped}; a result recorded by a build that
+ *     predates the field deserializes it as empty, and the sweep reads any shortfall as "the
+ *     dropped signatures are unknown" and keeps the old all-or-nothing veto
  */
 public record ScanObservation(
     SourceHealth sourceHealth,
@@ -37,10 +44,15 @@ public record ScanObservation(
     int containersSeen,
     int signaturesDropped,
     int mutedSignatures,
-    List<String> mutedBy) {
+    List<String> mutedBy,
+    List<List<String>> droppedKeyParts) {
 
   public ScanObservation {
     signatures = signatures == null ? List.of() : List.copyOf(signatures);
     mutedBy = mutedBy == null ? List.of() : List.copyOf(mutedBy);
+    droppedKeyParts =
+        droppedKeyParts == null
+            ? List.of()
+            : droppedKeyParts.stream().map(List::copyOf).toList();
   }
 }

@@ -26,6 +26,18 @@ class TemporalPayloadConfigurationTest {
       int signaturesDropped) {
   }
 
+  /** {@link ScanObservation} as it was before {@code droppedKeyParts}. */
+  record ScanObservationBeforeExclusion(
+      SourceHealth sourceHealth,
+      List<LogSignature> signatures,
+      int linesRead,
+      boolean truncated,
+      int containersSeen,
+      int signaturesDropped,
+      int mutedSignatures,
+      List<String> mutedBy) {
+  }
+
   private final DataConverter converter = new TemporalPayloadConfiguration().mainDataConverter();
 
   private static Payload writtenByNewerBuild() {
@@ -41,7 +53,8 @@ class TemporalPayloadConfigurationTest {
             12,
             0,
             3,
-            List.of("third-party noise"));
+            List.of("third-party noise"),
+            List.of());
     return DefaultDataConverter.STANDARD_INSTANCE.toPayload(observation).orElseThrow();
   }
 
@@ -82,5 +95,37 @@ class TemporalPayloadConfigurationTest {
     assertThat(read.mutedSignatures()).isEqualTo(3);
     assertThat(read.mutedBy()).containsExactly("third-party noise");
     assertThat(converter.toPayload(read).orElseThrow()).isEqualTo(payload);
+  }
+
+  /**
+   * The absence sweep's fallback rests on this: a capped result recorded by the previous build
+   * must read back as dropping signatures it does not name, never as dropping nothing, so the
+   * workflow keeps the old veto for it rather than sweeping past signatures it cannot identify.
+   */
+  @Test
+  @DisplayName("a capped result from before droppedKeyParts reads back naming nothing")
+  void resultFromBeforeExclusionNamesNothing() {
+    Payload previous =
+        DefaultDataConverter.STANDARD_INSTANCE
+            .toPayload(
+                new ScanObservationBeforeExclusion(
+                    new SourceHealth(
+                        SourceHealth.Status.ALIVE,
+                        SourceHealth.Tier.CONTAINER_COVERAGE,
+                        "12 containers reporting"),
+                    List.of(),
+                    480,
+                    false,
+                    12,
+                    7,
+                    0,
+                    List.of()))
+            .orElseThrow();
+
+    ScanObservation read =
+        converter.fromPayload(previous, ScanObservation.class, ScanObservation.class);
+
+    assertThat(read.signaturesDropped()).isEqualTo(7);
+    assertThat(read.droppedKeyParts()).isEmpty();
   }
 }

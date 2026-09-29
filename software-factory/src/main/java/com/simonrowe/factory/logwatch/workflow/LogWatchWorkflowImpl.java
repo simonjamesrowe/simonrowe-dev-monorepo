@@ -60,6 +60,20 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
    */
   private static final Duration MINIMUM_SWEEP_WINDOW = Duration.ofHours(1);
 
+  /**
+   * The {@link Workflow#getVersion} change id guarding the sweep on a run the cap overflowed.
+   *
+   * <p>Before it, a capped run never scheduled {@code sweepResolved}; now it does. A history
+   * whose capped observation was processed by the previous workflow code therefore holds no sweep
+   * where this code would issue one, and replaying it would fail with a non-determinism error.
+   * Such a run replays as {@link Workflow#DEFAULT_VERSION} and keeps the old veto. The
+   * observation's own {@code droppedKeyParts} is not enough on its own to tell the two apart:
+   * the activity and the workflow task can run on different builds — a {@code deployer} older
+   * than #193 polls this queue too, until it is recreated — so a result carrying the new field
+   * can still have been consumed by the old code.
+   */
+  static final String SWEEP_DESPITE_CAP_CHANGE = "sweep-despite-cap";
+
   private static final RetryOptions NETWORK_RETRIES =
       RetryOptions.newBuilder()
           .setInitialInterval(Duration.ofSeconds(1))
@@ -167,7 +181,7 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
                   SourceHealth.Status.UNREACHABLE,
                   SourceHealth.Tier.CONTAINER_COVERAGE,
                   "The scan failed before reaching a verdict."),
-              List.of(), 0, false, 0, 0, 0, List.of());
+              List.of(), 0, false, 0, 0, 0, List.of(), List.of());
       try {
         finish(request, empty, LogWatchStatus.FAILED, workflowId, runId, startedAt, from, to,
             issueUrls, detail, resolvedUrls);
@@ -255,15 +269,9 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
         linear.fileIssue(
             new IssueFiling(
                 PRODUCER,
-                // The source key, never the generated title and — since 046 — never the whole
-                // normalised line either. Both are phrasings of the problem, and a phrasing that
-                // varies files a second ticket: three phrasings from one Embabel logger became
-                // SIM-13, SIM-24 and SIM-25 for one startup failure. Severity is explicit here
-                // rather than left implicit inside the message text.
-                List.of(
-                    signature.container(),
-                    signature.severity().name(),
-                    signature.sourceKey()),
+                // Shared with observe's report of what the cap dropped, so a dropped signature
+                // names exactly the fingerprint its ticket carries. See SignatureKeyParts.
+                SignatureKeyParts.of(signature),
                 LogWatchReportRenderer.title(signature),
                 LogWatchReportRenderer.body(signature, from, to),
                 LogWatchReportRenderer.occurrenceDetail(signature, runId),
@@ -294,14 +302,25 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
    *       part of the window, so any signature it missed is missing for want of looking.
    *   <li><b>The window is long enough to mean anything.</b> See
    *       {@link #MINIMUM_SWEEP_WINDOW}.
-   *   <li><b>Nothing was dropped by the per-run cap.</b> This is the subtle one. The cap
-   *       (default five) limits how many signatures are <em>filed</em>, not how many were
+   *   <li><b>Every signature the per-run cap dropped is identified.</b> This is the subtle one.
+   *       The cap (default five) limits how many signatures are <em>filed</em>, not how many were
    *       <em>seen</em> — so with six live problems the sixth never reaches the sink, its
    *       {@code lastSeenAt} never advances, and it would look exactly like a problem that had
-   *       stopped. That makes a busy stack close tickets about its own busiest failures. It also
-   *       means the sweep is inert while the backlog is over the cap and comes into effect as the
-   *       backlog shrinks, which is the right way round.
+   *       stopped. This used to veto the sweep outright, which kept it inert for as long as the
+   *       backlog stayed over the cap: in September 2026 every nightly scan hit the cap and the
+   *       sweep never closed a ticket. The scan <em>saw</em> the dropped signatures, though, so
+   *       it knows who they are: their key parts travel as
+   *       {@link ScanObservation#droppedKeyParts} into {@link AbsenceSweep#presentKeyParts}, and
+   *       the sink leaves exactly those fingerprints open while sweeping every other stale one.
+   *       When the dropped signatures cannot all be named — a result recorded by the previous
+   *       build, whose observation has no such field, or a history that build's workflow code
+   *       already processed (see {@link #SWEEP_DESPITE_CAP_CHANGE}) — the old veto still applies.
    * </ol>
+   *
+   * <p>Muted signatures are <strong>not</strong> passed as present, deliberately. A muted group
+   * is excluded on purpose every run, and the sweep closing its ticket is how an adopted mute
+   * rule retires the existing ticket. The truncation veto is also not narrowed the same way: a
+   * truncated read has lines it never examined, so unlike the cap there is nothing to name.
    *
    * <p>A dry run still calls through: {@code factory.linear.dry-run} makes the sink report what it
    * would close without writing, and a preview that silently skips half the run is not a preview.
@@ -326,10 +345,10 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
     if (observation.truncated()) {
       return "; the read was truncated, so no ticket was closed as resolved";
     }
-    if (observation.signaturesDropped() > 0) {
+    if (observation.signaturesDropped() > 0 && !canExcludeDropped(observation)) {
       return "; the per-run cap dropped "
           + observation.signaturesDropped()
-          + " signature(s), so no ticket was closed as resolved";
+          + " signature(s) without naming them, so no ticket was closed as resolved";
     }
 
     SweepReport report =
@@ -345,7 +364,10 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
                 // skips half the run is not a preview. It must be the request's own flag, not
                 // the sink's configured one — the console's "Dry run scan" answers "nothing will
                 // be filed" and has to mean it on a stack where the sink is configured to write.
-                request.dryRun()));
+                request.dryRun(),
+                // Seen but not filed, so nothing advanced their lastSeenAt: the sink must treat
+                // them as present. Empty on a run the cap did not overflow.
+                observation.droppedKeyParts()));
 
     for (SweptIssue swept : report.resolved()) {
       if (swept.issueUrl() != null) {
@@ -369,6 +391,23 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
         + " ticket(s) no longer reported ("
         + String.join(", ", report.resolved().stream().map(SweptIssue::issueIdentifier).toList())
         + ")";
+  }
+
+  /**
+   * Whether the sweep can leave exactly the dropped signatures' tickets open, rather than having
+   * to skip the whole sweep to protect them.
+   *
+   * <p>Only called when the cap dropped something, so the version marker is recorded only on the
+   * runs whose behaviour changed. The size check is a mechanical bound rather than a
+   * null-versus-empty test: any shortfall — the field absent from an older build's result, or a
+   * future change that stops listing some dropped signature — means an unnamed live problem, and
+   * an unnamed live problem is exactly what the old veto exists for.
+   */
+  private static boolean canExcludeDropped(final ScanObservation observation) {
+    int version =
+        Workflow.getVersion(SWEEP_DESPITE_CAP_CHANGE, Workflow.DEFAULT_VERSION, 1);
+    return version >= 1
+        && observation.droppedKeyParts().size() == observation.signaturesDropped();
   }
 
   private String describeOutcome(
