@@ -929,3 +929,156 @@
 
 /* SiteSearch carries a 560px min-width for its old header slot. */
 .pa-search .site-search, .pa-sheet__search .site-search, .pb-search .site-search, .pc-command .site-search { min-width: 0; width: 100%; }
+
+/* ======================================================================
+   Landing hero — photo at full strength, adpower-style statement + AI pill
+   ====================================================================== */
+
+.ph-hero {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  min-height: max(640px, 100svh);
+  overflow: hidden;
+  background: #0a0e17;
+  color: #fff;
+}
+
+.ph-hero__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 60%;
+}
+
+/* Theme-independent on purpose: the text sits on the photo, not on a surface. */
+.ph-hero__shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(8, 12, 22, 0.55) 0%, rgba(8, 12, 22, 0.25) 40%, rgba(8, 12, 22, 0) 62%),
+    linear-gradient(0deg, rgba(8, 12, 22, 0.45) 0%, rgba(8, 12, 22, 0) 38%),
+    linear-gradient(180deg, rgba(8, 12, 22, 0.22) 0%, rgba(8, 12, 22, 0) 18%);
+}
+
+.ph-hero__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  padding: 0 1.5rem clamp(3rem, 9vh, 6rem);
+}
+
+.ph-hero__left { max-width: 64rem; }
+
+.ph-hero__eyebrow {
+  margin: 0 0 1.25rem;
+  color: rgba(255, 255, 255, 0.82);
+  font: 600 0.8rem var(--font-heading);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ph-hero__title {
+  margin: 0;
+  color: #fff;
+  font: 700 clamp(2.6rem, 4.3vw, 4.4rem)/1.04 var(--font-heading);
+  letter-spacing: -0.045em;
+  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.35);
+}
+
+.ph-hero__title-accent { color: #9fd8ff; }
+
+.ph-hero__lede {
+  max-width: 34rem;
+  margin: 1.5rem 0 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: clamp(1rem, 1.3vw, 1.15rem);
+  line-height: 1.55;
+}
+
+.ph-hero__ctas { display: flex; flex-wrap: wrap; align-items: center; gap: 1.5rem; margin-top: 2rem; }
+.ph-hero__primary { padding: 0.85rem 1.6rem; font-size: 1rem; text-decoration: none; }
+[data-theme="light"] .ph-hero__primary { background: #2563eb; color: #fff; }
+
+.ph-hero__textlink, .ph-hero__play {
+  padding: 0 0 0.2rem;
+  border: 0;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.85);
+  background: none;
+  color: #fff;
+  font: 600 1rem var(--font-heading);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ph-hero__textlink:hover, .ph-hero__play:hover { color: #9fd8ff; border-bottom-color: #9fd8ff; }
+.ph-hero__play { display: inline-flex; align-items: center; gap: 0.45rem; margin-top: 1.75rem; font-size: 0.92rem; }
+
+.ph-hero__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  padding: 0.5rem 0.5rem 0.5rem 1.4rem;
+  border: 1.5px solid rgba(212, 201, 255, 0.85);
+  border-radius: 999px;
+  background: rgba(236, 232, 255, 0.9);
+  backdrop-filter: blur(14px);
+  color: #3f22d6;
+  font-family: var(--font-heading);
+  cursor: pointer;
+  box-shadow: 0 12px 40px rgba(20, 10, 70, 0.35);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.ph-hero__pill:hover { transform: translateY(-2px); box-shadow: 0 16px 48px rgba(20, 10, 70, 0.45); }
+.ph-hero__pill-lead { color: #5b4ab0; font-size: 1rem; }
+.ph-hero__pill-main { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 1.05rem; font-weight: 700; }
+
+.ph-hero__pill-start {
+  margin-left: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  border: 1.5px solid #3f22d6;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.ph-hero__pill:hover .ph-hero__pill-start { background: #3f22d6; color: #fff; }
+
+@media (min-width: 901px) {
+  /* Pinned to the corner, as adpower does, so it never squeezes the headline. */
+  .ph-hero__pill { position: absolute; right: 1.5rem; bottom: clamp(3rem, 9vh, 6rem); }
+  .ph-hero__title { white-space: nowrap; }
+}
+
+/* The hero now runs under the floating header on every variant. */
+.proto-active.proto-home .app-layout__main { padding-top: 0; }
+
+@media (max-width: 900px) {
+  .ph-hero { align-items: stretch; min-height: 100svh; }
+  .ph-hero__shade {
+    background:
+      linear-gradient(180deg, rgba(8, 12, 22, 0.5) 0%, rgba(8, 12, 22, 0) 38%, rgba(8, 12, 22, 0) 58%, rgba(8, 12, 22, 0.75) 100%);
+  }
+  /* Headline in the sky, actions at the bottom, the photo between them. */
+  .ph-hero__inner { flex-direction: column; align-items: stretch; gap: 1rem; padding: 96px 1.25rem 1.5rem; }
+  .ph-hero__left { display: contents; }
+  .ph-hero__actions { margin-top: auto; }
+  .ph-hero__eyebrow { font-size: 0.68rem; margin-bottom: 0.75rem; }
+  .ph-hero__title { font-size: clamp(2.1rem, 9.5vw, 3rem); }
+  .ph-hero__lede { display: none; }
+  .ph-hero__ctas { gap: 1.25rem; margin-top: 0; }
+  .ph-hero__play { margin-top: 1rem; }
+  .ph-hero__pill { justify-content: space-between; width: 100%; padding-left: 1rem; }
+  .ph-hero__pill-lead { display: none; }
+  .ph-hero__pill-start { margin-left: 0; }
+  .proto-B.proto-home .ph-hero__inner { padding-bottom: 5.5rem; }
+}

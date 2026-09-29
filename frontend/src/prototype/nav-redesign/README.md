@@ -25,6 +25,10 @@ keys, to switch between:
 | `C` | Ask-first: search + chat merged into one centre command bar, every menu behind one "Menu" button that opens a typographic index; editorial numbered list |
 | `current` | Today's site, for comparison |
 
+Every variant except `current` also swaps the landing hero (`HeroPrototype.tsx`): the photo at
+full strength, a left-aligned two-line statement and a "Try the AI assistant" pill in place of
+the multi-line chat box. The headline and lede are placeholder copy.
+
 The choice sticks in sessionStorage while you click around. `/prototype/portfolio` is the stand-in
 "All projects" page.
 

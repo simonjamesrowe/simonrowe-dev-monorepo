@@ -17,8 +17,11 @@ export type VariantKey = (typeof VARIANTS)[number]['key']
 
 const STORAGE_KEY = 'prototype-nav-variant'
 
-/** Never true in a production build, so a stray merge cannot ship any of this. */
-export const PROTOTYPE_ENABLED = import.meta.env.DEV
+/**
+ * Never true in a production build, so a stray merge cannot ship any of this. Off under Vitest
+ * too (MODE 'test' is also DEV), so the suite keeps testing the real header and hero.
+ */
+export const PROTOTYPE_ENABLED = import.meta.env.DEV && import.meta.env.MODE !== 'test'
 
 function isVariant(value: string | null): value is VariantKey {
   return VARIANTS.some(variant => variant.key === value)

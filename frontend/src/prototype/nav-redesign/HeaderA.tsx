@@ -228,7 +228,11 @@ function FloatingAskPill() {
       setVisible(true)
       return
     }
-    const onScroll = () => setVisible(window.scrollY > window.innerHeight * 0.55)
+    // Dock only once the hero's own pill has scrolled away, so the two are never on screen together.
+    const onScroll = () => {
+      const heroPill = document.querySelector('.ph-hero__pill')
+      setVisible(heroPill ? heroPill.getBoundingClientRect().bottom < 0 : window.scrollY > window.innerHeight * 0.55)
+    }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
@@ -237,9 +241,8 @@ function FloatingAskPill() {
   return (
     <div className={`pa-askpill${visible ? ' is-visible' : ''}`}>
       <button className="pa-askpill__desktop" onClick={() => openChat()} type="button">
-        <span className="pa-askpill__lead">Ask Simon</span>
         <Sparkles size={16} />
-        <span className="pa-askpill__strong">anything</span>
+        <span className="pa-askpill__strong">Ask Simon anything</span>
         <span className="pa-askpill__start">Start chat</span>
       </button>
       <button aria-label="Ask Simon anything" className="pa-askpill__mobile" onClick={() => openChat()} type="button">
