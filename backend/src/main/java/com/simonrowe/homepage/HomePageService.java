@@ -1,5 +1,6 @@
 package com.simonrowe.homepage;
 
+import com.simonrowe.admin.FieldValidationException;
 import com.simonrowe.admin.ValidationErrorResponse.FieldError;
 import java.time.Instant;
 import java.util.List;
@@ -25,7 +26,7 @@ public class HomePageService {
   public HomePageContent save(final HomePageContent content) {
     List<FieldError> errors = HomePageValidator.validate(content);
     if (!errors.isEmpty()) {
-      throw new HomePageValidationException(errors);
+      throw new FieldValidationException(errors);
     }
     HomePage saved = repository.save(new HomePage(
         HomePage.SINGLETON_ID,

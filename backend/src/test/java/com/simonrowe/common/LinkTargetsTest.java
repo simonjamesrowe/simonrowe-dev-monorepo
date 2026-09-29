@@ -1,4 +1,4 @@
-package com.simonrowe.homepage;
+package com.simonrowe.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

@@ -20,6 +20,7 @@ import com.simonrowe.migration.changeunits.V029CreateShortLinksAndBackfill;
 import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
 import com.simonrowe.migration.changeunits.V045CreateCoparentAssistantSchema;
+import com.simonrowe.migration.changeunits.V048CreatePortfolioProjects;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -76,7 +77,9 @@ public class RestoreService {
       // One document with a fixed id and no references. A backup taken before it existed has
       // no entry for it, and a missing entry is skipped rather than dropped, so the copy
       // already on the target survives such a restore.
-      HomePage.COLLECTION
+      HomePage.COLLECTION,
+      // No @DBRef; the unique slug index is put back by the post-import hook below.
+      V048CreatePortfolioProjects.COLLECTION
   );
 
   private static final List<String> COPARENT_IMPORT_ORDER = List.of(
@@ -228,7 +231,8 @@ public class RestoreService {
         Map.entry(ARTICLE_SUMMARIES, this::ensureArticleSummaryIndexes),
         Map.entry(PLATFORM_RELEASES, this::ensurePlatformReleaseIndexes),
         Map.entry(SHORT_LINKS, this::ensureShortLinkIndexes),
-        Map.entry(SCHOOL_DOCUMENTS, this::ensureSchoolIndexes));
+        Map.entry(SCHOOL_DOCUMENTS, this::ensureSchoolIndexes),
+        Map.entry(V048CreatePortfolioProjects.COLLECTION, this::ensurePortfolioIndexes));
   }
 
   void restoreCollections(final Path zipFile) throws IOException {
@@ -369,6 +373,15 @@ public class RestoreService {
   void ensureShortLinkIndexes() {
     V029CreateShortLinksAndBackfill.createIndexes(mongoTemplate);
     LOG.info("Recreated short link indexes after restore");
+  }
+
+  /**
+   * The unique slug index is what stops two projects sharing an address, and it goes with the
+   * collection when the restore drops it. Mongock will not re-run a recorded change unit.
+   */
+  void ensurePortfolioIndexes() {
+    V048CreatePortfolioProjects.createIndexes(mongoTemplate);
+    LOG.info("Recreated portfolio indexes after restore");
   }
 
   private void restoreIndex(final Path tempZip, final String index, final boolean warnIfMissing)

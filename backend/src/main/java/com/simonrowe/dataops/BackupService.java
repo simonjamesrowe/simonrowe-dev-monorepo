@@ -68,7 +68,9 @@ public class BackupService {
       "school_links",
       // The home page hero's copy, edited in the CMS. Nothing re-derives it: without it a
       // restore silently falls back to the built-in default wording.
-      "home_page"
+      "home_page",
+      // Portfolio projects, edited in the CMS. A lost row loses its copy and its order.
+      "portfolio_projects"
   );
   private static final Set<String> COPARENT_BACKUP_COLLECTIONS = Set.of(
       "families", "parents", "children", "invitations", "onboardingstates", "events",

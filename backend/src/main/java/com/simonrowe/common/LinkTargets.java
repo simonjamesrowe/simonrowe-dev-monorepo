@@ -1,4 +1,4 @@
-package com.simonrowe.homepage;
+package com.simonrowe.common;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -14,9 +14,14 @@ import java.net.URISyntaxException;
  */
 public final class LinkTargets {
 
-  static final int MAX_LENGTH = 2048;
+  public static final int MAX_LENGTH = 2048;
 
   private LinkTargets() {
+  }
+
+  /** An absolute {@code https} URL only — for links that must leave the site. */
+  public static boolean isHttpsUrl(final String href) {
+    return isAllowed(href) && !href.startsWith("/");
   }
 
   public static boolean isAllowed(final String href) {
