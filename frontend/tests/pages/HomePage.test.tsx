@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ThemeProvider } from '../../src/contexts/ThemeContext'
-import { TopNav } from '../../src/components/layout/TopNav'
+import { SiteHeader } from '../../src/components/layout/SiteHeader'
 import { HomePage } from '../../src/pages/HomePage'
 import type { BlogSummary } from '../../src/types/blog'
 import type { IJob } from '../../src/types/job'
@@ -151,7 +151,7 @@ function renderLandingShell() {
       <NarrationAudioStub value={narrationAudioStub()}>
         <ThemeProvider>
           <DrawerProvider>
-            <TopNav />
+            <SiteHeader />
             <HomePage />
           </DrawerProvider>
         </ThemeProvider>
@@ -346,15 +346,14 @@ describe('HomePage', () => {
 
     renderLandingShell()
 
-    expect(screen.getAllByRole('link', { name: /^About$/ })[0]).toHaveAttribute('href', '/about')
-    // Profile and Experience merged into About, so neither has a nav entry of its own.
-    expect(screen.queryByRole('link', { name: /^Profile$/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /^Experience$/ })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: /Blog/i })[0]).toHaveAttribute('href', '/blogs')
-    expect(screen.getAllByRole('link', { name: /News & Events/i })[0]).toHaveAttribute(
-      'href',
-      '/news-events',
-    )
+    // The header groups its destinations under menus; each opens on click.
+    await user.click(screen.getByRole('button', { name: 'About' }))
+    expect(screen.getByRole('link', { name: /^Profile/ })).toHaveAttribute('href', '/about')
+    // Experience is a section of /about, not a page of its own (the /experience route redirects).
+    expect(screen.getByRole('link', { name: /^Experience/ })).toHaveAttribute('href', '/about#roles')
+    await user.click(screen.getByRole('button', { name: 'Insights' }))
+    expect(screen.getByRole('link', { name: /^Blog/ })).toHaveAttribute('href', '/blogs')
+    expect(screen.getByRole('link', { name: /^News & Events/ })).toHaveAttribute('href', '/news-events')
 
     // The footer lives in the layout, not the page, so there is no footer landmark here.
     expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()

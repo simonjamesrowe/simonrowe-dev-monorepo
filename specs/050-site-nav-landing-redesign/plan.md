@@ -111,7 +111,7 @@ by the desktop and mobile menus, so they cannot drift.
 ## Delivery (four pull requests, each independently shippable)
 
 1. **Header** (Stories 1–2): `SiteHeader` with the About, Insights and Under the hood menus, the compact
-   search field, the phone sheet and the floating Ask pill. The Portfolio menu shows only "All projects" until PR 4.
+   search field, the phone sheet and the floating Ask pill. The Portfolio menu is hidden until PR 4 gives it destinations.
    Deletes the prototype. The hero is untouched.
 2. **Hero content backend** (Story 4, backend): `homepage` package, the `V048` change unit (hero part), and
    backup/restore.

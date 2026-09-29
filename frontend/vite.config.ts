@@ -16,8 +16,11 @@ export default defineConfig(({ mode }) => {
   // silent move produces confusing failures later rather than an obvious one now.
   const env = loadEnv(mode, '.', '')
   const devPort = Number(env.VITE_DEV_PORT) || 5173
-  // PROTOTYPE (nav-redesign mockups): VITE_PROXY_TARGET=https://api.simonrowe.dev points the
-  // dev proxy at production so the mockups render real content without a local backend.
+  // VITE_PROXY_TARGET=https://api.simonrowe.dev points the dev proxy at production, for checking
+  // a public-page change against real content without running the backend. Pair it with an
+  // empty VITE_API_BASE_URL so requests stay same-origin (the shared env sets it to prod, which
+  // CORS refuses from localhost). Read-only in practice: public pages only GET. Chat (/ws) is
+  // proxied too and reaches the production assistant.
   const apiTarget = env.VITE_PROXY_TARGET || 'http://localhost:8080'
 
   return {

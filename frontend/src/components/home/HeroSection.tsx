@@ -64,7 +64,7 @@ export function HeroSection({ name, title, tagline, backgroundImageUrl }: HeroSe
         <p className="hero__role">{title}</p>
         <p className="hero__tagline">{tagline}</p>
 
-        <div className="hero__chat tour-home-chat">
+        <div className="hero__chat tour-home-chat" data-ask-anchor>
           <p className="hero__chat-intro">
             <MessageCircle size={18} />
             Chat with an AI assistant trained on Simon's experience, stack, and career history.

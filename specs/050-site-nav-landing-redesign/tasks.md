@@ -4,36 +4,36 @@
 
 ## Phase 1 — Header (PR 1, Stories 1–2)
 
-- [ ] T001 Delete `frontend/src/prototype/`, and revert its hooks in `App.tsx`, `HomePage.tsx` and
+- [x] T001 Delete `frontend/src/prototype/`, and revert its hooks in `App.tsx`, `HomePage.tsx` and
   `vite.config.ts`. Keep the `VITE_PROXY_TARGET` escape hatch only if it is documented in the README.
-- [ ] T002 [P] `frontend/src/components/layout/navModel.ts`: the four groups (labels, destinations,
-  descriptions, icons) and `groupIsActive(group, pathname)`. Portfolio holds only "All projects" for now.
-- [ ] T003 [P] Add the `--ai-accent*` tokens (dark and light) to `styles.css`.
-- [ ] T004 `HeaderMenu.tsx`: a disclosure trigger plus panel. It opens on click and on pointer hover, closes on
+- [x] T002 [P] `frontend/src/components/layout/navModel.ts`: the four groups (labels, destinations,
+  descriptions, icons) and `groupIsActive(group, pathname)`. Portfolio is empty, and therefore hidden, until Phase 4.
+- [x] T003 [P] Add the `--ai-accent*` tokens (dark and light) to `styles.css`.
+- [x] T004 `HeaderMenu.tsx`: a disclosure trigger plus panel. It opens on click and on pointer hover, closes on
   Escape, an outside click or a route change, exposes `aria-expanded`/`aria-controls`, and has the "Take a
   tour" footer on About.
-- [ ] T005 `SiteHeader.tsx`: the floating capsule.
+- [x] T005 `SiteHeader.tsx`: the floating capsule.
   - Brand, four `HeaderMenu`s, the compact `SiteSearch` with a `/` hint, the theme toggle, and the Ask button
     (keeps `top-nav__ask-ai` and `data-testid="open-chat"`).
   - The admin link, gated as today.
   - A global `/` and Ctrl/⌘+K shortcut that focuses the search input.
   - A shadow that strengthens on scroll.
-- [ ] T006 `MobileNavSheet.tsx`: the full-screen sheet.
+- [x] T006 `MobileNavSheet.tsx`: the full-screen sheet.
   - Search first, then accordion groups, the theme row, the admin link and the pinned Ask button.
   - Scroll lock, focus trap and focus restore; closes on navigation.
-- [ ] T007 `FloatingAskPill.tsx`: a corner pill (a sparkle button on phones) shown once
+- [x] T007 `FloatingAskPill.tsx`: a corner pill (a sparkle button on phones) shown once
   `[data-ask-anchor]` has scrolled out of view, or always when the page has no anchor. It sits above the
   narration bar when that is visible, and respects `prefers-reduced-motion`.
-- [ ] T008 Wire it up in `App.tsx` `PublicLayout`: `SiteHeader` + `FloatingAskPill`, delete
+- [x] T008 Wire it up in `App.tsx` `PublicLayout`: `SiteHeader` + `FloatingAskPill`, delete
   `TopNav.tsx`/`MobileMenu.tsx`, and add the CSS (BEM `site-header__*`, `header-menu__*`, `nav-sheet__*`,
   `ask-pill__*`).
-- [ ] T009 [P] Tests:
+- [x] T009 [P] Tests:
   - `tests/components/layout/SiteHeader.test.tsx`: menus open and close, keyboard, `aria-expanded`, the
     current group, the search shortcut, and the admin link.
   - `MobileNavSheet.test.tsx`: accordion, scroll lock, closes on navigation.
   - `FloatingAskPill.test.tsx`.
   - Port `AdminNavGating.test.tsx` and the nav assertions in `HomePage.test.tsx`.
-- [ ] T010 Verify the tour in a real browser: the `.tour-search` and `.top-nav__ask-ai` steps still spotlight
+- [x] T010 Verify the tour in a real browser: the `.tour-search` and `.top-nav__ask-ai` steps still spotlight
   and act, at 1440, 1024 and 390px.
 
 ## Phase 2 — Hero content backend (PR 2, Story 4 backend)
@@ -66,8 +66,8 @@
     two-line headline, the lede (hidden on phones), both CTAs (`Link` for site paths, `<a>` for `https`), and
     the tour button.
   - The Ask pill carries `tour-home-chat` and `data-ask-anchor`.
-- [ ] T019 Replace `HeroSection` in `HomePage.tsx`, then delete `HeroSection.tsx`, its test, and
-  `TourButton` (and update `TourButton.test.tsx`).
+- [ ] T019 Replace `HeroSection` in `HomePage.tsx`, then delete `HeroSection.tsx` and its test.
+  (`TourButton` was already removed in Phase 1, because the Ask pill took its corner.)
 - [ ] T020 `pages/admin/HomePageAdmin.tsx`:
   - Grouped fields with character counters and limits.
   - Inline field errors from the 400 response.

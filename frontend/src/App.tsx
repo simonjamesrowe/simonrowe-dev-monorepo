@@ -10,19 +10,16 @@ import { NarrationAudioProvider } from './components/narration/NarrationAudioPro
 import { NarrationPlayerBar } from './components/narration/NarrationPlayerBar'
 import { JobDetailDrawer } from './components/experience/JobDetailDrawer'
 import { Footer } from './components/layout/Footer'
-import { MobileMenu } from './components/layout/MobileMenu'
-import { TopNav } from './components/layout/TopNav'
+import { FloatingAskPill } from './components/layout/FloatingAskPill'
+import { SiteHeader } from './components/layout/SiteHeader'
 import { SkillGroupDetail } from './components/skills/SkillGroupDetail'
 import { TourProvider } from './components/tour/TourProvider'
-import { TourButton } from './components/tour/TourButton'
 import { TourOverlay } from './components/tour/TourOverlay'
 import { API_BASE_URL } from './config/api'
 import { ChatProvider, useChat } from './contexts/ChatContext'
 import { DrawerProvider, useDrawer } from './hooks/useDrawer'
 import { useProfile } from './hooks/useProfile'
 import { HomePage } from './pages/HomePage'
-import { PrototypeHeader, PrototypePortfolioPage, usePrototypeLayoutClass } from './prototype/nav-redesign/PrototypeChrome'
-import { PrototypeSwitcher } from './prototype/nav-redesign/PrototypeSwitcher'
 
 // The landing page (HomePage) stays in the initial bundle so it renders
 // instantly. Every other route is code-split so its dependencies — the
@@ -158,26 +155,18 @@ function RedirectPreservingLocation({ to, defaultHash = '' }: { to: string; defa
 }
 
 function PublicLayout({ children }: { children: React.ReactNode }) {
-  // PROTOTYPE (nav redesign): a ?variant= swaps the header. Remove with src/prototype/.
-  const { variant, className: prototypeClass } = usePrototypeLayoutClass()
   return (
     <ChatProvider>
       <DrawerProvider>
         <TourProvider>
-          <div className={`app-layout${prototypeClass}`}>
+          <div className="app-layout">
             <ScrollToTop />
-            {variant === 'current' ? (
-              <>
-                <TopNav />
-                <MobileMenu />
-              </>
-            ) : <PrototypeHeader variant={variant} />}
-            <PrototypeSwitcher />
+            <SiteHeader />
             <main className="app-layout__main">
               {children}
             </main>
             <Footer />
-            <TourButton />
+            <FloatingAskPill />
             <TourOverlay />
             <GlobalDrawers />
             <ChatOverlay />
@@ -215,7 +204,6 @@ function App() {
         <Route element={<PublicLayout><NewsEventsPage /></PublicLayout>} path="/news-events" />
         <Route element={<PublicLayout><McpPage /></PublicLayout>} path="/mcp" />
         <Route element={<PublicLayout><StatusPage /></PublicLayout>} path="/status" />
-        <Route element={<PublicLayout><PrototypePortfolioPage /></PublicLayout>} path="/prototype/portfolio" />
         {/* Legacy singular paths, still shared externally. */}
         <Route element={<Navigate replace to="/blogs" />} path="/blog" />
         <Route element={<LegacyBlogDetailRedirect />} path="/blog/:id" />

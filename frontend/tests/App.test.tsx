@@ -42,10 +42,6 @@ vi.mock('../src/hooks/useTour', () => ({
   }),
 }))
 
-vi.mock('../src/components/tour/TourButton', () => ({
-  TourButton: () => null,
-}))
-
 vi.mock('../src/components/tour/TourOverlay', () => ({
   TourOverlay: () => null,
 }))

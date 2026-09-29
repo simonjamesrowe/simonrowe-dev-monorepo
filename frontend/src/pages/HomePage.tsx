@@ -4,8 +4,7 @@ import { CTASection } from '../components/home/CTASection'
 import { CurrentlyStrip } from '../components/home/CurrentlyStrip'
 import { EmployerLogoStrip } from '../components/home/EmployerLogoStrip'
 import { FeaturedWriting } from '../components/home/FeaturedWriting'
-import { PrototypeAwareHero } from '../prototype/nav-redesign/HeroPrototype'
-import { PrototypePortfolioSection } from '../prototype/nav-redesign/PrototypeChrome'
+import { HeroSection } from '../components/home/HeroSection'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { useDrawer } from '../hooks/useDrawer'
@@ -80,10 +79,14 @@ export function HomePage() {
 
   return (
     <>
-      <PrototypeAwareHero profile={profile} />
+      <HeroSection
+        name={profile.name}
+        title={profile.title}
+        tagline={profile.headline}
+        backgroundImageUrl={profile.backgroundImage?.url}
+      />
       <CurrentlyStrip jobs={jobs} />
       <EmployerLogoStrip jobs={jobs} onEmployerClick={openJob} />
-      <PrototypePortfolioSection />
       <FeaturedWriting blogs={latestPosts} />
       <CTASection />
     </>

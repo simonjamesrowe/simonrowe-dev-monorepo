@@ -211,7 +211,9 @@ to Live with a link and an image and confirm it becomes a linked card with a det
   background image at phone widths, with a legibility shade that works in both themes.
 - **FR-011**: The hero MUST show an eyebrow built from the profile's name, title and location, a two-line
   headline (the second line accented), one supporting sentence (hidden at phone widths), a primary and a
-  secondary call to action, an optional "Take the tour" link, and the Ask pill.
+  secondary call to action, an optional "Take the tour" link (desktop widths only), and the Ask pill.
+- **FR-011a**: The guided tour remains desktop-only, as it is today. Its search step spotlights the header's
+  search field, which phones do not show. Neither the phone menu nor the phone hero offers it.
 - **FR-012**: The Ask pill MUST show a lead text, a label and a button label, all from the CMS. It MUST NOT use
   the wording "Try the AI assistant". Activating it MUST open the chat assistant.
 - **FR-013**: The multi-line chat input MUST be removed from the hero, along with the four suggested-question
