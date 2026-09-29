@@ -43,15 +43,16 @@ test.describe('routing', () => {
   test('a retired /experience?job= deep link redirects to /about and opens that role', async ({ page }) => {
     const response = await page.request.get('/api/jobs')
     expect(response.ok()).toBeTruthy()
-    const jobs = (await response.json()) as Array<{ id: string }>
+    const jobs = (await response.json()) as Array<{ id: string; title: string }>
     expect(jobs.length).toBeGreaterThan(0)
-    const { id } = jobs[0]
+    const { id, title } = jobs[0]
 
     await page.goto(`/experience?job=${id}`)
 
     await expect(page).toHaveURL(new RegExp(`/about\\?job=${id}#roles$`))
     await expect(page.locator('.tour-profile')).toBeVisible()
-    await expect(page.getByRole('dialog')).toBeVisible()
+    // The job drawer is the global `.drawer`, rendered by PublicLayout.
+    await expect(page.locator('.drawer')).toContainText(title)
   })
 
   test('a retired /experience#skills link redirects to the skills on /about', async ({ page }) => {
