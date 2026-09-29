@@ -390,6 +390,15 @@ fi
 # grace reads the rollback file's mtime through nginx, the same way layer 0 reads
 # the flag. A successful deploy has already pruned by then, so waiting costs
 # nothing.
+#
+# DELIBERATELY NOT honoured here: restart-prod.sh's `rollback-taken` marker, which
+# keeps a rolled-back deploy's images as evidence. That marker lasts until the NEXT
+# deploy's pull, which can be days away, and a watchdog that respected it could
+# not free space for all that time - the 2026-09-28 failure mode, reintroduced.
+# The trade is accepted because it is small in practice: the images a rollback
+# leaves behind were built minutes earlier, so the WARN prune's 72h window keeps
+# them anyway. Only the >=95% prune removes them, when the disk matters more, and
+# they can still be re-pulled from ghcr by their sha tag.
 # ---------------------------------------------------------------------------
 
 disk_check_path() {
