@@ -4,16 +4,18 @@ import { CTASection } from '../components/home/CTASection'
 import { CurrentlyStrip } from '../components/home/CurrentlyStrip'
 import { EmployerLogoStrip } from '../components/home/EmployerLogoStrip'
 import { FeaturedWriting } from '../components/home/FeaturedWriting'
-import { HeroSection } from '../components/home/HeroSection'
+import { LandingHero } from '../components/home/LandingHero'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { useDrawer } from '../hooks/useDrawer'
+import { useHomePage } from '../hooks/useHomePage'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useProfile } from '../hooks/useProfile'
 import { trackPageView } from '../services/analytics'
 import { fetchLatestBlogs } from '../services/blogApi'
 import { fetchJobs } from '../services/jobsApi'
 import type { BlogSummary } from '../types/blog'
+import { DEFAULT_HOME_PAGE } from '../types/homePage'
 import type { IJob } from '../types/job'
 
 /** Posts fed to the Recent writing carousel. The API caps `limit` at 10. */
@@ -21,6 +23,8 @@ const HOME_POST_COUNT = 10
 
 export function HomePage() {
   const { profile, loading: profileLoading, error: profileError, retry } = useProfile()
+  // Never rejects — a failed fetch resolves to the built-in copy — so it only ever delays.
+  const homePage = useHomePage()
   const [jobs, setJobs] = useState<IJob[]>([])
   const [latestPosts, setLatestPosts] = useState<BlogSummary[]>([])
   // The job drawer is rendered globally by PublicLayout, so a logo can open a role in
@@ -63,7 +67,7 @@ export function HomePage() {
     }
   }, [])
 
-  if (profileLoading) {
+  if (profileLoading || (profile && !homePage)) {
     return <LoadingIndicator message="Loading profile..." />
   }
 
@@ -79,12 +83,7 @@ export function HomePage() {
 
   return (
     <>
-      <HeroSection
-        name={profile.name}
-        title={profile.title}
-        tagline={profile.headline}
-        backgroundImageUrl={profile.backgroundImage?.url}
-      />
+      <LandingHero content={homePage ?? DEFAULT_HOME_PAGE} profile={profile} />
       <CurrentlyStrip jobs={jobs} />
       <EmployerLogoStrip jobs={jobs} onEmployerClick={openJob} />
       <FeaturedWriting blogs={latestPosts} />

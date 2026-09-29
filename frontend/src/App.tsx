@@ -54,6 +54,7 @@ const SchoolAllDocumentsPage = named(() => import('./pages/admin/SchoolAllDocume
 const SchoolEventsAdmin = named(() => import('./pages/admin/SchoolEventsAdmin'), 'SchoolEventsAdmin')
 const SchoolNotesAdmin = named(() => import('./pages/admin/SchoolNotesAdmin'), 'SchoolNotesAdmin')
 const ProfileAdmin = named(() => import('./pages/admin/ProfileAdmin'), 'ProfileAdmin')
+const HomePageAdmin = named(() => import('./pages/admin/HomePageAdmin'), 'HomePageAdmin')
 const SkillGroupEditor = named(() => import('./pages/admin/SkillGroupEditor'), 'SkillGroupEditor')
 const SkillsAdmin = named(() => import('./pages/admin/SkillsAdmin'), 'SkillsAdmin')
 const TagsAdmin = named(() => import('./pages/admin/TagsAdmin'), 'TagsAdmin')
@@ -221,6 +222,7 @@ function App() {
           <Route path="skills" element={<SkillsAdmin />} />
           <Route path="skill-groups/:id" element={<SkillGroupEditor />} />
           <Route path="profile" element={<ProfileAdmin />} />
+          <Route path="home-page" element={<HomePageAdmin />} />
           <Route path="tags" element={<TagsAdmin />} />
           <Route path="tour-steps" element={<TourStepsAdmin />} />
           <Route path="tour-steps/:id" element={<TourStepEditor />} />

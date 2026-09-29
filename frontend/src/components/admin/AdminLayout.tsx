@@ -8,6 +8,7 @@ import {
   FileCode,
   FileText,
   GraduationCap,
+  House,
   Image,
   LayoutDashboard,
   Link2,
@@ -28,6 +29,7 @@ import { ForbiddenScreen } from './ForbiddenScreen'
 const navItems = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { path: '/admin/blogs', label: 'Content', icon: <FileText size={18} /> },
+  { path: '/admin/home-page', label: 'Home page', icon: <House size={18} /> },
   { path: '/admin/profile', label: 'Profile', icon: <User size={18} /> },
   { path: '/admin/skills', label: 'Skills', icon: <Code size={18} /> },
   { path: '/admin/jobs', label: 'Jobs', icon: <Briefcase size={18} /> },

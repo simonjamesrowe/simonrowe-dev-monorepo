@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,6 +12,7 @@ import type { Profile } from '../../src/types/Profile'
 
 const mockUseProfile = vi.fn()
 const openChat = vi.fn()
+const startTour = vi.fn()
 
 vi.mock('../../src/hooks/useProfile', () => ({
   useProfile: () => mockUseProfile(),
@@ -43,18 +44,25 @@ vi.mock('../../src/contexts/ChatContext', () => ({
   }),
 }))
 
+vi.mock('../../src/services/homePageApi', () => ({
+  fetchHomePage: vi.fn(),
+}))
+
 vi.mock('../../src/hooks/useTour', () => ({
   useTour: () => ({
     isActive: false,
     currentStepIndex: 0,
     steps: [],
     searchValue: '',
+    start: startTour,
   }),
 }))
 
 import { DrawerProvider } from '../../src/hooks/useDrawer'
 import { fetchLatestBlogs } from '../../src/services/blogApi'
+import { fetchHomePage } from '../../src/services/homePageApi'
 import { fetchJobs } from '../../src/services/jobsApi'
+import { DEFAULT_HOME_PAGE, type HomePageContent } from '../../src/types/homePage'
 import { NarrationAudioStub } from '../testUtils/NarrationAudioStub'
 import { narrationAudioStub } from '../testUtils/narrationAudioValue'
 
@@ -173,6 +181,8 @@ describe('HomePage', () => {
   beforeEach(() => {
     mockUseProfile.mockReset()
     openChat.mockReset()
+    startTour.mockReset()
+    vi.mocked(fetchHomePage).mockReset().mockResolvedValue(DEFAULT_HOME_PAGE)
     vi.mocked(fetchJobs).mockReset().mockResolvedValue(jobs)
     vi.mocked(fetchLatestBlogs).mockReset().mockResolvedValue(posts)
     setMatchMedia(false)
@@ -208,7 +218,7 @@ describe('HomePage', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('boom')
     })
-    expect(document.querySelector('.hero')).not.toBeInTheDocument()
+    expect(document.querySelector('.landing-hero')).not.toBeInTheDocument()
   })
 
   it('sets the bare site title', async () => {
@@ -243,12 +253,12 @@ describe('HomePage', () => {
 
     const order = Array.from(
       container.querySelectorAll(
-        '.hero, .currently-strip, .employer-logo-strip, .featured-writing, .cta-section',
+        '.landing-hero, .currently-strip, .employer-logo-strip, .featured-writing, .cta-section',
       ),
     ).map((element) => element.classList[0])
 
     expect(order).toEqual([
-      'hero',
+      'landing-hero',
       'currently-strip',
       'employer-logo-strip',
       'featured-writing',
@@ -259,7 +269,8 @@ describe('HomePage', () => {
     expect(screen.getByText('Leading the engineering function.')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Global' })).toBeInTheDocument()
     expect(screen.getByText('Event Sourcing With Kafka')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Get in touch' })).toHaveAttribute(
+    const cta = container.querySelector<HTMLElement>('.cta-section')!
+    expect(within(cta).getByRole('link', { name: 'Get in touch' })).toHaveAttribute(
       'href',
       '/about#contact',
     )
@@ -278,7 +289,7 @@ describe('HomePage', () => {
 
     expect(container.querySelector('.currently-strip')).not.toBeInTheDocument()
     expect(container.querySelector('.employer-logo-strip')).not.toBeInTheDocument()
-    expect(container.querySelector('.hero')).toBeInTheDocument()
+    expect(container.querySelector('.landing-hero')).toBeInTheDocument()
     expect(container.querySelector('.cta-section')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.queryByText(/Unable to load jobs data/i)).not.toBeInTheDocument()
@@ -299,39 +310,59 @@ describe('HomePage', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('renders hero identity, role, AI chat entry, and prompt chips without the profile about section', async () => {
+  it('renders the CMS copy over the profile photograph, with the profile identity above it', async () => {
     loadedProfile()
+    const edited: HomePageContent = {
+      ...DEFAULT_HOME_PAGE,
+      headlineLine1: 'Edited first line.',
+      headlineLine2: 'Edited second line.',
+      lede: 'An edited sentence.',
+      updatedAt: '2026-09-29T10:00:00Z',
+    }
+    vi.mocked(fetchHomePage).mockResolvedValue(edited)
+
+    const { container } = renderHomePage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Edited first line.')
+    })
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Edited second line.')
+    expect(screen.getByText('An edited sentence.')).toBeInTheDocument()
+    expect(screen.getByText('Simon Rowe · Engineering Leader · London')).toBeInTheDocument()
+    // Prefixed with API_BASE_URL, which the test environment may set.
+    expect(container.querySelector('.landing-hero__image')?.getAttribute('src')).toMatch(/\/background\.jpg$/)
+    expect(container.querySelector('.landing-hero source')?.getAttribute('srcset'))
+      .toMatch(/\/mobile-background\.jpg$/)
+    // The multi-line composer and its prompt chips are gone; the pill replaces them.
+    expect(screen.queryByPlaceholderText(/Ask me anything about Simon/i)).not.toBeInTheDocument()
+    expect(document.querySelector('.tour-home-chat')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /About Simon/i })).not.toBeInTheDocument()
+  })
+
+  it('falls back to the built-in copy when the hero content cannot be fetched', async () => {
+    loadedProfile()
+    vi.mocked(fetchHomePage).mockRejectedValue(new Error('down'))
 
     renderHomePage()
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Simon Rowe')
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(DEFAULT_HOME_PAGE.headlineLine1)
     })
-    expect(screen.getByText('Engineering Leader')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText(/Ask me anything about Simon/i)).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: /What Spring Boot and Kafka patterns/i }),
-    ).toBeInTheDocument()
-    expect(document.querySelector('.tour-home-chat')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: /About Simon/i })).not.toBeInTheDocument()
-    expect(screen.queryByText('About copy')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('opens chat from prompt chips, hero composer, and top navigation search', async () => {
+  it('opens chat from the Ask pill and the header search, and starts the tour', async () => {
     const user = userEvent.setup()
     loadedProfile()
 
     renderLandingShell()
 
-    await user.click(screen.getByRole('button', { name: /What is he blogging about recently/i }))
-    expect(openChat).toHaveBeenCalledWith('What is he blogging about recently?')
+    const pill = await screen.findByRole('button', { name: /Ask Simon anything\s*Start chat/i })
+    await user.click(pill)
+    expect(openChat).toHaveBeenCalledWith()
 
-    await user.type(
-      screen.getByPlaceholderText(/Ask me anything about Simon/i),
-      'How does Simon lead teams?',
-    )
-    await user.click(screen.getAllByRole('button', { name: /send/i })[0])
-    expect(openChat).toHaveBeenCalledWith('How does Simon lead teams?')
+    await user.click(screen.getByRole('button', { name: /^Take a tour/ }))
+    expect(startTour).toHaveBeenCalled()
 
     await user.type(screen.getByRole('searchbox', { name: /search or ask a question/i }), 'Kafka')
     fireEvent.keyDown(screen.getByRole('searchbox', { name: /search or ask a question/i }), {
@@ -340,7 +371,7 @@ describe('HomePage', () => {
     expect(openChat).toHaveBeenCalledWith('Kafka')
   })
 
-  it('renders landing navigation and keyboard-accessible prompts', async () => {
+  it('renders landing navigation and a keyboard-operable Ask pill', async () => {
     const user = userEvent.setup()
     loadedProfile()
 
@@ -358,9 +389,10 @@ describe('HomePage', () => {
     // The footer lives in the layout, not the page, so there is no footer landmark here.
     expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()
 
-    const prompt = screen.getByRole('button', { name: /How big are the teams he's led/i })
-    prompt.focus()
+    await screen.findByRole('heading', { level: 1 })
+    const pill = document.querySelector<HTMLButtonElement>('.landing-hero__pill')!
+    pill.focus()
     await user.keyboard('{Enter}')
-    expect(openChat).toHaveBeenCalledWith("How big are the teams he's led?")
+    expect(openChat).toHaveBeenCalledWith()
   })
 })

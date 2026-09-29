@@ -59,22 +59,22 @@
 
 ## Phase 3 — Landing hero and Home page editor (PR 3, Stories 3–4 frontend)
 
-- [ ] T017 [P] `types/homePage.ts`, `services/homePageApi.ts` (public fetch plus admin get/put), and
+- [x] T017 [P] `types/homePage.ts`, `services/homePageApi.ts` (public fetch plus admin get/put), and
   `hooks/useHomePage.ts`, which falls back to built-in defaults if the fetch fails.
-- [ ] T018 `components/home/LandingHero.tsx`:
+- [x] T018 `components/home/LandingHero.tsx`:
   - Content: the `<picture>` (mobile image at 768px and below), the shade, the eyebrow from the profile, the
     two-line headline, the lede (hidden on phones), both CTAs (`Link` for site paths, `<a>` for `https`), and
     the tour button.
   - The Ask pill carries `tour-home-chat` and `data-ask-anchor`.
-- [ ] T019 Replace `HeroSection` in `HomePage.tsx`, then delete `HeroSection.tsx` and its test.
+- [x] T019 Replace `HeroSection` in `HomePage.tsx`, then delete `HeroSection.tsx` and its test.
   (`TourButton` was already removed in Phase 1, because the Ask pill took its corner.)
-- [ ] T020 `pages/admin/HomePageAdmin.tsx`:
+- [x] T020 `pages/admin/HomePageAdmin.tsx`:
   - Grouped fields with character counters and limits.
   - Inline field errors from the 400 response.
   - A read-only strip showing the profile's two background images, with a link to `/admin/profile`.
   - `useUnsavedChanges`.
   - Plus the sidebar entry "Home page" (Lucide `House`) and the route.
-- [ ] T021 Tests:
+- [x] T021 Tests:
   - `LandingHero.test.tsx`: copy rendered from props, CTA link types, pill opens chat, tour button starts the
     tour, mobile image source.
   - `HomePage.test.tsx`: section order with `.landing-hero`.
