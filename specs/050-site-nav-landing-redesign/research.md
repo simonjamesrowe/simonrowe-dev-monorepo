@@ -47,8 +47,9 @@ page for a placeholder has nothing to show.
 
 ## R6. Indexes and seed data
 
-**Decision**: One Mongock change unit creates the `portfolio_projects` unique slug index and the
-`(published, displayOrder)` index, and seeds the four projects and the hero singleton, idempotently. Restore
+**Decision**: The hero is not seeded. Its defaults are served in code until the first save (see
+data-model.md). One Mongock change unit creates the `portfolio_projects` unique slug index and the
+`(published, displayOrder)` index, and seeds the four projects, idempotently. Restore
 calls the unit's `createIndexes` directly, following the `V029` short-links precedent.
 **Rationale**: `auto-index-creation` is off, so `@Indexed` alone does nothing (see
 [[mongo-indexes-need-mongock]]). Mongock does not re-run a recorded unit after a restore drops the collection.

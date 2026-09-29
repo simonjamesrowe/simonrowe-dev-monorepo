@@ -56,4 +56,10 @@ class BackupCollectionsTest {
     assertThat(readList(BackupService.class, "BACKUP_COLLECTIONS"))
         .contains("article_summaries", "narrations", PLATFORM_RELEASES);
   }
+
+  @Test
+  void homePageCopyIsBackedUpAndRestored() throws ReflectiveOperationException {
+    assertThat(readList(BackupService.class, "BACKUP_COLLECTIONS")).contains("home_page");
+    assertThat(readList(RestoreService.class, "IMPORT_ORDER_INDEPENDENT")).contains("home_page");
+  }
 }

@@ -23,8 +23,9 @@ One document with the fixed `_id` `"home"`.
 
 The name, title, location and both background images are read from `Profile` and are not stored here.
 
-**Seed**: the defaults listed in the spec's Assumptions, written by the change unit only if `_id: "home"` is
-absent.
+**Defaults are served, not seeded**: until the first save, `GET` returns `HomePageDefaults`, with a null
+`updatedAt`. No change unit writes this collection. A fresh environment, and a restore from a backup that
+predates the collection, both show the full hero without any data migration.
 
 ## `portfolio_projects` (new)
 

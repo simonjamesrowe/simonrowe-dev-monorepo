@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import com.simonrowe.homepage.HomePage;
 import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
 import com.simonrowe.migration.changeunits.V022CreatePlatformReleaseIndexes;
 import com.simonrowe.migration.changeunits.V029CreateShortLinksAndBackfill;
@@ -71,7 +72,11 @@ public class RestoreService {
       SCHOOL_EVENTS,
       SCHOOL_SYNC_STATE,
       SCHOOL_USAGE,
-      SCHOOL_LINKS
+      SCHOOL_LINKS,
+      // One document with a fixed id and no references. A backup taken before it existed has
+      // no entry for it, and a missing entry is skipped rather than dropped, so the copy
+      // already on the target survives such a restore.
+      HomePage.COLLECTION
   );
 
   private static final List<String> COPARENT_IMPORT_ORDER = List.of(

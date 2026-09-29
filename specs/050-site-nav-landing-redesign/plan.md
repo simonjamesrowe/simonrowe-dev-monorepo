@@ -22,8 +22,9 @@ the first one.
 Mongock 5.5.1, React Router, Lucide React, the existing MDXEditor markdown editor and Media Library. **No new
 dependencies.**
 
-**Storage**: MongoDB. Two new collections (`home_page`, `portfolio_projects`). Indexes and seed data come from
-one Mongock change unit, `V048CreateHomePageAndPortfolio`.
+**Storage**: MongoDB. Two new collections (`home_page`, `portfolio_projects`). Portfolio indexes and seed data
+come from the Mongock change unit `V048CreatePortfolioProjects`. The hero needs none, because its defaults are
+served in code.
 
 **Testing**: JUnit 6 + MockMvc + Testcontainers Mongo via `AbstractIntegrationTest`; Vitest + Testing Library;
 the existing Playwright e2e project for the header journey.
@@ -80,7 +81,7 @@ backend/src/main/java/com/simonrowe/
 │                      HomePageController (public), HomePageAdminController, HomePageDto, LinkTargets
 ├── portfolio/         PortfolioProject, ProjectStatus, PortfolioProjectRepository, PortfolioService,
 │                      PortfolioController (public), PortfolioAdminController, DTOs
-├── migration/changeunits/V048CreateHomePageAndPortfolio.java
+├── migration/changeunits/V048CreatePortfolioProjects.java
 └── dataops/           BackupService / RestoreService list entries + index re-creation
 
 frontend/src/
@@ -113,12 +114,11 @@ by the desktop and mobile menus, so they cannot drift.
 1. **Header** (Stories 1–2): `SiteHeader` with the About, Insights and Under the hood menus, the compact
    search field, the phone sheet and the floating Ask pill. The Portfolio menu is hidden until PR 4 gives it destinations.
    Deletes the prototype. The hero is untouched.
-2. **Hero content backend** (Story 4, backend): `homepage` package, the `V048` change unit (hero part), and
-   backup/restore.
+2. **Hero content backend** (Story 4, backend): the `homepage` package and backup/restore entries. No change
+   unit.
 3. **Landing hero + Home page editor** (Stories 3–4, frontend): `LandingHero`, removal of `HeroSection` and
    `TourButton`, and `HomePageAdmin`.
-4. **Portfolio** (Story 5): backend package, the `V048` portfolio indexes and seed (added to the same unit
-   before it first ships, or as a `V049` unit if PR 2 is already deployed), admin list and editor, public
+4. **Portfolio** (Story 5): backend package, the `V048` indexes and seed, admin list and editor, public
    pages, carousel, and menu items.
 
 ## Complexity Tracking

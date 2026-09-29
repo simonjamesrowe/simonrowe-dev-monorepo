@@ -38,20 +38,20 @@
 
 ## Phase 2 — Hero content backend (PR 2, Story 4 backend)
 
-- [ ] T011 `com.simonrowe.homepage`:
+- [x] T011 `com.simonrowe.homepage`:
   - `HomePage` record (`@Document("home_page")`, id `"home"`), plus nested `Cta` and `AskPill`.
   - `HomePageRepository`.
   - `HomePageService`: `get()` returns the stored row or `HomePageDefaults`; `save(request)` validates.
-- [ ] T012 `LinkTargets.isAllowed(href)`: a site path (`/…`, not `//`, no backslash) or a parsed `URI` with
+- [x] T012 `LinkTargets.isAllowed(href)`: a site path (`/…`, not `//`, no backslash) or a parsed `URI` with
   scheme `https` and a host. Unit test it with `//evil`, `javascript:`, `http:`, `https://x`,
   `/about#roles`, `/\evil` and a 100k-character input.
-- [ ] T013 `HomePageController` `GET /api/home-page`, and `HomePageAdminController` `GET`/`PUT
+- [x] T013 `HomePageController` `GET /api/home-page`, and `HomePageAdminController` `GET`/`PUT
   /api/admin/home-page`, with per-field `ValidationErrorResponse` 400s.
-- [ ] T014 `V048CreateHomePageAndPortfolio` (hero part): seed `_id: "home"` if absent. Integration test: it
-  runs at boot, is idempotent, and does not overwrite an edited row.
-- [ ] T015 Backup/restore: add `home_page` to `BACKUP_COLLECTIONS` and `IMPORT_ORDER_INDEPENDENT`, with a
+- [x] T014 ~~Seed the hero in a change unit~~. Dropped: the defaults are served until the first save, so
+  there is no production data change to ship (research R6).
+- [x] T015 Backup/restore: add `home_page` to `BACKUP_COLLECTIONS` and `IMPORT_ORDER_INDEPENDENT`, with a
   comment explaining why.
-- [ ] T016 Tests:
+- [x] T016 Tests:
   - `HomePageAdminControllerTest` (Testcontainers): a round-trip of every field, a 400 naming the field for
     each rule, and 401/403 for non-admins.
   - `HomePageControllerTest`: defaults when empty, stored row when present.
@@ -89,7 +89,7 @@
   /api/portfolio/{slug}` (404 for Coming soon, unpublished or unknown). Images are hydrated.
 - [ ] T024 `PortfolioAdminController`: list, create (409 on a duplicate slug, caught as
   `DuplicateKeyException` with no read-before-write), get, update, delete, and `PATCH /reorder`.
-- [ ] T025 Change unit, `V048` if PR 2 has not shipped, otherwise `V049SeedPortfolio`:
+- [ ] T025 Change unit `V048CreatePortfolioProjects`:
   - A static `createIndexes` creating `idx_portfolio_slug` (unique) and `idx_portfolio_published_order`.
   - Seed the four projects only for slugs that are absent.
   - Integration test: boot run, idempotence, duplicate-slug rejection, multi-row insert still fine.

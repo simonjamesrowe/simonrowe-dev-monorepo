@@ -65,7 +65,10 @@ public class BackupService {
       "school_usage",
       // Fetch/ignore decisions on links found in email. Losing these re-offers every
       // link already declined, which is the one outcome that makes the queue useless.
-      "school_links"
+      "school_links",
+      // The home page hero's copy, edited in the CMS. Nothing re-derives it: without it a
+      // restore silently falls back to the built-in default wording.
+      "home_page"
   );
   private static final Set<String> COPARENT_BACKUP_COLLECTIONS = Set.of(
       "families", "parents", "children", "invitations", "onboardingstates", "events",
