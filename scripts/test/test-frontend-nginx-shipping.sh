@@ -21,10 +21,10 @@
 # infrastructure files owned by neither Gradle module, and this suite already
 # owns nginx and compose assertions (test-nginx-maintenance.sh).
 #
-# Note there is deliberately no `nginx -t` here: frontend/nginx.conf resolves
-# `proxy_pass http://backend:8080` at config-load time, so validating it without
-# a running backend on the network fails with "host not found in upstream" -
-# a false failure that says nothing about the config.
+# There is no `nginx -t` here because this suite needs no Docker. The config no longer
+# needs a running backend to validate: its upstream is a variable resolved per request
+# (see test-nginx-proxy-pass-uri.sh), so `nginx -t` in a stock nginx:alpine passes on
+# its own.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

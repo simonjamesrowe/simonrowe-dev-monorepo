@@ -15,13 +15,20 @@
 # page loaded perfectly, static assets were fine, and every single API call came back as
 # a Spring 404 whose `path` field read "/api/" no matter what had been requested.
 #
-# frontend/nginx.conf deliberately keeps its `/api/` URI part: it names a static host,
-# where the substitution behaves as everyone expects. Only the variable form is caught.
+# frontend/nginx.conf is held to the same rules. It used to name `backend` statically,
+# which was called deliberate, and on 2026-09-29 it is what broke every image on the site:
+# nginx resolves a static upstream once at boot, the backend restarted onto a new IP, and
+# every /uploads/, /api/ and /s/ request through www 502'd until the frontend container was
+# restarted. A static upstream there does not stop nginx booting (it has only the one), it
+# pins a stale address for the life of the process — the same fix covers both.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CONF="$PROJECT_DIR/config/nginx/nginx-proxy.conf"
+CONFS=(
+  "$PROJECT_DIR/config/nginx/nginx-proxy.conf"
+  "$PROJECT_DIR/frontend/nginx.conf"
+)
 
 failures=0
 checks=0
@@ -37,48 +44,60 @@ check() {
   fi
 }
 
-echo "  proxy_pass with a variable upstream must not carry a URI"
+for CONF in "${CONFS[@]}"; do
+  echo "  ${CONF#"$PROJECT_DIR"/}"
 
-# awk rather than grep, because the rule depends on the ENCLOSING location: an exact-match
-# `location = /path` has no remainder to append, so passing a literal URI there is not only
-# safe, it is the only way to rewrite that one path. `location = /` relies on exactly that
-# to map the site root onto /school/ for term-time.simonrowe.dev.
-offenders="$(awk '
-  /^[[:space:]]*#/ { next }
-  /location[[:space:]]/ {
-    exact = ($0 ~ /location[[:space:]]+=[[:space:]]/)
-  }
-  /proxy_pass/ {
-    line = $0
-    sub(/#.*/, "", line)
-    if (line ~ /proxy_pass[[:space:]]+https?:\/\/\$[A-Za-z_][A-Za-z0-9_]*(:[0-9]+)?\/[^;[:space:]]/ && !exact) {
-      printf "%d:%s\n", NR, line
+  # Without this every assertion below passes by reading nothing.
+  check "the file exists" '[ -f "$CONF" ]'
+
+  # A variable upstream is only re-resolved if nginx has a resolver to ask. Without one,
+  # a variable that names a container fails every request with "no resolver defined".
+  check "declares Docker's embedded DNS as its resolver" \
+    'grep -qE "^[[:space:]]*resolver[[:space:]]+127\.0\.0\.11[[:space:];]" "$CONF"'
+
+
+  # awk rather than grep, because the rule depends on the ENCLOSING location: an exact-match
+  # `location = /path` has no remainder to append, so passing a literal URI there is not only
+  # safe, it is the only way to rewrite that one path. `location = /` relies on exactly that
+  # to map the site root onto /school/ for term-time.simonrowe.dev.
+  offenders="$(awk '
+    /^[[:space:]]*#/ { next }
+    /location[[:space:]]/ {
+      exact = ($0 ~ /location[[:space:]]+=[[:space:]]/)
     }
-  }
-' "$CONF")"
+    /proxy_pass/ {
+      line = $0
+      sub(/#.*/, "", line)
+      if (line ~ /proxy_pass[[:space:]]+https?:\/\/\$[A-Za-z_][A-Za-z0-9_]*(:[0-9]+)?\/[^;[:space:]]/ && !exact) {
+        printf "%d:%s\n", NR, line
+      }
+    }
+  ' "$CONF")"
 
-check "no prefix-match location proxies a variable upstream with a URI" '[ -z "$offenders" ]'
-if [ -n "$offenders" ]; then
-  echo "      these send the literal URI instead of the request path:"
-  echo "$offenders" | sed 's/^/        /'
-fi
+  check "no prefix-match location proxies a variable upstream with a URI" '[ -z "$offenders" ]'
+  if [ -n "$offenders" ]; then
+    echo "      these send the literal URI instead of the request path:"
+    echo "$offenders" | sed 's/^/        /'
+  fi
 
-# The rule above only matters while upstreams really are variables; a static name stops
-# nginx booting whenever that upstream is down, which is what 62d26cc set out to fix.
-static="$(awk '
-  /^[[:space:]]*#/ { next }
-  /proxy_pass/ {
-    line = $0
-    sub(/#.*/, "", line)
-    if (line ~ /proxy_pass[[:space:]]+https?:\/\/[a-z]/) { printf "%d:%s\n", NR, line }
-  }
-' "$CONF")"
+  # The rule above only matters while upstreams really are variables. A static name is
+  # resolved once, at boot: nginx refuses to start while that upstream is down (what
+  # 62d26cc set out to fix), and keeps proxying to a dead IP once it has moved.
+  static="$(awk '
+    /^[[:space:]]*#/ { next }
+    /proxy_pass/ {
+      line = $0
+      sub(/#.*/, "", line)
+      if (line ~ /proxy_pass[[:space:]]+https?:\/\/[a-z]/) { printf "%d:%s\n", NR, line }
+    }
+  ' "$CONF")"
 
-check "every proxy_pass still resolves its upstream through a variable" '[ -z "$static" ]'
-if [ -n "$static" ]; then
-  echo "      static upstreams stop nginx booting when that upstream is down:"
-  echo "$static" | sed 's/^/        /'
-fi
+  check "every proxy_pass still resolves its upstream through a variable" '[ -z "$static" ]'
+  if [ -n "$static" ]; then
+    echo "      static upstreams are resolved once at boot and never again:"
+    echo "$static" | sed 's/^/        /'
+  fi
+done
 
 echo "  $checks checks, $failures failures"
 [ "$failures" -eq 0 ]
