@@ -242,6 +242,39 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- termtime-year-group-retrieval: **Year groups now reach the search and the assistant.** Asked
+  for the Year 3 spellings on 2026-09-30, a minute after that week's list had been pasted in with
+  Year 3 ticked, Term Time gave the Year 6 list, called it "the Year 3 Home Learning PDF", and
+  repeated it after apologising. There were three separate faults. The ticked year was stored on
+  the document but not in the chunk metadata, so neither retrieval nor the model could see it,
+  and `searchSchoolInformation` ignored the visitor's selection entirely. Every year's
+  home-learning PDF had one title and no year groups, and was dated by the crawl rather than its
+  upload. And the tool output was `substring`ed at 6,000 characters, so every search delivered
+  4 of 8 results and the note (similarity 0.42, against 0.56 for the other years' sheets) never
+  arrived. Load-bearing bits:
+  - **Chunks carry `yearGroups`, and every source is rendered with `years="…"` or
+    `years="not stated"`.** "Not stated" on purpose: untagged is not the same as whole-school.
+  - **`YearGroups.fromPageUrl` reads the year from the first path segment**, a fixed rule
+    rather than a model. A PDF gets the **union** of its linking pages' years, and **none** if
+    any non-year page links it. That is settled in `reattributePdfs` at the end of a crawl, and
+    **never on an interrupted one**, which would narrow a shared PDF to the pages it reached.
+  - **With a year selected, retrieval runs two searches:** one filtered to those years, and the
+    ordinary one minus sources tagged *only* for other years. The selected years' results come
+    first. Untagged content stays, so this is still not a hard filter.
+    `SchoolVectorStoreYearFilterIntegrationTest` checks the list-valued `in` filter on a real
+    Elasticsearch 9.4.5. It passed with the filter key misspelt until its whole-school chunk was
+    made the closest match.
+  - **`WriteResult.reindex`**: unchanged text with a new title, date or year groups is saved and
+    re-indexed without re-running event extraction. Before this, a note re-saved with a year
+    ticked kept its first save's year groups, and corrected dates never reached an answer.
+  - **PDF dates: stated, then `Last-Modified`, then now to the second.** The date is read with a
+    one-byte ranged GET, because the school's server never answers `HEAD`. Stored crawl stamps
+    are recognised by sub-second precision and re-dated once. About 130 are re-dated on the first
+    crawl, roughly 20 minutes extra, once.
+  - Prompt rules: attribute a year only from `years=`, say "I only have the Year 6 list" rather
+    than present it as the reader's, and never apologise and then repeat a disputed answer.
+  - Existing notes pick up their year groups only when **re-saved**. They are never re-crawled.
+  See `docs/runbooks/term-time.md` ("Year groups reach the search, and the assistant").
 - 050-site-nav-landing-redesign: **The public header, landing hero and a CMS portfolio.** A floating
   capsule `SiteHeader` replaces `TopNav`/`MobileMenu`, grouping pages under About, Portfolio,
   Insights and Under the hood. `LandingHero` replaces `HeroSection` and its multi-line chat box

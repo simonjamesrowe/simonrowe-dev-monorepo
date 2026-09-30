@@ -47,6 +47,8 @@ class SchoolCrawlDiscoveryTest {
   private SchoolWebsiteCrawler crawler;
   private SchoolDocumentWriter documentWriter;
   private SchoolPdfExtractor pdfExtractor;
+  private SchoolVectorStore vectorStore;
+  private SchoolEventExtractor eventExtractor;
   private SchoolIngestService service;
   private final List<String> fetched = new ArrayList<>();
 
@@ -55,6 +57,8 @@ class SchoolCrawlDiscoveryTest {
     crawler = mock(SchoolWebsiteCrawler.class);
     documentWriter = mock(SchoolDocumentWriter.class);
     pdfExtractor = mock(SchoolPdfExtractor.class);
+    vectorStore = mock(SchoolVectorStore.class);
+    eventExtractor = mock(SchoolEventExtractor.class);
 
     final SchoolProperties properties = new SchoolProperties(
         true, null, List.of(), List.of(), null, BASE, null, 0, null, null, null, 0L, null,
@@ -62,7 +66,7 @@ class SchoolCrawlDiscoveryTest {
 
     when(crawler.politePause()).thenReturn(true);
     when(crawler.pageUpdateTimes()).thenReturn(Map.of());
-    when(pdfExtractor.findPdfLinks(anyString(), anyString())).thenReturn(List.of());
+    when(pdfExtractor.findPdfLinksWithText(anyString(), anyString())).thenReturn(List.of());
     // Nothing has been ingested before, so no PDF is skipped as already-stored.
     when(documentWriter.existingPublishedAt(any(), anyString())).thenReturn(Optional.empty());
     when(documentWriter.write(any(), anyString(), any(), any(), any(), any(), any()))
@@ -77,11 +81,11 @@ class SchoolCrawlDiscoveryTest {
         mock(SchoolEventWriter.class),
         mock(SchoolSyncStateRepository.class),
         mock(StaffDirectory.class),
-        mock(SchoolVectorStore.class),
+        vectorStore,
         mock(TokenTextSplitter.class),
         pdfExtractor,
         mock(SchoolUsageRecorder.class),
-        mock(SchoolEventExtractor.class),
+        eventExtractor,
         mock(DocumentDateReader.class),
         new SchoolLinkFilter(properties));
   }
@@ -100,6 +104,230 @@ class SchoolCrawlDiscoveryTest {
       return new SchoolWebsiteCrawler.CrawledPage(
           url, canonical, "Title", "Readable text", "<html/>", List.of(links));
     });
+  }
+
+  /** Serves a page whose HTML links the given PDFs, each with its link text. */
+  private void servePdfs(final String url, final SchoolPdfExtractor.PdfLink... pdfs) {
+    final String html = "<html>" + url + "</html>";
+    when(crawler.fetchPage(url)).thenAnswer(call -> {
+      fetched.add(url);
+      return new SchoolWebsiteCrawler.CrawledPage(
+          url, url, "Title", "Readable text", html, List.of());
+    });
+    when(pdfExtractor.findPdfLinksWithText(eq(html), anyString())).thenReturn(List.of(pdfs));
+  }
+
+  private static SchoolPdfExtractor.PdfLink link(final String url, final String text) {
+    return new SchoolPdfExtractor.PdfLink(url, text);
+  }
+
+  /** An address shaped like the CMS's own: a content hash, so the file name says nothing. */
+  private static final String OPAQUE_PDF =
+      BASE + "/_site/data/files/users/parents-and-carers-files/yr-group-pages/"
+          + "938A752E316E2FCD10A5D23C20947DCE.pdf";
+
+  @Test
+  @DisplayName("a year page is stored with its year group, and a whole-school page with none")
+  void pagesAreStoredWithTheirYearGroup() {
+    when(crawler.listPages()).thenReturn(List.of(SEED, BASE + "/curriculum"));
+    serve(SEED, SEED);
+    serve(BASE + "/curriculum", BASE + "/curriculum");
+
+    service.ingestWebsite();
+
+    verify(documentWriter).write(eq(SchoolSourceType.WEBSITE_PAGE), eq(SEED), any(), any(),
+        any(), eq(List.of("Year 6")), any());
+    verify(documentWriter).write(eq(SchoolSourceType.WEBSITE_PAGE), eq(BASE + "/curriculum"),
+        any(), any(), any(), eq(List.of()), any());
+  }
+
+  @Test
+  @DisplayName("a PDF linked from two year pages belongs to both")
+  void sharedPdfBelongsToEveryYearLinkingIt() {
+    // "Fun ways to learn spellings at home" really is on the Year 3, 4, 5 and 6 pages.
+    final String y3 = BASE + "/year-three-home-learning";
+    final String y6 = BASE + "/year-six-home-learning";
+    when(crawler.listPages()).thenReturn(List.of(y3, y6));
+    servePdfs(y3, link(OPAQUE_PDF, "Fun ways to learn spellings at home"));
+    servePdfs(y6, link(OPAQUE_PDF, "Fun ways to learn spellings at home"));
+
+    service.ingestWebsite();
+
+    verify(documentWriter).refreshMetadata(eq(SchoolSourceType.PDF), eq(OPAQUE_PDF),
+        eq("Title - Fun ways to learn spellings at home (PDF)"), eq(null),
+        eq(List.of("Year 3", "Year 6")));
+  }
+
+  @Test
+  @DisplayName("a PDF also linked from a whole-school page belongs to no year in particular")
+  void pdfOnWholeSchoolPageIsUnscoped() {
+    // Conservative on purpose: a source tagged only for other years is left out of an answer,
+    // so narrowing a whole-school letter to one year would hide it from everyone else.
+    final String y3 = BASE + "/year-three-home-learning";
+    final String letters = BASE + "/letters-sent-home";
+    when(crawler.listPages()).thenReturn(List.of(y3, letters));
+    servePdfs(y3, link(OPAQUE_PDF, "Trip letter"));
+    servePdfs(letters, link(OPAQUE_PDF, "Trip letter"));
+
+    service.ingestWebsite();
+
+    verify(documentWriter).refreshMetadata(eq(SchoolSourceType.PDF), eq(OPAQUE_PDF), any(),
+        eq(null), eq(List.of()));
+  }
+
+  @Test
+  @DisplayName("an interrupted crawl does not settle any PDF's year groups")
+  void interruptedCrawlDoesNotReattribute() {
+    // Settling on a partial crawl would narrow a four-year PDF to whichever pages it reached.
+    final String y3 = BASE + "/year-three-home-learning";
+    final String y6 = BASE + "/year-six-home-learning";
+    when(crawler.listPages()).thenReturn(List.of(y3, y6));
+    servePdfs(y3, link(OPAQUE_PDF, "Spellings"));
+    servePdfs(y6, link(OPAQUE_PDF, "Spellings"));
+    when(pdfExtractor.fetch(OPAQUE_PDF)).thenReturn(
+        new SchoolPdfExtractor.FetchedPdf("words", Optional.empty()));
+    when(crawler.politePause()).thenReturn(false);
+
+    service.ingestWebsite();
+
+    verify(documentWriter, never()).refreshMetadata(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("a crawl stopped by the page cap does not settle any PDF's year groups")
+  void pageCapDoesNotReattribute() {
+    // Caught by the reviewer on #202: the cap ends the loop without an interrupted pause, so the
+    // guard above never fired and a shared PDF was settled on whichever pages fitted.
+    final List<String> pages = new ArrayList<>();
+    for (int i = 0; i < 401; i++) {
+      pages.add(BASE + "/news-" + i);
+    }
+    when(crawler.listPages()).thenReturn(pages);
+    when(crawler.fetchPage(anyString())).thenAnswer(call ->
+        new SchoolWebsiteCrawler.CrawledPage(call.getArgument(0), call.getArgument(0), "Title",
+            "Readable text", "<html/>", List.of()));
+    when(pdfExtractor.findPdfLinksWithText(anyString(), anyString()))
+        .thenReturn(List.of(link(OPAQUE_PDF, "Spellings")));
+    when(documentWriter.existingPublishedAt(SchoolSourceType.PDF, OPAQUE_PDF))
+        .thenReturn(Optional.of(Instant.parse("2026-01-15T10:39:47Z")));
+
+    service.ingestWebsite();
+
+    verify(crawler, times(400)).fetchPage(anyString());
+    verify(documentWriter, never()).refreshMetadata(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("a crawl that reads every page settles PDF year groups")
+  void completeCrawlReattributes() {
+    // The control for the two tests above: the same PDF, a crawl that finishes.
+    when(crawler.listPages()).thenReturn(List.of(SEED));
+    servePdfs(SEED, link(OPAQUE_PDF, "Spellings"));
+    when(documentWriter.existingPublishedAt(SchoolSourceType.PDF, OPAQUE_PDF))
+        .thenReturn(Optional.of(Instant.parse("2026-01-15T10:39:47Z")));
+
+    service.ingestWebsite();
+
+    verify(documentWriter).refreshMetadata(eq(SchoolSourceType.PDF), eq(OPAQUE_PDF), any(),
+        eq(null), eq(List.of("Year 6")));
+  }
+
+  @Test
+  @DisplayName("an opaque PDF is titled with the words the page links it by")
+  void pdfTitleUsesTheLinkText() {
+    // Every year's home-learning page is titled "Home Learning", so the page title alone gave
+    // four different spelling sheets one name.
+    final String y4 = BASE + "/year-four-home-learning";
+    when(crawler.listPages()).thenReturn(List.of(y4));
+    servePdfs(y4, link(OPAQUE_PDF, "Spellings list for Spring 1"));
+    when(pdfExtractor.fetch(OPAQUE_PDF)).thenReturn(
+        new SchoolPdfExtractor.FetchedPdf("words", Optional.empty()));
+
+    service.ingestWebsite();
+
+    verify(documentWriter).write(eq(SchoolSourceType.PDF), eq(OPAQUE_PDF),
+        eq("Title - Spellings list for Spring 1 (PDF)"), any(), any(),
+        eq(List.of("Year 4")), any());
+  }
+
+  @Test
+  @DisplayName("link text that names nothing is left out of the title")
+  void genericLinkTextIsNeverTheTitle() {
+    when(crawler.listPages()).thenReturn(List.of(SEED));
+    servePdfs(SEED, link(OPAQUE_PDF, "Click here"));
+    when(pdfExtractor.fetch(OPAQUE_PDF)).thenReturn(
+        new SchoolPdfExtractor.FetchedPdf("words", Optional.empty()));
+
+    service.ingestWebsite();
+
+    verify(documentWriter).write(eq(SchoolSourceType.PDF), eq(OPAQUE_PDF), eq("Title (PDF)"),
+        any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("an undated PDF is dated by the school server, not by the crawl")
+  void newPdfIsDatedByLastModified() {
+    // The Year 6 sheet was uploaded on 15 January and reached the assistant as "published 10
+    // September 2026", the day the crawl first read it.
+    final Instant uploaded = Instant.parse("2026-01-15T10:39:47Z");
+    when(crawler.listPages()).thenReturn(List.of(SEED));
+    servePdfs(SEED, link(OPAQUE_PDF, "Spellings"));
+    when(pdfExtractor.fetch(OPAQUE_PDF)).thenReturn(
+        new SchoolPdfExtractor.FetchedPdf("caution, injection", Optional.of(uploaded)));
+
+    service.ingestWebsite();
+
+    verify(documentWriter).write(eq(SchoolSourceType.PDF), eq(OPAQUE_PDF), any(), any(),
+        eq(uploaded), any(), any());
+  }
+
+  @Test
+  @DisplayName("with no date anywhere a PDF is stamped to the second, so it is not re-dated")
+  void undatablePdfIsStampedToTheSecond() {
+    when(crawler.listPages()).thenReturn(List.of(SEED));
+    servePdfs(SEED, link(OPAQUE_PDF, "Spellings"));
+    when(pdfExtractor.fetch(OPAQUE_PDF)).thenReturn(
+        new SchoolPdfExtractor.FetchedPdf("caution, injection", Optional.empty()));
+    final org.mockito.ArgumentCaptor<Instant> date =
+        org.mockito.ArgumentCaptor.forClass(Instant.class);
+
+    service.ingestWebsite();
+
+    verify(documentWriter).write(eq(SchoolSourceType.PDF), eq(OPAQUE_PDF), any(), any(),
+        date.capture(), any(), any());
+    assertThat(date.getValue().getNano()).isZero();
+  }
+
+  @Test
+  @DisplayName("a stored PDF still carrying a crawl-time stamp is re-dated once from the server")
+  void storedCrawlStampIsRedated() {
+    final Instant uploaded = Instant.parse("2026-01-15T10:39:47Z");
+    when(crawler.listPages()).thenReturn(List.of(SEED));
+    servePdfs(SEED, link(OPAQUE_PDF, "Spellings"));
+    when(documentWriter.existingPublishedAt(SchoolSourceType.PDF, OPAQUE_PDF))
+        .thenReturn(Optional.of(Instant.parse("2026-09-10T12:38:45.121Z")));
+    when(pdfExtractor.lastModified(OPAQUE_PDF)).thenReturn(Optional.of(uploaded));
+
+    service.ingestWebsite();
+
+    verify(documentWriter).refreshMetadata(
+        SchoolSourceType.PDF, OPAQUE_PDF, null, uploaded, null);
+    verify(pdfExtractor, never()).fetch(OPAQUE_PDF);
+  }
+
+  @Test
+  @DisplayName("a change to only the metadata re-indexes the page without re-reading its dates")
+  void metadataOnlyChangeReindexesWithoutExtracting() {
+    when(crawler.listPages()).thenReturn(List.of(SEED));
+    serve(SEED, SEED);
+    when(documentWriter.write(any(), anyString(), any(), any(), any(), any(), any()))
+        .thenAnswer(call -> new SchoolDocumentWriter.WriteResult(
+            document(call.getArgument(1)), false, true));
+
+    service.ingestWebsite();
+
+    verify(vectorStore).deleteForDocument("id-" + SEED);
+    verify(eventExtractor, never()).extract(any());
   }
 
   @Test
@@ -200,12 +428,14 @@ class SchoolCrawlDiscoveryTest {
     when(documentWriter.write(any(), anyString(), any(), any(), any(), any(), any()))
         .thenAnswer(call -> new SchoolDocumentWriter.WriteResult(
             document(call.getArgument(1)), false));
-    when(pdfExtractor.findPdfLinks(anyString(), anyString())).thenReturn(List.of(SPELLINGS_PDF));
-    when(pdfExtractor.extractText(SPELLINGS_PDF)).thenReturn("accommodate, conscience, rhythm");
+    when(pdfExtractor.findPdfLinksWithText(anyString(), anyString()))
+        .thenReturn(List.of(new SchoolPdfExtractor.PdfLink(SPELLINGS_PDF, "Spellings")));
+    when(pdfExtractor.fetch(SPELLINGS_PDF)).thenReturn(new SchoolPdfExtractor.FetchedPdf(
+        "accommodate, conscience, rhythm", Optional.empty()));
 
     service.ingestWebsite();
 
-    verify(pdfExtractor).extractText(SPELLINGS_PDF);
+    verify(pdfExtractor).fetch(SPELLINGS_PDF);
     verify(documentWriter).write(
         eq(SchoolSourceType.PDF), eq(SPELLINGS_PDF), any(), any(), any(), any(), any());
   }
@@ -217,13 +447,15 @@ class SchoolCrawlDiscoveryTest {
     // each with its own ten-second politeness pause.
     when(crawler.listPages()).thenReturn(List.of(SEED));
     serve(SEED, SEED);
-    when(pdfExtractor.findPdfLinks(anyString(), anyString())).thenReturn(List.of(SPELLINGS_PDF));
+    when(pdfExtractor.findPdfLinksWithText(anyString(), anyString()))
+        .thenReturn(List.of(new SchoolPdfExtractor.PdfLink(SPELLINGS_PDF, "Spellings")));
     when(documentWriter.existingPublishedAt(SchoolSourceType.PDF, SPELLINGS_PDF))
-        .thenReturn(Optional.of(Instant.now()));
+        .thenReturn(Optional.of(Instant.parse("2026-01-15T10:39:47Z")));
 
     service.ingestWebsite();
 
-    verify(pdfExtractor, never()).extractText(SPELLINGS_PDF);
+    verify(pdfExtractor, never()).fetch(SPELLINGS_PDF);
+    verify(pdfExtractor, never()).lastModified(SPELLINGS_PDF);
   }
 
   @Test

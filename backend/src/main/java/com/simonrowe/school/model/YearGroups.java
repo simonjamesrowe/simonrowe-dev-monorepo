@@ -4,6 +4,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * The school's year groups, and the mapping to the calendar feed's numeric sub-calendar ids.
@@ -23,7 +25,68 @@ public final class YearGroups {
   /** The whole-school calendar. Events here apply to every year group. */
   public static final int ALL_SCHOOL_CALENDAR_ID = 1;
 
+  /**
+   * The year a page is about, read from the first segment of its path.
+   *
+   * <p>The school's CMS names every year-group page and its children after the year, in both
+   * spellings it has accumulated: {@code /year-three}, {@code /year-three-home-learning},
+   * {@code /year-4}, {@code /year3-stonehenge}. Anchored at the start of the segment, so
+   * {@code /school-news/year-5-football} (first segment {@code school-news}) and
+   * {@code /year-group-pages} (the hub) are not attributed to anyone. The segment is bounded by
+   * the URL and every quantifier is a fixed-width alternation, so there is nothing to backtrack.
+   */
+  private static final Pattern YEAR_SEGMENT = Pattern.compile(
+      "^(?:year-?(one|two|three|four|five|six)(?![a-z])|year-?([1-6])(?![0-9])"
+          + "|(reception)(?![a-z]))");
+
+  private static final Map<String, String> YEAR_WORDS = Map.of(
+      "one", "Year 1", "two", "Year 2", "three", "Year 3",
+      "four", "Year 4", "five", "Year 5", "six", "Year 6");
+
   private YearGroups() {
+  }
+
+  /**
+   * The year group a school web page belongs to, from its address.
+   *
+   * <p>Deterministic on purpose. Which year a page belongs to is published by the school in the
+   * page's address, so there is no reason to ask a model and every reason not to: a spelling list
+   * is exactly the document where a guess reads as fact. It was not recorded at all before, and
+   * every year's "Home Learning" PDF reached the assistant under the same title with nothing to
+   * say whose it was — so it attributed a Year 6 list to Year 3 because Year 3 was what the
+   * parent asked about.
+   *
+   * @param url an absolute page URL, possibly null
+   * @return the one year group the page names, or empty for a whole-school page
+   */
+  public static List<String> fromPageUrl(final String url) {
+    if (url == null || url.isBlank()) {
+      return List.of();
+    }
+    final String path;
+    try {
+      path = java.net.URI.create(url.trim()).getPath();
+    } catch (IllegalArgumentException e) {
+      return List.of();
+    }
+    if (path == null) {
+      return List.of();
+    }
+    final String trimmed = path.startsWith("/") ? path.substring(1) : path;
+    final int slash = trimmed.indexOf('/');
+    final String segment = (slash < 0 ? trimmed : trimmed.substring(0, slash))
+        .toLowerCase(java.util.Locale.ROOT);
+    final Matcher matcher = YEAR_SEGMENT.matcher(segment);
+    if (!matcher.find()) {
+      return List.of();
+    }
+    if (matcher.group(1) != null) {
+      return List.of(YEAR_WORDS.get(matcher.group(1)));
+    }
+    if (matcher.group(2) != null) {
+      return List.of("Year " + matcher.group(2));
+    }
+    return List.of("Reception");
   }
 
   private static Map<Integer, String> buildCalendarIdMap() {

@@ -78,8 +78,81 @@ class SchoolDocumentWriterTest {
     final SchoolDocumentWriter.WriteResult second = write("Same words.", PUBLISHED);
 
     assertThat(second.document().publishedAt()).isEqualTo(PUBLISHED);
-    // Still unchanged: the chunks are identical, so re-embedding would be pure cost.
+    // Still unchanged, so no events are re-extracted - but the chunks carry the date as
+    // metadata and the assistant reads it from there, so they are rewritten. Leaving them was
+    // how a corrected date never reached an answer.
     assertThat(second.changed()).isFalse();
+    assertThat(second.reindex()).isTrue();
+  }
+
+  @Test
+  @DisplayName("new year groups on unchanged text are written, and the chunks re-indexed")
+  void yearGroupsAreCorrectedOnUnchangedText() {
+    // The note that started this: saved, then saved again with Year 3 ticked. The text was the
+    // same, so the second save returned the first one's document untouched and Year 3 was lost.
+    final SchoolDocumentWriter.WriteResult first = write("unhappy, unusual", PUBLISHED);
+    when(repository.findById(any())).thenReturn(Optional.of(first.document()));
+
+    final SchoolDocumentWriter.WriteResult second = writer.write(SchoolSourceType.WEBSITE_PAGE,
+        "https://example.test/page", "Title", "unhappy, unusual", PUBLISHED, List.of("Year 3"),
+        Visibility.PUBLIC);
+
+    assertThat(second.document().yearGroups()).containsExactly("Year 3");
+    assertThat(second.changed()).isFalse();
+    assertThat(second.reindex()).isTrue();
+  }
+
+  @Test
+  @DisplayName("identical text and metadata need no re-index")
+  void unchangedEverythingNeedsNoReindex() {
+    final SchoolDocumentWriter.WriteResult first = write("Same words.", PUBLISHED);
+    when(repository.findById(any())).thenReturn(Optional.of(first.document()));
+
+    assertThat(write("Same words.", PUBLISHED).reindex()).isFalse();
+  }
+
+  @Test
+  @DisplayName("refreshMetadata corrects title and year groups and keeps every human decision")
+  void refreshMetadataKeepsDecisions() {
+    final SchoolDocument approved = write("Spring 1 spellings", PUBLISHED).document()
+        .withApproval("simon", Instant.EPOCH, true);
+    when(repository.findById(any())).thenReturn(Optional.of(approved));
+
+    final SchoolDocument refreshed = writer.refreshMetadata(SchoolSourceType.WEBSITE_PAGE,
+        "https://example.test/page", "Home Learning - Spellings list (PDF)", null,
+        List.of("Year 4")).orElseThrow();
+
+    assertThat(refreshed.title()).isEqualTo("Home Learning - Spellings list (PDF)");
+    assertThat(refreshed.yearGroups()).containsExactly("Year 4");
+    assertThat(refreshed.publishedAt()).isEqualTo(PUBLISHED);
+    assertThat(refreshed.body()).isEqualTo("Spring 1 spellings");
+    assertThat(refreshed.contentHash()).isEqualTo(approved.contentHash());
+    assertThat(refreshed.visibility()).isEqualTo(Visibility.PUBLIC);
+    assertThat(refreshed.approvedBy()).isEqualTo("simon");
+  }
+
+  @Test
+  @DisplayName("refreshMetadata with nothing new writes nothing")
+  void refreshMetadataWithNothingNewWritesNothing() {
+    final SchoolDocument stored = write("Words.", PUBLISHED).document();
+    org.mockito.Mockito.reset(repository);
+    when(repository.findById(any())).thenReturn(Optional.of(stored));
+
+    assertThat(writer.refreshMetadata(SchoolSourceType.WEBSITE_PAGE, "https://example.test/page",
+        null, null, null)).isEmpty();
+    assertThat(writer.refreshMetadata(SchoolSourceType.WEBSITE_PAGE, "https://example.test/page",
+        "Title", PUBLISHED, List.of())).isEmpty();
+    verify(repository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("refreshMetadata on an unknown document does nothing")
+  void refreshMetadataOnUnknownDocument() {
+    when(repository.findById(any())).thenReturn(Optional.empty());
+
+    assertThat(writer.refreshMetadata(SchoolSourceType.PDF, "https://nope.test/a.pdf", "T",
+        PUBLISHED, List.of("Year 1"))).isEmpty();
+    verify(repository, never()).save(any());
   }
 
   @Test
