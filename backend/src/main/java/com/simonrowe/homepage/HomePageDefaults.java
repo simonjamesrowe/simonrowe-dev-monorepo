@@ -15,9 +15,8 @@ final class HomePageDefaults {
   static final HomePageContent CONTENT = new HomePageContent(
       "Leading engineering teams.",
       "Building AI-native systems.",
-      "I lead a 30-strong engineering function across three product pillars, delivering real "
-          + "business value incrementally with AI-native tooling and teams trusted to run what "
-          + "they ship.",
+      "Lately I've been building a software factory: autonomous agents that review pull "
+          + "requests, patch CVEs, deploy to production and file their own bugs.",
       new Cta("See my experience", "/about#roles"),
       new Cta("Get in touch", "/about#contact"),
       true,

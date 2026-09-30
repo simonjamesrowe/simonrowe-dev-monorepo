@@ -31,8 +31,8 @@ export interface HomePageContent {
 export const DEFAULT_HOME_PAGE: HomePageContent = {
   headlineLine1: 'Leading engineering teams.',
   headlineLine2: 'Building AI-native systems.',
-  lede: 'I lead a 30-strong engineering function across three product pillars, delivering real '
-    + 'business value incrementally with AI-native tooling and teams trusted to run what they ship.',
+  lede: "Lately I've been building a software factory: autonomous agents that review pull requests, "
+    + 'patch CVEs, deploy to production and file their own bugs.',
   primaryCta: { label: 'See my experience', href: '/about#roles' },
   secondaryCta: { label: 'Get in touch', href: '/about#contact' },
   showTourLink: true,

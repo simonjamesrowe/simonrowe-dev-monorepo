@@ -44,6 +44,8 @@ class HomePageControllerTest extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.headlineLine1").value("Leading engineering teams."))
         .andExpect(jsonPath("$.headlineLine2").value("Building AI-native systems."))
+        .andExpect(jsonPath("$.lede").value(org.hamcrest.Matchers.startsWith(
+            "Lately I've been building a software factory")))
         .andExpect(jsonPath("$.primaryCta.href").value("/about#roles"))
         .andExpect(jsonPath("$.showTourLink").value(true))
         .andExpect(jsonPath("$.askPill.label").value("Ask Simon anything"))

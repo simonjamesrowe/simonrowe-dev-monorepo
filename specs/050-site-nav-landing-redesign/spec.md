@@ -290,8 +290,8 @@ to Live with a link and an image and confirm it becomes a linked card with a det
   added AI-accent colour used only for AI affordances.
 - Seeded default copy, which Simon will refine in the CMS (LinkedIn cannot be read from here):
   - Headline: "Leading engineering teams." / "Building AI-native systems."
-  - Sentence: "I lead a 30-strong engineering function across three product pillars, delivering real
-    business value incrementally with AI-native tooling and teams trusted to run what they ship."
+  - Sentence: "Lately I've been building a software factory: autonomous agents that review pull requests,
+    patch CVEs, deploy to production and file their own bugs." (Chosen by Simon from four options.)
   - Primary CTA: "See my experience" → `/about#roles`. Secondary: "Get in touch" → `/about#contact`.
   - Tour link shown, labelled "Take the tour".
   - Pill: lead "Got a question?", label "Ask Simon anything", button "Start chat".
