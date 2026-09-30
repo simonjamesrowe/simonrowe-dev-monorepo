@@ -44,7 +44,7 @@ public class V048CreatePortfolioProjects {
   @Execution
   public void execution(final MongoTemplate mongoTemplate) {
     createIndexes(mongoTemplate);
-    seed(mongoTemplate);
+    insertMissingLaunchProjects(mongoTemplate);
   }
 
   @RollbackExecution
@@ -66,7 +66,7 @@ public class V048CreatePortfolioProjects {
         .on("published", ASC).on("displayOrder", ASC));
   }
 
-  static void seed(final MongoTemplate mongoTemplate) {
+  static void insertMissingLaunchProjects(final MongoTemplate mongoTemplate) {
     var collection = mongoTemplate.getCollection(COLLECTION);
     Date now = Date.from(Instant.now());
     for (int order = 0; order < SEED.size(); order++) {
