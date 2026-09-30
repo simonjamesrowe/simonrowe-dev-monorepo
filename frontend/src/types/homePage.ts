@@ -31,8 +31,9 @@ export interface HomePageContent {
 export const DEFAULT_HOME_PAGE: HomePageContent = {
   headlineLine1: 'Leading engineering teams.',
   headlineLine2: 'Building AI-native systems.',
-  lede: "Lately I've been building a software factory: autonomous agents that review pull requests, "
-    + 'patch CVEs, deploy to production and file their own bugs.',
+  lede: "Lately I've been building a software factory: autonomous agents across the whole software "
+    + 'development lifecycle, from code review and CVE fixes to deploys and monitoring, with '
+    + 'improvement loops that learn from every pull request.',
   primaryCta: { label: 'See my experience', href: '/about#roles' },
   secondaryCta: { label: 'Get in touch', href: '/about#contact' },
   showTourLink: true,
