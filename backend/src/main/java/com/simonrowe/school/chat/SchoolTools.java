@@ -26,7 +26,16 @@ import org.springframework.ai.tool.annotation.ToolParam;
  */
 public class SchoolTools {
 
-  private static final int MAX_PROSE_CHARS = 6000;
+  /**
+   * The character budget for retrieved fragments.
+   *
+   * <p>Was 6,000, applied as a {@code substring} over the joined results. Chunks are about 2,000
+   * characters each, so every one of the three searches in the Year 3 spellings conversation hit
+   * the cap exactly: four of eight results arrived, the fourth cut mid-sentence, and the pasted
+   * note that answered the question was among the four that never did. Doubled to match
+   * {@link #MAX_COMMUNICATION_CHARS}, and spent on whole results only — see {@link #renderHits}.
+   */
+  private static final int MAX_PROSE_CHARS = 12000;
 
   /**
    * The character budget for whole documents in {@link #getRecentCommunications}.
@@ -202,12 +211,8 @@ public class SchoolTools {
     final String query = events.isEmpty()
         ? "school events and activities between %s and %s".formatted(start, end)
         : events.stream().map(SchoolEvent::title).collect(Collectors.joining(", "));
-    final List<Document> hits = retrieval.search(query, audience);
-    if (hits.isEmpty()) {
-      return "";
-    }
-    final String body = hits.stream().map(this::renderChunk).collect(Collectors.joining("\n\n"));
-    return body.length() > MAX_PROSE_CHARS ? body.substring(0, MAX_PROSE_CHARS) : body;
+    final List<Document> hits = retrieval.search(query, audience, yearGroups);
+    return hits.isEmpty() ? "" : renderHits(hits);
   }
 
   /**
@@ -322,11 +327,24 @@ public class SchoolTools {
    */
   private String renderDocument(final SchoolDocument document) {
     return """
-        <<<SOURCE title="%s" published="%s" type="%s" url="%s">>>
+        <<<SOURCE title="%s" published="%s" type="%s" years="%s" url="%s">>>
         %s
         <<<END SOURCE>>>"""
         .formatted(document.title(), document.publishedAt(), document.sourceType(),
-            urlOf(document), document.body());
+            yearsLabel(document.yearGroups()), urlOf(document), document.body());
+  }
+
+  /**
+   * What a source says about which year groups it is for.
+   *
+   * <p>"not stated" rather than "whole school", deliberately. An untagged source is usually
+   * whole-school, but it may equally be a year's page the crawl could not attribute, and the
+   * assistant must not be told a Year 6 list is for everyone any more than that it is Year 3's.
+   */
+  private static String yearsLabel(final List<String> yearGroups) {
+    return yearGroups == null || yearGroups.isEmpty()
+        ? "not stated"
+        : String.join(", ", yearGroups);
   }
 
   /**
@@ -367,15 +385,45 @@ public class SchoolTools {
   public String searchSchoolInformation(
       @ToolParam(description = "What to look for") final String query) {
     return tracked(SEARCH_LABEL, () -> {
-      final List<Document> hits = retrieval.search(query, audience);
+      // The visitor's year groups, which the search used to ignore entirely: they were applied
+      // to dated events and nothing else, so "Year 3 spellings" with Year 3 selected ranked
+      // every year's spelling sheet equally.
+      final List<Document> hits = retrieval.search(query, audience, yearGroups);
       if (hits.isEmpty()) {
         return "Nothing in the school communications covers that.";
       }
-      final String body = hits.stream()
-          .map(this::renderChunk)
-          .collect(Collectors.joining("\n\n"));
-      return body.length() > MAX_PROSE_CHARS ? body.substring(0, MAX_PROSE_CHARS) : body;
+      return renderHits(hits);
     });
+  }
+
+  /**
+   * Renders retrieved fragments, whole, until the budget runs out.
+   *
+   * <p>Never cut mid-result. A {@code substring} over the joined text used to end the last result
+   * mid-sentence and drop the rest without a word, so the assistant could neither see that it had
+   * been given four of eight results nor tell that the fourth was a fragment. The first result is
+   * included whatever its size, and anything left out is counted in a closing line.
+   */
+  private String renderHits(final List<Document> hits) {
+    final StringBuilder out = new StringBuilder();
+    int included = 0;
+    for (Document hit : hits) {
+      final String rendered = renderChunk(hit);
+      if (included > 0 && out.length() + rendered.length() > MAX_PROSE_CHARS) {
+        break;
+      }
+      if (included > 0) {
+        out.append("\n\n");
+      }
+      out.append(rendered);
+      included++;
+    }
+    if (included < hits.size()) {
+      out.append("\n\n%d further result(s) were found but not included. ".formatted(
+          hits.size() - included))
+          .append("Search again with more specific words to read them.");
+    }
+    return out.toString();
   }
 
   /**
@@ -415,10 +463,11 @@ public class SchoolTools {
     // `title="%s" … %s` with no document text in it whatsoever. Nothing errors; the assistant
     // just quietly stops being able to answer from prose.
     return """
-        <<<SOURCE title="%s" published="%s" type="%s" url="%s">>>
+        <<<SOURCE title="%s" published="%s" type="%s" years="%s" url="%s">>>
         %s
         <<<END SOURCE>>>"""
-        .formatted(title, published, source, url, document.getText());
+        .formatted(title, published, source,
+            yearsLabel(SchoolRetrievalService.yearGroupsOf(document)), url, document.getText());
   }
 
   /**

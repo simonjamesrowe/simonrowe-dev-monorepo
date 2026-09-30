@@ -446,6 +446,77 @@ The window is clamped to 62 days rather than refused when it is too wide, and cl
 **recent** end: the caller is a model turning "this term" into two dates, and the recent half is
 the half being asked about.
 
+## Year groups reach the search, and the assistant
+
+On 2026-09-30 a parent asked for the Year 3 spellings, having pasted that week's list in as a note
+with **Year 3** ticked a minute earlier. Term Time answered with the **Year 6** list, called it
+"the Year 3 Home Learning PDF", and when told it was wrong apologised and repeated it. The
+Langfuse traces showed three independent faults, each enough on its own:
+
+- **The ticked year went nowhere.** It was stored on the `SchoolDocument` and left out of the
+  chunk metadata. Retrieval reads Elasticsearch, not Mongo, so the search could not favour it and
+  the model could not see it. `searchSchoolInformation` also ignored the visitor's own year
+  selection. That selection only ever narrowed dated events.
+- **The school's PDFs had no year at all.** Every year's home-learning PDF was titled "Kilmorie
+  Primary School - Home Learning (PDF)", after the page linking it, and stored with no year
+  groups. The model filled the gap with the year the parent had asked about. They were also dated
+  by the crawl ("published 10 September 2026") rather than by upload (the Year 6 sheet's
+  `Last-Modified` is 15 January 2026), so a January list looked current.
+- **The search output was cut short.** Results were joined and `substring`ed at 6,000 characters.
+  At ~2,000 characters a chunk, every search in the conversation hit the cap exactly: four of
+  eight results arrived, the fourth cut mid-sentence. Measured with `text-embedding-3-small`, the
+  note scored 0.42 against "Year 3 spellings for this week" while the other years' sheets scored
+  0.56, so it was one of the four that never arrived.
+
+What changed, and what is load-bearing:
+
+- **Chunks carry `yearGroups`** (a list, empty for whole-school), and every source the model sees
+  says `years="Year 3"` or `years="not stated"`. It is "not stated" rather than "whole school" on
+  purpose: an untagged source may be a year page the crawl could not attribute.
+- **Pages get their year from their own address**, via `YearGroups.fromPageUrl`
+  (`/year-three`, `/year-four-home-learning`, `/year3-stonehenge`). It is a fixed rule, not a
+  model, because the school publishes the year in the URL. It only looks at the first path
+  segment, so `/school-news/year-5-football` and the `/year-group-pages` hub name nobody.
+- **A PDF gets the union of the years of every page linking it, and none as soon as any
+  non-year page links it too.** Decided in `reattributePdfs` at the end of a crawl, because a PDF
+  is one document however many pages link it. **An interrupted crawl skips this**, or a PDF on
+  four year pages would be narrowed to whichever ones the crawl reached. The "none" rule is the
+  conservative direction: the search drops sources tagged only for other years, so wrongly
+  narrowing a whole-school letter would hide it.
+- **Opaque PDFs are titled with their link text** ("Home Learning - Spellings list for Spring 1
+  (PDF)"). A year page's wording wins over another page's, then the first in crawl order, so the
+  title does not flip between crawls and trigger a re-index every night.
+- **With a year selected, `SchoolRetrievalService` runs two searches.** One is filtered to the
+  selected years and guarantees they are found. The other is the ordinary search with anything
+  tagged *only* for other years removed. The selected years' results come first. Untagged
+  whole-school content stays in, which is why the year is still not a hard filter on everything.
+  The scoped results are re-checked in Java because the filter is a Lucene query string.
+  `SchoolVectorStoreYearFilterIntegrationTest` runs it against a real Elasticsearch 9.4.5. Its
+  whole-school chunk is deliberately the closest match, because with similarity doing the work
+  every assertion passed with the filter key misspelt.
+- **Results are included whole, up to 12,000 characters**, and anything left out is counted,
+  as `getRecentCommunications` already did.
+- **The writer now corrects year groups and titles on unchanged text, and says so.**
+  `WriteResult.reindex` is true when only metadata changed, so the chunks are rewritten without
+  re-running event extraction. Before this, a note re-saved with Year 3 ticked kept its first
+  save's year groups, and a corrected date never reached an answer, because the chunk kept the
+  old one.
+- **PDF dates:** a stated date, then the server's `Last-Modified`, then now (to the second).
+  `Last-Modified` is read with a one-byte ranged GET, because **this server never answers
+  `HEAD`** (the connection just hangs). PDFs stored with a crawl-time stamp are re-dated once.
+  They are recognised by sub-second precision: every real date is whole-second, while the old
+  `Instant.now()` fallback was stored to the millisecond. One stamp in a thousand lands on a whole
+  second and stays wrong. That is the accepted cost of not adding a "where did this date come
+  from" field to every document.
+- **Prompt:** attribute a source to a year group only when its `years=` names it. Say "I only
+  have the Year 6 list" rather than present it as theirs. Prefer the most recent source for "this
+  week". When told an answer is wrong, re-check rather than apologise and repeat it.
+
+The first crawl after deploy is longer and does more writes than usual. It re-dates the ~130
+stored PDFs (one ranged GET plus the ten-second pause each, about 20 minutes, once). It also
+re-indexes every year page and every retitled PDF. Embedding is the only cost, and it is small.
+Existing notes pick up their year groups when re-saved.
+
 ## Answer length, and the guardrail's blind spot
 
 Two rules that exist because the assistant was answering too thinly, both found in one real

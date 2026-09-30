@@ -9,16 +9,19 @@ import com.simonrowe.school.model.SchoolSourceType;
 import com.simonrowe.school.model.SchoolSyncState;
 import com.simonrowe.school.model.SchoolSyncStateRepository;
 import com.simonrowe.school.model.Visibility;
+import com.simonrowe.school.model.YearGroups;
 import com.simonrowe.school.retrieval.SchoolVectorStore;
 import com.simonrowe.school.usage.SchoolUsage;
 import com.simonrowe.school.usage.SchoolUsageRecorder;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +78,10 @@ public class SchoolIngestService {
           + "|\\d{4}-\\d{2}-\\d{2}"
           + "|monday|tuesday|wednesday|thursday|friday|saturday|sunday"
           + "|half\\s*term|inset|term\\s+(starts|ends|begins))\\b");
+
+  /** Link text that names nothing, so is no use in a title. */
+  private static final Pattern GENERIC_LINK_TEXT = Pattern.compile(
+      "(?i)(?:click here|here|download|view|open|pdf|link|read more)[.!]?");
 
   private final SchoolProperties properties;
   private final CalendarFeedClient calendarClient;
@@ -228,6 +235,11 @@ public class SchoolIngestService {
     int discovered = 0;
     int changed = 0;
     int visited = 0;
+    boolean interrupted = false;
+    // Every PDF linked from any page this crawl, with every page that linked it. A PDF has one
+    // document however many pages link it, so which year it belongs to can only be decided once
+    // all of them have been seen — see reattributePdfs.
+    final Map<String, PdfSighting> pdfSightings = new LinkedHashMap<>();
 
     while (!queue.isEmpty() && visited < MAX_CRAWL_PAGES) {
       // Between requests, at the TOP of the body rather than the bottom. Every path below can
@@ -241,6 +253,7 @@ public class SchoolIngestService {
         // get" is the question being asked, and changed undercounts it by every page that
         // was read and found unchanged — which on a settled site is nearly all of them.
         LOG.info("Website crawl interrupted after {} pages ({} changed)", visited, changed);
+        interrupted = true;
         break;
       }
       final String url = queue.poll();
@@ -276,12 +289,19 @@ public class SchoolIngestService {
       // The gate still runs where it earns its place: on email (private by default) and on
       // every generated answer served anonymously, which is the point at which a name would
       // actually reach a stranger.
+      //
+      // The year group comes from the page's own address (/year-three, /year-four-home-learning)
+      // and is written on every crawl, not only when the text changes, so pages stored before
+      // year groups were recorded pick theirs up on the next pass.
       final SchoolDocumentWriter.WriteResult result = documentWriter.write(
           SchoolSourceType.WEBSITE_PAGE, storedUrl, page.title(), page.text(),
-          publishedAtFor(storedUrl, updateTimes), List.of(), Visibility.PUBLIC);
+          publishedAtFor(storedUrl, updateTimes), YearGroups.fromPageUrl(storedUrl),
+          Visibility.PUBLIC);
 
-      if (result.changed()) {
+      if (result.reindex()) {
         embed(result.document());
+      }
+      if (result.changed()) {
         extractEventsFrom(result.document());
         changed++;
       }
@@ -295,7 +315,19 @@ public class SchoolIngestService {
       //
       // Cheap despite running every crawl: the page HTML is already in hand, and
       // ingestPdfsLinkedFrom fetches only URLs it has not already stored.
-      ingestPdfsLinkedFrom(page);
+      if (!ingestPdfsLinkedFrom(page, storedUrl, pdfSightings)) {
+        LOG.info("Website crawl interrupted while reading PDFs linked from {}", storedUrl);
+        interrupted = true;
+        break;
+      }
+    }
+    if (interrupted) {
+      // Deliberately skipped, not run on what was seen. A PDF's year groups are the union over
+      // every page linking it, and a crawl stopped halfway would narrow a PDF shared by four
+      // year pages to whichever ones it reached — excluding it from the other years' answers.
+      LOG.info("Skipping PDF year-group attribution for an interrupted crawl");
+    } else {
+      reattributePdfs(pdfSightings);
     }
     recordSuccess(WEBSITE_SOURCE);
     LOG.info("Website crawl complete: {} of {} pages changed ({} found by following links)",
@@ -423,9 +455,20 @@ public class SchoolIngestService {
    * answer sits one link away.
    *
    * @param page the page whose links to follow
+   * @param pageUrl the page's canonical address, which is what its year group is read from
+   * @param sightings every PDF seen this crawl, added to here
+   * @return false when the crawl was interrupted and should stop
    */
-  private void ingestPdfsLinkedFrom(final SchoolWebsiteCrawler.CrawledPage page) {
-    for (String pdfUrl : pdfExtractor.findPdfLinks(page.html(), page.url())) {
+  private boolean ingestPdfsLinkedFrom(
+      final SchoolWebsiteCrawler.CrawledPage page, final String pageUrl,
+      final Map<String, PdfSighting> sightings) {
+    final List<String> pageYears = YearGroups.fromPageUrl(pageUrl);
+    for (SchoolPdfExtractor.PdfLink link : pdfExtractor.findPdfLinksWithText(
+        page.html(), page.url())) {
+      final String pdfUrl = link.url();
+      final String title = pdfTitle(pdfUrl, page.title(), link.text());
+      sightings.computeIfAbsent(pdfUrl, url -> new PdfSighting()).seenOn(pageYears, title);
+
       // Already stored, so nothing to re-read. This is what makes running on every crawl
       // affordable rather than 133 extra fetches a night, each with its own politeness pause.
       //
@@ -434,13 +477,19 @@ public class SchoolIngestService {
       // replacement always lands on a new URL — but that is a property of their file naming,
       // not of anything here, and it is the assumption to check first if a stale document ever
       // shows up in an answer.
-      if (documentWriter.existingPublishedAt(SchoolSourceType.PDF, pdfUrl).isPresent()) {
+      final Optional<Instant> stored =
+          documentWriter.existingPublishedAt(SchoolSourceType.PDF, pdfUrl);
+      if (stored.isPresent()) {
+        if (isCrawlStamp(stored.get()) && !redate(pdfUrl, stored.get())) {
+          return false;
+        }
         continue;
       }
-      final String text = pdfExtractor.extractText(pdfUrl);
-      if (text == null || text.isBlank()) {
+      final SchoolPdfExtractor.FetchedPdf fetched = pdfExtractor.fetch(pdfUrl);
+      if (fetched == null || fetched.text() == null || fetched.text().isBlank()) {
         continue;
       }
+      final String text = fetched.text();
       final LocalDate today = LocalDate.now();
       final Optional<LocalDate> stated = dateReader.fromText(text, today);
 
@@ -451,42 +500,116 @@ public class SchoolIngestService {
       if (stated.isPresent() && isBeforeCutoff(stated.get())) {
         LOG.debug("Skipping {} — it dates itself {}", pdfUrl, stated.get());
         if (!crawler.politePause()) {
-          return;
+          return false;
         }
         continue;
       }
 
+      // Provisionally the linking page's year group. reattributePdfs settles it at the end of
+      // the crawl, once every page linking this file has been seen.
       final SchoolDocumentWriter.WriteResult pdf = documentWriter.write(
-          SchoolSourceType.PDF, pdfUrl, pdfTitle(pdfUrl, page.title()), text,
-          publishedAtForPdf(pdfUrl, stated), List.of(), Visibility.PUBLIC);
-      if (pdf.changed()) {
+          SchoolSourceType.PDF, pdfUrl, title, text,
+          publishedAtForPdf(pdfUrl, stated, fetched.lastModified()), pageYears,
+          Visibility.PUBLIC);
+      if (pdf.reindex()) {
         embed(pdf.document());
+      }
+      if (pdf.changed()) {
         extractEventsFrom(pdf.document());
       }
       if (!crawler.politePause()) {
-        return;
+        return false;
       }
     }
+    return true;
+  }
+
+  /**
+   * Settles the year groups and title of every PDF seen this crawl.
+   *
+   * <p>A PDF belongs to the year groups of the pages that link it — the "Fun ways to learn
+   * spellings" sheet is on four year pages and belongs to all four — and to <b>nobody in
+   * particular</b> as soon as any page that is not a year page links it too. That last rule is the
+   * conservative one: the assistant leaves out a source tagged only for other years, so wrongly
+   * narrowing a whole-school letter would hide it, while wrongly widening one costs only a
+   * missing label.
+   *
+   * <p>Also how PDFs stored before year groups were recorded get theirs: they are never re-read,
+   * so this is the only write that reaches them.
+   */
+  private void reattributePdfs(final Map<String, PdfSighting> sightings) {
+    int updated = 0;
+    for (Map.Entry<String, PdfSighting> entry : sightings.entrySet()) {
+      final PdfSighting sighting = entry.getValue();
+      final Optional<SchoolDocument> refreshed = documentWriter.refreshMetadata(
+          SchoolSourceType.PDF, entry.getKey(), sighting.title(), null, sighting.yearGroups());
+      if (refreshed.isPresent()) {
+        embed(refreshed.get());
+        updated++;
+      }
+    }
+    if (updated > 0) {
+      LOG.info("Updated the title or year groups of {} of {} linked PDF(s)",
+          updated, sightings.size());
+    }
+  }
+
+  /**
+   * Replaces a crawl-time date on a stored PDF with the school server's own date for the file.
+   *
+   * <p>Undated PDFs used to be stamped with the time of the crawl that first read them, so a
+   * spelling sheet uploaded in January reached the assistant as "published 10 September 2026" and
+   * was offered as this week's list. The school's server sends a {@code Last-Modified} for every
+   * file, which is the upload date; this asks for it once per stored PDF.
+   *
+   * @param pdfUrl the PDF's address
+   * @param stored the date currently recorded, known to be a crawl stamp
+   * @return false when the crawl was interrupted and should stop
+   */
+  private boolean redate(final String pdfUrl, final Instant stored) {
+    // Truncated when the server gives no date: a whole-second value is not a crawl stamp, so the
+    // file is asked about once rather than on every crawl for ever.
+    final Instant date = pdfExtractor.lastModified(pdfUrl)
+        .orElse(stored.truncatedTo(ChronoUnit.SECONDS));
+    documentWriter.refreshMetadata(SchoolSourceType.PDF, pdfUrl, null, date, null)
+        .ifPresent(this::embed);
+    return crawler.politePause();
+  }
+
+  /**
+   * Whether a stored PDF date is the crawl-time stamp rather than a real date.
+   *
+   * <p>Told apart by precision, because nothing else records it. Every real date this class
+   * writes is whole-second or coarser — a date the PDF states is midnight, and {@code
+   * Last-Modified} is an HTTP date — while the old fallback was {@code Instant.now()}, which Mongo
+   * keeps to the millisecond. One crawl stamp in a thousand lands on a whole second and is never
+   * corrected; that is the accepted cost of not adding a field to every document to say where its
+   * date came from.
+   */
+  private static boolean isCrawlStamp(final Instant publishedAt) {
+    return publishedAt.getNano() != 0;
   }
 
   /**
    * The best publication date available for a PDF.
    *
-   * <p>Order: the date the document states for itself, then whatever is already stored, then now.
-   * This used to be {@code Instant.now()} with no cascade at all, which stamped 133 of 147 site
-   * PDFs with the time of the crawl — including a November 2022 letter about a Year 1 trip, shown
-   * in the console as published today. The stored-date step is what stops a re-crawl re-dating an
-   * undated PDF on every pass.
+   * <p>Order: the date the document states for itself, then the date the school's server gives
+   * for the file, then whatever is already stored, then now. Without the server's date an undated
+   * file was stamped with the crawl time, which is how a January spelling sheet came to be
+   * offered as the current one.
    *
    * @param url the PDF's address
    * @param stated the date the document gives for itself, if any
-   * @return the date to record
+   * @param lastModified the server's date for the file, if any
+   * @return the date to record, never finer than a second — see {@link #isCrawlStamp}
    */
-  private Instant publishedAtForPdf(final String url, final Optional<LocalDate> stated) {
+  private Instant publishedAtForPdf(
+      final String url, final Optional<LocalDate> stated, final Optional<Instant> lastModified) {
     return stated
         .map(date -> date.atStartOfDay(ZoneId.systemDefault()).toInstant())
+        .or(() -> lastModified)
         .or(() -> documentWriter.existingPublishedAt(SchoolSourceType.PDF, url))
-        .orElseGet(Instant::now);
+        .orElseGet(() -> Instant.now().truncatedTo(ChronoUnit.SECONDS));
   }
 
   /**
@@ -505,10 +628,59 @@ public class SchoolIngestService {
    * ({@code download.asp?file=819}, or an MD5 filename), so the linking page's title is a far
    * better citation than the URL — an answer that cites "file 819" helps nobody.
    */
-  private String pdfTitle(final String pdfUrl, final String pageTitle) {
+  private String pdfTitle(final String pdfUrl, final String pageTitle, final String linkText) {
     final String tail = pdfUrl.substring(pdfUrl.lastIndexOf('/') + 1);
     final boolean opaque = tail.contains("download.asp") || tail.matches("[A-F0-9]{16,}\\.pdf");
-    return opaque ? pageTitle + " (PDF)" : tail;
+    if (!opaque) {
+      return tail;
+    }
+    // The link text as well, when it says anything. Every year's home-learning page is titled
+    // "Home Learning", so the page title alone gave four different spelling sheets one name.
+    return isDescriptive(linkText)
+        ? pageTitle + " - " + linkText + " (PDF)"
+        : pageTitle + " (PDF)";
+  }
+
+  /** Link text worth putting in a title: not blank, not "click here", not absurdly long. */
+  private static boolean isDescriptive(final String linkText) {
+    return linkText != null
+        && linkText.length() >= 3
+        && linkText.length() <= 120
+        && !GENERIC_LINK_TEXT.matcher(linkText).matches();
+  }
+
+  /**
+   * Every PDF link seen on one crawl, and the pages it was seen on.
+   *
+   * <p>Mutable, and private to one call of {@link #ingestWebsite}.
+   */
+  private static final class PdfSighting {
+
+    private final Set<String> years = new LinkedHashSet<>();
+    private boolean onWholeSchoolPage;
+    private String title;
+    private boolean titleFromYearPage;
+
+    void seenOn(final List<String> pageYears, final String linkTitle) {
+      if (pageYears.isEmpty()) {
+        onWholeSchoolPage = true;
+      }
+      years.addAll(pageYears);
+      // A year page's wording wins, and after that the first page to link it: the crawl order is
+      // fixed, so the title does not flip between crawls and re-index the file each time.
+      if (title == null || (!titleFromYearPage && !pageYears.isEmpty())) {
+        title = linkTitle;
+        titleFromYearPage = !pageYears.isEmpty();
+      }
+    }
+
+    List<String> yearGroups() {
+      return onWholeSchoolPage ? List.of() : YearGroups.sanitise(List.copyOf(years));
+    }
+
+    String title() {
+      return title;
+    }
   }
 
   /**
@@ -528,6 +700,11 @@ public class SchoolIngestService {
     metadata.put("title", document.title());
     metadata.put("publishedAt", String.valueOf(document.publishedAt()));
     metadata.put("sourceRef", document.sourceRef());
+    // Which year groups this is about, empty for whole-school. Stored on the chunk because the
+    // chunk is all the assistant is shown and all the search can filter on: the year ticked on a
+    // pasted note was recorded on the document and nowhere else, so a Year 3 spelling list
+    // reached the model with nothing to say it was Year 3's and lost to a Year 6 one.
+    metadata.put("yearGroups", List.copyOf(document.yearGroups()));
     // A public email attachment has a first-party URL of its own. Website content already has
     // a real sourceRef; email pseudo-refs ("gmail:<id>:<att>") are not links and are filtered
     // out downstream, so this is the only way an attachment becomes citable.

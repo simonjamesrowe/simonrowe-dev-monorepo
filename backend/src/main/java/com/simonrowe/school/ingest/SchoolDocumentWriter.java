@@ -58,16 +58,14 @@ public class SchoolDocumentWriter {
     final Optional<SchoolDocument> existing = repository.findById(id);
 
     if (existing.isPresent() && hash.equals(existing.get().contentHash())) {
-      // Unchanged text, but the date may still be wrong: it is derived separately from the body
-      // and improves as the derivation does. Website PDFs were stamped with the crawl time for
-      // 133 files, and because an unchanged document returned here untouched, no later crawl
-      // could ever have corrected them. Corrected in place and deliberately still reported as
-      // UNCHANGED — the chunks are identical, so re-embedding would be pure cost.
-      final SchoolDocument stored = existing.get();
-      if (publishedAt != null && !publishedAt.equals(stored.publishedAt())) {
-        return new WriteResult(repository.save(stored.withPublishedAt(publishedAt)), false);
-      }
-      return new WriteResult(stored, false);
+      // Unchanged text, but what is said ABOUT the text may still be wrong: the date, the title
+      // and the year groups are all derived separately from the body and improve as the
+      // derivation does. Website PDFs were stamped with the crawl time for 133 files, and a note
+      // re-saved with Year 3 ticked kept the year groups of its first save, because an unchanged
+      // document returned here untouched and no later write could ever have corrected it.
+      return refreshed(existing.get(), title, publishedAt, yearGroups)
+          .map(document -> new WriteResult(document, false, true))
+          .orElseGet(() -> new WriteResult(existing.get(), false, false));
     }
 
     final SchoolDocument document = existing
@@ -84,6 +82,51 @@ public class SchoolDocumentWriter {
             defaultVisibility, null, null, null, null, false, yearGroups, hash, null));
 
     return new WriteResult(repository.save(document), true);
+  }
+
+  /**
+   * Corrects what is stored about a document without touching its text.
+   *
+   * <p>For a document the caller is not re-reading — a website PDF, which is fetched once and
+   * never again — but whose title, year groups or date the caller now knows better.
+   *
+   * @param sourceType the source kind
+   * @param sourceRef the URL or message id
+   * @param title the title to record, or null to keep the stored one
+   * @param publishedAt the date to record, or null to keep the stored one
+   * @param yearGroups the year groups to record, or null to keep the stored ones
+   * @return the updated document when anything changed, empty when nothing did or it is unknown
+   */
+  public Optional<SchoolDocument> refreshMetadata(
+      final SchoolSourceType sourceType, final String sourceRef, final String title,
+      final Instant publishedAt, final List<String> yearGroups) {
+    return repository.findById(SchoolIds.documentId(sourceType, sourceRef))
+        .flatMap(stored -> refreshed(stored, title, publishedAt, yearGroups));
+  }
+
+  /**
+   * Saves a copy carrying the new title, date and year groups, if any of them differ.
+   *
+   * <p>A null argument means "no opinion" and keeps what is stored. Every human decision is
+   * carried forward untouched, because correcting metadata is never a reason to re-open one.
+   */
+  private Optional<SchoolDocument> refreshed(
+      final SchoolDocument stored, final String title, final Instant publishedAt,
+      final List<String> yearGroups) {
+    final String newTitle = title == null ? stored.title() : title;
+    final Instant newDate = publishedAt == null ? stored.publishedAt() : publishedAt;
+    final List<String> newYears =
+        yearGroups == null ? stored.yearGroups() : List.copyOf(yearGroups);
+    if (java.util.Objects.equals(newTitle, stored.title())
+        && java.util.Objects.equals(newDate, stored.publishedAt())
+        && newYears.equals(stored.yearGroups())) {
+      return Optional.empty();
+    }
+    return Optional.of(repository.save(new SchoolDocument(
+        stored.id(), stored.sourceType(), stored.sourceRef(), newTitle, stored.body(), newDate,
+        stored.ingestedAt(), stored.visibility(), stored.proposedVisibility(),
+        stored.proposalReason(), stored.approvedBy(), stored.approvedAt(),
+        stored.nameGateBlocked(), newYears, stored.contentHash(), stored.declinedAt())));
   }
 
   /**
@@ -113,11 +156,24 @@ public class SchoolDocumentWriter {
    * The outcome of a write.
    *
    * @param document the stored document
-   * @param changed whether the text differed from what was already stored, and so whether the
-   *     chunk needs re-embedding. Embedding is the only paid step in ingestion, so this flag is
-   *     what keeps a nightly crawl of an unchanged website free
+   * @param changed whether the text differed from what was already stored. Event extraction is
+   *     a model call per document, so this flag is what keeps a nightly crawl of an unchanged
+   *     website free
+   * @param reindex whether the indexed chunks are stale and need writing again: always when the
+   *     text changed, and also when only the title, date or year groups did, because the chunks
+   *     carry those as metadata and the assistant reads them from there, not from Mongo
    */
-  public record WriteResult(SchoolDocument document, boolean changed) {
+  public record WriteResult(SchoolDocument document, boolean changed, boolean reindex) {
+
+    /**
+     * A result whose chunks are stale exactly when its text changed.
+     *
+     * @param document the stored document
+     * @param changed whether the text differed from what was already stored
+     */
+    public WriteResult(final SchoolDocument document, final boolean changed) {
+      this(document, changed, changed);
+    }
   }
 
   private static String sha256(final String input) {

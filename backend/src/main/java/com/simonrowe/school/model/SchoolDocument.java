@@ -69,23 +69,6 @@ public record SchoolDocument(
   }
 
   /**
-   * Returns a copy carrying a corrected publication date.
-   *
-   * <p>The date is derived separately from the body — from a letterhead, a CMS feed or the fetch
-   * time — so it can be wrong while the text is right, and it improves as the derivation does.
-   * Every human decision is carried forward untouched: re-dating a document is a correction to
-   * metadata, never a reason to re-open an approval.
-   *
-   * @param corrected the date to record
-   * @return the updated copy
-   */
-  public SchoolDocument withPublishedAt(final java.time.Instant corrected) {
-    return new SchoolDocument(id, sourceType, sourceRef, title, body, corrected, ingestedAt,
-        visibility, proposedVisibility, proposalReason, approvedBy, approvedAt, nameGateBlocked,
-        yearGroups, contentHash, declinedAt);
-  }
-
-  /**
    * Returns a copy carrying a classifier's proposal. Deliberately cannot alter {@code visibility}.
    *
    * @param proposed what the classifier suggests this could be

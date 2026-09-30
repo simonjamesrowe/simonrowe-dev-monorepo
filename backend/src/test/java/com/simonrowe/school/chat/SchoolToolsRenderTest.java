@@ -26,7 +26,8 @@ class SchoolToolsRenderTest {
   private SchoolTools toolsReturning(final List<Document> hits) {
     final SchoolRetrievalService retrieval = mock(SchoolRetrievalService.class);
     org.mockito.Mockito.when(retrieval.search(org.mockito.ArgumentMatchers.anyString(),
-        org.mockito.ArgumentMatchers.any())).thenReturn(hits);
+        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+        .thenReturn(hits);
     return new SchoolTools(mock(SchoolQueryService.class), retrieval,
         SchoolAudience.anonymous(), List.of(), null, null, BASE_URL);
   }
@@ -120,5 +121,74 @@ class SchoolToolsRenderTest {
 
     assertThat(toolsReturning(List.of(hit)).searchSchoolInformation("lunch"))
         .contains("url=\"https://elsewhere.example/api/school/attachments/abc123\"");
+  }
+
+  @Test
+  @DisplayName("every source says which year groups it is for, or that it does not say")
+  void sourcesCarryTheirYearGroups() {
+    // The Year 6 sheet reached the model with nothing to say whose it was, and was presented as
+    // Year 3's because Year 3 was what the parent asked about.
+    final Document tagged = new Document("unhappy, unusual, disagree",
+        Map.of("title", "Prefixes un, dis", "publishedAt", "x", "sourceType", "PASTED_NOTE",
+            "sourceRef", "paste:abc", "yearGroups", List.of("Year 3")));
+    final Document untagged = new Document("Lunch menu.",
+        Map.of("title", "Menu", "publishedAt", "x", "sourceType", "PDF", "sourceRef", "x"));
+
+    final String rendered =
+        toolsReturning(List.of(tagged, untagged)).searchSchoolInformation("spellings");
+
+    assertThat(rendered).contains("type=\"PASTED_NOTE\" years=\"Year 3\"");
+    assertThat(rendered).contains("type=\"PDF\" years=\"not stated\"");
+  }
+
+  @Test
+  @DisplayName("results are included whole, and the ones left out are counted")
+  void resultsAreNeverCutMidway() {
+    // Every search in the Year 3 spellings conversation hit the old 6,000-character substring
+    // exactly: four of eight results arrived, the fourth cut mid-sentence, and nothing said so.
+    final List<Document> hits = new java.util.ArrayList<>();
+    for (int i = 0; i < 8; i++) {
+      hits.add(new Document(("result " + i + " ").repeat(300) + "END-" + i,
+          Map.of("title", "Doc " + i, "publishedAt", "x", "sourceType", "PDF",
+              "sourceRef", "x")));
+    }
+
+    final String rendered = toolsReturning(hits).searchSchoolInformation("anything");
+
+    final long starts = rendered.lines().filter(line -> line.startsWith("<<<SOURCE")).count();
+    final long ends = rendered.lines().filter(line -> line.equals("<<<END SOURCE>>>")).count();
+    assertThat(starts).isEqualTo(ends).isBetween(1L, 7L);
+    assertThat(rendered).contains("END-0");
+    assertThat(rendered).contains((8 - starts) + " further result(s) were found but not included");
+  }
+
+  @Test
+  @DisplayName("one enormous result is still included rather than nothing")
+  void firstResultIsAlwaysIncluded() {
+    final Document huge = new Document("x".repeat(50_000),
+        Map.of("title", "Huge", "publishedAt", "x", "sourceType", "PDF", "sourceRef", "x"));
+
+    assertThat(toolsReturning(List.of(huge)).searchSchoolInformation("anything"))
+        .contains("x".repeat(50_000)).doesNotContain("further result");
+  }
+
+  @Test
+  @DisplayName("the visitor's year groups reach the search")
+  void yearGroupsReachTheSearch() {
+    final SchoolRetrievalService retrieval = mock(SchoolRetrievalService.class);
+    new SchoolTools(mock(SchoolQueryService.class), retrieval, SchoolAudience.anonymous(),
+        List.of("Year 3"), null, null, BASE_URL).searchSchoolInformation("spellings");
+
+    org.mockito.Mockito.verify(retrieval)
+        .search("spellings", SchoolAudience.anonymous(), List.of("Year 3"));
+  }
+
+  @Test
+  @DisplayName("the prompt forbids attributing a source to a year it does not name")
+  void promptRulesOnYearGroups() {
+    assertThat(SchoolSystemPrompt.TEXT)
+        .contains("`years=`")
+        .contains("Never infer it from the question")
+        .contains("do NOT apologise and then repeat the same answer");
   }
 }
