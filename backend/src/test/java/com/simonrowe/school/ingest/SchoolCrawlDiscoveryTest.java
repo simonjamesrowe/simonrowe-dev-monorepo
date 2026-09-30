@@ -194,6 +194,45 @@ class SchoolCrawlDiscoveryTest {
   }
 
   @Test
+  @DisplayName("a crawl stopped by the page cap does not settle any PDF's year groups")
+  void pageCapDoesNotReattribute() {
+    // Caught by the reviewer on #202: the cap ends the loop without an interrupted pause, so the
+    // guard above never fired and a shared PDF was settled on whichever pages fitted.
+    final List<String> pages = new ArrayList<>();
+    for (int i = 0; i < 401; i++) {
+      pages.add(BASE + "/news-" + i);
+    }
+    when(crawler.listPages()).thenReturn(pages);
+    when(crawler.fetchPage(anyString())).thenAnswer(call ->
+        new SchoolWebsiteCrawler.CrawledPage(call.getArgument(0), call.getArgument(0), "Title",
+            "Readable text", "<html/>", List.of()));
+    when(pdfExtractor.findPdfLinksWithText(anyString(), anyString()))
+        .thenReturn(List.of(link(OPAQUE_PDF, "Spellings")));
+    when(documentWriter.existingPublishedAt(SchoolSourceType.PDF, OPAQUE_PDF))
+        .thenReturn(Optional.of(Instant.parse("2026-01-15T10:39:47Z")));
+
+    service.ingestWebsite();
+
+    verify(crawler, times(400)).fetchPage(anyString());
+    verify(documentWriter, never()).refreshMetadata(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("a crawl that reads every page settles PDF year groups")
+  void completeCrawlReattributes() {
+    // The control for the two tests above: the same PDF, a crawl that finishes.
+    when(crawler.listPages()).thenReturn(List.of(SEED));
+    servePdfs(SEED, link(OPAQUE_PDF, "Spellings"));
+    when(documentWriter.existingPublishedAt(SchoolSourceType.PDF, OPAQUE_PDF))
+        .thenReturn(Optional.of(Instant.parse("2026-01-15T10:39:47Z")));
+
+    service.ingestWebsite();
+
+    verify(documentWriter).refreshMetadata(eq(SchoolSourceType.PDF), eq(OPAQUE_PDF), any(),
+        eq(null), eq(List.of("Year 6")));
+  }
+
+  @Test
   @DisplayName("an opaque PDF is titled with the words the page links it by")
   void pdfTitleUsesTheLinkText() {
     // Every year's home-learning page is titled "Home Learning", so the page title alone gave

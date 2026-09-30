@@ -321,6 +321,13 @@ public class SchoolIngestService {
         break;
       }
     }
+    if (!interrupted && !queue.isEmpty()) {
+      // Stopped by the page cap with pages still waiting: just as partial as a crawl that was
+      // interrupted, and just as unsafe to settle PDF year groups on.
+      LOG.warn("Website crawl stopped at the {}-page cap with {} page(s) unread",
+          MAX_CRAWL_PAGES, queue.size());
+      interrupted = true;
+    }
     if (interrupted) {
       // Deliberately skipped, not run on what was seen. A PDF's year groups are the union over
       // every page linking it, and a crawl stopped halfway would narrow a PDF shared by four
