@@ -13,6 +13,24 @@ interface LandingHeroProps {
   content: HomePageContent
 }
 
+/**
+ * A headline with every hyphenated word kept whole. Browsers break lines after a hyphen, and
+ * balanced wrapping actively picks that break, so "AI-native" became "AI-" / "native" on a
+ * phone. Split on spaces only, so CMS text of any shape costs nothing to scan.
+ */
+function KeepHyphenatedWords({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(' ').map((word, index) => (
+        <span key={`${word}-${index}`}>
+          {index > 0 ? ' ' : null}
+          {word.includes('-') ? <span className="landing-hero__nobreak">{word}</span> : word}
+        </span>
+      ))}
+    </>
+  )
+}
+
 /** Site paths route in-app; the backend only lets an `https://` URL through otherwise. */
 function CtaLink({ cta, className }: { cta: HomePageCta; className: string }) {
   if (cta.href.startsWith('/')) {
@@ -75,9 +93,11 @@ export function LandingHero({ profile, content }: LandingHeroProps) {
           <div className="landing-hero__copy">
             {eyebrow ? <p className="landing-hero__eyebrow">{eyebrow}</p> : null}
             <h1 className="landing-hero__title">
-              <span className="landing-hero__title-line">{content.headlineLine1}</span>
+              <span className="landing-hero__title-line">
+                <KeepHyphenatedWords text={content.headlineLine1} />
+              </span>
               <span className="landing-hero__title-line landing-hero__title-line--accent">
-                {content.headlineLine2}
+                <KeepHyphenatedWords text={content.headlineLine2} />
               </span>
             </h1>
             {content.lede ? <p className="landing-hero__lede">{content.lede}</p> : null}

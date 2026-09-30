@@ -1337,6 +1337,10 @@ a:hover {
   text-wrap: balance;
 }
 
+.landing-hero__nobreak {
+  white-space: nowrap;
+}
+
 .landing-hero__title-line--accent {
   color: #9fd8ff;
 }
@@ -1517,7 +1521,9 @@ a:hover {
     flex-direction: column;
     align-items: stretch;
     gap: 1rem;
-    padding: 96px 1.25rem 1.5rem;
+    /* Header clearance plus breathing room that scales with the screen: the statement sits a
+       little below the header, well above centre, so the photograph still shows beneath it. */
+    padding: clamp(124px, 17svh, 160px) 1.25rem 1.5rem;
   }
 
   .landing-hero__left {
@@ -1533,8 +1539,10 @@ a:hover {
     font-size: 0.68rem;
   }
 
+  /* Sized so a phrase like "Building AI-native" fits one line at 390px rather than splitting at
+     its hyphen, which browsers treat as a break opportunity. */
   .landing-hero__title {
-    font-size: clamp(2.1rem, 9.5vw, 3rem);
+    font-size: clamp(2rem, 8.6vw, 3rem);
   }
 
   .landing-hero__lede {

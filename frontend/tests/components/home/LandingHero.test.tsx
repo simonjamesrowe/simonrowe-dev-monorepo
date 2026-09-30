@@ -96,4 +96,12 @@ describe('LandingHero', () => {
     expect(container.querySelector('img')).toBeNull()
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Leading engineering teams.')
   })
+
+  it('keeps a hyphenated headline word whole so it cannot break at the hyphen', () => {
+    const { container } = renderHero({ headlineLine2: 'Building AI-native systems.' })
+    const nobreak = container.querySelectorAll('.landing-hero__nobreak')
+    expect(nobreak).toHaveLength(1)
+    expect(nobreak[0]).toHaveTextContent('AI-native')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Building AI-native systems.')
+  })
 })
