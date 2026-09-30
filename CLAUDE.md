@@ -242,6 +242,52 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 050-site-nav-landing-redesign: **The public header, landing hero and a CMS portfolio.** A floating
+  capsule `SiteHeader` replaces `TopNav`/`MobileMenu`, grouping pages under About, Portfolio,
+  Insights and Under the hood. `LandingHero` replaces `HeroSection` and its multi-line chat box
+  with the profile photograph at full strength, CMS-edited copy and an "Ask Simon anything" pill.
+  `com.simonrowe.homepage` and `com.simonrowe.portfolio` back both, edited at `/admin/home-page`
+  and `/admin/portfolio`. Load-bearing bits:
+  - **Search stays a real field in the header, not an icon.** The tour's seeded
+    `default-site-search` step spotlights `.tour-search` and `SearchSimulation` types into that
+    input, so a search hidden behind a button breaks the tour silently. The same reason keeps the
+    tour **desktop-only**: phones do not show that field, so neither the phone menu nor the phone
+    hero offers "Take a tour".
+  - **Three tour hooks survived the redesign on purpose:** `top-nav__ask-ai` stays on the
+    header's Ask button (`tourActions.ts`, `TourOverlay.tsx`), `.tour-search` comes from
+    `SiteSearch` itself, and `.tour-home-chat` is now on the hero's Ask pill.
+  - **The floating `TourButton` is gone.** Its corner holds `FloatingAskPill`, which stays hidden
+    while any `[data-ask-anchor]` (the hero's pill) is on screen, so the two never show together.
+    It waits 700ms before deciding a page has no anchor, or it would flash over the home hero
+    while the profile loads.
+  - **A mouse click on a menu only ever opens it.** Hover has already opened it by the time the
+    click arrives, so a toggle would close it straight away.
+  - **The phone sheet mounts only while open**, so there is never a second `SiteSearch`, and so
+    no second `.tour-search`, in the document.
+  - **Hero copy is served, not seeded.** `HomePageDefaults` is returned until the first save, so
+    no change unit writes `home_page`. The frontend's `DEFAULT_HOME_PAGE` mirrors it only for
+    when the API is unreachable. Name, title, location and both background images stay on the
+    Profile.
+  - **Editable links are checked by `common.LinkTargets`, by parsing:** a site path (not `//`,
+    no backslash) or an `https` URL with a host.
+  - **Both CMS editors return `ValidationErrorResponse.fieldErrors`** through
+    `admin.FieldValidationException`. The frontend surfaces them as `AdminValidationError`.
+  - **Portfolio slugs are unique by index.** `V048CreatePortfolioProjects` creates
+    `idx_portfolio_slug`, and `RestoreService` re-creates it after a restore. The service saves
+    and maps `DuplicateKeyException` to 409, with no read-before-write. V048 seeds the four launch
+    projects as published Coming soon, only where the slug is absent.
+  - **A Coming soon project is public only as name, tagline, status and hue.** Description,
+    image and link are omitted from the JSON, and `/api/portfolio/{slug}` 404s for it.
+  - `usePortfolio` caches one request per page view, shared by the header menu and the home
+    carousel. **Tests that render either must mock `services/portfolioApi`:** the test
+    environment's `VITE_API_BASE_URL` is production, so an unmocked fetch reaches the live API.
+  - **Found, not fixed (pre-existing):**
+    - `adminApi.handleResponse` always parses JSON, so every existing 204 admin call (tour step
+      delete, for one) rejects with "Unexpected end of JSON input" after succeeding. The new
+      portfolio calls use `handleNoContent` instead.
+    - `ConfirmDialog` sets `aria-hidden` on the backdrop that contains the dialog, hiding it
+      from assistive technology.
+  See `specs/050-site-nav-landing-redesign/`.
 - merge-profile-experience-about: **Profile and Experience are one page, `/about`** (profile,
   then roles, then skills), freeing a nav slot. Load-bearing bits:
   - **`/profile` and `/experience` redirect and must keep doing so**, carrying the query string

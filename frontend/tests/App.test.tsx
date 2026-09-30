@@ -3,6 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from '../src/App'
 
+// No network: the header's Portfolio menu and the home carousel both read this.
+vi.mock('../src/services/portfolioApi', () => ({
+  fetchPortfolio: vi.fn().mockResolvedValue([]),
+  fetchPortfolioProject: vi.fn().mockResolvedValue(null),
+}))
+
 vi.mock('../src/pages/HomePage', () => ({
   HomePage: () => <h1>Homepage</h1>,
 }))
@@ -40,10 +46,6 @@ vi.mock('../src/hooks/useTour', () => ({
     pauseAutoAdvance: vi.fn(),
     resumeAutoAdvance: vi.fn(),
   }),
-}))
-
-vi.mock('../src/components/tour/TourButton', () => ({
-  TourButton: () => null,
 }))
 
 vi.mock('../src/components/tour/TourOverlay', () => ({

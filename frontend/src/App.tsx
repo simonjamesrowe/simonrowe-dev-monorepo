@@ -10,11 +10,10 @@ import { NarrationAudioProvider } from './components/narration/NarrationAudioPro
 import { NarrationPlayerBar } from './components/narration/NarrationPlayerBar'
 import { JobDetailDrawer } from './components/experience/JobDetailDrawer'
 import { Footer } from './components/layout/Footer'
-import { MobileMenu } from './components/layout/MobileMenu'
-import { TopNav } from './components/layout/TopNav'
+import { FloatingAskPill } from './components/layout/FloatingAskPill'
+import { SiteHeader } from './components/layout/SiteHeader'
 import { SkillGroupDetail } from './components/skills/SkillGroupDetail'
 import { TourProvider } from './components/tour/TourProvider'
-import { TourButton } from './components/tour/TourButton'
 import { TourOverlay } from './components/tour/TourOverlay'
 import { API_BASE_URL } from './config/api'
 import { ChatProvider, useChat } from './contexts/ChatContext'
@@ -35,6 +34,8 @@ const BlogDetailPage = named(() => import('./pages/BlogDetailPage'), 'BlogDetail
 const NewsEventsPage = named(() => import('./pages/NewsEventsPage'), 'NewsEventsPage')
 const McpPage = named(() => import('./pages/McpPage'), 'McpPage')
 const StatusPage = named(() => import('./pages/StatusPage'), 'StatusPage')
+const PortfolioPage = named(() => import('./pages/PortfolioPage'), 'PortfolioPage')
+const PortfolioProjectPage = named(() => import('./pages/PortfolioProjectPage'), 'PortfolioProjectPage')
 const NotFoundPage = named(() => import('./pages/NotFoundPage'), 'NotFoundPage')
 
 const AdminLayout = named(() => import('./components/admin/AdminLayout'), 'AdminLayout')
@@ -55,6 +56,9 @@ const SchoolAllDocumentsPage = named(() => import('./pages/admin/SchoolAllDocume
 const SchoolEventsAdmin = named(() => import('./pages/admin/SchoolEventsAdmin'), 'SchoolEventsAdmin')
 const SchoolNotesAdmin = named(() => import('./pages/admin/SchoolNotesAdmin'), 'SchoolNotesAdmin')
 const ProfileAdmin = named(() => import('./pages/admin/ProfileAdmin'), 'ProfileAdmin')
+const HomePageAdmin = named(() => import('./pages/admin/HomePageAdmin'), 'HomePageAdmin')
+const PortfolioAdmin = named(() => import('./pages/admin/PortfolioAdmin'), 'PortfolioAdmin')
+const PortfolioProjectEditor = named(() => import('./pages/admin/PortfolioProjectEditor'), 'PortfolioProjectEditor')
 const SkillGroupEditor = named(() => import('./pages/admin/SkillGroupEditor'), 'SkillGroupEditor')
 const SkillsAdmin = named(() => import('./pages/admin/SkillsAdmin'), 'SkillsAdmin')
 const TagsAdmin = named(() => import('./pages/admin/TagsAdmin'), 'TagsAdmin')
@@ -162,13 +166,12 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
         <TourProvider>
           <div className="app-layout">
             <ScrollToTop />
-            <TopNav />
-            <MobileMenu />
+            <SiteHeader />
             <main className="app-layout__main">
               {children}
             </main>
             <Footer />
-            <TourButton />
+            <FloatingAskPill />
             <TourOverlay />
             <GlobalDrawers />
             <ChatOverlay />
@@ -206,6 +209,8 @@ function App() {
         <Route element={<PublicLayout><NewsEventsPage /></PublicLayout>} path="/news-events" />
         <Route element={<PublicLayout><McpPage /></PublicLayout>} path="/mcp" />
         <Route element={<PublicLayout><StatusPage /></PublicLayout>} path="/status" />
+        <Route element={<PublicLayout><PortfolioPage /></PublicLayout>} path="/portfolio" />
+        <Route element={<PublicLayout><PortfolioProjectPage /></PublicLayout>} path="/portfolio/:slug" />
         {/* Legacy singular paths, still shared externally. */}
         <Route element={<Navigate replace to="/blogs" />} path="/blog" />
         <Route element={<LegacyBlogDetailRedirect />} path="/blog/:id" />
@@ -223,6 +228,9 @@ function App() {
           <Route path="skills" element={<SkillsAdmin />} />
           <Route path="skill-groups/:id" element={<SkillGroupEditor />} />
           <Route path="profile" element={<ProfileAdmin />} />
+          <Route path="home-page" element={<HomePageAdmin />} />
+          <Route path="portfolio" element={<PortfolioAdmin />} />
+          <Route path="portfolio/:id" element={<PortfolioProjectEditor />} />
           <Route path="tags" element={<TagsAdmin />} />
           <Route path="tour-steps" element={<TourStepsAdmin />} />
           <Route path="tour-steps/:id" element={<TourStepEditor />} />

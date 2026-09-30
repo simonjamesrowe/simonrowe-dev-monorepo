@@ -19,9 +19,11 @@ const CHAT_SUGGESTIONS = [
 
 interface SiteSearchProps {
   onChatStart?: (query: string) => void
+  /** Use the short placeholder at every width — for a field narrower than its container's. */
+  compact?: boolean
 }
 
-export function SiteSearch({ onChatStart }: SiteSearchProps) {
+export function SiteSearch({ onChatStart, compact = false }: SiteSearchProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<GroupedSearchResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -32,7 +34,7 @@ export function SiteSearch({ onChatStart }: SiteSearchProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { pathname } = useLocation()
   const isBlogPage = pathname.startsWith('/blogs')
-  const isNarrow = useMediaQuery('(max-width: 768px)')
+  const isNarrow = useMediaQuery('(max-width: 768px)') || compact
 
   const { isActive: tourActive, searchValue: tourSearchValue, currentStepIndex, steps } = useTour()
   const isSearchTourStep = tourActive && steps[currentStepIndex]?.targetSelector === '.tour-search'

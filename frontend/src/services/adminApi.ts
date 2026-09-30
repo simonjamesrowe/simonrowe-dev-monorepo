@@ -1,5 +1,7 @@
 import { API_BASE_URL } from '../config/api'
 import type { BlogContentType } from '../types/blog'
+import type { HomePageContent } from '../types/homePage'
+import type { ProjectStatus } from '../types/portfolio'
 
 const ADMIN_URL = `${API_BASE_URL}/api/admin`
 
@@ -212,11 +214,26 @@ async function authFetch(url: string, token: string, options?: RequestInit): Pro
   })
 }
 
+/** A save refused on validation, carrying the server's per-field errors for inline display. */
+export class AdminValidationError extends Error {
+  readonly fieldErrors: { field: string; message: string }[]
+
+  constructor(message: string, fieldErrors: { field: string; message: string }[]) {
+    super(message)
+    this.name = 'AdminValidationError'
+    this.fieldErrors = fieldErrors
+  }
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let message = 'Request failed.'
+    let fieldErrors: { field: string; message: string }[] | null = null
     try {
       const errorPayload = await response.json()
+      if (Array.isArray(errorPayload.fieldErrors) && errorPayload.fieldErrors.length > 0) {
+        fieldErrors = errorPayload.fieldErrors
+      }
       if (typeof errorPayload.message === 'string' && errorPayload.message.trim() !== '') {
         message = errorPayload.message
       } else if (typeof errorPayload.detail === 'string' && errorPayload.detail.trim() !== '') {
@@ -226,9 +243,21 @@ async function handleResponse<T>(response: Response): Promise<T> {
     } catch {
       // Keep default fallback message when the response has no JSON payload.
     }
+    if (fieldErrors) {
+      throw new AdminValidationError(message, fieldErrors)
+    }
     throw new Error(message)
   }
   return (await response.json()) as T
+}
+
+/**
+ * For endpoints that answer 204 with no body, which `handleResponse` would try to parse as
+ * JSON and reject on. Errors still go through `handleResponse` for their message.
+ */
+async function handleNoContent(response: Response): Promise<void> {
+  if (response.ok) return
+  await handleResponse<never>(response)
 }
 
 function jsonOptions(data: Record<string, unknown>, method: string): RequestInit {
@@ -513,6 +542,107 @@ export async function updateAdminProfile(
   const token = await getAccessToken()
   const response = await authFetch(`${ADMIN_URL}/profile`, token, jsonOptions(data, 'PUT'))
   return handleResponse<AdminProfile>(response)
+}
+
+// ---------------------------------------------------------------------------
+// Home page hero (singleton)
+// ---------------------------------------------------------------------------
+
+export async function fetchAdminHomePage(getAccessToken: GetAccessToken): Promise<HomePageContent> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/home-page`, token)
+  return handleResponse<HomePageContent>(response)
+}
+
+export async function updateAdminHomePage(
+  getAccessToken: GetAccessToken,
+  data: HomePageContent,
+): Promise<HomePageContent> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/home-page`,
+    token,
+    jsonOptions(data as unknown as Record<string, unknown>, 'PUT'),
+  )
+  return handleResponse<HomePageContent>(response)
+}
+
+// ---------------------------------------------------------------------------
+// Portfolio
+// ---------------------------------------------------------------------------
+
+export interface AdminPortfolioProject {
+  id: string
+  slug: string
+  name: string
+  tagline: string
+  description: string | null
+  status: ProjectStatus
+  displayOrder: number
+  published: boolean
+  image: { url: string } | null
+  liveUrl: string | null
+  accentHue: number
+  createdAt: string
+  updatedAt: string
+}
+
+/** Every editable field; `displayOrder` null on create appends the project to the end. */
+export type AdminPortfolioProjectInput = Omit<
+  AdminPortfolioProject, 'id' | 'createdAt' | 'updatedAt' | 'displayOrder'
+> & { displayOrder: number | null }
+
+export async function fetchAdminPortfolio(getAccessToken: GetAccessToken): Promise<AdminPortfolioProject[]> {
+  const token = await getAccessToken()
+  return handleResponse<AdminPortfolioProject[]>(await authFetch(`${ADMIN_URL}/portfolio`, token))
+}
+
+export async function fetchAdminPortfolioProject(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<AdminPortfolioProject> {
+  const token = await getAccessToken()
+  return handleResponse<AdminPortfolioProject>(await authFetch(`${ADMIN_URL}/portfolio/${id}`, token))
+}
+
+export async function createAdminPortfolioProject(
+  getAccessToken: GetAccessToken,
+  data: AdminPortfolioProjectInput,
+): Promise<AdminPortfolioProject> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/portfolio`, token, jsonOptions(data as unknown as Record<string, unknown>, 'POST'),
+  )
+  return handleResponse<AdminPortfolioProject>(response)
+}
+
+export async function updateAdminPortfolioProject(
+  getAccessToken: GetAccessToken,
+  id: string,
+  data: AdminPortfolioProjectInput,
+): Promise<AdminPortfolioProject> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/portfolio/${id}`, token, jsonOptions(data as unknown as Record<string, unknown>, 'PUT'),
+  )
+  return handleResponse<AdminPortfolioProject>(response)
+}
+
+export async function deleteAdminPortfolioProject(getAccessToken: GetAccessToken, id: string): Promise<void> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/portfolio/${id}`, token, { method: 'DELETE' })
+  return handleNoContent(response)
+}
+
+export async function reorderAdminPortfolio(
+  getAccessToken: GetAccessToken,
+  orderedIds: string[],
+): Promise<void> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/portfolio/reorder`, token, jsonOptions({ orderedIds }, 'PATCH'),
+  )
+  return handleNoContent(response)
 }
 
 // ---------------------------------------------------------------------------

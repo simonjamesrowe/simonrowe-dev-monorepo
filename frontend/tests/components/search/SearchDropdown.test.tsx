@@ -67,4 +67,14 @@ describe('SearchDropdown', () => {
     expect(screen.queryByText('Jobs')).not.toBeInTheDocument()
     expect(screen.queryByText('Skills')).not.toBeInTheDocument()
   })
+
+  it('keeps the previous results on screen while the next query loads', () => {
+    render(
+      <MemoryRouter>
+        <DrawerProvider><SearchDropdown hasResults={true} loading={true} onResultClick={onResultClick} results={results} />
+      </DrawerProvider></MemoryRouter>,
+    )
+    expect(screen.queryByText('Searching...')).not.toBeInTheDocument()
+    expect(screen.getByText('Blogs')).toBeInTheDocument()
+  })
 })
