@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -67,7 +67,28 @@ describe('LandingHero', () => {
 
   it('uses the desktop image on phones when the profile has no mobile one', () => {
     const { container } = renderHero()
-    expect(container.querySelector('source')?.getAttribute('srcset')).toMatch(/\/uploads\/desktop\.jpg$/)
+    expect(container.querySelector('source')).toBeNull()
+    expect(container.querySelector('img')?.getAttribute('src')).toMatch(/\/uploads\/desktop\.jpg$/)
+  })
+
+  it('drops a phone image that fails to load, then the desktop one, never leaving a broken image', () => {
+    const withMobile = { ...profile, mobileBackgroundImage: { url: '/uploads/mobile.jpg' } } as unknown as Profile
+    const { container } = renderHero({}, withMobile)
+    const img = container.querySelector('img')!
+    const mobileSrc = container.querySelector('source')?.getAttribute('srcset') ?? ''
+    expect(mobileSrc).toMatch(/mobile\.jpg$/)
+
+    // The browser reports whichever candidate it chose as currentSrc; here, the phone image.
+    Object.defineProperty(img, 'currentSrc', { configurable: true, get: () => mobileSrc })
+    fireEvent.error(img)
+    expect(container.querySelector('source')).toBeNull()
+    expect(container.querySelector('img')).toBeInTheDocument()
+
+    const desktop = container.querySelector('img')!
+    Object.defineProperty(desktop, 'currentSrc', { configurable: true, get: () => desktop.getAttribute('src') ?? '' })
+    fireEvent.error(desktop)
+    expect(container.querySelector('img')).toBeNull()
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument()
   })
 
   it('still renders, on a plain surface, when the profile has no images at all', () => {

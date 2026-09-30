@@ -9,7 +9,9 @@ interface SearchDropdownProps {
 }
 
 export function SearchDropdown({ results, loading, hasResults, onResultClick }: SearchDropdownProps) {
-  if (loading) {
+  // Keep the previous results on screen while the next query runs. Swapping them for
+  // "Searching..." on every keystroke made the whole panel flash as the visitor typed.
+  if (loading && !hasResults) {
     return (
       <div className="search-dropdown" role="status">
         <div className="search-dropdown__loading">Searching...</div>

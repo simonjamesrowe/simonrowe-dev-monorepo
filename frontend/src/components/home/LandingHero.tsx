@@ -1,4 +1,5 @@
-import { Play, Sparkles } from 'lucide-react'
+import { ArrowRight, Play, Sparkles } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { API_BASE_URL } from '../../config/api'
@@ -35,10 +36,14 @@ function CtaLink({ cta, className }: { cta: HomePageCta; className: string }) {
 export function LandingHero({ profile, content }: LandingHeroProps) {
   const { openChat } = useChat()
   const { start: startTour } = useTour()
-  const desktopImage = profile.backgroundImage?.url
+  // A failed image degrades rather than showing a broken-image icon: a missing phone image
+  // falls back to the desktop one, and a missing desktop image leaves the plain dark surface,
+  // which the white text is designed to sit on anyway.
+  const [failed, setFailed] = useState<{ mobile: boolean; desktop: boolean }>({ mobile: false, desktop: false })
+  const desktopImage = profile.backgroundImage?.url && !failed.desktop
     ? `${API_BASE_URL}${profile.backgroundImage.url}`
     : null
-  const mobileImage = profile.mobileBackgroundImage?.url
+  const mobileImage = profile.mobileBackgroundImage?.url && !failed.mobile
     ? `${API_BASE_URL}${profile.mobileBackgroundImage.url}`
     : desktopImage
   const eyebrow = [profile.name, profile.title, profile.location].filter(Boolean).join(' · ')
@@ -48,8 +53,19 @@ export function LandingHero({ profile, content }: LandingHeroProps) {
     <section className="landing-hero">
       {desktopImage ? (
         <picture>
-          {mobileImage ? <source media="(max-width: 768px)" srcSet={mobileImage} /> : null}
-          <img alt="" className="landing-hero__image" src={desktopImage} />
+          {mobileImage && mobileImage !== desktopImage
+            ? <source media="(max-width: 768px)" srcSet={mobileImage} />
+            : null}
+          <img
+            alt=""
+            className="landing-hero__image"
+            onError={event => {
+              // currentSrc names whichever candidate the browser picked, so the right one is dropped.
+              const usedMobile = mobileImage !== desktopImage && event.currentTarget.currentSrc.endsWith(mobileImage ?? '')
+              setFailed(current => (usedMobile ? { ...current, mobile: true } : { ...current, desktop: true }))
+            }}
+            src={desktopImage}
+          />
         </picture>
       ) : null}
       <div aria-hidden="true" className="landing-hero__shade" />
@@ -88,11 +104,15 @@ export function LandingHero({ profile, content }: LandingHeroProps) {
           onClick={() => openChat()}
           type="button"
         >
-          {askPill.lead ? <span className="landing-hero__pill-lead">{askPill.lead}</span> : null}
-          <span className="landing-hero__pill-label">
-            <Sparkles aria-hidden="true" size={17} /> {askPill.label}
+          <span aria-hidden="true" className="landing-hero__pill-icon"><Sparkles size={18} /></span>
+          <span className="landing-hero__pill-text">
+            {askPill.lead ? <span className="landing-hero__pill-lead">{askPill.lead}</span> : null}
+            <span className="landing-hero__pill-label">{askPill.label}</span>
           </span>
-          <span className="landing-hero__pill-start">{askPill.buttonLabel}</span>
+          <span className="landing-hero__pill-start">
+            <span className="landing-hero__pill-start-text">{askPill.buttonLabel}</span>
+            <ArrowRight aria-hidden="true" size={16} />
+          </span>
         </button>
       </div>
     </section>

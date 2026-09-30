@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react'
+import { ArrowRight, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 
@@ -56,9 +56,9 @@ export function FloatingAskPill() {
         tabIndex={visible ? 0 : -1}
         type="button"
       >
-        <Sparkles aria-hidden="true" size={17} />
+        <span aria-hidden="true" className="ask-pill__icon"><Sparkles size={17} /></span>
         <span className="ask-pill__label">Ask Simon anything</span>
-        <span className="ask-pill__start">Start chat</span>
+        <ArrowRight aria-hidden="true" className="ask-pill__arrow" size={16} />
       </button>
     </div>
   )

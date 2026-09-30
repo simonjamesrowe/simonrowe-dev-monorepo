@@ -1,8 +1,30 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { SearchResult } from '../../services/searchApi'
 import { useDrawer } from '../../hooks/useDrawer'
 
-const PLACEHOLDER_IMAGE = '/images/placeholder.png'
+/**
+ * A result's image, or a neutral tile when it has none or it fails to load.
+ *
+ * The tile is drawn, not fetched. The previous fallback pointed `onError` at
+ * `/images/placeholder.png`, a file that does not exist, so each failure set the same
+ * missing source again and fired `onError` again: an endless reload loop, seen as thumbnails
+ * flickering while the results were open. Failing once and staying failed is the fix.
+ */
+function ResultThumbnail({ src }: { src: string | null | undefined }) {
+  const [failed, setFailed] = useState(false)
+  if (!src || failed) {
+    return <span aria-hidden="true" className="search-result-group__thumbnail search-result-group__thumbnail--empty" />
+  }
+  return (
+    <img
+      alt=""
+      className="search-result-group__thumbnail"
+      onError={() => setFailed(true)}
+      src={src}
+    />
+  )
+}
 
 const JOB_URL_RE = /^\/jobs\/(.+)$/
 const SKILL_GROUP_URL_RE = /^\/skills-groups\/(.+)$/
@@ -51,14 +73,7 @@ export function SearchResultGroup({ title, results, onResultClick }: SearchResul
               onClick={() => handleClick(result.url)}
               type="button"
             >
-              <img
-                alt=""
-                className="search-result-group__thumbnail"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = PLACEHOLDER_IMAGE
-                }}
-                src={result.image ?? PLACEHOLDER_IMAGE}
-              />
+              <ResultThumbnail src={result.image} />
               <span className="search-result-group__name">{result.name}</span>
             </button>
           </li>

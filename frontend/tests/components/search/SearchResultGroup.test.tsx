@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -39,15 +39,29 @@ describe('SearchResultGroup', () => {
     expect(onResultClick).toHaveBeenCalledTimes(1)
   })
 
-  it('uses placeholder image when image is null', () => {
+  it('draws a neutral tile when a result has no image', () => {
     render(
       <MemoryRouter>
         <DrawerProvider><SearchResultGroup onResultClick={vi.fn()} results={results} title="Skills" />
       </DrawerProvider></MemoryRouter>,
     )
 
-    const images = document.querySelectorAll<HTMLImageElement>('.search-result-group__thumbnail')
+    const images = document.querySelectorAll<HTMLImageElement>('img.search-result-group__thumbnail')
+    expect(images).toHaveLength(1)
     expect(images[0].src).toContain('/img/spring.png')
-    expect(images[1].src).toContain('/images/placeholder.png')
+    expect(document.querySelectorAll('.search-result-group__thumbnail--empty')).toHaveLength(1)
+  })
+
+  it('falls back to the tile once when an image fails, rather than retrying in a loop', () => {
+    render(
+      <MemoryRouter>
+        <DrawerProvider><SearchResultGroup onResultClick={vi.fn()} results={results} title="Skills" />
+      </DrawerProvider></MemoryRouter>,
+    )
+
+    fireEvent.error(document.querySelector('img.search-result-group__thumbnail')!)
+
+    expect(document.querySelector('img.search-result-group__thumbnail')).toBeNull()
+    expect(document.querySelectorAll('.search-result-group__thumbnail--empty')).toHaveLength(2)
   })
 })
