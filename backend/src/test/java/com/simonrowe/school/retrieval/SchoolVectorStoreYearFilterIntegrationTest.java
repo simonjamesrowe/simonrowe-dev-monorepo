@@ -2,6 +2,7 @@ package com.simonrowe.school.retrieval;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import co.elastic.clients.transport.rest5_client.low_level.Request;
 import co.elastic.clients.transport.rest5_client.low_level.Rest5Client;
 import com.simonrowe.school.SchoolProperties;
 import java.net.URI;
@@ -50,7 +51,7 @@ class SchoolVectorStoreYearFilterIntegrationTest {
   private static SchoolRetrievalService retrieval;
 
   @BeforeAll
-  static void createStore() {
+  static void createStore() throws Exception {
     client = Rest5Client.builder(URI.create("http://" + elasticsearch.getHttpHostAddress()))
         .build();
     final SchoolProperties properties = new SchoolProperties(
@@ -58,10 +59,10 @@ class SchoolVectorStoreYearFilterIntegrationTest {
         List.of());
     final StaticListableBeanFactory beans = new StaticListableBeanFactory(
         Map.of("client", client, "model", new BagOfWordsEmbeddingModel()));
+    final String index = "school-year-filter-" + UUID.randomUUID();
     final SchoolVectorStore store = new SchoolVectorStoreConfig().schoolVectorStore(
         properties, beans.getBeanProvider(Rest5Client.class),
-        beans.getBeanProvider(EmbeddingModel.class),
-        "school-year-filter-" + UUID.randomUUID());
+        beans.getBeanProvider(EmbeddingModel.class), index);
 
     // The whole-school chunk is by far the closest to the query and the tagged ones do not
     // contain its word at all, so only a working year filter can put a tagged chunk first. With
@@ -71,6 +72,11 @@ class SchoolVectorStoreYearFilterIntegrationTest {
         chunk(Y6, List.of("Year 6")),
         chunk(Y3_AND_4, List.of("Year 3", "Year 4")),
         chunk(WHOLE_SCHOOL, List.of())));
+    // Every assertion compares a whole result list, so all four chunks must be searchable before
+    // any test reads. Writes become searchable on the refresh interval, and a retry that stops at
+    // the first non-empty result can catch the index part-way: on a loaded machine that returned
+    // one or two of the expected chunks. An explicit refresh makes all of them visible at once.
+    client.performRequest(new Request("POST", "/" + index + "/_refresh"));
     retrieval = new SchoolRetrievalService(store);
   }
 
