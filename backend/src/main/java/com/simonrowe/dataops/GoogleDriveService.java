@@ -1,15 +1,16 @@
 package com.simonrowe.dataops;
 
 import com.google.api.client.googleapis.media.MediaHttpDownloader;
-import com.google.api.client.googleapis.media.MediaHttpDownloaderProgressListener;
 import com.google.api.client.googleapis.media.MediaHttpUploader;
 import com.google.api.client.http.InputStreamContent;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.model.File;
 import com.google.api.services.drive.model.FileList;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,11 +41,15 @@ public class GoogleDriveService {
   // dominated by data transfer rather than acks, and progress logs land
   // every chunk so a stalled upload is visible quickly.
   private static final int UPLOAD_CHUNK_SIZE_BYTES = 1024 * 1024;
+  private static final int DOWNLOAD_CHUNK_SIZE_BYTES = 10 * 1024 * 1024;
+  /** One first try plus seven resumes, waiting 5s, 10s, ... 35s between them. */
+  static final int DOWNLOAD_ATTEMPTS = 8;
 
   @Nullable
   private final Drive drive;
   private final String configuredFolderId;
   private final String configuredPlatformFolderId;
+  private Duration retryDelay = Duration.ofSeconds(5);
 
   public GoogleDriveService(
       @Nullable final Drive drive,
@@ -54,6 +59,11 @@ public class GoogleDriveService {
     this.drive = drive;
     this.configuredFolderId = configuredFolderId;
     this.configuredPlatformFolderId = configuredPlatformFolderId;
+  }
+
+  /** Shortens the wait between resumed downloads, so a test does not sit through it. */
+  void setRetryDelay(final Duration retryDelay) {
+    this.retryDelay = retryDelay;
   }
 
   public boolean isConnected() {
@@ -238,20 +248,77 @@ public class GoogleDriveService {
     return backups;
   }
 
+  /**
+   * Downloads a file to the stream, resuming after a dropped connection.
+   *
+   * <p>The download is fetched in 10 MB ranged chunks, and a connection reset part-way through a
+   * chunk's body used to abandon the whole file: a 1.4 GB backup over a residential link failed at
+   * 346 MB, 545 MB and 577 MB on successive attempts. Retrying the HTTP request cannot help,
+   * because the reset happens while the body is streaming, after the request has succeeded. So
+   * the bytes already written are counted, and a fresh request resumes from exactly that offset.
+   * Whatever reached the stream is never asked for again, which is what makes this safe for a
+   * caller that is writing straight to a file.
+   */
   public void downloadFile(final String fileId, final OutputStream outputStream)
       throws IOException {
     checkDrive();
-    Drive.Files.Get request = drive.files().get(fileId);
-    MediaHttpDownloader downloader = request.getMediaHttpDownloader();
-    downloader.setDirectDownloadEnabled(false);
-    downloader.setChunkSize(10 * 1024 * 1024); // 10MB chunks
-    downloader.setProgressListener(new MediaHttpDownloaderProgressListener() {
-      public void progressChanged(MediaHttpDownloader d) {
-        LOG.info("Download progress: {} ({} bytes)", 
-            d.getDownloadState(), d.getNumBytesDownloaded());
+    CountingOutputStream counting = new CountingOutputStream(outputStream);
+    for (int attempt = 1; ; attempt++) {
+      Drive.Files.Get request = drive.files().get(fileId);
+      MediaHttpDownloader downloader = request.getMediaHttpDownloader();
+      downloader.setDirectDownloadEnabled(false);
+      downloader.setChunkSize(DOWNLOAD_CHUNK_SIZE_BYTES);
+      downloader.setBytesDownloaded(counting.count());
+      downloader.setProgressListener(d -> LOG.info("Download progress: {} ({} bytes)",
+          d.getDownloadState(), d.getNumBytesDownloaded()));
+      try {
+        request.executeMediaAndDownloadTo(counting);
+        return;
+      } catch (IOException e) {
+        if (attempt >= DOWNLOAD_ATTEMPTS) {
+          throw e;
+        }
+        LOG.warn("Download of {} interrupted at {} bytes ({}); resuming, attempt {} of {}",
+            fileId, counting.count(), e.getMessage(), attempt + 1, DOWNLOAD_ATTEMPTS);
+        pause(attempt);
       }
-    });
-    request.executeMediaAndDownloadTo(outputStream);
+    }
+  }
+
+  /** Waits a little longer after each failure, so a brief network outage can pass. */
+  private void pause(final int attempt) throws IOException {
+    try {
+      Thread.sleep(retryDelay.multipliedBy(attempt).toMillis());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("Interrupted while waiting to resume a download", e);
+    }
+  }
+
+  /** Counts what reached the underlying stream, which is where a resumed download starts. */
+  private static final class CountingOutputStream extends FilterOutputStream {
+
+    private long count;
+
+    CountingOutputStream(final OutputStream out) {
+      super(out);
+    }
+
+    long count() {
+      return count;
+    }
+
+    @Override
+    public void write(final int b) throws IOException {
+      out.write(b);
+      count++;
+    }
+
+    @Override
+    public void write(final byte[] b, final int off, final int len) throws IOException {
+      out.write(b, off, len);
+      count += len;
+    }
   }
 
   public void deleteFile(final String fileId) throws IOException {
