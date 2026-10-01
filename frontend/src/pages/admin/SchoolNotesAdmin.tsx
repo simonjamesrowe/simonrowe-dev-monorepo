@@ -17,16 +17,8 @@ import {
   type SchoolNote,
 } from '../../services/adminApi'
 import { prepareSchoolNoteImage } from './schoolNoteImage'
+import { SCHOOL_YEAR_GROUPS } from './schoolYearGroups'
 
-const YEAR_GROUPS = [
-  'Reception',
-  'Year 1',
-  'Year 2',
-  'Year 3',
-  'Year 4',
-  'Year 5',
-  'Year 6',
-]
 
 /**
  * How long the page keeps asking whether the links have been fetched.
@@ -276,7 +268,7 @@ export function SchoolNotesAdmin() {
           </div>
           <fieldset className="school-notes__years">
             <legend className="admin-form__label">Who this is for</legend>
-            {YEAR_GROUPS.map((year) => (
+            {SCHOOL_YEAR_GROUPS.map((year) => (
               <label key={year} className="school-notes__year">
                 <input
                   type="checkbox"

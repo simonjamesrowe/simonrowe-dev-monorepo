@@ -54,7 +54,7 @@ public class SchoolDocumentWriter {
       final Visibility defaultVisibility) {
 
     final String id = SchoolIds.documentId(sourceType, sourceRef);
-    final String hash = sha256(body);
+    final String hash = contentHash(body);
     final Optional<SchoolDocument> existing = repository.findById(id);
 
     if (existing.isPresent() && hash.equals(existing.get().contentHash())) {
@@ -176,7 +176,14 @@ public class SchoolDocumentWriter {
     }
   }
 
-  private static String sha256(final String input) {
+  /**
+   * The hash stored as {@code contentHash}, so a hand edit records the same value a re-ingest of
+   * that text would compare against.
+   *
+   * @param input the document text
+   * @return its hex SHA-256
+   */
+  public static String contentHash(final String input) {
     try {
       final MessageDigest digest = MessageDigest.getInstance("SHA-256");
       return HexFormat.of().formatHex(

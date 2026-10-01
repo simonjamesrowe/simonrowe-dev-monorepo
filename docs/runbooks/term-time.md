@@ -515,7 +515,30 @@ What changed, and what is load-bearing:
 The first crawl after deploy is longer and does more writes than usual. It re-dates the ~130
 stored PDFs (one ranged GET plus the ten-second pause each, about 20 minutes, once). It also
 re-indexes every year page and every retitled PDF. Embedding is the only cost, and it is small.
-Existing notes pick up their year groups when re-saved.
+Existing notes pick up their year groups when re-saved — or, now, when edited (below).
+
+### Editing a document in place
+
+`/admin/school/documents` has an **Edit** button on every card. It turns the title into a text
+field and the preview into a textarea, with the year-group checkboxes above it, and saves through
+`PUT /api/admin/school/documents/{id}` (`SchoolDocumentEditor`). Cmd/Ctrl+Enter saves and Escape
+cancels.
+
+- **In place, not a re-paste.** A note's id is a hash of its text, so pasting a corrected copy
+  forked a second note beside the first. An edit keeps the id, `sourceRef`, the publication date
+  and every human decision (tier, approval, decline).
+- **The chunks are always rewritten**, a title-only edit included: the assistant reads the
+  title, text and `years=` from Elasticsearch, not Mongo.
+- **Events are re-read when the text or year groups change**, and the ones this document made
+  before are deleted first, since a corrected date would otherwise leave the wrong one standing.
+  Extraction runs before the delete; if the model call fails the edit still saves, the old events
+  stay, and the console says so. A title-only edit makes no model call.
+- **A note's new links are recorded and fetched** as on first paste. Links already recorded keep
+  their status.
+- **Crawled sources can be edited, but not for long.** The website crawl compares a page against
+  its stored hash, reads the edit as a change and writes the page back; a website PDF's title and
+  year groups are re-derived at the end of every complete crawl. The editor warns on those
+  (`editsOverwrittenByCrawl`). Notes, email and email attachments keep their edits.
 
 ## Answer length, and the guardrail's blind spot
 

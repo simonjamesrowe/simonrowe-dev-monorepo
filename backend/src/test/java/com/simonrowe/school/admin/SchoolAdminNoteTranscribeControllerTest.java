@@ -35,7 +35,8 @@ class SchoolAdminNoteTranscribeControllerTest {
       mock(SchoolLinkRepository.class),
       mock(SchoolLinkFetcher.class),
       mock(SchoolNoteService.class),
-      transcriber);
+      transcriber,
+      mock(SchoolDocumentEditor.class));
 
   @Test
   @DisplayName("SVG and PDF uploads are rejected before untrusted bytes reach the model")

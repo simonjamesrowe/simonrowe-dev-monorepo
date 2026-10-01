@@ -12137,6 +12137,31 @@ body[data-narration-bar] .app-layout__main {
   color: #b3541e;
 }
 
+.school-admin__tag--year {
+  color: var(--color-text-muted);
+}
+
+/* Inline document editing: the card's title and preview become the form, in place. */
+.school-admin__edit-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.school-admin__editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+
+.school-admin__edit-body {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
 .school-admin__pager {
   display: flex;
   align-items: center;
@@ -12294,7 +12319,7 @@ body[data-narration-bar] .app-layout__main {
 
 .school-notes__text {
   width: 100%;
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--font-mono, monospace);
   font-size: 0.85rem;
   line-height: 1.55;
   resize: vertical;
