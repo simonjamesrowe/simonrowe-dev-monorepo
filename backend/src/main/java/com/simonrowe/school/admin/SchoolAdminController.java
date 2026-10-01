@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -27,6 +28,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -67,6 +69,7 @@ public class SchoolAdminController {
   private final SchoolLinkFetcher linkFetcher;
   private final SchoolNoteService notes;
   private final SchoolNoteTranscriber noteTranscriber;
+  private final SchoolDocumentEditor editor;
 
   @SuppressWarnings("checkstyle:ParameterNumber")
   public SchoolAdminController(
@@ -79,7 +82,8 @@ public class SchoolAdminController {
       final SchoolLinkRepository links,
       final SchoolLinkFetcher linkFetcher,
       final SchoolNoteService notes,
-      final SchoolNoteTranscriber noteTranscriber) {
+      final SchoolNoteTranscriber noteTranscriber,
+      final SchoolDocumentEditor editor) {
     this.mongoTemplate = mongoTemplate;
     this.syncState = syncState;
     this.approvalService = approvalService;
@@ -90,6 +94,7 @@ public class SchoolAdminController {
     this.linkFetcher = linkFetcher;
     this.notes = notes;
     this.noteTranscriber = noteTranscriber;
+    this.editor = editor;
   }
 
   /**
@@ -228,6 +233,35 @@ public class SchoolAdminController {
   public ResponseEntity<SchoolDocument> document(@PathVariable final String id) {
     final SchoolDocument found = mongoTemplate.findById(id, SchoolDocument.class);
     return found == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(found);
+  }
+
+  /**
+   * Corrects a document's title, text and year groups in place.
+   *
+   * <p>Keeps the id and every approval decision, rewrites the chunks and re-reads the events —
+   * see {@link SchoolDocumentEditor}.
+   *
+   * @param id the document id
+   * @param request the corrected title, text and year groups
+   * @return the updated row, 400 when the title or text is blank, 404 for an unknown id
+   */
+  @PutMapping("/documents/{id}")
+  public ResponseEntity<DocumentEditResponse> editDocument(@PathVariable final String id,
+      @org.springframework.web.bind.annotation.RequestBody final DocumentEditRequest request) {
+    final Optional<SchoolDocumentEditor.Edit> edit;
+    try {
+      edit = editor.edit(id, request.title(), request.body(), request.yearGroups());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+    return edit
+        .map(result -> ResponseEntity.ok(new DocumentEditResponse(
+            DocumentSummary.from(result.document(), attachments.has(id),
+                links.findBySourceDocumentIdIn(List.of(id)).stream()
+                    .map(LinkSummary::from).toList()),
+            result.changed(),
+            result.eventRefreshFailed())))
+        .orElseGet(() -> ResponseEntity.notFound().build());
   }
 
   /**
@@ -587,6 +621,34 @@ public class SchoolAdminController {
     }
   }
 
+  /**
+   * A hand correction to a document.
+   *
+   * @param title the corrected title
+   * @param body the corrected text
+   * @param yearGroups the year groups it concerns, empty for whole-school
+   */
+  public record DocumentEditRequest(String title, String body, List<String> yearGroups) {
+
+    /** Normalises nulls; blank title or text is refused by the editor, not here. */
+    public DocumentEditRequest {
+      title = title == null ? "" : title;
+      body = body == null ? "" : body;
+      yearGroups = com.simonrowe.school.model.YearGroups.sanitise(yearGroups);
+    }
+  }
+
+  /**
+   * What an edit did.
+   *
+   * @param document the row as now stored
+   * @param changed false when the edit matched what was stored, so nothing was rewritten
+   * @param eventRefreshFailed true when the events could not be re-read and the old ones remain
+   */
+  public record DocumentEditResponse(
+      DocumentSummary document, boolean changed, boolean eventRefreshFailed) {
+  }
+
   /** Text read from a photographed page and its suggested filing label. */
   public record TranscriptionResponse(String text, String title) {
   }
@@ -691,7 +753,9 @@ public class SchoolAdminController {
       boolean hasAttachment,
       String body,
       List<LinkSummary> discoveredLinks,
-      String originalUrl) {
+      String originalUrl,
+      List<String> yearGroups,
+      boolean editsOverwrittenByCrawl) {
 
     static DocumentSummary from(final SchoolDocument document, final boolean hasAttachment,
         final List<LinkSummary> discoveredLinks) {
@@ -715,7 +779,9 @@ public class SchoolAdminController {
           discoveredLinks,
           document.sourceRef() != null && document.sourceRef().startsWith("http")
               ? document.sourceRef()
-              : null);
+              : null,
+          document.yearGroups(),
+          SchoolDocumentEditor.isRewrittenByIngest(document));
     }
   }
 }

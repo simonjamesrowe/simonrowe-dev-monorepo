@@ -242,6 +242,14 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- termtime-document-edit: **Term Time documents can be edited inline** at
+  `/admin/school/documents` (title, text, year groups) via `PUT /api/admin/school/documents/{id}`
+  and `SchoolDocumentEditor`. The edit is **in place**: a note's id hashes its text, so
+  re-pasting a correction forked a second note. Id, date and every approval decision are kept;
+  chunks are always rewritten; events are re-read (old ones deleted only after extraction
+  succeeds) when the text or year groups change; an edited note follows its new links. Website
+  pages, the calendar and website PDFs are re-read by the crawl, so an edit to those is temporary
+  and the editor says so. See `docs/runbooks/term-time.md` ("Editing a document in place").
 - termtime-year-group-retrieval: **Year groups now reach the search and the assistant.** Asked
   for the Year 3 spellings on 2026-09-30, a minute after that week's list had been pasted in with
   Year 3 ticked, Term Time gave the Year 6 list, called it "the Year 3 Home Learning PDF", and

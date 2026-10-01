@@ -7,6 +7,8 @@ import {
   FileDown,
   ExternalLink,
   Link2,
+  Loader2,
+  Pencil,
   XCircle,
 } from 'lucide-react'
 
@@ -15,12 +17,22 @@ import {
   bulkSchoolApproval,
   fetchSchoolDocuments,
   decideSchoolLink,
+  editSchoolDocument,
   openSchoolAttachment,
   type SchoolDocumentSummary,
   type SchoolLinkSummary,
 } from '../../services/adminApi'
+import { SCHOOL_YEAR_GROUPS } from './schoolYearGroups'
 
 const PAGE_SIZE = 25
+
+/** The fields a hand edit can change. */
+interface DocumentDraft {
+  id: string
+  title: string
+  body: string
+  yearGroups: string[]
+}
 
 interface SchoolDocumentsAdminProps {
   /** Fixes the status filter, so the Approvals page is this table pre-filtered. */
@@ -56,6 +68,10 @@ export function SchoolDocumentsAdmin({
   const [notice, setNotice] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [linkState, setLinkState] = useState<Record<string, SchoolLinkSummary>>({})
+  // One document at a time: a second open editor would make "Save" ambiguous, and a page reload
+  // from an action on another row would discard whichever draft was not being looked at.
+  const [draft, setDraft] = useState<DocumentDraft | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -87,7 +103,65 @@ export function SchoolDocumentsAdmin({
   useEffect(() => {
     setSelected(new Set())
     setExpanded(new Set())
+    setDraft(null)
   }, [page, search, sourceType, visibility, status])
+
+  function startEditing(row: SchoolDocumentSummary) {
+    setDraft({
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      yearGroups: [...(row.yearGroups ?? [])],
+    })
+    setNotice(null)
+    setError(null)
+  }
+
+  function toggleDraftYear(year: string) {
+    setDraft((current) =>
+      current && {
+        ...current,
+        yearGroups: current.yearGroups.includes(year)
+          ? current.yearGroups.filter((y) => y !== year)
+          : // Kept in school order, so the stored list reads the same however it was ticked.
+            SCHOOL_YEAR_GROUPS.filter((y) => y === year || current.yearGroups.includes(y)),
+      },
+    )
+  }
+
+  async function saveEdit() {
+    if (!draft || savingEdit) {
+      return
+    }
+    setSavingEdit(true)
+    try {
+      const result = await editSchoolDocument(getAccessToken, draft.id, {
+        title: draft.title,
+        body: draft.body,
+        yearGroups: draft.yearGroups,
+      })
+      // Replaced in place rather than reloaded: a reload re-sorts and re-pages, and the row the
+      // operator just corrected could move off the screen they are looking at.
+      setRows((prior) => prior.map((r) => (r.id === draft.id ? result.document : r)))
+      setDraft(null)
+      setError(null)
+      if (!result.changed) {
+        setNotice('Nothing changed.')
+      } else if (result.eventRefreshFailed) {
+        setNotice(null)
+        setError(
+          'Saved, but the dates could not be re-read from the new text. ' +
+            'The events from before the edit are still in place.',
+        )
+      } else {
+        setNotice('Saved. Term Time answers from the edited version now.')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That edit did not save')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
 
   function toggleExpanded(id: string) {
     setExpanded((prior) => {
@@ -285,153 +359,251 @@ export function SchoolDocumentsAdmin({
       {!loading && rows.length === 0 && <p className="admin-empty">Nothing matches.</p>}
 
       <ul className="admin-approval-list">
-        {rows.map((row) => (
-          <li key={row.id} className="admin-approval">
-            <div className="admin-approval__head">
-              <label className="school-admin__row-check">
-                <input
-                  type="checkbox"
-                  checked={selected.has(row.id)}
-                  onChange={() => toggle(row.id)}
-                  aria-label={`Select ${row.title}`}
-                />
-                <h2 className="admin-approval__title">{row.title}</h2>
-              </label>
-              <span className="admin-approval__meta">
-                <span className={`school-admin__tag school-admin__tag--${row.sourceType}`}>
-                  {row.sourceType}
+        {rows.map((row) => {
+          const editing = draft?.id === row.id ? draft : null
+          return (
+            <li key={row.id} className="admin-approval">
+              <div className="admin-approval__head">
+                {editing ? (
+                  <input
+                    className="admin-form__input school-admin__edit-title"
+                    value={editing.title}
+                    onChange={(e) => setDraft({ ...editing, title: e.target.value })}
+                    aria-label="Title"
+                  />
+                ) : (
+                  <label className="school-admin__row-check">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(row.id)}
+                      onChange={() => toggle(row.id)}
+                      aria-label={`Select ${row.title}`}
+                    />
+                    <h2 className="admin-approval__title">{row.title}</h2>
+                  </label>
+                )}
+                <span className="admin-approval__meta">
+                  {!editing &&
+                    (row.yearGroups ?? []).map((year) => (
+                      <span key={year} className="school-admin__tag school-admin__tag--year">
+                        {year}
+                      </span>
+                    ))}
+                  <span className={`school-admin__tag school-admin__tag--${row.sourceType}`}>
+                    {row.sourceType}
+                  </span>
+                  <span
+                    className={`school-admin__tag school-admin__tag--${row.visibility}`}
+                  >
+                    {row.visibility}
+                  </span>
+                  {new Date(row.publishedAt).toLocaleDateString('en-GB')}
                 </span>
-                <span
-                  className={`school-admin__tag school-admin__tag--${row.visibility}`}
-                >
-                  {row.visibility}
-                </span>
-                {new Date(row.publishedAt).toLocaleDateString('en-GB')}
-              </span>
-            </div>
-
-            {row.proposalReason && (
-              <p className="admin-approval__reason">{row.proposalReason}</p>
-            )}
-            <pre className="admin-approval__preview">
-              {expanded.has(row.id) ? row.body : row.preview}
-            </pre>
-
-            {row.discoveredLinks.length > 0 && (
-              <div className="school-admin__links">
-                <p className="school-admin__links-title">
-                  <Link2 size={14} aria-hidden="true" /> Links found in this message —{' '}
-                  <strong>none have been followed</strong>
-                </p>
-                <ul>
-                  {row.discoveredLinks.map((raw) => {
-                    const link = linkState[raw.id] ?? raw
-                    return (
-                      <li key={link.id} className="school-admin__link">
-                        <div className="school-admin__link-detail">
-                          <span className="school-admin__link-text">{link.anchorText}</span>
-                          <span className="school-admin__tag">{link.likelyKind}</span>
-                          {/* The URL is shown in full and NOT clickable: clicking is exactly
-                              the decision being made, and an accidental click on a tracking
-                              link is the thing this page exists to prevent. */}
-                          <code className="school-admin__link-url">{link.url}</code>
-                          {link.failureReason && (
-                            <span className="school-admin__link-error">
-                              {link.failureReason}
-                            </span>
-                          )}
-                        </div>
-                        {link.status === 'PENDING' ? (
-                          <div className="school-admin__link-actions">
-                            <button
-                              type="button"
-                              className="admin-btn admin-btn--sm admin-btn--primary"
-                              onClick={() => void decideLink(link, 'fetch')}
-                            >
-                              <Download size={13} aria-hidden="true" /> Fetch
-                            </button>
-                            <button
-                              type="button"
-                              className="admin-btn admin-btn--sm"
-                              onClick={() => void decideLink(link, 'ignore')}
-                            >
-                              Ignore
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="school-admin__tag">{link.status}</span>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
               </div>
-            )}
 
-            <div className="school-admin__row-actions">
-              {/*
-                Per-row publish controls. The bulk bar above is for working through a queue of
-                similar items; for a single already-public website PDF, ticking a checkbox and
-                then reaching for a toolbar button is the wrong shape of interaction entirely.
-              */}
-              {row.visibility === 'PUBLIC' ? (
-                <button
-                  type="button"
-                  className="admin-btn admin-btn--sm"
-                  onClick={() => void applyOne(row.id, 'revoke')}
-                >
-                  <XCircle size={14} aria-hidden="true" /> Make private
-                </button>
+              {row.proposalReason && (
+                <p className="admin-approval__reason">{row.proposalReason}</p>
+              )}
+              {editing ? (
+                <div className="school-admin__editor">
+                  <fieldset className="school-notes__years">
+                    <legend className="admin-form__label">Who this is for</legend>
+                    {SCHOOL_YEAR_GROUPS.map((year) => (
+                      <label key={year} className="school-notes__year">
+                        <input
+                          type="checkbox"
+                          checked={editing.yearGroups.includes(year)}
+                          onChange={() => toggleDraftYear(year)}
+                        />
+                        {year}
+                      </label>
+                    ))}
+                    <p className="school-admin__source-note">
+                      Searches for a year look here first. Leave all of them unticked for
+                      whole-school.
+                    </p>
+                  </fieldset>
+                  <textarea
+                    className="admin-form__textarea school-admin__edit-body"
+                    value={editing.body}
+                    // Sized to the text, so editing a short note does not open a page-tall box and
+                    // a long newsletter does not open a three-line one.
+                    rows={Math.min(30, Math.max(6, editing.body.split('\n').length + 1))}
+                    onChange={(e) => setDraft({ ...editing, body: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setDraft(null)
+                      } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault()
+                        void saveEdit()
+                      }
+                    }}
+                    aria-label="Text"
+                    autoFocus
+                  />
+                  {row.editsOverwrittenByCrawl && (
+                    <p className="school-admin__source-note">
+                      The website crawl re-reads this source, so the next crawl may replace this
+                      edit with what the school publishes.
+                    </p>
+                  )}
+                </div>
               ) : (
-                <button
-                  type="button"
-                  className="admin-btn admin-btn--sm admin-btn--primary"
-                  onClick={() => void applyOne(row.id, 'approve')}
-                >
-                  <CheckCircle2 size={14} aria-hidden="true" /> Make public
-                </button>
+                <pre className="admin-approval__preview">
+                  {expanded.has(row.id) ? row.body : row.preview}
+                </pre>
               )}
-              {/* The preview is 300 characters — nowhere near enough to judge a newsletter by,
-                  which is the entire task on this page. The full body already came down with
-                  the row, so this is a local expand rather than another request. */}
-              {row.body.length > row.preview.length && (
-                <button
-                  type="button"
-                  className="admin-btn admin-btn--sm"
-                  onClick={() => toggleExpanded(row.id)}
-                  aria-expanded={expanded.has(row.id)}
-                >
-                  {expanded.has(row.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  {expanded.has(row.id) ? 'Show less' : 'Show more'}
-                </button>
+
+              {row.discoveredLinks.length > 0 && (
+                <div className="school-admin__links">
+                  <p className="school-admin__links-title">
+                    <Link2 size={14} aria-hidden="true" /> Links found in this message —{' '}
+                    <strong>none have been followed</strong>
+                  </p>
+                  <ul>
+                    {row.discoveredLinks.map((raw) => {
+                      const link = linkState[raw.id] ?? raw
+                      return (
+                        <li key={link.id} className="school-admin__link">
+                          <div className="school-admin__link-detail">
+                            <span className="school-admin__link-text">{link.anchorText}</span>
+                            <span className="school-admin__tag">{link.likelyKind}</span>
+                            {/* The URL is shown in full and NOT clickable: clicking is exactly
+                                the decision being made, and an accidental click on a tracking
+                                link is the thing this page exists to prevent. */}
+                            <code className="school-admin__link-url">{link.url}</code>
+                            {link.failureReason && (
+                              <span className="school-admin__link-error">
+                                {link.failureReason}
+                              </span>
+                            )}
+                          </div>
+                          {link.status === 'PENDING' ? (
+                            <div className="school-admin__link-actions">
+                              <button
+                                type="button"
+                                className="admin-btn admin-btn--sm admin-btn--primary"
+                                onClick={() => void decideLink(link, 'fetch')}
+                              >
+                                <Download size={13} aria-hidden="true" /> Fetch
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-btn admin-btn--sm"
+                                onClick={() => void decideLink(link, 'ignore')}
+                              >
+                                Ignore
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="school-admin__tag">{link.status}</span>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
               )}
-              {row.originalUrl && (
-                <a
-                  className="admin-btn admin-btn--sm"
-                  href={row.originalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink size={14} aria-hidden="true" />
-                  {row.sourceType === 'PDF' ? 'View PDF' : 'View original'}
-                </a>
+
+              {editing ? (
+                <div className="school-admin__row-actions">
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn--sm admin-btn--primary"
+                    disabled={savingEdit || !editing.title.trim() || !editing.body.trim()}
+                    onClick={() => void saveEdit()}
+                  >
+                    {savingEdit ? (
+                      <Loader2 size={14} className="school-admin__spin" aria-hidden="true" />
+                    ) : (
+                      <CheckCircle2 size={14} aria-hidden="true" />
+                    )}
+                    {savingEdit ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn--sm"
+                    disabled={savingEdit}
+                    onClick={() => setDraft(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="school-admin__row-actions">
+                  {/*
+                    Per-row publish controls. The bulk bar above is for working through a queue of
+                    similar items; for a single already-public website PDF, ticking a checkbox and
+                    then reaching for a toolbar button is the wrong shape of interaction entirely.
+                  */}
+                  {row.visibility === 'PUBLIC' ? (
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--sm"
+                      onClick={() => void applyOne(row.id, 'revoke')}
+                    >
+                      <XCircle size={14} aria-hidden="true" /> Make private
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--sm admin-btn--primary"
+                      onClick={() => void applyOne(row.id, 'approve')}
+                    >
+                      <CheckCircle2 size={14} aria-hidden="true" /> Make public
+                    </button>
+                  )}
+                  {/* The preview is 300 characters — nowhere near enough to judge a newsletter by,
+                      which is the entire task on this page. The full body already came down with
+                      the row, so this is a local expand rather than another request. */}
+                  {row.body.length > row.preview.length && (
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--sm"
+                      onClick={() => toggleExpanded(row.id)}
+                      aria-expanded={expanded.has(row.id)}
+                    >
+                      {expanded.has(row.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      {expanded.has(row.id) ? 'Show less' : 'Show more'}
+                    </button>
+                  )}
+                  {row.originalUrl && (
+                    <a
+                      className="admin-btn admin-btn--sm"
+                      href={row.originalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink size={14} aria-hidden="true" />
+                      {row.sourceType === 'PDF' ? 'View PDF' : 'View original'}
+                    </a>
+                  )}
+                  {row.hasAttachment && (
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--sm"
+                      onClick={() =>
+                        void openSchoolAttachment(getAccessToken, row.id).catch((err) =>
+                          setError(err instanceof Error ? err.message : 'Could not open that PDF'),
+                        )
+                      }
+                    >
+                      <FileDown size={14} aria-hidden="true" /> Open PDF
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn--sm"
+                    onClick={() => startEditing(row)}
+                    aria-label={`Edit ${row.title}`}
+                  >
+                    <Pencil size={14} aria-hidden="true" /> Edit
+                  </button>
+                </div>
               )}
-              {row.hasAttachment && (
-                <button
-                  type="button"
-                  className="admin-btn admin-btn--sm"
-                  onClick={() =>
-                    void openSchoolAttachment(getAccessToken, row.id).catch((err) =>
-                      setError(err instanceof Error ? err.message : 'Could not open that PDF'),
-                    )
-                  }
-                >
-                  <FileDown size={14} aria-hidden="true" /> Open PDF
-                </button>
-              )}
-            </div>
-          </li>
-        ))}
+            </li>
+          )
+        })}
       </ul>
 
       <nav className="school-admin__pager" aria-label="Pagination">

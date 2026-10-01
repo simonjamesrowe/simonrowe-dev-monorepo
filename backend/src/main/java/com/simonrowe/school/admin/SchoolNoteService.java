@@ -193,14 +193,28 @@ public class SchoolNoteService {
     final SchoolDocument document = result.document();
     ingestService.embed(document);
     final List<SchoolEvent> found = extractEvents(document, yearGroups);
-    final List<SchoolLink> recorded = recordLinks(document, body);
+    final int queued = followLinks(document);
+    LOG.info("Pasted note {} stored: {} event(s), {} link(s) queued",
+        document.id(), found.size(), queued);
+    return read(document.id()).orElseThrow();
+  }
 
+  /**
+   * Records every address in a note and starts fetching the ones nobody has decided about.
+   *
+   * <p>Public so an edited note follows its new links exactly as a pasted one does. Addresses
+   * already recorded keep their status, so an edit never re-fetches a page or re-offers one that
+   * was ignored.
+   *
+   * @param document the note
+   * @return how many addresses the note carries
+   */
+  public int followLinks(final SchoolDocument document) {
+    final List<SchoolLink> recorded = recordLinks(document, document.body());
     if (!recorded.isEmpty() && fetching.add(document.id())) {
       executor.submit(() -> fetchAll(document.id()));
     }
-    LOG.info("Pasted note {} stored: {} event(s), {} link(s) queued",
-        document.id(), found.size(), recorded.size());
-    return read(document.id()).orElseThrow();
+    return recorded.size();
   }
 
   /**

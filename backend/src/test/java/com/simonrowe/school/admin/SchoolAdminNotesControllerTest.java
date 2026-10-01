@@ -52,7 +52,8 @@ class SchoolAdminNotesControllerTest {
       mock(SchoolLinkRepository.class),
       mock(SchoolLinkFetcher.class),
       notes,
-      mock(SchoolNoteTranscriber.class));
+      mock(SchoolNoteTranscriber.class),
+      mock(SchoolDocumentEditor.class));
 
   @Test
   @DisplayName("saving a note returns what was understood, not just an acknowledgement")

@@ -1139,6 +1139,33 @@ export interface SchoolDocumentSummary {
   body: string
   discoveredLinks: SchoolLinkSummary[]
   originalUrl: string | null
+  yearGroups: string[]
+  /** True when the next crawl re-reads this source and so replaces a hand edit. */
+  editsOverwrittenByCrawl: boolean
+}
+
+/** What a hand edit to a document did. */
+export interface SchoolDocumentEditResult {
+  document: SchoolDocumentSummary
+  /** False when the edit matched what was stored, so nothing was rewritten. */
+  changed: boolean
+  /** True when the events could not be re-read and the previous ones remain. */
+  eventRefreshFailed: boolean
+}
+
+export async function editSchoolDocument(
+  getAccessToken: GetAccessToken,
+  id: string,
+  input: { title: string; body: string; yearGroups: string[] },
+): Promise<SchoolDocumentEditResult> {
+  const token = await getAccessToken()
+  return handleResponse<SchoolDocumentEditResult>(
+    await authFetch(`${ADMIN_URL}/school/documents/${encodeURIComponent(id)}`, token, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+  )
 }
 
 /** A hyperlink found in a document. Nothing has been requested from it. */
