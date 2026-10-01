@@ -139,6 +139,15 @@ describe('NewsSummaryDrawer', () => {
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
+  it('offers to write a summary when there is none yet', () => {
+    const { onRetry } = renderDrawer({ summary: null })
+
+    expect(screen.getByText('No summary has been written for this article yet.'))
+      .toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Summarise' }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
   it('closes on Escape', () => {
     const { onClose } = renderDrawer()
 

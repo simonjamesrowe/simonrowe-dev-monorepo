@@ -30,7 +30,10 @@ import com.simonrowe.media.BlogImageGenerationService;
 import com.simonrowe.media.ExternalImageDownloader;
 import com.simonrowe.media.MediaVariantResolver;
 import com.simonrowe.shortlink.ShortLinkService;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -508,5 +511,73 @@ class ContentAggregationAgentTest {
         ArgumentCaptor.forClass(AggregatedArticle.class);
     verify(articleRepository).save(captor.capture());
     assertThat(captor.getValue().sourceName()).isEqualTo("Tessl Blog");
+  }
+
+  @Test
+  void importFromUrl_filesPastTalkAsArticle() {
+    String url = "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem";
+    stubImport(url, new ContentClassification(
+        "event", "A talk about AI and engineering fundamentals.",
+        "2025-07-23", null, null, null));
+    when(articleRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+    agent.importFromUrl(url);
+
+    verify(articleRepository).save(any());
+    verify(eventRepository, never()).save(any());
+  }
+
+  @Test
+  void importFromUrl_keepsAnUpcomingEventAsAnEvent() {
+    String url = "https://example.com/meetup/upcoming";
+    stubImport(url, new ContentClassification(
+        "event", "An upcoming meetup.",
+        Instant.now().plus(Duration.ofDays(14)).toString(), "Tech Hub", "London", null));
+    when(eventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+    agent.importFromUrl(url);
+
+    verify(eventRepository).save(any());
+    verify(articleRepository, never()).save(any());
+  }
+
+  @Test
+  void importFromUrl_keepsAnEventDatedTodayAsAnEvent() {
+    // Stored at midnight UTC, so "now" is already past it for most of the day.
+    String url = "https://example.com/meetup/today";
+    String today = LocalDate.now(ZoneOffset.UTC).toString();
+    stubImport(url, new ContentClassification(
+        "event", "A meetup tonight.", today, null, null, null));
+    when(eventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+    agent.importFromUrl(url);
+
+    verify(eventRepository).save(any());
+    verify(articleRepository, never()).save(any());
+  }
+
+  @Test
+  void importFromUrl_keepsAnUndatedEventAsAnEvent() {
+    String url = "https://example.com/meetup/undated";
+    stubImport(url, new ContentClassification(
+        "event", "A meetup with no date given.", null, null, null, null));
+    when(eventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+    agent.importFromUrl(url);
+
+    verify(eventRepository).save(any());
+    verify(articleRepository, never()).save(any());
+  }
+
+  @SuppressWarnings("unchecked")
+  private void stubImport(final String url, final ContentClassification classification) {
+    when(articleRepository.existsByOriginalUrl(url)).thenReturn(false);
+    when(eventRepository.existsByOriginalUrl(url)).thenReturn(false);
+    when(htmlScraper.scrapeArticlePagePublic(url)).thenReturn(new ScrapedContent(
+        "A page", url,
+        "Body text long enough to be sent to the classifier rather than defaulted.",
+        null, null, null, false));
+    when(sourceNameResolver.resolve(url)).thenReturn("example.com");
+    when(creating.fromPrompt(anyString())).thenReturn(classification);
   }
 }

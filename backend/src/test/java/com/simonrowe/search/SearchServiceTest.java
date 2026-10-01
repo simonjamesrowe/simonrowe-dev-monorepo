@@ -318,4 +318,62 @@ class SearchServiceTest {
       assertThat(query.fields()).startsWith("name^3");
     }
   }
+
+  @SuppressWarnings("unchecked")
+  @Test
+  void siteSearchSendsNewsAndEventsToTheirPlaceOnNewsAndEvents() throws Exception {
+    stubSiteHits(
+        new SiteSearchDocument(
+            "news_a1", "An article", "news", "Summary", null, "Publisher",
+            "/uploads/a1.jpg", "https://publisher.example/a1", null),
+        new SiteSearchDocument(
+            "event_e1", "A talk", "event", "Summary", null, "Organiser",
+            null, "https://organiser.example/e1", null));
+
+    GroupedSearchResponse result = searchService.siteSearch("talk");
+
+    assertThat(result.news().getFirst().url()).isEqualTo("/news-events?article=a1");
+    assertThat(result.news().getFirst().image()).isEqualTo("/uploads/a1.jpg");
+    assertThat(result.events().getFirst().url()).isEqualTo("/news-events?event=e1");
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test
+  void siteSearchKeepsTheIndexedUrlWhenTheIdHasNoContentId() throws Exception {
+    stubSiteHits(new SiteSearchDocument(
+        "news_", "An article", "news", "Summary", null, "Publisher",
+        null, "https://publisher.example/a1", null));
+
+    GroupedSearchResponse result = searchService.siteSearch("article");
+
+    assertThat(result.news().getFirst().url()).isEqualTo("https://publisher.example/a1");
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test
+  void searchByTypeStillCitesThePublisher() throws Exception {
+    // The chat and MCP news tools cite the source, so only the site search box is rerouted.
+    stubSiteHits(new SiteSearchDocument(
+        "news_a1", "An article", "news", "Summary", null, "Publisher",
+        null, "https://publisher.example/a1", null));
+
+    List<SearchResult> results = searchService.searchByType("article", "news");
+
+    assertThat(results.getFirst().url()).isEqualTo("https://publisher.example/a1");
+  }
+
+  @SuppressWarnings("unchecked")
+  private void stubSiteHits(final SiteSearchDocument... docs) throws Exception {
+    List<Hit<SiteSearchDocument>> hitList = new java.util.ArrayList<>();
+    for (SiteSearchDocument doc : docs) {
+      Hit<SiteSearchDocument> hit = mock(Hit.class);
+      when(hit.source()).thenReturn(doc);
+      hitList.add(hit);
+    }
+    HitsMetadata<SiteSearchDocument> hits = mock(HitsMetadata.class);
+    when(hits.hits()).thenReturn(hitList);
+    SearchResponse<SiteSearchDocument> response = mock(SearchResponse.class);
+    when(response.hits()).thenReturn(hits);
+    when(esClient.search(any(Function.class), any(Class.class))).thenReturn(response);
+  }
 }
