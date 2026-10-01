@@ -144,10 +144,18 @@ export function NewsSummaryDrawer({
       </div>
     )
   } else {
+    // Reached by a shared link or a site-search result to an article nobody has summarised.
+    // Without the button this is a dead end: the card's Summarise control is somewhere
+    // behind the overlay, possibly on a page that was never loaded.
     body = (
-      <p className="news-summary__status" role="status">
-        No summary has been written for this article yet.
-      </p>
+      <div className="news-summary__feedback">
+        <p className="news-summary__status" role="status">
+          No summary has been written for this article yet.
+        </p>
+        <button className="button button--secondary" onClick={onRetry} type="button">
+          <Sparkles aria-hidden="true" size={14} /> Summarise
+        </button>
+      </div>
     )
   }
 

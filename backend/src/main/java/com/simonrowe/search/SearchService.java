@@ -10,10 +10,13 @@ import com.simonrowe.search.elasticsearch.BlogSearchDocument;
 import com.simonrowe.search.elasticsearch.ElasticsearchConfig;
 import com.simonrowe.search.elasticsearch.SiteSearchDocument;
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,8 +108,10 @@ public class SearchService {
       List<SearchResult> blogs = toSearchResults(grouped.getOrDefault("blog", List.of()));
       List<SearchResult> jobs = toSearchResults(grouped.getOrDefault("job", List.of()));
       List<SearchResult> skills = toSearchResults(grouped.getOrDefault("skill", List.of()));
-      List<SearchResult> news = toSearchResults(grouped.getOrDefault("news", List.of()));
-      List<SearchResult> events = toSearchResults(grouped.getOrDefault("event", List.of()));
+      List<SearchResult> news = toSearchResults(
+          grouped.getOrDefault("news", List.of()), doc -> onSiteUrl(doc, "news_", "article"));
+      List<SearchResult> events = toSearchResults(
+          grouped.getOrDefault("event", List.of()), doc -> onSiteUrl(doc, "event_", "event"));
 
       return new GroupedSearchResponse(blogs, jobs, skills, news, events);
     } catch (IOException e) {
@@ -202,13 +207,43 @@ public class SearchService {
   }
 
   private List<SearchResult> toSearchResults(final List<SiteSearchDocument> documents) {
+    return toSearchResults(documents, SiteSearchDocument::url);
+  }
+
+  private List<SearchResult> toSearchResults(
+      final List<SiteSearchDocument> documents,
+      final Function<SiteSearchDocument, String> urlFor) {
     return documents.stream()
         .limit(maxResultsPerGroup)
         .map(doc -> new SearchResult(
             doc.name(),
             mediaVariantResolver.resolvePath(doc.image(), "thumbnail", "small", "medium"),
-            doc.url()))
+            urlFor.apply(doc)))
         .toList();
+  }
+
+  /**
+   * Where a news or event result in the site search box takes the visitor: the item on
+   * News &amp; Events, not the publisher's page.
+   *
+   * <p>The publisher's page has none of what the site adds — the summary, narration,
+   * favourite and share controls all live on {@code /news-events}, which already opens an
+   * article's drawer for {@code ?article=} and puts an event's card on the page for
+   * {@code ?event=}, fetching either by id when it is not on the loaded page. The index
+   * keeps the publisher's URL, because the chat and MCP news tools cite the source.
+   *
+   * <p>Falls back to the indexed URL for a document whose id lacks the expected prefix,
+   * so a result is never left without a destination.
+   */
+  private static String onSiteUrl(
+      final SiteSearchDocument doc, final String idPrefix, final String parameter) {
+    String id = doc.id();
+    if (id == null || !id.startsWith(idPrefix) || id.length() == idPrefix.length()) {
+      return doc.url();
+    }
+    String contentId = id.substring(idPrefix.length());
+    return "/news-events?" + parameter + "="
+        + URLEncoder.encode(contentId, StandardCharsets.UTF_8);
   }
 
   private String sanitizeQuery(final String query) {

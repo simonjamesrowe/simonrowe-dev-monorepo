@@ -19,6 +19,7 @@ import com.simonrowe.media.MediaVariantResolver;
 import com.simonrowe.shortlink.ShortLinkContentType;
 import com.simonrowe.shortlink.ShortLinkService;
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
@@ -67,7 +68,10 @@ public class ContentAggregationAgent {
       the schema below.
 
       1. Classify whether this is a news/blog "article" or an "event" \
-      (conference, meetup, workshop, webinar, talk).
+      (conference, meetup, workshop, webinar, talk). An event is \
+      something a reader can still register for or attend. A page \
+      about a talk or session that has already taken place (its \
+      abstract, slides, recording or a write-up) is an "article".
       2. Write a concise 2-3 sentence summary.
       3. If it is an event, extract the event date (ISO-8601), venue \
       name, and location/city.
@@ -81,6 +85,14 @@ public class ContentAggregationAgent {
       Content:
       %s
       """;
+
+  /**
+   * How far in the past an imported "event" may be dated and still be filed as one.
+   *
+   * <p>A day rather than zero, because an event dated today is stored at midnight UTC and
+   * is still worth attending at noon.
+   */
+  private static final Duration IMPORT_EVENT_GRACE = Duration.ofDays(1);
 
   private final ContentSourceRepository sourceRepository;
   private final AggregatedArticleRepository articleRepository;
@@ -151,13 +163,43 @@ public class ContentAggregationAgent {
         ContentSource.ScrapeStrategy.HTML_LISTING,
         false, null, null, null);
 
-    if (classification.isEvent() || content.isEvent()) {
+    if (importAsEvent(content, classification)) {
       processEvent(manualSource, content, classification);
     } else {
       processArticle(manualSource, content, classification);
     }
     log.info("Imported from URL: {}", normalizedUrl);
     return "Imported: " + content.title();
+  }
+
+  /**
+   * Whether a hand-imported page is filed as an event rather than an article.
+   *
+   * <p>An event that has already happened is filed as an article. The classifier reads a
+   * speaker's page for a talk (abstract, slides, recording) as an "event", and an event
+   * dated in the past is invisible on News &amp; Events: the timeline lists upcoming events
+   * only, and events carry no image, summary or narration. What the visitor wants from that
+   * page is what an article offers, so the date decides rather than the classifier's wording.
+   *
+   * <p>An event with no date at all stays an event, as before, because nothing says it is
+   * over. Scheduled scrapes are not affected: an {@code EVENTS} source's past events are
+   * real events and belong in the past-events list.
+   */
+  boolean importAsEvent(
+      final ScrapedContent content, final ContentClassification classification) {
+    if (!classification.isEvent() && !content.isEvent()) {
+      return false;
+    }
+    Instant eventDate = parseEventDate(classification.eventDate());
+    if (eventDate == null) {
+      eventDate = content.publishedDate();
+    }
+    if (eventDate != null && eventDate.isBefore(Instant.now().minus(IMPORT_EVENT_GRACE))) {
+      log.info("Importing '{}' as an article: classified as an event dated {}, already past",
+          content.title(), eventDate);
+      return false;
+    }
+    return true;
   }
 
   // Fix 6: URL normalization matching the scraper's normalizeUrl logic
