@@ -1,7 +1,13 @@
 import { API_BASE_URL } from '../config/api'
 import type { BlogContentType } from '../types/blog'
 import type { HomePageContent } from '../types/homePage'
-import type { ProjectStatus } from '../types/portfolio'
+import type {
+  ProjectDemo,
+  ProjectHighlight,
+  ProjectPage,
+  ProjectStatement,
+  ProjectStatus,
+} from '../types/portfolio'
 
 const ADMIN_URL = `${API_BASE_URL}/api/admin`
 
@@ -583,6 +589,13 @@ export interface AdminPortfolioProject {
   image: { url: string } | null
   liveUrl: string | null
   accentHue: number
+  headline: string | null
+  summary: string | null
+  statement: ProjectStatement | null
+  exampleQuestions: string[]
+  highlights: ProjectHighlight[]
+  demo: ProjectDemo | null
+  pages: ProjectPage[]
   createdAt: string
   updatedAt: string
 }

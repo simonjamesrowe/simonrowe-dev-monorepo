@@ -1,0 +1,539 @@
+[
+  {
+    "type": "text",
+    "id": "title",
+    "x": 430,
+    "y": -110,
+    "text": "Where the answers come from",
+    "fontSize": 36
+  },
+  {
+    "type": "rectangle",
+    "id": "website",
+    "x": 0,
+    "y": 0,
+    "width": 240,
+    "height": 90,
+    "backgroundColor": "#a5d8ff",
+    "label": {
+      "text": "School website\npages and PDFs",
+      "fontSize": 20
+    },
+    "groupIds": [
+      "sources"
+    ]
+  },
+  {
+    "type": "rectangle",
+    "id": "calendar",
+    "x": 0,
+    "y": 150,
+    "width": 240,
+    "height": 90,
+    "backgroundColor": "#a5d8ff",
+    "label": {
+      "text": "Calendar feed\niCal",
+      "fontSize": 20
+    },
+    "groupIds": [
+      "sources"
+    ]
+  },
+  {
+    "type": "rectangle",
+    "id": "mailbox",
+    "x": 0,
+    "y": 300,
+    "width": 240,
+    "height": 90,
+    "backgroundColor": "#a5d8ff",
+    "label": {
+      "text": "School mailbox\nGmail, read-only",
+      "fontSize": 20
+    },
+    "groupIds": [
+      "sources"
+    ]
+  },
+  {
+    "type": "rectangle",
+    "id": "notes",
+    "x": 0,
+    "y": 450,
+    "width": 240,
+    "height": 90,
+    "backgroundColor": "#ffd8a8",
+    "label": {
+      "text": "WhatsApp notes\nand photos",
+      "fontSize": 20
+    },
+    "groupIds": [
+      "sources"
+    ]
+  },
+  {
+    "type": "rectangle",
+    "id": "fetch",
+    "x": 360,
+    "y": 60,
+    "width": 260,
+    "height": 100,
+    "backgroundColor": "#d0bfff",
+    "label": {
+      "text": "Fetch and extract\ncrawler, PDF, vision",
+      "fontSize": 20
+    },
+    "groupIds": [
+      "ingest"
+    ]
+  },
+  {
+    "type": "rectangle",
+    "id": "dates",
+    "x": 360,
+    "y": 260,
+    "width": 260,
+    "height": 100,
+    "backgroundColor": "#d0bfff",
+    "label": {
+      "text": "Pull out the dates\nand year groups",
+      "fontSize": 20
+    },
+    "groupIds": [
+      "ingest"
+    ]
+  },
+  {
+    "type": "diamond",
+    "id": "tier",
+    "x": 350,
+    "y": 430,
+    "width": 280,
+    "height": 170,
+    "backgroundColor": "#fff3bf",
+    "label": {
+      "text": "Public or\nrestricted?",
+      "fontSize": 19
+    },
+    "groupIds": [
+      "ingest"
+    ]
+  },
+  {
+    "type": "rectangle",
+    "id": "mongo",
+    "x": 760,
+    "y": 60,
+    "width": 250,
+    "height": 100,
+    "backgroundColor": "#c3fae8",
+    "label": {
+      "text": "MongoDB\ndocuments, events",
+      "fontSize": 20
+    },
+    "groupIds": [
+      "stores"
+    ]
+  },
+  {
+    "type": "rectangle",
+    "id": "es",
+    "x": 760,
+    "y": 260,
+    "width": 250,
+    "height": 100,
+    "backgroundColor": "#c3fae8",
+    "label": {
+      "text": "Elasticsearch\nschool vectors",
+      "fontSize": 20
+    },
+    "groupIds": [
+      "stores"
+    ]
+  },
+  {
+    "type": "rectangle",
+    "id": "queue",
+    "x": 760,
+    "y": 470,
+    "width": 250,
+    "height": 90,
+    "backgroundColor": "#ffc9c9",
+    "label": {
+      "text": "Approval queue\nadmin console",
+      "fontSize": 20
+    },
+    "groupIds": [
+      "stores"
+    ]
+  },
+  {
+    "type": "rectangle",
+    "id": "chat",
+    "x": 1150,
+    "y": 160,
+    "width": 250,
+    "height": 110,
+    "backgroundColor": "#b2f2bb",
+    "label": {
+      "text": "Term Time chat\ntools and search",
+      "fontSize": 20
+    },
+    "groupIds": [
+      "answers"
+    ]
+  },
+  {
+    "type": "ellipse",
+    "id": "parent",
+    "x": 1170,
+    "y": 400,
+    "width": 210,
+    "height": 100,
+    "backgroundColor": "#eebefa",
+    "label": {
+      "text": "A parent",
+      "fontSize": 20
+    },
+    "groupIds": [
+      "answers"
+    ]
+  },
+  {
+    "type": "arrow",
+    "id": "a-website",
+    "x": 240,
+    "y": 45,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        120,
+        50
+      ]
+    ],
+    "start": {
+      "id": "website"
+    },
+    "end": {
+      "id": "fetch"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "a-calendar",
+    "x": 240,
+    "y": 195,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        120,
+        -75
+      ]
+    ],
+    "start": {
+      "id": "calendar"
+    },
+    "end": {
+      "id": "fetch"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "a-mailbox",
+    "x": 240,
+    "y": 345,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        120,
+        -205
+      ]
+    ],
+    "start": {
+      "id": "mailbox"
+    },
+    "end": {
+      "id": "fetch"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "a-notes",
+    "x": 240,
+    "y": 495,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        120,
+        -340
+      ]
+    ],
+    "start": {
+      "id": "notes"
+    },
+    "end": {
+      "id": "fetch"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "a-fetch-dates",
+    "x": 490,
+    "y": 160,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        100
+      ]
+    ],
+    "start": {
+      "id": "fetch"
+    },
+    "end": {
+      "id": "dates"
+    },
+    "groupIds": [
+      "ingest"
+    ]
+  },
+  {
+    "type": "arrow",
+    "id": "a-dates-tier",
+    "x": 490,
+    "y": 360,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        70
+      ]
+    ],
+    "start": {
+      "id": "dates"
+    },
+    "end": {
+      "id": "tier"
+    },
+    "groupIds": [
+      "ingest"
+    ]
+  },
+  {
+    "type": "arrow",
+    "id": "a-dates-mongo",
+    "x": 620,
+    "y": 290,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        140,
+        -170
+      ]
+    ],
+    "start": {
+      "id": "dates"
+    },
+    "end": {
+      "id": "mongo"
+    }
+  },
+  {
+    "type": "text",
+    "id": "a-dates-mongo-label",
+    "x": 613,
+    "y": 170,
+    "text": "events",
+    "fontSize": 18,
+    "strokeColor": "#495057"
+  },
+  {
+    "type": "arrow",
+    "id": "a-tier-es",
+    "x": 600,
+    "y": 480,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        160,
+        -150
+      ]
+    ],
+    "start": {
+      "id": "tier"
+    },
+    "end": {
+      "id": "es"
+    }
+  },
+  {
+    "type": "text",
+    "id": "a-tier-es-label",
+    "x": 618,
+    "y": 365,
+    "text": "public",
+    "fontSize": 18,
+    "strokeColor": "#495057"
+  },
+  {
+    "type": "arrow",
+    "id": "a-tier-queue",
+    "x": 630,
+    "y": 515,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        130,
+        0
+      ]
+    ],
+    "start": {
+      "id": "tier"
+    },
+    "end": {
+      "id": "queue"
+    }
+  },
+  {
+    "type": "text",
+    "id": "a-tier-queue-label",
+    "x": 672.5,
+    "y": 485,
+    "text": "email",
+    "fontSize": 18,
+    "strokeColor": "#495057"
+  },
+  {
+    "type": "arrow",
+    "id": "a-queue-es",
+    "x": 885,
+    "y": 470,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        -110
+      ]
+    ],
+    "start": {
+      "id": "queue"
+    },
+    "end": {
+      "id": "es"
+    }
+  },
+  {
+    "type": "text",
+    "id": "a-queue-es-label",
+    "x": 895,
+    "y": 403,
+    "text": "approve",
+    "fontSize": 18,
+    "strokeColor": "#495057"
+  },
+  {
+    "type": "arrow",
+    "id": "a-mongo-chat",
+    "x": 1010,
+    "y": 110,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        140,
+        85
+      ]
+    ],
+    "start": {
+      "id": "mongo"
+    },
+    "end": {
+      "id": "chat"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "a-es-chat",
+    "x": 1010,
+    "y": 310,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        140,
+        -70
+      ]
+    ],
+    "start": {
+      "id": "es"
+    },
+    "end": {
+      "id": "chat"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "a-parent-chat",
+    "x": 1275,
+    "y": 400,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        -130
+      ]
+    ],
+    "start": {
+      "id": "parent"
+    },
+    "end": {
+      "id": "chat"
+    }
+  },
+  {
+    "type": "text",
+    "id": "a-parent-chat-label",
+    "x": 1285,
+    "y": 323,
+    "text": "asks",
+    "fontSize": 18,
+    "strokeColor": "#495057"
+  }
+]

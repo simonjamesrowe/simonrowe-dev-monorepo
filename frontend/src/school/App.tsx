@@ -30,6 +30,9 @@ const SCHOOL_URL = 'https://www.kilmorieschool.co.uk'
  */
 const SITE_STATUS_POLL_MS = 10_000
 
+/** The input box's limit, applied to a question handed over in the address too. */
+const MAX_QUESTION_LENGTH = 500
+
 const YEAR_GROUPS = [
   'Reception',
   'Year 1',
@@ -97,34 +100,60 @@ function newSessionId(): string {
   return `school-${hex}`
 }
 
+/**
+ * The visitor's saved year groups. Tolerates the single-string value the previous version
+ * stored, so an existing visitor does not silently lose their selection.
+ */
+function readStoredYearGroups(): string[] {
+  const stored = readStored(YEAR_STORAGE_KEY)
+  if (stored) {
+    try {
+      const parsed: unknown = JSON.parse(stored)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((y): y is string => typeof y === 'string')
+      }
+    } catch {
+      // Unparseable is the same as unset.
+    }
+    return []
+  }
+  const legacy = readStored('term-time-year-group')
+  return legacy ? [legacy] : []
+}
+
+/**
+ * A question handed over in the address as `?q=`, such as the example questions on this
+ * project's portfolio page. Removed from the address as soon as it is read, so reloading the page
+ * or sharing its URL does not ask it a second time. Capped at the input's own limit.
+ */
+function takeQuestionFromAddress(): string | null {
+  const params = new URLSearchParams(window.location.search)
+  const question = params.get('q')?.trim()
+  if (!question) return null
+  params.delete('q')
+  const rest = params.toString()
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`,
+  )
+  return question.slice(0, MAX_QUESTION_LENGTH)
+}
+
 export default function App() {
   const { theme, toggleTheme } = useTheme()
   const [messages, setMessages] = useState<ChatMessageModel[]>([])
   const [awaiting, setAwaiting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [connection, setConnection] = useState<SchoolConnectionState>('connecting')
-  const [yearGroups, setYearGroups] = useState<string[]>([])
+  // Read during the first render rather than in an effect, so a question handed over in the
+  // address is sent with the visitor's year groups and not with an empty selection.
+  const [yearGroups, setYearGroups] = useState<string[]>(readStoredYearGroups)
+  const [initialQuestion] = useState<string | null>(takeQuestionFromAddress)
+  const initialQuestionSentRef = useRef(false)
   const sessionIdRef = useRef<string>(newSessionId())
   const endRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    // Tolerates the single-string value the previous version stored, so an existing visitor
-    // does not silently lose their selection on the first load after this ships.
-    const stored = readStored(YEAR_STORAGE_KEY)
-    const legacy = readStored('term-time-year-group')
-    if (stored) {
-      try {
-        const parsed: unknown = JSON.parse(stored)
-        if (Array.isArray(parsed)) {
-          setYearGroups(parsed.filter((y): y is string => typeof y === 'string'))
-        }
-      } catch {
-        // Unparseable is the same as unset.
-      }
-    } else if (legacy) {
-      setYearGroups([legacy])
-    }
-  }, [])
 
   const onFrame = useCallback((response: ChatResponse) => {
     if (response.type === 'ERROR') {
@@ -274,6 +303,18 @@ export default function App() {
     [awaiting, yearGroups],
   )
 
+  // Sent without waiting for the socket: the transport holds one message until the connection
+  // it is already opening is up. Deferred a tick and cancelled on cleanup because a development
+  // build mounts twice, and the first unmount's disconnect() throws away a held message.
+  useEffect(() => {
+    if (!initialQuestion || initialQuestionSentRef.current) return
+    const timer = setTimeout(() => {
+      initialQuestionSentRef.current = true
+      void send(initialQuestion)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [initialQuestion, send])
+
   return (
     <div className="school-page">
       <header className="school-page__header">
@@ -395,7 +436,7 @@ export default function App() {
           <div ref={endRef} />
         </div>
 
-        <ChatInput onSend={(text) => void send(text)} disabled={awaiting} maxLength={500} />
+        <ChatInput onSend={(text) => void send(text)} disabled={awaiting} maxLength={MAX_QUESTION_LENGTH} />
       </div>
 
       <footer className="school-page__footer">

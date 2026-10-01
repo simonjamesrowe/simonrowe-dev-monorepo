@@ -242,6 +242,34 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- portfolio-project-pages: **A portfolio project can now have a real page, and Term Time is the
+  first.** `PortfolioProject` gains optional `headline`, `summary`, `statement` (label, text,
+  points), `exampleQuestions`, `highlights`, `demo` (video, captions, poster, chapters) and `pages`
+  (sub-pages at `/portfolio/{slug}/{page}`, markdown bodies), all edited in `/admin/portfolio`.
+  `V049SeedTermTimeProjectPage` moves Term Time to Beta and seeds its copy from
+  `backend/src/main/resources/seed/portfolio/term-time/`. Load-bearing bits:
+  - **V049 applies only while the row is still `COMING_SOON`**, so it can never overwrite a CMS
+    edit, and its rollback matches on the seeded headline.
+  - **Its images, diagrams and video ship in the frontend bundle** at
+    `frontend/public/media/portfolio/term-time/`, not the media library, so they version and
+    deploy with the change. `resolveMediaUrl` sends `/uploads/...` to the API origin and serves
+    every other site path from this one. `V049SeedTermTimeProjectPageTest` fails if a `/media`
+    path in the seed has no file behind it, since nothing else reads both sides.
+  - **A Coming soon project withholds every page field**, exactly as it already withheld the
+    description, image and link, and empty lists are omitted from the public JSON.
+  - **`reorder` goes through `PortfolioProject.withDisplayOrder`**: the old positional
+    constructor call would have silently dropped every field added after it was written.
+  - **Sub-page bodies are a plain markdown textarea**, not MDXEditor, which has no table support
+    and rewrites tables. The editor holds questions and chapters as text and converts on save, so
+    typing a new line is not undone mid-keystroke.
+  - **One route, `/portfolio/:slug/:pageSlug?`**, so switching tabs keeps the loaded project
+    instead of remounting and refetching.
+  - **Term Time takes `?q=`** and asks it once, with the visitor's saved year groups, then strips
+    it from the address so a reload does not ask again. The send is deferred a tick because a
+    StrictMode double mount's `disconnect()` discards a held message.
+  - Diagram sources are Excalidraw skeletons in `docs/diagrams/term-time/` (`make-diagrams.mjs`
+    writes them), rendered with the `demo-record` skill's renderer so the website and the demo
+    share one source.
 - termtime-document-edit: **Term Time documents can be edited inline** at
   `/admin/school/documents` (title, text, year groups) via `PUT /api/admin/school/documents/{id}`
   and `SchoolDocumentEditor`. The edit is **in place**: a note's id hashes its text, so

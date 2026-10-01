@@ -1,0 +1,85 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:01.687
+A primary school sends a lot.
+
+00:00:01.687 --> 00:00:08.143
+Newsletters, letters, calendar changes and class emails, plus whatever turns up in the parents' WhatsApp group.
+
+00:00:08.143 --> 00:00:10.760
+Term Time reads all of it, so I can just ask.
+
+00:00:11.363 --> 00:00:12.398
+When is half term?
+
+00:00:12.398 --> 00:00:17.403
+It checks today's date, then looks the term dates up in the school's own calendar feed.
+
+00:00:21.478 --> 00:00:23.154
+Every answer carries its source.
+
+00:00:23.154 --> 00:00:27.238
+That link opens the calendar entry it came from, so I can check it in one tap.
+
+00:00:27.839 --> 00:00:31.207
+With a child in Year 6, I tick Year 6 and ask about the next trip.
+
+00:00:31.207 --> 00:00:35.799
+The years I pick go with every question, so the search looks at that year's letters first.
+
+00:00:42.290 --> 00:00:44.496
+Now Year 6's own letters come first.
+
+00:00:44.496 --> 00:00:49.890
+The residential in Kent, the times, what to pack, and a link to the letter that says so.
+
+00:00:52.053 --> 00:00:54.296
+Some of it never comes from the school at all.
+
+00:00:54.296 --> 00:00:59.173
+Open evenings arrive in the parents' WhatsApp group, so the admin console has a Paste a note screen.
+
+00:00:59.776 --> 00:01:02.296
+I paste the message as it arrived, and save it.
+
+00:01:04.222 --> 00:01:11.155
+Term Time reads the dates out of the text and fetches any links, so a school's own page can fill in the time and the booking address.
+
+00:01:11.155 --> 00:01:17.410
+It is the same extraction that reads the newsletters, and it has to copy dates and links exactly rather than guess them.
+
+00:01:17.410 --> 00:01:20.902
+A note is public straight away, because pasting it is the decision.
+
+00:01:21.505 --> 00:01:26.185
+Here's the open evening it found, with its time, and narrowed to Year 6.
+
+00:01:26.788 --> 00:01:28.551
+A photographed letter works too.
+
+00:01:28.551 --> 00:01:33.068
+It's read into text I can check before saving, and the photo itself is never kept.
+
+00:01:35.064 --> 00:01:36.511
+School email is different.
+
+00:01:36.511 --> 00:01:43.024
+It's read every thirty minutes, but it starts out restricted, and nothing reaches the public chat until I approve it.
+
+00:01:43.627 --> 00:01:44.787
+Here's how it fits together.
+
+00:01:45.403 --> 00:01:51.803
+Four sources: the website and its PDFs, the calendar feed, the school mailbox, and those notes.
+
+00:01:52.405 --> 00:01:57.965
+Each one is fetched, its dates and year groups are pulled out, and email is held for approval.
+
+00:01:58.568 --> 00:02:03.048
+And the chat answers from what is stored, using tools that look dates up rather than guessing.
+
+00:02:04.355 --> 00:02:08.955
+That was Term Time, a school assistant that answers from what the school actually published.
+
+00:02:08.955 --> 00:02:12.355
+Every answer carries its source, so parents can check it in one tap.

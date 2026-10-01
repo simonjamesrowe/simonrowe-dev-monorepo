@@ -210,7 +210,9 @@ function App() {
         <Route element={<PublicLayout><McpPage /></PublicLayout>} path="/mcp" />
         <Route element={<PublicLayout><StatusPage /></PublicLayout>} path="/status" />
         <Route element={<PublicLayout><PortfolioPage /></PublicLayout>} path="/portfolio" />
-        <Route element={<PublicLayout><PortfolioProjectPage /></PublicLayout>} path="/portfolio/:slug" />
+        {/* One route with an optional segment, so moving between a project's pages keeps the
+            project already loaded instead of remounting the page and fetching it again. */}
+        <Route element={<PublicLayout><PortfolioProjectPage /></PublicLayout>} path="/portfolio/:slug/:pageSlug?" />
         {/* Legacy singular paths, still shared externally. */}
         <Route element={<Navigate replace to="/blogs" />} path="/blog" />
         <Route element={<LegacyBlogDetailRedirect />} path="/blog/:id" />

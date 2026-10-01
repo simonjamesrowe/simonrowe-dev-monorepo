@@ -1,10 +1,49 @@
+import { API_BASE_URL } from '../config/api'
 import type { ImageAsset } from './Profile'
 
 export type ProjectStatus = 'LIVE' | 'BETA' | 'IN_DEVELOPMENT' | 'COMING_SOON'
 
+/** A titled paragraph with an optional picture: a statement point or a numbered highlight. */
+export interface ProjectHighlight {
+  title: string
+  text?: string | null
+  imageUrl?: string | null
+  imageAlt?: string | null
+}
+
+export interface ProjectStatement {
+  label?: string | null
+  text?: string | null
+  points: ProjectHighlight[]
+}
+
+export interface ProjectChapter {
+  startSeconds: number
+  label: string
+}
+
+export interface ProjectDemo {
+  title?: string | null
+  summary?: string | null
+  videoUrl: string
+  captionsUrl?: string | null
+  posterUrl?: string | null
+  chapters: ProjectChapter[]
+}
+
+/** A sub-page at `/portfolio/{project}/{slug}`, written in markdown. */
+export interface ProjectPage {
+  slug: string
+  title: string
+  navHint?: string | null
+  summary?: string | null
+  body?: string | null
+}
+
 /**
- * A published portfolio project. A `COMING_SOON` one has no description, image or live link —
- * the API omits them — and no detail page.
+ * A published portfolio project. A `COMING_SOON` one has no description, image, live link or
+ * page fields — the API omits them — and no detail page. Every page field is optional: a project
+ * without them gets the plain page of name, tagline and description.
  */
 export interface PortfolioProject {
   slug: string
@@ -16,6 +55,13 @@ export interface PortfolioProject {
   description?: string
   image?: ImageAsset
   liveUrl?: string
+  headline?: string
+  summary?: string
+  statement?: ProjectStatement
+  exampleQuestions?: string[]
+  highlights?: ProjectHighlight[]
+  demo?: ProjectDemo
+  pages?: ProjectPage[]
 }
 
 export const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -27,4 +73,14 @@ export const STATUS_LABELS: Record<ProjectStatus, string> = {
 
 export function hasDetailPage(project: PortfolioProject): boolean {
   return project.status !== 'COMING_SOON'
+}
+
+/**
+ * Where a CMS image or media URL actually loads from. A media-library upload (`/uploads/...`) is
+ * served by the API, which is a different origin in production. Any other site path, such as
+ * the `/media/...` assets that ship in the frontend bundle, is served by this origin, and an
+ * https URL is used as it is.
+ */
+export function resolveMediaUrl(url: string): string {
+  return url.startsWith('/uploads/') ? `${API_BASE_URL}${url}` : url
 }

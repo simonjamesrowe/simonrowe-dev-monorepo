@@ -97,9 +97,7 @@ public class PortfolioService {
     for (int i = 0; i < orderedIds.size(); i++) {
       PortfolioProject p = byId.get(orderedIds.get(i));
       if (p.displayOrder() != i) {
-        repository.save(new PortfolioProject(p.id(), p.slug(), p.name(), p.tagline(),
-            p.description(), p.status(), i, p.published(), p.image(), p.liveUrl(),
-            p.accentHue(), p.createdAt(), now));
+        repository.save(p.withDisplayOrder(i, now));
       }
     }
   }
@@ -128,7 +126,18 @@ public class PortfolioService {
         project.displayOrder(),
         comingSoon ? null : project.description(),
         comingSoon ? null : hydrate(project.image()),
-        comingSoon ? null : project.liveUrl());
+        comingSoon ? null : project.liveUrl(),
+        comingSoon ? null : project.headline(),
+        comingSoon ? null : project.summary(),
+        comingSoon ? null : project.statement(),
+        comingSoon ? null : nullIfEmpty(project.exampleQuestions()),
+        comingSoon ? null : nullIfEmpty(project.highlights()),
+        comingSoon ? null : project.demo(),
+        comingSoon ? null : nullIfEmpty(project.pages()));
+  }
+
+  private static <T> List<T> nullIfEmpty(final List<T> values) {
+    return values == null || values.isEmpty() ? null : values;
   }
 
   private Image hydrate(final Image image) {
@@ -170,8 +179,53 @@ public class PortfolioService {
         image,
         isBlank(request.liveUrl()) ? null : request.liveUrl().strip(),
         request.accentHue() != null ? request.accentHue() : DEFAULT_HUE,
+        clean(request.headline()),
+        clean(request.summary()),
+        statement(request.statement()),
+        request.exampleQuestions() == null ? List.of()
+            : request.exampleQuestions().stream().map(String::strip).toList(),
+        request.highlights() == null ? List.of()
+            : request.highlights().stream().map(PortfolioService::highlight).toList(),
+        demo(request.demo()),
+        request.pages() == null ? List.of()
+            : request.pages().stream().map(PortfolioService::page).toList(),
         createdAt,
         updatedAt);
+  }
+
+  /** A statement with neither text nor points is no statement, and is stored as absent. */
+  private static ProjectStatement statement(final ProjectStatement statement) {
+    if (statement == null || (isBlank(statement.text()) && statement.points().isEmpty())) {
+      return null;
+    }
+    return new ProjectStatement(clean(statement.label()), clean(statement.text()),
+        statement.points().stream().map(PortfolioService::highlight).toList());
+  }
+
+  private static ProjectHighlight highlight(final ProjectHighlight highlight) {
+    return new ProjectHighlight(clean(highlight.title()), clean(highlight.text()),
+        clean(highlight.imageUrl()), clean(highlight.imageAlt()));
+  }
+
+  private static ProjectDemo demo(final ProjectDemo demo) {
+    if (demo == null) {
+      return null;
+    }
+    return new ProjectDemo(clean(demo.title()), clean(demo.summary()), clean(demo.videoUrl()),
+        clean(demo.captionsUrl()), clean(demo.posterUrl()),
+        demo.chapters().stream()
+            .map(chapter -> new ProjectChapter(chapter.startSeconds(), clean(chapter.label())))
+            .toList());
+  }
+
+  /** The body is markdown, where leading indentation means something, so it is kept verbatim. */
+  private static ProjectPage page(final ProjectPage page) {
+    return new ProjectPage(clean(page.slug()), clean(page.title()), clean(page.navHint()),
+        clean(page.summary()), isBlank(page.body()) ? null : page.body());
+  }
+
+  private static String clean(final String value) {
+    return isBlank(value) ? null : value.strip();
   }
 
   private static boolean isBlank(final String value) {

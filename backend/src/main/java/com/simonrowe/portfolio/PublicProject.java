@@ -2,11 +2,14 @@ package com.simonrowe.portfolio;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.simonrowe.common.Image;
+import java.util.List;
 
 /**
  * A project as the public site sees it. A {@link ProjectStatus#COMING_SOON} project carries no
  * description, image or link at all — omitted from the JSON, not sent as null — so an
- * unfinished product's details cannot leak through the API before it launches.
+ * unfinished product's details cannot leak through the API before it launches. The page fields
+ * from {@code headline} on are withheld the same way, and an empty list is omitted rather than
+ * sent as {@code []}.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record PublicProject(
@@ -18,6 +21,13 @@ public record PublicProject(
     int displayOrder,
     String description,
     Image image,
-    String liveUrl
+    String liveUrl,
+    String headline,
+    String summary,
+    ProjectStatement statement,
+    List<String> exampleQuestions,
+    List<ProjectHighlight> highlights,
+    ProjectDemo demo,
+    List<ProjectPage> pages
 ) {
 }

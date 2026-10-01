@@ -1,6 +1,7 @@
 package com.simonrowe.portfolio;
 
 import com.simonrowe.common.Image;
+import java.util.List;
 
 /**
  * Every editable field of a project, as the editor sends it. {@code displayOrder} may be null
@@ -16,6 +17,13 @@ public record ProjectRequest(
     boolean published,
     Image image,
     String liveUrl,
-    Integer accentHue
+    Integer accentHue,
+    String headline,
+    String summary,
+    ProjectStatement statement,
+    List<String> exampleQuestions,
+    List<ProjectHighlight> highlights,
+    ProjectDemo demo,
+    List<ProjectPage> pages
 ) {
 }
