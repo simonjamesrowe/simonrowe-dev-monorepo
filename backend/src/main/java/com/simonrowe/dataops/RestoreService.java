@@ -182,8 +182,9 @@ public class RestoreService {
 
     } catch (Exception ex) {
       LOG.error("Restore failed", ex);
-      operationsService.failOperation("Restore failed: " + ex.getMessage()
-          + ". A safety backup was created before the restore attempt.");
+      operationsService.failOperation(
+          "Restore failed: %s. A safety backup was created before the restore attempt."
+              .formatted(ex.getMessage()));
     } finally {
       deleteTempFile(tempZip);
       deleteTempFile(localBackup);
@@ -465,8 +466,9 @@ public class RestoreService {
     String folderId = googleDriveService.findOrCreateFolder();
     String sourceFileId = googleDriveService.findFileIdByName(folderId, mediaSource);
     if (sourceFileId == null) {
-      throw new IOException("Backup manifest references media source '"
-          + mediaSource + "' but that file is not present in Drive backups folder");
+      throw new IOException("""
+          Backup manifest references media source '%s' but that file is not present \
+          in Drive backups folder""".formatted(mediaSource));
     }
     Path sourceZip = Files.createTempFile("restore-media-", ".zip");
     try (var os = new BufferedOutputStream(Files.newOutputStream(sourceZip))) {

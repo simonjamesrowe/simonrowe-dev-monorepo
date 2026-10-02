@@ -1,7 +1,10 @@
 # Term Time demo and page assets
 
-Sources for the media behind `/portfolio/term-time`, which ship in
-`frontend/public/media/portfolio/term-time/`.
+Sources for the media behind `/portfolio/term-time`. The built files sit in
+`backend/src/main/resources/seed/portfolio/term-time/media/`, and `V049SeedTermTimeProjectPage`
+imports them into the media library once. After that the library copy is the live one: replace a
+file from `/admin/media` or the project editor's pickers, not by editing the seed, which a
+launched project never reads again.
 
 - `script.mjs` and `brief.md` are the narrated demo, built with the `demo-record` skill from a
   demos workspace (`~/workspace/simonjamesrowe/demos/term-time/`). Chat scenes run read-only

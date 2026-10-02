@@ -125,7 +125,7 @@ describe('MediaLibrary', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('search input filters results by file name', async () => {
+  it('asks the server for the file name typed, not this page of results', async () => {
     mockFetchAdminMedia.mockResolvedValue({
       content: mockAssets,
       totalElements: 3,
@@ -139,14 +139,35 @@ describe('MediaLibrary', () => {
     await waitFor(() => {
       expect(screen.getByAltText('photo.jpg')).toBeInTheDocument()
     })
-
-    fireEvent.change(screen.getByPlaceholderText('Search by file name...'), {
-      target: { value: 'photo' },
+    mockFetchAdminMedia.mockResolvedValue({
+      content: [mockAssets[0]], totalElements: 1, totalPages: 1, size: 20, number: 0,
     })
 
+    fireEvent.change(screen.getByPlaceholderText('Search by file name...'), {
+      target: { value: ' photo ' },
+    })
+
+    await waitFor(() => {
+      expect(mockFetchAdminMedia).toHaveBeenLastCalledWith(
+        mockGetAccessToken, 0, 20, { mimeTypes: undefined, search: 'photo' })
+    })
+    await waitFor(() => expect(screen.queryByAltText('banner.png')).not.toBeInTheDocument())
     expect(screen.getByAltText('photo.jpg')).toBeInTheDocument()
-    expect(screen.queryByAltText('banner.png')).not.toBeInTheDocument()
-    expect(screen.queryByAltText('logo.svg')).not.toBeInTheDocument()
+  })
+
+  it('asks the server for one type when a filter is picked', async () => {
+    mockFetchAdminMedia.mockResolvedValue({
+      content: mockAssets, totalElements: 3, totalPages: 1, size: 20, number: 0,
+    })
+    render(<MediaLibrary onSelect={onSelect} onClose={onClose} />)
+    await screen.findByAltText('photo.jpg')
+
+    fireEvent.click(screen.getByRole('button', { name: 'PNG' }))
+
+    await waitFor(() => {
+      expect(mockFetchAdminMedia).toHaveBeenLastCalledWith(
+        mockGetAccessToken, 0, 20, { mimeTypes: ['image/png'], search: '' })
+    })
   })
 
   it('shows empty state message when no assets are found', async () => {
@@ -165,16 +186,17 @@ describe('MediaLibrary', () => {
     })
   })
 
-  it('lists only the accepted types, and offers only their filters', async () => {
+  it('asks the server for only the accepted types, and offers only their filters', async () => {
     mockFetchAdminMedia.mockResolvedValue({
-      content: [...mockAssets, makeAsset('asset-4', 'demo.mp4', 'video/mp4'), makeAsset('asset-5', 'demo.vtt', 'text/vtt')],
-      totalElements: 5, totalPages: 1,
+      content: [makeAsset('asset-4', 'demo.mp4', 'video/mp4')],
+      totalElements: 1, totalPages: 1,
     })
     render(<MediaLibrary accept={['video/mp4']} onClose={onClose} onSelect={onSelect} />)
 
     expect(await screen.findByText('demo.mp4')).toBeInTheDocument()
-    expect(screen.queryByText('photo.jpg')).toBeNull()
-    expect(screen.queryByText('demo.vtt')).toBeNull()
+    // Filtered by the query, so a video forty pages into a library of images is still found.
+    expect(mockFetchAdminMedia).toHaveBeenCalledWith(
+      mockGetAccessToken, 0, 20, { mimeTypes: ['video/mp4'], search: '' })
     // One accepted type means nothing to filter between, so no filter buttons at all.
     expect(screen.queryByRole('button', { name: 'JPEG' })).toBeNull()
   })

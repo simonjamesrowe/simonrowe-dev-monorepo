@@ -837,13 +837,25 @@ export async function reorderAdminTourSteps(
 // Media
 // ---------------------------------------------------------------------------
 
+export interface MediaQuery {
+  /** Any of these types. Empty or absent means every type. */
+  mimeTypes?: readonly string[]
+  /** Part of a file name, matched case-insensitively. */
+  search?: string
+}
+
 export async function fetchAdminMedia(
   getAccessToken: GetAccessToken,
   page = 0,
   size = 20,
+  query: MediaQuery = {},
 ): Promise<PageResponse<MediaAsset>> {
   const token = await getAccessToken()
-  const response = await authFetch(`${ADMIN_URL}/media?page=${page}&size=${size}`, token)
+  const params = new URLSearchParams({ page: String(page), size: String(size) })
+  query.mimeTypes?.forEach((type) => params.append('mimeType', type))
+  const search = query.search?.trim()
+  if (search) params.set('search', search)
+  const response = await authFetch(`${ADMIN_URL}/media?${params}`, token)
   return handleResponse<PageResponse<MediaAsset>>(response)
 }
 

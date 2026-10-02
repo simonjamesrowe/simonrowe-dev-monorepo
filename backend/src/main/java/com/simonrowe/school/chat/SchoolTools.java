@@ -183,9 +183,12 @@ public class SchoolTools {
       final List<SchoolEvent> events = queries.eventsBetween(start, end, yearGroups, audience);
       final String dated = render(events, "Nothing is recorded for that period.");
       final String context = supportingProse(events, start, end);
-      return context.isEmpty()
-          ? dated
-          : dated + "\n\n" + "Supporting detail from school communications:\n\n" + context;
+      return context.isEmpty() ? dated : """
+          %s
+
+          Supporting detail from school communications:
+
+          %s""".formatted(dated, context);
     });
   }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  besideField,
   chaptersToText,
   questionsToText,
   textToChapters,
@@ -29,5 +30,14 @@ describe('portfolio editor text fields', () => {
     expect(textToChapters(`1:05${' '.repeat(100_000)}`)).toEqual({ ok: false, line: 1 })
     expect(textToChapters(`${'9'.repeat(100_000)}:00 x`)).toEqual({ ok: false, line: 1 })
     expect(performance.now() - started).toBeLessThan(500)
+  })
+
+  it('drops the field path from a message shown under that field, and nothing else', () => {
+    expect(besideField('pages[0].slug', 'pages[0].slug must be lower-case')).toBe('Must be lower-case')
+    expect(besideField('name', 'name is required')).toBe('Is required')
+    // A message about some other field, or one that only starts the same way, is left whole.
+    expect(besideField('pages[0].slug', 'pages[1].slug is used by another page'))
+      .toBe('pages[1].slug is used by another page')
+    expect(besideField('name', 'names must differ')).toBe('names must differ')
   })
 })

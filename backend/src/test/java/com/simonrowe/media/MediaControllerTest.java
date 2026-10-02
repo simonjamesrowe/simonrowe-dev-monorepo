@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.simonrowe.AbstractIntegrationTest;
+import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -116,13 +117,13 @@ class MediaControllerTest extends AbstractIntegrationTest {
     for (String[] upload : new String[][] {
         {"demo.mp4", "video/mp4"}, {"demo.vtt", "text/vtt"}, {"shot.webp", "image/webp"}}) {
       clearInvocations(imageVariantGenerator);
+      final String stored = "/original" + upload[0].substring(upload[0].lastIndexOf('.'));
       mockMvc.perform(multipart("/api/admin/media")
               .file(new MockMultipartFile("file", upload[0], upload[1], "content".getBytes()))
               .with(adminJwt().jwt(j -> j.subject("test-user"))))
           .andExpect(status().isCreated())
           .andExpect(jsonPath("$.mimeType").value(upload[1]))
-          .andExpect(jsonPath("$.originalPath").value(endsWith("/original."
-              + upload[0].substring(upload[0].lastIndexOf('.') + 1))));
+          .andExpect(jsonPath("$.originalPath").value(endsWith(stored)));
       verify(imageVariantGenerator, never()).generateVariants(any(), any(), any());
     }
 
@@ -156,6 +157,33 @@ class MediaControllerTest extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content").isArray())
         .andExpect(jsonPath("$.totalElements").value(0));
+  }
+
+  /** The library filters in the query, so a picker sees every asset of its kinds. */
+  @Test
+  void listNarrowsToAnyOfSeveralTypesAndToFileNames() throws Exception {
+    for (String[] asset : new String[][] {
+        {"hero.webp", "image/webp"}, {"logo.png", "image/png"}, {"demo.mp4", "video/mp4"},
+        {"demo.vtt", "text/vtt"}, {"demo-poster.webp", "image/webp"}}) {
+      mediaAssetRepository.save(new MediaAsset(null, asset[0], asset[1], 1, "/uploads/" + asset[0],
+          Map.of(), Instant.EPOCH, Instant.EPOCH, null));
+    }
+
+    mockMvc.perform(get("/api/admin/media")
+            .param("mimeType", "image/webp", "image/png")
+            .with(adminJwt()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(3));
+    mockMvc.perform(get("/api/admin/media")
+            .param("mimeType", "video/mp4")
+            .with(adminJwt()))
+        .andExpect(jsonPath("$.content[0].fileName").value("demo.mp4"))
+        .andExpect(jsonPath("$.totalElements").value(1));
+    mockMvc.perform(get("/api/admin/media")
+            .param("mimeType", "image/webp", "video/mp4")
+            .param("search", "DEMO")
+            .with(adminJwt()))
+        .andExpect(jsonPath("$.totalElements").value(2));
   }
 
   @Test

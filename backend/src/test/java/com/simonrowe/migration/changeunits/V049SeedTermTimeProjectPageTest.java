@@ -124,7 +124,7 @@ class V049SeedTermTimeProjectPageTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void aSecondRunImportsNothingTwice() {
+  void secondRunImportsNothingTwice() {
     launch();
     projects().updateOne(new Document("slug", "term-time"),
         new Document("$set", new Document("status", "COMING_SOON")));

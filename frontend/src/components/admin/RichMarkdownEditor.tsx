@@ -27,6 +27,7 @@ import '@mdxeditor/editor/style.css'
 import { FolderOpen } from 'lucide-react'
 
 import { useAuth } from '../../auth/useAuth'
+import { useTheme } from '../../contexts/ThemeContext'
 import { uploadAdminMedia } from '../../services/adminApi'
 import { MediaLibrary } from './MediaLibrary'
 import { IMAGE_TYPES } from './mediaTypes'
@@ -64,6 +65,7 @@ interface RichMarkdownEditorProps {
  */
 export function RichMarkdownEditor({ markdown, onChange, label, placeholder }: RichMarkdownEditorProps) {
   const { getAccessToken } = useAuth()
+  const { theme } = useTheme()
   const editorRef = useRef<MDXEditorMethods>(null)
   const [showLibrary, setShowLibrary] = useState(false)
 
@@ -75,9 +77,17 @@ export function RichMarkdownEditor({ markdown, onChange, label, placeholder }: R
   return (
     <div aria-label={label} className="blog-editor__content rich-markdown-editor" role="group">
       <MDXEditor
+        // The editor's own palette is light; its dark one keeps the toolbar legible on this site.
+        className={theme === 'dark' ? 'dark-theme' : undefined}
         markdown={markdown}
-        onChange={onChange}
+        // The editor re-serialises what it was given as soon as it mounts. That is not an edit:
+        // passing it on would mark an untouched page as changed and rewrite the stored copy.
+        onChange={(value, initialMarkdownNormalize) => {
+          if (!initialMarkdownNormalize) onChange(value)
+        }}
         placeholder={placeholder}
+        // Written the way the seeded copy is, so one edit does not rewrite every list on the page.
+        toMarkdownOptions={{ bullet: '-' }}
         plugins={[
           headingsPlugin(),
           listsPlugin(),

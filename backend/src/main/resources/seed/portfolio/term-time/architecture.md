@@ -24,8 +24,9 @@ the letters that describe those events, searching on the event titles it just fo
 
 ```java
 @Tool(description = """
-    Get school events between two dates, together with the newsletters, letters and PDFs that \
-    describe them. Use for 'what is on this week', 'what is happening next month' and similar.""")
+    Get school events between two dates, together with the newsletters, \
+    letters and PDFs that describe them. Use for 'what is on this week', \
+    'what is happening next month' and similar.""")
 public String getEventsBetween(
     @ToolParam(description = "Start date, ISO format yyyy-MM-dd") final String from,
     @ToolParam(description = "End date, ISO format yyyy-MM-dd") final String to) {

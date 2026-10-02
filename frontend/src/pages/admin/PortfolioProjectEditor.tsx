@@ -17,7 +17,7 @@ import {
   type AdminPortfolioProjectInput,
 } from '../../services/adminApi'
 import { STATUS_LABELS, type ProjectDemo, type ProjectStatus } from '../../types/portfolio'
-import { chaptersToText, questionsToText, textToChapters, textToQuestions } from './portfolioEditorText'
+import { besideField, chaptersToText, questionsToText, textToChapters, textToQuestions } from './portfolioEditorText'
 
 const STATUSES: ProjectStatus[] = ['COMING_SOON', 'IN_DEVELOPMENT', 'BETA', 'LIVE']
 
@@ -46,7 +46,12 @@ const EMPTY: AdminPortfolioProjectInput = {
 
 type DemoFields = Omit<ProjectDemo, 'chapters'>
 
-const EMPTY_DEMO: DemoFields = { title: '', summary: '', videoUrl: '', captionsUrl: '', posterUrl: '' }
+/** Tall enough to show every line of a one-per-line list, plus one to type into. */
+function rowsFor(text: string, minimum: number): number {
+  return Math.max(minimum, text.split('\n').length + 1)
+}
+
+const EMPTY_DEMO: DemoFields ={ title: '', summary: '', videoUrl: '', captionsUrl: '', posterUrl: '' }
 
 function isBlank(value: string | null | undefined): boolean {
   return !value || value.trim().length === 0
@@ -193,7 +198,7 @@ export function PortfolioProjectEditor() {
   }
 
   const fieldError = (field: string) => (fieldErrors[field]
-    ? <p className="home-page-editor__error" role="alert">{fieldErrors[field]}</p>
+    ? <p className="home-page-editor__error" role="alert">{besideField(field, fieldErrors[field])}</p>
     : null)
 
   return (
@@ -367,7 +372,7 @@ export function PortfolioProjectEditor() {
               setQuestionsText(value)
               setDirty(true)
             }}
-            rows={6} value={questionsText} />
+            rows={rowsFor(questionsText, 6)} value={questionsText} />
         </fieldset>
 
         <fieldset className="portfolio-editor__group">
@@ -411,7 +416,7 @@ export function PortfolioProjectEditor() {
               setChaptersText(value)
               setDirty(true)
             }}
-            rows={5} value={chaptersText} />
+            rows={rowsFor(chaptersText, 5)} value={chaptersText} />
         </fieldset>
 
         <fieldset className="portfolio-editor__group">

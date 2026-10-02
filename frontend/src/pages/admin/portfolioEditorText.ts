@@ -43,3 +43,13 @@ export function textToChapters(text: string): ChapterParse {
   }
   return { ok: true, chapters }
 }
+
+/**
+ * The server names the field in every message ("pages[0].slug must be ..."). Under the field's
+ * own label that path is noise, so it is dropped there; the banner above keeps the full text.
+ */
+export function besideField(field: string, message: string): string {
+  if (!message.startsWith(`${field} `)) return message
+  const rest = message.slice(field.length + 1)
+  return rest.charAt(0).toUpperCase() + rest.slice(1)
+}

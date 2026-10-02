@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -141,9 +143,9 @@ public class MediaService {
       final FileWriter writer,
       final String legacyId
   ) {
+    String assetId = UUID.randomUUID().toString();
+    Path assetDir = Path.of(uploadsPath, assetId);
     try {
-      String assetId = UUID.randomUUID().toString();
-      Path assetDir = Path.of(uploadsPath, assetId);
       Files.createDirectories(assetDir);
 
       String extension = getExtension(originalFileName, contentType);
@@ -173,27 +175,34 @@ public class MediaService {
       return repository.save(asset);
     } catch (IOException e) {
       LOG.warn("Failed to store media asset {}: {}", LogSafe.value(originalFileName), e.toString());
+      // A half-written asset is a directory nothing points at; it goes with the failure.
+      deleteAssetFiles(assetDir);
       throw new ResponseStatusException(
           HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store uploaded file", e);
     }
   }
 
+  /**
+   * One page of the library, optionally narrowed to some types and a file name. Both narrow the
+   * query rather than the page, so a picker that wants only videos sees every video.
+   */
   public Page<MediaAsset> list(
       final String search,
-      final String mimeType,
+      final Collection<String> mimeTypes,
       final Pageable pageable
   ) {
-    if (search != null && !search.isBlank() && mimeType != null
-        && !mimeType.isBlank()) {
-      return repository.findByFileNameContainingIgnoreCaseAndMimeType(
-          search, mimeType, pageable);
+    boolean bySearch = search != null && !search.isBlank();
+    List<String> types = mimeTypes == null ? List.of()
+        : mimeTypes.stream().filter(type -> type != null && !type.isBlank()).toList();
+    if (bySearch && !types.isEmpty()) {
+      return repository.findByFileNameContainingIgnoreCaseAndMimeTypeIn(
+          search.strip(), types, pageable);
     }
-    if (search != null && !search.isBlank()) {
-      return repository.findByFileNameContainingIgnoreCase(
-          search, pageable);
+    if (bySearch) {
+      return repository.findByFileNameContainingIgnoreCase(search.strip(), pageable);
     }
-    if (mimeType != null && !mimeType.isBlank()) {
-      return repository.findByMimeType(mimeType, pageable);
+    if (!types.isEmpty()) {
+      return repository.findByMimeTypeIn(types, pageable);
     }
     return repository.findAll(pageable);
   }
@@ -207,27 +216,28 @@ public class MediaService {
   public void delete(final String id) {
     MediaAsset asset = getById(id);
 
-    try {
-      Path assetDir = Path.of(uploadsPath, id);
-      if (Files.exists(assetDir)) {
-        try (var files = Files.walk(assetDir)) {
-          files.sorted(java.util.Comparator.reverseOrder())
-              .forEach(path -> {
-                try {
-                  Files.deleteIfExists(path);
-                } catch (IOException e) {
-                  LOG.warn("Failed to delete file: {}", path, e);
-                }
-              });
-        }
-      }
-    } catch (IOException e) {
-      LOG.warn("Failed to clean up media files for asset: {}", id, e);
-    }
+    deleteAssetFiles(Path.of(uploadsPath, id));
 
     repository.delete(asset);
     LOG.info("Deleted media asset: id={}, fileName={}",
         LogSafe.value(id), LogSafe.value(asset.fileName()));
+  }
+
+  private static void deleteAssetFiles(final Path assetDir) {
+    if (!Files.exists(assetDir)) {
+      return;
+    }
+    try (var files = Files.walk(assetDir)) {
+      files.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+        try {
+          Files.deleteIfExists(path);
+        } catch (IOException e) {
+          LOG.warn("Failed to delete file: {}", path, e);
+        }
+      });
+    } catch (IOException e) {
+      LOG.warn("Failed to clean up media files in {}", assetDir, e);
+    }
   }
 
   /**
