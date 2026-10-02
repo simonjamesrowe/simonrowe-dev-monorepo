@@ -94,7 +94,10 @@ describe('Portfolio pages', () => {
     expect(tabs.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
     expect(tabs.getByRole('link', { name: /How it works/ })).toHaveAttribute('href', '/portfolio/term-time/how-it-works')
     expect(screen.getByRole('link', { name: /Next · How it works/ })).toHaveAttribute('href', '/portfolio/term-time/how-it-works')
-    expect(document.querySelector('video track')).toHaveAttribute('src', '/media/demo.vtt')
+    const track = document.querySelector('video track')
+    expect(track).toHaveAttribute('src', '/media/demo.vtt')
+    // Offered, not forced: captions over a screen recording hide what is being shown.
+    expect(track).not.toHaveAttribute('default')
   })
 
   it('jumps the demo to a chapter', async () => {

@@ -4,13 +4,6 @@
 const TERM_TIME = 'https://term-time.simonrowe.dev/';
 const ADMIN = 'http://localhost:5173/admin/school';
 
-// Email subjects, bodies and link text are blurred on the approvals screen. Most of it is public
-// anyway, but restricted mail is restricted for a reason, and a video is forever.
-const BLUR_RESTRICTED = `
-  .admin-approval__title, .admin-approval__reason, .admin-approval__preview,
-  .school-admin__link-text, .school-admin__link-url, .school-admin__search { filter: blur(7px); }
-`;
-
 const HIDE_RECENT_NOTES = '.school-notes__recent { display: none !important; }';
 
 const NOTE = 'Hilltop Academy open evening, Thursday 15 October, 6pm to 8pm. '
@@ -28,7 +21,6 @@ export default {
   url: TERM_TIME,
   link: 'simonrowe.dev/portfolio/term-time',
   viewport: { width: 1440, height: 810 },
-  deviceScaleFactor: 2,
   contextOptions: { locale: 'en-GB', timezoneId: 'Europe/London' },
   colorScheme: 'light',
   storageState: 'auth.json',
@@ -159,18 +151,6 @@ export default {
       },
     },
     {
-      id: 'approvals',
-      show: 'The approvals queue, email subjects and bodies blurred',
-      order: 'do-then-say',
-      say: "School email is different. It's read every thirty minutes, but it starts out restricted, "
-        + 'and nothing reaches the public chat until I approve it.',
-      do: async ({ page }) => {
-        await page.goto(`${ADMIN}/approvals`);
-        await page.addStyleTag({ content: BLUR_RESTRICTED });
-        await page.locator('.admin-approval').first().waitFor({ timeout: 30000 });
-      },
-    },
-    {
       id: 'diagram',
       show: 'Diagram: where the answers come from, whole view',
       say: "Here's how it fits together.",
@@ -184,8 +164,8 @@ export default {
     },
     {
       id: 'diagram-ingest',
-      show: 'Focus: fetch, dates and the public-or-restricted decision',
-      say: 'Each one is fetched, its dates and year groups are pulled out, and email is held for approval.',
+      show: 'Focus: fetching and pulling out the dates',
+      say: 'Each one is fetched, and its dates and year groups are pulled out.',
       do: async ({ diagram }) => { await diagram.focus('ingest'); },
     },
     {

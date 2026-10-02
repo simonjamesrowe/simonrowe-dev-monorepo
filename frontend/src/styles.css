@@ -13087,36 +13087,33 @@ body[data-narration-bar] .app-layout__main {
   color: var(--on-surface-variant);
 }
 
-/* A project's page takes its colours from the project's accent hue, set inline as
- * --project-hue, so each project reads as its own without a stylesheet per project. Dark is the
- * default theme here, as everywhere in this file; the light values follow. */
+/* A project's page wears the site's own palette: the primary blue for accents, the violet AI
+ * accent in the hero's backdrop, and the site surfaces. The project's accent hue stays on its
+ * card silhouette only, so a product's own colours (Term Time's green) never take over the
+ * portfolio. Dark is the default theme here, as everywhere in this file; the light values follow. */
 .portfolio-project {
-  --project-accent: hsl(var(--project-hue, 212) 55% 62%);
-  --project-accent-strong: hsl(var(--project-hue, 212) 60% 72%);
-  --project-accent-soft: hsl(var(--project-hue, 212) 45% 50% / 0.14);
-  --project-accent-border: hsl(var(--project-hue, 212) 45% 55% / 0.4);
-  --project-band: hsl(var(--project-hue, 212) 45% 15%);
-  --project-band-text: hsl(var(--project-hue, 212) 25% 82%);
-  --project-band-accent: hsl(var(--project-hue, 212) 60% 68%);
+  --project-accent: var(--primary);
+  --project-accent-soft: rgba(var(--primary-rgb), 0.12);
+  --project-accent-border: rgba(var(--primary-rgb), 0.4);
+  --project-band: #12233a;
+  --project-band-text: #c6d4e6;
+  --project-band-accent: var(--primary);
+  --project-on-dark: #77d1ff;
   --project-stage: radial-gradient(120% 90% at 0% 0%,
-      hsl(var(--project-hue, 212) 40% 26%) 0%,
-      hsl(var(--project-hue, 212) 30% 16%) 55%,
-      hsl(calc(var(--project-hue, 212) + 50) 30% 18%) 100%);
+      rgba(var(--primary-rgb), 0.28) 0%,
+      var(--surface-container-low) 55%,
+      rgba(184, 166, 255, 0.22) 100%);
   padding: 2rem 0 4rem;
 }
 
 [data-theme="light"] .portfolio-project {
-  --project-accent: hsl(var(--project-hue, 212) 75% 26%);
-  --project-accent-strong: hsl(var(--project-hue, 212) 80% 20%);
-  --project-accent-soft: hsl(var(--project-hue, 212) 55% 93%);
-  --project-accent-border: hsl(var(--project-hue, 212) 45% 70%);
-  --project-band: hsl(var(--project-hue, 212) 75% 25%);
-  --project-band-text: hsl(var(--project-hue, 212) 45% 90%);
-  --project-band-accent: hsl(var(--project-hue, 212) 65% 76%);
+  --project-band: #1e40af;
+  --project-band-text: #dbeafe;
+  --project-band-accent: #bfdbfe;
   --project-stage: radial-gradient(120% 90% at 0% 0%,
-      hsl(var(--project-hue, 212) 55% 86%) 0%,
-      hsl(var(--project-hue, 212) 45% 94%) 45%,
-      hsl(calc(var(--project-hue, 212) + 50) 60% 92%) 100%);
+      #dbeafe 0%,
+      var(--surface-container-low) 50%,
+      #ede9fe 100%);
 }
 
 .project-section__inner {
@@ -13154,7 +13151,7 @@ body[data-narration-bar] .app-layout__main {
 }
 
 .project-eyebrow--on-dark {
-  color: hsl(var(--project-hue, 212) 60% 70%);
+  color: var(--project-on-dark);
 }
 
 .project-button {
@@ -13425,9 +13422,11 @@ a.project-question:hover {
   gap: 3rem;
   align-items: center;
   padding: 3rem;
+  border: 1px solid var(--border-faint);
   border-radius: 2rem;
-  background: #0f1a1d;
-  color: #d6e4e2;
+  /* A shade below the dark theme's page surface, so the panel keeps its edge there too. */
+  background: #0a0e17;
+  color: #d3dbe8;
 }
 
 .project-demo__player video {
@@ -13475,7 +13474,7 @@ a.project-question:hover {
 
 .project-demo__chapter time {
   min-width: 2.5rem;
-  color: hsl(var(--project-hue, 212) 60% 70%);
+  color: var(--project-on-dark);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85rem;
 }

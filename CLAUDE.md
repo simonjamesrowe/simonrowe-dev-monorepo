@@ -267,6 +267,11 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   - **Term Time takes `?q=`** and asks it once, with the visitor's saved year groups, then strips
     it from the address so a reload does not ask again. The send is deferred a tick because a
     StrictMode double mount's `disconnect()` discards a held message.
+  - **A project page wears the site palette** (`--primary`, the violet AI accent, the site
+    surfaces), never the product's own colours. `accentHue` stays on the card silhouette only.
+  - **The demo's captions are offered, not on by default**: over a screen recording they cover
+    what is being shown. It was recorded at `deviceScaleFactor` 1 because at 2 the
+    `demo-record` renderer's diagram focus overlay drifts off the boxes it highlights.
   - Diagram sources are Excalidraw skeletons in `docs/diagrams/term-time/` (`make-diagrams.mjs`
     writes them), rendered with the `demo-record` skill's renderer so the website and the demo
     share one source.

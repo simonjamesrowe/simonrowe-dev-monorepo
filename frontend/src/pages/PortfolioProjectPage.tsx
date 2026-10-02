@@ -1,5 +1,5 @@
 import { ArrowLeft, ExternalLink } from 'lucide-react'
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { MarkdownRenderer } from '../components/blog/MarkdownRenderer'
@@ -54,10 +54,9 @@ export function PortfolioProjectPage() {
   if (pageSlug && !page) return <NotFoundPage />
 
   const found = state.project
-  const style = { '--project-hue': found.accentHue } as CSSProperties
 
   return (
-    <article className="portfolio-project" style={style}>
+    <article className="portfolio-project">
       <div className="project-section__inner">
         <Link className="portfolio-project__back" to="/portfolio">
           <ArrowLeft aria-hidden="true" size={16} /> All projects

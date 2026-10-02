@@ -23,9 +23,9 @@ the school sent in a date range, and a search for everything else. The events to
 the letters that describe those events, searching on the event titles it just found.
 
 ```java
-@Tool(description = "Get school events between two dates, together with the newsletters, "
-    + "letters and PDFs that describe them. Use for 'what is on this week', "
-    + "'what is happening next month' and similar.")
+@Tool(description = """
+    Get school events between two dates, together with the newsletters, letters and PDFs that \
+    describe them. Use for 'what is on this week', 'what is happening next month' and similar.""")
 public String getEventsBetween(
     @ToolParam(description = "Start date, ISO format yyyy-MM-dd") final String from,
     @ToolParam(description = "End date, ISO format yyyy-MM-dd") final String to) {
@@ -34,9 +34,12 @@ public String getEventsBetween(
     final List<SchoolEvent> events = queries.eventsBetween(start, end, yearGroups, audience);
     final String dated = render(events, "Nothing is recorded for that period.");
     final String context = supportingProse(events, start, end);
-    return context.isEmpty()
-        ? dated
-        : dated + "\n\n" + "Supporting detail from school communications:\n\n" + context;
+    return context.isEmpty() ? dated : """
+        %s
+
+        Supporting detail from school communications:
+
+        %s""".formatted(dated, context);
   });
 }
 ```

@@ -59,8 +59,8 @@
     }
   ],
   "demo": {
-    "title": "A narrated walkthrough",
-    "summary": "Recorded in the browser with Playwright and narrated with Google's text-to-speech, in the same Australian voice as this site's blog narration.",
+    "title": "A two-minute walkthrough",
+    "summary": "Asking Term Time about half term and the next school trip, then the admin console, where a note from the parents' group and a photographed letter become answers.",
     "videoUrl": "/media/portfolio/term-time/demo.mp4",
     "captionsUrl": "/media/portfolio/term-time/demo.vtt",
     "posterUrl": "/media/portfolio/term-time/demo-poster.webp",
@@ -74,23 +74,19 @@
         "label": "Asking when half term is"
       },
       {
-        "startSeconds": 28,
+        "startSeconds": 24,
         "label": "Answers for a Year 6 family"
       },
       {
-        "startSeconds": 50,
+        "startSeconds": 42,
         "label": "Pasting a note from the WhatsApp group"
       },
       {
-        "startSeconds": 87,
+        "startSeconds": 79,
         "label": "Reading a photographed letter"
       },
       {
-        "startSeconds": 94,
-        "label": "The approval queue for school email"
-      },
-      {
-        "startSeconds": 104,
+        "startSeconds": 86,
         "label": "How it fits together"
       }
     ]

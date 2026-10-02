@@ -14,7 +14,8 @@ function formatTimestamp(seconds: number): string {
 /**
  * A project's demo video with its chapter list. `preload="none"` so the page does not start
  * downloading several megabytes of video for a visitor who never presses play; the poster stands
- * in until they do. Captions are on by default because the narration is the only explanation.
+ * in until they do. Captions are offered but off by default: shown over a screen recording they
+ * cover the very thing being demonstrated. The player's CC control turns them on.
  */
 export const ProjectDemoPlayer = forwardRef(function ProjectDemoPlayer(
   { demo }: ProjectDemoPlayerProps,
@@ -43,7 +44,7 @@ export const ProjectDemoPlayer = forwardRef(function ProjectDemoPlayer(
           src={resolveMediaUrl(demo.videoUrl)}
         >
           {demo.captionsUrl ? (
-            <track default kind="captions" label="English" src={resolveMediaUrl(demo.captionsUrl)} srcLang="en" />
+            <track kind="captions" label="English" src={resolveMediaUrl(demo.captionsUrl)} srcLang="en" />
           ) : null}
         </video>
       </div>
