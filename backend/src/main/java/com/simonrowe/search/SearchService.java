@@ -242,8 +242,8 @@ public class SearchService {
       return doc.url();
     }
     String contentId = id.substring(idPrefix.length());
-    return "/news-events?" + parameter + "="
-        + URLEncoder.encode(contentId, StandardCharsets.UTF_8);
+    return "/news-events?%s=%s".formatted(
+        parameter, URLEncoder.encode(contentId, StandardCharsets.UTF_8));
   }
 
   private String sanitizeQuery(final String query) {
