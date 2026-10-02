@@ -54,9 +54,8 @@ class SchoolWebsiteCrawlerPagesTest {
   }
 
   private static String sitemapOf(final List<String> urls) {
-    return "<urlset>"
-        + urls.stream().map(u -> "<loc>" + u + "</loc>").reduce("", String::concat)
-        + "</urlset>";
+    return "<urlset>%s</urlset>".formatted(
+        urls.stream().map(u -> "<loc>" + u + "</loc>").reduce("", String::concat));
   }
 
   @Test

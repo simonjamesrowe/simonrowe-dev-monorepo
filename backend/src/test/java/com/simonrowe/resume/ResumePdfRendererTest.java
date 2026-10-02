@@ -313,8 +313,9 @@ class ResumePdfRendererTest {
   }
 
   private static String sentence(int seed) {
-    return "A realistically long line describing responsibility " + seed
-        + " in the sort of detail a reader of this document would expect to find.";
+    return """
+        A realistically long line describing responsibility %s \
+        in the sort of detail a reader of this document would expect to find.""".formatted(seed);
   }
 
   private static int pageCount(byte[] pdf) throws IOException {

@@ -359,12 +359,14 @@ public class IssueFiler {
   }
 
   private static String regressionBody(final IssueFiling filing, final TrackedIssue predecessor) {
-    return filing.body()
-        + "\n\n---\n\nThis is a regression of "
-        + predecessor.identifier()
-        + " ("
-        + predecessor.url()
-        + "), which was marked complete. Same fingerprint, new occurrence: "
-        + filing.occurrenceDetail();
+    return """
+        %s
+
+        ---
+
+        This is a regression of %s (%s), which was marked complete. Same fingerprint, \
+        new occurrence: %s"""
+        .formatted(
+            filing.body(), predecessor.identifier(), predecessor.url(), filing.occurrenceDetail());
   }
 }

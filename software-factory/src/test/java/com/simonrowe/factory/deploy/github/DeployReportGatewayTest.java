@@ -46,10 +46,8 @@ class DeployReportGatewayTest {
         "/",
         exchange -> {
           byte[] body =
-              ("unexpected request: "
-                      + exchange.getRequestMethod()
-                      + " "
-                      + exchange.getRequestURI())
+              "unexpected request: %s %s"
+                  .formatted(exchange.getRequestMethod(), exchange.getRequestURI())
                   .getBytes(StandardCharsets.UTF_8);
           exchange.sendResponseHeaders(599, body.length);
           exchange.getResponseBody().write(body);

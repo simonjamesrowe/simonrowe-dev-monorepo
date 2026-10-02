@@ -69,8 +69,8 @@ public class V044MigrateCoparentData {
         } else if (existing.equals(sourceDocument)) {
           unchanged++;
         } else {
-          throw new IllegalStateException("Conflicting CoParent document in "
-              + mapping.getValue() + " for id " + sourceDocument.get("_id"));
+          throw new IllegalStateException("Conflicting CoParent document in %s for id %s"
+              .formatted(mapping.getValue(), sourceDocument.get("_id")));
         }
       }
     }

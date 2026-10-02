@@ -77,8 +77,8 @@ class ShortLinkControllerTest extends AbstractIntegrationTest {
         .contains("""
             <meta property="og:description" \
             content="What the guarantee buys you">""")
-        .contains("<meta property=\"og:image\" content=\""
-            + BASE + "/uploads/kafka-large.png\">")
+        .contains("""
+            <meta property="og:image" content="%s/uploads/kafka-large.png">""".formatted(BASE))
         .contains("<meta property=\"og:url\" content=\"" + BASE + "/blogs/blog-1\">")
         .contains("<meta property=\"og:type\" content=\"article\">")
         .contains("<meta name=\"twitter:card\" content=\"summary_large_image\">")

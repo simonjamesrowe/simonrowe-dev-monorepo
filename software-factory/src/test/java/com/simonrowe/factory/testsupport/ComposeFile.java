@@ -83,11 +83,10 @@ public final class ComposeFile {
     }
     if (!found) {
       throw new AssertionError(
-          "Could not find a '"
-              + serviceName
-              + ":' service block in "
-              + PATH.toAbsolutePath()
-              + " - has it been renamed or removed? This test must not pass by reading nothing.");
+          """
+          Could not find a '%s:' service block in %s - has it been renamed or removed? \
+          This test must not pass by reading nothing."""
+              .formatted(serviceName, PATH.toAbsolutePath()));
     }
     return block;
   }

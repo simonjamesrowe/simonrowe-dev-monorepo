@@ -143,16 +143,20 @@ public class ReviewMarkdownRenderer {
   }
 
   public String renderFindingComment(final ReviewFinding finding) {
-    return findingMarker(FindingFingerprint.of(finding))
-        + "\n**"
-        + finding.severity().toJson()
-        + " — "
-        + finding.title()
-        + "**\n\n"
-        + finding.explanation()
-        + "\n\n_Recommendation:_ "
-        + finding.recommendation()
-        + "\n";
+    return """
+        %s
+        **%s — %s**
+
+        %s
+
+        _Recommendation:_ %s
+        """
+        .formatted(
+            findingMarker(FindingFingerprint.of(finding)),
+            finding.severity().toJson(),
+            finding.title(),
+            finding.explanation(),
+            finding.recommendation());
   }
 
   public String renderAck(final String marker, final String headSha) {
@@ -216,13 +220,11 @@ public class ReviewMarkdownRenderer {
         temporalUiBaseUrl.endsWith("/")
             ? temporalUiBaseUrl.substring(0, temporalUiBaseUrl.length() - 1)
             : temporalUiBaseUrl;
-    return "\n[Workflow history]("
-        + base
-        + "/namespaces/default/workflows/"
-        + workflowId
-        + ") · `"
-        + workflowId
-        + "`\n";
+    return """
+
+        [Workflow history](%s/namespaces/default/workflows/%s) · `%s`
+        """
+        .formatted(base, workflowId, workflowId);
   }
 
   /** Keeps an arbitrary failure string from breaking out of the code fence around it. */

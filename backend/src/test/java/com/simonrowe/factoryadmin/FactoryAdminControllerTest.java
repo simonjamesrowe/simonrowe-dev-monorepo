@@ -154,8 +154,8 @@ class FactoryAdminControllerTest {
     mockMvc.perform(
             post(BASE + "/deploys")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"frontendCommit\":\"" + SHA
-                    + "\",\"confirmation\":\"REDEPLOY 0123456\"}"))
+                .content("""
+                    {"frontendCommit":"%s","confirmation":"REDEPLOY 0123456"}""".formatted(SHA)))
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.detail").value("Redeploying 0123456"));
   }

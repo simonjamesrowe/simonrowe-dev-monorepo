@@ -182,12 +182,8 @@ public class GitHubCredentials {
           HttpRequest.newBuilder()
               .uri(
                   URI.create(
-                      properties.github().apiBaseUrl()
-                          + "/repos/"
-                          + owner
-                          + "/"
-                          + repository
-                          + "/installation"))
+                      "%s/repos/%s/%s/installation"
+                          .formatted(properties.github().apiBaseUrl(), owner, repository)))
               .timeout(properties.github().requestTimeout())
               .header("Accept", "application/vnd.github+json")
               .header("Authorization", "Bearer " + createAppJwt(clock.instant()))
@@ -199,12 +195,8 @@ public class GitHubCredentials {
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         throw new IllegalStateException(
-            "GitHub App installation lookup for "
-                + owner
-                + "/"
-                + repository
-                + " returned "
-                + response.statusCode());
+            "GitHub App installation lookup for %s/%s returned %s"
+                .formatted(owner, repository, response.statusCode()));
       }
       long resolved = objectMapper.readTree(response.body()).path("id").asLong();
       if (resolved <= 0) {
@@ -253,10 +245,8 @@ public class GitHubCredentials {
           HttpRequest.newBuilder()
               .uri(
                   URI.create(
-                      properties.github().apiBaseUrl()
-                          + "/app/installations/"
-                          + installationId
-                          + "/access_tokens"))
+                      "%s/app/installations/%s/access_tokens"
+                          .formatted(properties.github().apiBaseUrl(), installationId)))
               .timeout(properties.github().requestTimeout())
               .header("Accept", "application/vnd.github+json")
               .header("Authorization", "Bearer " + createAppJwt(now))
@@ -274,10 +264,8 @@ public class GitHubCredentials {
         // requested permissions exceed the installation's grant. Retrying it three times only
         // delays the report, and GitHub's body names the offending permission, so keep it.
         throw ApplicationFailure.newNonRetryableFailure(
-            "GitHub App token endpoint returned "
-                + response.statusCode()
-                + ": "
-                + truncate(response.body()),
+            "GitHub App token endpoint returned %s: %s"
+                .formatted(response.statusCode(), truncate(response.body())),
             "GITHUB_TOKEN_REJECTED");
       }
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
@@ -325,11 +313,10 @@ public class GitHubCredentials {
       }
       if (!missing.isEmpty()) {
         throw ApplicationFailure.newNonRetryableFailure(
-            "GitHub App installation "
-                + installationId
-                + " is missing required permissions "
-                + String.join(", ", sorted(missing))
-                + " — grant them on the App and accept the installation update",
+            """
+            GitHub App installation %s is missing required permissions %s — grant them on \
+            the App and accept the installation update"""
+                .formatted(installationId, String.join(", ", sorted(missing))),
             "GITHUB_PERMISSION_MISSING");
       }
     }
@@ -447,9 +434,10 @@ public class GitHubCredentials {
               .put("exp", now.plusSeconds(9 * 60).getEpochSecond())
               .put("iss", properties.github().appClientId());
       String unsigned =
-          base64Url(objectMapper.writeValueAsBytes(header))
-              + "."
-              + base64Url(objectMapper.writeValueAsBytes(payload));
+          String.join(
+              ".",
+              base64Url(objectMapper.writeValueAsBytes(header)),
+              base64Url(objectMapper.writeValueAsBytes(payload)));
       Signature signer = Signature.getInstance("SHA256withRSA");
       signer.initSign(privateKey());
       signer.update(unsigned.getBytes(StandardCharsets.UTF_8));

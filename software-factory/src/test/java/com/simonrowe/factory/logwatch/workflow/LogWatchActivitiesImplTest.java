@@ -328,8 +328,9 @@ class LogWatchActivitiesImplTest {
   }
 
   private static String temporalJson(final String message, final String error) {
-    return "{\"level\":\"error\",\"ts\":\"2026-09-12T08:58:41.026Z\",\"msg\":\"" + message
-        + "\",\"error\":\"" + error + "\"}";
+    return """
+        {"level":"error","ts":"2026-09-12T08:58:41.026Z","msg":"%s","error":"%s"}"""
+        .formatted(message, error);
   }
 
   private static LogLine line(final String container, final String raw) {

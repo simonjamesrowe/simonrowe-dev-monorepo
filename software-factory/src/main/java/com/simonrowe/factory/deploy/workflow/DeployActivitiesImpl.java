@@ -384,10 +384,11 @@ public class DeployActivitiesImpl implements DeployActivities {
         content.length() <= MAX_EVIDENCE_BYTES
             ? content
             // The tail: the reason something failed is at the end of its output.
-            : "[truncated to the last "
-                + MAX_EVIDENCE_BYTES
-                + " characters]\n"
-                + content.substring(content.length() - MAX_EVIDENCE_BYTES);
+            : """
+                [truncated to the last %s characters]
+                %s"""
+                .formatted(
+                    MAX_EVIDENCE_BYTES, content.substring(content.length() - MAX_EVIDENCE_BYTES));
     Files.writeString(path, bounded);
   }
 

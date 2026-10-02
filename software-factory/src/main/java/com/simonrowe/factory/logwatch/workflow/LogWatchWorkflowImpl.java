@@ -103,8 +103,8 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
       current =
           new LogWatchProgress(
               LogWatchPhase.CHECKING_SOURCE,
-              "Checking the log source is alive over "
-                  + LogWatchReportRenderer.describeWindow(from, to),
+              "Checking the log source is alive over %s"
+                  .formatted(LogWatchReportRenderer.describeWindow(from, to)),
               null);
 
       ScanObservation observation = activities.observe(from, to);
@@ -117,8 +117,8 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
       current =
           new LogWatchProgress(
               LogWatchPhase.GROUPING,
-              "Read " + observation.linesRead() + " line(s) from "
-                  + observation.containersSeen() + " container(s)",
+              "Read %s line(s) from %s container(s)"
+                  .formatted(observation.linesRead(), observation.containersSeen()),
               observation.signatures().size());
 
       if (observation.signatures().isEmpty()) {
@@ -127,9 +127,8 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
         String swept =
             sweepResolved(request, observation, from, to, runId, workflowId, resolvedUrls);
         String detail =
-            "No signature met the minimum occurrence threshold. Source health: "
-                + observation.sourceHealth().evidence()
-                + swept;
+            "No signature met the minimum occurrence threshold. Source health: %s%s"
+                .formatted(observation.sourceHealth().evidence(), swept);
         current = new LogWatchProgress(LogWatchPhase.DONE, detail, 0);
         return finish(request, observation, LogWatchStatus.NO_FINDINGS, workflowId, runId,
             startedAt, from, to, issueUrls, detail, resolvedUrls);
@@ -327,9 +326,8 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
       return "; the read was truncated, so no ticket was closed as resolved";
     }
     if (observation.signaturesDropped() > 0) {
-      return "; the per-run cap dropped "
-          + observation.signaturesDropped()
-          + " signature(s), so no ticket was closed as resolved";
+      return "; the per-run cap dropped %s signature(s), so no ticket was closed as resolved"
+          .formatted(observation.signaturesDropped());
     }
 
     SweepReport report =
@@ -354,21 +352,19 @@ public class LogWatchWorkflowImpl implements LogWatchWorkflow {
     }
 
     if (report.unavailable()) {
-      return "; "
-          + report.considered()
-          + " ticket(s) look resolved but the Linear team has no Done state to close them into";
+      return "; %s ticket(s) look resolved but the Linear team has no Done state to close them into"
+          .formatted(report.considered());
     }
     if (report.resolved().isEmpty()) {
       return report.skippedStarted() > 0
-          ? "; " + report.skippedStarted()
-              + " ticket(s) look resolved but someone is working on them"
+          ? "; %s ticket(s) look resolved but someone is working on them"
+              .formatted(report.skippedStarted())
           : "";
     }
-    return "; closed "
-        + report.resolved().size()
-        + " ticket(s) no longer reported ("
-        + String.join(", ", report.resolved().stream().map(SweptIssue::issueIdentifier).toList())
-        + ")";
+    String identifiers =
+        String.join(", ", report.resolved().stream().map(SweptIssue::issueIdentifier).toList());
+    return "; closed %s ticket(s) no longer reported (%s)"
+        .formatted(report.resolved().size(), identifiers);
   }
 
   private String describeOutcome(

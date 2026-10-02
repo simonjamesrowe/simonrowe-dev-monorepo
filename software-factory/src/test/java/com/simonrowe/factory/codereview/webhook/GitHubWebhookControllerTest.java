@@ -130,8 +130,8 @@ class GitHubWebhookControllerTest {
   private static String sign(final String body) throws Exception {
     Mac mac = Mac.getInstance("HmacSHA256");
     mac.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-    return "sha256="
-        + HexFormat.of().formatHex(mac.doFinal(body.getBytes(StandardCharsets.UTF_8)));
+    String digest = HexFormat.of().formatHex(mac.doFinal(body.getBytes(StandardCharsets.UTF_8)));
+    return "sha256=" + digest;
   }
 
   private static String pullRequestPayload(final String action, final boolean draft) {
@@ -243,9 +243,9 @@ class GitHubWebhookControllerTest {
     String payload = pullRequestPayload("opened", false);
     Mac mac = Mac.getInstance("HmacSHA256");
     mac.init(new SecretKeySpec("wrong-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-    String forged =
-        "sha256="
-            + HexFormat.of().formatHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
+    String digest =
+        HexFormat.of().formatHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
+    String forged = "sha256=" + digest;
 
     deliver(payload, forged, "pull_request").andExpect(status().isUnauthorized());
 

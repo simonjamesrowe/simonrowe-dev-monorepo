@@ -79,9 +79,10 @@ public class DependencyTrackClient {
       }
     }
     throw new IllegalStateException(
-        "Dependency-Track has no project named "
-            + name
-            + " — check the project name or whether CI has uploaded its SBOM");
+        """
+        Dependency-Track has no project named %s — check the project name or whether CI \
+        has uploaded its SBOM"""
+            .formatted(name));
   }
 
   private JsonNode get(final String path) {

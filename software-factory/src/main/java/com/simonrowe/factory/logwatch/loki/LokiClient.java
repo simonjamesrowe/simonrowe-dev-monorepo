@@ -76,11 +76,8 @@ public class LokiClient {
    */
   public List<LogLine> linesIn(final Instant from, final Instant to, final int lineBudget) {
     String path =
-        "/query_range?query=" + encode(QUERY)
-            + "&start=" + nanos(from)
-            + "&end=" + nanos(to)
-            + "&limit=" + lineBudget
-            + "&direction=forward";
+        "/query_range?query=%s&start=%s&end=%s&limit=%s&direction=forward"
+            .formatted(encode(QUERY), nanos(from), nanos(to), lineBudget);
     JsonNode result = get(path).path("data").path("result");
 
     List<LogLine> lines = new ArrayList<>();
@@ -149,12 +146,13 @@ public class LokiClient {
         // A 404 here almost always means the query base is doubled rather than that Loki is down:
         // GRAFANA_CLOUD_LOKI_ENDPOINT already contains /loki/api/v1. Say so, because the bare
         // "404 page not found" body carries no hint at all.
+        String hint =
+            response.statusCode() == 404
+                ? " - a 404 usually means the query base is doubled; check queryBase()"
+                : "";
         throw new LokiException(
-            "Loki returned " + response.statusCode() + " for " + uri.getPath()
-                + (response.statusCode() == 404
-                    ? " - a 404 usually means the query base is doubled; check queryBase()"
-                    : "")
-                + ": " + response.body());
+            "Loki returned %s for %s%s: %s"
+                .formatted(response.statusCode(), uri.getPath(), hint, response.body()));
       }
       return objectMapper.readTree(response.body());
     } catch (IOException | JacksonException exception) {

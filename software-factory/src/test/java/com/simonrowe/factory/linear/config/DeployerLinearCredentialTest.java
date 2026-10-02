@@ -143,11 +143,10 @@ class DeployerLinearCredentialTest {
     }
     if (!found) {
       throw new AssertionError(
-          "Could not find a '"
-              + serviceName
-              + ":' service block in "
-              + COMPOSE_FILE.toAbsolutePath()
-              + " - has it been renamed or removed? This test must not pass by reading nothing.");
+          """
+          Could not find a '%s:' service block in %s - has it been renamed or removed? \
+          This test must not pass by reading nothing."""
+              .formatted(serviceName, COMPOSE_FILE.toAbsolutePath()));
     }
     return block;
   }

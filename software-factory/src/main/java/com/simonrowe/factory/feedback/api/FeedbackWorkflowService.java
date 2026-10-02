@@ -51,12 +51,8 @@ public class FeedbackWorkflowService {
   }
 
   private static String workflowId(final FeedbackRequest request) {
-    return "review-feedback-"
-        + safe(request.owner())
-        + "-"
-        + safe(request.repository())
-        + "-"
-        + request.pullNumber();
+    return "review-feedback-%s-%s-%s"
+        .formatted(safe(request.owner()), safe(request.repository()), request.pullNumber());
   }
 
   private static String safe(final String value) {

@@ -416,8 +416,8 @@ public class ProfileMcpTools {
     try {
       contactService.submitFromChat(submission);
       contactTracker.markSubmitted(sessionId);
-      return "Message sent successfully to Simon. He will respond to "
-          + email.trim() + " soon.";
+      return "Message sent successfully to Simon. He will respond to %s soon."
+          .formatted(email.trim());
     } catch (EmailDeliveryException e) {
       LOG.error("Contact form submission failed for session: {}", sessionId, e);
       return "Failed to send message. Please try again.";

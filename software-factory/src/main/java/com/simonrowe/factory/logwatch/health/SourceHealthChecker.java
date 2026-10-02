@@ -82,22 +82,18 @@ public final class SourceHealthChecker {
       return new SourceHealth(
           SourceHealth.Status.ALIVE,
           SourceHealth.Tier.CONTAINER_COVERAGE,
-          "Window shorter than "
-              + MINIMUM_WINDOW_FOR_INFERENCE.toHours()
-              + "h; too short to infer anything from quiet, so treated as alive.");
+          "Window shorter than %sh; too short to infer anything from quiet, so treated as alive."
+              .formatted(MINIMUM_WINDOW_FOR_INFERENCE.toHours()));
     }
 
     if (distinctContainers < minimumContainers) {
       return new SourceHealth(
           SourceHealth.Status.SILENT,
           SourceHealth.Tier.CONTAINER_COVERAGE,
-          "Only "
-              + distinctContainers
-              + " distinct container(s) produced lines over "
-              + window.toHours()
-              + "h, below the floor of "
-              + minimumContainers
-              + ". Alloy's component API was unreachable, so this is inferred from silence.");
+          """
+          Only %s distinct container(s) produced lines over %sh, below the floor of %s. \
+          Alloy's component API was unreachable, so this is inferred from silence."""
+              .formatted(distinctContainers, window.toHours(), minimumContainers));
     }
 
     return new SourceHealth(

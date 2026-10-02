@@ -99,9 +99,8 @@ public class AssistantInputValidator {
 
     @Override
     public String toString() {
-      return "ValidatedInput[textPresent=" + (text != null)
-          + ", imageContentType=" + imageContentType
-          + ", imageByteLength=" + (imageBytes == null ? 0 : imageBytes.length) + ']';
+      return "ValidatedInput[textPresent=%s, imageContentType=%s, imageByteLength=%s]"
+          .formatted(text != null, imageContentType, imageBytes == null ? 0 : imageBytes.length);
     }
   }
 }

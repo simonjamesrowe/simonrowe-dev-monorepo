@@ -209,10 +209,14 @@ class SignatureExtractorTest {
         SignatureExtractor.group(
             List.of(
                 line("backend", Severity.ERROR, prefix + "Validation failed with 1 errors:\"}"),
-                line("backend", Severity.ERROR, prefix
-                    + "- MISSING_GOALS: Agent 'ContentAggregation' must have one goal\"}"),
-                line("backend", Severity.ERROR, prefix
-                    + "- MISSING_GOALS: Agent 'WeeklyDigest' must have one goal\"}")));
+                line(
+                    "backend",
+                    Severity.ERROR,
+                    prefix + "- MISSING_GOALS: Agent 'ContentAggregation' must have one goal\"}"),
+                line(
+                    "backend",
+                    Severity.ERROR,
+                    prefix + "- MISSING_GOALS: Agent 'WeeklyDigest' must have one goal\"}")));
 
     assertThat(grouped).hasSize(1);
     assertThat(grouped.getFirst().occurrences()).isEqualTo(3);

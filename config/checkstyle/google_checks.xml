@@ -256,4 +256,30 @@
     <module name="FileTabCharacter">
         <property name="eachLine" value="true"/>
     </module>
+    <!--
+      A string literal joined with + across a line break should be a text block (or a single
+      line with formatted()). Four shapes, one per alternative:
+        1. a line ending in a literal, the next starting with "+ "
+        2. a line ending in a literal followed by " +"
+        3. a line ending in " +", the next starting with a literal
+        4. a line starting with "+ " followed by a literal
+      Every quantifier is possessive and none is nested, so the pattern cannot backtrack
+      catastrophically over long runs of whitespace, quotes or plus signs.
+      A pattern cannot see token boundaries, so:
+        - `""` beside the quote excludes text-block delimiters: a text block opened or closed
+          next to a line-break + is not reported.
+        - Javadoc and block comments are not matched, because their lines start with "*"
+          (shape 2 checks the next line explicitly). A // comment ending in `" +` would be.
+        - Text-block content is matched only if it reads like a broken Java concatenation
+          (a line ending in a quote and the next starting with "+ ", and so on).
+      The whitespace around + is what WhitespaceAround already requires, so it costs nothing.
+    -->
+    <module name="RegexpMultiline">
+        <property name="id" value="NoLiteralConcatenationAcrossLines"/>
+        <property name="fileExtensions" value="java"/>
+        <property name="format"
+         value="(?&lt;!&quot;&quot;)&quot;[ \t]*+\n[ \t]*+\+[ \t\n]|(?&lt;!&quot;&quot;)&quot;[ \t]++\+[ \t]*+\n(?![ \t]*+\*)|[ \t]\+[ \t]*+\n[ \t]*+&quot;(?!&quot;&quot;)|^[ \t]*+\+[ \t]++&quot;(?!&quot;&quot;)"/>
+        <property name="message"
+         value="Write multi-line strings as text blocks, not literals concatenated across lines"/>
+    </module>
 </module>

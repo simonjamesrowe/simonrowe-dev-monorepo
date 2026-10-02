@@ -201,16 +201,14 @@ public class AssistantInferenceService {
     final String targets = update
         ? "\"eventId\":" + nullableString() + ",\"targetHint\":" + nullableString() + ","
         : "";
-    final String properties = targets
-        + "\"type\":" + nullableString() + ",\"title\":" + nullableString()
-        + ",\"startDate\":" + nullableString() + ",\"endDate\":" + nullableString()
-        + ",\"startTime\":" + nullableString() + ",\"endTime\":" + nullableString()
-        + ",\"allDay\":{\"type\":[\"boolean\",\"null\"]},\"parentId\":" + nullableString()
-        + ",\"parentIds\":" + stringArray()
-        + ",\"childIds\":" + stringArray() + ",\"location\":" + nullableString()
-        + ",\"notes\":" + nullableString()
-        + ",\"recurringFrequency\":" + nullableEnum(Recurrence.FREQUENCIES)
-        + ",\"recurringDays\":" + enumArray(Recurrence.DAYS);
+    final String properties = """
+        %s"type":%s,"title":%s,"startDate":%s,"endDate":%s,"startTime":%s,"endTime":%s,\
+        "allDay":{"type":["boolean","null"]},"parentId":%s,"parentIds":%s,"childIds":%s,\
+        "location":%s,"notes":%s,"recurringFrequency":%s,"recurringDays":%s""".formatted(
+            targets, nullableString(), nullableString(), nullableString(), nullableString(),
+            nullableString(), nullableString(), nullableString(), stringArray(), stringArray(),
+            nullableString(), nullableString(), nullableEnum(Recurrence.FREQUENCIES),
+            enumArray(Recurrence.DAYS));
     final List<String> required = new ArrayList<>();
     if (update) {
       required.add("eventId");
@@ -223,15 +221,17 @@ public class AssistantInferenceService {
   }
 
   private static String targetSchema(final String idField) {
-    return objectSchema("\"" + idField + "\":" + nullableString()
-        + ",\"targetHint\":" + nullableString(), idField, "targetHint");
+    return objectSchema("""
+        "%s":%s,"targetHint":%s""".formatted(idField, nullableString(), nullableString()),
+        idField, "targetHint");
   }
 
   private static String objectSchema(final String properties, final String... required) {
     final String names = java.util.Arrays.stream(required)
         .map(name -> "\"" + name + "\"").collect(java.util.stream.Collectors.joining(","));
-    return "{\"type\":\"object\",\"properties\":{" + properties
-        + "},\"required\":[" + names + "],\"additionalProperties\":false}";
+    return """
+        {"type":"object","properties":{%s},"required":[%s],\
+        "additionalProperties":false}""".formatted(properties, names);
   }
 
   private static String stringType() {
@@ -256,8 +256,9 @@ public class AssistantInferenceService {
   }
 
   private static String enumArray(final List<String> values) {
-    return "{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\",\"enum\":["
-        + quoted(values) + "]}}";
+    return """
+        {"type":["array","null"],"items":{"type":"string","enum":[%s]}}"""
+        .formatted(quoted(values));
   }
 
   private static String quoted(final List<String> values) {

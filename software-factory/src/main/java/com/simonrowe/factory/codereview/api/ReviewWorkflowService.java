@@ -49,14 +49,12 @@ public class ReviewWorkflowService {
         request.expectedHeadSha() == null || request.expectedHeadSha().isBlank()
             ? UUID.randomUUID().toString()
             : request.expectedHeadSha();
-    return "code-review-"
-        + safe(request.owner())
-        + "-"
-        + safe(request.repository())
-        + "-"
-        + request.pullNumber()
-        + "-"
-        + safe(revision);
+    return "code-review-%s-%s-%s-%s"
+        .formatted(
+            safe(request.owner()),
+            safe(request.repository()),
+            request.pullNumber(),
+            safe(revision));
   }
 
   private static String safe(final String value) {

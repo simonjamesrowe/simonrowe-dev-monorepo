@@ -71,12 +71,8 @@ public class GitHubGateway {
 
   public PullRequestContext loadPullRequest(final ReviewRequest request) {
     String path =
-        "/repos/"
-            + request.owner()
-            + "/"
-            + request.repository()
-            + "/pulls/"
-            + request.pullNumber();
+        "/repos/%s/%s/pulls/%s"
+            .formatted(request.owner(), request.repository(), request.pullNumber());
     JsonNode pullRequest =
         sendJson("GET", path, null, credentials.accessToken(request.installationId()));
     return toPullRequestContext(request, pullRequest);

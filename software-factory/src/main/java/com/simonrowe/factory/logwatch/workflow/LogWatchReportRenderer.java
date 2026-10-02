@@ -173,14 +173,8 @@ public final class LogWatchReportRenderer {
    * @return a single line
    */
   public static String occurrenceDetail(final LogSignature signature, final String runId) {
-    return "scan "
-        + runId
-        + " saw this "
-        + signature.occurrences()
-        + " time(s) between "
-        + signature.firstSeen()
-        + " and "
-        + signature.lastSeen();
+    return "scan %s saw this %s time(s) between %s and %s"
+        .formatted(runId, signature.occurrences(), signature.firstSeen(), signature.lastSeen());
   }
 
   /**

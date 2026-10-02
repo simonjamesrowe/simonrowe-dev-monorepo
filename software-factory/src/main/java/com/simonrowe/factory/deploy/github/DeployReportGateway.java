@@ -81,13 +81,8 @@ public class DeployReportGateway {
    */
   public String commentOnCommit(final String sha, final String body, final Long installationId) {
     String path =
-        "/repos/"
-            + properties.owner()
-            + "/"
-            + properties.repository()
-            + "/commits/"
-            + sha
-            + "/comments";
+        "/repos/%s/%s/commits/%s/comments"
+            .formatted(properties.owner(), properties.repository(), sha);
     ObjectNode payload = objectMapper.createObjectNode();
     payload.put("body", body);
 

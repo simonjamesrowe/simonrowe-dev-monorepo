@@ -147,8 +147,8 @@ public class GoogleDriveService {
   public String findOrCreateFolderByName(final String folderName) throws IOException {
     checkDrive();
     FileList result = drive.files().list()
-        .setQ("name = '" + folderName + "' and mimeType = '"
-            + FOLDER_MIME + "' and trashed = false")
+        .setQ("name = '%s' and mimeType = '%s' and trashed = false"
+            .formatted(folderName, FOLDER_MIME))
         .setFields("files(id, name)")
         .setPageSize(1)
         .setSupportsAllDrives(true)
@@ -334,8 +334,8 @@ public class GoogleDriveService {
     checkDrive();
     String escaped = fileName.replace("\\", "\\\\").replace("'", "\\'");
     FileList result = drive.files().list()
-        .setQ("'" + folderId + "' in parents and trashed = false and name = '"
-            + escaped + "'")
+        .setQ("'%s' in parents and trashed = false and name = '%s'"
+            .formatted(folderId, escaped))
         .setFields("files(id)")
         .setPageSize(1)
         .setSupportsAllDrives(true)

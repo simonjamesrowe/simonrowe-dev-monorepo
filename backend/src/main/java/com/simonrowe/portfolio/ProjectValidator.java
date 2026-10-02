@@ -182,9 +182,9 @@ final class ProjectValidator {
       }
       String slug = page.slug();
       if (isBlank(slug) || slug.length() > SLUG_MAX || !SLUG.matcher(slug).matches()) {
-        errors.add(new FieldError(prefix + ".slug", prefix
-            + ".slug must be lower-case letters and digits separated by single hyphens, at most "
-            + SLUG_MAX + " characters"));
+        errors.add(new FieldError(prefix + ".slug", """
+            %s.slug must be lower-case letters and digits separated by single hyphens, \
+            at most %s characters""".formatted(prefix, SLUG_MAX)));
       } else if (!seen.add(slug)) {
         errors.add(new FieldError(prefix + ".slug", prefix + ".slug is used by another page"));
       }

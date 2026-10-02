@@ -149,8 +149,7 @@ public class ContentAggregationAgent {
         htmlScraper.scrapeArticlePagePublic(normalizedUrl);
     if (content == null) {
       log.warn("Failed to scrape URL: {}", normalizedUrl);
-      return "Failed to scrape URL (site may block automated access): "
-          + normalizedUrl;
+      return "Failed to scrape URL (site may block automated access): " + normalizedUrl;
     }
 
     ContentClassification classification =
