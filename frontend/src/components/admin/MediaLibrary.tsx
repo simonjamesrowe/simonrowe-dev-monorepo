@@ -3,10 +3,13 @@ import { X } from 'lucide-react'
 
 import { useAuth } from '../../auth/useAuth'
 import { fetchAdminMedia, type MediaAsset, type PageResponse } from '../../services/adminApi'
+import { MediaPreview } from './MediaPreview'
 
 interface MediaLibraryProps {
   onSelect: (asset: MediaAsset) => void
   onClose: () => void
+  /** Only these types are listed and filterable, so an image field never offers a video. */
+  accept?: readonly string[]
 }
 
 const MIME_FILTERS = [
@@ -16,6 +19,8 @@ const MIME_FILTERS = [
   { label: 'GIF', value: 'image/gif' },
   { label: 'WebP', value: 'image/webp' },
   { label: 'SVG', value: 'image/svg+xml' },
+  { label: 'Video', value: 'video/mp4' },
+  { label: 'Captions', value: 'text/vtt' },
 ]
 
 const PAGE_SIZE = 20
@@ -37,7 +42,7 @@ function getThumbnailDimensions(asset: MediaAsset): string {
   return ''
 }
 
-export function MediaLibrary({ onSelect, onClose }: MediaLibraryProps) {
+export function MediaLibrary({ onSelect, onClose, accept }: MediaLibraryProps) {
   const { getAccessToken } = useAuth()
 
   const [allAssets, setAllAssets] = useState<MediaAsset[]>([])
@@ -71,8 +76,10 @@ export function MediaLibrary({ onSelect, onClose }: MediaLibraryProps) {
     loadMedia(0)
   }, [loadMedia])
 
+  const filters = MIME_FILTERS.filter((f) => f.value === '' || !accept || accept.includes(f.value))
   const filteredAssets = allAssets.filter((asset) => {
-    const matchesMime = mimeFilter === '' || asset.mimeType === mimeFilter
+    const accepted = !accept || accept.includes(asset.mimeType)
+    const matchesMime = accepted && (mimeFilter === '' || asset.mimeType === mimeFilter)
     const matchesSearch =
       search.trim() === '' || asset.fileName.toLowerCase().includes(search.trim().toLowerCase())
     return matchesMime && matchesSearch
@@ -110,7 +117,7 @@ export function MediaLibrary({ onSelect, onClose }: MediaLibraryProps) {
             value={search}
           />
           <div className="media-library-drawer__mime-filters">
-            {MIME_FILTERS.map((f) => (
+            {filters.length > 2 && filters.map((f) => (
               <button
                 className={`admin-btn admin-btn--sm${mimeFilter === f.value ? ' admin-btn--primary' : ''}`}
                 key={f.value}
@@ -142,9 +149,10 @@ export function MediaLibrary({ onSelect, onClose }: MediaLibraryProps) {
                   type="button"
                 >
                   <div className="admin-media-card__preview">
-                    <img
+                    <MediaPreview
                       alt={asset.fileName}
                       className="admin-media-card__image"
+                      mimeType={asset.mimeType}
                       src={getThumbnailSrc(asset)}
                     />
                   </div>

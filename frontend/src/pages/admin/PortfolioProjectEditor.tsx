@@ -3,8 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 
 import { useAuth } from '../../auth/useAuth'
 import { ImagePicker } from '../../components/admin/ImagePicker'
-import { MarkdownEditor } from '../../components/admin/MarkdownEditor'
+import { MediaPicker } from '../../components/admin/MediaPicker'
 import { HighlightsEditor, PagesEditor, TextField } from '../../components/admin/PortfolioPageFields'
+import { RichMarkdownEditor } from '../../components/admin/RichMarkdownEditor'
 import { ProjectSilhouette } from '../../components/portfolio/ProjectSilhouette'
 import { clearPortfolioCache } from '../../hooks/usePortfolio'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
@@ -317,10 +318,11 @@ export function PortfolioProjectEditor() {
 
         <div className="blog-editor__section">
           <span className="blog-editor__section-label">Description</span>
-          <MarkdownEditor
+          <RichMarkdownEditor
+            label="Description"
+            markdown={form.description ?? ''}
             onChange={value => update('description', value)}
             placeholder="What it is, who it is for, how it is built. Hidden while Coming soon."
-            value={form.description ?? ''}
           />
           {fieldError('description')}
         </div>
@@ -378,14 +380,25 @@ export function PortfolioProjectEditor() {
         <fieldset className="portfolio-editor__group">
           <legend>Demo video</legend>
           <div className="blog-editor__three-col">
-            <TextField error={fieldError('demo.videoUrl')} id="demo-video" label="Video address"
-              onChange={videoUrl => updateDemo({ ...demo, videoUrl })} placeholder="/media/…/demo.mp4"
-              value={demo.videoUrl} />
-            <TextField error={fieldError('demo.captionsUrl')} id="demo-captions" label="Captions address"
-              onChange={captionsUrl => updateDemo({ ...demo, captionsUrl })} placeholder="/media/…/demo.vtt"
-              value={demo.captionsUrl} />
-            <TextField error={fieldError('demo.posterUrl')} id="demo-poster" label="Poster address"
-              onChange={posterUrl => updateDemo({ ...demo, posterUrl })} value={demo.posterUrl} />
+            <div className="blog-editor__section">
+              <span className="blog-editor__section-label">Video</span>
+              <MediaPicker kind="video" label="Demo video"
+                onChange={videoUrl => updateDemo({ ...demo, videoUrl })} value={demo.videoUrl || null} />
+              {fieldError('demo.videoUrl')}
+            </div>
+            <div className="blog-editor__section">
+              <span className="blog-editor__section-label">Captions</span>
+              <MediaPicker kind="captions" label="Demo captions"
+                onChange={captionsUrl => updateDemo({ ...demo, captionsUrl })} value={demo.captionsUrl || null} />
+              <p className="admin-form__hint">Offered on the player, off until a visitor turns them on.</p>
+              {fieldError('demo.captionsUrl')}
+            </div>
+            <div className="blog-editor__section">
+              <span className="blog-editor__section-label">Poster</span>
+              <MediaPicker kind="image" label="Demo poster"
+                onChange={posterUrl => updateDemo({ ...demo, posterUrl })} value={demo.posterUrl || null} />
+              {fieldError('demo.posterUrl')}
+            </div>
           </div>
           <TextField error={fieldError('demo.title')} id="demo-title" label="Demo title"
             onChange={title => updateDemo({ ...demo, title })} value={demo.title} />

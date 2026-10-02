@@ -25,8 +25,23 @@ public class MediaService {
 
   private static final Logger LOG = LoggerFactory.getLogger(MediaService.class);
 
-  private static final Set<String> ALLOWED_MIME_TYPES = Set.of(
-      "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"
+  /**
+   * What the library stores: images, plus MP4 video and WebVTT captions so a page's demo video
+   * is CMS content rather than a file in the frontend bundle.
+   */
+  static final Set<String> ALLOWED_MIME_TYPES = Set.of(
+      "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
+      "video/mp4", "text/vtt"
+  );
+
+  /**
+   * Resized into thumbnail/small/medium/large variants. Everything else is stored as the original
+   * only, which the image hydrator already falls back to. WebP is in the second group because the
+   * JVM has no WebP reader or writer, so resizing one always failed, and an allowed WebP upload
+   * used to return a 500.
+   */
+  private static final Set<String> RESIZABLE_IMAGE_TYPES = Set.of(
+      "image/jpeg", "image/png", "image/gif"
   );
 
   private static final long MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -41,7 +56,9 @@ public class MediaService {
       "image/png", "png",
       "image/gif", "gif",
       "image/webp", "webp",
-      "image/svg+xml", "svg"
+      "image/svg+xml", "svg",
+      "video/mp4", "mp4",
+      "text/vtt", "vtt"
   );
 
   /** An extension we are willing to paste into a path: a short alphanumeric run. */
@@ -63,54 +80,101 @@ public class MediaService {
 
   public MediaAsset upload(final MultipartFile file) {
     String contentType = file.getContentType();
+    validate(contentType, file.getSize());
+    String originalFileName = file.getOriginalFilename();
+    if (originalFileName == null) {
+      originalFileName = "upload";
+    }
+    return store(originalFileName, contentType, file.getSize(), file::transferTo, null);
+  }
+
+  /**
+   * Adds a file to the library from code rather than from an upload, such as a change unit
+   * seeding a page's media, so seeded media is ordinary library content: listed, replaceable and
+   * backed up with every other upload.
+   *
+   * <p>Idempotent on {@code legacyId}: when an asset already carries it, that asset is returned
+   * and nothing is written, so a re-run never imports a second copy.
+   *
+   * @param content the file's bytes
+   * @param fileName the name to show in the library
+   * @param contentType one of {@link #ALLOWED_MIME_TYPES}
+   * @param legacyId a stable key for this file, such as {@code seed:portfolio/term-time/hero.webp}
+   * @return the stored, or already present, asset
+   */
+  public MediaAsset importFile(
+      final byte[] content,
+      final String fileName,
+      final String contentType,
+      final String legacyId
+  ) {
+    var existing = repository.findByLegacyId(legacyId);
+    if (existing.isPresent()) {
+      return existing.get();
+    }
+    validate(contentType, content.length);
+    return store(fileName, contentType, content.length,
+        target -> Files.write(target, content), legacyId);
+  }
+
+  private static void validate(final String contentType, final long size) {
     if (contentType == null || !ALLOWED_MIME_TYPES.contains(contentType)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-          "Unsupported file type. Allowed: JPEG, PNG, GIF, WebP, SVG");
+          "Unsupported file type. Allowed: JPEG, PNG, GIF, WebP, SVG, MP4 video, WebVTT captions");
     }
-
-    if (file.getSize() > MAX_FILE_SIZE) {
+    if (size > MAX_FILE_SIZE) {
       throw new ResponseStatusException(
           HttpStatus.valueOf(413), "File too large. Maximum size is 10 MB");
     }
+  }
 
+  /** Writes the file to the asset's own directory. */
+  @FunctionalInterface
+  private interface FileWriter {
+    void writeTo(Path target) throws IOException;
+  }
+
+  private MediaAsset store(
+      final String originalFileName,
+      final String contentType,
+      final long size,
+      final FileWriter writer,
+      final String legacyId
+  ) {
     try {
       String assetId = UUID.randomUUID().toString();
       Path assetDir = Path.of(uploadsPath, assetId);
       Files.createDirectories(assetDir);
 
-      String originalFileName = file.getOriginalFilename();
-      if (originalFileName == null) {
-        originalFileName = "upload";
-      }
       String extension = getExtension(originalFileName, contentType);
       String storedFileName = "original." + extension;
       Path originalFile = assetDir.resolve(storedFileName);
-      file.transferTo(originalFile);
+      writer.writeTo(originalFile);
 
-      Map<String, MediaAsset.VariantInfo> variants =
-          variantGenerator.generateVariants(
-              originalFile, assetId, assetDir.toString());
+      Map<String, MediaAsset.VariantInfo> variants = RESIZABLE_IMAGE_TYPES.contains(contentType)
+          ? variantGenerator.generateVariants(originalFile, assetId, assetDir.toString())
+          : Map.of();
 
       Instant now = Instant.now();
       MediaAsset asset = new MediaAsset(
           assetId,
           originalFileName,
           contentType,
-          file.getSize(),
+          size,
           "/uploads/" + assetId + "/" + storedFileName,
           variants,
           now,
           now,
-          null
+          legacyId
       );
 
-      LOG.info("Uploaded media asset: id={}, fileName={}",
+      LOG.info("Stored media asset: id={}, fileName={}",
           assetId, LogSafe.value(originalFileName));
       return repository.save(asset);
     } catch (IOException e) {
+      LOG.warn("Failed to store media asset {}: {}", LogSafe.value(originalFileName), e.toString());
       throw new ResponseStatusException(
-          HttpStatus.INTERNAL_SERVER_ERROR,
-          "Failed to store uploaded file");
+          HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store uploaded file", e);
     }
   }
 

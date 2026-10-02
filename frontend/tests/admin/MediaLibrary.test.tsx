@@ -164,4 +164,31 @@ describe('MediaLibrary', () => {
       expect(screen.getByText('No media assets found.')).toBeInTheDocument()
     })
   })
+
+  it('lists only the accepted types, and offers only their filters', async () => {
+    mockFetchAdminMedia.mockResolvedValue({
+      content: [...mockAssets, makeAsset('asset-4', 'demo.mp4', 'video/mp4'), makeAsset('asset-5', 'demo.vtt', 'text/vtt')],
+      totalElements: 5, totalPages: 1,
+    })
+    render(<MediaLibrary accept={['video/mp4']} onClose={onClose} onSelect={onSelect} />)
+
+    expect(await screen.findByText('demo.mp4')).toBeInTheDocument()
+    expect(screen.queryByText('photo.jpg')).toBeNull()
+    expect(screen.queryByText('demo.vtt')).toBeNull()
+    // One accepted type means nothing to filter between, so no filter buttons at all.
+    expect(screen.queryByRole('button', { name: 'JPEG' })).toBeNull()
+  })
+
+  it('previews a video as a video and captions as a file, not as broken images', async () => {
+    mockFetchAdminMedia.mockResolvedValue({
+      content: [makeAsset('asset-4', 'demo.mp4', 'video/mp4'), makeAsset('asset-5', 'demo.vtt', 'text/vtt')],
+      totalElements: 2, totalPages: 1,
+    })
+    render(<MediaLibrary onClose={onClose} onSelect={onSelect} />)
+
+    await screen.findByText('demo.mp4')
+    expect(document.querySelector('video')).not.toBeNull()
+    expect(screen.getByRole('img', { name: 'demo.vtt' })).toBeInTheDocument()
+    expect(document.querySelectorAll('img')).toHaveLength(0)
+  })
 })

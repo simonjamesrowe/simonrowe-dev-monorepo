@@ -76,10 +76,8 @@ export function hasDetailPage(project: PortfolioProject): boolean {
 }
 
 /**
- * Where a CMS image or media URL actually loads from. A media-library upload (`/uploads/...`) is
- * served by the API, which is a different origin in production. Any other site path, such as
- * the `/media/...` assets that ship in the frontend bundle, is served by this origin, and an
- * https URL is used as it is.
+ * Where a CMS media URL actually loads from. A media-library item (`/uploads/...`) is served by
+ * the API, which is a different origin in production; an https URL is used as it is.
  */
 export function resolveMediaUrl(url: string): string {
   return url.startsWith('/uploads/') ? `${API_BASE_URL}${url}` : url

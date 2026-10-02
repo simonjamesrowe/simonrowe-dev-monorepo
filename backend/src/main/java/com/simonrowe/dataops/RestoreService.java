@@ -21,6 +21,7 @@ import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
 import com.simonrowe.migration.changeunits.V045CreateCoparentAssistantSchema;
 import com.simonrowe.migration.changeunits.V048CreatePortfolioProjects;
+import com.simonrowe.migration.changeunits.V049SeedTermTimeProjectPage;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -232,7 +233,8 @@ public class RestoreService {
         Map.entry(PLATFORM_RELEASES, this::ensurePlatformReleaseIndexes),
         Map.entry(SHORT_LINKS, this::ensureShortLinkIndexes),
         Map.entry(SCHOOL_DOCUMENTS, this::ensureSchoolIndexes),
-        Map.entry(V048CreatePortfolioProjects.COLLECTION, this::ensurePortfolioIndexes));
+        Map.entry(V048CreatePortfolioProjects.COLLECTION, this::ensurePortfolioIndexes),
+        Map.entry(V049SeedTermTimeProjectPage.MEDIA_COLLECTION, this::ensureMediaIndexes));
   }
 
   void restoreCollections(final Path zipFile) throws IOException {
@@ -382,6 +384,15 @@ public class RestoreService {
   void ensurePortfolioIndexes() {
     V048CreatePortfolioProjects.createIndexes(mongoTemplate);
     LOG.info("Recreated portfolio indexes after restore");
+  }
+
+  /**
+   * The unique key on seeded media is what stops a change unit importing a second copy of a file,
+   * and it goes with the collection when the restore drops it.
+   */
+  void ensureMediaIndexes() {
+    V049SeedTermTimeProjectPage.createMediaIndexes(mongoTemplate);
+    LOG.info("Recreated media indexes after restore");
   }
 
   private void restoreIndex(final Path tempZip, final String index, final boolean warnIfMissing)

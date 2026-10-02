@@ -1,7 +1,9 @@
 import { Plus, Trash2 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import type { ProjectHighlight, ProjectPage } from '../../types/portfolio'
+import { MediaPicker } from './MediaPicker'
+import { RichMarkdownEditor } from './RichMarkdownEditor'
 
 /** Shows the server's message for a field, which is named the way the API names it. */
 export type FieldErrorFor = (field: string) => ReactNode
@@ -51,17 +53,34 @@ interface ListEditorProps<T> {
   render: (item: T, update: (next: T) => void, index: number) => ReactNode
 }
 
-/** A repeatable group of fields: each item in its own fieldset, with add and remove. */
+let nextItemId = 0
+const newItemId = () => `item-${nextItemId++}`
+
+/**
+ * A repeatable group of fields: each item in its own fieldset, with add and remove. Items are
+ * keyed by an id that follows the item, not by position, because a rich editor reads its text
+ * only when it mounts: keyed by index, removing the first page would leave the second page's
+ * slot showing the first page's body.
+ */
 function ListEditor<T>({ items, onChange, empty, noun, max, render }: ListEditorProps<T>) {
+  const [ids, setIds] = useState(() => items.map(newItemId))
+  const remove = (index: number) => {
+    setIds(current => current.filter((_, i) => i !== index))
+    onChange(items.filter((_, i) => i !== index))
+  }
+  const add = () => {
+    setIds(current => [...current, newItemId()])
+    onChange([...items, empty()])
+  }
   return (
     <div className="portfolio-editor__list">
       {items.map((item, index) => (
-        <fieldset className="portfolio-editor__item" key={index}>
+        <fieldset className="portfolio-editor__item" key={ids[index] ?? index}>
           <legend>{noun} {index + 1}</legend>
           {render(item, next => onChange(items.map((current, i) => (i === index ? next : current))), index)}
           <button
             className="admin-btn portfolio-editor__remove"
-            onClick={() => onChange(items.filter((_, i) => i !== index))}
+            onClick={() => remove(index)}
             type="button"
           >
             <Trash2 aria-hidden="true" size={14} /> Remove {noun.toLowerCase()} {index + 1}
@@ -69,7 +88,7 @@ function ListEditor<T>({ items, onChange, empty, noun, max, render }: ListEditor
         </fieldset>
       ))}
       {items.length < max ? (
-        <button className="admin-btn" onClick={() => onChange([...items, empty()])} type="button">
+        <button className="admin-btn" onClick={add} type="button">
           <Plus aria-hidden="true" size={14} /> Add {noun.toLowerCase()}
         </button>
       ) : null}
@@ -106,11 +125,13 @@ export function HighlightsEditor({ field, items, onChange, fieldError, noun, max
               onChange={text => update({ ...item, text })} value={item.text} />
             {withImages ? (
               <>
-                <TextField
-                  error={fieldError(`${path}.imageUrl`)}
-                  hint="A media-library upload (/uploads/…), a file in the site bundle (/media/…) or an https address."
-                  id={`${id}-image`} label="Image address"
-                  onChange={imageUrl => update({ ...item, imageUrl })} value={item.imageUrl} />
+                <div className="blog-editor__section">
+                  <span className="blog-editor__section-label">Image</span>
+                  <MediaPicker
+                    kind="image" label={`${noun} ${index + 1} image`}
+                    onChange={imageUrl => update({ ...item, imageUrl })} value={item.imageUrl ?? null} />
+                  {fieldError(`${path}.imageUrl`)}
+                </div>
                 <TextField error={fieldError(`${path}.imageAlt`)} id={`${id}-alt`} label="Image description"
                   onChange={imageAlt => update({ ...item, imageAlt })} value={item.imageAlt} />
               </>
@@ -130,10 +151,7 @@ interface PagesEditorProps {
   max: number
 }
 
-/**
- * Sub-pages. The body is a plain markdown textarea rather than the rich editor the description
- * uses, because that editor has no table support and rewrites tables it is given.
- */
+/** Sub-pages, each with its body in the same rich markdown editor as the rest of the admin. */
 export function PagesEditor({ items, onChange, fieldError, projectSlug, max }: PagesEditorProps) {
   return (
     <ListEditor
@@ -159,8 +177,13 @@ export function PagesEditor({ items, onChange, fieldError, projectSlug, max }: P
             <TextField error={fieldError(`${path}.summary`)} id={`${id}-summary`} label="Teaser"
               hint="Shown on the overview's link to this page."
               onChange={summary => update({ ...item, summary })} value={item.summary} />
-            <TextField error={fieldError(`${path}.body`)} id={`${id}-body`} label="Body (markdown)" monospace multiline rows={16}
-              onChange={body => update({ ...item, body })} value={item.body} />
+            <div className="blog-editor__section">
+              <span className="blog-editor__section-label">Body</span>
+              <RichMarkdownEditor
+                label={`Page ${index + 1} body`} markdown={item.body ?? ''}
+                onChange={body => update({ ...item, body })} />
+              {fieldError(`${path}.body`)}
+            </div>
           </>
         )
       }}

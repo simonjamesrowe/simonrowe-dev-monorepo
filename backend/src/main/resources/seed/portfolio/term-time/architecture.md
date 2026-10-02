@@ -4,7 +4,7 @@ Term Time runs inside this site's Spring Boot backend, on the same Raspberry Pi 
 else. It has its own Elasticsearch index and its own chat client, and its frontend is a second
 Vite entry point in the same project, served at `term-time.simonrowe.dev`.
 
-![Ingest on the left, the request path on the right. The scheduler drives the crawler, calendar client and Gmail sync; extraction writes to MongoDB and Elasticsearch. A question arrives over STOMP, passes a topic guardrail, and the chat service answers through its tools.](/media/portfolio/term-time/architecture.svg)
+![Ingest on the left, the request path on the right. The scheduler drives the crawler, calendar client and Gmail sync; extraction writes to MongoDB and Elasticsearch. A question arrives over STOMP, passes a topic guardrail, and the chat service answers through its tools.]({{media:architecture.svg}})
 
 - **Backend:** Java 25, Spring Boot 4.1 and Spring AI 2.0
 - **Extraction:** Embabel, turning newsletters, letters and PDFs into dated events

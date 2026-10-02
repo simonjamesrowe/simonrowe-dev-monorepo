@@ -4,6 +4,9 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static com.simonrowe.AdminTestAuth.adminJwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -101,6 +104,34 @@ class MediaControllerTest extends AbstractIntegrationTest {
             .with(adminJwt().jwt(j -> j.subject("test-user"))))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.originalPath").value(endsWith("/original.webp")));
+  }
+
+  /**
+   * Video and captions are library items too, so a page's demo is CMS content. Neither is resized,
+   * and nor is WebP: the JVM has no WebP reader or writer, so resizing one used to fail the upload
+   * with a 500. The generator is mocked here, so what is asserted is which types reach it.
+   */
+  @Test
+  void storesVideoCaptionsAndWebpAsOriginalsAndResizesOnlyWhatItCan() throws Exception {
+    for (String[] upload : new String[][] {
+        {"demo.mp4", "video/mp4"}, {"demo.vtt", "text/vtt"}, {"shot.webp", "image/webp"}}) {
+      clearInvocations(imageVariantGenerator);
+      mockMvc.perform(multipart("/api/admin/media")
+              .file(new MockMultipartFile("file", upload[0], upload[1], "content".getBytes()))
+              .with(adminJwt().jwt(j -> j.subject("test-user"))))
+          .andExpect(status().isCreated())
+          .andExpect(jsonPath("$.mimeType").value(upload[1]))
+          .andExpect(jsonPath("$.originalPath").value(endsWith("/original."
+              + upload[0].substring(upload[0].lastIndexOf('.') + 1))));
+      verify(imageVariantGenerator, never()).generateVariants(any(), any(), any());
+    }
+
+    clearInvocations(imageVariantGenerator);
+    mockMvc.perform(multipart("/api/admin/media")
+            .file(new MockMultipartFile("file", "photo.jpg", "image/jpeg", "content".getBytes()))
+            .with(adminJwt().jwt(j -> j.subject("test-user"))))
+        .andExpect(status().isCreated());
+    verify(imageVariantGenerator).generateVariants(any(), any(), any());
   }
 
   @Test

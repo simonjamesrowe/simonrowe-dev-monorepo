@@ -4,7 +4,7 @@ Everything goes through the same pipeline. Each source is fetched, split into da
 searchable text, tagged with the year groups it applies to, and stored. Nothing reaches the public
 chat until it is either something the school published itself or something I have approved.
 
-![From source to answer. The school website, calendar feed, school mailbox and pasted notes are fetched, their dates pulled out and stored in MongoDB and Elasticsearch, while email waits in an approval queue.](/media/portfolio/term-time/sources.svg)
+![From source to answer. The school website, calendar feed, school mailbox and pasted notes are fetched, their dates pulled out and stored in MongoDB and Elasticsearch, while email waits in an approval queue.]({{media:sources.svg}})
 
 | Source | How often | What it brings |
 | --- | --- | --- |
@@ -19,7 +19,7 @@ Each source runs as often as it is worth. The calendar is a single request, so i
 The website crawl takes half an hour, so running it every hour would mean crawling almost all the
 time.
 
-![Twenty-four hours of scheduled work: 48 mailbox syncs, four calendar refreshes, two website crawls of about 30 minutes each, and notes pasted at any time.](/media/portfolio/term-time/schedule.svg)
+![Twenty-four hours of scheduled work: 48 mailbox syncs, four calendar refreshes, two website crawls of about 30 minutes each, and notes pasted at any time.]({{media:schedule.svg}})
 
 The schedules use a fixed delay rather than a fixed rate. The next crawl starts twelve hours after
 the last one finished, so a slow crawl can never overlap the next one. Each interval is a property
@@ -30,7 +30,7 @@ with a default, so the cadence can change without a deploy.
 The newsletter usually arrives on a Friday afternoon. This is the path it takes before a parent
 can ask about it.
 
-![A newsletter's path: the next mailbox sync picks it up within 30 minutes. Mail from the school that links to its own newsletter page is followed and answerable at once; other school email waits for approval; anything else is ignored.](/media/portfolio/term-time/newsletter.svg)
+![A newsletter's path: the next mailbox sync picks it up within 30 minutes. Mail from the school that links to its own newsletter page is followed and answerable at once; other school email waits for approval; anything else is ignored.]({{media:newsletter.svg}})
 
 In September 2026 the school moved its newsletter onto its parent portal, so the email became a
 covering sentence and a link. Term Time follows that one kind of link automatically, because the

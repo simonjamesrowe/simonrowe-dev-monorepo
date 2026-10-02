@@ -6299,6 +6299,30 @@ a:hover {
   object-fit: contain;
 }
 
+/* A video plays in place, so it fills the box's width rather than sitting small in the middle. */
+.image-picker__box--video video.image-picker__img {
+  width: 100%;
+  background: #000;
+}
+
+/* A captions file has no picture of its own: an icon and its name stand in. */
+.media-preview__file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.rich-markdown-editor {
+  width: 100%;
+}
+
 .image-picker__placeholder {
   display: flex;
   flex-direction: column;

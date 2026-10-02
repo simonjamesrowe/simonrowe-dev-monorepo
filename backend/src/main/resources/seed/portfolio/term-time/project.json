@@ -2,7 +2,7 @@
   "status": "BETA",
   "liveUrl": "https://term-time.simonrowe.dev",
   "image": {
-    "url": "/media/portfolio/term-time/hero.webp"
+    "url": "{{media:hero.webp}}"
   },
   "headline": "School life,\none question away.",
   "summary": "Term Time reads the school's website, calendar, newsletters and emails, plus whatever turns up in the parents' WhatsApp group, and answers questions about any of it in plain English.",
@@ -42,28 +42,28 @@
     {
       "title": "Term dates and holidays",
       "text": "Half terms, INSET days and the first day back, read from the school's own calendar feed rather than a page that can go stale.",
-      "imageUrl": "/media/portfolio/term-time/highlight-term-dates.webp",
+      "imageUrl": "{{media:highlight-term-dates.webp}}",
       "imageAlt": "Term Time answering \"When is half term?\" with the dates and a link to the school calendar."
     },
     {
       "title": "Trips and events, by year group",
       "text": "Pick your children's year groups and answers lead with their trips, letters and spelling lists.",
-      "imageUrl": "/media/portfolio/term-time/highlight-year-groups.webp",
+      "imageUrl": "{{media:highlight-year-groups.webp}}",
       "imageAlt": "Term Time with Year 6 selected, answering a question about the next school trip."
     },
     {
       "title": "Fed from the WhatsApp group too",
       "text": "Paste a message or photograph a letter in the admin console. Term Time pulls out the dates and follows any links.",
-      "imageUrl": "/media/portfolio/term-time/highlight-notes.webp",
+      "imageUrl": "{{media:highlight-notes.webp}}",
       "imageAlt": "The admin console's Paste a note screen, with a message from a parents' group ready to save."
     }
   ],
   "demo": {
     "title": "A two-minute walkthrough",
     "summary": "Asking Term Time about half term and the next school trip, then the admin console, where a note from the parents' group and a photographed letter become answers.",
-    "videoUrl": "/media/portfolio/term-time/demo.mp4",
-    "captionsUrl": "/media/portfolio/term-time/demo.vtt",
-    "posterUrl": "/media/portfolio/term-time/demo-poster.webp",
+    "videoUrl": "{{media:demo.mp4}}",
+    "captionsUrl": "{{media:demo.vtt}}",
+    "posterUrl": "{{media:demo-poster.webp}}",
     "chapters": [
       {
         "startSeconds": 0,
