@@ -199,8 +199,10 @@ class LinearGatewayWriteTest {
   }
 
   private static final String UPDATE_OK =
-      "{\"data\":{\"issueUpdate\":{\"success\":true,\"issue\":"
-          + "{\"id\":\"i1\",\"identifier\":\"SIM-1\",\"url\":\"https://linear.app/i/1\"}}}}";
+      """
+      {"data":{"issueUpdate":{"success":true,"issue":\
+      {"id":"i1","identifier":"SIM-1","url":"https://linear.app/i/1"}}}}\
+      """;
 
   @Test
   @DisplayName("updateIssue rewrites the description and leaves the state alone when null")

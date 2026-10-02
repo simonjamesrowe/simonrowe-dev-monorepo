@@ -90,8 +90,9 @@ public class OriginalMediaPruneService {
     long[] deleted = deleteOriginalFiles();
 
     LOG.info(
-        "Original media prune complete: rewrote {} inline reference(s), "
-            + "deleted {} original file(s), reclaimed {} MB",
+        """
+        Original media prune complete: rewrote {} inline reference(s), \
+        deleted {} original file(s), reclaimed {} MB""",
         rewritten, deleted[0], deleted[1] / (1024 * 1024));
   }
 

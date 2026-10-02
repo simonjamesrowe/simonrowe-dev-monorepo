@@ -179,8 +179,9 @@ public class IssueFiler {
           // comment on, and creating one — or filing a "recurrence" whose actual content is the
           // ABSENCE of the problem — would be worse than silence.
           log.info(
-              "Fingerprint {} has no open issue to comment on; a comment-only filing does"
-                  + " nothing",
+              """
+              Fingerprint {} has no open issue to comment on; a comment-only filing does\
+               nothing""",
               fingerprint);
       default -> throw new IllegalStateException("Unhandled decision " + effective);
     }

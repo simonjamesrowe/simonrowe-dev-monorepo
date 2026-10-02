@@ -196,8 +196,9 @@ public class DataOperationsController {
   private void requireDriveConnected() {
     if (!googleDriveService.isConnected()) {
       throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-          "Google Drive is not connected. "
-              + "Configure GOOGLE_DRIVE_CREDENTIALS to enable this feature.");
+          """
+          Google Drive is not connected. \
+          Configure GOOGLE_DRIVE_CREDENTIALS to enable this feature.""");
     }
   }
 

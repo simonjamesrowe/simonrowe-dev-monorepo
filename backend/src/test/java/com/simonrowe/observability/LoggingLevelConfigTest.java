@@ -36,8 +36,9 @@ import org.springframework.core.io.ClassPathResource;
 class LoggingLevelConfigTest {
 
   private static final String CHECKER =
-      "org.springframework.context.support.PostProcessorRegistrationDelegate"
-          + "$BeanPostProcessorChecker";
+      """
+      org.springframework.context.support.PostProcessorRegistrationDelegate\
+      $BeanPostProcessorChecker""";
 
   private static Map<String, String> boundLevels() throws IOException {
     StandardEnvironment environment = new StandardEnvironment();

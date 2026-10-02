@@ -33,9 +33,10 @@ public class SitemapHtmlScraper {
   private static final long DELAY_BETWEEN_REQUESTS_MS = 1000;
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String USER_AGENT =
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-          + "AppleWebKit/537.36 (KHTML, like Gecko) "
-          + "Chrome/131.0.0.0 Safari/537.36";
+      """
+      Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
+      AppleWebKit/537.36 (KHTML, like Gecko) \
+      Chrome/131.0.0.0 Safari/537.36""";
 
   private static final Pattern DATE_HEADER_PATTERN = Pattern.compile(
       "(\\d{1,2})\\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*",
@@ -46,12 +47,13 @@ public class SitemapHtmlScraper {
 
   // Fix 5: regex for visible-text date extraction
   private static final Pattern TEXT_DATE_PATTERN = Pattern.compile(
-      "(?:(\\d{1,2})\\s+(January|February|March|April|May|June|July|August|September"
-          + "|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
-          + "\\s+(\\d{4}))"
-          + "|(?:(January|February|March|April|May|June|July|August|September"
-          + "|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
-          + "\\s+(\\d{1,2}),?\\s+(\\d{4}))",
+      """
+      (?:(\\d{1,2})\\s+(January|February|March|April|May|June|July|August|September\
+      |October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\
+      \\s+(\\d{4}))\
+      |(?:(January|February|March|April|May|June|July|August|September\
+      |October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\
+      \\s+(\\d{1,2}),?\\s+(\\d{4}))""",
       Pattern.CASE_INSENSITIVE);
 
   public List<ScrapedContent> scrape(String sitemapUrl) {
@@ -290,12 +292,14 @@ public class SitemapHtmlScraper {
     String lastDateStr = null;
 
     Elements children = doc.select(
-        "[class*=timeline], [class*=event], [class*=schedule], "
-            + "section, main, [class*=content]")
+        """
+        [class*=timeline], [class*=event], [class*=schedule], \
+        section, main, [class*=content]""")
         .first() != null
         ? doc.select(
-            "[class*=timeline], [class*=event], [class*=schedule], "
-                + "section, main, [class*=content]")
+            """
+            [class*=timeline], [class*=event], [class*=schedule], \
+            section, main, [class*=content]""")
             .first().children()
         : doc.body().children();
 

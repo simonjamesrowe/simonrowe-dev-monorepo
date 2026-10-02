@@ -289,8 +289,10 @@ class DigestComposerTest {
     String result = composer.compose(List.of(SECTION_WITH_NESTED_HTML_IN_BODY));
 
     assertThat(result).isEqualTo(
-        "### [Sketchy Body Article](https://sketchy.example/body)\n\n"
-            + "Intro text. alert(1) Trailing text.");
+        """
+        ### [Sketchy Body Article](https://sketchy.example/body)
+        
+        Intro text. alert(1) Trailing text.""");
     assertThat(result).doesNotContain("<").doesNotContain(">");
   }
 
@@ -312,17 +314,20 @@ class DigestComposerTest {
     // later, unrelated ">" and delete everything in between.
     DigestSection prose = new DigestSection(
         "art-6", "Benchmark Results", "https://bench.example/a",
-        "The results show that if latency < threshold and throughput > "
-            + "baseline, the service is healthy.", false);
+        """
+        The results show that if latency < threshold and throughput > \
+        baseline, the service is healthy.""", false);
     when(promptRunner.respond(anyList()))
         .thenThrow(new RuntimeException("upstream 500"));
 
     String result = composer.compose(List.of(prose));
 
     assertThat(result).isEqualTo(
-        "### [Benchmark Results](https://bench.example/a)\n\n"
-            + "The results show that if latency < threshold and throughput "
-            + "> baseline, the service is healthy.");
+        """
+        ### [Benchmark Results](https://bench.example/a)
+        
+        The results show that if latency < threshold and throughput \
+        > baseline, the service is healthy.""");
   }
 
   @Test

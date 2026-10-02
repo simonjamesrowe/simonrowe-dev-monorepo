@@ -46,8 +46,10 @@ public final class ComposeFile {
   public static List<String> lines() throws IOException {
     if (!Files.exists(PATH)) {
       throw new AssertionError(
-          "Could not find " + PATH.toAbsolutePath() + " - this test assumes the Gradle test "
-              + "working directory is the module directory, one level below the repo root.");
+          """
+          Could not find %s - this test assumes the Gradle test \
+          working directory is the module directory, one level below the repo \
+          root.""".formatted(PATH.toAbsolutePath()));
     }
     return Files.readAllLines(PATH);
   }

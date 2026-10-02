@@ -164,10 +164,12 @@ class ImageVariantGeneratorTest {
   }
 
   private Path createTestSvg(final String filename) throws IOException {
-    String svgContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\">\n"
-        + "  <rect width=\"100\" height=\"100\" fill=\"blue\"/>\n"
-        + "</svg>\n";
+    String svgContent = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+          <rect width="100" height="100" fill="blue"/>
+        </svg>
+        """;
 
     Path file = tempDir.resolve(filename);
     Files.writeString(file, svgContent);

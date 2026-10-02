@@ -77,8 +77,9 @@ class ReviewMarkdownRendererTest {
 
     assertThat(body)
         .contains(
-            "**Auto-merge:** armed. GitHub will squash-merge once every required check passes"
-                + " and every conversation is resolved.");
+            """
+            **Auto-merge:** armed. GitHub will squash-merge once every required check passes\
+             and every conversation is resolved.""");
   }
 
   @Test

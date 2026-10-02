@@ -48,8 +48,9 @@ class SchoolIngestEmbedMetadataTest {
     final SchoolDocument note = new SchoolDocument(
         "note-1", SchoolSourceType.PASTED_NOTE, "paste:abc",
         "Prefixes 'un', 'dis' - Autumn 1 Week 3",
-        "Autumn 1 Week 3. Prefixes un and dis. unhappy unusual disagree disobey displease. "
-            + "Words from the statutory list: answer appear. ".repeat(4),
+        """
+            Autumn 1 Week 3. Prefixes un and dis. unhappy unusual disagree disobey displease. \
+            %s""".formatted("Words from the statutory list: answer appear. ".repeat(4)),
         Instant.parse("2026-09-30T18:33:58Z"), Instant.now(), Visibility.PUBLIC, null, null,
         null, null, false, List.of("Year 3"), "hash", null);
 

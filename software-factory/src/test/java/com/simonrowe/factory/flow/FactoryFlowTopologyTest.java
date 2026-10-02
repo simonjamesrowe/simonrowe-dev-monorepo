@@ -55,13 +55,15 @@ class FactoryFlowTopologyTest {
     unknown.removeAll(authoritativeKeys);
 
     assertThat(undrawn)
-        .as("module key(s) %s are in ModulePrerequisites.KEYS but no node in "
-            + "FactoryFlowTopology.NODES carries them as a moduleKey - a module was added "
-            + "without being drawn into the graph", undrawn)
+        .as("""
+            module key(s) %s are in ModulePrerequisites.KEYS but no node in \
+            FactoryFlowTopology.NODES carries them as a moduleKey - a module was added \
+            without being drawn into the graph""", undrawn)
         .isEmpty();
     assertThat(unknown)
-        .as("node moduleKey(s) %s do not match any key in ModulePrerequisites.KEYS - likely "
-            + "a typo, which would leave that node's health permanently unknown", unknown)
+        .as("""
+            node moduleKey(s) %s do not match any key in ModulePrerequisites.KEYS - likely \
+            a typo, which would leave that node's health permanently unknown""", unknown)
         .isEmpty();
   }
 
@@ -92,13 +94,15 @@ class FactoryFlowTopologyTest {
     unknown.removeAll(expected);
 
     assertThat(undrawn)
-        .as("workflow interface simple name(s) %s have no node in FactoryFlowTopology.NODES "
-            + "carrying them as workflowType", undrawn)
+        .as("""
+            workflow interface simple name(s) %s have no node in FactoryFlowTopology.NODES \
+            carrying them as workflowType""", undrawn)
         .isEmpty();
     assertThat(unknown)
-        .as("node workflowType(s) %s do not match any real @WorkflowInterface simple name - "
-            + "likely a stale rename, which would leave that node's Temporal query matching "
-            + "nothing and READY with all-zero counts forever", unknown)
+        .as("""
+            node workflowType(s) %s do not match any real @WorkflowInterface simple name - \
+            likely a stale rename, which would leave that node's Temporal query matching \
+            nothing and READY with all-zero counts forever""", unknown)
         .isEmpty();
   }
 

@@ -47,8 +47,9 @@ class NarrationPropertiesTest {
     }
 
     @Test
-    @DisplayName("ADC still requires the project number and bucket the Long Audio "
-        + "route resolves its resource path and output URI from")
+    @DisplayName("""
+        ADC still requires the project number and bucket the Long Audio \
+        route resolves its resource path and output URI from""")
     void adcRequiresLongAudioSettings() {
       assertThat(properties(null, null, "bucket").isProviderConfigured()).isFalse();
       assertThat(properties("123456789012", null, null).isProviderConfigured()).isFalse();

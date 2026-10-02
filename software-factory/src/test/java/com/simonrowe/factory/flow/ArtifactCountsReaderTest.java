@@ -170,10 +170,11 @@ class ArtifactCountsReaderTest {
     server.createContext(
         "/repos/simonjamesrowe/simonrowe-dev-monorepo/pulls",
         exchange -> {
-          byte[] body = ("[{\"number\":7,\"title\":\"Fix flake\",\"draft\":false,"
-              + "\"mergeable\":true,\"html_url\":\"https://github.com/x/pull/7\"},"
-              + "{\"number\":8,\"title\":\"WIP\",\"draft\":true,"
-              + "\"html_url\":\"https://github.com/x/pull/8\"}]")
+          byte[] body = ("""
+              [{"number":7,"title":"Fix flake","draft":false,\
+              "mergeable":true,"html_url":"https://github.com/x/pull/7"},\
+              {"number":8,"title":"WIP","draft":true,\
+              "html_url":"https://github.com/x/pull/8"}]""")
               .getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().add("Content-Type", "application/json");
           exchange.sendResponseHeaders(200, body.length);
@@ -211,14 +212,18 @@ class ArtifactCountsReaderTest {
     assertThat(
             ArtifactCountsReader.pullRequestStatus(
                 mapper.readTree(
-                    "{\"mergeable\":true,\"auto_merge\":{\"enabled_by\":"
-                        + "{\"login\":\"simonrowe-software-factory[bot]\",\"type\":\"Bot\"}}}")))
+                    """
+                    {"mergeable":true,"auto_merge":{"enabled_by":\
+                    {"login":"simonrowe-software-factory[bot]","type":"Bot"}}}\
+                    """)))
         .isEqualTo("auto-merge armed");
     assertThat(
             ArtifactCountsReader.pullRequestStatus(
                 mapper.readTree(
-                    "{\"auto_merge\":{\"enabled_by\":"
-                        + "{\"login\":\"simonjamesrowe\",\"type\":\"User\"}}}")))
+                    """
+                    {"auto_merge":{"enabled_by":\
+                    {"login":"simonjamesrowe","type":"User"}}}\
+                    """)))
         .isEqualTo("auto-merge armed (by a person)");
     // A draft cannot be armed, and says so first.
     assertThat(
@@ -237,10 +242,11 @@ class ArtifactCountsReaderTest {
     server.createContext(
         "/repos/simonjamesrowe/simonrowe-dev-monorepo/commits",
         exchange -> {
-          byte[] body = ("[{\"sha\":\"abcdef1234567890\",\"html_url\":"
-              + "\"https://github.com/x/commit/abcdef1234567890\",\"commit\":{\"message\":"
-              + "\"fix: patch the thing\\n\\nlonger body\",\"committer\":{\"date\":"
-              + "\"2026-09-01T12:00:00Z\"}}}]").getBytes(StandardCharsets.UTF_8);
+          byte[] body = ("""
+              [{"sha":"abcdef1234567890","html_url":\
+              "https://github.com/x/commit/abcdef1234567890","commit":{"message":\
+              "fix: patch the thing\\n\\nlonger body","committer":{"date":\
+              "2026-09-01T12:00:00Z"}}}]""").getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().add("Content-Type", "application/json");
           exchange.sendResponseHeaders(200, body.length);
           try (OutputStream output = exchange.getResponseBody()) {
@@ -275,8 +281,9 @@ class ArtifactCountsReaderTest {
     server.createContext(
         "/repos/simonjamesrowe/agent-setup/pulls",
         exchange -> {
-          byte[] body = ("[{\"number\":3,\"title\":\"Teach the reviewer a new lesson\","
-              + "\"html_url\":\"https://github.com/x/agent-setup/pull/3\"}]")
+          byte[] body = ("""
+              [{"number":3,"title":"Teach the reviewer a new lesson",\
+              "html_url":"https://github.com/x/agent-setup/pull/3"}]""")
               .getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().add("Content-Type", "application/json");
           exchange.sendResponseHeaders(200, body.length);

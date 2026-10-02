@@ -799,8 +799,9 @@ class DeployWorkflowTest {
     // reporting anything. This class has been bitten by that twice; trade it for a legible throw.
     if (linear == null && request.linearFilingEnabled()) {
       throw new IllegalArgumentException(
-          "linearFilingEnabled needs a LinearActivities worker - use executeFiling(..), "
-              + "not execute(..), or the suite will hang rather than fail");
+          """
+          linearFilingEnabled needs a LinearActivities worker - use executeFiling(..), \
+          not execute(..), or the suite will hang rather than fail""");
     }
     try (TestWorkflowEnvironment environment = environment(activities, linear)) {
       DeployWorkflow workflow = stub(environment);
@@ -833,8 +834,9 @@ class DeployWorkflowTest {
     // failing it, so refuse the combination up front.
     if (linear == null && request.linearFilingEnabled()) {
       throw new IllegalArgumentException(
-          "linearFilingEnabled needs a LinearActivities worker - pass one to executeSignalling, "
-              + "or the suite will hang rather than fail");
+          """
+          linearFilingEnabled needs a LinearActivities worker - pass one to executeSignalling, \
+          or the suite will hang rather than fail""");
     }
     try (TestWorkflowEnvironment environment = environment(activities, linear)) {
       DeployWorkflow workflow = stub(environment);

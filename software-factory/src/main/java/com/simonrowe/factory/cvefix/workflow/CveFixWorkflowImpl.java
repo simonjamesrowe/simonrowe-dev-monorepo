@@ -75,8 +75,9 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       findingsSeen = components.stream().mapToInt(component -> component.findings().size()).sum();
       if (components.isEmpty()) {
         current = new CveFixProgress(CveFixPhase.FETCHING,
-            "Dependency-Track reported no findings; checking whether the repository was "
-                + "previously dirty",
+            """
+            Dependency-Track reported no findings; checking whether the repository was \
+            previously dirty""",
             0);
         String detail = "Dependency-Track reported no findings";
         // Only on the transition. Commenting on every clean run would add a comment a night,

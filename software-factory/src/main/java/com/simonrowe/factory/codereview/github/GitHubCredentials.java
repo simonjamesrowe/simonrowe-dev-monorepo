@@ -145,8 +145,9 @@ public class GitHubCredentials {
         return staticToken();
       }
       throw ApplicationFailure.newNonRetryableFailure(
-          "GitHub App webhook requires GITHUB_APP_CLIENT_ID and "
-              + "GITHUB_APP_PRIVATE_KEY_PATH",
+          """
+          GitHub App webhook requires GITHUB_APP_CLIENT_ID and \
+          GITHUB_APP_PRIVATE_KEY_PATH""",
           "MISSING_GITHUB_APP_CREDENTIALS");
     }
 
@@ -344,8 +345,9 @@ public class GitHubCredentials {
         // Not an error: the capability behind it degrades on its own, and saying so once per mint
         // is what turns "code review stopped gating anything" into a one-line diagnosis.
         LOGGER.warn(
-            "GitHub App installation {} does not grant {}:{}; continuing without it. "
-                + "The capability it backs is unavailable until the grant is accepted.",
+            """
+            GitHub App installation {} does not grant {}:{}; continuing without it. \
+            The capability it backs is unavailable until the grant is accepted.""",
             installationId,
             name,
             level);
@@ -379,8 +381,9 @@ public class GitHubCredentials {
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         LOGGER.warn(
-            "GitHub App installation lookup for {} returned {}; requesting required "
-                + "permissions only",
+            """
+            GitHub App installation lookup for {} returned {}; requesting required \
+            permissions only""",
             installationId,
             response.statusCode());
         return null;
@@ -388,8 +391,9 @@ public class GitHubCredentials {
       JsonNode permissions = objectMapper.readTree(response.body()).path("permissions");
       if (!permissions.isObject()) {
         LOGGER.warn(
-            "GitHub App installation {} reported no permissions block; requesting required "
-                + "permissions only",
+            """
+            GitHub App installation {} reported no permissions block; requesting required \
+            permissions only""",
             installationId);
         return null;
       }

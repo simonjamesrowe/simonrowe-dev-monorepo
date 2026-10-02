@@ -263,9 +263,14 @@ class WeeklyDigestAgentTest {
     when(sectionWriter.write(fallbackArticle)).thenReturn(fallbackSection);
     when(sectionWriter.write(realArticle)).thenReturn(realSection);
     when(composer.compose(List.of(fallbackSection, realSection)))
-        .thenReturn("## [Spring Boot 4](https://infoq.com/art-1)\n\n"
-            + "Stored summary.\n\n"
-            + "## [GraalVM 24](https://infoq.com/art-2)\n\nReal prose.");
+        .thenReturn("""
+            ## [Spring Boot 4](https://infoq.com/art-1)
+            
+            Stored summary.
+            
+            ## [GraalVM 24](https://infoq.com/art-2)
+            
+            Real prose.""");
     when(metadataGenerator.generate(anyList(), anyString()))
         .thenReturn(new DigestMetadata("What caught my eye", "A description"));
     when(blogImageGenerationService

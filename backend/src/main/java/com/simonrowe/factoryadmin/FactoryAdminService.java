@@ -125,8 +125,9 @@ public class FactoryAdminService {
         module.missingPrerequisites(),
         pollersPresent,
         pollersPresent
-            ? "The deployer is unreachable, so its configuration is unconfirmed, but Temporal "
-                + "shows a live worker on this queue"
+            ? """
+                The deployer is unreachable, so its configuration is unconfirmed, but Temporal \
+                shows a live worker on this queue"""
             : "The deployer is unreachable and nothing is polling this queue");
   }
 

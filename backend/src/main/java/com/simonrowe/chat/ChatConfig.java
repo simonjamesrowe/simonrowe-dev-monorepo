@@ -106,30 +106,33 @@ public class ChatConfig {
   }
 
   static String widgetPromptGuidance() {
-    return "For any question about Simon's blogs, jobs, skills, code, news, or events, "
-        + "ALWAYS call the matching tool (getRecentBlogs, searchBlogs, getJobs, getSkills, "
-        + "getCodeExamples, searchNews, getUpcomingEvents) — even if the retrieved context "
-        + "already appears to answer it. The tool is what renders the visual card for the "
-        + "visitor; answering from retrieved context alone leaves them with no card.\n\n"
-        + "When you call the skills, jobs, code example, blog, news, or event tools, "
-        + "the visitor already sees a visual card with the details. Add a brief "
-        + "framing sentence and do not re-list the data the card shows.\n\n"
-        + "Link the content you mention so the visitor can explore it, using ONLY URLs "
-        + "and ids present in the tool results or retrieval context. ALWAYS use markdown "
-        + "link syntax [visible name](url) — NEVER paste a bare/raw URL into your prose, "
-        + "because a bare URL is not clickable and looks broken:\n"
-        + "- Blog post: [Blog Title](/blogs/{id}) using the post id.\n"
-        + "- A specific role or job: [Company or Role](/about?job={id}) using the "
-        + "job id — e.g. [Y-Tree](/about?job=5eedd4803c8d74001e4497f5).\n"
-        + "- A specific skill group: [Skill Group](/about?skillGroup={id}) using the "
-        + "group id.\n"
-        + "- Simon's experience in general: [Experience](/about#roles); his profile: "
-        + "[About](/about).\n"
-        + "- News article or event: [Title](originalUrl) using its external URL.\n"
-        + "- Embed an image ONLY with markdown image syntax ![alt](imageUrl) and ONLY "
-        + "using an image URL you were explicitly given (blog/news images); skills and "
-        + "jobs have no images.\n"
-        + "Never invent, guess, or construct a URL or id you were not given. If you have "
-        + "no URL or id for something, mention it in plain text and link nothing.";
+    return """
+        For any question about Simon's blogs, jobs, skills, code, news, or events, \
+        ALWAYS call the matching tool (getRecentBlogs, searchBlogs, getJobs, getSkills, \
+        getCodeExamples, searchNews, getUpcomingEvents) — even if the retrieved context \
+        already appears to answer it. The tool is what renders the visual card for the \
+        visitor; answering from retrieved context alone leaves them with no card.
+        
+        When you call the skills, jobs, code example, blog, news, or event tools, \
+        the visitor already sees a visual card with the details. Add a brief \
+        framing sentence and do not re-list the data the card shows.
+        
+        Link the content you mention so the visitor can explore it, using ONLY URLs \
+        and ids present in the tool results or retrieval context. ALWAYS use markdown \
+        link syntax [visible name](url) — NEVER paste a bare/raw URL into your prose, \
+        because a bare URL is not clickable and looks broken:
+        - Blog post: [Blog Title](/blogs/{id}) using the post id.
+        - A specific role or job: [Company or Role](/about?job={id}) using the \
+        job id — e.g. [Y-Tree](/about?job=5eedd4803c8d74001e4497f5).
+        - A specific skill group: [Skill Group](/about?skillGroup={id}) using the \
+        group id.
+        - Simon's experience in general: [Experience](/about#roles); his profile: \
+        [About](/about).
+        - News article or event: [Title](originalUrl) using its external URL.
+        - Embed an image ONLY with markdown image syntax ![alt](imageUrl) and ONLY \
+        using an image URL you were explicitly given (blog/news images); skills and \
+        jobs have no images.
+        Never invent, guess, or construct a URL or id you were not given. If you have \
+        no URL or id for something, mention it in plain text and link nothing.""";
   }
 }

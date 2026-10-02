@@ -244,9 +244,10 @@ class ResumePdfRendererTest {
   @Test
   void renderKeepsRealisticTwentyYearHistoryWithinThreePages() throws IOException {
     ResumeData data = new ResumeData(
-        profile("A summary of roughly the length the CMS field allows, which is about "
-            + "seventy words and runs to five or six lines in the main column of the "
-            + "rendered document before the experience section begins below it."),
+        profile("""
+            A summary of roughly the length the CMS field allows, which is about \
+            seventy words and runs to five or six lines in the main column of the \
+            rendered document before the experience section begins below it."""),
         realisticHistory(), List.of(education()), skillGroups());
 
     assertThat(pageCount(renderer.render(data))).isLessThanOrEqualTo(3);

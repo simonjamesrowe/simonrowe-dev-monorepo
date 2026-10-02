@@ -36,16 +36,18 @@ public class DocumentDateReader {
 
   /** {@code 3 November 2022}, {@code 03rd November 2022}, {@code Thursday, 3 Nov 2022}. */
   private static final Pattern DAY_MONTH_YEAR = Pattern.compile(
-      "(?i)\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+"
-          + "(january|february|march|april|may|june|july|august|september|october|november"
-          + "|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)\\.?"
-          + "\\s+(\\d{4})\\b");
+      """
+      (?i)\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+\
+      (january|february|march|april|may|june|july|august|september|october|november\
+      |december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)\\.?\
+      \\s+(\\d{4})\\b""");
 
   /** {@code November 3, 2022} — less common here, but the CMS emits it on some pages. */
   private static final Pattern MONTH_DAY_YEAR = Pattern.compile(
-      "(?i)\\b(january|february|march|april|may|june|july|august|september|october|november"
-          + "|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)\\.?\\s+"
-          + "(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})\\b");
+      """
+      (?i)\\b(january|february|march|april|may|june|july|august|september|october|november\
+      |december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)\\.?\\s+\
+      (\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})\\b""");
 
   /** ISO, which the CMS uses in a few machine-written places. */
   private static final Pattern ISO = Pattern.compile("\\b(\\d{4})-(\\d{2})-(\\d{2})\\b");

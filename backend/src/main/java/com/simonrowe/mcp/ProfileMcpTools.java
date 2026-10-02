@@ -95,10 +95,11 @@ public class ProfileMcpTools {
   }
 
   @WithSpan
-  @Tool(description = "Get Simon's profile — returns his full name, professional title, "
-      + "headline summary, detailed bio/description, location, email addresses, phone number, "
-      + "and social media links (GitHub, LinkedIn, etc.). Use this for personal or background "
-      + "questions about who Simon is.")
+  @Tool(description = """
+      Get Simon's profile — returns his full name, professional title, \
+      headline summary, detailed bio/description, location, email addresses, phone number, \
+      and social media links (GitHub, LinkedIn, etc.). Use this for personal or background \
+      questions about who Simon is.""")
   public ProfileResponse getProfile() {
     return profileService.getProfile();
   }
@@ -108,10 +109,11 @@ public class ProfileMcpTools {
   }
 
   @WithSpan
-  @Tool(description = "Search Simon's published blog posts by keyword. Returns matching "
-      + "blog entries with titles, summaries, tags, and publication dates, ranked by relevance "
-      + "with title and tags weighted higher. Use this when asked about topics Simon has "
-      + "written about, his blog content, or technical articles. Returns blog posts only.")
+  @Tool(description = """
+      Search Simon's published blog posts by keyword. Returns matching \
+      blog entries with titles, summaries, tags, and publication dates, ranked by relevance \
+      with title and tags weighted higher. Use this when asked about topics Simon has \
+      written about, his blog content, or technical articles. Returns blog posts only.""")
   public List<BlogSearchResult> searchBlogs(
       @ToolParam(description = "Search keywords to match against blog titles and content")
       final String query,
@@ -135,13 +137,15 @@ public class ProfileMcpTools {
   }
 
   @WithSpan
-  @Tool(description = "Get Simon's employment history. Returns jobs with company names, "
-      + "job titles, date ranges, descriptions, and associated skills/technologies. "
-      + "Optionally filter by keyword to find jobs related to a specific technology or role. "
-      + "Use this for questions about where Simon has worked or his career progression.")
+  @Tool(description = """
+      Get Simon's employment history. Returns jobs with company names, \
+      job titles, date ranges, descriptions, and associated skills/technologies. \
+      Optionally filter by keyword to find jobs related to a specific technology or role. \
+      Use this for questions about where Simon has worked or his career progression.""")
   public Object getJobs(
-      @ToolParam(description = "Optional search keywords to filter jobs by technology, "
-          + "role, or company. Pass null or empty for all jobs.")
+      @ToolParam(description = """
+          Optional search keywords to filter jobs by technology, \
+          role, or company. Pass null or empty for all jobs.""")
       final String query,
       final ToolContext toolContext) {
     String sessionId = sessionId(toolContext);
@@ -167,13 +171,15 @@ public class ProfileMcpTools {
   }
 
   @WithSpan
-  @Tool(description = "Get Simon's technical skill groups with individual skills "
-      + "and proficiency ratings (0-10). Optionally filter by keyword to find skills "
-      + "related to a specific technology. Use this for questions about what technologies "
-      + "Simon knows and how experienced he is with them.")
+  @Tool(description = """
+      Get Simon's technical skill groups with individual skills \
+      and proficiency ratings (0-10). Optionally filter by keyword to find skills \
+      related to a specific technology. Use this for questions about what technologies \
+      Simon knows and how experienced he is with them.""")
   public Object getSkills(
-      @ToolParam(description = "Optional search keywords to filter skills by technology. "
-          + "Pass null or empty for all skill groups.")
+      @ToolParam(description = """
+          Optional search keywords to filter skills by technology. \
+          Pass null or empty for all skill groups.""")
       final String query,
       final ToolContext toolContext) {
     String sessionId = sessionId(toolContext);
@@ -199,9 +205,10 @@ public class ProfileMcpTools {
   }
 
   @WithSpan
-  @Tool(description = "Get Simon's most recent blog posts, ordered by date (newest first). "
-      + "Returns titles, summaries, tags, skills, and publication dates. Use this when asked "
-      + "what Simon has been writing about, his latest posts, or recent blogging activity.")
+  @Tool(description = """
+      Get Simon's most recent blog posts, ordered by date (newest first). \
+      Returns titles, summaries, tags, skills, and publication dates. Use this when asked \
+      what Simon has been writing about, his latest posts, or recent blogging activity.""")
   public List<BlogSummaryResponse> getRecentBlogs(final ToolContext toolContext) {
     String sessionId = sessionId(toolContext);
     publishToolStart(sessionId, BLOGS_LABEL);
@@ -215,9 +222,10 @@ public class ProfileMcpTools {
   }
 
   @WithSpan
-  @Tool(description = "Search across all site content — blogs, jobs, skills, news, and "
-      + "events. Returns grouped results by content type. Use this for broad or general "
-      + "questions that might span multiple areas of Simon's portfolio.")
+  @Tool(description = """
+      Search across all site content — blogs, jobs, skills, news, and \
+      events. Returns grouped results by content type. Use this for broad or general \
+      questions that might span multiple areas of Simon's portfolio.""")
   public GroupedSearchResponse searchSite(
       @ToolParam(description = "Search keywords to match across all site content")
       final String query) {
@@ -234,13 +242,15 @@ public class ProfileMcpTools {
   }
 
   @WithSpan
-  @Tool(description = "Get code examples from Simon's portfolio. Returns real code "
-      + "snippets with titles, descriptions, language, and associated skills. Optionally "
-      + "filter by language (java, typescript, yaml, etc.). Use this when asked to show "
-      + "code, demonstrate implementation patterns, or provide technical examples.")
+  @Tool(description = """
+      Get code examples from Simon's portfolio. Returns real code \
+      snippets with titles, descriptions, language, and associated skills. Optionally \
+      filter by language (java, typescript, yaml, etc.). Use this when asked to show \
+      code, demonstrate implementation patterns, or provide technical examples.""")
   public List<Map<String, Object>> getCodeExamples(
-      @ToolParam(description = "Optional language filter: java, typescript, yaml, python, "
-          + "kotlin, go, bash. Pass null or empty to return all.")
+      @ToolParam(description = """
+          Optional language filter: java, typescript, yaml, python, \
+          kotlin, go, bash. Pass null or empty to return all.""")
       final String language,
       final ToolContext toolContext) {
     String sessionId = sessionId(toolContext);
@@ -268,13 +278,15 @@ public class ProfileMcpTools {
   }
 
   @WithSpan
-  @Tool(description = "Search aggregated tech news articles from external sources like "
-      + "AI Native Dev, Rundown AI, and Spring Blog. Returns recent articles with "
-      + "AI-generated summaries and source attribution. Use this when asked about "
-      + "recent tech news, industry trends, or what's happening in the tech world.")
+  @Tool(description = """
+      Search aggregated tech news articles from external sources like \
+      AI Native Dev, Rundown AI, and Spring Blog. Returns recent articles with \
+      AI-generated summaries and source attribution. Use this when asked about \
+      recent tech news, industry trends, or what's happening in the tech world.""")
   public Object searchNews(
-      @ToolParam(description = "Search keywords to match against news article titles "
-          + "and summaries. Pass null or empty for latest articles.")
+      @ToolParam(description = """
+          Search keywords to match against news article titles \
+          and summaries. Pass null or empty for latest articles.""")
       final String query,
       final ToolContext toolContext) {
     String sessionId = sessionId(toolContext);
@@ -322,12 +334,14 @@ public class ProfileMcpTools {
   }
 
   @WithSpan
-  @Tool(description = "Get upcoming tech community events like meetups and conferences. "
-      + "Optionally filter by keyword. Returns events with dates, venues, and descriptions. "
-      + "Use this when asked about upcoming events, meetups, or tech gatherings.")
+  @Tool(description = """
+      Get upcoming tech community events like meetups and conferences. \
+      Optionally filter by keyword. Returns events with dates, venues, and descriptions. \
+      Use this when asked about upcoming events, meetups, or tech gatherings.""")
   public Object getUpcomingEvents(
-      @ToolParam(description = "Optional search keywords to filter events. "
-          + "Pass null or empty for all upcoming events.")
+      @ToolParam(description = """
+          Optional search keywords to filter events. \
+          Pass null or empty for all upcoming events.""")
       final String query,
       final ToolContext toolContext) {
     String sessionId = sessionId(toolContext);
@@ -365,11 +379,12 @@ public class ProfileMcpTools {
   }
 
   @WithSpan
-  @Tool(description = "Submit a contact message to Simon on behalf of the visitor. "
-      + "Collects the visitor's details and sends an email to Simon. Can only be used "
-      + "once per chat session to prevent spam. If the email fails to send, the visitor "
-      + "can retry. Use this when a visitor asks to get in touch, send a message, or "
-      + "contact Simon.")
+  @Tool(description = """
+      Submit a contact message to Simon on behalf of the visitor. \
+      Collects the visitor's details and sends an email to Simon. Can only be used \
+      once per chat session to prevent spam. If the email fails to send, the visitor \
+      can retry. Use this when a visitor asks to get in touch, send a message, or \
+      contact Simon.""")
   public String submitContactForm(
       @ToolParam(description = "Visitor's first name") final String firstName,
       @ToolParam(description = "Visitor's last name") final String lastName,
@@ -380,8 +395,9 @@ public class ProfileMcpTools {
     String sessionId = (String) toolContext.getContext().get("sessionId");
 
     if (contactTracker.hasSubmitted(sessionId)) {
-      return "A contact message has already been sent in this chat session. "
-          + "Only one message per session is allowed.";
+      return """
+          A contact message has already been sent in this chat session. \
+          Only one message per session is allowed.""";
     }
 
     if (isBlank(firstName) || isBlank(lastName) || isBlank(email)

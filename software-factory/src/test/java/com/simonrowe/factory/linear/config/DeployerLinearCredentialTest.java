@@ -76,10 +76,11 @@ class DeployerLinearCredentialTest {
 
     assertThat(offendingKeys)
         .as(
-            "`deployer` holds /var/run/docker.sock and must hold as few other credentials as "
-                + "possible; the Linear tracker key AND the flag that would make it needed "
-                + "(FACTORY_LINEAR_ENABLED) belong only on `software-factory`. See "
-                + "docs/runbooks/linear.md.")
+            """
+            `deployer` holds /var/run/docker.sock and must hold as few other credentials as \
+            possible; the Linear tracker key AND the flag that would make it needed \
+            (FACTORY_LINEAR_ENABLED) belong only on `software-factory`. See \
+            docs/runbooks/linear.md.""")
         .isEmpty();
   }
 
@@ -95,17 +96,19 @@ class DeployerLinearCredentialTest {
 
     assertThat(deployerBlock).as("the `deployer:` service block must be non-empty").isNotEmpty();
     assertThat(deployerBlock)
-        .as("the extracted block should contain deployer's own known settings, or the block "
-            + "boundaries are wrong")
+        .as("""
+            the extracted block should contain deployer's own known settings, or the block \
+            boundaries are wrong""")
         .anySatisfy(line -> assertThat(line).contains("FACTORY_DEPLOY_ENABLED"));
   }
 
   private static List<String> readComposeLines() throws IOException {
     if (!Files.exists(COMPOSE_FILE)) {
       throw new AssertionError(
-          "Could not find " + COMPOSE_FILE.toAbsolutePath() + " - this test assumes the Gradle "
-              + "test working directory is the module directory, one level below the repo "
-              + "root.");
+          """
+          Could not find %s - this test assumes the Gradle \
+          test working directory is the module directory, one level below the repo \
+          root.""".formatted(COMPOSE_FILE.toAbsolutePath()));
     }
     return Files.readAllLines(COMPOSE_FILE);
   }

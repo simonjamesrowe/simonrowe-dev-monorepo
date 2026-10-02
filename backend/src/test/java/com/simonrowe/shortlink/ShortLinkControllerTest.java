@@ -31,8 +31,9 @@ class ShortLinkControllerTest extends AbstractIntegrationTest {
 
   private static final String BASE = "https://simonrowe.dev";
   private static final String BROWSER_AGENT =
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
-          + "(KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+      """
+      Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 \
+      (KHTML, like Gecko) Version/17.0 Safari/605.1.15""";
   private static final String SLACKBOT_AGENT =
       "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)";
 
@@ -73,8 +74,9 @@ class ShortLinkControllerTest extends AbstractIntegrationTest {
 
     assertThat(html)
         .contains("<meta property=\"og:title\" content=\"Exactly-once semantics\">")
-        .contains("<meta property=\"og:description\" "
-            + "content=\"What the guarantee buys you\">")
+        .contains("""
+            <meta property="og:description" \
+            content="What the guarantee buys you">""")
         .contains("<meta property=\"og:image\" content=\""
             + BASE + "/uploads/kafka-large.png\">")
         .contains("<meta property=\"og:url\" content=\"" + BASE + "/blogs/blog-1\">")

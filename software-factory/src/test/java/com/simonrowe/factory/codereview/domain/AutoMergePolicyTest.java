@@ -172,8 +172,9 @@ class AutoMergePolicyTest {
             HEAD,
             () -> new ChangedFiles(List.of("frontend/src/App.tsx"), true));
     assertThat(decision.reason())
-        .isEqualTo("`frontend/src/App.tsx` changes what a visitor sees, so it needs screenshots"
-            + " and a human");
+        .isEqualTo("""
+            `frontend/src/App.tsx` changes what a visitor sees, so it needs screenshots\
+             and a human""");
   }
 
   /** Moving a script into docs/ deletes a script; the old side of a rename is classified too. */

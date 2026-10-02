@@ -324,8 +324,9 @@ public class ContentAggregationAgent {
           parseEventDate(classification.publishedDate());
     }
     if (publishedDate == null) {
-      log.info("No date from scraper or LLM for '{}', "
-          + "fetching detail page", content.title());
+      log.info("""
+          No date from scraper or LLM for '{}', \
+          fetching detail page""", content.title());
       publishedDate =
           htmlScraper.extractPublishedDateFromUrl(content.url());
     }
@@ -361,8 +362,9 @@ public class ContentAggregationAgent {
       eventDate = content.publishedDate();
     }
     if (eventDate == null) {
-      log.info("No date from scraper or LLM for event '{}', "
-          + "fetching detail page", content.title());
+      log.info("""
+          No date from scraper or LLM for event '{}', \
+          fetching detail page""", content.title());
       eventDate =
           htmlScraper.extractPublishedDateFromUrl(content.url());
     }

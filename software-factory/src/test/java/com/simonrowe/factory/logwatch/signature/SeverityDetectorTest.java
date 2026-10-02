@@ -21,9 +21,10 @@ class SeverityDetectorTest {
   @DisplayName("logfmt: alloy's own failure, the line that diagnosed the outage")
   void detectsLogfmtError() {
     String line =
-        "ts=2026-08-31T10:34:52.95190745Z level=error msg=\"final error sending batch, no "
-            + "retries left, dropping data\" component_path=/ "
-            + "component_id=loki.write.grafana_cloud";
+        """
+        ts=2026-08-31T10:34:52.95190745Z level=error msg="final error sending batch, no \
+        retries left, dropping data" component_path=/ \
+        component_id=loki.write.grafana_cloud""";
 
     assertThat(SeverityDetector.detect(line)).contains(Severity.ERROR);
   }
@@ -38,11 +39,13 @@ class SeverityDetectorTest {
   @DisplayName("Spring Boot console layout, as the backend and software-factory emit it")
   void detectsSpringBootLevels() {
     String error =
-        "2026-08-31T17:23:34.236Z ERROR 1 --- [software-factory] [main] c.s.f.Application"
-            + " : something broke";
+        """
+        2026-08-31T17:23:34.236Z ERROR 1 --- [software-factory] [main] c.s.f.Application\
+         : something broke""";
     String warn =
-        "2026-08-31T17:23:34.236Z  WARN 1 --- [software-factory] [main] c.s.f.Application"
-            + " : something is odd";
+        """
+        2026-08-31T17:23:34.236Z  WARN 1 --- [software-factory] [main] c.s.f.Application\
+         : something is odd""";
 
     assertThat(SeverityDetector.detect(error)).contains(Severity.ERROR);
     assertThat(SeverityDetector.detect(warn)).contains(Severity.WARN);
@@ -79,14 +82,22 @@ class SeverityDetectorTest {
   @ParameterizedTest
   @ValueSource(
       strings = {
-        "172.18.0.14 - - [31/Aug/2026:11:18:38 +0000] \"GET /ws/chat HTTP/1.1\" 101 43 \"-\""
-            + " \"Mozilla/5.0\" xff=\"-\"",
-        "172.18.0.14 - - [31/Aug/2026:11:18:38 +0000] \"GET /error HTTP/1.1\" 200 43 \"-\""
-            + " \"Mozilla/5.0\" xff=\"-\"",
-        "172.18.0.14 - - [31/Aug/2026:11:18:38 +0000] \"GET /api/warnings HTTP/1.1\" 200 43"
-            + " \"-\" \"Mozilla/5.0\" xff=\"-\"",
-        "172.18.0.14 - - [31/Aug/2026:11:18:38 +0000] \"GET /blogs/handling-errors HTTP/1.1\""
-            + " 200 9 \"-\" \"Mozilla/5.0\" xff=\"-\""
+          """
+          172.18.0.14 - - [31/Aug/2026:11:18:38 +0000] "GET /ws/chat HTTP/1.1" 101 43 "-"\
+           "Mozilla/5.0" xff="-"\
+          """,
+          """
+          172.18.0.14 - - [31/Aug/2026:11:18:38 +0000] "GET /error HTTP/1.1" 200 43 "-"\
+           "Mozilla/5.0" xff="-"\
+          """,
+          """
+          172.18.0.14 - - [31/Aug/2026:11:18:38 +0000] "GET /api/warnings HTTP/1.1" 200 43\
+           "-" "Mozilla/5.0" xff="-"\
+          """,
+          """
+          172.18.0.14 - - [31/Aug/2026:11:18:38 +0000] "GET /blogs/handling-errors HTTP/1.1"\
+           200 9 "-" "Mozilla/5.0" xff="-"\
+          """
       })
   void doesNotClassifyNginxAccessLines(final String accessLine) {
     assertThat(SeverityDetector.detect(accessLine)).isEmpty();

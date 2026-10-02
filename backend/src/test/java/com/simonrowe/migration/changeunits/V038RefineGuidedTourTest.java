@@ -46,12 +46,14 @@ class V038RefineGuidedTourTest extends AbstractIntegrationTest {
             "/",
             3, 8000, timestamp),
         step("default-home-writing", "Browse recent writing", ".tour-featured-writing",
-            "Recent engineering writing is collected here. Use the arrows to browse, "
-                + "or open the full blog.",
+            """
+            Recent engineering writing is collected here. Use the arrows to browse, \
+            or open the full blog.""",
             "top", "/", 4, 8000, timestamp),
         step(null, "Get In Touch", ".tour-contact",
-            "Interested in working together or just want to say hello? Hit the button to send me "
-                + "a message directly.",
+            """
+            Interested in working together or just want to say hello? Hit the button to send me \
+            a message directly.""",
             "bottom", "/", 5, 7000,
             timestamp),
         step("default-profile", "Read the profile", ".tour-profile-heading",
@@ -75,8 +77,9 @@ class V038RefineGuidedTourTest extends AbstractIntegrationTest {
             7000,
             timestamp),
         step("default-platform-status", "See the platform status", ".tour-status-running",
-            "This live view shows the services running in production and the commit "
-                + "each was built from.",
+            """
+            This live view shows the services running in production and the commit \
+            each was built from.""",
             "bottom", "/status", 11, 12000, timestamp),
         step("operator-step", "A custom stop", ".operator-choice", "Keep this unchanged.", "bottom",
             "/",

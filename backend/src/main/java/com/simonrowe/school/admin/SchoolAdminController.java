@@ -498,8 +498,9 @@ public class SchoolAdminController {
           .body(Map.of("detail", "A " + source + " ingest is already running"));
     }
     final String note = "website".equals(source)
-        ? "Website crawl started. It takes around 30 minutes — the school's robots.txt asks for "
-            + "a ten second delay between pages."
+        ? """
+            Website crawl started. It takes around 30 minutes — the school's robots.txt asks for \
+            a ten second delay between pages."""
         : source + " ingest started";
     return ResponseEntity.accepted().body(Map.of("detail", note));
   }

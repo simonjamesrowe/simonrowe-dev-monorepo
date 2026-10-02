@@ -35,9 +35,10 @@ class DeployerGrafanaCredentialTest {
 
     assertThat(ComposeFile.declaredKeysContaining(deployerBlock, FORBIDDEN_FRAGMENT))
         .as(
-            "`deployer` holds /var/run/docker.sock and must hold as few other credentials as "
-                + "possible; the Grafana Cloud read key belongs only on `software-factory`. "
-                + "See docs/runbooks/log-shipping.md.")
+            """
+            `deployer` holds /var/run/docker.sock and must hold as few other credentials as \
+            possible; the Grafana Cloud read key belongs only on `software-factory`. \
+            See docs/runbooks/log-shipping.md.""")
         .isEmpty();
   }
 
@@ -102,8 +103,9 @@ class DeployerGrafanaCredentialTest {
 
     assertThat(deployerBlock).as("the `deployer:` service block must be non-empty").isNotEmpty();
     assertThat(deployerBlock)
-        .as("the extracted block should contain deployer's own known settings, or the block "
-            + "boundaries are wrong")
+        .as("""
+            the extracted block should contain deployer's own known settings, or the block \
+            boundaries are wrong""")
         .anySatisfy(line -> assertThat(line).contains("FACTORY_DEPLOY_ENABLED"));
   }
 }

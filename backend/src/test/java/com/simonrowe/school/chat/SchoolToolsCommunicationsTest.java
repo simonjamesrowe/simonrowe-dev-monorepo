@@ -130,8 +130,9 @@ class SchoolToolsCommunicationsTest {
         "doc-newsletter", SchoolSourceType.WEBSITE_PAGE,
         "https://www.kilmorieschool.co.uk/parentportal/newsletter/?id=163",
         "Newsletter - 11th September 2026",
-        "Friday 11th September 2026 Dear Parents and Carers, The autumnal weather has certainly "
-            + "arrived this week, reminding us that the seasons are changing.",
+        """
+        Friday 11th September 2026 Dear Parents and Carers, The autumnal weather has certainly \
+        arrived this week, reminding us that the seasons are changing.""",
         Instant.parse("2026-09-11T00:00:00Z"), Instant.parse("2026-09-11T15:22:35Z"),
         Visibility.PUBLIC, null, null, "simon", Instant.parse("2026-09-11T15:22:35Z"), false,
         List.of(), "hash", null);

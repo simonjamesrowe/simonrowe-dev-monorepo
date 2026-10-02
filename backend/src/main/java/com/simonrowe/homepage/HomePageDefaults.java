@@ -15,9 +15,10 @@ final class HomePageDefaults {
   static final HomePageContent CONTENT = new HomePageContent(
       "Leading engineering teams.",
       "Building AI-native systems.",
-      "Lately I've been building a software factory: autonomous agents across the whole "
-          + "software development lifecycle, from code review and CVE fixes to deploys and "
-          + "monitoring, with improvement loops that learn from every pull request.",
+      """
+      Lately I've been building a software factory: autonomous agents across the whole \
+      software development lifecycle, from code review and CVE fixes to deploys and \
+      monitoring, with improvement loops that learn from every pull request.""",
       new Cta("See my experience", "/about#roles"),
       new Cta("Get in touch", "/about#contact"),
       true,

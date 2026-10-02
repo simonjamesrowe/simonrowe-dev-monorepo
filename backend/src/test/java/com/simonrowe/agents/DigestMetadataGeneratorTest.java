@@ -50,8 +50,9 @@ class DigestMetadataGeneratorTest {
   @Test
   void parsesUsableResponseIntoTitleAndDescription() {
     when(assistantMessage.getContent()).thenReturn(
-        "Title: What Spring Boot 4 means for us\n"
-            + "Description: A look at the release and what it changes.");
+        """
+        Title: What Spring Boot 4 means for us
+        Description: A look at the release and what it changes.""");
 
     DigestMetadata metadata = generator.generate(
         List.of(article("Spring Boot 4")), "activity");
@@ -64,8 +65,9 @@ class DigestMetadataGeneratorTest {
   @Test
   void fallsBackWhenTitleStartsWithAiTechRoundup() {
     when(assistantMessage.getContent()).thenReturn(
-        "Title: AI & Tech Roundup: Spring Boot 4\n"
-            + "Description: A generic roundup.");
+        """
+        Title: AI & Tech Roundup: Spring Boot 4
+        Description: A generic roundup.""");
 
     DigestMetadata metadata = generator.generate(
         List.of(article("Spring Boot 4")), "activity");
@@ -77,8 +79,9 @@ class DigestMetadataGeneratorTest {
   @Test
   void fallsBackWhenTitleContainsThisWeekInAi() {
     when(assistantMessage.getContent()).thenReturn(
-        "Title: This Week In AI: Spring Boot 4\n"
-            + "Description: A generic roundup.");
+        """
+        Title: This Week In AI: Spring Boot 4
+        Description: A generic roundup.""");
 
     DigestMetadata metadata = generator.generate(
         List.of(article("Spring Boot 4")), "activity");
@@ -113,8 +116,9 @@ class DigestMetadataGeneratorTest {
   @Test
   void parsesBoldDecoratedLabelsFromNewerModel() {
     when(assistantMessage.getContent()).thenReturn(
-        "**Title:** What Spring Boot 4 means for us\n"
-            + "**Description:** A look at the release and what it changes.");
+        """
+        **Title:** What Spring Boot 4 means for us
+        **Description:** A look at the release and what it changes.""");
 
     DigestMetadata metadata = generator.generate(
         List.of(article("Spring Boot 4")), "activity");
@@ -127,10 +131,11 @@ class DigestMetadataGeneratorTest {
   @Test
   void parsesLabelsWrappedInCodeFence() {
     when(assistantMessage.getContent()).thenReturn(
-        "```\n"
-            + "Title: What Spring Boot 4 means for us\n"
-            + "Description: A look at the release and what it changes.\n"
-            + "```");
+        """
+        ```
+        Title: What Spring Boot 4 means for us
+        Description: A look at the release and what it changes.
+        ```""");
 
     DigestMetadata metadata = generator.generate(
         List.of(article("Spring Boot 4")), "activity");

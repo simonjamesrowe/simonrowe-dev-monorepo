@@ -72,12 +72,13 @@ public class SchoolIngestService {
    * is real money for a guaranteed empty result.
    */
   private static final Pattern DATE_LIKE = Pattern.compile(
-      "(?i)\\b(\\d{1,2}(st|nd|rd|th)?\\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)"
-          + "|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\s+\\d{1,2}"
-          + "|\\d{1,2}[/.-]\\d{1,2}[/.-]\\d{2,4}"
-          + "|\\d{4}-\\d{2}-\\d{2}"
-          + "|monday|tuesday|wednesday|thursday|friday|saturday|sunday"
-          + "|half\\s*term|inset|term\\s+(starts|ends|begins))\\b");
+      """
+      (?i)\\b(\\d{1,2}(st|nd|rd|th)?\\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\
+      |(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\s+\\d{1,2}\
+      |\\d{1,2}[/.-]\\d{1,2}[/.-]\\d{2,4}\
+      |\\d{4}-\\d{2}-\\d{2}\
+      |monday|tuesday|wednesday|thursday|friday|saturday|sunday\
+      |half\\s*term|inset|term\\s+(starts|ends|begins))\\b""");
 
   /** Link text that names nothing, so is no use in a title. */
   private static final Pattern GENERIC_LINK_TEXT = Pattern.compile(

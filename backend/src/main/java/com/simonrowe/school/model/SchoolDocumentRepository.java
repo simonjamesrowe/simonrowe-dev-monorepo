@@ -74,8 +74,10 @@ public interface SchoolDocumentRepository extends MongoRepository<SchoolDocument
    * @param to window end, inclusive
    * @return matching documents, most recently published first
    */
-  @Query(value = "{ 'visibility': { $in: ?0 }, 'sourceType': { $in: ?1 }, "
-      + "'publishedAt': { $gte: ?2, $lte: ?3 } }",
+  @Query(value = """
+      { 'visibility': { $in: ?0 }, 'sourceType': { $in: ?1 }, \
+      'publishedAt': { $gte: ?2, $lte: ?3 } }\
+      """,
       sort = "{ 'publishedAt': -1 }")
   List<SchoolDocument> findPublishedBetween(
       List<Visibility> visibilities, List<SchoolSourceType> sourceTypes, Instant from, Instant to);

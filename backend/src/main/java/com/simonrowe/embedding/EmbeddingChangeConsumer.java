@@ -79,8 +79,9 @@ public class EmbeddingChangeConsumer {
       case BLOG -> handleBlog(event.contentId());
       case JOB -> handleJob(event.contentId());
       case SKILL -> handleSkill(event.contentId());
-      case CODE_EXAMPLE -> LOG.debug("Code example embedding handled by "
-          + "AdminCodeExampleController directly");
+      case CODE_EXAMPLE -> LOG.debug("""
+          Code example embedding handled by \
+          AdminCodeExampleController directly""");
       case AGGREGATED_ARTICLE -> handleArticle(event.contentId());
       case AGGREGATED_EVENT -> handleEvent(event.contentId());
       default -> LOG.warn("Unknown content type: {}", event.contentType());

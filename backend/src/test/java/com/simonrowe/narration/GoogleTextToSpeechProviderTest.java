@@ -42,8 +42,9 @@ class GoogleTextToSpeechProviderTest {
   @Test
   void startsLongAudioWithPrivateGcsOutputAndReturnsOperation() {
     server.expect(requestTo(
-            "https://texttospeech.googleapis.com/v1beta1/projects/123456789012/locations/global:"
-                + "synthesizeLongAudio"))
+            """
+            https://texttospeech.googleapis.com/v1beta1/projects/123456789012/locations/global:\
+            synthesizeLongAudio"""))
         .andExpect(method(HttpMethod.POST))
         .andExpect(header("Authorization", "Bearer token-value"))
         .andExpect(jsonPath("$.parent")
@@ -64,8 +65,9 @@ class GoogleTextToSpeechProviderTest {
 
   @Test
   void pollsPendingSuccessAndSanitizedFailure() {
-    String url = "https://texttospeech.googleapis.com/v1beta1/projects/123456789012/"
-        + "locations/global/operations/1";
+    String url = """
+        https://texttospeech.googleapis.com/v1beta1/projects/123456789012/\
+        locations/global/operations/1""";
     server.expect(requestTo(url)).andRespond(withSuccess(
         "{\"done\":false}", MediaType.APPLICATION_JSON));
     server.expect(requestTo(url)).andRespond(withSuccess(
@@ -84,8 +86,9 @@ class GoogleTextToSpeechProviderTest {
   void downloadsEncodedObjectAsBytes() {
     byte[] audio = new byte[]{'I', 'D', '3', 1};
     server.expect(requestTo(
-            "https://storage.googleapis.com/storage/v1/b/bucket/o/"
-                + "narrations%2Fid.mp3?alt=media"))
+            """
+            https://storage.googleapis.com/storage/v1/b/bucket/o/\
+            narrations%2Fid.mp3?alt=media"""))
         .andExpect(header("Authorization", "Bearer token-value"))
         .andRespond(withSuccess(audio, MediaType.valueOf("audio/mpeg")));
 
@@ -156,8 +159,9 @@ class GoogleTextToSpeechProviderTest {
   @Test
   void longAudioStartAlsoSendsTheQuotaProjectHeader() {
     server.expect(requestTo(
-            "https://texttospeech.googleapis.com/v1beta1/projects/123456789012/locations/"
-                + "global:synthesizeLongAudio"))
+            """
+            https://texttospeech.googleapis.com/v1beta1/projects/123456789012/locations/\
+            global:synthesizeLongAudio"""))
         .andExpect(header("x-goog-user-project", "project"))
         .andRespond(withSuccess("{\"name\":\"23456\"}", MediaType.APPLICATION_JSON));
 

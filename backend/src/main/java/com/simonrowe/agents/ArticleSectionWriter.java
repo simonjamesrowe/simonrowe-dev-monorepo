@@ -78,9 +78,10 @@ public class ArticleSectionWriter {
   public DigestSection write(final AggregatedArticle article) {
     String sourceText = sourceTextProvider.sourceTextFor(article);
     if (!ArticleSourceTextProvider.clearsHardFloor(sourceText)) {
-      LOG.warn("No usable source text for '{}' — fresh scrape, stored "
-          + "content and stored summary are all under {} characters; "
-          + "publishing the stored summary without calling the model",
+      LOG.warn("""
+          No usable source text for '{}' — fresh scrape, stored \
+          content and stored summary are all under {} characters; \
+          publishing the stored summary without calling the model""",
           article.title(), ArticleSourceTextProvider.HARD_MIN_SOURCE_CHARS);
       return fallbackSection(article);
     }
@@ -96,8 +97,9 @@ public class ArticleSectionWriter {
         return fallbackSection(article);
       }
       if (containsHtml(body)) {
-        LOG.warn("Model output for '{}' contained an HTML tag, "
-            + "using stored summary instead", article.title());
+        LOG.warn("""
+            Model output for '{}' contained an HTML tag, \
+            using stored summary instead""", article.title());
         return fallbackSection(article);
       }
       return new DigestSection(

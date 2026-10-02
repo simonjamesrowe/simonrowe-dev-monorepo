@@ -391,8 +391,9 @@ public class RestoreService {
       int count = esBackupService.importEmbeddings(index, embeddingsJson);
       LOG.info("Restored {} vector embeddings into {}", count, index);
     } else if (warnIfMissing) {
-      LOG.warn("No vector embeddings found in backup for {} — "
-          + "use 'Re-embed Content' from Data Operations to regenerate", index);
+      LOG.warn("""
+          No vector embeddings found in backup for {} — \
+          use 'Re-embed Content' from Data Operations to regenerate""", index);
     } else {
       LOG.info("No embeddings for {} in this backup", index);
     }
@@ -443,8 +444,9 @@ public class RestoreService {
     }
     String mediaSource = extractJsonString(manifestJson, "mediaSource");
     if (mediaSource == null || mediaSource.isBlank()) {
-      LOG.info("Backup contains no uploads/ and no mediaSource — "
-          + "uploads dir will be cleared but no media restored");
+      LOG.info("""
+          Backup contains no uploads/ and no mediaSource — \
+          uploads dir will be cleared but no media restored""");
       return zipFile;
     }
     LOG.info("Backup references media from prior backup '{}', fetching from Drive",

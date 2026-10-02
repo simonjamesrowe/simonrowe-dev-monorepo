@@ -81,8 +81,9 @@ public class GoogleDriveService {
 
   public String getConnectionError() {
     if (drive == null) {
-      return "Google Drive credentials are not configured. "
-          + "Set the GOOGLE_DRIVE_CREDENTIALS environment variable.";
+      return """
+          Google Drive credentials are not configured. \
+          Set the GOOGLE_DRIVE_CREDENTIALS environment variable.""";
     }
     try {
       drive.files().list().setPageSize(1).setFields("files(id)").execute();
@@ -217,8 +218,8 @@ public class GoogleDriveService {
 
     do {
       FileList result = drive.files().list()
-          .setQ("'" + folderId + "' in parents and trashed = false "
-              + "and mimeType = 'application/zip'")
+          .setQ("'%s' in parents and trashed = false and mimeType = 'application/zip'"
+              .formatted(folderId))
           .setFields("nextPageToken, files(id, name, size, createdTime)")
           .setOrderBy("createdTime desc")
           .setPageSize(100)
@@ -349,8 +350,9 @@ public class GoogleDriveService {
   private void checkDrive() {
     if (drive == null) {
       throw new IllegalStateException(
-          "Google Drive is not configured. "
-              + "Set the GOOGLE_DRIVE_CREDENTIALS environment variable.");
+          """
+          Google Drive is not configured. \
+          Set the GOOGLE_DRIVE_CREDENTIALS environment variable.""");
     }
   }
 }

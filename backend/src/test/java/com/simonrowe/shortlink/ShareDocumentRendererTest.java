@@ -137,8 +137,9 @@ class ShareDocumentRendererTest {
     assertThat(html)
         .contains("<meta property=\"og:type\" content=\"article\">")
         .contains("<meta property=\"og:title\" content=\"Exactly-once semantics\">")
-        .contains("<meta property=\"og:description\" "
-            + "content=\"What the guarantee buys you\">")
+        .contains("""
+            <meta property="og:description" \
+            content="What the guarantee buys you">""")
         .contains("<meta property=\"og:image\" content=\"" + BASE + "/uploads/kafka.png\">")
         .contains("<meta property=\"og:url\" content=\"" + BASE + "/blogs/abc123\">")
         .contains("<meta name=\"twitter:card\" content=\"summary_large_image\">")

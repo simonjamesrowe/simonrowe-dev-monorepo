@@ -203,8 +203,9 @@ public interface DeployActivities {
           "unknown",
           List.of(),
           List.of(),
-          "Read the deploy run's container logs directly, and check the Temporal UI for the "
-              + "failing phase.");
+          """
+          Read the deploy run's container logs directly, and check the Temporal UI for the \
+          failing phase.""");
     }
   }
 

@@ -35,20 +35,28 @@ import org.springframework.stereotype.Component;
 public class LinearGateway {
 
   private static final String TEAM_QUERY =
-      "query($key:String!){teams(filter:{key:{eq:$key}}){nodes{id key "
-          + "states{nodes{id name type}} labels{nodes{id name}}}}}";
+      """
+      query($key:String!){teams(filter:{key:{eq:$key}}){nodes{id key \
+      states{nodes{id name type}} labels{nodes{id name}}}}}\
+      """;
 
   private static final String ATTACHMENTS_QUERY =
-      "query($url:String!){attachmentsForURL(url:$url){nodes{issue{id identifier url "
-          + "createdAt state{type}}}}}";
+      """
+      query($url:String!){attachmentsForURL(url:$url){nodes{issue{id identifier url \
+      createdAt state{type}}}}}\
+      """;
 
   private static final String CREATE_ISSUE =
-      "mutation($input:IssueCreateInput!){issueCreate(input:$input){success "
-          + "issue{id identifier url}}}";
+      """
+      mutation($input:IssueCreateInput!){issueCreate(input:$input){success \
+      issue{id identifier url}}}\
+      """;
 
   private static final String CREATE_ATTACHMENT =
-      "mutation($input:AttachmentCreateInput!){attachmentCreate(input:$input){success "
-          + "attachment{id}}}";
+      """
+      mutation($input:AttachmentCreateInput!){attachmentCreate(input:$input){success \
+      attachment{id}}}\
+      """;
 
   private static final String CREATE_COMMENT =
       "mutation($input:CommentCreateInput!){commentCreate(input:$input){success comment{id}}}";
@@ -57,8 +65,10 @@ public class LinearGateway {
       "mutation($input:IssueRelationCreateInput!){issueRelationCreate(input:$input){success}}";
 
   private static final String UPDATE_ISSUE =
-      "mutation($id:String!,$input:IssueUpdateInput!){issueUpdate(id:$id,input:$input)"
-          + "{success issue{id identifier url}}}";
+      """
+      mutation($id:String!,$input:IssueUpdateInput!){issueUpdate(id:$id,input:$input)\
+      {success issue{id identifier url}}}\
+      """;
 
   // GraphQL wire names shared by the queries/mutations above and the response handling below.
   // VAR_INPUT is the variable every mutation binds its input object to; FIELD_NODES is the
@@ -133,10 +143,9 @@ public class LinearGateway {
       }
       if (triageStateId == null) {
         throw new LinearApiException(
-            "Team "
-                + properties.teamKey()
-                + " has no Triage state — enable Triage on the team in Linear settings; the "
-                + "suppression design depends on it",
+            """
+            Team %s has no Triage state — enable Triage on the team in Linear settings; the \
+            suppression design depends on it""".formatted(properties.teamKey()),
             false);
       }
       Map<String, String> labels = new HashMap<>();
@@ -208,9 +217,10 @@ public class LinearGateway {
       // label files every ticket unlabelled, forever, successfully, with nothing anywhere to
       // notice - and the label is how a human tells factory tickets apart in Triage.
       log.warn(
-          "Team {} has no label named {} - filing this issue unlabelled. Create the label in "
-              + "Linear; teamContext() caches positively for the process lifetime, so the "
-              + "container needs restarting before the new label is picked up.",
+          """
+          Team {} has no label named {} - filing this issue unlabelled. Create the label in \
+          Linear; teamContext() caches positively for the process lifetime, so the \
+          container needs restarting before the new label is picked up.""",
           properties.teamKey(),
           labelName);
     }

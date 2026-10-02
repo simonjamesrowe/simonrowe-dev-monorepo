@@ -79,8 +79,9 @@ public class V018BackfillFavouriteDigests {
     }
 
     if (weeks.isEmpty()) {
-      log.info("All {} news favourite(s) fall in the current week; "
-          + "leaving that to the scheduled run", favourites.size());
+      log.info("""
+          All {} news favourite(s) fall in the current week; \
+          leaving that to the scheduled run""", favourites.size());
       return;
     }
 
@@ -126,8 +127,9 @@ public class V018BackfillFavouriteDigests {
     try {
       Optional<Blog> saved = digestAgent.generateForWindow(from, to, publishAt);
       if (saved.isEmpty()) {
-        log.info("Week of {} produced no digest; leaving existing post(s) "
-            + "in place", weekStart);
+        log.info("""
+            Week of {} produced no digest; leaving existing post(s) \
+            in place""", weekStart);
         return false;
       }
       for (Blog old : existing) {

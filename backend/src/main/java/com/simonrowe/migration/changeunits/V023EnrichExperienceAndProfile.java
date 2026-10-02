@@ -22,9 +22,12 @@ public class V023EnrichExperienceAndProfile {
     if (profile != null) {
       String desc = profile.getString("description");
       if (desc != null && !desc.contains("Using multiple agents, software factories")) {
-        desc = desc + "\n\nRecently, I've been heavily focused on exploring the capabilities of "
-            + "multiple autonomous agents and building software factories to revolutionize how we "
-            + "approach complex development tasks.";
+        desc = """
+            %s
+
+            Recently, I've been heavily focused on exploring the capabilities of \
+            multiple autonomous agents and building software factories to revolutionize how we \
+            approach complex development tasks.""".formatted(desc);
         mongoTemplate.updateFirst(
             profileQuery,
             new Update().set("description", desc).set("updatedAt", new Date()),
@@ -34,36 +37,45 @@ public class V023EnrichExperienceAndProfile {
     }
 
     Map<String, String> shortDescUpdates = new HashMap<>();
-    shortDescUpdates.put("Global", "Leading the engineering function for Commercial Trading "
-        + "across three product pillars. Passionate about AI-native transformation, platform "
-        + "modernization, and mentoring a talented team of 30+ engineers.");
-    shortDescUpdates.put("Y-Tree", "Lead Developer for an exciting fin-tech platform, building "
-        + "event-driven and RESTful microservices while driving cloud-native transformation.");
-    shortDescUpdates.put("Upp Technologies", "Hands-on engineering lead for an agile "
-        + "cross-functional team, delivering high-quality software solutions.");
-    shortDescUpdates.put("Pivotal", "Technical pre-sales and Platform Architect. Ran Cloud "
-        + "Native Developer workshops for Spring, Steeltoe, and .NET, and troubleshooted "
-        + "complex Cloud Foundry issues. This role truly elevated my cloud-native and Spring "
-        + "Boot skills to an expert level.");
-    shortDescUpdates.put("Macquarie Group", "Brought new technology to the Risk Management "
-        + "Group by transitioning monolithic WebSphere apps to Tomcat with Spring. Built the "
-        + "new JSP tag library for PARS and credit risk platforms, and modernized the frontend "
-        + "with jQuery.");
-    shortDescUpdates.put("SAS", "Designed and developed the Synapse internal business "
-        + "software. Championed the introduction of new technologies and modern frameworks "
-        + "to the team.");
-    shortDescUpdates.put("Civica", "Full-stack developer on the Authority application, "
-        + "primarily building out the rates and assets modules. Gained broad experience "
-        + "across Java, JEE, and various database platforms.");
-    shortDescUpdates.put("Workcover Queensland", "Led a team building a self-service "
-        + "portal for online workers' compensation insurance premiums. Migrated the Castor "
-        + "application from Oracle Forms to a cloud-native modern Java Spring SPA architecture, "
-        + "and introduced UI-based end-to-end testing with Watir and Cucumber.");
-    shortDescUpdates.put("Universal Music Publishing", "Senior Director driving cloud "
-        + "migration for business-critical applications (12-15 factor cloud-native apps). "
-        + "Built systems like [UMPG Sync](https://www.umpg.com) for sync licensing and UMPG "
-        + "Works for copyright. Rebuilt the royalty window with modern identity and revamped "
-        + "end-to-end testing for [UMPG Window](https://www.umpgwindow.com).");
+    shortDescUpdates.put("Global", """
+        Leading the engineering function for Commercial Trading \
+        across three product pillars. Passionate about AI-native transformation, platform \
+        modernization, and mentoring a talented team of 30+ engineers.""");
+    shortDescUpdates.put("Y-Tree", """
+        Lead Developer for an exciting fin-tech platform, building \
+        event-driven and RESTful microservices while driving cloud-native transformation.""");
+    shortDescUpdates.put("Upp Technologies", """
+        Hands-on engineering lead for an agile \
+        cross-functional team, delivering high-quality software solutions.""");
+    shortDescUpdates.put("Pivotal", """
+        Technical pre-sales and Platform Architect. Ran Cloud \
+        Native Developer workshops for Spring, Steeltoe, and .NET, and troubleshooted \
+        complex Cloud Foundry issues. This role truly elevated my cloud-native and Spring \
+        Boot skills to an expert level.""");
+    shortDescUpdates.put("Macquarie Group", """
+        Brought new technology to the Risk Management \
+        Group by transitioning monolithic WebSphere apps to Tomcat with Spring. Built the \
+        new JSP tag library for PARS and credit risk platforms, and modernized the frontend \
+        with jQuery.""");
+    shortDescUpdates.put("SAS", """
+        Designed and developed the Synapse internal business \
+        software. Championed the introduction of new technologies and modern frameworks \
+        to the team.""");
+    shortDescUpdates.put("Civica", """
+        Full-stack developer on the Authority application, \
+        primarily building out the rates and assets modules. Gained broad experience \
+        across Java, JEE, and various database platforms.""");
+    shortDescUpdates.put("Workcover Queensland", """
+        Led a team building a self-service \
+        portal for online workers' compensation insurance premiums. Migrated the Castor \
+        application from Oracle Forms to a cloud-native modern Java Spring SPA architecture, \
+        and introduced UI-based end-to-end testing with Watir and Cucumber.""");
+    shortDescUpdates.put("Universal Music Publishing", """
+        Senior Director driving cloud \
+        migration for business-critical applications (12-15 factor cloud-native apps). \
+        Built systems like [UMPG Sync](https://www.umpg.com) for sync licensing and UMPG \
+        Works for copyright. Rebuilt the royalty window with modern identity and revamped \
+        end-to-end testing for [UMPG Window](https://www.umpgwindow.com).""");
 
     for (Map.Entry<String, String> entry : shortDescUpdates.entrySet()) {
       Query q = new Query(Criteria.where("company").is(entry.getKey()));

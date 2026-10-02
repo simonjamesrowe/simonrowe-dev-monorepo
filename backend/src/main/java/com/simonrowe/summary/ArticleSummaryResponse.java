@@ -30,8 +30,9 @@ public record ArticleSummaryResponse(
       "Writing the summary. This usually takes under a minute";
   static final String READY_MESSAGE = "Summary ready";
   static final String INSUFFICIENT_SOURCE_MESSAGE =
-      "There is not enough of this article available to summarise. "
-          + "Read the original instead.";
+      """
+      There is not enough of this article available to summarise. \
+      Read the original instead.""";
   static final String ARTICLE_NOT_FOUND_MESSAGE =
       "This article is no longer available.";
   static final String MODEL_ERROR_MESSAGE =
