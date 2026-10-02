@@ -184,8 +184,8 @@ public class ArtifactCountsReader {
     Instant since = Instant.now().minus(WINDOW);
     NodeCounts commits =
         gitHubCount(
-            "/repos/" + owner + "/" + repository
-                + "/commits?sha=main&since=" + since + "&per_page=100");
+            "/repos/%s/%s/commits?sha=main&since=%s&per_page=100"
+                .formatted(owner, repository, since));
     return commits == null ? null : new NodeCounts(0, commits.inFlight(), 0);
   }
 

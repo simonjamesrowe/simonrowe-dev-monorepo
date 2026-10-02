@@ -1,6 +1,7 @@
 package com.simonrowe.media;
 
 import com.simonrowe.common.LogSafe;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -49,7 +50,7 @@ public class MediaController {
   public Page<MediaAsset> list(
       @RequestParam(defaultValue = "0") final int page,
       @RequestParam(defaultValue = "24") final int size,
-      @RequestParam(required = false) final String mimeType,
+      @RequestParam(required = false) final List<String> mimeType,
       @RequestParam(required = false) final String search
   ) {
     return mediaService.list(search, mimeType,

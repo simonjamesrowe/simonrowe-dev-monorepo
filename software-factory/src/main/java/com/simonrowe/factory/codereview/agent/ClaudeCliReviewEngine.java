@@ -86,11 +86,8 @@ public class ClaudeCliReviewEngine implements ReviewEngine {
         continue;
       }
       String key =
-          finding.file()
-              + ":"
-              + finding.line()
-              + ":"
-              + finding.title().toLowerCase(Locale.ROOT);
+          "%s:%s:%s"
+              .formatted(finding.file(), finding.line(), finding.title().toLowerCase(Locale.ROOT));
       unique.putIfAbsent(key, finding);
       if (unique.size() == MAX_FINDINGS) {
         break;

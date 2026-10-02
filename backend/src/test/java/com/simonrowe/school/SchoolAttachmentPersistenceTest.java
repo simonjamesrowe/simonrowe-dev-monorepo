@@ -39,8 +39,9 @@ class SchoolAttachmentPersistenceTest {
     final List<String> backend = serviceBlock("backend");
 
     assertThat(backend)
-        .as("without a volume the bytes live in the container's writable layer and every "
-            + "deploy deletes them, leaving citations that 404 with no error anywhere")
+        .as("""
+            without a volume the bytes live in the container's writable layer and every \
+            deploy deletes them, leaving citations that 404 with no error anywhere""")
         .anySatisfy(line -> assertThat(line.trim())
             .isEqualTo("- school-attachments:" + MOUNT_POINT));
 
@@ -53,8 +54,9 @@ class SchoolAttachmentPersistenceTest {
   @DisplayName("the configured path is absolute and matches the mount point")
   void pathMatchesTheMountPoint() throws IOException {
     assertThat(serviceBlock("backend"))
-        .as("a relative path is resolved against the working directory, so it would miss the "
-            + "mount and land in the writable layer again")
+        .as("""
+            a relative path is resolved against the working directory, so it would miss the \
+            mount and land in the writable layer again""")
         .anySatisfy(line -> assertThat(line.trim())
             .isEqualTo("SCHOOL_ATTACHMENT_PATH: " + MOUNT_POINT + "/"));
   }
@@ -63,8 +65,9 @@ class SchoolAttachmentPersistenceTest {
   @DisplayName("attachments are not stored under the unauthenticated uploads path")
   void attachmentsAreNotUnderUploads() {
     assertThat(MOUNT_POINT)
-        .as("uploads/ is served straight out with no tier check; a restricted attachment "
-            + "there would be public to anyone who guessed a document id")
+        .as("""
+            uploads/ is served straight out with no tier check; a restricted attachment \
+            there would be public to anyone who guessed a document id""")
         .doesNotStartWith("/workspace/uploads");
   }
 

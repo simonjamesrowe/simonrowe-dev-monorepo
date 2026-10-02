@@ -274,8 +274,9 @@ public class ArticleSummaryService {
       return Optional.empty();
     }
     meterRegistry.counter("article.summary.requests", "result", "reclaimed").increment();
-    LOG.warn("Reclaimed an abandoned summary generation: articleId={}, "
-            + "abandonedFor={}s",
+    LOG.warn("""
+            Reclaimed an abandoned summary generation: articleId={}, \
+            abandonedFor={}s""",
         summary.articleId(),
         Duration.between(summary.updatedAt(), now).toSeconds());
     return Optional.of(claimed);
@@ -288,8 +289,9 @@ public class ArticleSummaryService {
     final Instant started = Instant.now();
     String sourceText = sourceTextProvider.sourceTextFor(article);
     if (!ArticleSourceTextProvider.clearsHardFloor(sourceText)) {
-      LOG.warn("Not summarising '{}': best available source text is {} characters, "
-              + "under the hard floor of {}. Not calling the model.",
+      LOG.warn("""
+              Not summarising '{}': best available source text is {} characters, \
+              under the hard floor of {}. Not calling the model.""",
           article.title(),
           sourceText == null ? 0 : sourceText.length(),
           ArticleSourceTextProvider.HARD_MIN_SOURCE_CHARS);

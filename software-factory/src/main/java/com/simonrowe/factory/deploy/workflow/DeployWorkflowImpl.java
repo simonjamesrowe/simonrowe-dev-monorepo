@@ -495,8 +495,8 @@ public class DeployWorkflowImpl implements DeployWorkflow {
   private static String detailForFailure(
       final DeployPhase failedPhase, final DeployStatus status) {
     if (status == DeployStatus.ROLLBACK_FAILED) {
-      return failedPhase.argument()
-          + " failed and the rollback did not verify - the maintenance page has been left up";
+      return "%s failed and the rollback did not verify - the maintenance page has been left up"
+          .formatted(failedPhase.argument());
     }
     return failedPhase.argument() + " failed; rolled back to the previous version";
   }

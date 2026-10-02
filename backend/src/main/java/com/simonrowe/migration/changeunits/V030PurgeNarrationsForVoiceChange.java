@@ -53,8 +53,9 @@ public class V030PurgeNarrationsForVoiceChange {
     long documents = mongoTemplate.getCollection(COLLECTION)
         .deleteMany(new Document()).getDeletedCount();
     int audioFiles = narrationStorage.deleteAll();
-    LOG.info("Purged {} narration documents and {} narration audio files after the "
-        + "text-to-speech voice change", documents, audioFiles);
+    LOG.info("""
+        Purged {} narration documents and {} narration audio files after the \
+        text-to-speech voice change""", documents, audioFiles);
   }
 
   @RollbackExecution

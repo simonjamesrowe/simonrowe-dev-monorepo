@@ -175,8 +175,9 @@ class ContentAggregationAgentTest {
             null, null, null, null);
     ScrapedContent content = new ScrapedContent(
         "New Post", "https://example.com/new",
-        "This is a long enough content string to pass the "
-            + "fifty character threshold for classification.",
+        """
+        This is a long enough content string to pass the \
+        fifty character threshold for classification.""",
         Instant.now(), "Jane Doe",
         "https://example.com/img.jpg", false);
     AggregatedArticle savedArticle = new AggregatedArticle(
@@ -224,8 +225,9 @@ class ContentAggregationAgentTest {
     // No published date from the scraper.
     ScrapedContent content = new ScrapedContent(
         "Dateless Post", "https://example.com/dateless",
-        "This is a long enough content string to pass the "
-            + "fifty character threshold for classification.",
+        """
+        This is a long enough content string to pass the \
+        fifty character threshold for classification.""",
         null, "Jane Doe", "https://example.com/img.jpg", false);
 
     when(sourceRepository.findByActiveTrue())
@@ -273,8 +275,9 @@ class ContentAggregationAgentTest {
             "London", null);
     ScrapedContent content = new ScrapedContent(
         "Java Meetup", "https://example.com/meetup",
-        "Join us for an evening of Java talks and "
-            + "networking at Tech Hub London.",
+        """
+        Join us for an evening of Java talks and \
+        networking at Tech Hub London.""",
         null, null, null, false);
     AggregatedEvent savedEvent = new AggregatedEvent(
         "evt1", content.title(), ACTIVE_SOURCE.name(),
@@ -390,8 +393,9 @@ class ContentAggregationAgentTest {
   void classifyAndSummarize_returnsDefaultsOnLlmFailure() {
     ScrapedContent content = new ScrapedContent(
         "Failing Post", "https://example.com/fail",
-        "This content is definitely long enough to trigger "
-            + "the LLM classification path.",
+        """
+        This content is definitely long enough to trigger \
+        the LLM classification path.""",
         null, null, null, false);
 
     when(creating.fromPrompt(anyString()))
@@ -411,13 +415,15 @@ class ContentAggregationAgentTest {
 
     ScrapedContent recent = new ScrapedContent(
         "Recent Post", "https://www.danvega.dev/blog/recent",
-        "This is a long enough content string to pass the "
-            + "fifty character threshold for classification.",
+        """
+        This is a long enough content string to pass the \
+        fifty character threshold for classification.""",
         now.minus(5, ChronoUnit.DAYS), "Dan Vega", null, false);
     ScrapedContent old = new ScrapedContent(
         "Old Post", "https://www.danvega.dev/blog/old",
-        "This is a long enough content string to pass the "
-            + "fifty character threshold for classification.",
+        """
+        This is a long enough content string to pass the \
+        fifty character threshold for classification.""",
         now.minus(100, ChronoUnit.DAYS), "Dan Vega", null, false);
 
     ContentClassification articleClassification =
@@ -460,8 +466,9 @@ class ContentAggregationAgentTest {
   void backfillSource_processesDatelessPost() {
     ScrapedContent dateless = new ScrapedContent(
         "Dateless Post", "https://www.danvega.dev/blog/dateless",
-        "This is a long enough content string to pass the "
-            + "fifty character threshold for classification.",
+        """
+        This is a long enough content string to pass the \
+        fifty character threshold for classification.""",
         null, "Dan Vega", null, false);
 
     when(scraperFactory.scrape(DAN_VEGA_SOURCE))

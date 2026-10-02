@@ -74,8 +74,9 @@ public class ArticleSourceTextProvider {
     if (clearsFloor(scrapedText, MIN_USABLE_SOURCE_CHARS)) {
       return truncate(scrapedText);
     }
-    LOG.info("Scrape returned nothing usable for '{}', "
-        + "falling back to stored content", article.title());
+    LOG.info("""
+        Scrape returned nothing usable for '{}', \
+        falling back to stored content""", article.title());
     String fullContent = article.fullContent();
     if (clearsFloor(fullContent, MIN_USABLE_SOURCE_CHARS)) {
       return truncate(fullContent);

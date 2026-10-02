@@ -89,10 +89,9 @@ public class GoogleTextToSpeechProvider implements NarrationProvider {
   @Override
   public StartResult start(final String script, final String outputObject) {
     requireConfigured();
-    String parent = "projects/" + properties.projectNumber()
-        + "/locations/" + properties.location();
-    String url = TTS_BASE + "/" + TTS_API_VERSION + "/" + parent
-        + ":synthesizeLongAudio";
+    String parent = "projects/%s/locations/%s"
+        .formatted(properties.projectNumber(), properties.location());
+    String url = "%s/%s/%s:synthesizeLongAudio".formatted(TTS_BASE, TTS_API_VERSION, parent);
     Map<String, Object> body = Map.of(
         "parent", parent,
         "input", Map.of("text", script),
@@ -154,8 +153,8 @@ public class GoogleTextToSpeechProvider implements NarrationProvider {
   @Override
   public byte[] download(final String outputObject) {
     requireConfigured();
-    String url = STORAGE_BASE + "/storage/v1/b/" + encode(properties.bucket())
-        + "/o/" + encode(outputObject) + "?alt=media";
+    String url = "%s/storage/v1/b/%s/o/%s?alt=media"
+        .formatted(STORAGE_BASE, encode(properties.bucket()), encode(outputObject));
     try {
       byte[] body = restClient.get()
           .uri(URI.create(url))
@@ -229,9 +228,8 @@ public class GoogleTextToSpeechProvider implements NarrationProvider {
   private String operationUrl(final String operationName) {
     String resourceName = operationName.contains("/")
         ? operationName
-        : "projects/" + properties.projectNumber()
-            + "/locations/" + properties.location()
-            + "/operations/" + encode(operationName);
+        : "projects/%s/locations/%s/operations/%s".formatted(
+            properties.projectNumber(), properties.location(), encode(operationName));
     return TTS_BASE + "/" + TTS_API_VERSION + "/" + resourceName;
   }
 

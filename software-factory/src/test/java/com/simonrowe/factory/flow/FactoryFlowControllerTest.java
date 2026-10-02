@@ -59,11 +59,12 @@ class FactoryFlowControllerTest {
         .collect(Collectors.toSet());
 
     assertThat(actual)
-        .as("FlowNode's record components changed from %s to %s. /api/factory/flow is "
-            + "deliberately unauthenticated because its payload is limited to node keys, labels, "
-            + "integer counts and diagnostic strings - titled or free-text content (a ticket "
-            + "subject, a pull request title, a list of recent runs) belongs on the "
-            + "token-protected GET /api/factory/flow/{nodeKey} detail endpoint instead, never here",
+        .as("""
+            FlowNode's record components changed from %s to %s. /api/factory/flow is \
+            deliberately unauthenticated because its payload is limited to node keys, labels, \
+            integer counts and diagnostic strings - titled or free-text content (a ticket \
+            subject, a pull request title, a list of recent runs) belongs on the \
+            token-protected GET /api/factory/flow/{nodeKey} detail endpoint instead, never here""",
             expected, actual)
         .isEqualTo(expected);
   }

@@ -38,8 +38,9 @@ class SchoolCredentialConfinementTest {
   @DisplayName("the deployer holds no school or Gmail variable")
   void deployerHoldsNothing() throws IOException {
     assertThat(schoolVariablesFor("deployer"))
-        .as("`deployer` holds /var/run/docker.sock. The Gmail token reads a mailbox about "
-            + "children and belongs only on `backend`. See docs/runbooks/term-time.md.")
+        .as("""
+            `deployer` holds /var/run/docker.sock. The Gmail token reads a mailbox about \
+            children and belongs only on `backend`. See docs/runbooks/term-time.md.""")
         .isEmpty();
   }
 
@@ -47,8 +48,9 @@ class SchoolCredentialConfinementTest {
   @DisplayName("software-factory holds no school or Gmail variable either")
   void softwareFactoryHoldsNothing() throws IOException {
     assertThat(schoolVariablesFor("software-factory"))
-        .as("`software-factory` shares an image with `deployer` and has no reason to read "
-            + "school mail.")
+        .as("""
+            `software-factory` shares an image with `deployer` and has no reason to read \
+            school mail.""")
         .isEmpty();
   }
 

@@ -3,10 +3,13 @@ import { X } from 'lucide-react'
 
 import { useAuth } from '../../auth/useAuth'
 import { fetchAdminMedia, type MediaAsset, type PageResponse } from '../../services/adminApi'
+import { MediaPreview } from './MediaPreview'
 
 interface MediaLibraryProps {
   onSelect: (asset: MediaAsset) => void
   onClose: () => void
+  /** Only these types are listed and filterable, so an image field never offers a video. */
+  accept?: readonly string[]
 }
 
 const MIME_FILTERS = [
@@ -16,6 +19,8 @@ const MIME_FILTERS = [
   { label: 'GIF', value: 'image/gif' },
   { label: 'WebP', value: 'image/webp' },
   { label: 'SVG', value: 'image/svg+xml' },
+  { label: 'Video', value: 'video/mp4' },
+  { label: 'Captions', value: 'text/vtt' },
 ]
 
 const PAGE_SIZE = 20
@@ -37,46 +42,63 @@ function getThumbnailDimensions(asset: MediaAsset): string {
   return ''
 }
 
-export function MediaLibrary({ onSelect, onClose }: MediaLibraryProps) {
+/** How long typing pauses before the search is sent. */
+const SEARCH_DELAY_MS = 300
+
+export function MediaLibrary({ onSelect, onClose, accept }: MediaLibraryProps) {
   const { getAccessToken } = useAuth()
 
-  const [allAssets, setAllAssets] = useState<MediaAsset[]>([])
+  const [assets, setAssets] = useState<MediaAsset[]>([])
   const [pageInfo, setPageInfo] = useState<Omit<PageResponse<MediaAsset>, 'content'> | null>(null)
   const [page, setPage] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
   const [mimeFilter, setMimeFilter] = useState('')
 
+  // The server filters, not this page of results: a video field must find a video that sits
+  // forty pages into a library of images.
+  const mimeTypes = mimeFilter ? [mimeFilter] : accept
+  const typesKey = mimeTypes?.join(',') ?? ''
+
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search.trim()), SEARCH_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [search])
+
   const loadMedia = useCallback(
-    async (pageNum: number) => {
+    async (pageNum: number, signal?: { cancelled: boolean }) => {
       try {
         setLoading(true)
         setError(null)
-        const data = await fetchAdminMedia(getAccessToken, pageNum, PAGE_SIZE)
+        const data = await fetchAdminMedia(getAccessToken, pageNum, PAGE_SIZE, {
+          mimeTypes: typesKey ? typesKey.split(',') : undefined,
+          search: query,
+        })
+        if (signal?.cancelled) return
         const { content, ...rest } = data
-        setAllAssets(content)
+        setAssets(content)
         setPageInfo(rest)
         setPage(pageNum)
       } catch (err) {
+        if (signal?.cancelled) return
         setError(err instanceof Error ? err.message : 'Failed to load media')
       } finally {
-        setLoading(false)
+        if (!signal?.cancelled) setLoading(false)
       }
     },
-    [getAccessToken],
+    [getAccessToken, typesKey, query],
   )
 
   useEffect(() => {
-    loadMedia(0)
+    // A slower answer to an older filter must not replace the newer one.
+    const signal = { cancelled: false }
+    loadMedia(0, signal)
+    return () => { signal.cancelled = true }
   }, [loadMedia])
 
-  const filteredAssets = allAssets.filter((asset) => {
-    const matchesMime = mimeFilter === '' || asset.mimeType === mimeFilter
-    const matchesSearch =
-      search.trim() === '' || asset.fileName.toLowerCase().includes(search.trim().toLowerCase())
-    return matchesMime && matchesSearch
-  })
+  const filters = MIME_FILTERS.filter((f) => f.value === '' || !accept || accept.includes(f.value))
 
   const handleSelect = (asset: MediaAsset) => {
     onSelect(asset)
@@ -110,7 +132,7 @@ export function MediaLibrary({ onSelect, onClose }: MediaLibraryProps) {
             value={search}
           />
           <div className="media-library-drawer__mime-filters">
-            {MIME_FILTERS.map((f) => (
+            {filters.length > 2 && filters.map((f) => (
               <button
                 className={`admin-btn admin-btn--sm${mimeFilter === f.value ? ' admin-btn--primary' : ''}`}
                 key={f.value}
@@ -128,13 +150,13 @@ export function MediaLibrary({ onSelect, onClose }: MediaLibraryProps) {
 
           {loading ? (
             <div className="admin-loading">Loading media...</div>
-          ) : filteredAssets.length === 0 ? (
+          ) : assets.length === 0 ? (
             <div className="admin-empty">
               {search || mimeFilter ? 'No assets match your filters.' : 'No media assets found.'}
             </div>
           ) : (
             <div className="admin-media-grid">
-              {filteredAssets.map((asset) => (
+              {assets.map((asset) => (
                 <button
                   className="admin-media-card admin-media-card--selectable"
                   key={asset.id}
@@ -142,9 +164,10 @@ export function MediaLibrary({ onSelect, onClose }: MediaLibraryProps) {
                   type="button"
                 >
                   <div className="admin-media-card__preview">
-                    <img
+                    <MediaPreview
                       alt={asset.fileName}
                       className="admin-media-card__image"
+                      mimeType={asset.mimeType}
                       src={getThumbnailSrc(asset)}
                     />
                   </div>

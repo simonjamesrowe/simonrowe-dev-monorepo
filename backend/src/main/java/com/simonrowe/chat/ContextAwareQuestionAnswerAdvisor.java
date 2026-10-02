@@ -38,27 +38,24 @@ public class ContextAwareQuestionAnswerAdvisor implements BaseAdvisor {
   private static final int DEFAULT_ORDER = 100;
   private static final int DEFAULT_HISTORY_SIZE = 5;
 
-  static final String PROMPT_TEMPLATE =
-      "{query}"
-          + System.lineSeparator()
-          + System.lineSeparator()
-          + "Supporting background retrieved from Simon's content is below, surrounded by "
-          + "---------------------. Treat it as reference material, not as the only source "
-          + "you may use."
-          + System.lineSeparator()
-          + System.lineSeparator()
-          + "---------------------"
-          + System.lineSeparator()
-          + "{question_answer_context}"
-          + System.lineSeparator()
-          + "---------------------"
-          + System.lineSeparator()
-          + System.lineSeparator()
-          + "Use this background together with the tools available to you. When the visitor "
-          + "asks about Simon's blogs, jobs, skills, code, news, or events, call the matching "
-          + "tool even if the background above already seems to contain the answer — that is "
-          + "how the visitor gets the visual card. Draw on the tools for anything the "
-          + "background does not cover.";
+  // A text block's line breaks are always \n; the replace keeps the platform line separator
+  // this template has always used.
+  static final String PROMPT_TEMPLATE = """
+      {query}
+
+      Supporting background retrieved from Simon's content is below, surrounded by \
+      ---------------------. Treat it as reference material, not as the only source \
+      you may use.
+
+      ---------------------
+      {question_answer_context}
+      ---------------------
+
+      Use this background together with the tools available to you. When the visitor \
+      asks about Simon's blogs, jobs, skills, code, news, or events, call the matching \
+      tool even if the background above already seems to contain the answer — that is \
+      how the visitor gets the visual card. Draw on the tools for anything the \
+      background does not cover.""".replace("\n", System.lineSeparator());
 
   private final VectorStore vectorStore;
   private final ChatMemory chatMemory;

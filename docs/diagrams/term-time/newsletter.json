@@ -1,0 +1,304 @@
+[
+  {
+    "type": "text",
+    "id": "title",
+    "x": 540,
+    "y": -130,
+    "text": "How a newsletter reaches the chat",
+    "fontSize": 36
+  },
+  {
+    "type": "ellipse",
+    "id": "sent",
+    "x": 0,
+    "y": 0,
+    "width": 200,
+    "height": 110,
+    "backgroundColor": "#a5d8ff",
+    "label": {
+      "text": "Friday 15:03\nit is sent",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "sync",
+    "x": 270,
+    "y": 10,
+    "width": 210,
+    "height": 90,
+    "backgroundColor": "#fff3bf",
+    "label": {
+      "text": "Next mailbox sync\nwithin 30 min",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "diamond",
+    "id": "school",
+    "x": 550,
+    "y": -25,
+    "width": 240,
+    "height": 160,
+    "backgroundColor": "#fff3bf",
+    "label": {
+      "text": "From the school's\nown address?",
+      "fontSize": 18
+    }
+  },
+  {
+    "type": "diamond",
+    "id": "portal",
+    "x": 890,
+    "y": -25,
+    "width": 240,
+    "height": 160,
+    "backgroundColor": "#fff3bf",
+    "label": {
+      "text": "A link to its\nnewsletter page?",
+      "fontSize": 18
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "fetch",
+    "x": 1230,
+    "y": 5,
+    "width": 230,
+    "height": 100,
+    "backgroundColor": "#d0bfff",
+    "label": {
+      "text": "Fetch that page\npublic at once",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "ellipse",
+    "id": "ask",
+    "x": 1530,
+    "y": 0,
+    "width": 190,
+    "height": 110,
+    "backgroundColor": "#b2f2bb",
+    "label": {
+      "text": "Ask about\nit",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "ignored",
+    "x": 570,
+    "y": 260,
+    "width": 200,
+    "height": 80,
+    "backgroundColor": "#e9ecef",
+    "label": {
+      "text": "Ignored",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "held",
+    "x": 900,
+    "y": 260,
+    "width": 220,
+    "height": 90,
+    "backgroundColor": "#ffc9c9",
+    "label": {
+      "text": "Restricted\nuntil approved",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "n1",
+    "x": 200,
+    "y": 55,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        70,
+        0
+      ]
+    ],
+    "start": {
+      "id": "sent"
+    },
+    "end": {
+      "id": "sync"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "n2",
+    "x": 480,
+    "y": 55,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        70,
+        0
+      ]
+    ],
+    "start": {
+      "id": "sync"
+    },
+    "end": {
+      "id": "school"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "n3",
+    "x": 790,
+    "y": 55,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        100,
+        0
+      ]
+    ],
+    "start": {
+      "id": "school"
+    },
+    "end": {
+      "id": "portal"
+    }
+  },
+  {
+    "type": "text",
+    "id": "n3-label",
+    "x": 826.5,
+    "y": 25,
+    "text": "yes",
+    "fontSize": 18,
+    "strokeColor": "#495057"
+  },
+  {
+    "type": "arrow",
+    "id": "n4",
+    "x": 1130,
+    "y": 55,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        100,
+        0
+      ]
+    ],
+    "start": {
+      "id": "portal"
+    },
+    "end": {
+      "id": "fetch"
+    }
+  },
+  {
+    "type": "text",
+    "id": "n4-label",
+    "x": 1166.5,
+    "y": 25,
+    "text": "yes",
+    "fontSize": 18,
+    "strokeColor": "#495057"
+  },
+  {
+    "type": "arrow",
+    "id": "n5",
+    "x": 1460,
+    "y": 55,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        70,
+        0
+      ]
+    ],
+    "start": {
+      "id": "fetch"
+    },
+    "end": {
+      "id": "ask"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "n6",
+    "x": 670,
+    "y": 135,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        125
+      ]
+    ],
+    "start": {
+      "id": "school"
+    },
+    "end": {
+      "id": "ignored"
+    }
+  },
+  {
+    "type": "text",
+    "id": "n6-label",
+    "x": 680,
+    "y": 185.5,
+    "text": "no",
+    "fontSize": 18,
+    "strokeColor": "#495057"
+  },
+  {
+    "type": "arrow",
+    "id": "n7",
+    "x": 1010,
+    "y": 135,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        125
+      ]
+    ],
+    "start": {
+      "id": "portal"
+    },
+    "end": {
+      "id": "held"
+    }
+  },
+  {
+    "type": "text",
+    "id": "n7-label",
+    "x": 1020,
+    "y": 185.5,
+    "text": "no",
+    "fontSize": 18,
+    "strokeColor": "#495057"
+  }
+]

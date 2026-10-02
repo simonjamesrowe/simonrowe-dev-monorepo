@@ -78,10 +78,9 @@ public class GmailClient {
     if (accessToken != null && Instant.now().isBefore(accessTokenExpiry)) {
       return accessToken;
     }
-    final String form = "client_id=" + enc(credentials.clientId())
-        + "&client_secret=" + enc(credentials.clientSecret())
-        + "&refresh_token=" + enc(credentials.refreshToken())
-        + "&grant_type=refresh_token";
+    final String form = "client_id=%s&client_secret=%s&refresh_token=%s&grant_type=refresh_token"
+        .formatted(enc(credentials.clientId()), enc(credentials.clientSecret()),
+            enc(credentials.refreshToken()));
     try {
       final HttpRequest request = HttpRequest.newBuilder(URI.create(TOKEN_ENDPOINT))
           .header("Content-Type", "application/x-www-form-urlencoded")
@@ -91,9 +90,9 @@ public class GmailClient {
       final HttpResponse<String> response =
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() != 200) {
-        throw new GmailAuthException(
-            "Refresh grant failed with HTTP " + response.statusCode()
-                + " - the token may have been revoked (a Google password change does this)");
+        throw new GmailAuthException("""
+            Refresh grant failed with HTTP %s - the token may have been revoked \
+            (a Google password change does this)""".formatted(response.statusCode()));
       }
       final JsonNode body = objectMapper.readTree(response.body());
       accessToken = body.path("access_token").asString();
@@ -121,9 +120,9 @@ public class GmailClient {
     final List<String> ids = new ArrayList<>();
     String pageToken = null;
     for (int page = 0; page < MAX_PAGES; page++) {
-      final String url = BASE + "/messages?maxResults=" + PAGE_SIZE
-          + "&q=" + enc(query)
-          + (pageToken == null ? "" : "&pageToken=" + enc(pageToken));
+      final String pageParam = pageToken == null ? "" : "&pageToken=" + enc(pageToken);
+      final String url = "%s/messages?maxResults=%s&q=%s%s"
+          .formatted(BASE, PAGE_SIZE, enc(query), pageParam);
       final Optional<JsonNode> body = get(url);
       if (body.isEmpty()) {
         break;
@@ -191,8 +190,8 @@ public class GmailClient {
       final HttpResponse<String> response =
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() == 401 || response.statusCode() == 403) {
-        throw new GmailAuthException("Gmail rejected the credential with HTTP "
-            + response.statusCode());
+        throw new GmailAuthException(
+            "Gmail rejected the credential with HTTP " + response.statusCode());
       }
       if (response.statusCode() != 200) {
         LOG.debug("Gmail returned {} for {}", response.statusCode(), url);

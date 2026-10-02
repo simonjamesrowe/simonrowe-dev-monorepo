@@ -43,8 +43,9 @@ public final class Fingerprint {
     }
     if (keyParts == null || keyParts.isEmpty()) {
       throw new IllegalArgumentException(
-          "at least one of the key parts is required, or every finding would share "
-              + "one fingerprint");
+          """
+          at least one of the key parts is required, or every finding would share \
+          one fingerprint""");
     }
     String canonical = VERSION + ":" + producer + ":" + String.join(SEPARATOR, keyParts);
     try {

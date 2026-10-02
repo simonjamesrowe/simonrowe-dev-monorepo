@@ -54,8 +54,9 @@ public class TourStepSeeder implements ApplicationRunner {
             "default-home-chat",
             "Ask Simon anything",
             ".tour-home-chat",
-            "Ask about a platform decision, leadership challenge, or career chapter. "
-                + "Answers are grounded in the work across this site.",
+            """
+            Ask about a platform decision, leadership challenge, or career chapter. \
+            Answers are grounded in the work across this site.""",
             "bottom",
             1,
             "/",
@@ -66,8 +67,9 @@ public class TourStepSeeder implements ApplicationRunner {
             "default-site-search",
             "Search the evidence",
             ".tour-search",
-            "Search posts, projects, and appearances — then turn a result into a "
-                + "deeper question.",
+            """
+            Search posts, projects, and appearances — then turn a result into a \
+            deeper question.""",
             "bottom",
             2,
             "/",
@@ -78,8 +80,9 @@ public class TourStepSeeder implements ApplicationRunner {
             "default-home-currently",
             "The work happening now",
             ".tour-currently",
-            "Start with Simon's current remit, the teams he leads, and the transformation "
-                + "underway.",
+            """
+            Start with Simon's current remit, the teams he leads, and the transformation \
+            underway.""",
             "bottom",
             3,
             "/",
@@ -90,8 +93,9 @@ public class TourStepSeeder implements ApplicationRunner {
             "default-home-writing",
             "Writing from the workbench",
             ".tour-featured-writing",
-            "Explore practical thinking on AI-native delivery, platform engineering, "
-                + "and technical leadership.",
+            """
+            Explore practical thinking on AI-native delivery, platform engineering, \
+            and technical leadership.""",
             "top",
             4,
             "/",
@@ -146,8 +150,9 @@ public class TourStepSeeder implements ApplicationRunner {
             "default-mcp-tools",
             "Plug your own agent in",
             ".tour-mcp-tools",
-            "This site is also a Model Context Protocol server. These are the tools it "
-                + "exposes — run them here, or connect your own agent and call them directly.",
+            """
+            This site is also a Model Context Protocol server. These are the tools it \
+            exposes — run them here, or connect your own agent and call them directly.""",
             "top",
             9,
             "/mcp",
@@ -158,8 +163,9 @@ public class TourStepSeeder implements ApplicationRunner {
             "default-platform-status",
             "A portfolio that runs in public",
             ".tour-status-running",
-            "Finish with the live platform view: what is running, what shipped, and the "
-                + "build serving this site right now.",
+            """
+            Finish with the live platform view: what is running, what shipped, and the \
+            build serving this site right now.""",
             "bottom",
             10,
             "/status",

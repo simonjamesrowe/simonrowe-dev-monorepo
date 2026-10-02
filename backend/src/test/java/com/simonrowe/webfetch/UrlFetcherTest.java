@@ -55,8 +55,9 @@ class UrlFetcherTest {
   @Test
   void extractsTitleAndTruncatesText() {
     final org.jsoup.nodes.Document doc =
-        org.jsoup.Jsoup.parse("<html><head><title>Head of Engineering</title></head>"
-            + "<body><h1>Role</h1><p>abcdefghijklmnop</p></body></html>");
+        org.jsoup.Jsoup.parse("""
+            <html><head><title>Head of Engineering</title></head>\
+            <body><h1>Role</h1><p>abcdefghijklmnop</p></body></html>""");
 
     final WebPageContent content = UrlFetcher.extract(doc, "https://example.com", 10);
 
@@ -90,8 +91,9 @@ class UrlFetcherTest {
     when(res.statusCode()).thenReturn(200);
     when(res.contentType()).thenReturn("text/html;charset=utf-8");
     when(res.parse()).thenReturn(Jsoup.parse(
-        "<html><head><title>Head of Eng</title></head>"
-            + "<body><p>abcdefghijklmnop</p></body></html>"));
+        """
+        <html><head><title>Head of Eng</title></head>\
+        <body><p>abcdefghijklmnop</p></body></html>"""));
 
     final WebPageContent content = UrlFetcher.readResponse(res, "https://example.com", 10);
 

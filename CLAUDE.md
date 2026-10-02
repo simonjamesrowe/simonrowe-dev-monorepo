@@ -47,6 +47,7 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 ## Code Style
 
 - Java: Google Java Style Guide, enforced via Checkstyle
+- Java multi-line strings are text blocks (`"""`), with `.formatted(...)` for values, never `+` concatenation across lines. Checkstyle's `NoLiteralConcatenationAcrossLines` rule fails the build on the old form.
 - TypeScript: Standard conventions, ESLint
 - CSS: BEM naming, plain CSS with custom properties
 - Keep null checks on third-party library return values even when static analysis flags them unreachable — library behavior varies across versions and the check is cheaper than an NPE from a dependency upgrade.
@@ -60,6 +61,36 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 - When adding dry-run/preview modes to multiple operations, decide independently what each should expose in preview rather than mirroring another operation's guard conditions — e.g. filing might show nothing useful, but sweeping should show what would be resolved
 - Destructive Mongock change units (ones that remove rows) need an integration test proving they actually run at boot, correct survivor-selection logic, and a comment documenting why the deleted data is safely re-derivable — path classifiers won't flag these for review, so verify by hand
+
+### CMS content and media
+
+- **Seed copy with Mongock, then the CMS owns it.** A change unit may write a page's first copy,
+  but only while the row is in the state an earlier unit left it in (V049: still `COMING_SOON`),
+  so a re-run or a late deploy can never overwrite an edit. Keep the copy in
+  `backend/src/main/resources/seed/` as JSON and markdown files, not Java strings.
+- **Content media goes in the media library, never in `frontend/public/`.** A file in the bundle
+  cannot be listed, replaced or backed up from the CMS. Import seed media with
+  `MediaService.importFile(bytes, name, type, legacyId)`, keyed `seed:<area>/<file>`. It returns
+  the existing asset for a key it has seen, and the unique partial index `idx_media_legacy_id`
+  (strings only, so assets without a key never collide) is what makes that safe to re-run.
+  `RestoreService` re-creates the index after a restore. `frontend/public/` is for the app's own
+  chrome, such as the share card.
+- **The library takes images, `video/mp4` and `text/vtt`.** Only JPEG, PNG and GIF get resized
+  variants: the JVM has no WebP ImageIO reader, so WebP is stored as an original (asking for
+  variants used to 500 the upload). `.vtt` is served as `text/vtt` by a servlet `MimeMappings`
+  customiser in `WebConfig`, because Boot 4 has no `server.mime-mappings` property and browsers
+  ignore a captions track sent as `application/octet-stream`.
+- **Pick media with `MediaPicker` (`kind` image, video or captions)**, which limits both upload
+  and `MediaLibrary` to that kind. `ImagePicker` is the image case of it.
+- **Long-form admin text uses `RichMarkdownEditor`**, never a bare textarea (it had no CSS and
+  looked broken) and never a second MDXEditor setup. Two things it does that a new MDXEditor must
+  copy: it ignores the `onChange` MDXEditor fires on mount with `initialMarkdownNormalize` set
+  (passing it on marks an untouched page as changed, so leaving it prompts "unsaved changes",
+  and rewrites the stored copy), and it sets `toMarkdownOptions={{ bullet: '-' }}` so one edit
+  does not turn every `-` list into `*`. It also takes the site's dark theme. The blog editor's
+  own MDXEditor still has neither fix nor the dark theme.
+- **Inline field errors drop the field path** the server puts at the start of every message
+  (`besideField` in `portfolioEditorText.ts`). The banner keeps the full text.
 
 ## Production Deployment
 
@@ -242,6 +273,44 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- portfolio-project-pages: **A portfolio project can now have a real page, and Term Time is the
+  first.** `PortfolioProject` gains optional `headline`, `summary`, `statement` (label, text,
+  points), `exampleQuestions`, `highlights`, `demo` (video, captions, poster, chapters) and `pages`
+  (sub-pages at `/portfolio/{slug}/{page}`, markdown bodies), all edited in `/admin/portfolio`.
+  `V049SeedTermTimeProjectPage` moves Term Time to Beta and seeds its copy from
+  `backend/src/main/resources/seed/portfolio/term-time/`. Load-bearing bits:
+  - **V049 applies only while the row is still `COMING_SOON`**, so it can never overwrite a CMS
+    edit, and its rollback matches on the seeded headline.
+  - **Its images, diagrams and video live in the media library**, imported by V049 through
+    `MediaService.importFile` from `seed/portfolio/term-time/media/`, and the copy names them as
+    `{{media:<file>}}` tokens that V049 swaps for library paths. An earlier cut shipped them in
+    `frontend/public/media/`, which the CMS could not see or replace. See "CMS content and media"
+    under Key Design Decisions.
+  - **A Coming soon project withholds every page field**, exactly as it already withheld the
+    description, image and link, and empty lists are omitted from the public JSON.
+  - **`reorder` goes through `PortfolioProject.withDisplayOrder`**: the old positional
+    constructor call would have silently dropped every field added after it was written.
+  - **Description and sub-page bodies use `RichMarkdownEditor`**, MDXEditor with the blog
+    editor's plugins plus `tablePlugin`, since the pages are tables as often as prose. The
+    questions and chapters are held as text and converted on save, so typing a new line is not
+    undone mid-keystroke.
+  - **Media pickers filter on the server.** `GET /api/admin/media` takes `mimeType` repeatedly
+    plus `search`, and `MediaLibrary` sends both. It used to fetch page 1 of everything and
+    filter that page in the browser, so the Video picker showed an empty library while the one
+    video sat forty pages in, and search only searched 20 thumbnails.
+  - **One route, `/portfolio/:slug/:pageSlug?`**, so switching tabs keeps the loaded project
+    instead of remounting and refetching.
+  - **Term Time takes `?q=`** and asks it once, with the visitor's saved year groups, then strips
+    it from the address so a reload does not ask again. The send is deferred a tick because a
+    StrictMode double mount's `disconnect()` discards a held message.
+  - **A project page wears the site palette** (`--primary`, the violet AI accent, the site
+    surfaces), never the product's own colours. `accentHue` stays on the card silhouette only.
+  - **The demo's captions are offered, not on by default**: over a screen recording they cover
+    what is being shown. It was recorded at `deviceScaleFactor` 1 because at 2 the
+    `demo-record` renderer's diagram focus overlay drifts off the boxes it highlights.
+  - Diagram sources are Excalidraw skeletons in `docs/diagrams/term-time/` (`make-diagrams.mjs`
+    writes them), rendered with the `demo-record` skill's renderer so the website and the demo
+    share one source.
 - termtime-document-edit: **Term Time documents can be edited inline** at
   `/admin/school/documents` (title, text, year groups) via `PUT /api/admin/school/documents/{id}`
   and `SchoolDocumentEditor`. The edit is **in place**: a note's id hashes its text, so

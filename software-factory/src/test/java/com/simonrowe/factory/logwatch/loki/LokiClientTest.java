@@ -171,10 +171,10 @@ class LokiClientTest {
 
     client().linesIn(FROM, TO, 100);
 
-    String expected =
-        "Basic "
-            + java.util.Base64.getEncoder()
-                .encodeToString("1539009:test-key".getBytes(StandardCharsets.UTF_8));
+    String encoded =
+        java.util.Base64.getEncoder()
+            .encodeToString("1539009:test-key".getBytes(StandardCharsets.UTF_8));
+    String expected = "Basic " + encoded;
     assertThat(SEEN_AUTH.get("/loki/api/v1/query_range")).isEqualTo(expected);
   }
 

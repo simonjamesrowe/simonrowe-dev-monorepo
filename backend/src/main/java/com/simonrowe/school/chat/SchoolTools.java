@@ -123,8 +123,9 @@ public class SchoolTools {
    * @param academicYear e.g. {@code 2026/27}, or blank for the current year
    * @return the term boundaries and half terms, or a plain statement that none are known
    */
-  @Tool(description = "Get the term start and end dates and half term breaks for the school. "
-      + "Use this for any question about terms, holidays or half term.")
+  @Tool(description = """
+      Get the term start and end dates and half term breaks for the school. \
+      Use this for any question about terms, holidays or half term.""")
   public String getTermDates(
       @ToolParam(description = "Academic year like 2026/27. Leave blank for the current year.",
           required = false) final String academicYear) {
@@ -163,9 +164,10 @@ public class SchoolTools {
    * @param to ISO date, inclusive
    * @return the events in that window
    */
-  @Tool(description = "Get school events between two dates, together with the newsletters, "
-      + "letters and PDFs that describe them. Use for 'what is on this week', "
-      + "'what is happening next month' and similar.")
+  @Tool(description = """
+      Get school events between two dates, together with the newsletters, \
+      letters and PDFs that describe them. Use for 'what is on this week', \
+      'what is happening next month' and similar.""")
   public String getEventsBetween(
       @ToolParam(description = "Start date, ISO format yyyy-MM-dd") final String from,
       @ToolParam(description = "End date, ISO format yyyy-MM-dd") final String to) {
@@ -181,9 +183,12 @@ public class SchoolTools {
       final List<SchoolEvent> events = queries.eventsBetween(start, end, yearGroups, audience);
       final String dated = render(events, "Nothing is recorded for that period.");
       final String context = supportingProse(events, start, end);
-      return context.isEmpty()
-          ? dated
-          : dated + "\n\n" + "Supporting detail from school communications:\n\n" + context;
+      return context.isEmpty() ? dated : """
+          %s
+
+          Supporting detail from school communications:
+
+          %s""".formatted(dated, context);
     });
   }
 
@@ -245,12 +250,13 @@ public class SchoolTools {
    * @param to ISO date, inclusive
    * @return an index of what was published, then as many full texts as the budget allows
    */
-  @Tool(description = "List what the school actually sent or published between two dates - "
-      + "newsletters, letters, emails, website pages and PDFs - newest first, with their full "
-      + "text. Use this for 'was there a newsletter last week', 'what was in the latest "
-      + "newsletter', 'what is the latest news' and any question about a named date or a "
-      + "recent period. Prefer it over searching when the question is about WHEN something was "
-      + "sent rather than WHAT it said.")
+  @Tool(description = """
+      List what the school actually sent or published between two dates - \
+      newsletters, letters, emails, website pages and PDFs - newest first, with their full \
+      text. Use this for 'was there a newsletter last week', 'what was in the latest \
+      newsletter', 'what is the latest news' and any question about a named date or a \
+      recent period. Prefer it over searching when the question is about WHEN something was \
+      sent rather than WHAT it said.""")
   public String getRecentCommunications(
       @ToolParam(description = "Start date, ISO format yyyy-MM-dd") final String from,
       @ToolParam(description = "End date, ISO format yyyy-MM-dd") final String to) {
@@ -380,8 +386,9 @@ public class SchoolTools {
    * @param query what to look for
    * @return matching passages with their sources, or a statement that nothing was found
    */
-  @Tool(description = "Search school newsletters, letters and website pages for information that "
-      + "is not a date - school lunches, uniform, PE days, policies and similar.")
+  @Tool(description = """
+      Search school newsletters, letters and website pages for information that \
+      is not a date - school lunches, uniform, PE days, policies and similar.""")
   public String searchSchoolInformation(
       @ToolParam(description = "What to look for") final String query) {
     return tracked(SEARCH_LABEL, () -> {
@@ -431,8 +438,9 @@ public class SchoolTools {
    *
    * @return today and the academic year
    */
-  @Tool(description = "Get today's date and the current academic year. Call this before doing "
-      + "any date arithmetic.")
+  @Tool(description = """
+      Get today's date and the current academic year. Call this before doing \
+      any date arithmetic.""")
   public String getToday() {
     return tracked(TODAY_LABEL, () -> "Today is %s. The current academic year is %s."
         .formatted(queries.today(), queries.currentAcademicYear()));

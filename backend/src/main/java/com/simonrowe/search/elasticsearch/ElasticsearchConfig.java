@@ -102,9 +102,11 @@ public class ElasticsearchConfig {
           .waitForStatus(HealthStatus.Yellow)
           .timeout(Time.of(t -> t.time("30s"))));
       if (health.timedOut() || health.status() == HealthStatus.Red) {
-        LOG.error("Vector index {} is RED at startup — RAG-backed chat will fail until "
-            + "the index is repaired (delete + reembed). Cluster health: status={}, "
-            + "active_primary_shards={}, unassigned_shards={}",
+        LOG.error("""
+            Vector index {} is RED at startup — RAG-backed chat will fail until \
+            the index is repaired (delete + reembed). Cluster health: status={}, \
+            active_primary_shards={}, unassigned_shards={}\
+            """,
             CONTENT_EMBEDDINGS_INDEX, health.status(),
             health.activePrimaryShards(), health.unassignedShards());
       } else {

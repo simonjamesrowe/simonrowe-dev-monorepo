@@ -53,11 +53,12 @@ class NoHostProcessLaunchTest {
 
     assertThat(offenders)
         .as(
-            "The backend must not launch host processes. Shelling out is what forced this "
-                + "container to hold /var/run/docker.sock - host-root capability behind the "
-                + "public API - along with the compose file and .env. Deployment belongs in the "
-                + "`deployer` container, which has no ingress. See Constitution Principle II and "
-                + "specs/036-auto-deploy-on-merge/.")
+            """
+            The backend must not launch host processes. Shelling out is what forced this \
+            container to hold /var/run/docker.sock - host-root capability behind the \
+            public API - along with the compose file and .env. Deployment belongs in the \
+            `deployer` container, which has no ingress. See Constitution Principle II and \
+            specs/036-auto-deploy-on-merge/.""")
         .isEmpty();
   }
 

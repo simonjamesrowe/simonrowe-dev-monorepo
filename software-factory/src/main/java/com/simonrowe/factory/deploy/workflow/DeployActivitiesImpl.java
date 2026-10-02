@@ -332,16 +332,19 @@ public class DeployActivitiesImpl implements DeployActivities {
       case APPLIED -> "fast-forwarded the deploy directory to the deployed commit";
       case ALREADY_CURRENT -> "the deploy directory was already at the deployed commit";
       case DIRTY_TREE ->
-          "a tracked file in the deploy directory is modified, so nothing was moved; "
-              + "deploying images only";
+          """
+          a tracked file in the deploy directory is modified, so nothing was moved; \
+          deploying images only""";
       case NOT_AN_ANCESTOR ->
           "the target commit is not on origin/main, so nothing was moved";
       case HELD_BACK ->
-          "a configuration change affects a service outside the recreate allowlist, so nothing "
-              + "was moved; deploying images only";
+          """
+          a configuration change affects a service outside the recreate allowlist, so nothing \
+          was moved; deploying images only""";
       case MISSING_VARIABLE ->
-          "the new compose file needs an environment variable the host does not define, so "
-              + "nothing was moved; deploying images only";
+          """
+          the new compose file needs an environment variable the host does not define, so \
+          nothing was moved; deploying images only""";
       case DISABLED -> "configuration sync is disabled; images only";
       case FAILED -> lastLine(execution.output());
     };
@@ -381,10 +384,11 @@ public class DeployActivitiesImpl implements DeployActivities {
         content.length() <= MAX_EVIDENCE_BYTES
             ? content
             // The tail: the reason something failed is at the end of its output.
-            : "[truncated to the last "
-                + MAX_EVIDENCE_BYTES
-                + " characters]\n"
-                + content.substring(content.length() - MAX_EVIDENCE_BYTES);
+            : """
+                [truncated to the last %s characters]
+                %s"""
+                .formatted(
+                    MAX_EVIDENCE_BYTES, content.substring(content.length() - MAX_EVIDENCE_BYTES));
     Files.writeString(path, bounded);
   }
 

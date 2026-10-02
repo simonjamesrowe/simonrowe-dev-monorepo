@@ -1,0 +1,604 @@
+[
+  {
+    "type": "text",
+    "id": "title",
+    "x": 470,
+    "y": -110,
+    "text": "Inside Term Time",
+    "fontSize": 36
+  },
+  {
+    "type": "rectangle",
+    "id": "ingest-region",
+    "x": 0,
+    "y": 0,
+    "width": 580,
+    "height": 700,
+    "strokeStyle": "dashed",
+    "strokeColor": "#868e96",
+    "strokeWidth": 1,
+    "roughness": 1
+  },
+  {
+    "type": "text",
+    "id": "ingest-region-label",
+    "x": 20,
+    "y": 14,
+    "text": "Ingest, on a schedule",
+    "fontSize": 22,
+    "strokeColor": "#495057"
+  },
+  {
+    "type": "rectangle",
+    "id": "request-region",
+    "x": 640,
+    "y": 0,
+    "width": 600,
+    "height": 700,
+    "strokeStyle": "dashed",
+    "strokeColor": "#868e96",
+    "strokeWidth": 1,
+    "roughness": 1
+  },
+  {
+    "type": "text",
+    "id": "request-region-label",
+    "x": 660,
+    "y": 14,
+    "text": "A question",
+    "fontSize": 22,
+    "strokeColor": "#495057"
+  },
+  {
+    "type": "rectangle",
+    "id": "scheduler",
+    "x": 30,
+    "y": 70,
+    "width": 400,
+    "height": 80,
+    "backgroundColor": "#fff3bf",
+    "label": {
+      "text": "Scheduled jobs in the backend",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "crawler",
+    "x": 15,
+    "y": 220,
+    "width": 128,
+    "height": 90,
+    "backgroundColor": "#a5d8ff",
+    "label": {
+      "text": "Website\ncrawler",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "calendar",
+    "x": 158,
+    "y": 220,
+    "width": 128,
+    "height": 90,
+    "backgroundColor": "#a5d8ff",
+    "label": {
+      "text": "Calendar\nfeed",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "gmail",
+    "x": 301,
+    "y": 220,
+    "width": 128,
+    "height": 90,
+    "backgroundColor": "#a5d8ff",
+    "label": {
+      "text": "Gmail\nsync",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "notes",
+    "x": 444,
+    "y": 220,
+    "width": 122,
+    "height": 90,
+    "backgroundColor": "#ffd8a8",
+    "label": {
+      "text": "Admin\nnotes",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "extract",
+    "x": 110,
+    "y": 390,
+    "width": 360,
+    "height": 100,
+    "backgroundColor": "#d0bfff",
+    "label": {
+      "text": "Event extractor and\ntier classifier, Embabel",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "mongo",
+    "x": 30,
+    "y": 560,
+    "width": 230,
+    "height": 100,
+    "backgroundColor": "#c3fae8",
+    "label": {
+      "text": "MongoDB\ndocuments, events",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "es",
+    "x": 320,
+    "y": 560,
+    "width": 230,
+    "height": 100,
+    "backgroundColor": "#c3fae8",
+    "label": {
+      "text": "Elasticsearch\nschool vectors",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "ellipse",
+    "id": "page",
+    "x": 790,
+    "y": 50,
+    "width": 300,
+    "height": 90,
+    "backgroundColor": "#e9ecef",
+    "label": {
+      "text": "The Term Time page",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "stomp",
+    "x": 800,
+    "y": 180,
+    "width": 280,
+    "height": 70,
+    "backgroundColor": "#a5d8ff",
+    "label": {
+      "text": "STOMP over WebSocket",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "guard",
+    "x": 800,
+    "y": 290,
+    "width": 280,
+    "height": 70,
+    "backgroundColor": "#ffc9c9",
+    "label": {
+      "text": "Topic guardrail",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "chat",
+    "x": 800,
+    "y": 400,
+    "width": 280,
+    "height": 90,
+    "backgroundColor": "#b2f2bb",
+    "label": {
+      "text": "Chat service\nits own ChatClient",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "tools",
+    "x": 670,
+    "y": 560,
+    "width": 270,
+    "height": 100,
+    "backgroundColor": "#d0bfff",
+    "label": {
+      "text": "Tools: term dates,\nevents, search",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "langfuse",
+    "x": 990,
+    "y": 560,
+    "width": 220,
+    "height": 100,
+    "backgroundColor": "#eebefa",
+    "label": {
+      "text": "Langfuse\na trace per turn",
+      "fontSize": 20
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "r1",
+    "x": 79,
+    "y": 150,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        70
+      ]
+    ],
+    "start": {
+      "id": "scheduler"
+    },
+    "end": {
+      "id": "crawler"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "r2",
+    "x": 222,
+    "y": 150,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        70
+      ]
+    ],
+    "start": {
+      "id": "scheduler"
+    },
+    "end": {
+      "id": "calendar"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "r3",
+    "x": 365,
+    "y": 150,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        70
+      ]
+    ],
+    "start": {
+      "id": "scheduler"
+    },
+    "end": {
+      "id": "gmail"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "r4",
+    "x": 79,
+    "y": 310,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        81,
+        80
+      ]
+    ],
+    "start": {
+      "id": "crawler"
+    },
+    "end": {
+      "id": "extract"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "r5",
+    "x": 222,
+    "y": 310,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        28,
+        80
+      ]
+    ],
+    "start": {
+      "id": "calendar"
+    },
+    "end": {
+      "id": "extract"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "r6g",
+    "x": 365,
+    "y": 310,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        -25,
+        80
+      ]
+    ],
+    "start": {
+      "id": "gmail"
+    },
+    "end": {
+      "id": "extract"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "r7n",
+    "x": 505,
+    "y": 310,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        -75,
+        80
+      ]
+    ],
+    "start": {
+      "id": "notes"
+    },
+    "end": {
+      "id": "extract"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "r6",
+    "x": 200,
+    "y": 490,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        -55,
+        70
+      ]
+    ],
+    "start": {
+      "id": "extract"
+    },
+    "end": {
+      "id": "mongo"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "r7",
+    "x": 380,
+    "y": 490,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        55,
+        70
+      ]
+    ],
+    "start": {
+      "id": "extract"
+    },
+    "end": {
+      "id": "es"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "q1",
+    "x": 940,
+    "y": 140,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        40
+      ]
+    ],
+    "start": {
+      "id": "page"
+    },
+    "end": {
+      "id": "stomp"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "q2",
+    "x": 940,
+    "y": 250,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        40
+      ]
+    ],
+    "start": {
+      "id": "stomp"
+    },
+    "end": {
+      "id": "guard"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "q3",
+    "x": 940,
+    "y": 360,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        40
+      ]
+    ],
+    "start": {
+      "id": "guard"
+    },
+    "end": {
+      "id": "chat"
+    }
+  },
+  {
+    "type": "text",
+    "id": "q3-label",
+    "x": 950,
+    "y": 368,
+    "text": "on topic",
+    "fontSize": 18,
+    "strokeColor": "#495057"
+  },
+  {
+    "type": "arrow",
+    "id": "q4",
+    "x": 880,
+    "y": 490,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        -75,
+        70
+      ]
+    ],
+    "start": {
+      "id": "chat"
+    },
+    "end": {
+      "id": "tools"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "q5",
+    "x": 1000,
+    "y": 490,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        100,
+        70
+      ]
+    ],
+    "start": {
+      "id": "chat"
+    },
+    "end": {
+      "id": "langfuse"
+    },
+    "strokeStyle": "dashed"
+  },
+  {
+    "type": "arrow",
+    "id": "q6",
+    "x": 670,
+    "y": 610,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        -120,
+        0
+      ]
+    ],
+    "start": {
+      "id": "tools"
+    },
+    "end": {
+      "id": "es"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "q7",
+    "x": 700,
+    "y": 660,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        50
+      ],
+      [
+        -555,
+        50
+      ],
+      [
+        -555,
+        0
+      ]
+    ],
+    "start": {
+      "id": "tools"
+    },
+    "end": {
+      "id": "mongo"
+    }
+  }
+]

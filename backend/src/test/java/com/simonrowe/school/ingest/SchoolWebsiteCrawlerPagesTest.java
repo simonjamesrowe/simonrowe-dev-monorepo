@@ -54,9 +54,8 @@ class SchoolWebsiteCrawlerPagesTest {
   }
 
   private static String sitemapOf(final List<String> urls) {
-    return "<urlset>"
-        + urls.stream().map(u -> "<loc>" + u + "</loc>").reduce("", String::concat)
-        + "</urlset>";
+    return "<urlset>%s</urlset>".formatted(
+        urls.stream().map(u -> "<loc>" + u + "</loc>").reduce("", String::concat));
   }
 
   @Test
@@ -164,9 +163,11 @@ class SchoolWebsiteCrawlerPagesTest {
     // second time under a second id and embeds it twice.
     final String ugly = BASE + "/page/?title=Home+Learning&pid=158";
     final StubCrawler crawler = new StubCrawler(propertiesWith(BASE, null), sitemapOf(List.of()))
-        .serving(ugly, "<html><head><title>Home Learning</title>"
-            + "<link rel=\"canonical\" href=\"" + BASE + "/year-six-home-learning\">"
-            + "</head><body><main>Spellings are given out on a Monday.</main></body></html>");
+        .serving(ugly, """
+            <html><head><title>Home Learning</title>\
+            <link rel="canonical" href="%s/year-six-home-learning">\
+            </head><body><main>Spellings are given out on a Monday.</main></body>\
+            </html>""".formatted(BASE));
 
     final SchoolWebsiteCrawler.CrawledPage page = crawler.fetchPage(ugly);
 
@@ -192,13 +193,14 @@ class SchoolWebsiteCrawlerPagesTest {
     // real /year-six, 68 same-host links in the raw markup become 12 once they are gone.
     // Without this, one hop from any page is a crawl of the whole site.
     final StubCrawler crawler = new StubCrawler(propertiesWith(BASE, null), sitemapOf(List.of()))
-        .serving(BASE + "/year-six", "<html><body>"
-            + "<header><a href=\"/school-uniform\">Uniform</a></header>"
-            + "<nav><a href=\"/admissions\">Admissions</a></nav>"
-            + "<main><a href=\"/year-six-home-learning\">Home Learning</a>"
-            + "<a href=\"https://www.natgeokids.com/greece\">Ancient Greece</a></main>"
-            + "<footer><a href=\"/privacy-cookies\">Privacy</a></footer>"
-            + "</body></html>");
+        .serving(BASE + "/year-six", """
+            <html><body>\
+            <header><a href="/school-uniform">Uniform</a></header>\
+            <nav><a href="/admissions">Admissions</a></nav>\
+            <main><a href="/year-six-home-learning">Home Learning</a>\
+            <a href="https://www.natgeokids.com/greece">Ancient Greece</a></main>\
+            <footer><a href="/privacy-cookies">Privacy</a></footer>\
+            </body></html>""");
 
     assertThat(crawler.fetchPage(BASE + "/year-six").links()).containsExactly(
         BASE + "/year-six-home-learning", "https://www.natgeokids.com/greece");
@@ -208,11 +210,12 @@ class SchoolWebsiteCrawlerPagesTest {
   @DisplayName("relative links are resolved to absolute, and unresolvable ones are dropped")
   void linksAreAbsolute() {
     final StubCrawler crawler = new StubCrawler(propertiesWith(BASE, null), sitemapOf(List.of()))
-        .serving(BASE + "/year-six/index", "<html><body><main>"
-            + "<a href=\"../year-five\">Five</a>"
-            + "<a href=\"mailto:office@example.test\">Mail</a>"
-            + "<a href=\"#top\">Top</a>"
-            + "</main></body></html>");
+        .serving(BASE + "/year-six/index", """
+            <html><body><main>\
+            <a href="../year-five">Five</a>\
+            <a href="mailto:office@example.test">Mail</a>\
+            <a href="#top">Top</a>\
+            </main></body></html>""");
 
     assertThat(crawler.fetchPage(BASE + "/year-six/index").links())
         .containsExactly(BASE + "/year-five");
@@ -227,9 +230,10 @@ class SchoolWebsiteCrawlerPagesTest {
     // https://. So an unchecked canonical is a way for page content to put a link to another
     // host into an answer written in the school's voice. Raised by the reviewer on #165.
     final StubCrawler crawler = new StubCrawler(propertiesWith(BASE, null), sitemapOf(List.of()))
-        .serving(BASE + "/year-six", "<html><head>"
-            + "<link rel=\"canonical\" href=\"https://evil.example.com/year-six\">"
-            + "</head><body><main>Year 6</main></body></html>");
+        .serving(BASE + "/year-six", """
+            <html><head>\
+            <link rel="canonical" href="https://evil.example.com/year-six">\
+            </head><body><main>Year 6</main></body></html>""");
 
     assertThat(crawler.fetchPage(BASE + "/year-six").canonicalUrl())
         .isEqualTo(BASE + "/year-six");
@@ -241,9 +245,10 @@ class SchoolWebsiteCrawlerPagesTest {
     // The check is host-only, deliberately: pointing at a different page on the school's own
     // site is exactly what the CMS legitimately does, and is the whole reason to read it.
     final StubCrawler crawler = new StubCrawler(propertiesWith(BASE, null), sitemapOf(List.of()))
-        .serving(BASE + "/page/?title=Home+Learning&pid=158", "<html><head>"
-            + "<link rel=\"canonical\" href=\"" + BASE + "/year-six-home-learning\">"
-            + "</head><body><main>Spellings</main></body></html>");
+        .serving(BASE + "/page/?title=Home+Learning&pid=158", """
+            <html><head>\
+            <link rel="canonical" href="%s/year-six-home-learning">\
+            </head><body><main>Spellings</main></body></html>""".formatted(BASE));
 
     assertThat(crawler.fetchPage(BASE + "/page/?title=Home+Learning&pid=158").canonicalUrl())
         .isEqualTo(BASE + "/year-six-home-learning");

@@ -45,10 +45,11 @@ public class GoogleDriveConfig {
   @Bean
   public Drive googleDriveClient() {
     if (isBlank(clientId) || isBlank(clientSecret) || isBlank(refreshToken)) {
-      LOG.warn("Google Drive OAuth2 credentials not configured — "
-          + "backup/restore features will be unavailable. "
-          + "Set GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, "
-          + "and GOOGLE_DRIVE_REFRESH_TOKEN.");
+      LOG.warn("""
+          Google Drive OAuth2 credentials not configured — \
+          backup/restore features will be unavailable. \
+          Set GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, \
+          and GOOGLE_DRIVE_REFRESH_TOKEN.""");
       return null;
     }
 

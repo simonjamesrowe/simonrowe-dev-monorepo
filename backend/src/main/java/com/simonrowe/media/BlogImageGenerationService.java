@@ -28,13 +28,14 @@ public class BlogImageGenerationService {
   private static final String IMAGE_QUALITY = "medium";
 
   private static final String PROMPT_TEMPLATE =
-      "A personal editorial hero image for a technical blog. Use a %s visual "
-          + "direction with %s. The image should feel specific to these topics: "
-          + "%s. Prefer practical engineering cues such as notes, architecture "
-          + "sketches, tooling dashboards, event streams, model orchestration, "
-          + "search indexes, or delivery pipelines when relevant. "
-          + "No text, no words, no letters, no logos. "
-          + "Wide cinematic landscape format.";
+      """
+      A personal editorial hero image for a technical blog. Use a %s visual \
+      direction with %s. The image should feel specific to these topics: \
+      %s. Prefer practical engineering cues such as notes, architecture \
+      sketches, tooling dashboards, event streams, model orchestration, \
+      search indexes, or delivery pipelines when relevant. \
+      No text, no words, no letters, no logos. \
+      Wide cinematic landscape format.""";
 
   /** Colour palettes selected deterministically per blog title for variety. */
   private static final String[] COLOR_THEMES = {

@@ -118,13 +118,11 @@ public class AutoMergeGateway {
     try {
       String permission =
           getJson(
-                  "/repos/"
-                      + pullRequest.owner()
-                      + "/"
-                      + pullRequest.repository()
-                      + "/collaborators/"
-                      + URLEncoder.encode(login, StandardCharsets.UTF_8)
-                      + "/permission",
+                  "/repos/%s/%s/collaborators/%s/permission"
+                      .formatted(
+                          pullRequest.owner(),
+                          pullRequest.repository(),
+                          URLEncoder.encode(login, StandardCharsets.UTF_8)),
                   token)
               .path("permission")
               .asText("");
@@ -229,12 +227,8 @@ public class AutoMergeGateway {
   }
 
   private static String pullRequestPath(final PullRequestContext pullRequest) {
-    return "/repos/"
-        + pullRequest.owner()
-        + "/"
-        + pullRequest.repository()
-        + "/pulls/"
-        + pullRequest.pullNumber();
+    return "/repos/%s/%s/pulls/%s"
+        .formatted(pullRequest.owner(), pullRequest.repository(), pullRequest.pullNumber());
   }
 
   private String token(final PullRequestContext pullRequest) {

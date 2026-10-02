@@ -41,9 +41,12 @@ public class ReviewMarkdownRenderer {
    * holds the merge through required conversation resolution.
    */
   private static final String ADVISORY =
-      "\n_Critical findings and reviewer failures turn the `Code Review` check red and block the "
-          + "merge. Other findings block until their conversation is resolved — by fixing them, "
-          + "or by replying with why they are declined and resolving the thread._\n";
+      """
+      
+      _Critical findings and reviewer failures turn the `Code Review` check red and block the \
+      merge. Other findings block until their conversation is resolved — by fixing them, \
+      or by replying with why they are declined and resolving the thread._
+      """;
 
   /**
    * Renders the single comment that carries the whole review outcome.
@@ -120,8 +123,9 @@ public class ReviewMarkdownRenderer {
     return switch (autoMerge.outcome()) {
       case OFF -> null;
       case ARMED ->
-          "**Auto-merge:** armed. GitHub will squash-merge once every required check passes and"
-              + " every conversation is resolved.";
+          """
+          **Auto-merge:** armed. GitHub will squash-merge once every required check passes and\
+           every conversation is resolved.""";
       case ELIGIBLE -> "**Auto-merge:** eligible, not armed (dry run).";
       case INELIGIBLE, ARM_FAILED -> "**Auto-merge:** " + autoMerge.describe() + ".";
     };
@@ -139,26 +143,31 @@ public class ReviewMarkdownRenderer {
   }
 
   public String renderFindingComment(final ReviewFinding finding) {
-    return findingMarker(FindingFingerprint.of(finding))
-        + "\n**"
-        + finding.severity().toJson()
-        + " — "
-        + finding.title()
-        + "**\n\n"
-        + finding.explanation()
-        + "\n\n_Recommendation:_ "
-        + finding.recommendation()
-        + "\n";
+    return """
+        %s
+        **%s — %s**
+
+        %s
+
+        _Recommendation:_ %s
+        """
+        .formatted(
+            findingMarker(FindingFingerprint.of(finding)),
+            finding.severity().toJson(),
+            finding.title(),
+            finding.explanation(),
+            finding.recommendation());
   }
 
   public String renderAck(final String marker, final String headSha) {
-    return marker
-        + "\n"
-        + "## Automated code review\n\n"
-        + "🔄 A review of these changes is **in progress**.\n\n"
-        + "This comment is replaced by the review when it finishes, or by the reason it did not.\n"
-        + reviewedAt(headSha)
-        + ADVISORY;
+    return """
+        %s
+        ## Automated code review
+
+        🔄 A review of these changes is **in progress**.
+
+        This comment is replaced by the review when it finishes, or by the reason it did not.
+        %s%s""".formatted(marker, reviewedAt(headSha), ADVISORY);
   }
 
   public String renderFailure(
@@ -166,19 +175,24 @@ public class ReviewMarkdownRenderer {
       final String marker,
       final String headSha,
       final String temporalUiBaseUrl) {
-    return marker
-        + "\n"
-        + "## Automated code review — failed\n\n"
-        + "This review did not complete, so these changes have **not** been reviewed.\n\n"
-        + "**Phase:** `"
-        + failure.phase()
-        + "`\n\n"
-        + "```\n"
-        + fenceSafe(failure.reason())
-        + "\n```\n"
-        + workflowLink(failure.workflowId(), temporalUiBaseUrl)
-        + reviewedAt(headSha)
-        + ADVISORY;
+    return """
+        %s
+        ## Automated code review — failed
+
+        This review did not complete, so these changes have **not** been reviewed.
+
+        **Phase:** `%s`
+
+        ```
+        %s
+        ```
+        %s%s%s""".formatted(
+        marker,
+        failure.phase(),
+        fenceSafe(failure.reason()),
+        workflowLink(failure.workflowId(), temporalUiBaseUrl),
+        reviewedAt(headSha),
+        ADVISORY);
   }
 
   /** Names the commit this comment is about, or says nothing when there is no commit to name. */
@@ -206,13 +220,11 @@ public class ReviewMarkdownRenderer {
         temporalUiBaseUrl.endsWith("/")
             ? temporalUiBaseUrl.substring(0, temporalUiBaseUrl.length() - 1)
             : temporalUiBaseUrl;
-    return "\n[Workflow history]("
-        + base
-        + "/namespaces/default/workflows/"
-        + workflowId
-        + ") · `"
-        + workflowId
-        + "`\n";
+    return """
+
+        [Workflow history](%s/namespaces/default/workflows/%s) · `%s`
+        """
+        .formatted(base, workflowId, workflowId);
   }
 
   /** Keeps an arbitrary failure string from breaking out of the code fence around it. */

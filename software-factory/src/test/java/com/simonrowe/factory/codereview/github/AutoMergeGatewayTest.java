@@ -49,13 +49,13 @@ class AutoMergeGatewayTest {
     server.createContext(
         "/repos/",
         exchange -> {
+          String query = exchange.getRequestURI().getQuery();
           String key =
-              exchange.getRequestMethod()
-                  + " "
-                  + exchange.getRequestURI().getPath()
-                  + (exchange.getRequestURI().getQuery() == null
-                      ? ""
-                      : "?" + exchange.getRequestURI().getQuery());
+              "%s %s%s"
+                  .formatted(
+                      exchange.getRequestMethod(),
+                      exchange.getRequestURI().getPath(),
+                      query == null ? "" : "?" + query);
           requests.add(key);
           byte[] body = responses.getOrDefault(key, "{}").getBytes(StandardCharsets.UTF_8);
           exchange.sendResponseHeaders(responses.containsKey(key) ? 200 : 404, body.length);

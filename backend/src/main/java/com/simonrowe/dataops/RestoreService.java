@@ -21,6 +21,7 @@ import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
 import com.simonrowe.migration.changeunits.V045CreateCoparentAssistantSchema;
 import com.simonrowe.migration.changeunits.V048CreatePortfolioProjects;
+import com.simonrowe.migration.changeunits.V049SeedTermTimeProjectPage;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -181,8 +182,9 @@ public class RestoreService {
 
     } catch (Exception ex) {
       LOG.error("Restore failed", ex);
-      operationsService.failOperation("Restore failed: " + ex.getMessage()
-          + ". A safety backup was created before the restore attempt.");
+      operationsService.failOperation(
+          "Restore failed: %s. A safety backup was created before the restore attempt."
+              .formatted(ex.getMessage()));
     } finally {
       deleteTempFile(tempZip);
       deleteTempFile(localBackup);
@@ -232,7 +234,8 @@ public class RestoreService {
         Map.entry(PLATFORM_RELEASES, this::ensurePlatformReleaseIndexes),
         Map.entry(SHORT_LINKS, this::ensureShortLinkIndexes),
         Map.entry(SCHOOL_DOCUMENTS, this::ensureSchoolIndexes),
-        Map.entry(V048CreatePortfolioProjects.COLLECTION, this::ensurePortfolioIndexes));
+        Map.entry(V048CreatePortfolioProjects.COLLECTION, this::ensurePortfolioIndexes),
+        Map.entry(V049SeedTermTimeProjectPage.MEDIA_COLLECTION, this::ensureMediaIndexes));
   }
 
   void restoreCollections(final Path zipFile) throws IOException {
@@ -384,6 +387,15 @@ public class RestoreService {
     LOG.info("Recreated portfolio indexes after restore");
   }
 
+  /**
+   * The unique key on seeded media is what stops a change unit importing a second copy of a file,
+   * and it goes with the collection when the restore drops it.
+   */
+  void ensureMediaIndexes() {
+    V049SeedTermTimeProjectPage.createMediaIndexes(mongoTemplate);
+    LOG.info("Recreated media indexes after restore");
+  }
+
   private void restoreIndex(final Path tempZip, final String index, final boolean warnIfMissing)
       throws IOException {
     String embeddingsJson = readEntryFromZip(tempZip, "embeddings/" + index + ".json");
@@ -391,8 +403,9 @@ public class RestoreService {
       int count = esBackupService.importEmbeddings(index, embeddingsJson);
       LOG.info("Restored {} vector embeddings into {}", count, index);
     } else if (warnIfMissing) {
-      LOG.warn("No vector embeddings found in backup for {} — "
-          + "use 'Re-embed Content' from Data Operations to regenerate", index);
+      LOG.warn("""
+          No vector embeddings found in backup for {} — \
+          use 'Re-embed Content' from Data Operations to regenerate""", index);
     } else {
       LOG.info("No embeddings for {} in this backup", index);
     }
@@ -443,8 +456,9 @@ public class RestoreService {
     }
     String mediaSource = extractJsonString(manifestJson, "mediaSource");
     if (mediaSource == null || mediaSource.isBlank()) {
-      LOG.info("Backup contains no uploads/ and no mediaSource — "
-          + "uploads dir will be cleared but no media restored");
+      LOG.info("""
+          Backup contains no uploads/ and no mediaSource — \
+          uploads dir will be cleared but no media restored""");
       return zipFile;
     }
     LOG.info("Backup references media from prior backup '{}', fetching from Drive",
@@ -452,8 +466,9 @@ public class RestoreService {
     String folderId = googleDriveService.findOrCreateFolder();
     String sourceFileId = googleDriveService.findFileIdByName(folderId, mediaSource);
     if (sourceFileId == null) {
-      throw new IOException("Backup manifest references media source '"
-          + mediaSource + "' but that file is not present in Drive backups folder");
+      throw new IOException("""
+          Backup manifest references media source '%s' but that file is not present \
+          in Drive backups folder""".formatted(mediaSource));
     }
     Path sourceZip = Files.createTempFile("restore-media-", ".zip");
     try (var os = new BufferedOutputStream(Files.newOutputStream(sourceZip))) {

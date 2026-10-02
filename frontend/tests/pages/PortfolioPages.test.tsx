@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -12,13 +12,33 @@ import { clearPortfolioCache } from '../../src/hooks/usePortfolio'
 import { PortfolioPage } from '../../src/pages/PortfolioPage'
 import { PortfolioProjectPage } from '../../src/pages/PortfolioProjectPage'
 import { fetchPortfolio, fetchPortfolioProject } from '../../src/services/portfolioApi'
+import type { PortfolioProject } from '../../src/types/portfolio'
 
-function renderProjectPage(slug: string) {
+function renderProjectPage(path: string) {
   return render(
-    <MemoryRouter initialEntries={[`/portfolio/${slug}`]}>
-      <Routes><Route element={<PortfolioProjectPage />} path="/portfolio/:slug" /></Routes>
+    <MemoryRouter initialEntries={[`/portfolio/${path}`]}>
+      <Routes><Route element={<PortfolioProjectPage />} path="/portfolio/:slug/:pageSlug?" /></Routes>
     </MemoryRouter>,
   )
+}
+
+const TERM_TIME: PortfolioProject = {
+  slug: 'term-time', name: 'Term Time', tagline: 'For parents', status: 'BETA', accentHue: 152,
+  displayOrder: 1, liveUrl: 'https://term-time.simonrowe.dev',
+  image: { url: '/media/portfolio/term-time/hero.webp' } as PortfolioProject['image'],
+  headline: 'School life,\none question away.',
+  summary: 'Answers about school.',
+  statement: { label: 'Why I built it', text: 'Schools send a lot.', points: [{ title: 'The inbox', text: 'Newsletters.' }] },
+  exampleQuestions: ['When is half term?'],
+  highlights: [{ title: 'Term dates', text: 'From the calendar.', imageUrl: '/uploads/dates.webp', imageAlt: 'Dates' }],
+  demo: {
+    title: 'A walkthrough', videoUrl: '/media/demo.mp4', captionsUrl: '/media/demo.vtt',
+    chapters: [{ startSeconds: 0, label: 'Asking' }, { startSeconds: 65, label: 'Admin' }],
+  },
+  pages: [
+    { slug: 'how-it-works', title: 'How it works', navHint: 'sources', summary: 'Four sources.', body: '## Four sources\n\n| a | b |\n| - | - |\n| 1 | 2 |' },
+    { slug: 'architecture', title: 'Architecture', body: '```java\nclass A {}\n```' },
+  ],
 }
 
 describe('Portfolio pages', () => {
@@ -55,5 +75,68 @@ describe('Portfolio pages', () => {
     vi.mocked(fetchPortfolioProject).mockResolvedValue(null)
     renderProjectPage('clinicians-veil')
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+  })
+
+  it('shows the overview sections the CMS has content for', async () => {
+    vi.mocked(fetchPortfolioProject).mockResolvedValue(TERM_TIME)
+    renderProjectPage('term-time')
+
+    const heading = await screen.findByRole('heading', { level: 1 })
+    expect(heading).toHaveTextContent('School life,one question away.')
+    expect(heading.querySelector('em')).toHaveTextContent('one question away.')
+    expect(screen.getByText('Schools send a lot.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'When is half term?' })).toHaveAttribute(
+      'href', 'https://term-time.simonrowe.dev/?q=When+is+half+term%3F')
+    // A media-library upload loads from the API; a bundled /media asset from this origin.
+    expect(screen.getByRole('img', { name: 'Dates' }).getAttribute('src')).toMatch(/\/uploads\/dates\.webp$/)
+    expect(document.querySelector('.project-hero__browser img')).toHaveAttribute('src', '/media/portfolio/term-time/hero.webp')
+    const tabs = within(screen.getByRole('navigation', { name: 'Term Time pages' }))
+    expect(tabs.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
+    expect(tabs.getByRole('link', { name: /How it works/ })).toHaveAttribute('href', '/portfolio/term-time/how-it-works')
+    expect(screen.getByRole('link', { name: /Next · How it works/ })).toHaveAttribute('href', '/portfolio/term-time/how-it-works')
+    const track = document.querySelector('video track')
+    expect(track).toHaveAttribute('src', '/media/demo.vtt')
+    // Offered, not forced: captions over a screen recording hide what is being shown.
+    expect(track).not.toHaveAttribute('default')
+  })
+
+  it('jumps the demo to a chapter', async () => {
+    vi.mocked(fetchPortfolioProject).mockResolvedValue(TERM_TIME)
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
+    renderProjectPage('term-time')
+
+    fireEvent.click(await screen.findByRole('button', { name: /1:05\s*Admin/ }))
+
+    expect(document.querySelector('video')!.currentTime).toBe(65)
+    expect(play).toHaveBeenCalled()
+    play.mockRestore()
+  })
+
+  it('renders a sub-page from its markdown, with the tabs', async () => {
+    vi.mocked(fetchPortfolioProject).mockResolvedValue(TERM_TIME)
+    renderProjectPage('term-time/how-it-works')
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'How it works' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Four sources' })).toBeInTheDocument()
+    expect(screen.getByRole('table')).toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Term Time pages' }))
+      .getByRole('link', { name: /How it works/ })).toHaveAttribute('aria-current', 'page')
+    expect(document.title).toContain('How it works')
+  })
+
+  it('is a not-found page for a sub-page the project does not have', async () => {
+    vi.mocked(fetchPortfolioProject).mockResolvedValue(TERM_TIME)
+    renderProjectPage('term-time/nope')
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+  })
+
+  it('has no tabs for a project without sub-pages', async () => {
+    vi.mocked(fetchPortfolioProject).mockResolvedValue({
+      slug: 'plain', name: 'Plain', tagline: 'Just a description', status: 'LIVE', accentHue: 1, displayOrder: 0,
+    })
+    renderProjectPage('plain')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Plain' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation')).toBeNull()
+    expect(screen.getByText('Just a description')).toBeInTheDocument()
   })
 })

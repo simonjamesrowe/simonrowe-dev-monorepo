@@ -123,8 +123,9 @@ class SchoolCrawlDiscoveryTest {
 
   /** An address shaped like the CMS's own: a content hash, so the file name says nothing. */
   private static final String OPAQUE_PDF =
-      BASE + "/_site/data/files/users/parents-and-carers-files/yr-group-pages/"
-          + "938A752E316E2FCD10A5D23C20947DCE.pdf";
+      BASE + """
+          /_site/data/files/users/parents-and-carers-files/yr-group-pages/\
+          938A752E316E2FCD10A5D23C20947DCE.pdf""";
 
   @Test
   @DisplayName("a year page is stored with its year group, and a whole-school page with none")

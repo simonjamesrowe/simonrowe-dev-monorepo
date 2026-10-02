@@ -134,8 +134,9 @@ public class IssueResolver {
     String completedStateId = gateway.teamContext().completedStateId();
     if (completedStateId == null) {
       log.warn(
-          "{} fingerprint(s) have been quiet since {} but team {} has no completed workflow"
-              + " state, so nothing can be closed",
+          """
+          {} fingerprint(s) have been quiet since {} but team {} has no completed workflow\
+           state, so nothing can be closed""",
           candidates.size(),
           cutoff,
           properties.teamKey());

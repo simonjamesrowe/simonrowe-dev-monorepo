@@ -86,8 +86,9 @@ public class DigestComposer {
     if (synthesised == null || !preservesEveryUrl(synthesised, sections)
         || containsTopLevelHeading(synthesised)
         || containsHtml(synthesised)) {
-      LOG.warn("Synthesis pass rejected for {} sections; "
-          + "publishing the assembled document", sections.size());
+      LOG.warn("""
+          Synthesis pass rejected for {} sections; \
+          publishing the assembled document""", sections.size());
       winner = assembled;
     } else {
       winner = synthesised;

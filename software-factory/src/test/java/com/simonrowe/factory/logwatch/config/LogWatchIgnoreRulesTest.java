@@ -37,45 +37,58 @@ class LogWatchIgnoreRulesTest {
   private static final Instant WHEN = Instant.parse("2026-09-12T08:58:41Z");
 
   private static final String TEMPORAL_INTERNAL_ERROR =
-      "{\"level\":\"error\",\"ts\":\"2026-09-12T08:58:41.026Z\",\"msg\":\"Operation failed with "
-          + "internal error.\",\"error\":\"GetTaskQueue operation failed. Failed to check if task "
-          + "queue /_sys/default-worker-tq/1 of type Workflow existed. Error: context canceled\","
-          + "\"error-type\":\"serviceerror.Unavailable\",\"operation\":\"GetTaskQueue\"}";
+      """
+      {"level":"error","ts":"2026-09-12T08:58:41.026Z","msg":"Operation failed with \
+      internal error.","error":"GetTaskQueue operation failed. Failed to check if task \
+      queue /_sys/default-worker-tq/1 of type Workflow existed. Error: context canceled",\
+      "error-type":"serviceerror.Unavailable","operation":"GetTaskQueue"}\
+      """;
 
   private static final String TEMPORAL_COMMITTED_TRANSACTION =
-      "{\"level\":\"error\",\"ts\":\"2026-09-13T20:04:46.645Z\",\"msg\":\"Operation failed "
-          + "with internal error.\",\"error\":\"UpdateTaskQueue operation failed. Failed to "
-          + "commit transaction. Error: sql: transaction has already been committed or rolled "
-          + "back\",\"error-type\":\"serviceerror.Unavailable\",\"operation\":"
-          + "\"UpdateTaskQueue\"}";
+      """
+      {"level":"error","ts":"2026-09-13T20:04:46.645Z","msg":"Operation failed \
+      with internal error.","error":"UpdateTaskQueue operation failed. Failed to \
+      commit transaction. Error: sql: transaction has already been committed or rolled \
+      back","error-type":"serviceerror.Unavailable","operation":\
+      "UpdateTaskQueue"}\
+      """;
 
   private static final String TEMPORAL_LOST_CONNECTION =
-      "{\"level\":\"error\",\"ts\":\"2026-09-13T20:04:46.730Z\",\"msg\":\"Operation failed "
-          + "with internal error.\",\"error\":\"database connection lost: driver: bad "
-          + "connection\",\"error-type\":\"serviceerror.Unavailable\",\"operation\":"
-          + "\"UpdateTaskQueue\"}";
+      """
+      {"level":"error","ts":"2026-09-13T20:04:46.730Z","msg":"Operation failed \
+      with internal error.","error":"database connection lost: driver: bad \
+      connection","error-type":"serviceerror.Unavailable","operation":\
+      "UpdateTaskQueue"}\
+      """;
 
   private static final String TEMPORAL_POLL_TIMEOUT =
-      "{\"level\":\"error\",\"ts\":\"2026-09-10T06:40:38.554Z\",\"msg\":\"Unable to call "
-          + "matching.PollWorkflowTaskQueue.\",\"service\":\"frontend\",\"wf-task-queue-name\":"
-          + "\"1@a3e10add0f76:d2955baf\",\"timeout\":\"1m9.995004899s\",\"error\":"
-          + "\"context canceled\"}";
+      """
+      {"level":"error","ts":"2026-09-10T06:40:38.554Z","msg":"Unable to call \
+      matching.PollWorkflowTaskQueue.","service":"frontend","wf-task-queue-name":\
+      "1@a3e10add0f76:d2955baf","timeout":"1m9.995004899s","error":\
+      "context canceled"}\
+      """;
 
   private static final String TEMPORAL_VISIBILITY_CANCEL =
-      "{\"level\":\"error\",\"ts\":\"2026-09-07T12:00:07.843Z\",\"msg\":\"Operation failed with "
-          + "an error.\",\"error\":\"pq: canceling statement due to user request\"}";
+      """
+      {"level":"error","ts":"2026-09-07T12:00:07.843Z","msg":"Operation failed with \
+      an error.","error":"pq: canceling statement due to user request"}\
+      """;
 
   private static final String ALLOY_DEAD_CONTAINER =
-      "ts=2026-09-10T06:16:10.340215638Z level=error msg=\"could not fetch logs for container\" "
-          + "component_path=/ component_id=loki.source.docker.default component=tailer "
-          + "container=docker/68d510e49c92 container=68d510e49c92 err=\"Error response from "
-          + "daemon: can not get logs from container which is dead or marked for removal\"";
+      """
+      ts=2026-09-10T06:16:10.340215638Z level=error msg="could not fetch logs for container" \
+      component_path=/ component_id=loki.source.docker.default component=tailer \
+      container=docker/68d510e49c92 container=68d510e49c92 err="Error response from \
+      daemon: can not get logs from container which is dead or marked for removal"\
+      """;
 
   private static final String DTRACK_PYPI_RANGE =
-      "2026-09-11 03:12:01,143 WARN [BovModelConverter] Range 'vers:pypi/>=0|<2.2.0rrc0|>=2.2.0|"
-          + "<2.3.0rrc0' could not be parsed because one or more versions do not comply with the "
-          + "versioning scheme's rules; Falling back to versioning scheme 'generic' instead "
-          + "[vulnDataSourceName=osv, vulnSource=OSV, vulnId=PYSEC-2021-150]";
+      """
+      2026-09-11 03:12:01,143 WARN [BovModelConverter] Range 'vers:pypi/>=0|<2.2.0rrc0|>=2.2.0|\
+      <2.3.0rrc0' could not be parsed because one or more versions do not comply with the \
+      versioning scheme's rules; Falling back to versioning scheme 'generic' instead \
+      [vulnDataSourceName=osv, vulnSource=OSV, vulnId=PYSEC-2021-150]""";
 
   private final LogWatchProperties properties = shippedProperties();
 
@@ -113,15 +126,19 @@ class LogWatchIgnoreRulesTest {
     assertAudible(
         "simonrowe-dev-monorepo-alloy-1",
         Severity.ERROR,
-        "ts=2026-09-11T07:44:05.277299745Z level=error msg=\"final error sending batch, no "
-            + "retries left, dropping data\" component_id=loki.write.grafana_cloud status=429 "
-            + "error=\"ingestion rate limit exceeded\"");
+        """
+        ts=2026-09-11T07:44:05.277299745Z level=error msg="final error sending batch, no \
+        retries left, dropping data" component_id=loki.write.grafana_cloud status=429 \
+        error="ingestion rate limit exceeded"\
+        """);
     assertAudible(
         "simonrowe-dev-monorepo-temporal-1",
         Severity.ERROR,
-        "{\"level\":\"error\",\"ts\":\"2026-09-12T08:58:41.026Z\",\"msg\":\"Operation failed with "
-            + "internal error.\",\"error\":\"GetTaskQueue operation failed. Error: connection "
-            + "refused\"}");
+        """
+        {"level":"error","ts":"2026-09-12T08:58:41.026Z","msg":"Operation failed with \
+        internal error.","error":"GetTaskQueue operation failed. Error: connection \
+        refused"}\
+        """);
     assertAudible(
         "simonrowe-dev-monorepo-backend-1",
         Severity.ERROR,
@@ -173,10 +190,12 @@ class LogWatchIgnoreRulesTest {
         TEMPORAL_INTERNAL_ERROR,
         TEMPORAL_COMMITTED_TRANSACTION,
         TEMPORAL_LOST_CONNECTION,
-        "{\"level\":\"error\",\"ts\":\"2026-09-13T20:04:47.001Z\",\"msg\":\"Operation "
-            + "failed with internal error.\",\"error\":\"UpdateTaskQueue operation failed. "
-            + "Error: no space left on device\",\"error-type\":"
-            + "\"serviceerror.Unavailable\",\"operation\":\"UpdateTaskQueue\"}");
+        """
+        {"level":"error","ts":"2026-09-13T20:04:47.001Z","msg":"Operation \
+        failed with internal error.","error":"UpdateTaskQueue operation failed. \
+        Error: no space left on device","error-type":\
+        "serviceerror.Unavailable","operation":"UpdateTaskQueue"}\
+        """);
   }
 
   @Test
@@ -283,8 +302,9 @@ class LogWatchIgnoreRulesTest {
     }
     List<LogSignature> grouped = SignatureExtractor.group(lines);
     assertThat(grouped)
-        .as("these lines must land in ONE group, or the test is not asking the question it looks"
-            + " like it is asking")
+        .as("""
+            these lines must land in ONE group, or the test is not asking the question it looks\
+             like it is asking""")
         .hasSize(1);
     return grouped.getFirst();
   }

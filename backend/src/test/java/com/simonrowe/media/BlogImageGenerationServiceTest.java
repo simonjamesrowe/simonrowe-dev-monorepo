@@ -172,8 +172,9 @@ class BlogImageGenerationServiceTest {
     String prompt = service.buildPrompt(
         "What caught my eye: Agent frameworks mature",
         "A few practical notes on agent frameworks.",
-        "External sources: Agent frameworks mature from AI Native Dev; "
-            + "Spring AI advisors from Spring Blog");
+        """
+        External sources: Agent frameworks mature from AI Native Dev; \
+        Spring AI advisors from Spring Blog""");
 
     assertThat(prompt).contains("Agent frameworks mature");
     assertThat(prompt).contains("AI Native Dev");

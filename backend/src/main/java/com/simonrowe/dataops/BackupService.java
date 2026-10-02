@@ -246,8 +246,9 @@ public class BackupService {
       int totalDocs = collectionCounts.values().stream()
           .mapToInt(Integer::intValue).sum();
       String summary = String.format(
-          "%d collections, %d documents, %d media files backed up; "
-              + "%d narrations, %d narration audio files and %d article summaries (%s)",
+          """
+          %d collections, %d documents, %d media files backed up; \
+          %d narrations, %d narration audio files and %d article summaries (%s)""",
           collectionCounts.size(), totalDocs, mediaFileCount,
           collectionCounts.getOrDefault("narrations", 0), narrationAudioFileCount,
           collectionCounts.getOrDefault("article_summaries", 0),

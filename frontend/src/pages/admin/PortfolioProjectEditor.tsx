@@ -3,7 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 
 import { useAuth } from '../../auth/useAuth'
 import { ImagePicker } from '../../components/admin/ImagePicker'
-import { MarkdownEditor } from '../../components/admin/MarkdownEditor'
+import { MediaPicker } from '../../components/admin/MediaPicker'
+import { HighlightsEditor, PagesEditor, TextField } from '../../components/admin/PortfolioPageFields'
+import { RichMarkdownEditor } from '../../components/admin/RichMarkdownEditor'
 import { ProjectSilhouette } from '../../components/portfolio/ProjectSilhouette'
 import { clearPortfolioCache } from '../../hooks/usePortfolio'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
@@ -14,7 +16,8 @@ import {
   updateAdminPortfolioProject,
   type AdminPortfolioProjectInput,
 } from '../../services/adminApi'
-import { STATUS_LABELS, type ProjectStatus } from '../../types/portfolio'
+import { STATUS_LABELS, type ProjectDemo, type ProjectStatus } from '../../types/portfolio'
+import { besideField, chaptersToText, questionsToText, textToChapters, textToQuestions } from './portfolioEditorText'
 
 const STATUSES: ProjectStatus[] = ['COMING_SOON', 'IN_DEVELOPMENT', 'BETA', 'LIVE']
 
@@ -32,6 +35,26 @@ const EMPTY: AdminPortfolioProjectInput = {
   image: null,
   liveUrl: '',
   accentHue: 212,
+  headline: '',
+  summary: '',
+  statement: null,
+  exampleQuestions: [],
+  highlights: [],
+  demo: null,
+  pages: [],
+}
+
+type DemoFields = Omit<ProjectDemo, 'chapters'>
+
+/** Tall enough to show every line of a one-per-line list, plus one to type into. */
+function rowsFor(text: string, minimum: number): number {
+  return Math.max(minimum, text.split('\n').length + 1)
+}
+
+const EMPTY_DEMO: DemoFields ={ title: '', summary: '', videoUrl: '', captionsUrl: '', posterUrl: '' }
+
+function isBlank(value: string | null | undefined): boolean {
+  return !value || value.trim().length === 0
 }
 
 /** A slug suggestion from the name, only while the slug has not been typed by hand. */
@@ -57,6 +80,10 @@ export function PortfolioProjectEditor() {
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [dirty, setDirty] = useState(false)
+  // Edited as text and turned into lists only on save; see portfolioEditorText.
+  const [questionsText, setQuestionsText] = useState('')
+  const [chaptersText, setChaptersText] = useState('')
+  const [demo, setDemo] = useState<DemoFields>(EMPTY_DEMO)
 
   useUnsavedChanges(dirty)
 
@@ -76,7 +103,25 @@ export function PortfolioProjectEditor() {
         image: project.image,
         liveUrl: project.liveUrl ?? '',
         accentHue: project.accentHue,
+        headline: project.headline ?? '',
+        summary: project.summary ?? '',
+        statement: project.statement,
+        exampleQuestions: project.exampleQuestions ?? [],
+        highlights: project.highlights ?? [],
+        demo: project.demo,
+        pages: project.pages ?? [],
       })
+      setQuestionsText(questionsToText(project.exampleQuestions ?? []))
+      setChaptersText(chaptersToText(project.demo?.chapters ?? []))
+      setDemo(project.demo
+        ? {
+            title: project.demo.title ?? '',
+            summary: project.demo.summary ?? '',
+            videoUrl: project.demo.videoUrl,
+            captionsUrl: project.demo.captionsUrl ?? '',
+            posterUrl: project.demo.posterUrl ?? '',
+          }
+        : EMPTY_DEMO)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load the project')
     } finally {
@@ -93,16 +138,45 @@ export function PortfolioProjectEditor() {
     setDirty(true)
   }
 
+  const statement = form.statement ?? { label: '', text: '', points: [] }
+  const updateStatement = (next: typeof statement) => update('statement', next)
+  const updateDemo = (next: DemoFields) => {
+    setDemo(next)
+    setDirty(true)
+  }
+
+  /** The form as the API takes it, or the name of the one field that cannot be read. */
+  const toPayload = (): AdminPortfolioProjectInput | { invalid: string; message: string } => {
+    const chapters = textToChapters(chaptersText)
+    if (!chapters.ok) {
+      return { invalid: 'demo.chapters', message: `Chapter line ${chapters.line} should look like "1:05 What happens".` }
+    }
+    const demoIsEmpty = Object.values(demo).every(value => isBlank(value)) && chapters.chapters.length === 0
+    const statementIsEmpty = isBlank(statement.label) && isBlank(statement.text) && statement.points.length === 0
+    return {
+      ...form,
+      statement: statementIsEmpty ? null : statement,
+      exampleQuestions: textToQuestions(questionsText),
+      demo: demoIsEmpty ? null : { ...demo, chapters: chapters.chapters },
+    }
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    setSaving(true)
     setError(null)
     setFieldErrors({})
+    const payload = toPayload()
+    if ('invalid' in payload) {
+      setFieldErrors({ [payload.invalid]: payload.message })
+      setError('Some fields need attention.')
+      return
+    }
+    setSaving(true)
     try {
       if (isNew) {
-        await createAdminPortfolioProject(getAccessToken, form)
+        await createAdminPortfolioProject(getAccessToken, payload)
       } else {
-        await updateAdminPortfolioProject(getAccessToken, id!, form)
+        await updateAdminPortfolioProject(getAccessToken, id!, payload)
       }
       clearPortfolioCache()
       setDirty(false)
@@ -124,7 +198,7 @@ export function PortfolioProjectEditor() {
   }
 
   const fieldError = (field: string) => (fieldErrors[field]
-    ? <p className="home-page-editor__error" role="alert">{fieldErrors[field]}</p>
+    ? <p className="home-page-editor__error" role="alert">{besideField(field, fieldErrors[field])}</p>
     : null)
 
   return (
@@ -249,13 +323,108 @@ export function PortfolioProjectEditor() {
 
         <div className="blog-editor__section">
           <span className="blog-editor__section-label">Description</span>
-          <MarkdownEditor
+          <RichMarkdownEditor
+            label="Description"
+            markdown={form.description ?? ''}
             onChange={value => update('description', value)}
             placeholder="What it is, who it is for, how it is built. Hidden while Coming soon."
-            value={form.description ?? ''}
           />
           {fieldError('description')}
         </div>
+
+        <h2 className="portfolio-editor__heading">Project page</h2>
+        <p className="admin-form__hint">
+          Everything below is optional, and hidden while the project is Coming soon. A section with
+          nothing in it is left off the page.
+        </p>
+
+        <div className="blog-editor__section">
+          <TextField
+            error={fieldError('headline')}
+            hint="Shown instead of the name. A second line is shown in the project's colour."
+            id="project-headline" label="Headline" multiline onChange={value => update('headline', value)}
+            rows={2} value={form.headline} />
+          <TextField
+            error={fieldError('summary')} hint="Shown under the headline instead of the tagline."
+            id="project-summary" label="Summary" multiline onChange={value => update('summary', value)}
+            value={form.summary} />
+        </div>
+
+        <fieldset className="portfolio-editor__group">
+          <legend>Statement</legend>
+          <TextField error={fieldError('statement.label')} id="statement-label" label="Label"
+            onChange={label => updateStatement({ ...statement, label })} placeholder="Why I built it"
+            value={statement.label} />
+          <TextField error={fieldError('statement.text')} id="statement-text" label="Statement" multiline
+            onChange={text => updateStatement({ ...statement, text })} value={statement.text} />
+          <HighlightsEditor
+            field="statement.points" fieldError={fieldError} items={statement.points} max={6} noun="Point"
+            onChange={points => updateStatement({ ...statement, points })} withImages={false} />
+        </fieldset>
+
+        <fieldset className="portfolio-editor__group">
+          <legend>Example questions</legend>
+          <TextField
+            error={fieldError('exampleQuestions')}
+            hint="One per line. With a live link, each opens the project with the question already asked."
+            id="project-questions" label="Questions" multiline
+            onChange={value => {
+              setQuestionsText(value)
+              setDirty(true)
+            }}
+            rows={rowsFor(questionsText, 6)} value={questionsText} />
+        </fieldset>
+
+        <fieldset className="portfolio-editor__group">
+          <legend>Highlights</legend>
+          <HighlightsEditor
+            field="highlights" fieldError={fieldError} items={form.highlights} max={6} noun="Highlight"
+            onChange={highlights => update('highlights', highlights)} withImages />
+        </fieldset>
+
+        <fieldset className="portfolio-editor__group">
+          <legend>Demo video</legend>
+          <div className="blog-editor__three-col">
+            <div className="blog-editor__section">
+              <span className="blog-editor__section-label">Video</span>
+              <MediaPicker kind="video" label="Demo video"
+                onChange={videoUrl => updateDemo({ ...demo, videoUrl })} value={demo.videoUrl || null} />
+              {fieldError('demo.videoUrl')}
+            </div>
+            <div className="blog-editor__section">
+              <span className="blog-editor__section-label">Captions</span>
+              <MediaPicker kind="captions" label="Demo captions"
+                onChange={captionsUrl => updateDemo({ ...demo, captionsUrl })} value={demo.captionsUrl || null} />
+              <p className="admin-form__hint">Offered on the player, off until a visitor turns them on.</p>
+              {fieldError('demo.captionsUrl')}
+            </div>
+            <div className="blog-editor__section">
+              <span className="blog-editor__section-label">Poster</span>
+              <MediaPicker kind="image" label="Demo poster"
+                onChange={posterUrl => updateDemo({ ...demo, posterUrl })} value={demo.posterUrl || null} />
+              {fieldError('demo.posterUrl')}
+            </div>
+          </div>
+          <TextField error={fieldError('demo.title')} id="demo-title" label="Demo title"
+            onChange={title => updateDemo({ ...demo, title })} value={demo.title} />
+          <TextField error={fieldError('demo.summary')} id="demo-summary" label="Demo summary" multiline
+            onChange={summary => updateDemo({ ...demo, summary })} value={demo.summary} />
+          <TextField
+            error={fieldError('demo.chapters')} hint='One per line, as "1:05 What happens".'
+            id="demo-chapters" label="Chapters" monospace multiline
+            onChange={value => {
+              setChaptersText(value)
+              setDirty(true)
+            }}
+            rows={rowsFor(chaptersText, 5)} value={chaptersText} />
+        </fieldset>
+
+        <fieldset className="portfolio-editor__group">
+          <legend>Sub-pages</legend>
+          <PagesEditor
+            fieldError={fieldError} items={form.pages} max={6} onChange={pages => update('pages', pages)}
+            projectSlug={form.slug} />
+        </fieldset>
 
         <div className="admin-form__actions">
           <button className="admin-btn" onClick={() => navigate('/admin/portfolio')} type="button">Cancel</button>

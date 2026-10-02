@@ -100,8 +100,9 @@ class GitHubGatewayTest {
           sentBodies.merge("GRAPHQL " + operation, sent, (a, b) -> a + "\n" + b);
           byte[] body =
               ("reviewThreads".equals(operation)
-                      ? "{\"data\":{\"repository\":{\"pullRequest\":{\"reviewThreads\":"
-                          + "{\"nodes\":" + threadNodes.get() + "}}}}}"
+                      ? """
+                          {"data":{"repository":{"pullRequest":{"reviewThreads":\
+                          {"nodes":%s}}}}}""".formatted(threadNodes.get())
                       : "{\"data\":{}}")
                   .getBytes(StandardCharsets.UTF_8);
           exchange.sendResponseHeaders(200, body.length);

@@ -6299,6 +6299,30 @@ a:hover {
   object-fit: contain;
 }
 
+/* A video plays in place, so it fills the box's width rather than sitting small in the middle. */
+.image-picker__box--video video.image-picker__img {
+  width: 100%;
+  background: #000;
+}
+
+/* A captions file has no picture of its own: an icon and its name stand in. */
+.media-preview__file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.rich-markdown-editor {
+  width: 100%;
+}
+
 .image-picker__placeholder {
   display: flex;
   flex-direction: column;
@@ -12990,10 +13014,6 @@ body[data-narration-bar] .app-layout__main {
   color: #15803d;
 }
 
-.portfolio-project__header .project-card__status {
-  position: static;
-  display: inline-block;
-}
 
 .project-card__name {
   margin: 1.25rem 0 0.4rem;
@@ -13091,10 +13111,480 @@ body[data-narration-bar] .app-layout__main {
   color: var(--on-surface-variant);
 }
 
+/* A project's page wears the site's own palette: the primary blue for accents, the violet AI
+ * accent in the hero's backdrop, and the site surfaces. The project's accent hue stays on its
+ * card silhouette only, so a product's own colours (Term Time's green) never take over the
+ * portfolio. Dark is the default theme here, as everywhere in this file; the light values follow. */
 .portfolio-project {
-  max-width: 52rem;
+  --project-accent: var(--primary);
+  --project-accent-soft: rgba(var(--primary-rgb), 0.12);
+  --project-accent-border: rgba(var(--primary-rgb), 0.4);
+  --project-band: #12233a;
+  --project-band-text: #c6d4e6;
+  --project-band-accent: var(--primary);
+  --project-on-dark: #77d1ff;
+  --project-stage: radial-gradient(120% 90% at 0% 0%,
+      rgba(var(--primary-rgb), 0.28) 0%,
+      var(--surface-container-low) 55%,
+      rgba(184, 166, 255, 0.22) 100%);
+  padding: 2rem 0 4rem;
+}
+
+[data-theme="light"] .portfolio-project {
+  --project-band: #1e40af;
+  --project-band-text: #dbeafe;
+  --project-band-accent: #bfdbfe;
+  --project-stage: radial-gradient(120% 90% at 0% 0%,
+      #dbeafe 0%,
+      var(--surface-container-low) 50%,
+      #ede9fe 100%);
+}
+
+.project-section__inner {
+  max-width: 72rem;
   margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
+  padding: 0 1.5rem;
+}
+
+.project-section__inner--prose {
+  max-width: 52rem;
+}
+
+.project-section {
+  padding: 4rem 0 0;
+}
+
+.project-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 0.5rem;
+  color: var(--project-accent);
+  font: 600 0.8rem var(--font-heading);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.project-eyebrow .project-card__status {
+  position: static;
+}
+
+.project-eyebrow--on-band {
+  color: var(--project-band-accent);
+}
+
+.project-eyebrow--on-dark {
+  color: var(--project-on-dark);
+}
+
+.project-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.project-section__title {
+  margin: 0 0 0.75rem;
+  font: 700 clamp(1.8rem, 3.5vw, 2.5rem)/1.1 var(--font-heading);
+  letter-spacing: -0.025em;
+}
+
+.project-section__lede {
+  max-width: 44rem;
+  margin: 0 0 2rem;
+  color: var(--on-surface-variant);
+  font-size: 1.1rem;
+  line-height: 1.55;
+}
+
+.project-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 3.5rem;
+  align-items: center;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 3rem;
+}
+
+.project-hero__title {
+  margin: 0.75rem 0 1.25rem;
+  font: 700 clamp(2.6rem, 5.5vw, 4rem)/1.02 var(--font-heading);
+  letter-spacing: -0.035em;
+}
+
+.project-hero__title em {
+  color: var(--project-accent);
+  font-style: normal;
+}
+
+.project-hero__lede {
+  margin: 0 0 2rem;
+  color: var(--on-surface-variant);
+  font-size: 1.2rem;
+  line-height: 1.55;
+}
+
+.project-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+
+.project-hero__stage {
+  overflow: hidden;
+  height: 30rem;
+  padding: 2.25rem 2rem 0;
+  border-radius: 1.75rem;
+  background: var(--project-stage);
+}
+
+.project-hero__browser {
+  overflow: hidden;
+  border-radius: 0.9rem 0.9rem 0 0;
+  background: var(--surface-container);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+}
+
+.project-hero__browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 2.1rem;
+  padding: 0 0.9rem;
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  font-size: 0.75rem;
+}
+
+.project-hero__browser-bar i {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--outline-variant);
+}
+
+.project-hero__browser-bar span {
+  margin-left: 0.75rem;
+  padding: 0.15rem 0.75rem;
+  border-radius: 0.4rem;
+  background: var(--surface-container);
+}
+
+.project-hero__browser img {
+  display: block;
+  width: 100%;
+}
+
+.project-subnav {
+  position: sticky;
+  top: 72px;
+  z-index: 10;
+  border-bottom: 1px solid var(--border-faint);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.project-subnav__inner {
+  display: flex;
+  gap: 0.25rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.project-subnav__link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 3px solid transparent;
+  color: var(--on-surface-variant);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.project-subnav__link:hover {
+  color: var(--on-surface);
+}
+
+.project-subnav__link--active {
+  border-color: var(--project-accent);
+  color: var(--project-accent);
+}
+
+.project-subnav__hint {
+  color: var(--outline);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.project-statement {
+  padding: 4.5rem 0;
+  background: var(--project-band);
+  color: var(--project-band-text);
+}
+
+.project-statement__text {
+  max-width: 56rem;
+  margin: 0.75rem 0 0;
+  color: #fff;
+  font: 600 clamp(1.7rem, 3.4vw, 2.6rem)/1.16 var(--font-heading);
+  letter-spacing: -0.02em;
+}
+
+.project-statement__points {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1.5rem;
+  margin: 3rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-statement__points li {
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  line-height: 1.5;
+}
+
+.project-statement__points strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #fff;
+  font-size: 1.05rem;
+}
+
+.project-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-question {
+  display: inline-block;
+  padding: 0.75rem 1.15rem;
+  border: 1px solid var(--border-faint);
+  border-radius: 999px;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font-size: 1rem;
+  text-decoration: none;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.project-question::before,
+.project-question::after {
+  color: var(--project-accent);
+  font-weight: 700;
+}
+
+.project-question::before {
+  content: '\201C';
+}
+
+.project-question::after {
+  content: '\201D';
+}
+
+a.project-question:hover {
+  border-color: var(--project-accent-border);
+  background: var(--project-accent-soft);
+}
+
+.project-highlights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 2rem 1.75rem;
+  list-style: none;
+}
+
+.project-highlight__number {
+  color: var(--project-accent);
+  font: 700 0.95rem var(--font-heading);
+}
+
+.project-highlight__image {
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+  margin: 0.75rem 0 1.1rem;
+  border: 1px solid var(--border-faint);
+  border-radius: 1.1rem;
+  background: var(--project-accent-soft);
+}
+
+.project-highlight__image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.project-highlight__title {
+  margin: 0 0 0.5rem;
+  font: 700 1.35rem var(--font-heading);
+  letter-spacing: -0.015em;
+}
+
+.project-highlight__text {
+  margin: 0;
+  color: var(--on-surface-variant);
+  line-height: 1.55;
+}
+
+.project-demo {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 3rem;
+  align-items: center;
+  padding: 3rem;
+  border: 1px solid var(--border-faint);
+  border-radius: 2rem;
+  /* A shade below the dark theme's page surface, so the panel keeps its edge there too. */
+  background: #0a0e17;
+  color: #d3dbe8;
+}
+
+.project-demo__player video {
+  display: block;
+  width: 100%;
+  border-radius: 1rem;
+  background: #000;
+}
+
+.project-demo__title {
+  margin: 0 0 0.75rem;
+  color: #fff;
+  font: 700 clamp(1.7rem, 3vw, 2.3rem)/1.1 var(--font-heading);
+}
+
+.project-demo__summary {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.project-demo__chapters {
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-demo__chapter {
+  display: flex;
+  gap: 0.9rem;
+  width: 100%;
+  padding: 0.7rem 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-demo__chapter:hover span {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.project-demo__chapter time {
+  min-width: 2.5rem;
+  color: var(--project-on-dark);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.project-teasers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1.5rem;
+  list-style: none;
+}
+
+.project-teaser {
+  display: block;
+  height: 100%;
+  padding: 1.75rem;
+  border: 1px solid var(--border-faint);
+  border-radius: 1.25rem;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  text-decoration: none;
+  transition: border-color var(--transition-fast);
+}
+
+.project-teaser:hover {
+  border-color: var(--project-accent-border);
+}
+
+.project-teaser__summary {
+  display: block;
+  color: var(--on-surface-variant);
+  line-height: 1.5;
+}
+
+.project-compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  padding-top: 1.25rem;
+  padding-bottom: 1.5rem;
+}
+
+.project-compact .project-eyebrow {
+  margin: 0;
+}
+
+.project-compact__title {
+  flex: 1;
+  margin: 0;
+  font: 700 clamp(1.8rem, 3.5vw, 2.4rem)/1.1 var(--font-heading);
+  letter-spacing: -0.025em;
+}
+
+/* Diagrams are exported on an opaque white background so their dark ink stays legible in the
+ * dark theme; the frame gives that white edge somewhere to sit. */
+.portfolio-project .blog-detail__content img {
+  display: block;
+  padding: 0.75rem;
+  border: 1px solid var(--border-faint);
+  border-radius: 1rem;
+  background: #fff;
+}
+
+/* A diagram is wider than a line of text wants to be, so it breaks out of the prose column to
+ * the page's width, centred on the column. */
+.portfolio-project .blog-detail__content img[src$=".svg"] {
+  position: relative;
+  left: 50%;
+  width: min(68rem, calc(100vw - 3rem));
+  max-width: none;
+  transform: translateX(-50%);
+}
+
+@media (max-width: 900px) {
+  .project-hero,
+  .project-demo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-hero__stage {
+    height: 22rem;
+  }
+
+  .project-demo {
+    padding: 1.5rem;
+  }
 }
 
 .portfolio-project__back {
@@ -13106,31 +13596,9 @@ body[data-narration-bar] .app-layout__main {
   text-decoration: none;
 }
 
-.portfolio-project__header {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin: 1.5rem 0 2rem;
-}
 
-.portfolio-project__title {
-  margin: 0;
-  font: 700 clamp(2.2rem, 5vw, 3.5rem)/1.05 var(--font-heading);
-  letter-spacing: -0.035em;
-}
 
-.portfolio-project__tagline {
-  margin: 0;
-  color: var(--on-surface-variant);
-  font-size: 1.15rem;
-}
 
-.portfolio-project__image {
-  width: 100%;
-  margin-bottom: 2rem;
-  border-radius: 1.25rem;
-}
 
 @media (max-width: 900px) {
   .portfolio-carousel {
@@ -13155,6 +13623,58 @@ body[data-narration-bar] .app-layout__main {
 
 .portfolio-editor__hue input[type="range"] {
   flex: 1;
+}
+
+.portfolio-editor__heading {
+  margin: 2.5rem 0 0.25rem;
+  font: 700 1.25rem var(--font-heading);
+}
+
+.portfolio-editor__group {
+  margin: 1.5rem 0 0;
+  padding: 1rem 1.25rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+}
+
+.portfolio-editor__group > legend {
+  padding: 0 0.4rem;
+  font-weight: 700;
+}
+
+.portfolio-editor__list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.portfolio-editor__item {
+  align-self: stretch;
+  margin: 0;
+  padding: 0.75rem 1rem 1rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 0.6rem;
+}
+
+.portfolio-editor__item > legend {
+  padding: 0 0.3rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.portfolio-editor__remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.portfolio-editor__code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
 .project-silhouette--sm {

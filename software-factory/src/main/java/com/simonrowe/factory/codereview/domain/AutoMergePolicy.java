@@ -74,9 +74,8 @@ public final class AutoMergePolicy {
     if (state.authorPermission() == null
         || !TRUSTED_PERMISSIONS.contains(state.authorPermission())) {
       return MergeDecision.ineligible(
-          "the author has no write access to this repository (`"
-              + state.authorPermission()
-              + "`)");
+          "the author has no write access to this repository (`%s`)"
+              .formatted(state.authorPermission()));
     }
     if (state.labels().contains(OPT_OUT_LABEL)) {
       return MergeDecision.ineligible("labelled `" + OPT_OUT_LABEL + "`");
@@ -91,11 +90,8 @@ public final class AutoMergePolicy {
     }
     if (!Objects.equals(state.headSha(), reviewedHeadSha)) {
       return MergeDecision.ineligible(
-          "the pull request moved on to `"
-              + shortSha(state.headSha())
-              + "` after `"
-              + shortSha(reviewedHeadSha)
-              + "` was reviewed");
+          "the pull request moved on to `%s` after `%s` was reviewed"
+              .formatted(shortSha(state.headSha()), shortSha(reviewedHeadSha)));
     }
 
     ChangedFiles changed = files.get();
@@ -108,9 +104,8 @@ public final class AutoMergePolicy {
       case AUTO_MERGE -> MergeDecision.eligible();
       case UX_REVIEW ->
           MergeDecision.ineligible(
-              "`"
-                  + classification.decidingPath()
-                  + "` changes what a visitor sees, so it needs screenshots and a human");
+              "`%s` changes what a visitor sees, so it needs screenshots and a human"
+                  .formatted(classification.decidingPath()));
       case MANUAL ->
           classification.decidingPath() == null
               ? MergeDecision.ineligible("the change touches no files")

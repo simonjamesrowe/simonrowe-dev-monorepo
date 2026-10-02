@@ -9,6 +9,8 @@ import {
   type PageResponse,
 } from '../../services/adminApi'
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
+import { MediaPreview } from '../../components/admin/MediaPreview'
+import { ALL_MEDIA_TYPES, kindOf, mimeTypeOf } from '../../components/admin/mediaTypes'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -53,8 +55,11 @@ export function MediaAdmin() {
   }, [loadMedia])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const picked = e.target.files?.[0]
+    if (!picked) return
+    // A .vtt is typed as "" by some browsers; label it so the server accepts it as captions.
+    const type = mimeTypeOf(picked)
+    const file = type === picked.type ? picked : new File([picked], picked.name, { type })
     try {
       setUploading(true)
       setError(null)
@@ -95,9 +100,9 @@ export function MediaAdmin() {
       <div className="admin-page__header">
         <h1 className="admin-page__title">Media Library</h1>
         <label className="admin-btn admin-btn--primary admin-btn--upload">
-          {uploading ? 'Uploading...' : 'Upload Image'}
+          {uploading ? 'Uploading...' : 'Upload media'}
           <input
-            accept="image/*"
+            accept={[...ALL_MEDIA_TYPES, '.vtt'].join(',')}
             className="admin-upload__input"
             disabled={uploading}
             onChange={handleUpload}
@@ -114,7 +119,7 @@ export function MediaAdmin() {
       ) : (
         <>
           {media.length === 0 ? (
-            <div className="admin-empty">No media assets found. Upload an image to get started.</div>
+            <div className="admin-empty">No media assets found. Upload an image, video or captions file to get started.</div>
           ) : (
             <div className="admin-media-grid">
               {media.map((asset) => (
@@ -124,9 +129,10 @@ export function MediaAdmin() {
                   onClick={() => handleSelectAsset(asset)}
                 >
                   <div className="admin-media-card__preview">
-                    <img
+                    <MediaPreview
                       alt={asset.fileName}
                       className="admin-media-card__image"
+                      mimeType={asset.mimeType}
                       src={asset.originalPath}
                     />
                   </div>
@@ -193,11 +199,22 @@ export function MediaAdmin() {
             </button>
           </div>
           <div className="admin-media-detail__body">
-            <img
-              alt={selectedAsset.fileName}
-              className="admin-media-detail__image"
-              src={selectedAsset.originalPath}
-            />
+            {kindOf(selectedAsset.mimeType) === 'video' ? (
+              <video
+                aria-label={selectedAsset.fileName}
+                className="admin-media-detail__image"
+                controls
+                preload="metadata"
+                src={selectedAsset.originalPath}
+              />
+            ) : (
+              <MediaPreview
+                alt={selectedAsset.fileName}
+                className="admin-media-detail__image"
+                mimeType={selectedAsset.mimeType}
+                src={selectedAsset.originalPath}
+              />
+            )}
             <dl className="admin-media-detail__meta">
               <dt>File Name</dt>
               <dd>{selectedAsset.fileName}</dd>

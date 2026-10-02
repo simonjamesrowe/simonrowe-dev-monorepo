@@ -42,16 +42,19 @@ public class LangfuseScoreClient {
    */
   private void logConfiguration() {
     if (!properties.isScoresEnabled()) {
-      LOG.info("Langfuse score submission is DISABLED by configuration "
-          + "(langfuse.scores-enabled=false); no chat-turn scores will be sent to {}.",
+      LOG.info("""
+          Langfuse score submission is DISABLED by configuration \
+          (langfuse.scores-enabled=false); no chat-turn scores will be sent to {}.""",
           properties.getHost());
     } else if (!hasCredentials()) {
-      LOG.warn("Langfuse score submission is enabled but DISABLED IN PRACTICE: "
-          + "langfuse.public-key/secret-key are missing or blank. Set LANGFUSE_PUBLIC_KEY and "
-          + "LANGFUSE_SECRET_KEY to send chat-turn scores to {}.", properties.getHost());
+      LOG.warn("""
+          Langfuse score submission is enabled but DISABLED IN PRACTICE: \
+          langfuse.public-key/secret-key are missing or blank. Set LANGFUSE_PUBLIC_KEY and \
+          LANGFUSE_SECRET_KEY to send chat-turn scores to {}.""", properties.getHost());
     } else {
-      LOG.info("Langfuse score submission is ENABLED: chat-turn scores will be sent to {} "
-          + "in environment '{}'.", properties.getHost(), properties.getEnvironment());
+      LOG.info("""
+          Langfuse score submission is ENABLED: chat-turn scores will be sent to {} \
+          in environment '{}'.""", properties.getHost(), properties.getEnvironment());
     }
   }
 

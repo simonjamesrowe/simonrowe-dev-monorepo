@@ -88,8 +88,8 @@ class CoparentBackupCoverageTest extends AbstractIntegrationTest {
       output.write("[]".getBytes(java.nio.charset.StandardCharsets.UTF_8));
       output.closeEntry();
       output.putNextEntry(new ZipEntry("databases/coparent/collections/families.json"));
-      output.write(("[{\"_id\":{\"$oid\":\"" + familyId.toHexString()
-          + "\"},\"name\":\"Restored\"}]")
+      output.write("""
+          [{"_id":{"$oid":"%s"},"name":"Restored"}]""".formatted(familyId.toHexString())
           .getBytes(java.nio.charset.StandardCharsets.UTF_8));
       output.closeEntry();
     }

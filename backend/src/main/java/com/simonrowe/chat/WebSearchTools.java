@@ -36,14 +36,15 @@ public class WebSearchTools {
   @WithSpan
   @Tool(
       description =
-          "Search the live web for current information about companies Simon has worked at, "
-              + "technologies/skills he lists, or sources in his content. Also use it for "
-              + "recruiter/employer questions to find current UK job openings comparable to "
-              + "Simon's profile (e.g. on LinkedIn, Indeed, Reed, Totaljobs, CV-Library, "
-              + "Glassdoor) — include a UK site or location term in the query. Use ONLY to "
-              + "enrich topics grounded in Simon's profile/experience/skills — not for general "
-              + "or unrelated questions. Cite the results as inline markdown links. Returns a "
-              + "list of results with title, url, and snippet.")
+          """
+          Search the live web for current information about companies Simon has worked at, \
+          technologies/skills he lists, or sources in his content. Also use it for \
+          recruiter/employer questions to find current UK job openings comparable to \
+          Simon's profile (e.g. on LinkedIn, Indeed, Reed, Totaljobs, CV-Library, \
+          Glassdoor) — include a UK site or location term in the query. Use ONLY to \
+          enrich topics grounded in Simon's profile/experience/skills — not for general \
+          or unrelated questions. Cite the results as inline markdown links. Returns a \
+          list of results with title, url, and snippet.""")
   public Object webSearch(
       @ToolParam(
               description =

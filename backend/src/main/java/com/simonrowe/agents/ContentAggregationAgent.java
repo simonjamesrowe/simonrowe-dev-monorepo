@@ -149,8 +149,7 @@ public class ContentAggregationAgent {
         htmlScraper.scrapeArticlePagePublic(normalizedUrl);
     if (content == null) {
       log.warn("Failed to scrape URL: {}", normalizedUrl);
-      return "Failed to scrape URL (site may block automated access): "
-          + normalizedUrl;
+      return "Failed to scrape URL (site may block automated access): " + normalizedUrl;
     }
 
     ContentClassification classification =
@@ -324,8 +323,9 @@ public class ContentAggregationAgent {
           parseEventDate(classification.publishedDate());
     }
     if (publishedDate == null) {
-      log.info("No date from scraper or LLM for '{}', "
-          + "fetching detail page", content.title());
+      log.info("""
+          No date from scraper or LLM for '{}', \
+          fetching detail page""", content.title());
       publishedDate =
           htmlScraper.extractPublishedDateFromUrl(content.url());
     }
@@ -361,8 +361,9 @@ public class ContentAggregationAgent {
       eventDate = content.publishedDate();
     }
     if (eventDate == null) {
-      log.info("No date from scraper or LLM for event '{}', "
-          + "fetching detail page", content.title());
+      log.info("""
+          No date from scraper or LLM for event '{}', \
+          fetching detail page""", content.title());
       eventDate =
           htmlScraper.extractPublishedDateFromUrl(content.url());
     }

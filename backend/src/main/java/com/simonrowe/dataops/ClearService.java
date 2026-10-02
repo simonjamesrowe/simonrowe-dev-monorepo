@@ -58,9 +58,9 @@ public class ClearService {
       indexService.fullSyncSiteIndex();
       indexService.fullSyncBlogIndex();
 
-      operationsService.completeOperation(
-          "All local data cleared. " + COLLECTIONS.size()
-              + " collections dropped, media files deleted, search indices cleared.");
+      operationsService.completeOperation("""
+          All local data cleared. %s collections dropped, media files deleted, \
+          search indices cleared.""".formatted(COLLECTIONS.size()));
 
     } catch (Exception ex) {
       LOG.error("Clear operation failed", ex);

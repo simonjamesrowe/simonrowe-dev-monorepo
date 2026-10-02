@@ -17,8 +17,9 @@ class LogSignatureTest {
   private static final Instant NOW = Instant.parse("2026-09-06T00:00:00Z");
 
   @Test
-  @DisplayName("a null sourceKey defaults to the same discriminated form an unidentifiable line "
-      + "gets, keyed on the group's own signature")
+  @DisplayName("""
+      a null sourceKey defaults to the same discriminated form an unidentifiable line \
+      gets, keyed on the group's own signature""")
   void nullSourceKeyDefaultsToDiscriminatedLineForm() {
     LogSignature signature =
         new LogSignature(

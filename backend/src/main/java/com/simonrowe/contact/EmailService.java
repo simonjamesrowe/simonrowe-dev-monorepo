@@ -46,9 +46,15 @@ public class EmailService {
   }
 
   private String buildEmailBody(final ContactSubmission submission) {
-    return "A message has been sent from the site: " + submission.referrer() + "\n"
-        + "Email Address: " + submission.email() + "\n"
-        + "Name: " + submission.firstName() + " " + submission.lastName() + "\n"
-        + "Content: " + submission.message();
+    return """
+        A message has been sent from the site: %s
+        Email Address: %s
+        Name: %s %s
+        Content: %s""".formatted(
+        submission.referrer(),
+        submission.email(),
+        submission.firstName(),
+        submission.lastName(),
+        submission.message());
   }
 }

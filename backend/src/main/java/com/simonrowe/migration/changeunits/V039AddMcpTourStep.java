@@ -36,8 +36,9 @@ public class V039AddMcpTourStep {
   private static final String TITLE = "Plug your own agent in";
   private static final String SELECTOR = ".tour-mcp-tools";
   private static final String DESCRIPTION =
-      "This site is also a Model Context Protocol server. These are the tools it exposes — "
-          + "run them here, or connect your own agent and call them directly.";
+      """
+      This site is also a Model Context Protocol server. These are the tools it exposes — \
+      run them here, or connect your own agent and call them directly.""";
   private static final String POSITION = "top";
   private static final String ROUTE = "/mcp";
 

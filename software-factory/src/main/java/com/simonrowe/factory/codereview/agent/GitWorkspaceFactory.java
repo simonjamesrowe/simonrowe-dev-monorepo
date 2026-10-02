@@ -68,9 +68,8 @@ public class GitWorkspaceFactory {
               "fetch",
               "--quiet",
               "origin",
-              "+refs/pull/"
-                  + pullRequest.pullNumber()
-                  + "/head:refs/remotes/origin/review-head"),
+              "+refs/pull/%s/head:refs/remotes/origin/review-head"
+                  .formatted(pullRequest.pullNumber())),
           repository,
           pullRequest,
           heartbeat);
@@ -178,9 +177,10 @@ public class GitWorkspaceFactory {
    */
   public static String basicAuthorizationHeader(final String accessToken) {
     String credential = "x-access-token:" + accessToken;
-    return "Authorization: Basic "
-        + Base64.getEncoder()
+    String encoded =
+        Base64.getEncoder()
             .encodeToString(credential.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    return "Authorization: Basic " + encoded;
   }
 
   /**

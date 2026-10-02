@@ -34,9 +34,10 @@ class SitemapHtmlScraperTest {
   @Test
   void extractPublishedDate_parsesArticlePublishedTimeMeta() {
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<meta property=\"article:published_time\" content=\"2025-03-15T10:00:00Z\"/>"
-            + "</head><body></body></html>");
+        """
+        <html><head>\
+        <meta property="article:published_time" content="2025-03-15T10:00:00Z"/>\
+        </head><body></body></html>""");
 
     Instant result = scraper.extractPublishedDate(doc);
 
@@ -46,9 +47,10 @@ class SitemapHtmlScraperTest {
   @Test
   void extractPublishedDate_parsesOgArticlePublishedTimeMeta() {
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<meta property=\"og:article:published_time\" content=\"2025-06-01T08:30:00Z\"/>"
-            + "</head><body></body></html>");
+        """
+        <html><head>\
+        <meta property="og:article:published_time" content="2025-06-01T08:30:00Z"/>\
+        </head><body></body></html>""");
 
     Instant result = scraper.extractPublishedDate(doc);
 
@@ -58,9 +60,10 @@ class SitemapHtmlScraperTest {
   @Test
   void extractPublishedDate_parsesTimeElementDatetime() {
     Document doc = Jsoup.parse(
-        "<html><head></head><body>"
-            + "<time datetime=\"2025-09-20T14:00:00Z\">September 20</time>"
-            + "</body></html>");
+        """
+        <html><head></head><body>\
+        <time datetime="2025-09-20T14:00:00Z">September 20</time>\
+        </body></html>""");
 
     Instant result = scraper.extractPublishedDate(doc);
 
@@ -70,9 +73,10 @@ class SitemapHtmlScraperTest {
   @Test
   void extractPublishedDate_parsesDateMetaTag() {
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<meta name=\"date\" content=\"2025-11-05\"/>"
-            + "</head><body></body></html>");
+        """
+        <html><head>\
+        <meta name="date" content="2025-11-05"/>\
+        </head><body></body></html>""");
 
     Instant result = scraper.extractPublishedDate(doc);
 
@@ -83,9 +87,10 @@ class SitemapHtmlScraperTest {
   void extractPublishedDate_parsesJsonLdDatePublished() {
     String jsonLd = "{\"@type\":\"Article\",\"datePublished\":\"2025-07-04T12:00:00Z\"}";
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<script type=\"application/ld+json\">" + jsonLd + "</script>"
-            + "</head><body></body></html>");
+        """
+        <html><head>\
+        <script type="application/ld+json">%s</script>\
+        </head><body></body></html>""".formatted(jsonLd));
 
     Instant result = scraper.extractPublishedDate(doc);
 
@@ -96,9 +101,10 @@ class SitemapHtmlScraperTest {
   void extractPublishedDate_parsesJsonLdDateCreatedWhenDatePublishedAbsent() {
     String jsonLd = "{\"@type\":\"Article\",\"dateCreated\":\"2025-08-12T00:00:00Z\"}";
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<script type=\"application/ld+json\">" + jsonLd + "</script>"
-            + "</head><body></body></html>");
+        """
+        <html><head>\
+        <script type="application/ld+json">%s</script>\
+        </head><body></body></html>""".formatted(jsonLd));
 
     Instant result = scraper.extractPublishedDate(doc);
 
@@ -111,9 +117,10 @@ class SitemapHtmlScraperTest {
     // which is not ISO-8601 and previously failed to parse.
     String jsonLd = "{\"@type\":\"Article\",\"datePublished\":\"Jul 16, 2026\"}";
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<script type=\"application/ld+json\">" + jsonLd + "</script>"
-            + "</head><body></body></html>");
+        """
+        <html><head>\
+        <script type="application/ld+json">%s</script>\
+        </head><body></body></html>""".formatted(jsonLd));
 
     Instant result = scraper.extractPublishedDate(doc);
 
@@ -123,9 +130,10 @@ class SitemapHtmlScraperTest {
   @Test
   void extractPublishedDate_parsesItempropDatePublishedContent() {
     Document doc = Jsoup.parse(
-        "<html><head></head><body>"
-            + "<span itemprop=\"datePublished\" content=\"2025-05-22T09:00:00Z\"></span>"
-            + "</body></html>");
+        """
+        <html><head></head><body>\
+        <span itemprop="datePublished" content="2025-05-22T09:00:00Z"></span>\
+        </body></html>""");
 
     Instant result = scraper.extractPublishedDate(doc);
 
@@ -144,11 +152,12 @@ class SitemapHtmlScraperTest {
   @Test
   void extractPublishedDate_prefersArticlePublishedTimeOverTimeElement() {
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<meta property=\"article:published_time\" content=\"2025-01-01T00:00:00Z\"/>"
-            + "</head><body>"
-            + "<time datetime=\"2025-12-31T00:00:00Z\">December 31</time>"
-            + "</body></html>");
+        """
+        <html><head>\
+        <meta property="article:published_time" content="2025-01-01T00:00:00Z"/>\
+        </head><body>\
+        <time datetime="2025-12-31T00:00:00Z">December 31</time>\
+        </body></html>""");
 
     Instant result = scraper.extractPublishedDate(doc);
 
@@ -274,19 +283,20 @@ class SitemapHtmlScraperTest {
   @Test
   void scrapeEventsPage_extractsEventsFromArticleElements() {
     Document doc = Jsoup.parse(
-        "<html><body>"
-            + "<article>"
-            + "  <h3>Java Meetup London 2025</h3>"
-            + "  <p>Join us for talks and networking.</p>"
-            + "  <a href=\"https://example.com/events/java-meetup\">Register</a>"
-            + "  <time datetime=\"2025-10-15T18:00:00Z\">October 15</time>"
-            + "</article>"
-            + "<article>"
-            + "  <h3>Spring Boot Workshop Online</h3>"
-            + "  <p>Hands-on workshop for Spring developers.</p>"
-            + "  <a href=\"https://example.com/events/spring-workshop\">Sign up</a>"
-            + "</article>"
-            + "</body></html>",
+        """
+        <html><body>\
+        <article>\
+          <h3>Java Meetup London 2025</h3>\
+          <p>Join us for talks and networking.</p>\
+          <a href="https://example.com/events/java-meetup">Register</a>\
+          <time datetime="2025-10-15T18:00:00Z">October 15</time>\
+        </article>\
+        <article>\
+          <h3>Spring Boot Workshop Online</h3>\
+          <p>Hands-on workshop for Spring developers.</p>\
+          <a href="https://example.com/events/spring-workshop">Sign up</a>\
+        </article>\
+        </body></html>""",
         "https://example.com/events");
 
     TestableHtmlScraper testScraper = new TestableHtmlScraper(doc);
@@ -302,13 +312,14 @@ class SitemapHtmlScraperTest {
   @Test
   void scrapeEventsPage_parsesEventDateFromTimeElement() {
     Document doc = Jsoup.parse(
-        "<html><body>"
-            + "<article>"
-            + "  <h3>Cloud Native Conference 2025</h3>"
-            + "  <a href=\"https://example.com/events/cloud-native\">Details</a>"
-            + "  <time datetime=\"2025-11-20T09:00:00Z\">November 20</time>"
-            + "</article>"
-            + "</body></html>",
+        """
+        <html><body>\
+        <article>\
+          <h3>Cloud Native Conference 2025</h3>\
+          <a href="https://example.com/events/cloud-native">Details</a>\
+          <time datetime="2025-11-20T09:00:00Z">November 20</time>\
+        </article>\
+        </body></html>""",
         "https://example.com/events");
 
     TestableHtmlScraper testScraper = new TestableHtmlScraper(doc);
@@ -322,16 +333,17 @@ class SitemapHtmlScraperTest {
   @Test
   void scrapeEventsPage_skipsEventsWithShortTitles() {
     Document doc = Jsoup.parse(
-        "<html><body>"
-            + "<article>"
-            + "  <h3>OK</h3>"
-            + "  <a href=\"https://example.com/events/short\">Link</a>"
-            + "</article>"
-            + "<article>"
-            + "  <h3>Kubernetes Deep Dive Workshop</h3>"
-            + "  <a href=\"https://example.com/events/k8s-workshop\">Register</a>"
-            + "</article>"
-            + "</body></html>",
+        """
+        <html><body>\
+        <article>\
+          <h3>OK</h3>\
+          <a href="https://example.com/events/short">Link</a>\
+        </article>\
+        <article>\
+          <h3>Kubernetes Deep Dive Workshop</h3>\
+          <a href="https://example.com/events/k8s-workshop">Register</a>\
+        </article>\
+        </body></html>""",
         "https://example.com/events");
 
     TestableHtmlScraper testScraper = new TestableHtmlScraper(doc);
@@ -344,12 +356,13 @@ class SitemapHtmlScraperTest {
   @Test
   void scrapeEventsPage_setsIsEventTrue() {
     Document doc = Jsoup.parse(
-        "<html><body>"
-            + "<article>"
-            + "  <h3>Platform Engineering Summit 2025</h3>"
-            + "  <a href=\"https://example.com/events/platform-summit\">Attend</a>"
-            + "</article>"
-            + "</body></html>",
+        """
+        <html><body>\
+        <article>\
+          <h3>Platform Engineering Summit 2025</h3>\
+          <a href="https://example.com/events/platform-summit">Attend</a>\
+        </article>\
+        </body></html>""",
         "https://example.com/events");
 
     TestableHtmlScraper testScraper = new TestableHtmlScraper(doc);
@@ -367,9 +380,10 @@ class SitemapHtmlScraperTest {
   @Test
   void extractPublishedDate_ignoresMalformedJsonLd() {
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<script type=\"application/ld+json\">{not valid json}</script>"
-            + "</head><body></body></html>");
+        """
+        <html><head>\
+        <script type="application/ld+json">{not valid json}</script>\
+        </head><body></body></html>""");
 
     // Should not throw; returns null because JSON-LD is unparsable
     Instant result = scraper.extractPublishedDate(doc);
@@ -380,9 +394,10 @@ class SitemapHtmlScraperTest {
   @Test
   void extractPublishedDate_parsesDateOnlyString() {
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<meta property=\"article:published_time\" content=\"2025-04-22\"/>"
-            + "</head><body></body></html>");
+        """
+        <html><head>\
+        <meta property="article:published_time" content="2025-04-22"/>\
+        </head><body></body></html>""");
 
     Instant result = scraper.extractPublishedDate(doc);
 
@@ -400,10 +415,11 @@ class SitemapHtmlScraperTest {
   @Test
   void scrape_extractsAuthorFromMetaTag() {
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<meta name=\"author\" content=\"Jane Smith\"/>"
-            + "<title>Test Article</title>"
-            + "</head><body><article>Some content here.</article></body></html>");
+        """
+        <html><head>\
+        <meta name="author" content="Jane Smith"/>\
+        <title>Test Article</title>\
+        </head><body><article>Some content here.</article></body></html>""");
 
     // Verify the selector the scraper uses to find author
     org.jsoup.nodes.Element authorMeta = doc.selectFirst("meta[name=author]");
@@ -414,10 +430,11 @@ class SitemapHtmlScraperTest {
   @Test
   void scrape_extractsImageFromOpenGraph() {
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<meta property=\"og:image\" content=\"https://example.com/images/hero.jpg\"/>"
-            + "<title>Test Article</title>"
-            + "</head><body><article>Content here.</article></body></html>");
+        """
+        <html><head>\
+        <meta property="og:image" content="https://example.com/images/hero.jpg"/>\
+        <title>Test Article</title>\
+        </head><body><article>Content here.</article></body></html>""");
 
     // Verify the selector the scraper uses to find og:image
     org.jsoup.nodes.Element ogImage = doc.selectFirst("meta[property=og:image]");
@@ -428,10 +445,11 @@ class SitemapHtmlScraperTest {
   @Test
   void scrape_ogTitleOverridesDocumentTitle() {
     Document doc = Jsoup.parse(
-        "<html><head>"
-            + "<title>Raw Page Title</title>"
-            + "<meta property=\"og:title\" content=\"Better Article Title\"/>"
-            + "</head><body><article>Content here.</article></body></html>");
+        """
+        <html><head>\
+        <title>Raw Page Title</title>\
+        <meta property="og:title" content="Better Article Title"/>\
+        </head><body><article>Content here.</article></body></html>""");
 
     // Verify og:title is present and would override doc.title()
     org.jsoup.nodes.Element ogTitle = doc.selectFirst("meta[property=og:title]");

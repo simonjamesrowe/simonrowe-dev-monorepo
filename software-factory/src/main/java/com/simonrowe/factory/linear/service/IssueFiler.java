@@ -179,8 +179,9 @@ public class IssueFiler {
           // comment on, and creating one — or filing a "recurrence" whose actual content is the
           // ABSENCE of the problem — would be worse than silence.
           log.info(
-              "Fingerprint {} has no open issue to comment on; a comment-only filing does"
-                  + " nothing",
+              """
+              Fingerprint {} has no open issue to comment on; a comment-only filing does\
+               nothing""",
               fingerprint);
       default -> throw new IllegalStateException("Unhandled decision " + effective);
     }
@@ -358,12 +359,14 @@ public class IssueFiler {
   }
 
   private static String regressionBody(final IssueFiling filing, final TrackedIssue predecessor) {
-    return filing.body()
-        + "\n\n---\n\nThis is a regression of "
-        + predecessor.identifier()
-        + " ("
-        + predecessor.url()
-        + "), which was marked complete. Same fingerprint, new occurrence: "
-        + filing.occurrenceDetail();
+    return """
+        %s
+
+        ---
+
+        This is a regression of %s (%s), which was marked complete. Same fingerprint, \
+        new occurrence: %s"""
+        .formatted(
+            filing.body(), predecessor.identifier(), predecessor.url(), filing.occurrenceDetail());
   }
 }

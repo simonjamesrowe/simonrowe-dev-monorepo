@@ -58,8 +58,9 @@ public class SchoolVectorStoreConfig {
     final Rest5Client client = rest5Client.getIfAvailable();
     final EmbeddingModel model = embeddingModel.getIfAvailable();
     if (client == null || model == null) {
-      LOG.warn("school.enabled is true but Elasticsearch or the embedding model is unavailable; "
-          + "Term Time will find nothing");
+      LOG.warn("""
+          school.enabled is true but Elasticsearch or the embedding model is unavailable; \
+          Term Time will find nothing""");
       return SchoolVectorStore.disabled();
     }
 

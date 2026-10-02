@@ -108,14 +108,16 @@ public class SchoolChatService {
       // Deliberately not an error status: from the visitor's point of view this is the service
       // being quiet, not their request being wrong, and a 500 would look like a bug.
       return SchoolChatResponse.unavailable(
-          "Term Time has answered as many questions as it can today. Please try again tomorrow, "
-              + "or check https://www.kilmorieschool.co.uk directly.");
+          """
+          Term Time has answered as many questions as it can today. Please try again tomorrow, \
+          or check https://www.kilmorieschool.co.uk directly.""");
     }
 
     if (!guardrail.isAboutSchool(question)) {
       return SchoolChatResponse.declined(
-          "I can only help with questions about Kilmorie Primary School - term dates, events, "
-              + "clubs, lunches and school arrangements.");
+          """
+          I can only help with questions about Kilmorie Primary School - term dates, events, \
+          clubs, lunches and school arrangements.""");
     }
 
     final SchoolTools tools =
@@ -188,12 +190,14 @@ public class SchoolChatService {
       final String clientAddress) {
 
     if (!audience.authenticated() && !budget.tryConsume()) {
-      return Flux.just("Term Time has answered as many questions as it can today. Please try "
-          + "again tomorrow, or check https://www.kilmorieschool.co.uk directly.");
+      return Flux.just("""
+          Term Time has answered as many questions as it can today. Please try \
+          again tomorrow, or check https://www.kilmorieschool.co.uk directly.""");
     }
     if (!guardrail.isAboutSchool(question)) {
-      return Flux.just("I can only help with questions about Kilmorie Primary School - term "
-          + "dates, events, clubs, lunches and school arrangements.");
+      return Flux.just("""
+          I can only help with questions about Kilmorie Primary School - term \
+          dates, events, clubs, lunches and school arrangements.""");
     }
 
     final SchoolTools tools =

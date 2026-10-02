@@ -33,13 +33,16 @@ public class DigestMetadataGenerator {
       Pattern.compile("^[\\s*#`-]*Description:\\**\\s*");
 
   private static final String METADATA_PROMPT =
-      "Generate metadata for a personal editorial digest post by Simon Rowe. "
-          + "Return exactly two lines in this format:\n"
-          + "Title: <human title, under 90 characters>\n"
-          + "Description: <one sentence, under 160 characters>\n"
-          + "Use first-person curated phrasing. Do not use the phrases "
-          + "'AI & Tech Roundup' or 'This week in AI'. Base the title on the specific themes "
-          + "of the source material.\n\n";
+      """
+      Generate metadata for a personal editorial digest post by Simon Rowe. \
+      Return exactly two lines in this format:
+      Title: <human title, under 90 characters>
+      Description: <one sentence, under 160 characters>
+      Use first-person curated phrasing. Do not use the phrases \
+      'AI & Tech Roundup' or 'This week in AI'. Base the title on the specific themes \
+      of the source material.
+      
+      """;
 
   private final Ai ai;
   private final String model;

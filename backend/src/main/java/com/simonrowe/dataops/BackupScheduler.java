@@ -62,8 +62,9 @@ public class BackupScheduler {
       try {
         retentionService.pruneToLimit();
       } catch (Exception ex) {
-        LOG.error("Nightly backup succeeded but retention pruning failed; "
-            + "old backups are accumulating in Drive", ex);
+        LOG.error("""
+            Nightly backup succeeded but retention pruning failed; \
+            old backups are accumulating in Drive""", ex);
       }
     } catch (Exception ex) {
       LOG.error("Nightly backup job errored", ex);

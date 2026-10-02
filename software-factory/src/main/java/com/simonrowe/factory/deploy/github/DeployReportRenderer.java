@@ -85,9 +85,11 @@ public class DeployReportRenderer {
 
     body.append("\n---\n\n");
     body.append(
-        "Opened automatically by the `deployer`. Deploy history is in the `deploy_runs` "
-            + "collection of the `software_factory` database, and the run itself is in the "
-            + "Temporal UI while it is inside the retention window.\n");
+        """
+        Opened automatically by the `deployer`. Deploy history is in the `deploy_runs` \
+        collection of the `software_factory` database, and the run itself is in the \
+        Temporal UI while it is inside the retention window.
+        """);
     return body.toString();
   }
 
@@ -164,35 +166,42 @@ public class DeployReportRenderer {
         // frontend image, so a frozen checkout no longer freezes the SPA's routing with it.
         // It used to be bind-mounted, and naming a file here that is in fact live would send a
         // reader looking in the wrong place.
-        "The new images for this commit are running, but the host-side configuration was "
-            + "**not** applied, so anything this commit changed in `docker-compose.prod.yml`, "
-            + "`config/nginx/` or `scripts/` is not live. Until this is resolved every later "
-            + "merge deploys images only too, because the held-back comparison is against this "
-            + "checkout rather than against the previous deploy.\n\n");
+        """
+        The new images for this commit are running, but the host-side configuration was \
+        **not** applied, so anything this commit changed in `docker-compose.prod.yml`, \
+        `config/nginx/` or `scripts/` is not live. Until this is resolved every later \
+        merge deploys images only too, because the held-back comparison is against this \
+        checkout rather than against the previous deploy.
+
+        """);
     body.append(configSyncSection(record));
     return body.toString();
   }
 
   private String siteState(final DeployRunRecord record) {
     if (record.maintenancePageLeftUp()) {
-      return "> [!CAUTION]\n"
-          + "> **The site is showing the maintenance page and needs a human.** The rollback did "
-          + "not verify clean, so the page was deliberately left up rather than exposing a "
-          + "broken site.";
+      return """
+          > [!CAUTION]
+          > **The site is showing the maintenance page and needs a human.** The rollback did \
+          not verify clean, so the page was deliberately left up rather than exposing a \
+          broken site.""";
     }
     return switch (record.status()) {
       case ROLLED_BACK ->
-          "> [!WARNING]\n"
-              + "> **The site is up, on the previous version.** This commit was deployed, failed "
-              + "verification, and was rolled back automatically.";
+          """
+          > [!WARNING]
+          > **The site is up, on the previous version.** This commit was deployed, failed \
+          verification, and was rolled back automatically.""";
       case ROLLBACK_DISABLED ->
-          "> [!CAUTION]\n"
-              + "> **Rollback was disabled, so this commit is still deployed and failing.**";
+          """
+          > [!CAUTION]
+          > **Rollback was disabled, so this commit is still deployed and failing.**""";
       case DEPLOYED, DEPLOYED_IMAGES_ONLY -> "> [!NOTE]\n> **The site is up.**";
       default ->
-          "> [!WARNING]\n"
-              + "> **The deploy failed.** Check the site and the container states before "
-              + "assuming either way.";
+          """
+          > [!WARNING]
+          > **The deploy failed.** Check the site and the container states before \
+          assuming either way.""";
     };
   }
 
@@ -233,9 +242,12 @@ public class DeployReportRenderer {
 
     if (!record.configSync().heldBackServices().isEmpty()) {
       section.append(
-          "These services are affected by a configuration change in this commit and are "
-              + "**not** on the allowlist the automation may recreate, so nothing was applied "
-              + "at all rather than applying it half way:\n\n");
+          """
+          These services are affected by a configuration change in this commit and are \
+          **not** on the allowlist the automation may recreate, so nothing was applied \
+          at all rather than applying it half way:
+          
+          """);
       record
           .configSync()
           .heldBackServices()
@@ -244,12 +256,16 @@ public class DeployReportRenderer {
     }
     if (record.configSync().missingVariable() != null) {
       section.append(
-          "The new compose file references an environment variable the host's `.env` does not "
-              + "define: `");
+          """
+          The new compose file references an environment variable the host's `.env` does not \
+          define: `""");
       section.append(record.configSync().missingVariable());
       section.append(
-          "`. `.env` is host-managed and never synced, so this needs adding by hand before the "
-              + "configuration can be applied.\n\n");
+          """
+          `. `.env` is host-managed and never synced, so this needs adding by hand before the \
+          configuration can be applied.
+          
+          """);
     }
     if (record.configSync().manualCommand() != null) {
       section.append("Apply it by hand on the host with:\n\n```bash\n");

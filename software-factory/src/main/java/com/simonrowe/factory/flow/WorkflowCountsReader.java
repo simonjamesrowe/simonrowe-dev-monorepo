@@ -37,8 +37,8 @@ public class WorkflowCountsReader {
    */
   public NodeCounts countsFor(final String workflowType) {
     String scope = "WorkflowType = '" + workflowType + "'";
-    String since = " AND StartTime > '"
-        + Instant.now().minus(WINDOW).truncatedTo(ChronoUnit.SECONDS) + "'";
+    String since = " AND StartTime > '%s'"
+        .formatted(Instant.now().minus(WINDOW).truncatedTo(ChronoUnit.SECONDS));
     Long running = count(scope + " AND ExecutionStatus = 'Running'");
     Long ok = count(scope + " AND ExecutionStatus = 'Completed'" + since);
     Long failed = count(scope + " AND ExecutionStatus = 'Failed'" + since);

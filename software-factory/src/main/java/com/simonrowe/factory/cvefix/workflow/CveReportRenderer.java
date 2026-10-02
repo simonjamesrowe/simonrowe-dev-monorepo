@@ -67,8 +67,11 @@ public final class CveReportRenderer {
       }
     }
 
-    markdown.append("\nA future Linear-triggered repair agent will own remediation; this scan does "
-        + "not modify the repository.\n");
+    markdown.append("""
+        
+        A future Linear-triggered repair agent will own remediation; this scan does \
+        not modify the repository.
+        """);
     return markdown.toString();
   }
 

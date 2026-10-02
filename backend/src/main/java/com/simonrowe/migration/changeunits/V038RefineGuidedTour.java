@@ -60,8 +60,9 @@ public class V038RefineGuidedTour {
           "bottom", "/", 8000)),
       Map.entry("default-home-writing", new PreviousDefault(
           "Browse recent writing", ".tour-featured-writing",
-          "Recent engineering writing is collected here. Use the arrows to browse, "
-              + "or open the full blog.",
+          """
+          Recent engineering writing is collected here. Use the arrows to browse, \
+          or open the full blog.""",
           "top", "/", 8000)),
       Map.entry("default-profile", new PreviousDefault(
           "Read the profile", ".tour-profile-heading",
@@ -80,8 +81,9 @@ public class V038RefineGuidedTour {
           "See recent appearances, articles, meetups, and events.", "top", "/news-events", 7000)),
       Map.entry("default-platform-status", new PreviousDefault(
           "See the platform status", ".tour-status-running",
-          "This live view shows the services running in production and the commit "
-              + "each was built from.",
+          """
+          This live view shows the services running in production and the commit \
+          each was built from.""",
           "bottom", "/status", 12000)));
   /**
    * The two contact stops this migration removes, and the previous default each must still
@@ -102,8 +104,9 @@ public class V038RefineGuidedTour {
           "bottom", "/", 7000));
   private static final PreviousDefault UNTAGGED_HOMEPAGE_CONTACT = new PreviousDefault(
       "Get In Touch", HOMEPAGE_CONTACT_SELECTOR,
-      "Interested in working together or just want to say hello? Hit the button to send me "
-          + "a message directly.",
+      """
+      Interested in working together or just want to say hello? Hit the button to send me \
+      a message directly.""",
       "bottom", "/", 7000);
 
   @Execution

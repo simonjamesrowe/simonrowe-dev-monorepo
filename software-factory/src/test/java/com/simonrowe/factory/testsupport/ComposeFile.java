@@ -46,8 +46,10 @@ public final class ComposeFile {
   public static List<String> lines() throws IOException {
     if (!Files.exists(PATH)) {
       throw new AssertionError(
-          "Could not find " + PATH.toAbsolutePath() + " - this test assumes the Gradle test "
-              + "working directory is the module directory, one level below the repo root.");
+          """
+          Could not find %s - this test assumes the Gradle test \
+          working directory is the module directory, one level below the repo \
+          root.""".formatted(PATH.toAbsolutePath()));
     }
     return Files.readAllLines(PATH);
   }
@@ -81,11 +83,10 @@ public final class ComposeFile {
     }
     if (!found) {
       throw new AssertionError(
-          "Could not find a '"
-              + serviceName
-              + ":' service block in "
-              + PATH.toAbsolutePath()
-              + " - has it been renamed or removed? This test must not pass by reading nothing.");
+          """
+          Could not find a '%s:' service block in %s - has it been renamed or removed? \
+          This test must not pass by reading nothing."""
+              .formatted(serviceName, PATH.toAbsolutePath()));
     }
     return block;
   }

@@ -9,9 +9,12 @@ import java.util.Arrays;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.server.MimeMappings;
+import org.springframework.boot.web.server.WebServerFactoryCustomizer;
+import org.springframework.boot.web.server.servlet.ConfigurableServletWebServerFactory;
 import org.springframework.context.annotation.Bean;
-import org.springframework.http.CacheControl;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.CacheControl;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -46,6 +49,20 @@ public class WebConfig implements WebMvcConfigurer {
     final UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", config);
     return source;
+  }
+
+  /**
+   * Serves {@code .vtt} as {@code text/vtt}. The servlet container has no mapping for WebVTT, so
+   * a demo video's captions in the media library went out as {@code application/octet-stream},
+   * which browsers refuse for a captions track. The uploads handler takes its types from here.
+   */
+  @Bean
+  WebServerFactoryCustomizer<ConfigurableServletWebServerFactory> captionsMimeMapping() {
+    return factory -> {
+      MimeMappings mappings = new MimeMappings();
+      mappings.add("vtt", "text/vtt");
+      factory.addMimeMappings(mappings);
+    };
   }
 
   @Override

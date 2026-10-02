@@ -34,9 +34,10 @@ public class LinkRoundupScraper {
 
   private static final int TIMEOUT_MS = 15000;
   private static final String USER_AGENT =
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-          + "AppleWebKit/537.36 (KHTML, like Gecko) "
-          + "Chrome/131.0.0.0 Safari/537.36";
+      """
+      Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
+      AppleWebKit/537.36 (KHTML, like Gecko) \
+      Chrome/131.0.0.0 Safari/537.36""";
 
   private static final String PRIMARY_SELECTOR = ".news-bar li";
   private static final String FALLBACK_SELECTOR = "#news li";

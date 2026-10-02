@@ -200,17 +200,23 @@ class SignatureExtractorTest {
   @DisplayName("SIM-13/24/25: three phrasings from one logger become one group")
   void oneLoggerIsOneGroup() {
     String prefix =
-        "{\"@timestamp\":\"2026-09-05T08:18:45.175457758Z\",\"log\":{\"level\":\"ERROR\","
-            + "\"logger\":\"com.embabel.agent.spi.validation.DefaultAgentValidationManager\"},"
-            + "\"message\":\"";
+        """
+        {"@timestamp":"2026-09-05T08:18:45.175457758Z","log":{"level":"ERROR",\
+        "logger":"com.embabel.agent.spi.validation.DefaultAgentValidationManager"},\
+        "message":"\
+        """;
     List<LogSignature> grouped =
         SignatureExtractor.group(
             List.of(
                 line("backend", Severity.ERROR, prefix + "Validation failed with 1 errors:\"}"),
-                line("backend", Severity.ERROR, prefix
-                    + "- MISSING_GOALS: Agent 'ContentAggregation' must have one goal\"}"),
-                line("backend", Severity.ERROR, prefix
-                    + "- MISSING_GOALS: Agent 'WeeklyDigest' must have one goal\"}")));
+                line(
+                    "backend",
+                    Severity.ERROR,
+                    prefix + "- MISSING_GOALS: Agent 'ContentAggregation' must have one goal\"}"),
+                line(
+                    "backend",
+                    Severity.ERROR,
+                    prefix + "- MISSING_GOALS: Agent 'WeeklyDigest' must have one goal\"}")));
 
     assertThat(grouped).hasSize(1);
     assertThat(grouped.getFirst().occurrences()).isEqualTo(3);
@@ -224,8 +230,10 @@ class SignatureExtractorTest {
   @DisplayName("SIM-16/23: one Alloy component with two different error payloads is one group")
   void oneAlloyComponentIsOneGroup() {
     String prefix =
-        "ts=2026-09-03T05:59:25.342351851Z level=error msg=\"final error sending batch\" "
-            + "component_id=loki.write.grafana_cloud error=\"";
+        """
+        ts=2026-09-03T05:59:25.342351851Z level=error msg="final error sending batch" \
+        component_id=loki.write.grafana_cloud error="\
+        """;
     List<LogSignature> grouped =
         SignatureExtractor.group(
             List.of(

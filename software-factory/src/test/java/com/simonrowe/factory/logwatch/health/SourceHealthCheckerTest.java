@@ -24,8 +24,9 @@ class SourceHealthCheckerTest {
   @DisplayName("the August 2026 outage, replayed, is SILENT and names the 429")
   void replaysTheAugustOutage() {
     String realError =
-        "server returned HTTP status 429 Too Many Requests (429): ingestion rate limit "
-            + "exceeded for user 1539009 (limit: 0 bytes/sec)";
+        """
+        server returned HTTP status 429 Too Many Requests (429): ingestion rate limit \
+        exceeded for user 1539009 (limit: 0 bytes/sec)""";
 
     SourceHealth health =
         SourceHealthChecker.check(Optional.of(realError), true, false, 0, FLOOR, DAY);

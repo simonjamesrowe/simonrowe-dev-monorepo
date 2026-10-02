@@ -25,8 +25,10 @@ class NarrationScriptChunkerTest {
 
   @Test
   void everyChunkStaysWithinTheByteBudget() {
-    String script = ("The quick brown fox jumps over the lazy dog. "
-        + "Pack my box with five dozen liquor jugs. ").repeat(20);
+    String script = ("""
+        The quick brown fox jumps over the lazy dog. \
+        Pack my box with five dozen liquor jugs.\s\
+        """).repeat(20);
 
     List<String> chunks = chunker.chunk(script, 200);
 

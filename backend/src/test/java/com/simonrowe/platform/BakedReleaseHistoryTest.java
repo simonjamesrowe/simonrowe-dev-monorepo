@@ -13,18 +13,18 @@ class BakedReleaseHistoryTest {
 
   @Test
   void parsesOneCommitPerRecord() {
-    String raw = RECORD_SEP
-        + "840c311abcdef0123456789abcdef0123456789a" + UNIT_SEP
-        + "1756200000" + UNIT_SEP
-        + "docs: overhaul the README (#118)" + UNIT_SEP
-        + "Rewrote it.\n\nAdded diagrams." + UNIT_SEP
-        + "\nREADME.md\ndocs/architecture.md\n"
-        + RECORD_SEP
-        + "39e0f7aabcdef0123456789abcdef0123456789a" + UNIT_SEP
-        + "1756100000" + UNIT_SEP
-        + "feat: deploy automatically on merge to main (#116)" + UNIT_SEP
-        + "" + UNIT_SEP
-        + "\ndocker-compose.prod.yml\n";
+    String raw = record(
+        "840c311abcdef0123456789abcdef0123456789a",
+        "1756200000",
+        "docs: overhaul the README (#118)",
+        "Rewrote it.\n\nAdded diagrams.",
+        "\nREADME.md\ndocs/architecture.md\n")
+        + record(
+            "39e0f7aabcdef0123456789abcdef0123456789a",
+            "1756100000",
+            "feat: deploy automatically on merge to main (#116)",
+            "",
+            "\ndocker-compose.prod.yml\n");
 
     List<BakedRelease> releases = BakedReleaseHistory.parse(raw);
 
@@ -64,19 +64,20 @@ class BakedReleaseHistoryTest {
 
   @Test
   void skipsRecordWithAnUnparseableTimestamp() {
-    String raw = RECORD_SEP
-        + "840c311abcdef0123456789abcdef0123456789a" + UNIT_SEP
-        + "not-a-number" + UNIT_SEP
-        + "feat: thing" + UNIT_SEP + "" + UNIT_SEP + "\n";
+    String raw = record(
+        "840c311abcdef0123456789abcdef0123456789a", "not-a-number", "feat: thing", "", "\n");
 
     assertThat(BakedReleaseHistory.parse(raw)).isEmpty();
   }
 
   private static BakedRelease release(final String subject) {
-    String raw = RECORD_SEP
-        + "840c311abcdef0123456789abcdef0123456789a" + UNIT_SEP
-        + "1756200000" + UNIT_SEP
-        + subject + UNIT_SEP + "" + UNIT_SEP + "\n";
+    String raw =
+        record("840c311abcdef0123456789abcdef0123456789a", "1756200000", subject, "", "\n");
     return BakedReleaseHistory.parse(raw).get(0);
+  }
+
+  /** One {@code git log} record: a record separator, then the fields joined by unit separators. */
+  private static String record(final String... fields) {
+    return RECORD_SEP + String.join(UNIT_SEP, fields);
   }
 }

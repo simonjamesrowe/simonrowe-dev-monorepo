@@ -33,11 +33,12 @@ public class FetchUrlTools {
   @WithSpan
   @Tool(
       description =
-          "Read the contents of a specific web page the visitor references — most often a job "
-              + "posting they paste — to assess Simon's fit for a role or to enrich an answer "
-              + "grounded in his profile/experience/skills. Not a general web reader; do not use "
-              + "it for unrelated pages. Returns the page title, url, and extracted text, or a "
-              + "short message if the page cannot be read (some job boards block automated reads).")
+          """
+          Read the contents of a specific web page the visitor references — most often a job \
+          posting they paste — to assess Simon's fit for a role or to enrich an answer \
+          grounded in his profile/experience/skills. Not a general web reader; do not use \
+          it for unrelated pages. Returns the page title, url, and extracted text, or a \
+          short message if the page cannot be read (some job boards block automated reads).""")
   public Object fetchUrl(
       @ToolParam(description = "The absolute http(s) URL of the page to read")
           final String url,

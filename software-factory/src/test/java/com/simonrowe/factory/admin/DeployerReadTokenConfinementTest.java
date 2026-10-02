@@ -31,8 +31,9 @@ class DeployerReadTokenConfinementTest {
     List<String> deployerBlock = ComposeFile.serviceBlock(ComposeFile.lines(), DEPLOYER_SERVICE);
 
     assertThat(ComposeFile.declaredKeysContaining(deployerBlock, FORBIDDEN_FRAGMENT))
-        .as("`deployer` holds the Docker socket and must never hold the credential that "
-            + "authorises starting a deploy of itself")
+        .as("""
+            `deployer` holds the Docker socket and must never hold the credential that \
+            authorises starting a deploy of itself""")
         .isEmpty();
   }
 
@@ -43,8 +44,9 @@ class DeployerReadTokenConfinementTest {
     List<String> deployerBlock = ComposeFile.serviceBlock(ComposeFile.lines(), DEPLOYER_SERVICE);
 
     assertThat(ComposeFile.declaredKeysContaining(deployerBlock, "FACTORY_READ_TOKEN"))
-        .as("`deployer` must hold FACTORY_READ_TOKEN so it can answer "
-            + "GET /api/factory/flow/{nodeKey} for the nodes it owns")
+        .as("""
+            `deployer` must hold FACTORY_READ_TOKEN so it can answer \
+            GET /api/factory/flow/{nodeKey} for the nodes it owns""")
         .isNotEmpty();
   }
 
@@ -73,13 +75,15 @@ class DeployerReadTokenConfinementTest {
         .as("expected exactly two FACTORY_READ_TOKEN assignment lines (deployer, software-factory)")
         .hasSize(2);
     assertThat(occurrences)
-        .as("every FACTORY_READ_TOKEN assignment must use the optional ${FACTORY_READ_TOKEN:-} "
-            + "form, or an unset variable fails interpolation for the whole compose file: %s",
+        .as("""
+            every FACTORY_READ_TOKEN assignment must use the optional ${FACTORY_READ_TOKEN:-} \
+            form, or an unset variable fails interpolation for the whole compose file: %s""",
             occurrences)
         .allMatch(line -> line.contains("${FACTORY_READ_TOKEN:-}"));
     assertThat(occurrences)
-        .as("no FACTORY_READ_TOKEN assignment may use the required ${FACTORY_READ_TOKEN:?} form: "
-            + "%s", occurrences)
+        .as("""
+            no FACTORY_READ_TOKEN assignment may use the required ${FACTORY_READ_TOKEN:?} form: \
+            %s""", occurrences)
         .noneMatch(line -> line.contains(":?"));
   }
 }

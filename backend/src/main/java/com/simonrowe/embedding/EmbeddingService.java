@@ -88,8 +88,12 @@ public class EmbeddingService {
           .collect(Collectors.joining(",")));
     }
     metadata.put("url", "/blogs/" + blog.id());
-    String content = blog.title() + "\n\n" + blog.shortDescription()
-        + "\n\n" + blog.content();
+    String content = """
+        %s
+
+        %s
+
+        %s""".formatted(blog.title(), blog.shortDescription(), blog.content());
     embedContent(content, metadata);
     LOG.info("Embedded blog: {} ({} chars)", blog.title(), content.length());
   }
@@ -97,8 +101,10 @@ public class EmbeddingService {
   @WithSpan
   public void embedJob(final Job job) {
     removeContent(job.id());
-    String content = job.title() + " at " + job.company() + "\n\n"
-        + job.shortDescription();
+    String content = """
+        %s at %s
+
+        %s""".formatted(job.title(), job.company(), job.shortDescription());
     if (job.longDescription() != null) {
       content += "\n\n" + job.longDescription();
     }

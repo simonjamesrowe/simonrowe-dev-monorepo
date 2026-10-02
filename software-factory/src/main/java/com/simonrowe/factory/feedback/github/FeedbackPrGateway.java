@@ -82,8 +82,8 @@ public class FeedbackPrGateway {
       JsonNode responseArray = parseJson(findResponse);
       if (!responseArray.isArray() || responseArray.isEmpty()) {
         throw new IllegalStateException(
-            "GitHub API returned 422 for PR creation but found no existing PR for branch "
-                + branch);
+            "GitHub API returned 422 for PR creation but found no existing PR for branch %s"
+                .formatted(branch));
       }
 
       JsonNode existingPr = responseArray.get(0);

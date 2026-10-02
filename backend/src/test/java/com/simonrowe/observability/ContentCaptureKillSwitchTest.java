@@ -64,8 +64,9 @@ class ContentCaptureKillSwitchTest {
 
     assertThat(environment.getProperty(OURS, Boolean.class)).isFalse();
     assertThat(environment.getProperty(SPRING_AI, Boolean.class))
-        .as("Spring AI's tool-call content filter must honour the same switch, or contact-form "
-            + "arguments keep reaching Langfuse after capture is supposedly off")
+        .as("""
+            Spring AI's tool-call content filter must honour the same switch, or contact-form \
+            arguments keep reaching Langfuse after capture is supposedly off""")
         .isFalse();
   }
 

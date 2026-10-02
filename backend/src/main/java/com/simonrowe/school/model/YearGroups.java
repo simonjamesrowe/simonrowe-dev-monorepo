@@ -36,8 +36,9 @@ public final class YearGroups {
    * the URL and every quantifier is a fixed-width alternation, so there is nothing to backtrack.
    */
   private static final Pattern YEAR_SEGMENT = Pattern.compile(
-      "^(?:year-?(one|two|three|four|five|six)(?![a-z])|year-?([1-6])(?![0-9])"
-          + "|(reception)(?![a-z]))");
+      """
+      ^(?:year-?(one|two|three|four|five|six)(?![a-z])|year-?([1-6])(?![0-9])\
+      |(reception)(?![a-z]))""");
 
   private static final Map<String, String> YEAR_WORDS = Map.of(
       "one", "Year 1", "two", "Year 2", "three", "Year 3",

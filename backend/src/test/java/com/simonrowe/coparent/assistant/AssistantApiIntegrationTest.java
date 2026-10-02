@@ -67,8 +67,9 @@ import org.springframework.test.web.servlet.MvcResult;
 class AssistantApiIntegrationTest extends AbstractIntegrationTest {
 
   private static final String APPROVE_PATH =
-      "/api/coparent/families/{familyId}/assistant/batches/{batchId}"
-          + "/actions/{actionId}/approve";
+      """
+      /api/coparent/families/{familyId}/assistant/batches/{batchId}\
+      /actions/{actionId}/approve""";
 
   @Autowired
   @Qualifier("coparentMongoTemplate")
@@ -333,8 +334,9 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
             .content("{\"version\":0}"))
         .andExpect(status().isUnprocessableEntity());
     mockMvc.perform(post(
-            "/api/coparent/families/{familyId}/assistant/batches/{batchId}"
-                + "/actions/{actionId}/reject",
+            """
+            /api/coparent/families/{familyId}/assistant/batches/{batchId}\
+            /actions/{actionId}/reject""",
             fixture.familyId(), batchId, ambiguousId)
             .with(user("alice"))
             .contentType(MediaType.APPLICATION_JSON)
@@ -363,8 +365,9 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.status", is("BLOCKED")))
         .andExpect(jsonPath("$.fieldErrors[0].field", is("action")));
     mockMvc.perform(post(
-            "/api/coparent/families/{familyId}/assistant/batches/{batchId}"
-                + "/actions/{actionId}/reject",
+            """
+            /api/coparent/families/{familyId}/assistant/batches/{batchId}\
+            /actions/{actionId}/reject""",
             fixture.familyId(), batchId, invalidCreateId)
             .with(user("alice"))
             .contentType(MediaType.APPLICATION_JSON)

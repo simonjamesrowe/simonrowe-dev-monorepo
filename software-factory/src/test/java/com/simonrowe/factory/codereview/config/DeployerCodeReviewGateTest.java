@@ -44,18 +44,20 @@ class DeployerCodeReviewGateTest {
 
     assertThat(value)
         .as(
-            FLAG
-                + " must be declared on `deployer`. It is NOT safe to omit: "
-                + "factory.codereview.enabled defaults to true, so an absent variable leaves this "
-                + "container polling the code-review activity queue with no GitHub App "
-                + "credential, failing roughly half of all reviews and blocking every merge.")
+            """
+            %s must be declared on `deployer`. It is NOT safe to omit: \
+            factory.codereview.enabled defaults to true, so an absent variable leaves this \
+            container polling the code-review activity queue with no GitHub App \
+            credential, failing roughly half of all reviews and blocking every merge.""",
+            FLAG)
         .isPresent();
 
     assertThat(value.orElseThrow().replace("\"", "").replace("'", "").trim())
         .as(
-            "%s must be exactly \"false\" on `deployer`, and a literal rather than an "
-                + "interpolated ${...} form: this container runs `docker compose` against this "
-                + "file and compose gives the process environment precedence over .env.",
+            """
+            %s must be exactly "false" on `deployer`, and a literal rather than an \
+            interpolated ${...} form: this container runs `docker compose` against this \
+            file and compose gives the process environment precedence over .env.""",
             FLAG)
         .isEqualTo("false");
   }
@@ -70,8 +72,9 @@ class DeployerCodeReviewGateTest {
 
     assertThat(value.map(raw -> raw.replace("\"", "").replace("'", "").trim()))
         .as(
-            "`software-factory` must not pin %s off - that is the container that reviews pull "
-                + "requests, and the required `Code Review` check would never go green again.",
+            """
+            `software-factory` must not pin %s off - that is the container that reviews pull \
+            requests, and the required `Code Review` check would never go green again.""",
             FLAG)
         .isNotEqualTo(Optional.of("false"));
   }
@@ -110,8 +113,9 @@ class DeployerCodeReviewGateTest {
 
     assertThat(block).as("the `deployer:` service block must be non-empty").isNotEmpty();
     assertThat(block)
-        .as("the extracted block should contain deployer's own known settings, or the block "
-            + "boundaries are wrong")
+        .as("""
+            the extracted block should contain deployer's own known settings, or the block \
+            boundaries are wrong""")
         .anySatisfy(line -> assertThat(line).contains("FACTORY_DEPLOY_ENABLED"));
   }
 

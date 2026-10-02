@@ -75,8 +75,9 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       findingsSeen = components.stream().mapToInt(component -> component.findings().size()).sum();
       if (components.isEmpty()) {
         current = new CveFixProgress(CveFixPhase.FETCHING,
-            "Dependency-Track reported no findings; checking whether the repository was "
-                + "previously dirty",
+            """
+            Dependency-Track reported no findings; checking whether the repository was \
+            previously dirty""",
             0);
         String detail = "Dependency-Track reported no findings";
         // Only on the transition. Commenting on every clean run would add a comment a night,
@@ -93,8 +94,10 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
                           "simonjamesrowe/simonrowe-dev-monorepo", "current-vulnerabilities"),
                       "Current vulnerabilities in simonrowe-dev-monorepo",
                       "",
-                      "No current vulnerabilities as of scan " + runId
-                          + ". Dependency-Track reports no findings.",
+                      """
+                      No current vulnerabilities as of scan %s. \
+                      Dependency-Track reports no findings."""
+                          .formatted(runId),
                       runId,
                       workflowId,
                       FilingMode.STATUS_UPDATE)));
@@ -115,8 +118,11 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
                   List.of("simonjamesrowe/simonrowe-dev-monorepo", "current-vulnerabilities"),
                   "Current vulnerabilities in simonrowe-dev-monorepo",
                   report,
-                  "scan " + runId + " found " + findingsSeen + " finding(s) across "
-                      + componentsSeen + " component(s)\n\n" + report,
+                  """
+                  scan %s found %s finding(s) across %s component(s)
+
+                  %s"""
+                      .formatted(runId, findingsSeen, componentsSeen, report),
                   runId,
                   workflowId,
                   FilingMode.ROLLING)));

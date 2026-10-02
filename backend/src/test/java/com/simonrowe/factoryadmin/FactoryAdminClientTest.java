@@ -38,8 +38,10 @@ class FactoryAdminClientTest {
   private static final String SHA = "0123456789abcdef0123456789abcdef01234567";
   private static final String UNREACHABLE = "http://127.0.0.1:1";
   private static final String REVIEW_ACCEPTED =
-      "{\"workflowId\":\"code-review-simonjamesrowe-simonrowe-dev-monorepo-130-uuid\","
-          + "\"started\":true}";
+      """
+      {"workflowId":"code-review-simonjamesrowe-simonrowe-dev-monorepo-130-uuid",\
+      "started":true}\
+      """;
   private static final String FEEDBACK_ACCEPTED =
       "{\"workflowId\":\"review-feedback-42\",\"started\":true}";
 
@@ -89,9 +91,11 @@ class FactoryAdminClientTest {
     // request titles and Linear ticket subjects. It checks the narrower read token, never the
     // trigger token that starts a deploy.
     startFactory(Map.of("/api/factory/flow/logwatch", json(200,
-        "{\"nodeKey\":\"logwatch\",\"items\":["
-            + "{\"id\":\"logwatch-1\",\"title\":\"logwatch-1\",\"status\":\"COMPLETED\","
-            + "\"at\":null,\"url\":null}]}")));
+        """
+        {"nodeKey":"logwatch","items":[\
+        {"id":"logwatch-1","title":"logwatch-1","status":"COMPLETED",\
+        "at":null,"url":null}]}\
+        """)));
     startDeployer(Map.of());
     FactoryAdminClient client = client();
 
@@ -109,9 +113,11 @@ class FactoryAdminClientTest {
     // credential attached at all.
     startFactory(Map.of());
     startDeployer(Map.of("/api/factory/flow/deploy", json(200,
-        "{\"nodeKey\":\"deploy\",\"items\":["
-            + "{\"id\":\"deploy-prod\",\"title\":\"deploy-prod\",\"status\":\"COMPLETED\","
-            + "\"at\":null,\"url\":null}]}")));
+        """
+        {"nodeKey":"deploy","items":[\
+        {"id":"deploy-prod","title":"deploy-prod","status":"COMPLETED",\
+        "at":null,"url":null}]}\
+        """)));
     FactoryAdminClient client = client();
 
     FactoryFlowDetail detail = client.deployerFlowDetail("deploy");
@@ -230,8 +236,9 @@ class FactoryAdminClientTest {
     startFactory(
         Map.of(
             "/api/deploys",
-            json(202, "{\"workflowId\":\"deploy-prod\",\"runId\":\"run-9\","
-                + "\"sha\":\"" + SHA + "\"}")));
+            json(202, """
+                {"workflowId":"deploy-prod","runId":"run-9",\
+                "sha":"%s"}""".formatted(SHA))));
     startDeployer(Map.of());
 
     FactoryRunAccepted accepted = client().startDeploy(SHA);
@@ -246,11 +253,15 @@ class FactoryAdminClientTest {
     startFactory(
         Map.of(
             "/api/vulnerability-scans",
-            json(202, "{\"workflowId\":\"cve-scan-manual-1\",\"runId\":\"run-1\","
-                + "\"detail\":\"Vulnerability scan accepted\"}"),
+            json(202, """
+                {"workflowId":"cve-scan-manual-1","runId":"run-1",\
+                "detail":"Vulnerability scan accepted"}\
+                """),
             "/api/platform-backups",
-            json(202, "{\"workflowId\":\"platform-backup-manual\",\"runId\":\"run-2\","
-                + "\"detail\":\"Platform backup dry run accepted\"}")));
+            json(202, """
+                {"workflowId":"platform-backup-manual","runId":"run-2",\
+                "detail":"Platform backup dry run accepted"}\
+                """)));
     startDeployer(Map.of());
     FactoryAdminClient client = client();
 
@@ -265,9 +276,11 @@ class FactoryAdminClientTest {
     startFactory(
         Map.of(
             "/api/factory/runs/cve-scan-manual-1",
-            json(200, "{\"workflowId\":\"cve-scan-manual-1\",\"runId\":\"run-1\","
-                + "\"executionStatus\":\"WORKFLOW_EXECUTION_STATUS_RUNNING\","
-                + "\"phase\":\"FILING\",\"detail\":\"Filing\",\"terminal\":false}")));
+            json(200, """
+                {"workflowId":"cve-scan-manual-1","runId":"run-1",\
+                "executionStatus":"WORKFLOW_EXECUTION_STATUS_RUNNING",\
+                "phase":"FILING","detail":"Filing","terminal":false}\
+                """)));
     startDeployer(Map.of());
 
     FactoryRunProgress progress = client().progress("cve-scan-manual-1");
@@ -394,12 +407,13 @@ class FactoryAdminClientTest {
   }
 
   private static String statusBody(final String container) {
-    return "{\"container\":\"" + container + "\",\"fetchedAt\":\"2026-08-28T09:00:00Z\","
-        + "\"modules\":[{\"key\":\"linear\",\"displayName\":\"Issue tracking\","
-        + "\"configured\":true,\"taskQueue\":\"linear\",\"workflowPollers\":0,"
-        + "\"activityPollers\":1,\"trigger\":\"upstream workflow\",\"schedule\":null,"
-        + "\"missingPrerequisites\":[\"Linear API key is not set\"],\"ready\":false,"
-        + "\"diagnostic\":\"Enabled but not usable: Linear API key is not set\"}]}";
+    return """
+        {"container":"%s","fetchedAt":"2026-08-28T09:00:00Z",\
+        "modules":[{"key":"linear","displayName":"Issue tracking",\
+        "configured":true,"taskQueue":"linear","workflowPollers":0,\
+        "activityPollers":1,"trigger":"upstream workflow","schedule":null,\
+        "missingPrerequisites":["Linear API key is not set"],"ready":false,\
+        "diagnostic":"Enabled but not usable: Linear API key is not set"}]}""".formatted(container);
   }
 
   private static Response json(final int status, final String body) {

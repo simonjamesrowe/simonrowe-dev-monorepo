@@ -179,8 +179,8 @@ public class FactoryAdminClient {
         null,
         publish
             ? "Review accepted for pull request " + pullNumber
-            : "Dry-run review accepted for pull request " + pullNumber
-                + "; it will post nothing to GitHub");
+            : "Dry-run review accepted for pull request %s; it will post nothing to GitHub"
+                .formatted(pullNumber));
   }
 
   public FactoryRunAccepted startFeedback(

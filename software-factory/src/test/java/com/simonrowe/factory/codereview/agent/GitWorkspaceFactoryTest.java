@@ -132,11 +132,10 @@ class GitWorkspaceFactoryTest {
       assertThat(workspace.changedFiles()).containsExactly("visible.txt");
     }
 
-    String expectedHeader =
-        "Authorization: Basic "
-            + Base64.getEncoder()
-                .encodeToString(
-                    "x-access-token:ghs_example".getBytes(StandardCharsets.UTF_8));
+    String encoded =
+        Base64.getEncoder()
+            .encodeToString("x-access-token:ghs_example".getBytes(StandardCharsets.UTF_8));
+    String expectedHeader = "Authorization: Basic " + encoded;
     assertThat(environments).isNotEmpty();
     assertThat(environments)
         .allSatisfy(

@@ -1,8 +1,7 @@
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 
-import { API_BASE_URL } from '../../config/api'
-import { hasDetailPage, STATUS_LABELS, type PortfolioProject } from '../../types/portfolio'
+import { hasDetailPage, resolveMediaUrl, STATUS_LABELS, type PortfolioProject } from '../../types/portfolio'
 import { ProjectSilhouette } from './ProjectSilhouette'
 
 interface ProjectCardProps {
@@ -20,7 +19,7 @@ export function ProjectCard({ project, number }: ProjectCardProps) {
   const imageUrl = project.image?.formats?.medium?.url ?? project.image?.url
   const media = linked && imageUrl ? (
     <div className="project-card__image">
-      <img alt="" loading="lazy" src={`${API_BASE_URL}${imageUrl}`} />
+      <img alt="" loading="lazy" src={resolveMediaUrl(imageUrl)} />
       {number ? <span className="project-silhouette__number">{number}</span> : null}
     </div>
   ) : (

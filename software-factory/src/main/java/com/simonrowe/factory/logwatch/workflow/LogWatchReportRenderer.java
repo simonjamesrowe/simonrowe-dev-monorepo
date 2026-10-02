@@ -173,14 +173,8 @@ public final class LogWatchReportRenderer {
    * @return a single line
    */
   public static String occurrenceDetail(final LogSignature signature, final String runId) {
-    return "scan "
-        + runId
-        + " saw this "
-        + signature.occurrences()
-        + " time(s) between "
-        + signature.firstSeen()
-        + " and "
-        + signature.lastSeen();
+    return "scan %s saw this %s time(s) between %s and %s"
+        .formatted(runId, signature.occurrences(), signature.firstSeen(), signature.lastSeen());
   }
 
   /**
@@ -231,13 +225,14 @@ public final class LogWatchReportRenderer {
    * @return the Markdown comment
    */
   public static String resolutionComment(final Duration quietFor, final String runId) {
-    return "Closing automatically: this has not appeared in a log scan for "
-        + quietFor.toDays()
-        + " day(s).\n\nThat is an observation, not a verdict — logs also go quiet when a "
-        + "service is stopped or a problem is intermittent. If it happens again, the next scan "
-        + "will file a linked regression rather than losing it, so there is nothing to keep this "
-        + "open for.\n\nClosed by log-watch scan `"
-        + runId
-        + "`.";
+    return """
+        Closing automatically: this has not appeared in a log scan for %s day(s).
+
+        That is an observation, not a verdict — logs also go quiet when a \
+        service is stopped or a problem is intermittent. If it happens again, the next scan \
+        will file a linked regression rather than losing it, so there is nothing to keep this \
+        open for.
+
+        Closed by log-watch scan `%s`.""".formatted(quietFor.toDays(), runId);
   }
 }

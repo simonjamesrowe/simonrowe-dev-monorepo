@@ -116,8 +116,9 @@ public class WeeklyDigestAgent {
     Instant duplicateCutoff =
         now.minus(duplicateWindowHours, ChronoUnit.HOURS);
     if (digestAlreadyPublishedInWindow(duplicateCutoff)) {
-      log.info("A digest already exists within the last {} hours, "
-          + "skipping this run", duplicateWindowHours);
+      log.info("""
+          A digest already exists within the last {} hours, \
+          skipping this run""", duplicateWindowHours);
       return;
     }
     generateForWindow(now.minus(windowDays, ChronoUnit.DAYS), now, now);
@@ -149,11 +150,13 @@ public class WeeklyDigestAgent {
         .toList();
     if (articles.isEmpty()) {
       if (favourites.isEmpty()) {
-        log.info("No news favourited between {} and {}, "
-            + "skipping digest generation", from, to);
+        log.info("""
+            No news favourited between {} and {}, \
+            skipping digest generation""", from, to);
       } else {
-        log.info("{} favourite(s) between {} and {} all resolved to "
-            + "missing or hidden articles, skipping digest generation",
+        log.info("""
+            {} favourite(s) between {} and {} all resolved to \
+            missing or hidden articles, skipping digest generation""",
             favourites.size(), from, to);
       }
       return Optional.empty();
@@ -165,8 +168,9 @@ public class WeeklyDigestAgent {
 
     if (!sections.isEmpty()
         && sections.stream().allMatch(DigestSection::fallback)) {
-      log.error("Every section fell back to its stored summary — "
-          + "assuming an LLM outage and publishing nothing");
+      log.error("""
+          Every section fell back to its stored summary — \
+          assuming an LLM outage and publishing nothing""");
       return Optional.empty();
     }
 
