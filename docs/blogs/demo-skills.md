@@ -32,7 +32,7 @@ Between them sits the rule I care about most. Nothing gets recorded until I've a
 scene by scene, in the conversation. Re-recording is cheap. Narration in my name that I never
 agreed to isn't.
 
-![The pipeline. demo-plan grills me for the aim, walks the product, drafts and rehearses the script, and stops at my approval of the plan table. demo-record then narrates, films the browser or the Mac app with diagram walkthroughs, mixes, verifies every still, and produces the MP4, captions, poster and blurb. A dashed loop runs from verify back to the script: tweak a line, rebuild.](docs/diagrams/demo-skills/pipeline.svg)
+![The pipeline. demo-plan grills me for the aim, walks the product, drafts and rehearses the script, and stops at my approval of the plan table. demo-record then narrates, films the browser or the Mac app with diagram walkthroughs, mixes, verifies every still, and produces the MP4, captions, poster and blurb. A dashed loop runs from verify back to the script: tweak a line, rebuild.](/uploads/9f36b50c-f5eb-4d4a-80a2-d948c9268db9/original.svg)
 *Story first, video second, and a human gate in between.*
 
 Both skills live in my [`agent-setup`](https://github.com/simonjamesrowe/agent-setup) repository,
