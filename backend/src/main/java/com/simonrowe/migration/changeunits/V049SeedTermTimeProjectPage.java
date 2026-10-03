@@ -2,26 +2,15 @@ package com.simonrowe.migration.changeunits;
 
 import static org.springframework.data.domain.Sort.Direction.ASC;
 
-import com.simonrowe.media.MediaAsset;
 import com.simonrowe.media.MediaService;
 import io.mongock.api.annotations.ChangeUnit;
 import io.mongock.api.annotations.Execution;
 import io.mongock.api.annotations.RollbackExecution;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.bson.Document;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.data.mongodb.core.index.PartialIndexFilter;
@@ -43,7 +32,8 @@ import org.springframework.data.mongodb.core.query.Criteria;
  * <p>It applies only while the row is still Coming soon, the state {@code V048} seeded it in, and
  * imports nothing otherwise, so a project already launched by hand is left exactly as edited.
  * Each file is imported under the key {@code seed:portfolio/term-time/<file>}, which the unique
- * {@link #MEDIA_LEGACY_ID_INDEX} makes impossible to import twice.
+ * {@link #MEDIA_LEGACY_ID_INDEX} makes impossible to import twice. The work itself is
+ * {@link PortfolioPageSeed}'s, which later project pages share.
  */
 @ChangeUnit(id = "seed-term-time-project-page", order = "049", author = "simonrowe")
 public class V049SeedTermTimeProjectPage {
@@ -51,19 +41,18 @@ public class V049SeedTermTimeProjectPage {
   public static final String SLUG = "term-time";
   public static final String MEDIA_COLLECTION = "media_assets";
   public static final String MEDIA_LEGACY_ID_INDEX = "idx_media_legacy_id";
-  static final String SEED_DIR = "seed/portfolio/term-time/";
-  static final String LEGACY_ID_PREFIX = "seed:portfolio/term-time/";
   private static final int BSON_STRING = 2;
 
   /** Every file the seed may name, with the type the library stores it as. */
   static final Map<String, String> MEDIA = mediaTypes();
 
-  /** Every field this unit writes, so the rollback can remove exactly those. */
-  static final List<String> PAGE_FIELDS = List.of("headline", "summary", "statement",
-      "exampleQuestions", "highlights", "demo", "pages", "image", "liveUrl");
+  static final PortfolioPageSeed SEED =
+      new PortfolioPageSeed(SLUG, "Term Time", MEDIA, new Document());
+  static final String SEED_DIR = SEED.seedDir();
+  static final String LEGACY_ID_PREFIX = SEED.legacyIdPrefix();
 
-  /** A media token. Possessive over a class that excludes the braces, so nothing backtracks. */
-  private static final Pattern MEDIA_TOKEN = Pattern.compile("\\{\\{media:([a-z0-9.-]++)}}");
+  /** Every field this unit writes, so the rollback can remove exactly those. */
+  static final List<String> PAGE_FIELDS = PortfolioPageSeed.PAGE_FIELDS;
 
   private static Map<String, String> mediaTypes() {
     Map<String, String> types = new LinkedHashMap<>();
@@ -83,22 +72,7 @@ public class V049SeedTermTimeProjectPage {
 
   @Execution
   public void execution(final MongoTemplate mongoTemplate, final MediaService mediaService) {
-    createMediaIndexes(mongoTemplate);
-    Document stillComingSoon = new Document("slug", SLUG).append("status", "COMING_SOON");
-    if (mongoTemplate.getCollection(V048CreatePortfolioProjects.COLLECTION)
-        .countDocuments(stillComingSoon) == 0) {
-      return;
-    }
-    Map<String, String> paths = new LinkedHashMap<>();
-    MEDIA.forEach((file, type) -> {
-      MediaAsset asset = mediaService.importFile(
-          readBytes("media/" + file), file, type, LEGACY_ID_PREFIX + file);
-      paths.put(file, asset.originalPath());
-    });
-    Document fields = seedFields(file -> paths.get(file));
-    fields.append("updatedAt", Date.from(Instant.now()));
-    mongoTemplate.getCollection(V048CreatePortfolioProjects.COLLECTION)
-        .updateOne(stillComingSoon, new Document("$set", fields));
+    SEED.apply(mongoTemplate, mediaService);
   }
 
   /**
@@ -107,12 +81,7 @@ public class V049SeedTermTimeProjectPage {
    */
   @RollbackExecution
   public void rollback(final MongoTemplate mongoTemplate) {
-    Document unset = new Document();
-    PAGE_FIELDS.forEach(field -> unset.append(field, ""));
-    mongoTemplate.getCollection(V048CreatePortfolioProjects.COLLECTION).updateOne(
-        new Document("slug", SLUG)
-            .append("headline", seedFields(file -> file).getString("headline")),
-        new Document("$set", new Document("status", "COMING_SOON")).append("$unset", unset));
+    SEED.rollback(mongoTemplate);
   }
 
   /**
@@ -133,40 +102,6 @@ public class V049SeedTermTimeProjectPage {
    * media token replaced by {@code pathFor} of its file.
    */
   static Document seedFields(final UnaryOperator<String> pathFor) {
-    Document fields = Document.parse(resolveMedia(read("project.json"), pathFor));
-    List<Document> pages = new ArrayList<>();
-    for (Document page : fields.getList("pages", Document.class)) {
-      String body = resolveMedia(read(page.getString("body")), pathFor);
-      pages.add(new Document(page).append("body", body));
-    }
-    fields.put("pages", pages);
-    return fields;
-  }
-
-  private static String resolveMedia(final String text, final UnaryOperator<String> pathFor) {
-    Matcher matcher = MEDIA_TOKEN.matcher(text);
-    StringBuilder out = new StringBuilder();
-    while (matcher.find()) {
-      String file = matcher.group(1);
-      String path = MEDIA.containsKey(file) ? pathFor.apply(file) : null;
-      if (path == null) {
-        throw new IllegalStateException("The Term Time seed names unknown media " + file);
-      }
-      matcher.appendReplacement(out, Matcher.quoteReplacement(path));
-    }
-    matcher.appendTail(out);
-    return out.toString();
-  }
-
-  private static String read(final String name) {
-    return new String(readBytes(name), StandardCharsets.UTF_8);
-  }
-
-  private static byte[] readBytes(final String name) {
-    try (InputStream in = new ClassPathResource(SEED_DIR + name).getInputStream()) {
-      return in.readAllBytes();
-    } catch (IOException e) {
-      throw new UncheckedIOException("Missing Term Time seed file " + name, e);
-    }
+    return SEED.seedFields(pathFor);
   }
 }

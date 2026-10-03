@@ -273,6 +273,16 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- clinicians-veil-project-page: **Clinician's Veil gets its page**, In development, seeded by
+  `V050SeedCliniciansVeilProjectPage` from `backend/src/main/resources/seed/portfolio/clinicians-veil/`
+  exactly as V049 seeded Term Time. The shared work now lives in `PortfolioPageSeed` (import the
+  media under `seed:portfolio/<slug>/<file>`, swap `{{media:…}}` tokens, write only while the row
+  is still `COMING_SOON`); V049 delegates to it unchanged, so the next project page is a slug, a
+  media list and a seed directory. V050's rollback also puts back V048's `Details soon.` tagline,
+  because unlike Term Time's seed this one replaces it. Every screenshot is a frame of the demo's
+  synthetic case 09, cut from the `demo-record` take; the site copy of the video is re-encoded to
+  1440x810 (about 4 MB) like Term Time's. `docs/blogs/demo-skills.md` is the post about the two
+  demo skills, with its diagram sources in `docs/diagrams/demo-skills/`.
 - portfolio-project-pages: **A portfolio project can now have a real page, and Term Time is the
   first.** `PortfolioProject` gains optional `headline`, `summary`, `statement` (label, text,
   points), `exampleQuestions`, `highlights`, `demo` (video, captions, poster, chapters) and `pages`
