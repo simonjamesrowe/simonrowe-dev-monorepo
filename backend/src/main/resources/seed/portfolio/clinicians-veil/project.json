@@ -1,0 +1,86 @@
+{
+  "status": "IN_DEVELOPMENT",
+  "tagline": "Clinical notes de-identified on the Mac before any AI sees them.",
+  "liveUrl": "https://github.com/simonjamesrowe/clinical-privacy-gateway/releases",
+  "image": {
+    "url": "{{media:hero.webp}}"
+  },
+  "headline": "Premium AI for clinical letters.\nThe patient's identity stays on the Mac.",
+  "summary": "Clinician's Veil finds the names, dates, addresses and references in a clinical note on the Mac itself, lets the clinician review every change, and only then lets one pseudonymised request go to a frontier model. The draft letter comes back, and the details are put back locally.",
+  "statement": {
+    "label": "Why I built it",
+    "text": "The best models write a good referral letter in seconds. But a clinical note is full of people, and identifiable patient information cannot simply be pasted into a chatbot.",
+    "points": [
+      {
+        "title": "The note",
+        "text": "Names, dates of birth, addresses, references and the people around the patient."
+      },
+      {
+        "title": "The letter",
+        "text": "GP letters, referrals and progress reports, written at the end of a long day."
+      },
+      {
+        "title": "The rule",
+        "text": "Identifiable patient information does not leave without a justified purpose and approval."
+      },
+      {
+        "title": "The gap",
+        "text": "Models small enough to run on a laptop find identifiers well, but do not write the letter as well as the best ones."
+      }
+    ]
+  },
+  "exampleQuestions": [],
+  "highlights": [
+    {
+      "title": "Found on the Mac, decided by the clinician",
+      "text": "Rules and a BERT model find identifiers offline. Every proposal is accepted, kept or removed by hand, and anything missed is selected and added.",
+      "imageUrl": "{{media:highlight-side-by-side.webp}}",
+      "imageAlt": "The review screen, with the original synthetic note beside the proposed result where the name, dates and address are placeholders."
+    },
+    {
+      "title": "Tokens out, one request at a time",
+      "text": "The exact request is shown before it is sent. Every identifying detail is a one-off token, and each send needs its own approval.",
+      "imageUrl": "{{media:highlight-request.webp}}",
+      "imageAlt": "The exact request payload, where the patient's details appear only as one-off tokens."
+    },
+    {
+      "title": "Names back, on the Mac",
+      "text": "GPT-6 Sol drafts the letter, and the tokens are swapped back for the real details locally, ready to review and export as a PDF.",
+      "imageUrl": "{{media:highlight-restored.webp}}",
+      "imageAlt": "The draft referral letter with the synthetic patient's name and details restored on the Mac."
+    }
+  ],
+  "demo": {
+    "title": "A two-minute walkthrough",
+    "summary": "A synthetic referral note goes through local detection and review, then one approved request to GPT-6 Sol, and the letter comes back with the details restored on the Mac.",
+    "videoUrl": "{{media:demo.mp4}}",
+    "captionsUrl": "{{media:demo.vtt}}",
+    "posterUrl": "{{media:demo-poster.webp}}",
+    "chapters": [
+      { "startSeconds": 0, "label": "Why notes cannot just be pasted in" },
+      { "startSeconds": 12, "label": "Importing a synthetic referral note" },
+      { "startSeconds": 23, "label": "Finding identifiers on the Mac" },
+      { "startSeconds": 43, "label": "Adding what the models missed" },
+      { "startSeconds": 62, "label": "Preparing the referral letter" },
+      { "startSeconds": 77, "label": "The exact request: tokens, not names" },
+      { "startSeconds": 95, "label": "The details restored on the Mac" },
+      { "startSeconds": 109, "label": "What stays and what leaves" }
+    ]
+  },
+  "pages": [
+    {
+      "slug": "how-it-works",
+      "title": "How it works",
+      "navHint": "one note's journey",
+      "summary": "From the note to the letter: what happens on the Mac, the one request that leaves it, and what never goes in that request.",
+      "body": "how-it-works.md"
+    },
+    {
+      "slug": "architecture",
+      "title": "Architecture",
+      "navHint": "Rust",
+      "summary": "A Tauri app with a plain Rust core, local models behind adapters, and one carefully built route out.",
+      "body": "architecture.md"
+    }
+  ]
+}
