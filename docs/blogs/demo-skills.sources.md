@@ -1,18 +1,21 @@
 # Metadata and media provenance — demo-skills
 
-## CMS metadata (proposed)
+## CMS metadata
 
 - **Title:** I'm Rubbish at Recording Demos, So I Taught Claude to Do It
 - **Short description:** Two Claude Code skills that grill me for the story, then voice, film and
   mix a narrated demo. Here's how they made the Term Time and Clinician's Veil walkthroughs.
 - **Content type:** ENGINEERING
-- **Tags:** Claude Code, Agents, AI, Playwright
+- **Tags:** Claude Code, Agents, AI
 - **Skills:** Claude Code, AI-Assisted Development
 
-## Publishing dependency
+## Published
 
-The post links `/portfolio/clinicians-veil`, which was Coming soon until
-`V050SeedCliniciansVeilProjectPage` launched it. Publish the post only once that page is live.
+- **URL:** https://www.simonrowe.dev/blogs/6ac125958031c0e562dd7353 (short link
+  https://simonrowe.dev/s/i-m-rubbish-at), published 3 Oct 2026 through `POST /api/admin/blogs`.
+  The stored `content` hashes identically to this draft.
+- **Featured image:** `/uploads/863de2d0-77b8-457e-a261-7b725d34afc8/863de2d0-77b8-457e-a261-7b725d34afc8_large.jpg`
+- **Diagram:** `/uploads/9f36b50c-f5eb-4d4a-80a2-d948c9268db9/original.svg`
 
 ## Featured image
 
@@ -26,8 +29,7 @@ The post links `/portfolio/clinicians-veil`, which was Coming soon until
 
 - Term Time demo poster: already in the media library as
   `/uploads/a877cd36-ac56-4550-88fb-07843968f6f4/original.webp` (the project page's `posterUrl`).
-- `docs/diagrams/demo-skills/pipeline.svg`: upload through the CMS media workflow and replace the
-  draft's local path with the returned `/uploads/...` path.
+- `docs/diagrams/demo-skills/pipeline.svg`: uploaded through the CMS media library (path above).
 
 ## Diagram
 
