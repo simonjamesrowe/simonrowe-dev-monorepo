@@ -41,6 +41,14 @@ const PAGE: ReleasePage = {
   typeCounts: { docs: 1 },
 }
 
+/**
+ * The URL the last fetch asked for. Resolved against a base because API_BASE_URL is empty in CI,
+ * where the request path is relative, and absolute wherever a .env sets it.
+ */
+function requestedUrl(): URL {
+  return new URL(vi.mocked(fetch).mock.calls[0][0] as string, 'http://localhost')
+}
+
 describe('platformApi', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
@@ -69,7 +77,7 @@ describe('platformApi', () => {
     respondWith(PAGE)
 
     await expect(fetchReleases()).resolves.toEqual(PAGE)
-    const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    const url = requestedUrl()
     expect(url.pathname).toBe('/api/platform/releases')
     expect(url.searchParams.get('page')).toBe('0')
     expect(url.searchParams.get('size')).toBe('10')
@@ -82,7 +90,7 @@ describe('platformApi', () => {
 
     await fetchReleases({ page: 3, size: 25, type: 'feat', query: '  C++ & co ' })
 
-    const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    const url = requestedUrl()
     expect(url.searchParams.get('page')).toBe('3')
     expect(url.searchParams.get('size')).toBe('25')
     expect(url.searchParams.get('type')).toBe('feat')
