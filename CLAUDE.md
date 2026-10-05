@@ -61,6 +61,7 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - `scripts/backup.sh` and `scripts/restore.sh` are the canonical data management scripts (legacy Strapi migration scripts retained for reference)
 - When adding dry-run/preview modes to multiple operations, decide independently what each should expose in preview rather than mirroring another operation's guard conditions — e.g. filing might show nothing useful, but sweeping should show what would be resolved
 - Destructive Mongock change units (ones that remove rows) need an integration test proving they actually run at boot, correct survivor-selection logic, and a comment documenting why the deleted data is safely re-derivable — path classifiers won't flag these for review, so verify by hand
+- When designing automated recovery/remediation (e.g. disk-space or outage prevention), prioritize stopping the primary failure mode over preserving non-critical evidence (e.g. rollback images) — if the evidence is independently recoverable (re-pullable, re-derivable), don't let preserving it delay the critical remediation
 
 ### CMS content and media
 
