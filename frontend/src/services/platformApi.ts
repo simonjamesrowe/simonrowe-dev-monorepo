@@ -1,8 +1,17 @@
 import { API_BASE_URL } from '../config/api'
 import { fetchWithRetry } from './fetchWithRetry'
-import type { PlatformStatus, Release } from '../types/platform'
+import type { PlatformStatus, ReleasePage } from '../types/platform'
 
-const DEFAULT_LIMIT = 20
+export const RELEASE_PAGE_SIZE = 10
+
+export interface ReleaseQuery {
+  page?: number
+  size?: number
+  /** A conventional-commit type such as `feat`; absent for every type. */
+  type?: string | null
+  /** Free text matched against the subject, the release note and the SHA. */
+  query?: string
+}
 
 /**
  * What is running in production right now.
@@ -16,12 +25,19 @@ export async function fetchPlatformStatus(): Promise<PlatformStatus> {
 }
 
 /**
- * Recent releases, newest first.
- *
- * @param limit how many to request; the backend clamps this to 100
+ * One page of the changelog, newest first. The whole stored history is reachable a page at a
+ * time; the backend clamps `size` to 50.
  */
-export async function fetchReleases(limit: number = DEFAULT_LIMIT): Promise<Release[]> {
-  return fetchWithRetry<Release[]>(`${API_BASE_URL}/api/platform/releases?limit=${limit}`, {
+export async function fetchReleases({
+  page = 0,
+  size = RELEASE_PAGE_SIZE,
+  type = null,
+  query = '',
+}: ReleaseQuery = {}): Promise<ReleasePage> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) })
+  if (type) params.set('type', type)
+  if (query.trim()) params.set('q', query.trim())
+  return fetchWithRetry<ReleasePage>(`${API_BASE_URL}/api/platform/releases?${params}`, {
     fallbackMessage: 'Unable to load releases.',
   })
 }

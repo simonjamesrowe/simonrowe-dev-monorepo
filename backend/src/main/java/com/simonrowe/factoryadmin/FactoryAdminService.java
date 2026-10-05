@@ -40,20 +40,22 @@ public class FactoryAdminService {
   /** Modules the deployer, not the factory, is the authority on. */
   private static final List<String> DEPLOYER_OWNED = List.of(DEPLOY, PLATFORM_BACKUP);
 
-  private static final String UNKNOWN_COMMIT = "unknown";
   private static final int SHORT_COMMIT = 7;
 
   private final FactoryAdminClient client;
   private final FactoryAdminProperties properties;
   private final RunningVersion runningVersion;
+  private final RedeployTarget redeployTarget;
 
   public FactoryAdminService(
       final FactoryAdminClient client,
       final FactoryAdminProperties properties,
-      final RunningVersion runningVersion) {
+      final RunningVersion runningVersion,
+      final RedeployTarget redeployTarget) {
     this.client = client;
     this.properties = properties;
     this.runningVersion = runningVersion;
+    this.redeployTarget = redeployTarget;
   }
 
   /**
@@ -89,6 +91,7 @@ public class FactoryAdminService {
     return new FactoryAdminStatus(
         Instant.now(),
         runningVersion.commit(),
+        redeployTarget.serverSideCommits(),
         properties.owner() + "/" + properties.repository(),
         factory != null,
         deployer != null,
@@ -339,12 +342,13 @@ public class FactoryAdminService {
   }
 
   /**
-   * Starts the one deploy this release permits: the commit already running.
+   * Redeploys what is running: the newest commit any deployed service was built from, as
+   * {@link RedeployTarget} explains.
    *
    * <p>Every check here is repeated from the browser deliberately. The console disables the
    * control, but the control is not the boundary — a request that skipped it must fail for the
-   * same reasons, and the commit that gets deployed is the backend's own, never the one the
-   * browser sent. The browser's value is used solely to prove the two agree.
+   * same reasons. The browser's commit is one of three inputs and is accepted only as a commit
+   * already recorded from {@code main}; the phrase must name the target this side worked out.
    *
    * @param frontendCommit the commit the loaded bundle reports
    * @param confirmation the typed phrase
@@ -352,21 +356,14 @@ public class FactoryAdminService {
    */
   public FactoryRunAccepted startDeploy(
       final String frontendCommit, final String confirmation) {
-    String backendCommit = runningVersion.commit();
-    if (UNKNOWN_COMMIT.equals(backendCommit)
-        || frontendCommit == null
-        || !backendCommit.equals(frontendCommit)) {
-      throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-          "Frontend and backend are not reporting the same production commit");
-    }
-    String shortCommit =
-        backendCommit.substring(0, Math.min(SHORT_COMMIT, backendCommit.length()));
+    String target = redeployTarget.resolve(frontendCommit).commit();
+    String shortCommit = target.substring(0, Math.min(SHORT_COMMIT, target.length()));
     if (!("REDEPLOY " + shortCommit).equals(confirmation)) {
       throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-          "Confirmation phrase does not match the running commit");
+          "Confirmation phrase does not match the redeploy commit " + shortCommit);
     }
     requireReady(DEPLOY);
-    return proxy(() -> client.startDeploy(backendCommit));
+    return proxy(() -> client.startDeploy(target));
   }
 
   /**

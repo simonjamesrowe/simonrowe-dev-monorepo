@@ -47,9 +47,9 @@ public class BackupService {
       // Generated article summaries cost an LLM call each, so a backup that skipped them
       // would silently discard paid-for content on the next restore.
       "article_summaries",
-      // Release notes on /status are the same: one LLM call per release, and the backfill
-      // of history is only baked into the image that produced it — a restore into a newer
-      // image could not regenerate the older entries at all.
+      // Release notes on /status are the same: one LLM call per release. And the history is
+      // re-read from GitHub only 50 commits deep, so a restore without this collection could
+      // never get back any entry older than that.
       "platform_releases",
       // Share slugs are already pasted into other people's Slack channels and LinkedIn
       // posts. A restore that dropped them would break URLs that exist in the wild, and

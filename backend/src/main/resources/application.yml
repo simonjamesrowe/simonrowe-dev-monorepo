@@ -591,6 +591,16 @@ platform:
       batch-size: 3
       max-attempts: 3
       model: ${PLATFORM_RELEASE_SUMMARY_MODEL:gpt-5.6-luna}
+    # The changelog's commits, read from GitHub's REST API (GitHubCommitHistory). Anonymous: the
+    # repository is public, and the limit is 60 requests an hour per address. Polling an
+    # unchanged branch is free (ETag, 304), and file lookups cost one request per new commit.
+    history:
+      enabled: ${PLATFORM_RELEASE_HISTORY_ENABLED:true}
+      repository: simonjamesrowe/simonrowe-dev-monorepo
+      branch: main
+      poll-interval: PT5M
+      # A restore into an empty collection backfills 50 commits over three polls, not one.
+      max-file-lookups: 20
   # The other first-party JVMs, asked over the Docker network. Neither is routed by nginx.
   # Note the port: software-factory serves on 8090, not 8080.
   services:

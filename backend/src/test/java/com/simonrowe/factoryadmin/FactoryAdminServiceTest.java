@@ -34,6 +34,7 @@ class FactoryAdminServiceTest {
   private static final String CONFIRMATION = "REDEPLOY 0123456";
 
   private final FactoryAdminClient client = mock(FactoryAdminClient.class);
+  private final RedeployTarget redeployTarget = mock(RedeployTarget.class);
 
   @Test
   void reportsEveryModuleEvenWhenNeitherContainerAnswers() {
@@ -215,7 +216,10 @@ class FactoryAdminServiceTest {
   }
 
   @Test
-  void refusesDeployWhenTheTwoServicesDisagreeOnTheRunningCommit() {
+  void refusesDeployWhenTheRedeployCommitCannotBeEstablished() {
+    when(redeployTarget.resolve("a".repeat(40))).thenThrow(new ResponseStatusException(
+        HttpStatus.PRECONDITION_FAILED, "software-factory is not reporting its commit"));
+
     assertThatThrownBy(() -> service(SHA).startDeploy("a".repeat(40), CONFIRMATION))
         .isInstanceOf(ResponseStatusException.class)
         .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
@@ -225,18 +229,9 @@ class FactoryAdminServiceTest {
   }
 
   @Test
-  void refusesDeployWhenTheBackendDoesNotKnowItsOwnCommit() {
-    // A dev build reports "unknown", and "unknown" must never be something two sides can agree on.
-    assertThatThrownBy(() -> service(null).startDeploy("unknown", "REDEPLOY unknow"))
-        .isInstanceOf(ResponseStatusException.class)
-        .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
-        .isEqualTo(HttpStatus.PRECONDITION_FAILED);
-
-    verify(client, never()).startDeploy(anyString());
-  }
-
-  @Test
   void refusesDeployWhoseConfirmationPhraseDoesNotMatch() {
+    when(redeployTarget.resolve(SHA)).thenReturn(target(SHA));
+
     assertThatThrownBy(() -> service(SHA).startDeploy(SHA, "REDEPLOY please"))
         .isInstanceOf(ResponseStatusException.class)
         .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
@@ -246,14 +241,41 @@ class FactoryAdminServiceTest {
   }
 
   @Test
-  void deploysTheBackendsOwnCommitRatherThanTheOneTheBrowserSent() {
+  void refusesPhraseNamingTheBrowsersCommitWhenTheTargetIsAnother() {
+    // The phrase has to name the commit this side will deploy, so a console that worked out a
+    // different target than the server cannot get a deploy of something its operator never saw.
+    String newer = "fedcba9876543210fedcba9876543210fedcba98";
+    when(redeployTarget.resolve(SHA)).thenReturn(target(newer));
+
+    assertThatThrownBy(() -> service(SHA).startDeploy(SHA, CONFIRMATION))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("fedcba9");
+
+    verify(client, never()).startDeploy(anyString());
+  }
+
+  @Test
+  void deploysTheResolvedCommitRatherThanTheOneTheBrowserSent() {
+    String newer = "fedcba9876543210fedcba9876543210fedcba98";
+    when(redeployTarget.resolve(SHA)).thenReturn(target(newer));
     when(client.factoryStatus()).thenReturn(instance("software-factory"));
     when(client.deployerStatus()).thenReturn(instance("deployer", ready("deploy")));
-    when(client.startDeploy(SHA)).thenReturn(new FactoryRunAccepted("deploy-prod", "run-1", "go"));
+    when(client.startDeploy(newer))
+        .thenReturn(new FactoryRunAccepted("deploy-prod", "run-1", "go"));
 
-    assertThat(service(SHA).startDeploy(SHA, CONFIRMATION).workflowId()).isEqualTo("deploy-prod");
+    assertThat(service(SHA).startDeploy(SHA, "REDEPLOY fedcba9").workflowId())
+        .isEqualTo("deploy-prod");
 
-    verify(client).startDeploy(SHA);
+    verify(client).startDeploy(newer);
+  }
+
+  @Test
+  void reportsTheServerSideCommitsSoTheConsoleCanNameTheTarget() {
+    when(client.factoryStatus()).thenThrow(new ResourceAccessException("down"));
+    when(client.deployerStatus()).thenThrow(new ResourceAccessException("down"));
+    when(redeployTarget.serverSideCommits()).thenReturn(List.of(target(SHA)));
+
+    assertThat(service(SHA).status().serviceCommits()).containsExactly(target(SHA));
   }
 
   @Test
@@ -392,7 +414,11 @@ class FactoryAdminServiceTest {
   }
 
   private FactoryAdminService service(final String commit) {
-    return new FactoryAdminService(client, properties(), runningVersion(commit));
+    return new FactoryAdminService(client, properties(), runningVersion(commit), redeployTarget);
+  }
+
+  private static ServiceCommit target(final String commit) {
+    return new ServiceCommit("backend", commit, Instant.parse("2026-10-05T12:00:00Z"));
   }
 
   private static FactoryAdminProperties properties() {

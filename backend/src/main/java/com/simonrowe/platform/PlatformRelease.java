@@ -34,23 +34,23 @@ public class PlatformRelease {
   private Instant updatedAt;
 
   /**
-   * Builds a pending release record from a baked commit.
+   * Builds a pending release record from a commit on {@code main}.
    *
-   * @param baked the commit as baked into the image
+   * @param commit the commit, with its changed paths
    * @param source how this record came to exist
    * @param now the seeding instant
    * @return a record awaiting its summary
    */
-  public static PlatformRelease fromBaked(
-      final BakedRelease baked, final ReleaseSource source, final Instant now) {
+  public static PlatformRelease fromCommit(
+      final MainCommit commit, final ReleaseSource source, final Instant now) {
     PlatformRelease release = new PlatformRelease();
-    release.id = baked.sha();
-    release.shortSha = baked.shortSha();
-    release.commitTime = baked.commitTime();
-    release.subject = baked.subject();
-    release.body = baked.body();
-    release.type = baked.type();
-    release.filesChanged = baked.filesChanged();
+    release.id = commit.sha();
+    release.shortSha = commit.shortSha();
+    release.commitTime = commit.commitTime();
+    release.subject = commit.subject();
+    release.body = commit.body();
+    release.type = commit.type();
+    release.filesChanged = commit.filesChanged();
     release.summaryStatus = ReleaseSummaryStatus.PENDING;
     release.firstSeenAt = now;
     release.source = source;

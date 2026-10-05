@@ -21,6 +21,21 @@ vi.mock('../../src/auth/useAuth', () => ({
   useAuth: vi.fn(),
 }))
 
+// Mutable so a test can stand in for a production bundle; a test build reports no commit.
+const bundle = vi.hoisted(() => ({
+  commit: 'unknown',
+  buildTime: null as string | null,
+}))
+
+vi.mock('../../src/config/version', () => ({
+  get FRONTEND_COMMIT() {
+    return bundle.commit
+  },
+  get FRONTEND_BUILD_TIME() {
+    return bundle.buildTime
+  },
+}))
+
 import {
   fetchFactoryFlow,
   fetchFactoryFlowDetail,
@@ -75,6 +90,10 @@ function status(overrides: Partial<SoftwareFactoryStatus> = {}): SoftwareFactory
   return {
     fetchedAt: '2026-08-28T09:00:00Z',
     backendCommit: SHA,
+    serviceCommits: [
+      { service: 'backend', commit: SHA, commitTime: '2026-10-01T09:00:00Z' },
+      { service: 'software-factory', commit: SHA, commitTime: '2026-10-01T09:00:00Z' },
+    ],
     repository: 'simonjamesrowe/simonrowe-dev-monorepo',
     factoryReachable: true,
     deployerReachable: true,
@@ -491,18 +510,40 @@ describe('SoftwareFactoryAdmin', () => {
     expect(within(drawer).queryByRole('button', { name: /^Scan now$/ })).not.toBeInTheDocument()
   })
 
-  it('keeps the redeploy button disabled until the phrase matches exactly', async () => {
+  it('offers no redeploy while this bundle reports no commit', async () => {
     renderConsoleWithFlow()
     const drawer = await openDrawer(/^Deploy /)
 
-    const button = within(drawer).getByRole('button', { name: /Redeploy 0123456/ })
-    expect(button).toBeDisabled()
+    const button = within(drawer).getByRole('button', { name: /Redeploy unknown/ })
+    await userEvent.type(within(drawer).getByLabelText(/Confirmation phrase/), 'REDEPLOY unknown')
 
-    await userEvent.type(within(drawer).getByLabelText(/Confirmation phrase/), 'REDEPLOY 0123456')
-
-    // Still disabled here, because this bundle reports no commit in a test build, and the two
-    // sides disagreeing is exactly when a redeploy must not be offered.
+    // A test build reports no commit, so the newest of the three cannot be worked out, and a
+    // redeploy that might roll a service back must not be offered.
     expect(button).toBeDisabled()
+  })
+
+  it('redeploys the newest commit a service was built from, once the phrase names it', async () => {
+    // A frontend-only merge: the bundle is newer than the backend and the factory.
+    bundle.commit = 'fedcba9876543210fedcba9876543210fedcba98'
+    bundle.buildTime = '2026-10-03T09:00:00Z'
+    try {
+      renderConsoleWithFlow()
+      const drawer = await openDrawer(/^Deploy /)
+
+      const button = within(drawer).getByRole('button', { name: /Redeploy fedcba9/ })
+      expect(button).toBeDisabled()
+      expect(within(drawer).getByText(/the frontend's/)).toBeInTheDocument()
+
+      await userEvent.type(within(drawer).getByLabelText(/Confirmation phrase/), 'REDEPLOY 0123456')
+      expect(button).toBeDisabled()
+
+      await userEvent.clear(within(drawer).getByLabelText(/Confirmation phrase/))
+      await userEvent.type(within(drawer).getByLabelText(/Confirmation phrase/), 'REDEPLOY fedcba9')
+      expect(button).toBeEnabled()
+    } finally {
+      bundle.commit = 'unknown'
+      bundle.buildTime = null
+    }
   })
 
   it('surfaces a status failure without rendering a broken page', async () => {

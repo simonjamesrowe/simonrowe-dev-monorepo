@@ -1028,18 +1028,22 @@ Note the module has no enable flag — reviewing pull requests is the factory's 
 is always registered — so a missing `code-review` poller is the only way it breaks, and that is
 exactly the state an operator is in when reaching for this button.
 
-**Redeploy is the guarded one.** It can only redeploy the commit already running,
-and every check is repeated at the server:
+**Redeploy is the guarded one.** It redeploys what is running: **the newest commit any
+deployed service was built from**, and every check is repeated at the server
+(`RedeployTarget`):
 
-- the backend's own commit and the loaded bundle's commit must be **equal** and
-  neither may be `unknown`;
-- the typed phrase must be exactly `REDEPLOY <short-sha>`;
+- the backend, software-factory and the loaded bundle must each report a known commit, and the
+  bundle's commit must already be in `platform_releases` (its time is read from there, never
+  from the browser);
+- the typed phrase must be exactly `REDEPLOY <short-sha>` of the commit the **server** chose;
 - the `deploy` module must be ready.
 
-The commit that reaches Temporal is **the backend's own**, never the one the
-browser sent — the browser's value is used solely to prove the two agree. A
-disagreement means a partial deploy, which is precisely when a redeploy must not
-be offered.
+Publish rebuilds only the images a merge changed and tags the rest with the new commit, so the
+services routinely report different commits ([build-and-startup.md](build-and-startup.md)). At
+the newest of them, every service's image is the one running; an older commit would roll back
+whichever service was built after it. The old rule, "frontend and backend must report the same
+commit", would refuse every redeploy after a frontend-only merge. If the deploy directory is
+already past the target (after a docs-only merge), `sync-config`'s fast-forward is a no-op.
 
 ### When the page says nothing is ready
 

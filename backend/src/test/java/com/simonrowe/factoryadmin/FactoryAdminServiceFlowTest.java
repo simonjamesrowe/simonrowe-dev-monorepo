@@ -80,7 +80,7 @@ class FactoryAdminServiceFlowTest {
   }
 
   private FactoryAdminService service() {
-    return new FactoryAdminService(client, mock(FactoryAdminProperties.class), null);
+    return new FactoryAdminService(client, mock(FactoryAdminProperties.class), null, null);
   }
 
   private static FactoryFlow flow(final FactoryFlow.Node... nodes) {

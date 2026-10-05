@@ -10,21 +10,6 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 public interface PlatformReleaseRepository extends MongoRepository<PlatformRelease, String> {
 
   /**
-   * The most recent releases, newest first.
-   *
-   * <p>A default method over {@code findAll(Pageable)} rather than a derived
-   * {@code findTopNBy...} query, because the limit is a request parameter and a derived query
-   * would hard-code it.
-   *
-   * @param limit how many to return
-   * @return the releases, newest first
-   */
-  default List<PlatformRelease> findRecent(final int limit) {
-    return findAll(PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "commitTime")))
-        .getContent();
-  }
-
-  /**
    * Releases awaiting a summary, newest commit first.
    *
    * @param limit how many to claim

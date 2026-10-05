@@ -105,6 +105,26 @@ WORKDIR /app
 COPY --from=build --chown=factory:factory \
     /workspace/software-factory/build/libs/software-factory-*.jar /app/software-factory.jar
 
+# Project Leyden AOT cache (JEP 483/514/515), for startup time: ~40-50s on the Pi before this.
+#
+# The jar is extracted first because an AOT cache can only cover classes loaded from plain jars
+# on the class path, never from jars nested inside a Spring Boot fat jar. The training run then
+# refreshes the whole application context (-Dspring.context.exit=onRefresh exits before any
+# worker, listener or web server starts, so no Temporal, Mongo or GitHub is needed) and the JVM
+# writes the classes it loaded and linked into /app/app.aot. That file holds class metadata,
+# never the heap, so nothing from the build environment can end up in it; this image takes no
+# secrets at build time in any case.
+#
+# The training runs as root and writes into root-owned /app, so the service user can read the
+# cache but not replace it. A cache the JVM cannot use (a different JDK, a changed class path)
+# is ignored with a warning rather than failing startup - the default -XX:AOTMode=auto - so the
+# worst case is the old startup time.
+RUN java -Djarmode=tools -jar /app/software-factory.jar extract --destination /app/extracted \
+    && rm /app/software-factory.jar \
+    && java -Dspring.context.exit=onRefresh -XX:AOTCacheOutput=/app/app.aot \
+       -jar /app/extracted/software-factory.jar \
+    && test -s /app/app.aot
+
 # Clone target. Compose backs this with a named volume, so pull-request branches
 # never land on the host filesystem.
 RUN mkdir -p /workspace && chown factory:factory /workspace
@@ -116,4 +136,7 @@ ENV CLAUDE_COMMAND=/usr/local/bin/claude \
     HOME=/app
 
 EXPOSE 8090 8091
-ENTRYPOINT ["java", "-jar", "/app/software-factory.jar"]
+# Adds -XX:AOTCache unless JAVA_TOOL_OPTIONS carries an -Xshare option, which the JVM refuses to
+# combine with it; the deployer runs with -Xshare:off. See the script.
+COPY --chown=root:root --chmod=0755 software-factory/docker/start.sh /app/start.sh
+ENTRYPOINT ["/app/start.sh"]

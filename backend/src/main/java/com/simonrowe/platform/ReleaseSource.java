@@ -12,6 +12,6 @@ public enum ReleaseSource {
   /** A backend instance booted reporting this SHA, so it demonstrably ran. */
   RUNNING,
 
-  /** Derived from baked git history: published to ghcr, deployment unknown. */
+  /** Read from {@code main}'s history on GitHub: published to ghcr, deployment unknown. */
   PUBLISHED_HISTORY
 }

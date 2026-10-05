@@ -18,19 +18,24 @@ back to step level, this is what happens.
 
 ## What runs where
 
-Four jobs in `.github/workflows/ci.yml`, on `pull_request` against `main`:
+Five jobs in `.github/workflows/ci.yml`, on `pull_request` against `main` and on every push
+to `main`:
 
 ```
-pull_request ─┬─ backend            (Checkstyle, tests, JaCoCo + 0.78 floor, CycloneDX)
-              ├─ frontend           (ESLint, Vitest + coverage, build)
-              ├─ software-factory   (Checkstyle + tests, JaCoCo report, container build)
-              └─ sonar              needs all three · continue-on-error · advisory
+changes ─┬─ backend            (Checkstyle, tests, JaCoCo + 0.78 floor, CycloneDX)
+         ├─ frontend           (ESLint, Vitest + coverage, build)
+         ├─ software-factory   (Checkstyle + tests, JaCoCo report, container build; shell tests)
+         └─ sonar              needs all of them · continue-on-error · advisory
 ```
 
-The `sonar` job **runs no tests**. It checks out with `fetch-depth: 0`, downloads
-the three coverage artifacts, asserts they are all present, compiles with
-`./gradlew classes testClasses`, then analyses. Coverage is only ever as fresh as
-the artifacts.
+On a pull request, `changes` runs only the jobs the change needs
+([build-and-startup.md](build-and-startup.md)); a push to `main` runs everything. The `sonar`
+job **runs no tests**. It checks out with `fetch-depth: 0`, downloads the coverage of every
+module whose job ran, asserts exactly those are present, compiles with
+`./gradlew classes testClasses`, then analyses. Coverage is only ever as fresh as the artifacts.
+On a pull request that skipped a module, that module has no coverage report, which is fine: a
+pull request analysis grades new code, and an untouched module has none. It is skipped outright
+for a documentation-only change.
 
 | Module | Language | Coverage produced by | Artifact | Floor |
 | --- | --- | --- | --- | --- |
@@ -321,7 +326,8 @@ incorrectly between the two dialects.
 **Symptom**: one module reports 0% coverage while the others look right.
 
 **Cause**: an artifact upload or download broke — a renamed artifact, a changed
-report path, or a producing job that was skipped. **A missing coverage report is
+report path, or a producing job that was skipped. A job skipped by `changes` is expected and
+its report is not required; the input check only demands reports from jobs that ran. **A missing coverage report is
 not an analysis error**: Sonar reports 0% and carries on.
 
 **Remedy**: the `sonar` job's **Verify analysis inputs** step exists precisely for

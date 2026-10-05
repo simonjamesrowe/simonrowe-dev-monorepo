@@ -31,7 +31,7 @@ from a service that has already verified an HMAC signature.
 | --- | --- |
 | `sync-config` | Fast-forwards the deploy directory to the deployed commit, if that is provably safe |
 | `maintenance-on` / `maintenance-off` | Creates/removes `/var/run/deploy-state/maintenance.on` |
-| `pull` | Records the current image ID of each target service, then pulls the head SHA and re-tags it to `:latest` |
+| `pull` | Records the current image ID of each target service, then pulls the head SHA and re-tags it to `:latest`. An image the merge did not change was published under the head SHA as an exact copy of the previous one ([build-and-startup.md](build-and-startup.md)), so its ID is unchanged and `recreate` leaves that container running |
 | `recreate` | `up -d --no-deps --pull never` each target, `restart nginx`, then a full `up -d` reconcile |
 | `verify` | The container settle loop, plus the four ops hostnames |
 | `verify-public` | `www` and `api` — only after the page comes down. On success, prunes unused images ([below](#image-cleanup)) |
@@ -198,7 +198,12 @@ comment titled "Deployed — images only". `sync-config` declines, without movin
 | `missing-variable` | The new compose file references a variable the host's `.env` does not define. `.env` is host-managed and never synced. |
 
 For `held-back`, the report names the services and the exact command to apply
-them by hand. Deciding first and moving `HEAD` second is deliberate: a
+them by hand.
+
+**An images-only deploy can crash the backend.** The backend image turns its AOT cache on at
+launch, and the JVM refuses to start when that meets the `-Xshare:off` an older compose file
+carried. `verify` then fails and the deploy rolls back. Apply the held-back configuration to
+fix it; see [build-and-startup.md](build-and-startup.md). Deciding first and moving `HEAD` second is deliberate: a
 fast-forward followed by a refusal to recreate would leave the deploy directory
 ahead of what is running, and `monitor-prod.sh`'s next bare `up -d` would apply
 the held-back change within the minute.

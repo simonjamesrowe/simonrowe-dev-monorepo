@@ -33,8 +33,8 @@ class ReleaseSummarySweepTest extends AbstractIntegrationTest {
   }
 
   private PlatformRelease pending(final String sha, final long epoch) {
-    PlatformRelease release = PlatformRelease.fromBaked(
-        new BakedRelease(
+    PlatformRelease release = PlatformRelease.fromCommit(
+        new MainCommit(
             sha, Instant.ofEpochSecond(epoch), "feat: add a thing", "It does a thing.",
             List.of("Thing.java")),
         ReleaseSource.PUBLISHED_HISTORY,

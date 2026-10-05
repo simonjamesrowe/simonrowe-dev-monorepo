@@ -8,58 +8,127 @@ permissions:
   contents: read
   packages: write
 
+# One Publish at a time, never cancelled. An image left unchanged is published by re-tagging
+# the previous commit's image (see the `changes` job), so a run must not start until the run
+# for the commit before it has finished pushing. GitHub keeps at most one run pending per group
+# and cancels an older pending one when a newer arrives; that is safe, because the newer run
+# then finds no image for the cancelled commit and rebuilds rather than re-tags.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 jobs:
-  publish-backend:
-    name: Publish Backend Image
-    runs-on: ubuntu-24.04-arm
+  # Decides which images this merge has to rebuild; see scripts/changed-areas.sh.
+  #
+  # Every image is still published under this commit's SHA on every run, because the deployer
+  # pulls `:<sha>` for all three (restart-prod.sh's `pull` phase) and must keep doing so. An
+  # unchanged image gets the tag by a registry-side re-tag of the previous commit's image -
+  # seconds, no pull - and because its image id is unchanged, the deploy's `up -d` leaves that
+  # container running. A frontend-only merge no longer restarts the backend.
+  #
+  # The comparison is with the commit before this push (`github.event.before`), and a re-tag
+  # needs that commit's image to exist. When it does not - its Publish failed or was cancelled
+  # - the job rebuilds instead, which is what makes skipping safe: an image is only ever reused
+  # from a commit whose own Publish produced it.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.areas.outputs.image_backend }}
+      frontend: ${{ steps.areas.outputs.image_frontend }}
+      factory: ${{ steps.areas.outputs.image_factory }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # fetch-depth: 0 is REQUIRED, not an optimisation. The default is a depth-1
-          # shallow clone, so `git log` sees exactly ONE commit and the /status changelog
-          # ships with a single entry — a failure that looks identical to success.
-          # backend/build.gradle.kts's generateReleaseHistory task reads 50 commits.
+          # The diff needs the previous commit; a push can carry more than one.
           fetch-depth: 0
 
+      - name: Decide which images this merge rebuilds
+        id: areas
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: scripts/changed-areas.sh "$BEFORE" "$AFTER" | tee -a "$GITHUB_OUTPUT"
+
+  publish-backend:
+    name: Publish Backend Image
+    runs-on: ubuntu-24.04-arm
+    needs: changes
+    env:
+      IMAGE: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend
+      # Unknown when the detector itself failed, and an unknown answer means rebuild.
+      CHANGED: ${{ needs.changes.result != 'success' || needs.changes.outputs.backend == 'true' }}
+    if: ${{ !cancelled() }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Re-tag the previous commit's image
+        id: retag
+        if: env.CHANGED != 'true'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: scripts/ci/retag-image.sh "$IMAGE" "$BEFORE" "$AFTER" | tee -a "$GITHUB_OUTPUT"
+
       - name: Set up JDK 25
+        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
         uses: actions/setup-java@v4
         with:
           java-version: '25'
           distribution: 'temurin'
 
       - name: Setup Gradle
+        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      # Also performs the AOT cache training run: the buildpack starts the app with the
+      # aot-training profile and -Dspring.context.exit=onRefresh. See backend/build.gradle.kts.
+      - name: Build backend image
+        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
+        run: ./gradlew :backend:bootBuildImage --imageName="$IMAGE:${{ github.sha }}"
 
-      - name: Build and push backend native image
+      # The AOT training run activates the aot-training profile through the BUILD environment,
+      # and that profile replaces the site's Elasticsearch vector store with an in-memory one.
+      # Build-time variables are not persisted into a buildpack image, but this is the one
+      # property where being wrong would silently empty site search in production, so it is
+      # checked on the artifact rather than trusted. The cache itself is checked too: without
+      # it the image still works, just slowly, and nothing else would notice.
+      - name: Assert the image carries the AOT cache and not the training profile
+        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
         run: |
-          ./gradlew :backend:bootBuildImage \
-            --imageName=ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:${{ github.sha }}
+          set -euo pipefail
+          if docker inspect "$IMAGE:${{ github.sha }}" --format '{{json .Config.Env}}' \
+              | grep -q 'SPRING_PROFILES_ACTIVE'; then
+            echo "::error::The backend image sets SPRING_PROFILES_ACTIVE; the aot-training profile must never reach a running container"
+            exit 1
+          fi
+          docker run --rm --entrypoint test "$IMAGE:${{ github.sha }}" -s /workspace/application.aot \
+            || { echo "::error::The backend image has no AOT cache at /workspace/application.aot"; exit 1; }
 
-      - name: Tag and push images
+      - name: Push backend image
+        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
         run: |
-          docker tag ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:${{ github.sha }} \
-            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:latest
-          docker push ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:${{ github.sha }}
-          docker push ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-backend:latest
+          docker tag "$IMAGE:${{ github.sha }}" "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
 
   publish-frontend:
     name: Publish Frontend Image
     runs-on: ubuntu-24.04-arm
+    needs: changes
+    env:
+      IMAGE: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-frontend
+      CHANGED: ${{ needs.changes.result != 'success' || needs.changes.outputs.frontend == 'true' }}
+    if: ${{ !cancelled() }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          # fetch-depth: 0 is REQUIRED, not an optimisation. The default is a depth-1
-          # shallow clone, so `git log` sees exactly ONE commit and the /status changelog
-          # ships with a single entry — a failure that looks identical to success.
-          # backend/build.gradle.kts's generateReleaseHistory task reads 50 commits.
-          fetch-depth: 0
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -67,6 +136,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Re-tag the previous commit's image
+        id: retag
+        if: env.CHANGED != 'true'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: scripts/ci/retag-image.sh "$IMAGE" "$BEFORE" "$AFTER" | tee -a "$GITHUB_OUTPUT"
 
       # github.event.head_commit.timestamp is only populated for push events. This
       # workflow currently only triggers on push, but git log matches the backend
@@ -74,9 +151,11 @@ jobs:
       # fired") and keeps working if a workflow_dispatch trigger is ever added here.
       - name: Resolve build time
         id: build-time
+        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
         run: echo "value=$(git log -1 --format=%cI)" >> "$GITHUB_OUTPUT"
 
       - name: Build and push frontend image
+        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -98,14 +177,13 @@ jobs:
   publish-software-factory:
     name: Publish Software Factory Image
     runs-on: ubuntu-24.04-arm
+    needs: changes
+    env:
+      IMAGE: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory
+      CHANGED: ${{ needs.changes.result != 'success' || needs.changes.outputs.factory == 'true' }}
+    if: ${{ !cancelled() }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          # fetch-depth: 0 is REQUIRED, not an optimisation. The default is a depth-1
-          # shallow clone, so `git log` sees exactly ONE commit and the /status changelog
-          # ships with a single entry — a failure that looks identical to success.
-          # software-factory/build.gradle.kts's buildInfo block reads the HEAD SHA.
-          fetch-depth: 0
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -113,6 +191,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Re-tag the previous commit's image
+        id: retag
+        if: env.CHANGED != 'true'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: scripts/ci/retag-image.sh "$IMAGE" "$BEFORE" "$AFTER" | tee -a "$GITHUB_OUTPUT"
 
       # .dockerignore excludes .git/ from the build context on purpose (shipping full repo
       # history into an image that gets published is the wrong trade), so
@@ -123,6 +209,7 @@ jobs:
       # plain KEY=VALUE line written to GITHUB_OUTPUT.
       - name: Resolve commit metadata
         id: commit-meta
+        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
         run: |
           {
             echo "time=$(git log -1 --format=%ct)"
@@ -132,6 +219,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Build and push software factory image
+        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .

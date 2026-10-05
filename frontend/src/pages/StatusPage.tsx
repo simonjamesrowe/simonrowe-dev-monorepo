@@ -21,12 +21,7 @@ import { trackPageView } from '../services/analytics'
  */
 export function StatusPage() {
   const { status, loading, error, retry } = usePlatformStatus()
-  const {
-    releases,
-    loading: releasesLoading,
-    error: releasesError,
-    retry: retryReleases,
-  } = useReleases()
+  const changelog = useReleases()
 
   usePageTitle('Platform Status')
 
@@ -34,8 +29,8 @@ export function StatusPage() {
     trackPageView('/status')
   }, [])
 
-  // The backend reports itself first; the frontend inserts itself second so the two
-  // versions that most often drift sit next to each other.
+  // The backend reports itself first and the frontend inserts itself second, so the two
+  // services a reader most often compares sit next to each other.
   const services = status
     ? [status.services[0], frontendServiceVersion(), ...status.services.slice(1)].filter(Boolean)
     : [frontendServiceVersion()]
@@ -47,6 +42,7 @@ export function StatusPage() {
         <p className="status-page__intro">
           What is running in production right now, and what shipped recently. Versions are the
           commit each service was built from — there are no release tags, the SHA is the version.
+          A service is rebuilt only when its own code changes, so they rarely all match.
         </p>
       </header>
 
@@ -79,21 +75,34 @@ export function StatusPage() {
 
       <section className="status-page__section">
         <CollapsibleSection
-          count={releasesLoading ? undefined : releases.length}
+          count={changelog.loading && changelog.totalReleases === 0 ? undefined : changelog.totalReleases}
           defaultOpen
-          title="Recent releases"
+          title="Releases"
         >
           <p className="status-page__note">
-            Every merge to <code>main</code> publishes an image, so one commit is one release.
-            Entries other than the one running now record what was <strong>published</strong>,
-            not what was deployed — deploys are manual, so there is no deployment history to
-            report. Summaries are written by a model when a release is first seen.
+            Every merge to <code>main</code> is a release; only the services whose code it touched
+            are rebuilt. The entry marked running is the commit the backend was built from. The
+            others record what was <strong>published</strong> to <code>main</code>, not proof of
+            what was deployed. Summaries are written by a model when a release is first seen.
           </p>
-          {releasesLoading ? <LoadingIndicator /> : null}
-          {releasesError ? (
-            <ErrorMessage message={releasesError} onRetry={retryReleases} />
+          {changelog.loading ? <LoadingIndicator /> : null}
+          {changelog.error ? (
+            <ErrorMessage message={changelog.error} onRetry={changelog.retry} />
           ) : null}
-          <ReleaseList releases={releases} />
+          <ReleaseList
+            activeType={changelog.activeType}
+            hasMore={changelog.hasMore}
+            loading={changelog.loading}
+            loadingMore={changelog.loadingMore}
+            onLoadMore={changelog.loadMore}
+            onQueryChange={changelog.setQuery}
+            onTypeChange={changelog.setActiveType}
+            query={changelog.query}
+            releases={changelog.releases}
+            totalItems={changelog.totalItems}
+            totalReleases={changelog.totalReleases}
+            typeCounts={changelog.typeCounts}
+          />
         </CollapsibleSection>
       </section>
     </div>

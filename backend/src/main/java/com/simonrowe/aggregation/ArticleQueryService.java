@@ -122,7 +122,7 @@ public class ArticleQueryService {
    * @param query the raw query text
    * @return the terms, empty when there is nothing to match on
    */
-  static List<String> terms(final String query) {
+  public static List<String> terms(final String query) {
     if (query == null) {
       return List.of();
     }

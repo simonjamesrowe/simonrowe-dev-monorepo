@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Search, X } from 'lucide-react'
 
 import type { Release } from '../../types/platform'
 
@@ -6,114 +6,124 @@ import { ReleaseEntry } from './ReleaseEntry'
 
 interface ReleaseListProps {
   releases: Release[]
+  /** Releases matching the current type and search, across every page. */
+  totalItems: number
+  /** Every stored release, whatever the filters: the "All" pill's count. */
+  totalReleases: number
+  typeCounts: Record<string, number>
+  activeType: string | null
+  onTypeChange: (type: string | null) => void
+  query: string
+  onQueryChange: (query: string) => void
+  hasMore: boolean
+  loading: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
 }
 
-const PAGE_SIZE = 8
-
 /**
- * Renders the release history as a timeline with client-side type filtering and paging.
+ * The changelog as a timeline: a search box, type pills and "Load more".
  *
- * Filtering and paging are both client-side: the full list is already fetched by
- * `useReleases`, so there is nothing to gain from asking the backend to do this again.
- * Changing the filter resets the visible count back to `PAGE_SIZE`, otherwise switching to
- * a smaller type could leave every matching entry hidden behind a stale "show more" count.
+ * Purely presentational. Filtering and paging happen on the server (`useReleases`), because the
+ * page now reaches the whole history rather than the newest 20, and a search has to search all
+ * of it rather than whatever happens to be loaded.
  */
-export function ReleaseList({ releases }: ReleaseListProps) {
-  const [activeType, setActiveType] = useState<string | null>(null)
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-
-  // Counted from the data rather than a hardcoded list, so a new conventional-commit type
-  // shows up as its own pill the moment a release uses it.
-  const typeCounts = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const release of releases) {
-      counts.set(release.type, (counts.get(release.type) ?? 0) + 1)
-    }
-    return counts
-  }, [releases])
-
-  // Explicit comparator: a bare sort() coerces to string, which happens to be right for
-  // these lowercase type names but states no intent and trips typescript:S2871.
-  const types = useMemo(
-    () => Array.from(typeCounts.keys()).sort((a, b) => a.localeCompare(b)),
-    [typeCounts],
-  )
-
-  const filtered = useMemo(
-    () => (activeType ? releases.filter((release) => release.type === activeType) : releases),
-    [releases, activeType],
-  )
-
-  function selectType(type: string | null) {
-    setActiveType(type)
-    setVisibleCount(PAGE_SIZE)
-  }
-
-  if (releases.length === 0) {
+export function ReleaseList({
+  releases,
+  totalItems,
+  totalReleases,
+  typeCounts,
+  activeType,
+  onTypeChange,
+  query,
+  onQueryChange,
+  hasMore,
+  loading,
+  loadingMore,
+  onLoadMore,
+}: ReleaseListProps) {
+  if (!loading && totalReleases === 0) {
     return <p className="status-page__empty">No release history yet.</p>
   }
 
-  const visible = filtered.slice(0, visibleCount)
-  const hasMore = visibleCount < filtered.length
-  const canShowLess = visibleCount > PAGE_SIZE
+  // Ordered by the server, most common first. Counted from the data rather than a hardcoded
+  // list, so a new conventional-commit type shows up as its own pill the moment one is used.
+  const types = Object.keys(typeCounts)
+  const filtering = activeType !== null || query.trim() !== ''
 
   return (
     <div className="release-timeline">
+      <div className="feed__search release-timeline__search">
+        <Search aria-hidden="true" className="feed__search-icon" size={16} />
+        <input
+          aria-label="Search releases"
+          className="feed__search-input"
+          onChange={(event) => onQueryChange(event.target.value)}
+          placeholder="Search releases by subject, note or SHA"
+          type="search"
+          value={query}
+        />
+        {query ? (
+          <button
+            aria-label="Clear search"
+            className="feed__search-clear"
+            onClick={() => onQueryChange('')}
+            type="button"
+          >
+            <X aria-hidden="true" size={14} />
+          </button>
+        ) : null}
+      </div>
+
       {/* .feed__filters-scroll is the class that turns this row into a horizontal
           scroller below 768px (see styles.css); without it, .feed__filters' mobile rule
           (`width: max-content`) overflows the page instead of scrolling internally. */}
       <div className="feed__filters-scroll">
         <div aria-label="Filter releases by type" className="feed__filters" role="group">
           <button
+            aria-pressed={activeType === null}
             className={`feed__pill${activeType === null ? ' feed__pill--active' : ''}`}
-            onClick={() => selectType(null)}
+            onClick={() => onTypeChange(null)}
             type="button"
           >
-            All <span className="feed__more-count">{releases.length}</span>
+            All <span className="feed__more-count">{totalReleases}</span>
           </button>
           {types.map((type) => (
             <button
+              aria-pressed={activeType === type}
               className={`feed__pill${activeType === type ? ' feed__pill--active' : ''}`}
               key={type}
-              onClick={() => selectType(type)}
+              onClick={() => onTypeChange(type)}
               type="button"
             >
-              {type} <span className="feed__more-count">{typeCounts.get(type)}</span>
+              {type} <span className="feed__more-count">{typeCounts[type]}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="status-page__empty">No releases of this type.</p>
+      {!loading && releases.length === 0 ? (
+        <p className="status-page__empty">
+          {filtering ? 'No releases match.' : 'No release history yet.'}
+        </p>
       ) : (
         <ol className="release-list">
-          {visible.map((release) => (
+          {releases.map((release) => (
             <ReleaseEntry key={release.sha} release={release} />
           ))}
         </ol>
       )}
 
-      {hasMore || canShowLess ? (
+      {hasMore ? (
         <div className="feed__load-more">
-          {hasMore ? (
-            <button
-              className="button button--secondary"
-              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
-              type="button"
-            >
-              Show more ({visible.length} of {filtered.length})
-            </button>
-          ) : null}
-          {canShowLess ? (
-            <button
-              className="button button--secondary"
-              onClick={() => setVisibleCount(PAGE_SIZE)}
-              type="button"
-            >
-              Show less
-            </button>
-          ) : null}
+          <button
+            className="button button--secondary"
+            disabled={loadingMore || loading}
+            onClick={onLoadMore}
+            type="button"
+          >
+            {loadingMore ? 'Loading…' : `Load more (${releases.length} of ${totalItems})`}
+          </button>
         </div>
       ) : null}
     </div>

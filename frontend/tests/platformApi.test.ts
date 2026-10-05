@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { fetchPlatformStatus, fetchReleases } from '../src/services/platformApi'
-import type { PlatformStatus, Release } from '../src/types/platform'
+import type { PlatformStatus, Release, ReleasePage } from '../src/types/platform'
 
 const STATUS: PlatformStatus = {
   services: [
@@ -31,6 +31,16 @@ const RELEASES: Release[] = [
   },
 ]
 
+const PAGE: ReleasePage = {
+  items: RELEASES,
+  page: 0,
+  size: 10,
+  totalItems: 1,
+  totalPages: 1,
+  totalReleases: 1,
+  typeCounts: { docs: 1 },
+}
+
 describe('platformApi', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
@@ -55,23 +65,30 @@ describe('platformApi', () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/platform/status'), {})
   })
 
-  it('fetches releases with the default limit of 20', async () => {
-    respondWith(RELEASES)
+  it('fetches the first page of releases by default', async () => {
+    respondWith(PAGE)
 
-    await expect(fetchReleases()).resolves.toEqual(RELEASES)
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('limit=20'), {})
+    await expect(fetchReleases()).resolves.toEqual(PAGE)
+    const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(url.pathname).toBe('/api/platform/releases')
+    expect(url.searchParams.get('page')).toBe('0')
+    expect(url.searchParams.get('size')).toBe('10')
+    expect(url.searchParams.has('type')).toBe(false)
+    expect(url.searchParams.has('q')).toBe(false)
   })
 
-  it('fetches releases with an explicit limit', async () => {
-    respondWith(RELEASES)
+  it('sends the page, type and trimmed search, encoded', async () => {
+    respondWith(PAGE)
 
-    await fetchReleases(5)
+    await fetchReleases({ page: 3, size: 25, type: 'feat', query: '  C++ & co ' })
 
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('limit=5'), {})
+    const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(url.searchParams.get('page')).toBe('3')
+    expect(url.searchParams.get('size')).toBe('25')
+    expect(url.searchParams.get('type')).toBe('feat')
+    expect(url.searchParams.get('q')).toBe('C++ & co')
   })
 
-  // 4xx rather than 5xx: fetchWithRetry never retries a client error, so this proves the
-  // fallback message reaches the caller without paying for the 5xx retry backoff.
   it('throws a readable error on a failed status response', async () => {
     respondWith(null, false, 400)
 
