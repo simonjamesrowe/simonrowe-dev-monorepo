@@ -47,9 +47,46 @@ allprojects {
     }
 }
 
+// SIM-72: the aggregate BOM's root component had no entry in `dependencies[]`, so
+// Dependency-Track logged "the project (metadata.component node of the BOM) is not
+// one of them; Graph will be incomplete because it is not possible to determine its
+// root" on every upload of `simonrowe-dev/backend`, and could not draw the tree.
+// That is the plugin, not our configuration: in 3.4.1 `CyclonedxAggregateTask`
+// builds the root from an empty graph and only copies dependency entries out of the
+// module BOMs, so nothing ever links the root to `backend` or `software-factory`.
+// Declaring the modules as root dependencies does not help either: the root cannot
+// resolve their variants, so its direct BOM still has no edges.
+//
+// The edge is added here, inside the task that writes the BOM, so every invocation
+// carries it. Each module is found by its `project_path` purl qualifier, and the task
+// fails if one is missing: an edge that silently stops being added would go back to
+// a warning nobody reads. Drop this once the plugin links the root itself.
 tasks.named<org.cyclonedx.gradle.CyclonedxAggregateTask>("cyclonedxBom") {
     jsonOutput.set(layout.buildDirectory.file("reports/bom.json"))
     xmlOutput.set(layout.buildDirectory.file("reports/bom.xml"))
+
+    val modulePaths = subprojects.map { "project_path=" + it.path.replace(":", "%3A") }
+    doLast {
+        val version = schemaVersion.get()
+        listOf(jsonOutput.get().asFile, xmlOutput.get().asFile).forEach { file ->
+            val bom = org.cyclonedx.parsers.BomParserFactory.createParser(file).parse(file)
+            val rootRef = bom.metadata.component.bomRef
+            val moduleRefs = modulePaths.map { path ->
+                bom.components.orEmpty().firstOrNull { it.purl?.contains(path) == true }?.bomRef
+                    ?: throw GradleException("SIM-72: no component with $path in ${file.name}")
+            }
+            val dependencies = bom.dependencies.orEmpty().filterNot { it.ref == rootRef }.toMutableList()
+            dependencies.add(0, org.cyclonedx.model.Dependency(rootRef).apply {
+                setDependencies(moduleRefs.map { org.cyclonedx.model.Dependency(it) })
+            })
+            bom.dependencies = dependencies
+            if (file.extension == "json") {
+                org.cyclonedx.gradle.utils.CyclonedxUtils.writeJsonBom(version, bom, file)
+            } else {
+                org.cyclonedx.gradle.utils.CyclonedxUtils.writeXmlBom(version, bom, file)
+            }
+        }
+    }
 }
 
 // Static analysis for the whole monorepo — see docs/runbooks/static-analysis.md.
@@ -185,6 +222,21 @@ subprojects {
     // JWTs — but the vulnerable class ships in the deployed jar, which is what
     // Dependency-Track reports and what a future Tomcat-level default could expose.
     ext["tomcat.version"] = "11.0.25"
+
+    // SIM-10: seven Jackson advisories against jackson-core and jackson-databind, on
+    // BOTH lines — Boot 4.1.1 manages 3.1.5 and 2.21.5, and every advisory is fixed by
+    // 3.1.7 / 2.21.7. Two properties because Boot 4 versions the lines separately
+    // (see above: `jackson-bom.version` is Jackson 3, `jackson-2-bom.version` is 2).
+    //
+    //   GHSA-7hhh-6rmp-j9qf  core: unbounded StringBuilder in _reportInvalidToken (DoS)
+    //   GHSA-p6pp-m3f8-5c89  core: ReDoS in NumberInput.PATTERN_FLOAT
+    //   GHSA-cxp5-3px4-pw24  databind: quadratic forward-reference completion
+    //   GHSA-q4xh-88c3-wmh7  databind: unbounded Duration/XMLGregorianCalendar parse
+    //   GHSA-wv8q-qhhj-9h54  databind: retains every unknown raw type id
+    //   GHSA-gx83-3vf8-gh7j  databind: Comparable missing from the PTV denylist
+    //   GHSA-wjgm-6hv5-3cvf  databind: Path deserialization has no scheme allowlist
+    ext["jackson-bom.version"] = "3.1.7"
+    ext["jackson-2-bom.version"] = "2.21.7"
 
     java {
         toolchain {
