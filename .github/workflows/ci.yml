@@ -28,9 +28,54 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decides which of the jobs below a pull request needs; see scripts/changed-areas.sh for the
+  # rules. A push to main always builds everything: that run is what writes the Gradle cache
+  # every pull request restores, and what gives Static Analysis a whole-project baseline.
+  #
+  # The skipping is done with job-level `if:`, never with workflow-level `paths:`. Three of
+  # these jobs are required checks, and a required check whose workflow never ran is reported
+  # as missing, which blocks the merge for ever. A job skipped by `if:` reports as passed.
+  #
+  # That makes THIS job's failure the dangerous case: a module job skipped because its `needs`
+  # failed would ALSO report as passed, and a broken detector would wave every pull request
+  # through untested. So each module job runs whenever this job did not succeed - a broken
+  # detector costs a full build, never a skipped one.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.areas.outputs.backend }}
+      frontend: ${{ steps.areas.outputs.frontend }}
+      factory: ${{ steps.areas.outputs.factory }}
+      shell: ${{ steps.areas.outputs.shell }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The diff needs the pull request's base commit, which a depth-1 checkout lacks.
+          # With it missing the script builds everything rather than guessing, which is safe
+          # but would quietly make this whole job pointless.
+          fetch-depth: 0
+
+      - name: Decide which jobs this change needs
+        id: areas
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "pull_request" ]; then
+            scripts/changed-areas.sh "$BASE_SHA" "$HEAD_SHA" | tee -a "$GITHUB_OUTPUT"
+          else
+            printf '%s\n' backend=true frontend=true factory=true shell=true \
+              "reason=a push to main builds everything" | tee -a "$GITHUB_OUTPUT"
+          fi
+
   backend:
     name: Backend Build & Test
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.backend == 'true') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -73,6 +118,8 @@ jobs:
   frontend:
     name: Frontend Build & Test
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.frontend == 'true') }}
     defaults:
       run:
         working-directory: frontend
@@ -121,49 +168,68 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage/
 
+  # Two halves with separate triggers: the module's Gradle checks and image build, and the deploy
+  # shell tests, which read files from all over the repository and so run for any change that
+  # is not documentation. One job rather than two because both are inside the required
+  # `Software Factory Build & Test` check, and the shell tests need the Docker daemon this
+  # runner already has.
   software-factory:
     name: Software Factory Build & Test
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.factory == 'true' || needs.changes.outputs.shell == 'true') }}
+    env:
+      RUN_FACTORY: ${{ needs.changes.result != 'success' || needs.changes.outputs.factory == 'true' }}
+      RUN_SHELL: ${{ needs.changes.result != 'success' || needs.changes.outputs.shell == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up JDK 25
+        if: env.RUN_FACTORY == 'true'
         uses: actions/setup-java@v4
         with:
           java-version: '25'
           distribution: 'temurin'
 
       - name: Setup Gradle
+        if: env.RUN_FACTORY == 'true'
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run software factory checks
+        if: env.RUN_FACTORY == 'true'
         run: ./gradlew :software-factory:check
 
       # Report only — this module has no coverage floor, deliberately. See
       # software-factory/build.gradle.kts and docs/runbooks/static-analysis.md.
       - name: Generate JaCoCo report
+        if: env.RUN_FACTORY == 'true'
         run: ./gradlew :software-factory:jacocoTestReport
 
       - name: Upload software factory coverage report
+        if: env.RUN_FACTORY == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: software-factory-jacoco-report
           path: software-factory/build/reports/jacoco/
 
+      # Also runs the AOT cache training at the end of Dockerfile.software-factory, which
+      # refreshes the whole application context - so a bean that starts contacting a datastore
+      # while being created fails HERE, on the pull request, rather than in Publish.
       - name: Build software factory container
+        if: env.RUN_FACTORY == 'true'
         run: docker build -f Dockerfile.software-factory -t software-factory:test .
 
       # The shell side of auto-deploy: restart-prod.sh's phases, sync-config against
-      # throwaway git clones, and the nginx maintenance/unavailable pages.
+      # throwaway git clones, the nginx maintenance/unavailable pages, and the change
+      # detector that decides which of these jobs run (scripts/changed-areas.sh).
       #
-      # In this job rather than a new one because it needs a Docker daemon (the nginx
-      # tests run a real nginx:alpine, and sync-config uses `docker compose config
-      # --hash`), and this job already has one for the image build above. A new job
-      # would cost a fresh runner and a cold Gradle cache for three bash files.
+      # It needs a Docker daemon (the nginx tests run a real nginx:alpine, and sync-config
+      # uses `docker compose config --hash`).
       #
       # run-tests.sh exports DRY_RUN=1 for every child, so no test can perform a real
       # restart even if it forgets to set it.
       - name: Run deploy shell tests
+        if: env.RUN_SHELL == 'true'
         run: ./scripts/test/run-tests.sh
 
   # Static analysis for all three modules in one project. See
@@ -182,13 +248,20 @@ jobs:
     runs-on: ubuntu-latest
     # All three, not just backend and frontend: this job consumes software-factory's
     # coverage artifact too, and without the dependency it races the producing job.
-    needs: [backend, frontend, software-factory]
+    needs: [changes, backend, frontend, software-factory]
+    # On a pull request, only the modules whose jobs ran produced coverage. That is enough:
+    # a pull request analysis grades new code, and a module the change did not touch has none.
+    # Skipped outright when nothing that has source changed, and when any job failed.
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && (github.event_name == 'push' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.factory == 'true') }}
     continue-on-error: true
     # Job level, NOT step level. A step's `if:` is evaluated before that step's own
     # `env:` block is applied, so the previous step-level form could never evaluate
     # true — which is why this analysis had never run once.
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      HAS_BACKEND: ${{ needs.backend.result == 'success' }}
+      HAS_FRONTEND: ${{ needs.frontend.result == 'success' }}
+      HAS_FACTORY: ${{ needs.software-factory.result == 'success' && (github.event_name == 'push' || needs.changes.outputs.factory == 'true') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -210,18 +283,21 @@ jobs:
       # uploaded from, so each `path:` reconstructs the location the sonar properties
       # in build.gradle.kts expect.
       - name: Download backend coverage
+        if: env.HAS_BACKEND == 'true'
         uses: actions/download-artifact@v4
         with:
           name: jacoco-report
           path: backend/build/reports/jacoco
 
       - name: Download software factory coverage
+        if: env.HAS_FACTORY == 'true'
         uses: actions/download-artifact@v4
         with:
           name: software-factory-jacoco-report
           path: software-factory/build/reports/jacoco
 
       - name: Download frontend coverage
+        if: env.HAS_FRONTEND == 'true'
         uses: actions/download-artifact@v4
         with:
           name: frontend-coverage
@@ -233,15 +309,15 @@ jobs:
       # thing standing between a silent hand-off breakage and a coverage number that
       # looks real and measures nothing.
       - name: Verify analysis inputs
+        # Coverage is required from exactly the modules whose jobs ran: on a push to main that
+        # is all three, so a broken hand-off there still fails loudly.
         run: |
           fail=0
-          for p in \
-            backend/build/reports/jacoco/test/jacocoTestReport.xml \
-            software-factory/build/reports/jacoco/test/jacocoTestReport.xml \
-            frontend/coverage/lcov.info \
-            frontend/tsconfig.app.json \
-            frontend/src \
-            frontend/tests
+          expected="frontend/tsconfig.app.json frontend/src frontend/tests"
+          [ "$HAS_BACKEND" = "true" ] && expected="$expected backend/build/reports/jacoco/test/jacocoTestReport.xml"
+          [ "$HAS_FACTORY" = "true" ] && expected="$expected software-factory/build/reports/jacoco/test/jacocoTestReport.xml"
+          [ "$HAS_FRONTEND" = "true" ] && expected="$expected frontend/coverage/lcov.info"
+          for p in $expected
           do
             if [ -s "$p" ] || [ -d "$p" ]; then
               echo "  ok   $p"

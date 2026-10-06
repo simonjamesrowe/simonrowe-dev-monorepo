@@ -82,3 +82,7 @@ platform:
     summaries:
       enabled: false
       model: test-model
+    # No test may reach api.github.com: ReleaseRecorder's scheduled poll would otherwise fire
+    # 20s into every long-running integration context.
+    history:
+      enabled: false

@@ -37,9 +37,18 @@ export interface FactoryModuleStatus {
   diagnostic: string | null
 }
 
+/** The commit one deployed service was built from. */
+export interface ServiceCommit {
+  service: string
+  commit: string
+  commitTime: string
+}
+
 export interface SoftwareFactoryStatus {
   fetchedAt: string
   backendCommit: string
+  /** The backend's and software-factory's commits, each only when known. */
+  serviceCommits: ServiceCommit[]
   /** The repository the pull-request actions target, fixed server-side. */
   repository: string
   factoryReachable: boolean

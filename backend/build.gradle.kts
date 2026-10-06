@@ -84,58 +84,26 @@ springBoot {
 // parsing in Java where it is unit-testable, and makes drift between parser and compose
 // file a test failure rather than a silent wrong answer.
 //
-// ---------------------------------------------------------------------------
-// The changelog on /status. 50 commits are baked so the AI summary sweep has depth;
-// the page itself requests 20.
-//
-// Separators rather than JSON: generating JSON here would mean hand-rolling escaping
-// for arbitrary commit messages. `git log` emits ASCII record/unit separators for free
-// and BakedReleaseHistory parses them.
-//
-// The task's only input is the HEAD SHA, so it re-runs when and only when HEAD moves.
-//
-// NOTE: in CI this yields ONE commit unless the checkout uses fetch-depth: 0. See
-// .github/workflows/publish.yml.
-// ---------------------------------------------------------------------------
-val releaseHistoryFile = layout.buildDirectory.file("generated/platform/release-history.txt")
-
-val releaseHistoryRaw: Provider<String> = gitText(
-    "-c", "core.quotepath=false",
-    "log", "-n", "50",
-    "--format=%x1e%H%x1f%ct%x1f%s%x1f%b%x1f",
-    "--name-only",
-)
-
-val generateReleaseHistory by tasks.registering {
-    description = "Bakes the last 50 commits on this branch into a backend resource."
-    val sha = headSha
-    val raw = releaseHistoryRaw
-    val output = releaseHistoryFile
-    inputs.property("headSha", sha)
-    outputs.file(output)
-    doLast {
-        val file = output.get().asFile
-        file.parentFile.mkdirs()
-        file.writeText(raw.get())
-    }
-}
-
+// The changelog is deliberately NOT baked in here any more. It used to be (`git log -n 50`
+// into a resource), which tied the changelog to the backend image: once Publish stopped
+// rebuilding images whose inputs had not changed, a frontend-only merge would never have
+// reached /status until the next backend change. `GitHubCommitHistory` reads main's
+// history from the GitHub API at runtime instead.
 tasks.named<ProcessResources>("processResources") {
     from(rootProject.file("docker-compose.prod.yml")) {
-        into("platform")
-    }
-    from(generateReleaseHistory) {
         into("platform")
     }
 }
 
 normalization {
     runtimeClasspath {
-        // release-history.txt embeds HEAD's SHA and message, so it changes on every commit.
-        // Without this, it would change :backend:test's classpath cache key every commit and
-        // no test task could ever be FROM-CACHE again — silently undoing ci-build-speedup.
-        // No test reads this resource; BakedReleaseHistoryTest exercises parse() directly.
-        ignore("platform/release-history.txt")
+        // build-info.properties embeds HEAD's SHA, subject and commit time, so it changes on
+        // every commit. It sits in build/resources/main, which is on the test runtime
+        // classpath, so without this every commit changed :backend:test's cache key and the
+        // Testcontainers suite re-ran in full even for a docs-only change — measured: a new
+        // empty commit turned FROM-CACHE into a full run. No test reads the generated file;
+        // every test that needs BuildProperties constructs its own.
+        ignore("META-INF/build-info.properties")
     }
 }
 
@@ -215,6 +183,24 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("boot
     //
     // Keep this in step with the toolchain's languageVersion in the root build file.
     environment.put("BP_JVM_VERSION", "25")
+    // Project Leyden AOT cache (JEP 483/514/515): the buildpack starts the app once at build
+    // time with -Dspring.context.exit=onRefresh, records which classes were loaded and linked,
+    // and the runtime JVM maps that cache instead of re-doing the work. It holds class
+    // metadata, never the heap, so no secret from the build environment can end up in it.
+    // A cache the JVM cannot use (different JDK, changed classpath) is ignored with a warning,
+    // not a failure, so the worst case is today's startup time.
+    //
+    // One combination IS fatal: the JVM refuses to start when -XX:AOTCache, which the buildpack
+    // adds at launch, meets any -Xshare option. So the cache is switched off with
+    // BPL_JVM_AOTCACHE_ENABLED=false (BACKEND_AOT_CACHE_ENABLED in docker-compose.prod.yml),
+    // never with -Xshare:off on its own.
+    environment.put("BP_JVM_AOTCACHE_ENABLED", "true")
+    // The training run inherits the build environment, so this activates the aot-training
+    // profile for that run only: build-time variables are not persisted into the image
+    // (verified with `docker inspect`, and asserted by the Publish workflow). The profile
+    // swaps out the few beans that contact a datastore while being created — see
+    // application-aot-training.yml and AotTrainingConfiguration.
+    environment.put("SPRING_PROFILES_ACTIVE", "aot-training")
     // The build time, not the plugin's default of a fixed 1980-01-01 (chosen for
     // reproducible image ids). Production prunes unused images with
     // `docker image prune --filter until=72h`, and `until` reads this field: with

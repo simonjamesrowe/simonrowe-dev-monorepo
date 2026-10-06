@@ -11247,11 +11247,15 @@ body[data-narration-bar] .app-layout__main {
   font-style: italic;
 }
 
-/* The filter pills above the timeline and the "Show more" row below it reuse
-   .feed__filters / .feed__pill / .feed__load-more verbatim (see the News & Events feed)
-   rather than defining a second, near-identical set of pill/load-more rules. */
+/* The search box, the filter pills above the timeline and the "Load more" row below it
+   reuse .feed__search / .feed__filters / .feed__pill / .feed__load-more verbatim (see the
+   News & Events feed) rather than defining a second, near-identical set of rules. */
 .release-timeline {
   margin-top: 1.25rem;
+}
+
+.release-timeline__search {
+  margin-bottom: 0.75rem;
 }
 
 .release-timeline .feed__filters-scroll {

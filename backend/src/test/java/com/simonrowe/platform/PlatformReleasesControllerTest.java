@@ -54,8 +54,8 @@ class PlatformReleasesControllerTest extends AbstractIntegrationTest {
       final String subject,
       final ReleaseSummaryStatus status,
       final String summary) {
-    PlatformRelease release = PlatformRelease.fromBaked(
-        new BakedRelease(sha, Instant.ofEpochSecond(epoch), subject, "", List.of("a.java")),
+    PlatformRelease release = PlatformRelease.fromCommit(
+        new MainCommit(sha, Instant.ofEpochSecond(epoch), subject, "", List.of("a.java")),
         ReleaseSource.PUBLISHED_HISTORY,
         Instant.ofEpochSecond(epoch));
     release.setSummaryStatus(status);
@@ -73,43 +73,106 @@ class PlatformReleasesControllerTest extends AbstractIntegrationTest {
   void returnsReleasesNewestFirst() throws Exception {
     mockMvc.perform(get("/api/platform/releases"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].sha").value(NEWER))
-        .andExpect(jsonPath("$[0].shortSha").value("840c311"))
-        .andExpect(jsonPath("$[0].type").value("docs"))
-        .andExpect(jsonPath("$[0].subject").value("docs: overhaul the README (#118)"))
-        .andExpect(jsonPath("$[0].summary").value("The README was rewritten."))
-        .andExpect(jsonPath("$[0].summaryStatus").value("READY"))
-        .andExpect(jsonPath("$[1].sha").value(OLDER))
-        .andExpect(jsonPath("$[1].type").value("feat"));
+        .andExpect(jsonPath("$.items[0].sha").value(NEWER))
+        .andExpect(jsonPath("$.items[0].shortSha").value("840c311"))
+        .andExpect(jsonPath("$.items[0].type").value("docs"))
+        .andExpect(jsonPath("$.items[0].subject").value("docs: overhaul the README (#118)"))
+        .andExpect(jsonPath("$.items[0].summary").value("The README was rewritten."))
+        .andExpect(jsonPath("$.items[0].summaryStatus").value("READY"))
+        .andExpect(jsonPath("$.items[1].sha").value(OLDER))
+        .andExpect(jsonPath("$.items[1].type").value("feat"));
+  }
+
+  @Test
+  void describesThePageAndTheWholeHistory() throws Exception {
+    mockMvc.perform(get("/api/platform/releases"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.page").value(0))
+        .andExpect(jsonPath("$.size").value(ReleaseQueryService.DEFAULT_PAGE_SIZE))
+        .andExpect(jsonPath("$.totalItems").value(2))
+        .andExpect(jsonPath("$.totalPages").value(1))
+        .andExpect(jsonPath("$.totalReleases").value(2))
+        .andExpect(jsonPath("$.typeCounts.docs").value(1))
+        .andExpect(jsonPath("$.typeCounts.feat").value(1));
   }
 
   @Test
   void exposesPendingSummaryRatherThanHidingTheEntry() throws Exception {
     mockMvc.perform(get("/api/platform/releases"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$[1].summaryStatus").value("PENDING"))
-        .andExpect(jsonPath("$[1].subject").value("feat: deploy automatically (#116)"));
+        .andExpect(jsonPath("$.items[1].summaryStatus").value("PENDING"))
+        .andExpect(jsonPath("$.items[1].subject").value("feat: deploy automatically (#116)"));
   }
 
   @Test
-  void honoursTheLimitParameter() throws Exception {
-    mockMvc.perform(get("/api/platform/releases").param("limit", "1"))
+  void pagesThroughTheWholeHistory() throws Exception {
+    mockMvc.perform(get("/api/platform/releases").param("size", "1").param("page", "1"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$", Matchers.hasSize(1)))
-        .andExpect(jsonPath("$[0].sha").value(NEWER));
+        .andExpect(jsonPath("$.items", Matchers.hasSize(1)))
+        .andExpect(jsonPath("$.items[0].sha").value(OLDER))
+        .andExpect(jsonPath("$.totalItems").value(2))
+        .andExpect(jsonPath("$.totalPages").value(2));
   }
 
   @Test
-  void clampsAnAbsurdLimitRatherThanServingTheWholeCollection() throws Exception {
-    mockMvc.perform(get("/api/platform/releases").param("limit", "100000"))
+  void returnsAnEmptyPageBeyondTheEnd() throws Exception {
+    mockMvc.perform(get("/api/platform/releases").param("page", "7"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$", Matchers.hasSize(Matchers.lessThanOrEqualTo(100))));
+        .andExpect(jsonPath("$.items", Matchers.hasSize(0)))
+        .andExpect(jsonPath("$.totalItems").value(2));
   }
 
   @Test
-  void rejectsNonPositiveLimit() throws Exception {
-    mockMvc.perform(get("/api/platform/releases").param("limit", "0"))
+  void clampsAnAbsurdPageSizeRatherThanServingTheWholeCollection() throws Exception {
+    mockMvc.perform(get("/api/platform/releases").param("size", "100000"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.size").value(ReleaseQueryService.MAX_PAGE_SIZE));
+  }
+
+  @Test
+  void rejectsNonPositivePageSizeAndNegativePage() throws Exception {
+    mockMvc.perform(get("/api/platform/releases").param("size", "0"))
         .andExpect(status().isBadRequest());
+    mockMvc.perform(get("/api/platform/releases").param("page", "-1"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void filtersByType() throws Exception {
+    mockMvc.perform(get("/api/platform/releases").param("type", "feat"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items", Matchers.hasSize(1)))
+        .andExpect(jsonPath("$.items[0].sha").value(OLDER))
+        .andExpect(jsonPath("$.totalItems").value(1))
+        // Counts label the pills and do not narrow with the filter.
+        .andExpect(jsonPath("$.totalReleases").value(2))
+        .andExpect(jsonPath("$.typeCounts.docs").value(1));
+  }
+
+  @Test
+  void searchesTheSubjectTheReleaseNoteAndTheSha() throws Exception {
+    mockMvc.perform(get("/api/platform/releases").param("q", "DEPLOY"))
+        .andExpect(jsonPath("$.items[*].sha").value(Matchers.contains(OLDER)));
+    mockMvc.perform(get("/api/platform/releases").param("q", "rewritten"))
+        .andExpect(jsonPath("$.items[*].sha").value(Matchers.contains(NEWER)));
+    mockMvc.perform(get("/api/platform/releases").param("q", "39e0f7a"))
+        .andExpect(jsonPath("$.items[*].sha").value(Matchers.contains(OLDER)));
+  }
+
+  @Test
+  void requiresEveryTermButLetsEachMatchAnyField() throws Exception {
+    mockMvc.perform(get("/api/platform/releases").param("q", "readme rewritten"))
+        .andExpect(jsonPath("$.items[*].sha").value(Matchers.contains(NEWER)));
+    mockMvc.perform(get("/api/platform/releases").param("q", "readme deploy"))
+        .andExpect(jsonPath("$.items", Matchers.hasSize(0)));
+  }
+
+  @Test
+  void treatsRegexCharactersInTheSearchLiterally() throws Exception {
+    // Each term is quoted, so a visitor typing a pattern cannot make the engine backtrack.
+    mockMvc.perform(get("/api/platform/releases").param("q", "(a+)+$ .*"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items", Matchers.hasSize(0)));
   }
 
   @Test
@@ -118,10 +181,10 @@ class PlatformReleasesControllerTest extends AbstractIntegrationTest {
 
     mockMvc.perform(get("/api/platform/releases"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].sha").value(NEWER))
-        .andExpect(jsonPath("$[0].running").value(true))
-        .andExpect(jsonPath("$[1].sha").value(OLDER))
-        .andExpect(jsonPath("$[1].running").value(false));
+        .andExpect(jsonPath("$.items[0].sha").value(NEWER))
+        .andExpect(jsonPath("$.items[0].running").value(true))
+        .andExpect(jsonPath("$.items[1].sha").value(OLDER))
+        .andExpect(jsonPath("$.items[1].running").value(false));
   }
 
   @Test
@@ -130,16 +193,17 @@ class PlatformReleasesControllerTest extends AbstractIntegrationTest {
 
     mockMvc.perform(get("/api/platform/releases"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].running").value(false))
-        .andExpect(jsonPath("$[1].running").value(false));
+        .andExpect(jsonPath("$.items[0].running").value(false))
+        .andExpect(jsonPath("$.items[1].running").value(false));
   }
 
   @Test
-  void returnsAnEmptyArrayWhenNothingHasBeenSeeded() throws Exception {
+  void returnsAnEmptyPageWhenNothingHasBeenRecorded() throws Exception {
     mongoTemplate.dropCollection(PlatformRelease.class);
 
     mockMvc.perform(get("/api/platform/releases"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$", Matchers.hasSize(0)));
+        .andExpect(jsonPath("$.items", Matchers.hasSize(0)))
+        .andExpect(jsonPath("$.totalReleases").value(0));
   }
 }

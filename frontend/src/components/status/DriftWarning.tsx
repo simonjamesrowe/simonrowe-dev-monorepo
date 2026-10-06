@@ -4,29 +4,37 @@ interface DriftWarningProps {
   services: ServiceVersion[]
 }
 
+/** The two services that run the same image, so any difference between them is drift. */
+const SAME_IMAGE = ['software-factory', 'deployer']
+
 /**
- * Warns when the first-party services are not all on the same commit.
+ * Warns when `software-factory` and `deployer` are on different commits.
  *
- * This is the most valuable single thing the page can say. A partial deploy — frontend
- * updated, backend not, or `deployer` left behind because it excludes itself from its own
- * recreate list — is a real and recurring state here, and once went unnoticed for months.
+ * It used to warn whenever any first-party services differed. Publish now rebuilds only the
+ * images whose code changed, so the backend, the frontend and the factory routinely report
+ * different commits after a perfectly good deploy, and that warning would have shown on almost
+ * every page view. The pair that still has to match is these two: they run one image, and the
+ * deployer never recreates itself, so a difference means it was left behind — the case this
+ * warning existed for.
  *
  * Services that are not reporting are excluded rather than counted as drift: "unknown" is
  * not evidence of a mismatch.
  */
 export function DriftWarning({ services }: DriftWarningProps) {
-  const known = services.filter((s) => s.reachable && s.commit !== 'unknown')
-  const commits = new Set(known.map((s) => s.commit))
+  const pair = services.filter(
+    (s) => SAME_IMAGE.includes(s.name) && s.reachable && s.commit !== 'unknown',
+  )
+  const commits = new Set(pair.map((s) => s.commit))
 
-  if (commits.size <= 1) {
+  if (pair.length < 2 || commits.size <= 1) {
     return null
   }
 
   return (
     <p className="status-page__drift" role="alert">
-      These services are running <strong>different commits</strong>:{' '}
-      {known.map((s) => `${s.name} (${s.shortCommit})`).join(', ')}. That usually means a
-      partial deploy.
+      <strong>software-factory and deployer run the same image but different commits</strong>:{' '}
+      {pair.map((s) => `${s.name} (${s.shortCommit})`).join(', ')}. The deployer does not update
+      itself, so it needs recreating by hand.
     </p>
   )
 }

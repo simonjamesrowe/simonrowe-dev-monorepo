@@ -37,11 +37,16 @@ class FactoryAdminControllerTest {
   void servesTheAggregatedStatus() throws Exception {
     when(service.status()).thenReturn(
         new FactoryAdminStatus(
-            Instant.EPOCH, SHA, "simonjamesrowe/simonrowe-dev-monorepo", true, false, List.of()));
+            Instant.EPOCH, SHA,
+            List.of(new ServiceCommit("backend", SHA, Instant.parse("2026-10-05T12:00:00Z"))),
+            "simonjamesrowe/simonrowe-dev-monorepo", true, false, List.of()));
 
     mockMvc.perform(get(BASE + "/status"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.backendCommit").value(SHA))
+        .andExpect(jsonPath("$.serviceCommits[0].service").value("backend"))
+        .andExpect(jsonPath("$.serviceCommits[0].commit").value(SHA))
+        .andExpect(jsonPath("$.serviceCommits[0].commitTime").value("2026-10-05T12:00:00Z"))
         .andExpect(jsonPath("$.repository").value("simonjamesrowe/simonrowe-dev-monorepo"))
         .andExpect(jsonPath("$.factoryReachable").value(true))
         .andExpect(jsonPath("$.deployerReachable").value(false));

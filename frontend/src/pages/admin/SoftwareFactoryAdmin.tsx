@@ -13,10 +13,11 @@ import {
 } from 'lucide-react'
 
 import { useAuth } from '../../auth/useAuth'
-import { FRONTEND_COMMIT } from '../../config/version'
+import { FRONTEND_BUILD_TIME, FRONTEND_COMMIT } from '../../config/version'
 import { FactoryFlowGraph } from './FactoryFlowGraph'
 import { FactoryNodeDrawer } from './FactoryNodeDrawer'
 import { parsePullNumber } from './pullRequestInput'
+import { redeployTarget } from './redeployTarget'
 import {
   fetchFactoryFlow,
   fetchFactoryFlowDetail,
@@ -259,7 +260,11 @@ export function SoftwareFactoryAdmin() {
     () => new Map<string, FactoryModuleStatus>(status?.modules.map((module) => [module.key, module]) ?? []),
     [status],
   )
-  const shortCommit = status?.backendCommit?.slice(0, 7) ?? 'unknown'
+  const deployTarget = useMemo(
+    () => redeployTarget(status?.serviceCommits ?? [], FRONTEND_COMMIT, FRONTEND_BUILD_TIME),
+    [status],
+  )
+  const shortCommit = deployTarget?.commit.slice(0, 7) ?? 'unknown'
   const deployPhrase = `REDEPLOY ${shortCommit}`
   const repository = status?.repository ?? 'the configured repository'
   const reviewNumber = parsePullNumber(reviewPullNumber)
@@ -426,7 +431,13 @@ export function SoftwareFactoryAdmin() {
         )
       case 'deploy':
         return (
-          <ActionPanel title="Redeploy production" description={`Only the currently running commit can be redeployed. Type ${deployPhrase} to continue.`} danger>
+          <ActionPanel
+            title="Redeploy production"
+            description={deployTarget
+              ? `Redeploys ${shortCommit}, the newest commit a running service was built from (the ${deployTarget.service}'s), so every image stays exactly as it is. Type ${deployPhrase} to continue.`
+              : 'The redeploy commit cannot be worked out until the backend, software-factory and this page all report the commit they were built from.'}
+            danger
+          >
             <label className="factory-console__field">
               Confirmation phrase
               <input value={deployConfirmation} onChange={(event) => setDeployConfirmation(event.target.value)} />
@@ -434,7 +445,7 @@ export function SoftwareFactoryAdmin() {
             <button
               className="admin-btn admin-btn--danger"
               disabled={
-                !modules.get('deploy')?.ready || pending !== null || FRONTEND_COMMIT === 'unknown'
+                !modules.get('deploy')?.ready || pending !== null || deployTarget === null
                 || deployConfirmation !== deployPhrase
               }
               onClick={() => void start('deploy', () => startDeploy(getAccessToken, FRONTEND_COMMIT, deployConfirmation))}

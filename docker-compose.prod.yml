@@ -268,7 +268,13 @@ services:
     # would put every unrelated production secret in that process; declare what it
     # needs, and nothing else.
     environment:
-      JAVA_TOOL_OPTIONS: "-Xshare:off"
+      # Empty by default, so the image's AOT cache (Dockerfile.software-factory) is used. It
+      # was "-Xshare:off" until the AOT cache landed: a JDK 21 aarch64 CDS bug (see the backend
+      # service below). Setting FACTORY_JAVA_TOOL_OPTIONS=-Xshare:off in .env and recreating
+      # this service turns class sharing, and with it the AOT cache, back off: the image's
+      # start script leaves -XX:AOTCache out whenever it sees an -Xshare option, because the
+      # JVM refuses to start with both.
+      JAVA_TOOL_OPTIONS: ${FACTORY_JAVA_TOOL_OPTIONS:-}
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
       FACTORY_RUNTIME_ROLE: software-factory
@@ -459,6 +465,11 @@ services:
     # from here truthfully, the same way it already reads their live counts from the
     # unauthenticated /api/factory/flow.
     environment:
+      # Deliberately still "-Xshare:off", which makes the image's start script skip the AOT
+      # cache (the JVM refuses -XX:AOTCache alongside any -Xshare option), unlike
+      # software-factory above. Changing any value in this service changes its config hash, and
+      # the deployer is not in FACTORY_DEPLOY_RECREATABLE, so sync-config would hold back every
+      # deploy from then on (the #130 wedge). It starts rarely; change it in a maintenance window.
       JAVA_TOOL_OPTIONS: "-Xshare:off"
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
@@ -739,8 +750,16 @@ services:
     env_file:
       - .env
     environment:
-      # Disable Class Data Sharing to prevent G1GC SIGSEGV crash on aarch64 (JDK-21 bug)
-      JAVA_TOOL_OPTIONS: "-Xshare:off"
+      # The image's Leyden AOT cache (BP_JVM_AOTCACHE_ENABLED in backend/build.gradle.kts),
+      # roughly halving startup. This service carried JAVA_TOOL_OPTIONS=-Xshare:off from #55
+      # until the cache landed: JDK 21.0.11 on aarch64 hit a G1 SIGSEGV populating CDS archive
+      # regions. The runtime is JDK 25 now, and the cache needs class sharing.
+      #
+      # NEVER put -Xshare:off back on its own: the buildpack adds -XX:AOTCache at launch and
+      # the JVM refuses to start when that meets any -Xshare option. To turn the cache off,
+      # set BACKEND_AOT_CACHE_ENABLED=false in .env and recreate the backend; only then is
+      # adding -Xshare:off safe, if the old crash ever returns.
+      BPL_JVM_AOTCACHE_ENABLED: ${BACKEND_AOT_CACHE_ENABLED:-true}
       SPRING_MONGODB_URI: mongodb://mongodb:27017/simonrowe
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200

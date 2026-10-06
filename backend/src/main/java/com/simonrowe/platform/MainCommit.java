@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * One commit on {@code main}, as baked into the image at build time.
+ * One commit on {@code main}, as read from the GitHub API by {@link GitHubCommitHistory}.
  *
  * <p>Because {@code main} is squash-merged and Publish runs on every merge, one commit is one
  * release. There is deliberately no "commits within a release" concept.
@@ -16,14 +16,27 @@ import java.util.Locale;
  * @param body the message body, empty when there is none
  * @param filesChanged the paths the commit touched
  */
-public record BakedRelease(
+public record MainCommit(
     String sha, Instant commitTime, String subject, String body, List<String> filesChanged) {
 
   private static final int SHORT_SHA_LENGTH = 7;
   private static final String OTHER_TYPE = "other";
 
-  public BakedRelease {
+  public MainCommit {
     filesChanged = filesChanged == null ? List.of() : List.copyOf(filesChanged);
+  }
+
+  /**
+   * This commit with its changed paths filled in.
+   *
+   * <p>GitHub's commit listing carries no file list, so a commit is first read without one and
+   * completed by a second, per-commit request only when it is about to be stored.
+   *
+   * @param files the paths the commit touched
+   * @return a copy carrying those paths
+   */
+  public MainCommit withFiles(final List<String> files) {
+    return new MainCommit(sha, commitTime, subject, body, files);
   }
 
   /**

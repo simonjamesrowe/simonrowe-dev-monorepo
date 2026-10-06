@@ -75,6 +75,15 @@ springBoot {
     }
 }
 
+normalization {
+    runtimeClasspath {
+        // Same reason as backend/build.gradle.kts: build-info.properties carries the commit SHA,
+        // lands on the test runtime classpath, and would otherwise change :software-factory:test's
+        // cache key on every commit. No test reads the generated file.
+        ignore("META-INF/build-info.properties")
+    }
+}
+
 // Report only — deliberately NO jacocoTestCoverageVerification and NO tasks.check
 // wiring, unlike backend. This module's coverage has never been measured; inventing
 // a floor before measuring it either fails the build on day one or sets the floor

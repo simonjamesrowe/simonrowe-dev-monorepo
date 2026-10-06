@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { StatusPage } from '../src/pages/StatusPage'
+import type { UseReleasesResult } from '../src/hooks/useReleases'
 import type { PlatformStatus, Release, ServiceVersion } from '../src/types/platform'
 
 vi.mock('../src/services/analytics', () => ({ trackPageView: vi.fn() }))
@@ -122,15 +123,33 @@ function buildRelease(index: number, overrides: Partial<Release> = {}): Release 
   }
 }
 
+/** What `useReleases` returns, with the given releases as the loaded page. */
+function changelog(releases: Release[], overrides: Partial<UseReleasesResult> = {}): UseReleasesResult {
+  const typeCounts: Record<string, number> = {}
+  for (const release of releases) typeCounts[release.type] = (typeCounts[release.type] ?? 0) + 1
+  return {
+    releases,
+    totalItems: releases.length,
+    totalReleases: releases.length,
+    typeCounts,
+    hasMore: false,
+    loading: false,
+    loadingMore: false,
+    error: null,
+    activeType: null,
+    setActiveType: vi.fn(),
+    query: '',
+    setQuery: vi.fn(),
+    loadMore: vi.fn(),
+    retry: vi.fn(),
+    ...overrides,
+  }
+}
+
 describe('StatusPage', () => {
   beforeEach(() => {
     mockStatus.mockReturnValue({ status: STATUS, loading: false, error: null, retry: vi.fn() })
-    mockReleases.mockReturnValue({
-      releases: RELEASES,
-      loading: false,
-      error: null,
-      retry: vi.fn(),
-    })
+    mockReleases.mockReturnValue(changelog(RELEASES))
   })
 
   it('renders a card for every reported service plus the frontend', async () => {
@@ -169,7 +188,27 @@ describe('StatusPage', () => {
     expect(screen.getByText(/not reporting/i)).toBeInTheDocument()
   })
 
-  it('warns when the frontend and backend SHAs differ', () => {
+  it('warns when software-factory and deployer, which share one image, differ', () => {
+    mockStatus.mockReturnValue({
+      status: {
+        ...STATUS,
+        services: [
+          BACKEND,
+          { ...BACKEND, name: 'software-factory' },
+          { ...BACKEND, name: 'deployer', commit: 'aaaaaaabbbbbb', shortCommit: 'aaaaaaa' },
+        ],
+      },
+      loading: false,
+      error: null,
+      retry: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/deployer \(aaaaaaa\)/)
+  })
+
+  it('does not warn when the backend and frontend differ, which selective builds make normal', () => {
     mockStatus.mockReturnValue({
       status: {
         ...STATUS,
@@ -182,10 +221,10 @@ describe('StatusPage', () => {
 
     renderPage()
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/different/i)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('does not warn when every first-party SHA matches', () => {
+  it('does not warn when the deployer is not reporting', () => {
     renderPage()
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -283,7 +322,7 @@ describe('StatusPage', () => {
   })
 
   it('shows an empty-history message rather than a blank section', () => {
-    mockReleases.mockReturnValue({ releases: [], loading: false, error: null, retry: vi.fn() })
+    mockReleases.mockReturnValue(changelog([]))
 
     renderPage()
 
@@ -329,10 +368,10 @@ describe('StatusPage', () => {
       expect(screen.getByText('mongodb')).toBeInTheDocument()
     })
 
-    it('expands Recent releases by default', () => {
+    it('expands Releases by default', () => {
       renderPage()
 
-      const header = screen.getByRole('button', { name: /recent releases/i })
+      const header = screen.getByRole('button', { name: /^releases/i })
       expect(header).toHaveAttribute('aria-expanded', 'true')
       expect(
         screen.getByText('docs: overhaul the README (#118)'),
@@ -340,52 +379,72 @@ describe('StatusPage', () => {
     })
   })
 
-  describe('release paging and filtering', () => {
-    const MANY_RELEASES: Release[] = Array.from({ length: 12 }, (_, index) =>
+  describe('release paging, search and filtering', () => {
+    const PAGE: Release[] = Array.from({ length: 10 }, (_, index) =>
       buildRelease(index, { type: index === 0 ? 'fix' : 'feat' }),
     )
 
-    it('renders only 8 releases initially, and Show more/Show less step by 8', async () => {
-      mockReleases.mockReturnValue({
-        releases: MANY_RELEASES,
-        loading: false,
-        error: null,
-        retry: vi.fn(),
-      })
+    it('labels the pills with counts over the whole history, not the loaded page', () => {
+      mockReleases.mockReturnValue(
+        changelog(PAGE, { totalReleases: 240, typeCounts: { feat: 200, fix: 40 } }),
+      )
 
       renderPage()
 
-      expect(document.querySelectorAll('.release')).toHaveLength(8)
-      expect(screen.queryByRole('button', { name: /show less/i })).not.toBeInTheDocument()
-
-      await userEvent.click(screen.getByRole('button', { name: /show more/i }))
-
-      expect(document.querySelectorAll('.release')).toHaveLength(12)
-      expect(screen.queryByRole('button', { name: /show more/i })).not.toBeInTheDocument()
-
-      await userEvent.click(screen.getByRole('button', { name: /show less/i }))
-
-      expect(document.querySelectorAll('.release')).toHaveLength(8)
+      expect(screen.getByRole('button', { name: /^All 240/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^feat 200/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^fix 40/ })).toBeInTheDocument()
     })
 
-    it('filters by type and resets the visible count', async () => {
-      mockReleases.mockReturnValue({
-        releases: MANY_RELEASES,
-        loading: false,
-        error: null,
-        retry: vi.fn(),
-      })
+    it('offers the next page while more matches remain, and asks the hook for it', async () => {
+      const loadMore = vi.fn()
+      mockReleases.mockReturnValue(
+        changelog(PAGE, { totalItems: 240, totalReleases: 240, hasMore: true, loadMore }),
+      )
 
       renderPage()
-      await userEvent.click(screen.getByRole('button', { name: /show more/i }))
-      expect(document.querySelectorAll('.release')).toHaveLength(12)
+      await userEvent.click(screen.getByRole('button', { name: /load more \(10 of 240\)/i }))
 
+      expect(loadMore).toHaveBeenCalledTimes(1)
+    })
+
+    it('offers no next page once everything matching is loaded', () => {
+      mockReleases.mockReturnValue(changelog(PAGE))
+
+      renderPage()
+
+      expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument()
+    })
+
+    it('filters by type through the hook, which asks the server', async () => {
+      const setActiveType = vi.fn()
+      mockReleases.mockReturnValue(changelog(PAGE, { setActiveType }))
+
+      renderPage()
       await userEvent.click(screen.getByRole('button', { name: /^fix/i }))
 
-      // Only the one 'fix' release exists in the fixture, and paging is back to the top.
-      expect(document.querySelectorAll('.release')).toHaveLength(1)
-      expect(screen.queryByRole('button', { name: /show more/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /show less/i })).not.toBeInTheDocument()
+      expect(setActiveType).toHaveBeenCalledWith('fix')
+    })
+
+    it('searches through the hook, which asks the server', async () => {
+      const setQuery = vi.fn()
+      mockReleases.mockReturnValue(changelog(PAGE, { setQuery }))
+
+      renderPage()
+      await userEvent.type(screen.getByRole('searchbox', { name: /search releases/i }), 'n')
+
+      expect(setQuery).toHaveBeenCalledWith('n')
+    })
+
+    it('says nothing matches, rather than that there is no history, while filtering', () => {
+      mockReleases.mockReturnValue(
+        changelog([], { totalReleases: 240, typeCounts: { feat: 240 }, query: 'zzz' }),
+      )
+
+      renderPage()
+
+      expect(screen.getByText(/no releases match/i)).toBeInTheDocument()
+      expect(screen.queryByText(/no release history yet/i)).not.toBeInTheDocument()
     })
   })
 })

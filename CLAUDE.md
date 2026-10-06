@@ -274,6 +274,47 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- selective-builds-and-aot-cache: **CI and Publish build only what a change touched, the two JVM
+  images start from a Leyden AOT cache, and the `/status` changelog comes from GitHub.**
+  `scripts/changed-areas.sh` maps paths to areas, and both workflows call it. Load-bearing bits:
+  - **Any path no rule names builds everything**, as does a base that cannot be diffed. Rules
+    follow what each build reads: the prod compose file rebuilds the backend (it is baked in),
+    `config/nginx/` runs software-factory's tests, and the shell tests run for any change that
+    is not documentation.
+  - **Skipping is a job-level `if:`, never `paths:`.** A skipped job reports as passed. A
+    required check from a workflow that never ran reports as missing and blocks the merge forever.
+    **If `Detect changes` fails, every job runs**: a job skipped because its `needs` failed
+    also reports as passed. A push to `main` always builds everything (cache writes, Sonar
+    baseline).
+  - **The backend test cache had never hit.** `build-info.properties` carries the commit SHA and
+    sits on the test runtime classpath, so every commit invalidated `:backend:test` (a docs-only
+    pull request ran the full suite, ~4 min). Both modules now ignore it in `normalization`.
+  - **Publish re-tags unchanged images** (`scripts/ci/retag-image.sh`, `imagetools create
+    --prefer-index=false`): same digest, so the deploy leaves that container running. It
+    re-tags only from the previous commit's own image and rebuilds when that is missing.
+    Publish runs are serialised.
+  - **The changelog moved out of the backend image.** A baked `git log` would have stopped at
+    the last backend change. `GitHubCommitHistory` polls `main` (anonymous, ETag'd, file
+    lookups capped at 20 per poll), and `/api/platform/releases` is now paged and searched on
+    the server (`ReleasePage`; `?page=&size=&type=&q=`), so the whole history is reachable.
+  - **Services now routinely report different commits.** The `/status` drift warning compares
+    only `software-factory` with `deployer` (same image). **Manual redeploy targets the newest
+    commit any service was built from** (`RedeployTarget`, mirrored by `redeployTarget.ts`).
+    At that commit every image is the running one; any older commit rolls a service back.
+  - **AOT cache**: about 2x faster startup measured on arm64 (backend 6.2s to 2.8s,
+    software-factory 2.0s to 0.8s). Re-measure on the Pi. The backend trains in the buildpack
+    under the **`aot-training` profile**, which swaps out the beans that contact a datastore
+    while being *created* (Spring AI's ES vector store, `BlogSearchRepository`, Mongock, the
+    Embabel key). That profile replaces site search with an in-memory store, so **Publish
+    asserts the image carries no `SPRING_PROFILES_ACTIVE`**.
+  - **`-XX:AOTCache` plus any `-Xshare` option stops the JVM at startup.** `-Xshare:off` (from #55,
+    a JDK 21 aarch64 CDS crash) is gone from backend and software-factory. Turn the cache off
+    with `BACKEND_AOT_CACHE_ENABLED=false` / `FACTORY_JAVA_TOOL_OPTIONS=-Xshare:off`, never
+    `-Xshare:off` on the backend alone. The deployer keeps `-Xshare:off` (changing it would
+    hold back every deploy), and the factory image's `start.sh` skips the cache when it sees it.
+    The new backend image under the OLD compose file, i.e. a held-back, images-only deploy,
+    crash-loops until `verify` rolls it back.
+  See `docs/runbooks/build-and-startup.md`.
 - clinicians-veil-project-page: **Clinician's Veil gets its page**, In development, seeded by
   `V050SeedCliniciansVeilProjectPage` from `backend/src/main/resources/seed/portfolio/clinicians-veil/`
   exactly as V049 seeded Term Time. The shared work now lives in `PortfolioPageSeed` (import the

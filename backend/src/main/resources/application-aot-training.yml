@@ -1,0 +1,39 @@
+# Active ONLY during the AOT cache training run that bootBuildImage performs at image build
+# time (see BP_JVM_AOTCACHE_ENABLED in build.gradle.kts). Never set in any running environment.
+# The beans it replaces are in com.simonrowe.platform.AotTrainingConfiguration; this file
+# exists so the profile is visible next to the other application-*.yml files.
+#
+# The training run refreshes the full application context with -Dspring.context.exit=onRefresh
+# and exits before anything starts, so it needs no datastore - except for the few beans that
+# reach out to one while being CREATED rather than when started. Anything set here that the
+# run does not need makes the trained class set differ from production's for no reason, which
+# costs startup time rather than correctness.
+spring:
+  data:
+    elasticsearch:
+      repositories:
+        # BlogSearchRepository checks its index exists when created; AotTrainingConfiguration
+        # supplies an inert stand-in in its place.
+        enabled: false
+  autoconfigure:
+    # Its vectorStore bean is @ConditionalOnMissingBean on its own return type,
+    # ElasticsearchVectorStore, so AotTrainingConfiguration's in-memory VectorStore does not
+    # make it back off. There is no base exclude list to merge with: a profile list replaces
+    # the base one wholesale, so if one is ever added, repeat its entries here.
+    exclude:
+      - org.springframework.ai.vectorstore.elasticsearch.autoconfigure.ElasticsearchVectorStoreAutoConfiguration
+
+embabel:
+  agent:
+    platform:
+      models:
+        openai:
+          # Embabel's OpenAiModelsConfig throws from its constructor without a key. A literal
+          # placeholder, not a credential: the training run makes no model call, and a real key
+          # must never be present at image build time, where it would sit in the build env.
+          api-key: aot-training-placeholder
+
+mongock:
+  # Mongock's driver bean checks its lock and changelog indexes in Mongo when created. The
+  # change units themselves would run later, from a runner the training run never reaches.
+  enabled: false

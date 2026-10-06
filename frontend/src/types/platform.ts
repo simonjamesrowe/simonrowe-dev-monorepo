@@ -44,3 +44,18 @@ export interface Release {
   summary: string | null
   summaryStatus: ReleaseSummaryStatus
 }
+
+/**
+ * One page of the changelog, mirroring the backend's `ReleasePage`. `typeCounts` and
+ * `totalReleases` cover every stored release whatever the filters, so the type pills keep
+ * their numbers while a search narrows the list.
+ */
+export interface ReleasePage {
+  items: Release[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
+  totalReleases: number
+  typeCounts: Record<string, number>
+}
