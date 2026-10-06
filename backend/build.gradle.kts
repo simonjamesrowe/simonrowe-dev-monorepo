@@ -195,6 +195,23 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("boot
     // BPL_JVM_AOTCACHE_ENABLED=false (BACKEND_AOT_CACHE_ENABLED in docker-compose.prod.yml),
     // never with -Xshare:off on its own.
     environment.put("BP_JVM_AOTCACHE_ENABLED", "true")
+    // Use the cache's class data, never its machine code. With an AOT cache in use, JDK 25
+    // switches on AOTAdapterCaching and AOTStubCaching itself, so the cache also carries the
+    // i2c/c2i adapters compiled on the GitHub runner that built the image. On the Pi 5 those
+    // fail to link ("Failed to link AdapterHandlerEntry ... in the AOT code cache") and the
+    // JVM then dies with SIGILL in ~AdapterBlob within a minute of starting: every deploy of
+    // #211 crash-looped and rolled back (SIM-79). An Apple Silicon machine does not reproduce
+    // it. Verified on the Pi: with these flags the warnings are gone and the cache still maps
+    // its AOT-linked classes, which is most of the startup gain.
+    //
+    // BPE_ variables are the Environment Variables buildpack's, written into the image's
+    // LAUNCH environment, so the flags travel with the image rather than the compose file. A
+    // new image can therefore never start without them, whatever compose file it lands under.
+    environment.put("BPE_DELIM_JAVA_TOOL_OPTIONS", " ")
+    environment.put(
+        "BPE_APPEND_JAVA_TOOL_OPTIONS",
+        "-XX:+UnlockDiagnosticVMOptions -XX:-AOTAdapterCaching -XX:-AOTStubCaching",
+    )
     // The training run inherits the build environment, so this activates the aot-training
     // profile for that run only: build-time variables are not persisted into the image
     // (verified with `docker inspect`, and asserted by the Publish workflow). The profile

@@ -28,5 +28,13 @@ case " ${JAVA_TOOL_OPTIONS:-} ${JDK_JAVA_OPTIONS:-} " in
     ;;
 esac
 
-# shellcheck disable=SC2086 # JVM_PERMISSIONS is two words on purpose
-exec java $JVM_PERMISSIONS -XX:AOTCache="$CACHE" -jar "$JAR" "$@"
+# Use the cache's class data, never its machine code. With a cache in use JDK 25 turns adapter and
+# stub caching on by itself, and the adapters compiled on the GitHub runner that built this image
+# fail to link on the Pi 5 and then SIGILL in ~AdapterBlob (SIM-79). Runtime-only on purpose: these
+# stop the JVM loading that code, so the training run does not need them and the module-graph
+# options above, which DO have to match training, are untouched. backend/build.gradle.kts carries
+# the same three for the backend image.
+AOT_CLASS_DATA_ONLY="-XX:+UnlockDiagnosticVMOptions -XX:-AOTAdapterCaching -XX:-AOTStubCaching"
+
+# shellcheck disable=SC2086 # both variables are several words on purpose
+exec java $JVM_PERMISSIONS $AOT_CLASS_DATA_ONLY -XX:AOTCache="$CACHE" -jar "$JAR" "$@"

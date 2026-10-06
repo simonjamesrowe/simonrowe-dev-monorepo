@@ -274,6 +274,20 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- aot-cache-class-data-only: **#211's AOT cache crash-looped both JVMs on the Pi, so every deploy
+  from #211 onwards rolled back (SIM-79), #212 included.** JDK 25 turns on the diagnostic
+  `AOTAdapterCaching`/`AOTStubCaching` itself whenever an AOT cache is in use, so the cache carried
+  adapters compiled on the GitHub runner. On the Pi 5 they fail to link (`Failed to link
+  AdapterHandlerEntry ... in the AOT code cache`) and the JVM dies with `SIGILL` in `~AdapterBlob`.
+  Apple Silicon does not reproduce it. The deploy report blamed nginx, because the backend came
+  up healthy on its third try, too late for verify-public. Both images now pass
+  `-XX:+UnlockDiagnosticVMOptions -XX:-AOTAdapterCaching -XX:-AOTStubCaching` at runtime: the
+  backend through `BPE_APPEND_JAVA_TOOL_OPTIONS` (the image's launch environment, so it cannot
+  meet a compose file without them), software-factory through `AOT_CLASS_DATA_ONLY` in `start.sh`.
+  Verified on the Pi: the warnings go, and the cache still maps its AOT-linked classes.
+  `scripts/test/test-aot-class-data-only.sh` guards both. **Look for `SIGILL` in Loki before
+  believing an "api 502 but backend healthy" deploy report.** See
+  `docs/runbooks/build-and-startup.md` ("Class data only").
 - logwatch-backlog-4: **The twelve open `factory:logwatch` tickets on 2026-10-06 (SIM-29, 62–64,
   66, 67, 71, 73, 74, 76–78).** Five came from the 2026-09-28 disk-full and have not recurred since
   `prod-disk-image-cleanup`. One of them was a real bug that had gone unnoticed for five weeks.
@@ -287,14 +301,15 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     `ElasticsearchBackupServiceIntegrationTest` round-trips a real ES 9.4.5. It fails on the old
     code. **Any type passed to the ES client to decode into must be Jackson 2.** The compiler
     cannot tell you, because `Class<T>` takes either library's type.
-  - **A disk-full can corrupt a running container's `json-file` log, and the container then
-    stops shipping logs while it carries on serving (SIM-29).** `temporal`, `temporal-ui` and
-    `langfuse-redis` shipped nothing after 20:05–20:11 on 09-28. Alloy re-read the same stretch
-    every 15–30s, and Loki rejected it ~5,000 times a day once it was 7 days old. A restart keeps
-    the log file, so only `up -d --force-recreate --no-deps <svc>` fixes it. This is a host step,
-    now step 7 of "Disk full" recovery in `docs/runbooks/prod-monitoring.md`. Nothing detects a
-    single container going quiet in Loki: logwatch's coverage check counts containers only when
-    Alloy is unreachable.
+  - **A NUL line in a running container's `json-file` log stops it shipping logs while it carries
+    on serving (SIM-29).** `temporal`, `temporal-ui` and `langfuse-redis` shipped nothing after
+    20:05–20:11 on 09-28. Alloy re-read the same stretch every 15–30s, and Loki rejected it ~5,000
+    times a day once it was 7 days old. The NULs sat near the start of the files, most likely from
+    an unclean start on 09-26; the disk-full only made Alloy re-read from the top. A restart keeps
+    the log file, so only `up -d --force-recreate --no-deps <svc>` fixes it (done 2026-10-06). Step
+    7 of "Disk full" recovery in `docs/runbooks/prod-monitoring.md`. Nothing detects a single
+    container going quiet in Loki: logwatch's coverage check counts containers only when Alloy is
+    unreachable.
   - **software-factory's JVM flags must be identical at AOT training and at runtime.**
     `--enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow` silence Java 25's
     grpc-netty `loadLibrary` and protobuf `Unsafe` warnings (SIM-73/74). The flags are
