@@ -28,9 +28,10 @@ import org.springframework.core.io.ClassPathResource;
  * reads its YAML for the same reason.
  *
  * <p>The lines below are verbatim from the tickets each rule exists to stop: SIM-28, SIM-31,
- * SIM-32, SIM-40, SIM-41 and SIM-42, captured from Loki on 2026-09-13. They are long and ugly on
- * purpose. A rule tested against a paraphrase is a rule tested against nothing — the phrases are
- * matched literally, and "canceling" has one L in Temporal's output.
+ * SIM-32, SIM-40, SIM-41 and SIM-42, captured from Loki on 2026-09-13, and SIM-77, captured on
+ * 2026-10-06. They are long and ugly on purpose. A rule tested against a paraphrase is a rule
+ * tested against nothing — the phrases are matched literally, and "canceling" has one L in
+ * Temporal's output.
  */
 class LogWatchIgnoreRulesTest {
 
@@ -90,6 +91,11 @@ class LogWatchIgnoreRulesTest {
       versioning scheme's rules; Falling back to versioning scheme 'generic' instead \
       [vulnDataSourceName=osv, vulnSource=OSV, vulnId=PYSEC-2021-150]""";
 
+  private static final String DEPLOYER_HEARTBEAT_FAILED =
+      """
+      2026-10-04T01:02:21.001Z  WARN 1 --- [software-factory] [tform-backup: 4] \
+      i.t.i.activity.HeartbeatContextImpl      : Heartbeat failed""";
+
   private final LogWatchProperties properties = shippedProperties();
 
   @Test
@@ -100,6 +106,7 @@ class LogWatchIgnoreRulesTest {
     assertMuted("temporal", Severity.ERROR, TEMPORAL_VISIBILITY_CANCEL);
     assertMuted("alloy", Severity.ERROR, ALLOY_DEAD_CONTAINER);
     assertMuted("dependencytrack-apiserver", Severity.WARN, DTRACK_PYPI_RANGE);
+    assertMuted("simonrowe-dev-monorepo-deployer-1", Severity.WARN, DEPLOYER_HEARTBEAT_FAILED);
   }
 
   /**
@@ -143,6 +150,10 @@ class LogWatchIgnoreRulesTest {
         "simonrowe-dev-monorepo-backend-1",
         Severity.ERROR,
         "{\"level\":\"error\",\"msg\":\"upload aborted\",\"error\":\"context canceled\"}");
+    // The heartbeat rule is the deployer's alone: the backup that explains it runs there, so the
+    // same line from the code reviewer still files.
+    assertAudible(
+        "simonrowe-dev-monorepo-software-factory-1", Severity.WARN, DEPLOYER_HEARTBEAT_FAILED);
   }
 
   /**

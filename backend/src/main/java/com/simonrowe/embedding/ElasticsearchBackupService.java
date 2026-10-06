@@ -6,10 +6,10 @@ import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.ScrollResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.io.StringReader;
 import org.slf4j.Logger;
@@ -17,6 +17,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+/**
+ * Exports and imports the vector indices for the application backup.
+ *
+ * <p>Every JSON type here is <b>Jackson 2</b> ({@code com.fasterxml.jackson.databind}), and that
+ * is the whole of what makes it work. The Elasticsearch client decodes hits through its own
+ * {@code JacksonJsonpMapper}, which is compiled against Jackson 2 (see
+ * {@code ElasticsearchJsonpMapperConfig}). The Boot 4 upgrade moved this class to Jackson 3's
+ * {@code tools.jackson.databind.JsonNode}, an abstract type the Jackson 2 mapper cannot build, so
+ * every search failed with {@code [es/search] Failed to decode response}. {@code BackupService}
+ * logs that at WARN and carries on, so from then until SIM-76 every nightly backup was written
+ * without its embeddings and reported success.
+ */
 @Service
 public class ElasticsearchBackupService {
 

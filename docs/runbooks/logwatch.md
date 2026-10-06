@@ -96,7 +96,7 @@ orphaned `deploy` and `cvefix`, which have no duplicate-ticket problem to fix.
 
 ## Muting third-party noise
 
-Three of the containers this module reads log routine internal events at `ERROR` or `WARN`, and
+Four of the containers this module reads log routine internal events at `ERROR` or `WARN`, and
 none of them has a line in this repository to change:
 
 | Container | What it logs | Tickets it filed |
@@ -107,6 +107,7 @@ none of them has a line in this repository to change:
 | `temporal` | `database connection lost: driver: bad connection` — a task-queue connection dropped while workers were replaced | SIM-28 |
 | `alloy` | tailing a container that exited between discovery and the read | SIM-31 |
 | `dependencytrack-apiserver` | `[BovModelConverter] Range` — malformed pypi ranges in OSV's data | SIM-41, SIM-42 |
+| `deployer` | `HeartbeatContextImpl ... Heartbeat failed` — one heartbeat RPC slow while the platform backup dumps Temporal's database | SIM-77 |
 
 Before `factory.logwatch.ignore` the disposition on all six was "not fixed, deliberately", which
 is a backlog entry pretending to be a decision: they were re-filed nightly, for ever, and the

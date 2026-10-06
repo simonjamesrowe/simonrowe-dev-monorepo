@@ -383,6 +383,30 @@ Verified on 2026-09-28. Run these from the deploy directory.
    Any other container whose logs show a truncated file after a disk-full needs
    the same fix.
 6. **Curl the public hostnames.** Do not rely on a green `docker compose ps`.
+7. **Check that every container still ships logs, and recreate any that stopped.**
+   A container that was writing its `json-file` log when the disk filled can be
+   left with a truncated last line. Docker's log reader stops at that line, so
+   `docker logs` and Alloy can both read only up to the moment of the outage.
+   The container itself carries on serving, so nothing else shows it.
+   After 2026-09-28, `temporal`, `temporal-ui` and `langfuse-redis` shipped nothing
+   to Loki from 20:05–20:11 that evening onwards, while all three stayed up. Alloy
+   re-read the same stretch of history every 15–30 seconds
+   (`finished transferring logs ... written=268`, always the same count). Loki
+   accepted it until it was seven days old and then rejected all of it as
+   `timestamp too old`, about 5,000 times a day. That was SIM-29.
+   Look for containers with no lines since the outage, then confirm on the host:
+   ```bash
+   docker logs --since 10m simonrowe-dev-monorepo-temporal-ui-1 | tail -3
+   ```
+   A healthy container shows lines from the last ten minutes. An affected one
+   shows nothing, or an error such as `invalid character '\x00'`. A restart keeps
+   the same log file, so only a recreate fixes it:
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps \
+     temporal temporal-ui langfuse-redis
+   ```
+   Recreating `temporal` loses no workflow state, because that is in `langfuse-db`.
+   Running workflows carry on once their workers reconnect.
 
 ## Host defect: the memory cgroup is disabled
 

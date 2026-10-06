@@ -231,6 +231,18 @@ Two behavioural changes worth knowing:
   and must re-establish two things the injected Boot mapper used to provide:
   JSR-310 (without it, indexing anything carrying an `Instant` throws) and
   ISO-8601 dates (without it, ES infers a different mapping for every date field).
+- **Any type you hand the Elasticsearch client to decode into must be Jackson 2.**
+  This upgrade moved `ElasticsearchBackupService` to Jackson 3's
+  `tools.jackson.databind.JsonNode` and passed that to `esClient.search(..., JsonNode.class)`.
+  The Jackson 2 mapper cannot build that abstract type, so every export failed with
+  `[es/search] Failed to decode response`. `BackupService` logs that at WARN and
+  writes the archive anyway, so **every application backup from 2026-09-01 (#145)
+  until the SIM-76 fix holds no `embeddings/` entries** while reporting success.
+  Restoring one of those brings back Mongo and media, with empty vector indices.
+  The site and Term Time then need a full re-embed, which costs money. The
+  compile gave no hint: `Class<T>` accepts either library's type.
+  `ElasticsearchBackupServiceIntegrationTest` runs the round trip against a real
+  Elasticsearch, and fails on the Jackson 3 version.
 
 ## 8. Elasticsearch 8.17 → 9.4.5 — the operator-facing part
 

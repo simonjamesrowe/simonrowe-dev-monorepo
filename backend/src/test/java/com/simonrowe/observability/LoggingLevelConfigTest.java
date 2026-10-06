@@ -19,9 +19,10 @@ import org.springframework.core.io.ClassPathResource;
  *
  * <p>Every entry under {@code logging.level} here exists to stop a library filing a log-watch
  * ticket that no change in this repository could ever close — PDFBox and FontBox for the fonts
- * the school PDFs do not embed (SIM-36, SIM-44, SIM-45), and Spring's
+ * the school PDFs do not embed (SIM-36, SIM-44, SIM-45), Spring's
  * {@code BeanPostProcessorChecker} for beans that belong to Embabel, Spring AI and OpenTelemetry
- * (SIM-47).
+ * (SIM-47), and Spring's {@code ResourceHandlerUtils} for the path-traversal probes it has already
+ * refused (SIM-78).
  *
  * <p>The reason this is a test rather than a line of YAML taken on trust is the last of those.
  * Its logger name contains a {@code $}, and {@code logging.level} is bound as a map, so an
@@ -63,13 +64,15 @@ class LoggingLevelConfigTest {
         .containsEntry(CHECKER, "ERROR");
     assertThat(levels)
         .containsEntry("org.apache.pdfbox.pdmodel.font", "ERROR")
-        .containsEntry("org.apache.fontbox.ttf", "ERROR");
+        .containsEntry("org.apache.fontbox.ttf", "ERROR")
+        .containsEntry("org.springframework.web.servlet.resource.ResourceHandlerUtils", "ERROR");
   }
 
   /**
    * Each of these is scoped one level below the obvious package on purpose: a document PDFBox
    * cannot parse, a font FontBox cannot read at all, and any other warning Spring's context
-   * support emits are all still reported. Silencing the parent package would take those with it.
+   * support or resource handling emits are all still reported. Silencing the parent package
+   * would take those with it.
    */
   @Test
   @DisplayName("nothing is silenced more broadly than the noise it was written for")
@@ -80,6 +83,7 @@ class LoggingLevelConfigTest {
         "org.apache.pdfbox",
         "org.apache.fontbox",
         "org.springframework.context.support",
+        "org.springframework.web.servlet.resource",
         "org.springframework");
   }
 }

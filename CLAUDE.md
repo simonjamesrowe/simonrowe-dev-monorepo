@@ -274,6 +274,40 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- logwatch-backlog-4: **The twelve open `factory:logwatch` tickets on 2026-10-06 (SIM-29, 62–64,
+  66, 67, 71, 73, 74, 76–78).** Five came from the 2026-09-28 disk-full and have not recurred since
+  `prod-disk-image-cleanup`. One of them was a real bug that had gone unnoticed for five weeks.
+  Load-bearing bits:
+  - **Application backups have held no vectors since the Boot 4 upgrade (SIM-76).**
+    `ElasticsearchBackupService` decoded hits into Jackson 3's `JsonNode`. The Elasticsearch
+    client's mapper is Jackson 2 and cannot build that, so every export failed with
+    `[es/search] Failed to decode response`. `BackupService` logs that at WARN and writes the
+    archive anyway. Every backup from #145 (2026-09-01) to this fix restores Mongo and media into
+    empty vector indices. The class is all Jackson 2 again, and
+    `ElasticsearchBackupServiceIntegrationTest` round-trips a real ES 9.4.5. It fails on the old
+    code. **Any type passed to the ES client to decode into must be Jackson 2.** The compiler
+    cannot tell you, because `Class<T>` takes either library's type.
+  - **A disk-full can corrupt a running container's `json-file` log, and the container then
+    stops shipping logs while it carries on serving (SIM-29).** `temporal`, `temporal-ui` and
+    `langfuse-redis` shipped nothing after 20:05–20:11 on 09-28. Alloy re-read the same stretch
+    every 15–30s, and Loki rejected it ~5,000 times a day once it was 7 days old. A restart keeps
+    the log file, so only `up -d --force-recreate --no-deps <svc>` fixes it. This is a host step,
+    now step 7 of "Disk full" recovery in `docs/runbooks/prod-monitoring.md`. Nothing detects a
+    single container going quiet in Loki: logwatch's coverage check counts containers only when
+    Alloy is unreachable.
+  - **software-factory's JVM flags must be identical at AOT training and at runtime.**
+    `--enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow` silence Java 25's
+    grpc-netty `loadLibrary` and protobuf `Unsafe` warnings (SIM-73/74). The flags are
+    `JVM_PERMISSIONS` in `software-factory/docker/start.sh` and appear again in the Dockerfile's
+    training run. A mismatch in `enable-native-access` disables the AOT cache
+    (`Mismatched values for property jdk.module.enable.native.access`), and startup goes from
+    0.8s back to 2s+.
+  - `mongock.transactional: false`, not `transaction-enabled`, which Mongock 5.5.1 deprecates
+    with a third WARN (SIM-71). Prod Mongo is standalone, so `false` is what has always run.
+  - `ResourceHandlerUtils` at ERROR silences already-refused `../` scanner probes (SIM-78).
+    `IndexService` now logs which bulk items failed and why (SIM-62). A `factory.logwatch.ignore`
+    rule mutes the deployer's transient `Heartbeat failed` during the 01:00 platform backup
+    (SIM-77). Every one of those backups completed.
 - selective-builds-and-aot-cache: **CI and Publish build only what a change touched, the two JVM
   images start from a Leyden AOT cache, and the `/status` changelog comes from GitHub.**
   `scripts/changed-areas.sh` maps paths to areas, and both workflows call it. Load-bearing bits:

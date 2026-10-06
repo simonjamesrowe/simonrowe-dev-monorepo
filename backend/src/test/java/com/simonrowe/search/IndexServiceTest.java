@@ -2,6 +2,7 @@ package com.simonrowe.search;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -13,6 +14,8 @@ import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.DeleteResponse;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
+import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
+import co.elastic.clients.elasticsearch.core.bulk.OperationType;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
@@ -339,5 +342,57 @@ class IndexServiceTest {
     indexService.bulkIndexBlogDocuments(List.of(doc));
 
     verify(esClient).bulk(any(BulkRequest.class));
+  }
+
+  /**
+   * A partly failed bulk is logged, not thrown: the 4-hourly full sync re-sends everything, so
+   * one blocked batch must not abort the rest of the sync. Reading the items is how the log line
+   * learns which ones failed.
+   */
+  @Test
+  void bulkIndexWithFailedItemsReportsThemWithoutThrowing() throws Exception {
+    BulkResponse failed = mock(BulkResponse.class);
+    when(failed.errors()).thenReturn(true);
+    when(failed.items()).thenReturn(List.of(item("blog_1", "index read-only")));
+    when(esClient.bulk(any(BulkRequest.class))).thenReturn(failed);
+
+    indexService.bulkIndexSiteDocuments(List.of(new SiteSearchDocument(
+        "id1", "Name", "blog", "Desc", null, null, null, "/url", null)));
+    indexService.bulkIndexBlogDocuments(List.of(new BlogSearchDocument(
+        "id1", "Title", "Desc", "Content", List.of(), List.of(), null, Instant.now(), "/url")));
+
+    verify(failed, times(2)).errors();
+    verify(failed, atLeast(2)).items();
+  }
+
+  private static BulkResponseItem item(final String id, final String reason) {
+    return BulkResponseItem.of(b -> {
+      b.operationType(OperationType.Index).index("site_search").id(id)
+          .status(reason == null ? 201 : 429);
+      if (reason != null) {
+        b.error(e -> e.type("cluster_block_exception").reason(reason));
+      }
+      return b;
+    });
+  }
+
+  @Test
+  void describeFailuresNamesTheCountAndTheFirstReason() {
+    BulkResponse response = BulkResponse.of(b -> b.errors(true).took(3).items(
+        item("blog_1", null),
+        item("blog_2", "index [site_search] blocked by: [TOO_MANY_REQUESTS/12/disk usage]"),
+        item("blog_3", "a second reason, not repeated")));
+
+    assertThat(IndexService.describeFailures(response)).isEqualTo("""
+        2 of 3 item(s) failed; first: blog_2 cluster_block_exception: \
+        index [site_search] blocked by: [TOO_MANY_REQUESTS/12/disk usage]""");
+  }
+
+  @Test
+  void describeFailuresCopesWithNoItemCarryingAnError() {
+    BulkResponse response = BulkResponse.of(b -> b.errors(true).took(1)
+        .items(item("blog_1", null)));
+
+    assertThat(IndexService.describeFailures(response)).isEqualTo("no item reported an error");
   }
 }
