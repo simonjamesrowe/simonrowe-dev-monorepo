@@ -61,7 +61,27 @@ public class InterestProfile {
     static final Relevance NO_PROFILE = new Relevance(0, null);
   }
 
-  private record Interest(String title, float[] vector) {
+  /**
+   * One hearted article's title and embedding. A plain holder rather than a record: a record's
+   * generated {@code equals} and {@code toString} would treat the vector by identity, and nothing
+   * here compares or prints one anyway.
+   */
+  private static final class Interest {
+    private final String title;
+    private final float[] vector;
+
+    Interest(final String title, final float[] vector) {
+      this.title = title;
+      this.vector = vector;
+    }
+
+    String title() {
+      return title;
+    }
+
+    float[] vector() {
+      return vector;
+    }
   }
 
   /**
