@@ -137,6 +137,44 @@ jar), trains with `-Dspring.context.exit=onRefresh`, and writes `/app/app.aot`. 
 profile: nothing in that context contacts a service while being created. CI's image build runs
 the training too, so a regression fails the pull request.
 
+### Class data only: the cached machine code crashes the Pi
+
+**Every deploy of #211 crash-looped on the Pi and rolled back** (SIM-79). Both images died
+within a minute of starting with:
+
+```
+[aot] Failed to link AdapterHandlerEntry (fp=LLLLLLIILLLL) to its code in the AOT code cache
+# A fatal error has been detected by the Java Runtime Environment:
+#  SIGILL (0x4) at pc=..., pid=1
+# Problematic frame:
+# v  ~AdapterBlob ...
+```
+
+`AOTAdapterCaching` and `AOTStubCaching` are diagnostic flags that default to `false`, but JDK 25
+**turns them on by itself when an AOT cache is in use**. So the cache also stored the i2c/c2i
+adapters compiled on the GitHub runner that built the image. On the Pi 5 they fail to link and
+then execute an illegal instruction. **An Apple Silicon machine does not reproduce it**, which
+is how the change passed its local verification. A healthy-looking backend that took 80 seconds
+to start on its third attempt is also why the deploy report blamed nginx: verify-public saw a 502
+while every container reported healthy.
+
+Both images now pass `-XX:+UnlockDiagnosticVMOptions -XX:-AOTAdapterCaching -XX:-AOTStubCaching`
+at runtime:
+
+- **backend**: `BPE_APPEND_JAVA_TOOL_OPTIONS` in `bootBuildImage`. `BPE_` variables are the
+  Environment Variables buildpack's and land in the image's **launch** environment, so the flags
+  travel with the image and a new image can never start without them, whatever compose file it
+  lands under.
+- **software-factory**: `AOT_CLASS_DATA_ONLY` in `start.sh`, on the line that maps the cache.
+
+Verified on the Pi with the `8185edbb` images, isolated on an internal Docker network. Without
+the flags the backend printed both `Failed to link` warnings. With them, the warnings are gone
+and the cache still reports `full module graph: enabled` and `Using AOT-linked classes: true`,
+which is most of the startup gain. `scripts/test/test-aot-class-data-only.sh` fails if either
+image loses the flags.
+
+Look for `SIGILL` in Loki before believing any "api 502 but backend healthy" deploy report.
+
 ### `-Xshare` and the cache cannot be combined
 
 **The JVM refuses to start when `-XX:AOTCache` meets any `-Xshare` option**:
