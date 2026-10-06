@@ -11,6 +11,7 @@ import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.aggregation.ContentSource;
 import com.simonrowe.aggregation.ContentSourceRepository;
 import com.simonrowe.aggregation.SourceNameResolver;
+import com.simonrowe.aggregation.newsletter.NewsletterIngestService;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
 import com.simonrowe.media.BlogImageGenerationService;
@@ -22,6 +23,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -106,6 +108,7 @@ public class ContentAggregationAgent {
   private final MediaVariantResolver mediaVariantResolver;
   private final SourceNameResolver sourceNameResolver;
   private final ShortLinkService shortLinkService;
+  private final NewsletterIngestService newsletterIngestService;
 
   public ContentAggregationAgent(
       final ContentSourceRepository sourceRepository,
@@ -119,7 +122,8 @@ public class ContentAggregationAgent {
       final BlogImageGenerationService blogImageGenerationService,
       final MediaVariantResolver mediaVariantResolver,
       final SourceNameResolver sourceNameResolver,
-      final ShortLinkService shortLinkService) {
+      final ShortLinkService shortLinkService,
+      final NewsletterIngestService newsletterIngestService) {
     this.sourceRepository = sourceRepository;
     this.articleRepository = articleRepository;
     this.eventRepository = eventRepository;
@@ -132,6 +136,7 @@ public class ContentAggregationAgent {
     this.mediaVariantResolver = mediaVariantResolver;
     this.sourceNameResolver = sourceNameResolver;
     this.shortLinkService = shortLinkService;
+    this.newsletterIngestService = newsletterIngestService;
   }
 
   /** Imports a single article or event from a URL. */
@@ -247,6 +252,10 @@ public class ContentAggregationAgent {
   }
 
   private void processSource(final ContentSource source) {
+    if (source.scrapeStrategy() == ContentSource.ScrapeStrategy.EMAIL_NEWSLETTER) {
+      newsletterIngestService.ingest(source, null, this::saveCuratedArticle);
+      return;
+    }
     List<ScrapedContent> scraped = scraperFactory.scrape(source);
     log.info("Fetched {} items from {}", scraped.size(), source.name());
 
@@ -266,6 +275,10 @@ public class ContentAggregationAgent {
    * @param since  the earliest publish date to keep
    */
   public void backfillSource(final ContentSource source, final Instant since) {
+    if (source.scrapeStrategy() == ContentSource.ScrapeStrategy.EMAIL_NEWSLETTER) {
+      newsletterIngestService.ingest(source, since, this::saveCuratedArticle);
+      return;
+    }
     List<ScrapedContent> scraped = scraperFactory.scrape(source);
     log.info("Backfilling {} items from {} published on/after {}",
         scraped.size(), source.name(), since);
@@ -302,7 +315,32 @@ public class ContentAggregationAgent {
     }
   }
 
-  private void processArticle(
+  /**
+   * Saves an article whose summary a curator has already written, such as a story from an email
+   * newsletter, without asking the classifier.
+   *
+   * <p>The classifier would only re-summarise a summary and decide whether the item is an event,
+   * and a newsletter story is always an article. Skipping it saves an LLM call per story. The
+   * image, date and share-link handling are exactly those of every other article.
+   *
+   * @param source the source to attribute it to
+   * @param content the article content
+   * @param summary the curator's summary
+   * @return the saved article's id, or empty when its address is already held
+   */
+  public Optional<String> saveCuratedArticle(
+      final ContentSource source, final ScrapedContent content, final String summary) {
+    if (articleRepository.existsByOriginalUrl(content.url())
+        || eventRepository.existsByOriginalUrl(content.url())) {
+      return Optional.empty();
+    }
+    ContentClassification classification = new ContentClassification(
+        "article", summary == null || summary.isBlank() ? content.title() : summary,
+        null, null, null, null);
+    return Optional.of(processArticle(source, content, classification).id());
+  }
+
+  private AggregatedArticle processArticle(
       final ContentSource source,
       final ScrapedContent content,
       final ContentClassification classification) {
@@ -349,6 +387,7 @@ public class ContentAggregationAgent {
     changePublisher.publishCreated(
         ContentType.AGGREGATED_ARTICLE, saved.id());
     log.info("Saved article: {}", saved.title());
+    return saved;
   }
 
   private void processEvent(

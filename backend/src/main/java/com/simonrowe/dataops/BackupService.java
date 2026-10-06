@@ -70,7 +70,10 @@ public class BackupService {
       // restore silently falls back to the built-in default wording.
       "home_page",
       // Portfolio projects, edited in the CMS. A lost row loses its copy and its order.
-      "portfolio_projects"
+      "portfolio_projects",
+      // The newsletter review queue's decisions. Without them every story already dismissed
+      // or promoted inside the mailbox look-back window would be offered again.
+      "newsletter_candidates"
   );
   private static final Set<String> COPARENT_BACKUP_COLLECTIONS = Set.of(
       "families", "parents", "children", "invitations", "onboardingstates", "events",

@@ -47,6 +47,13 @@ public record ContentSource(
     HTML,
     HTML_LISTING,
     LUMA,
-    LINK_ROUNDUP
+    LINK_ROUNDUP,
+    /**
+     * Stories read out of an email newsletter in the Gmail mailbox, rather than from a site.
+     * {@code feedUrl} holds the sender's address and {@code name} must equal the sender's
+     * display name, since one address can send several newsletters. Handled by
+     * {@code NewsletterIngestService}, never by {@code ScraperFactory}.
+     */
+    EMAIL_NEWSLETTER
   }
 }

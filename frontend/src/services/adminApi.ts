@@ -1434,3 +1434,91 @@ export async function fetchSchoolUsage(
     await authFetch(`${ADMIN_URL}/school/usage?days=${days}`, token),
   )
 }
+
+// ---------------------------------------------------------------------------
+// Newsletter review queue
+// ---------------------------------------------------------------------------
+
+export type NewsletterCandidateStatus = 'PENDING' | 'ACCEPTED' | 'PROMOTED' | 'DISMISSED'
+
+/** One story read out of an email newsletter, whether or not it reached the site. */
+export interface AdminNewsletterCandidate {
+  id: string
+  sourceName: string
+  title: string
+  url: string
+  summary: string
+  section: string | null
+  label: string | null
+  issueSubject: string
+  receivedAt: string
+  /** Best cosine similarity to a hearted article, 0 to 1. */
+  relevance: number
+  /** The hearted article it was closest to; null when nothing was hearted. */
+  nearestFavourite: string | null
+  status: NewsletterCandidateStatus
+  reason: string
+  articleId: string | null
+}
+
+export interface NewsletterReviewSummary {
+  counts: Record<NewsletterCandidateStatus, number>
+  relevanceThreshold: number
+  maxAcceptedPerRun: number
+}
+
+export async function fetchNewsletterCandidates(
+  getAccessToken: GetAccessToken,
+  options: {
+    status: NewsletterCandidateStatus
+    source?: string
+    sort?: 'relevance' | 'received'
+    page?: number
+    size?: number
+  },
+): Promise<PageResponse<AdminNewsletterCandidate>> {
+  const token = await getAccessToken()
+  const params = new URLSearchParams({
+    status: options.status,
+    sort: options.sort ?? 'relevance',
+    page: String(options.page ?? 0),
+    size: String(options.size ?? 20),
+  })
+  if (options.source) params.set('source', options.source)
+  const response = await authFetch(`${ADMIN_URL}/newsletter-candidates?${params}`, token)
+  return handleResponse<PageResponse<AdminNewsletterCandidate>>(response)
+}
+
+export async function fetchNewsletterReviewSummary(
+  getAccessToken: GetAccessToken,
+): Promise<NewsletterReviewSummary> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/newsletter-candidates/summary`, token)
+  return handleResponse<NewsletterReviewSummary>(response)
+}
+
+export async function promoteNewsletterCandidate(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<AdminNewsletterCandidate> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/newsletter-candidates/${encodeURIComponent(id)}/promote`,
+    token,
+    { method: 'POST' },
+  )
+  return handleResponse<AdminNewsletterCandidate>(response)
+}
+
+export async function dismissNewsletterCandidate(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<AdminNewsletterCandidate> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/newsletter-candidates/${encodeURIComponent(id)}/dismiss`,
+    token,
+    { method: 'POST' },
+  )
+  return handleResponse<AdminNewsletterCandidate>(response)
+}

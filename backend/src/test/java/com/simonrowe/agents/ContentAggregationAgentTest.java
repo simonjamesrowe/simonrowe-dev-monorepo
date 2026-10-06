@@ -24,6 +24,7 @@ import com.simonrowe.aggregation.ContentSource.ScrapeStrategy;
 import com.simonrowe.aggregation.ContentSource.SourceType;
 import com.simonrowe.aggregation.ContentSourceRepository;
 import com.simonrowe.aggregation.SourceNameResolver;
+import com.simonrowe.aggregation.newsletter.NewsletterIngestService;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
 import com.simonrowe.events.ContentChangePublisher;
 import com.simonrowe.media.BlogImageGenerationService;
@@ -36,6 +37,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,6 +60,7 @@ class ContentAggregationAgentTest {
   @Mock private MediaVariantResolver mediaVariantResolver;
   @Mock private SourceNameResolver sourceNameResolver;
   @Mock private ShortLinkService shortLinkService;
+  @Mock private NewsletterIngestService newsletterIngestService;
 
   private PromptRunner promptRunner;
   @SuppressWarnings("rawtypes")
@@ -93,7 +96,8 @@ class ContentAggregationAgentTest {
         sourceRepository, articleRepository,
         eventRepository, scraperFactory, htmlScraper, ai,
         changePublisher, imageDownloader, blogImageGenerationService,
-        mediaVariantResolver, sourceNameResolver, shortLinkService);
+        mediaVariantResolver, sourceNameResolver, shortLinkService,
+        newsletterIngestService);
   }
 
   @Test
@@ -586,5 +590,95 @@ class ContentAggregationAgentTest {
         null, null, null, false));
     when(sourceNameResolver.resolve(url)).thenReturn("example.com");
     when(creating.fromPrompt(anyString())).thenReturn(classification);
+  }
+
+  // --- Email newsletters ---
+
+  private static final ContentSource TLDR_SOURCE =
+      new ContentSource(
+          "src-tldr", "TLDR Dev", "https://tldr.tech/dev",
+          "dan@tldrnewsletter.com", null, SourceType.NEWS,
+          ScrapeStrategy.EMAIL_NEWSLETTER, true, null, null, null);
+
+  @Test
+  void emailNewsletterSourcesAreReadByTheNewsletterIngestNotTheScrapers() {
+    when(sourceRepository.findByActiveTrue()).thenReturn(List.of(TLDR_SOURCE));
+
+    agent.runAggregation();
+
+    verify(newsletterIngestService).ingest(
+        org.mockito.ArgumentMatchers.eq(TLDR_SOURCE),
+        org.mockito.ArgumentMatchers.isNull(), any());
+    verify(scraperFactory, never()).scrape(any());
+    ArgumentCaptor<ContentSource> saved = ArgumentCaptor.forClass(ContentSource.class);
+    verify(sourceRepository).save(saved.capture());
+    assertThat(saved.getValue().lastFetchedAt()).isNotNull();
+    assertThat(saved.getValue().lastError()).isNull();
+  }
+
+  @Test
+  void anUnreadableMailboxIsRecordedOnTheSource() {
+    when(sourceRepository.findByActiveTrue()).thenReturn(List.of(TLDR_SOURCE));
+    when(newsletterIngestService.ingest(any(), any(), any()))
+        .thenThrow(new IllegalStateException("No Gmail credential is configured"));
+
+    agent.runAggregation();
+
+    ArgumentCaptor<ContentSource> saved = ArgumentCaptor.forClass(ContentSource.class);
+    verify(sourceRepository).save(saved.capture());
+    assertThat(saved.getValue().lastError()).isEqualTo("No Gmail credential is configured");
+  }
+
+  @Test
+  void backfillPassesTheCutoffToTheNewsletterIngest() {
+    Instant since = Instant.parse("2026-10-01T00:00:00Z");
+
+    agent.backfillSource(TLDR_SOURCE, since);
+
+    verify(newsletterIngestService).ingest(
+        org.mockito.ArgumentMatchers.eq(TLDR_SOURCE),
+        org.mockito.ArgumentMatchers.eq(since), any());
+  }
+
+  @Test
+  void curatedArticleKeepsItsSummaryAndSkipsTheClassifier() {
+    ScrapedContent content = new ScrapedContent(
+        "Worth building", "https://armstr.ng/writing/worth-building",
+        "A long body well over fifty characters so the classifier would normally run.",
+        Instant.parse("2026-10-04T00:00:00Z"), null, "https://armstr.ng/og.png", false);
+    when(imageDownloader.downloadAndStore("https://armstr.ng/og.png"))
+        .thenReturn("/uploads/x/original.png");
+    when(mediaVariantResolver.resolvePath(anyString(), any(String[].class)))
+        .thenReturn("/uploads/x/large.png");
+    when(articleRepository.save(any(AggregatedArticle.class)))
+        .thenAnswer(inv -> {
+          AggregatedArticle a = inv.getArgument(0);
+          return new AggregatedArticle("a-1", a.title(), a.sourceName(), a.sourceUrl(),
+              a.originalUrl(), a.summary(), a.fullContent(), a.author(), a.publishedDate(),
+              a.fetchedAt(), a.visible(), a.imageUrl());
+        });
+
+    Optional<String> id = agent.saveCuratedArticle(
+        TLDR_SOURCE, content, "Small tools are worth building.");
+
+    assertThat(id).contains("a-1");
+    ArgumentCaptor<AggregatedArticle> saved = ArgumentCaptor.forClass(AggregatedArticle.class);
+    verify(articleRepository).save(saved.capture());
+    assertThat(saved.getValue().summary()).isEqualTo("Small tools are worth building.");
+    assertThat(saved.getValue().sourceName()).isEqualTo("TLDR Dev");
+    assertThat(saved.getValue().imageUrl()).isEqualTo("/uploads/x/large.png");
+    verify(ai, never()).withLlm(anyString());
+    verify(changePublisher).publishCreated(ContentType.AGGREGATED_ARTICLE, "a-1");
+  }
+
+  @Test
+  void curatedArticleAlreadyHeldIsNotSavedTwice() {
+    when(articleRepository.existsByOriginalUrl("https://example.com/held")).thenReturn(true);
+
+    Optional<String> id = agent.saveCuratedArticle(TLDR_SOURCE, new ScrapedContent(
+        "Held", "https://example.com/held", "Body", Instant.now(), null, null, false), "S");
+
+    assertThat(id).isEmpty();
+    verify(articleRepository, never()).save(any());
   }
 }
