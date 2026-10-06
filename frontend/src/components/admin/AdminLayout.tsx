@@ -9,6 +9,7 @@ import {
   FileText,
   GraduationCap,
   House,
+  Inbox,
   Image,
   LayoutDashboard,
   LayoutGrid,
@@ -41,6 +42,7 @@ const navItems = [
   { path: '/admin/media', label: 'Media', icon: <Image size={18} /> },
   { path: '/admin/aggregated-content', label: 'News & Events', icon: <Newspaper size={18} /> },
   { path: '/admin/content-sources', label: 'Content Sources', icon: <Rss size={18} /> },
+  { path: '/admin/newsletter-review', label: 'Newsletter Review', icon: <Inbox size={18} /> },
   { path: '/admin/short-links', label: 'Share Links', icon: <Link2 size={18} /> },
   {
     path: '/admin/school',

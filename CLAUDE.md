@@ -274,6 +274,30 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- tldr-email-newsletter-source: **News & Events can read email newsletters, and the four TLDR
+  editions are the first.** Strategy `EMAIL_NEWSLETTER` (`com.simonrowe.aggregation.newsletter`)
+  reads Simon's Gmail with Term Time's read-only `SCHOOL_GMAIL_*` credential. Each story is scored
+  against the **hearted** articles, and only those at or above `aggregation.newsletter.relevance-threshold`
+  (0.50) are saved. The rest wait at `/admin/newsletter-review`. Load-bearing bits:
+  - **A source's `name` must equal the edition's From display name** and `feedUrl` holds the
+    sender address: all four editions come from `dan@tldrnewsletter.com`. A message also needs a
+    passing DKIM signature for the sender's domain in the **first** `Authentication-Results`
+    header Google stamped. A `From` header can claim anything, and Gmail's `from:` matches
+    display names too.
+  - **Click-tracking links are decoded, never followed.** Following one records a click on
+    Simon's behalf. Short links get one request with redirects off, and their `Location` is
+    validated, not fetched.
+  - **`newsletter_candidates` is the ledger as well as the queue.** A rejected story never
+    becomes an article, so without this row it would be re-scored every run. Its unique `url`
+    index (V051) is what makes "read once" hold across editions and overlapping runs. It is
+    backed up, and its index is re-created by `RestoreService`.
+  - **Cost is bounded on purpose:** one embedding per story to score it, no classifier call (TLDR's
+    summary is kept), and image generation only for saved stories, capped at 15 per edition per
+    run. With nothing hearted everything waits for review, and nothing is saved blind.
+  - Test fixtures are two real issues with every subscriber token (unsubscribe, referral,
+    manage, click ids) redacted. Keep it that way: the repo is public and those links act on
+    the subscription.
+  See `docs/runbooks/newsletter-sources.md`.
 - aot-cache-class-data-only: **#211's AOT cache crash-looped both JVMs on the Pi, so every deploy
   from #211 onwards rolled back (SIM-79), #212 included.** JDK 25 turns on the diagnostic
   `AOTAdapterCaching`/`AOTStubCaching` itself whenever an AOT cache is in use, so the cache carried

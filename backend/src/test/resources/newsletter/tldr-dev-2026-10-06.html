@@ -1,0 +1,613 @@
+<!DOCTYPE html><html lang="en"><head><meta http-equiv="Content-Type" content="text/html charset=UTF-8"><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><meta name="x-apple-disable-message-reformatting"><title>TLDR Dev</title><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style type="text/css">
+			:root {
+				color-scheme: light dark; supported-color-schemes: light dark;
+			}
+			
+			*,
+			*:after,
+			*:before {
+				-webkit-box-sizing: border-box; -moz-box-sizing: border-box; box-sizing: border-box;
+			}
+			
+			* {
+				-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;
+			}
+			
+			html,
+			body,
+			.document {
+				width: 100% !important; height: 100% !important; margin: 0; padding: 0;
+			}
+			
+			body {
+				-webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
+			}
+			
+			div[style*="margin: 16px 0"] {
+				margin: 0 !important;
+			}
+			
+			table,
+			td {
+				mso-table-lspace: 0pt; mso-table-rspace: 0pt;
+			}
+			
+			table {
+				border-spacing: 0; border-collapse: collapse; table-layout: fixed; margin: 0 auto;
+			}
+			
+			img {
+				-ms-interpolation-mode: bicubic; max-width: 100%; border: 0;
+			}
+			
+			*[x-apple-data-detectors] {
+				color: inherit !important; text-decoration: none !important;
+			}
+			
+			.x-gmail-data-detectors,
+			.x-gmail-data-detectors *,
+			.aBn {
+				border-bottom: 0 !important; cursor: default !important;
+			}
+			
+			.btn {
+				-webkit-transition: all 200ms ease; transition: all 200ms ease;
+			}
+			
+			.btn:hover {
+				background-color: #f67575; border-color: #f67575;
+			}
+			
+			* {
+				font-family: Arial, Helvetica, sans-serif; font-size: 18px;
+			}
+			
+			@media screen and (max-width: 600px) {
+				.container {
+					width: 100%; margin: auto;
+				}
+				.stack {
+					display: block!important; width: 100%!important; max-width: 100%!important;
+				}
+				.btn {
+					display: block; width: 100%; text-align: center;
+				}
+			}
+			
+			body,
+			p,
+			td,
+			tr,
+			.body,
+			table,
+			h1,
+			h2,
+			h3,
+			h4,
+			h5,
+			h6,
+			div,
+			span {
+				background-color: #FEFEFE !important; color: #010101 !important;
+			}
+			
+			@media (prefers-color-scheme: dark) {
+				body,
+				p,
+				td,
+				tr,
+				.body,
+				table,
+				h1,
+				h2,
+				h3,
+				h4,
+				h5,
+				h6,
+				div,
+				span {
+					background-color: #27292D !important; color: #FEFEFE !important;
+				}
+			}
+			
+			a {
+				color: inherit !important; text-decoration: underline !important;
+			}
+
+		</style><!--[if mso | ie]>
+		<style type="text/css">
+			a {
+				background-color: #FEFEFE !important; color: #010101 !important;
+			}
+			@media (prefers-color-scheme: dark) {
+				a {
+					background-color: #27292D !important; color: #FEFEFE !important;
+				}
+			}
+	 </style>
+			<![endif]--></head><body class="">
+
+
+
+<div style="display: none; max-height: 0px; overflow: hidden;">A reliable agent loop depends less on model size than on a trustworthy check that turns progress into a score or pass condition. In two visual tasks&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;</div>
+<div style="display: none; max-height: 0px; overflow: hidden;">
+<br>
+</div>
+
+<table align="center" class="document"><tbody><tr><td valign="top">
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" class="container" width="600"><tbody><tr class="inner-body"><td>
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr class="header"><td bgcolor="" class="container">
+
+<table width="100%"><tbody><tr><td class="container">
+
+
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" style="margin-top: 0px;" width="100%"><tbody><tr><td style="padding: 0px;">
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div style="text-align: center;">
+<span style="margin-right: 0px;"><a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Ftldr.tech%2Fdev%3Futm_source=tldrdev/1/redacted" rel="noopener noreferrer" target="_blank"><span>Sign Up</span></a>
+|<span style="margin-right: 2px; margin-left: 2px;"><a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fadvertise.tldr.tech%2F%3Futm_source=tldrdev%26utm_medium=newsletter%26utm_campaign=advertisetopnav/1/redacted" rel="noopener noreferrer" target="_blank"><span>Advertise</span></a></span>|<span style="margin-left: 2px;"><a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fa.tldrnewsletter.com%2Fredacted/1/redacted"><span>View Online</span></a></span>
+<br>
+</span></div>
+</td></tr></tbody></table>
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="text-align: center;"><span data-darkreader-inline-color="" style="--darkreader-inline-color:#3db3ff; color: rgb(51, 175, 255) !important; font-size: 30px;">T</span><span style="font-size: 30px;"><span data-darkreader-inline-color="" style="color: rgb(232, 192, 96) !important; --darkreader-inline-color:#e8c163; font-size:30px;">L</span><span data-darkreader-inline-color="" style="color: rgb(101, 195, 173) !important; --darkreader-inline-color:#6ec7b2; font-size:30px;">D</span></span><span data-darkreader-inline-color="" style="--darkreader-inline-color:#dd6e6e; color: rgb(220, 107, 107) !important; font-size: 30px;">R</span>
+<br>
+</td></tr></tbody></table>
+
+<br>
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr id="together-with"><td align="center" height="20" style="vertical-align:middle !important;" valign="middle" width="100%"><strong style="vertical-align:middle !important; height: 100%;">Together With </strong>
+<a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Faws.amazon.com%2Fmarketplace%2Fbuild-learn%2Fdata-analytics%2Fbuilding-event-driven-serverless-architecture-mongodb%3Ftrk=c9395285-7dc2-4d2d-92df-7240ab8770de%26sc_channel=el/1/redacted"><img src="https://images.tldr.tech/awsmarketplace.png" valign="middle" style="vertical-align: middle !important; height: 100%;" alt="AWS"></a></td></tr></tbody></table>
+
+
+<table style="table-layout: fixed; width:100%;" width="100%"><tbody><tr><td style="padding:0;border-collapse:collapse;border-spacing:0;margin:0;">
+<div style="text-align: center;">
+
+<h1><strong>&nbsp;TLDR Dev <span id="date">2026-10-06</span></strong></h1>
+</div>
+</td></tr></tbody></table>
+
+<table style="table-layout: fixed; width:100%;" width="100%"><tbody><tr id="sponsy-copy"><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Faws.amazon.com%2Fmarketplace%2Fbuild-learn%2Fdata-analytics%2Fbuilding-event-driven-serverless-architecture-mongodb%3Ftrk=c9395285-7dc2-4d2d-92df-7240ab8770de%26sc_channel=el/1/redacted">
+                                    <span>
+                                        <strong>Build serverless microservices on AWS (Sponsor)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    Learn how to build serverless microservices that react to database events in real time. This AWS tutorial walks through building an event-driven system by connecting Amazon EventBridge, AWS Lambda, and <a class="TypographyPresentation_31345133_root LinkThemeablePresentation_450120641_root Surface_311631053_color--selected-text Surface_311631053_color-hover--selected-text-hover Surface_311631053_color-active--selected-text-hover HighlightSol_1625403506_highlightSol HighlightSol_1625403506_buildingBlock HighlightSol_1625403506_highlightSol HighlightSol_1625403506_core HighlightSol_1625403506_buildingBlock" href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Faws.amazon.com%2Fmarketplace%2Fpp%2Fprodview-pp445qepfdy34%3Ftrk=cde26e6f-2e2d-4c54-84fe-6b9d1c63a222%26sc_channel=el/1/redacted" rel="noreferrer noopener" target="_blank"><span>MongoDB Atlas on AWS Marketplace</span></a>.
+
+<p></p>
+
+<p>You'll learn how to detect database changes, trigger automated workflows, and deploy scalable services without managing infrastructure. Whether you're launching new features or modernizing legacy systems, get step-by-step guidance to move faster while cutting integration overhead.</p>
+
+<p><a class="TypographyPresentation_31345133_root LinkThemeablePresentation_450120641_root Surface_311631053_color--selected-text Surface_311631053_color-hover--selected-text-hover Surface_311631053_color-active--selected-text-hover HighlightSol_1625403506_highlightSol HighlightSol_1625403506_buildingBlock HighlightSol_1625403506_highlightSol HighlightSol_1625403506_core HighlightSol_1625403506_buildingBlock" href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Faws.amazon.com%2Fmarketplace%2Fbuild-learn%2Fdata-analytics%2Fbuilding-event-driven-serverless-architecture-mongodb%3Ftrk=c9395285-7dc2-4d2d-92df-7240ab8770de%26sc_channel=el/1/redacted" rel="noreferrer noopener" target="_blank"><span>Read the step-by-step tutorial.</span></a>
+
+
+</p>
+</span></span></div>
+</td></tr></tbody></table>
+</td></tr></tbody></table>
+</td></tr></tbody></table>
+</td></tr>
+<tr bgcolor=""><td class="container">
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td style="padding: 0px;">
+
+
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding-top: 0px; padding-bottom: 0px;">
+<div class="text-block">
+<div style="text-align: center;"><span style="font-size: 36px;">🧑‍💻</span></div>
+</div>
+</td></tr></tbody></table>
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding-top: 0px; padding-bottom: 0px;">
+<div class="text-block">
+<div style="text-align: center;">
+
+<h1><strong>Articles &amp; Tutorials</strong></h1>
+</div>
+</div>
+</td></tr></tbody></table>
+
+<table style="table-layout: fixed; width: 100%;" width="100%"><tbody><tr><td style="padding:0;border-collapse:collapse;border-spacing:0;margin:0;" valign="top">
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fwww.builder.io%2Fblog%2Fbuild-an-agent-loop-a-small-model-can-finish%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>Build an agent loop a small model can finish (11 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    A reliable agent loop depends less on model size than on a trustworthy check that turns progress into a score or pass condition. In two visual tasks, small models improved dramatically when they received repeatable feedback across varied examples and holdout cases, while weak checks encouraged overfitting or shortcuts.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fironbee.ai%2Fblog%2Fhow-we-built-the-fastest-cheapest-browser-agent-with-jev%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>How we built the fastest, cheapest browser agent with Jev (23 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    IronBee Express uses Jev as a fast classifier for bounded browser decisions, calling an LLM only for writing, recovery, or failure explanations. Explored runs cost about $0.0042 for 20 actions, recordings can replay with no step decisions, and narrow verification questions helped a 130-run replay test reach 130 correct outcomes.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+</td></tr></tbody></table>
+
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding-top: 0px; padding-bottom: 0px;">
+<div class="text-block">
+<div style="text-align: center;"><span style="font-size: 36px;">🧠</span></div>
+</div>
+</td></tr></tbody></table>
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding-top: 0px; padding-bottom: 0px;">
+<div class="text-block">
+<div style="text-align: center;">
+
+<h1><strong>Opinions &amp; Advice</strong></h1>
+</div>
+</div>
+</td></tr></tbody></table>
+
+
+<table style="table-layout: fixed; width: 100%;" width="100%"><tbody><tr><td style="padding:0;border-collapse:collapse;border-spacing:0;margin:0;" valign="top">
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fwattenberger.com%2Fthoughts%2Fai-is-still-in-its-terminal-era%2F%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>Chat is AI's command line (5 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    Chat is useful for rough direction, but it becomes awkward when people need to make precise edits or understand the state of ongoing work. The piece argues for AI interfaces built around direct manipulation, visible state, and reversible experimentation, much like spreadsheets and graphical desktops expanded computing beyond the command line.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Flemire.me%2Fblog%2F2026%2F10%2F05%2Fephemeral-testing%2F%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>Ephemeral testing (2 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    Ephemeral testing evaluates a software component by asking an AI agent to build disposable applications or layers on top of it, then judging how well those downstream projects work. Repeating the exercise with different agents and tasks can expose hidden state, unstable invariants, surprising defaults, and weak documentation.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+</td></tr></tbody></table>
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding-top: 0px; padding-bottom: 0px;">
+<div class="text-block">
+<div style="text-align: center;"><span style="font-size: 36px;">🚀</span></div></div>
+</td></tr></tbody></table>
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding-top: 0px; padding-bottom: 0px;">
+<div class="text-block">
+<div style="text-align: center;">
+
+<h1><strong>Launches &amp; Tools</strong></h1>
+</div>
+</div>
+</td></tr></tbody></table>
+
+<table style="table-layout: fixed; width: 100%;" width="100%"><tbody><tr><td style="padding:0;border-collapse:collapse;border-spacing:0;margin:0;" valign="top">
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fwww.docusign.com%2Fblog%2Fdevelopers%2Fquery-agreement-data-agreement-manager-api-mcp-server%3Futm_campaign=AWA_2610_FY27Q4%26utm_medium=newsletter%26utm_source=tldr-web-dev/1/redacted">
+                                    <span>
+                                        <strong>Docusign API or MCP? How to choose the right standard for your agreement data (Sponsor)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    Keyword-based queries don't work for large agreement repositories because contract language is often inconsistent. <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fwww.docusign.com%2Fblog%2Fdevelopers%2Fquery-agreement-data-agreement-manager-api-mcp-server%3Futm_campaign=AWA_2610_FY27Q4%26utm_medium=newsletter%26utm_source=tldr-web-dev/1/redacted" rel="noopener noreferrer nofollow" target="_blank"><span>This guide</span></a> explains how the Docusign Agreement Manager API and MCP Server use AI to surface relevant insights, and how to choose the right approach for your task. <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fdevelopers.docusign.com%2F%3Futm_campaign=AWA_2610_FY27Q4%26utm_medium=newsletter%26utm_source=tldr-web-dev/1/redacted" rel="noopener noreferrer nofollow" target="_blank"><span>Start building with a free developer account</span></a>
+</span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Ftanstack.com%2Fblog%2Ftanstack-charts-1-0%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>TanStack Charts 1.0 (6 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    TanStack Charts 1.0 offers a composable, type-safe charting system built from marks, scales, axes, and interactions instead of rigid chart types. It supports custom marks and renderers, optional SVG or Canvas output, modular animation and scale packages, and a stable API intended to evolve without forcing applications to rebuild their visualizations.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Freflection.ai%2Fblog%2Fintroducing-beam%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>Introducing Beam: Reflection's 501B open-weight model (1 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    Beam is a sparse Mixture-of-Experts model with 501 billion total parameters and 23 billion active parameters aimed at coding, reasoning, and agentic workloads. Reflection trained it on 23.8 trillion tokens and more than 100 million reinforcement learning rollouts, with Apache 2.0 weights and developer artifacts planned for release later this month.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+</td></tr></tbody></table>
+
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding-top: 0px; padding-bottom: 0px;">
+<div class="text-block">
+<div style="text-align: center;"><span style="font-size: 36px;">🎁</span></div></div>
+</td></tr></tbody></table>
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding-top: 0px; padding-bottom: 0px;">
+<div class="text-block">
+<div style="text-align: center;"><strong><h1>Miscellaneous</h1></strong></div>
+</div>
+</td></tr></tbody></table>
+
+<table bgcolor="" style="table-layout: fixed; width: 100%;" width="100%"><tbody><tr><td style="padding:0;border-collapse:collapse;border-spacing:0;margin:0;" valign="top">
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fadventures.nodeland.dev%2Farchive%2Fhow-bookingcom-cut-nodejs-costs-by-38-with-watt%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>How Booking.com cut Node.js costs by 38% with Watt (4 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    Booking.com moved a major Node.js rendering service from pm2 clustering to Watt worker threads, cutting compute costs by 38% with 30% fewer pods, 20% less memory per pod, and up to 10% lower tail latency. The migration required no service code changes, and production tests showed 40% to 50% more throughput within the same latency target.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Farmstr.ng%2Fwriting%2Fworth-building%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>Worth building (3 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    Cheaper software development makes small tools worthwhile even when they solve one person's annoyance and never become a business. As more people can ship, the story behind a project and the choices that shaped it become increasingly important reasons for others to care.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+</td></tr></tbody></table>
+
+
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding-top: 0px; padding-bottom: 0px;">
+<div class="text-block">
+<div style="text-align: center;"><span style="font-size: 36px;">⚡</span></div></div>
+</td></tr></tbody></table>
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding-top: 0px; padding-bottom: 0px;">
+<div class="text-block">
+<div style="text-align: center;">
+
+<h1><strong>Quick Links</strong></h1>
+</div>
+</div>
+</td></tr></tbody></table>
+
+<table bgcolor="" style="table-layout: fixed; width: 100%;" width="100%"><tbody><tr><td style="padding:0;border-collapse:collapse;border-spacing:0;margin:0;" valign="top">
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fplayground.developers.thinkfree.com%2Fplayground%2Feditor-ai-sdk%2F%3Futm_source=tldrdev%26utm_medium=newsletter%26utm_campaign=sdklaunch2026/1/redacted">
+                                    <span>
+                                        <strong>An Embeddable Office Editor With 900+ API Methods for AI Apps &amp; Agents (Sponsor)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    Add AI document creation and editing to your app. Give your agents object-level APIs for DOCX, XLSX and PPTX, and users an embedded editor. <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fplayground.developers.thinkfree.com%2Fplayground%2Feditor-ai-sdk%2F%3Futm_source=tldrdev%26utm_medium=newsletter%26utm_campaign=sdklaunch2026/1/redacted" rel="noopener noreferrer nofollow" target="_blank"><span>Try the playground</span></a>
+</span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fdevelopers.cloudflare.com%2Fchangelog%2Fpost%2F2026-10-02-introducing-web-search-api%2F%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>Introducing Web Search API (1 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    Cloudflare's beta Web Search API lets agents search through Ceramic.ai, Exa, or Linkup via AI Gateway with Zero Data Retention, gateway logging, and provider list pricing without added markup.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fpranitha.dev%2Fposts%2Frwlock-vs-lockfree%2F%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>The performance cost of RwLock in a read-heavy workload (6 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    A Rust benchmark found that replacing 16,384 per-item RwLock acquisitions with one Crossbeam epoch guard and atomic pointer loads raised read throughput from 15.93k to 229.07k operations per second, while a simple lock still worked well around an infrequently changed collection.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fallthingssmitty.com%2F2026%2F10%2F05%2Fcss-does-your-tooltip-positioning-now%2F%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>CSS does your tooltip positioning now (3 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    CSS anchor positioning, position fallbacks, popovers, and anchor-size() can now handle responsive tooltip and dropdown placement with little or no JavaScript, though component-scoped anchor names and accessible DOM order still matter.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+<table align="center" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block">
+<span>
+                                <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fwww.vals.ai%2Fblogs%2Froom-temperature-magnetic-semiconductors%3Futm_source=tldrdev/1/redacted">
+                                    <span>
+                                        <strong>Two Room-Temperature Antiferromagnetic Semiconductor Candidates (6 minute read)</strong>
+                                    </span>
+</a>
+<br>
+<br>
+<span style="font-family: &quot;Helvetica Neue&quot;, Helvetica, Arial, Verdana, sans-serif;">
+                                    AI agents identified two candidate room-temperature Luttinger-compensated semiconductors for spintronic memory, but one may be difficult to synthesize, and the other still needs direct measurement of its band gap and spin sorting.
+                                </span>
+</span>
+</div>
+</td></tr></tbody></table>
+
+</td></tr></tbody></table>
+
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td align="left" style="word-break: break-word; vertical-align: top; padding: 5px 10px;">
+
+<p style="padding: 0; margin: 0; font-size: 22px; color: #000000; line-height: 1.6; font-weight: bold;">
+Love TLDR? Tell your friends and get rewards!
+</p>
+</td></tr>
+<tr><td class="container" style="padding: 0px 10px 15px;">
+<div class="text-block">
+Share your referral link below with friends to get free TLDR swag!
+</div>
+</td></tr>
+<tr><td align="left" style="padding: 10px;">
+<div class="text-block">
+<a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Frefer.tldr.tech%2Fredacted/1/redacted" style="color: #464ba4; text-decoration: underline;">https://refer.tldr.tech/redacted</a>
+</div>
+</td></tr>
+<tr></tr>
+<tr><td align="left" style="padding:5px 10px;">
+<a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fhub.sparklp.co%2Fredacted/1/redacted" style="font-size: 16px; line-height: 1.6;  padding: 10px 0; display: inline-block;  text-decoration: underline;"><span style="mso-text-raise:13pt; text-decoration: underline;">Track your referrals here.</span></a>
+</td></tr></tbody></table>
+
+
+
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td align="left" style="word-break: break-word; vertical-align: top; padding: 5px 10px;">
+
+<p style="padding: 0; margin: 0; font-size: 22px; color: #000000; line-height: 1.6; font-weight: bold;">
+Want to advertise in TLDR? 📰
+</p>
+<div class="text-block" style="margin-top: 10px;">
+If your company is interested in reaching an audience of web developers and engineering decision makers, you may want to <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fadvertise.tldr.tech%2F%3Futm_source=tldrdev%26utm_medium=newsletter%26utm_campaign=advertisecta/1/redacted"><strong><span>advertise with us</span></strong></a>.
+</div>
+<br>
+
+<!-- New "Want to work at TLDR?" section -->
+
+<p style="padding: 0; margin: 0; font-size: 22px; color: #000000; line-height: 1.6; font-weight: bold;">
+Want to work at TLDR? 💼
+</p>
+<div class="text-block" style="margin-top: 10px;">
+<a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fjobs.ashbyhq.com%2Ftldr.tech/1/redacted" rel="noopener noreferrer" style="color: #0000EE; text-decoration: underline;" target="_blank"><strong>Apply here</strong></a>,
+<a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fjobs.ashbyhq.com%2Ftldr.tech%2Fc227b917-a6a4-40ce-8950-d3e165357871/1/redacted" rel="noopener noreferrer" style="color: #0000EE; text-decoration: underline;" target="_blank"><strong>create your own role</strong></a> or send a friend's resume to <a href="mailto:jobs@tldr.tech" style="color: #0000EE; text-decoration: underline;">jobs@tldr.tech</a> and get $1k if we hire them! TLDR is one of <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fwww.linkedin.com%2Ffeed%2Fupdate%2Furn:li:activity:7401699691039830016%2F/1/redacted" rel="noopener noreferrer" style="color: #0000EE; text-decoration: underline;" target="_blank"><strong>Inc.'s Best Bootstrapped businesses</strong></a> of 2025.
+</div>
+<br>
+
+<div class="text-block">
+If you have any comments or feedback, just respond to this email!
+<br>
+<br> Thanks for reading,
+<br>
+<span>Priyam Mohanty</span>, <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fwww.linkedin.com%2Fin%2Fxu-jenny%2F/1/redacted"><span>Jenny Xu</span></a> &amp; <span>Ceora Ford</span>
+<br>
+<br>
+</div>
+<br>
+</td></tr></tbody></table>
+
+<table align="center" bgcolor="" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td class="container" style="padding: 15px 15px;">
+<div class="text-block" id="testing-id">
+<a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Ftldr.tech%2Fdev%2Fmanage%3Femail=reader%40example.com">Manage your subscriptions</a> to our other newsletters on tech, startups, and programming. Or if TLDR Dev isn't for you, please <a href="https://tracking.tldrnewsletter.com/CL0/https:%2F%2Fa.tldrnewsletter.com%2Fredacted/1/redacted">unsubscribe</a>.
+<br>
+
+</div>
+</td></tr></tbody></table>
+
+
+</td></tr></tbody></table>
+</td></tr></tbody></table>
+</td></tr></tbody></table>
+</td></tr></tbody></table>
+
+
+
+
+</body></html>

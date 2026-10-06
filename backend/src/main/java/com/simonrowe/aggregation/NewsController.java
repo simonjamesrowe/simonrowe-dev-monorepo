@@ -103,7 +103,7 @@ public class NewsController {
    * @param request the current request
    * @return the source names, empty when the parameter is absent
    */
-  private static List<String> sourcesFrom(final HttpServletRequest request) {
+  static List<String> sourcesFrom(final HttpServletRequest request) {
     String[] values = request.getParameterValues("source");
     return values == null ? List.of() : List.of(values);
   }

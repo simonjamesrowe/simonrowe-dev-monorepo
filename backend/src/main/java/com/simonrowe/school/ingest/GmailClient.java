@@ -151,6 +151,19 @@ public class GmailClient {
   }
 
   /**
+   * Fetches one message as Gmail's own JSON, for callers that need what {@link GmailMessage}
+   * reduces away: the HTML markup and the authentication headers. The newsletter ingest reads
+   * stories out of the markup's structure and checks DKIM before trusting a sender.
+   *
+   * @param messageId the Gmail message id
+   * @return the {@code format=full} response, or empty when it could not be read
+   * @throws GmailAuthException when the credential will not authenticate
+   */
+  public Optional<JsonNode> fetchRawMessage(final String messageId) throws GmailAuthException {
+    return get(BASE + "/messages/" + messageId + "?format=full");
+  }
+
+  /**
    * Downloads one attachment.
    *
    * <p>Gmail returns attachment bodies as base64<b>url</b> text inside JSON, not as raw bytes —

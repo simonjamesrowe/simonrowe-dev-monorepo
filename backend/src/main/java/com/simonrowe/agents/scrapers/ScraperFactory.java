@@ -31,6 +31,10 @@ public class ScraperFactory {
       case HTML_LISTING -> sitemapHtmlScraper.scrapeListingPage(source.baseUrl());
       case LUMA -> lumaApiScraper.scrape(source.feedUrl());
       case LINK_ROUNDUP -> linkRoundupScraper.scrape(source.baseUrl());
+      // Read from Gmail and filtered for relevance before anything is saved, so it cannot be
+      // a list of items for the agent to classify. ContentAggregationAgent routes it to
+      // NewsletterIngestService before it reaches here.
+      case EMAIL_NEWSLETTER -> List.of();
     };
   }
 }

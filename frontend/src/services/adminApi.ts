@@ -178,8 +178,9 @@ export interface AdminNewsArticle {
   title: string
   sourceName: string
   publishedDate: string | null
+  fetchedAt: string | null
   visible: boolean
-  url: string | null
+  originalUrl: string | null
 }
 
 export interface AdminEvent {
@@ -188,7 +189,38 @@ export interface AdminEvent {
   sourceName: string
   eventDate: string | null
   visible: boolean
-  url: string | null
+  originalUrl: string | null
+}
+
+export type SortDirection = 'asc' | 'desc'
+export type AdminVisibilityFilter = 'all' | 'visible' | 'hidden'
+export type AdminNewsSort = 'publishedDate' | 'fetchedAt' | 'title' | 'sourceName'
+export type AdminEventSort = 'eventDate' | 'title' | 'sourceName'
+
+/** What an admin news or events listing asks the server for. Absent fields use its defaults. */
+export interface AdminListingQuery<S extends string> {
+  page: number
+  size: number
+  q?: string
+  sources?: string[]
+  visibility?: AdminVisibilityFilter
+  sort?: S
+  direction?: SortDirection
+}
+
+export interface AdminSourceSummary {
+  name: string
+  count: number
+}
+
+export type AdminBulkAction = 'hide' | 'show' | 'delete'
+
+export interface AdminBulkResult {
+  action: AdminBulkAction
+  requested: number
+  updated: number
+  notFound: number
+  notFoundIds: string[]
 }
 
 export interface AdminContentSource {
@@ -952,14 +984,69 @@ export async function deleteAdminCodeExample(
 // Aggregated Content (News & Events)
 // ---------------------------------------------------------------------------
 
+/**
+ * The query string for an admin listing. `source` repeats rather than being comma-joined,
+ * because a scraped source name can itself contain a comma.
+ */
+function listingParams<S extends string>(query: AdminListingQuery<S>): string {
+  const params = new URLSearchParams()
+  params.set('page', String(query.page))
+  params.set('size', String(query.size))
+  const q = query.q?.trim()
+  if (q) params.set('q', q)
+  for (const source of query.sources ?? []) {
+    if (source) params.append('source', source)
+  }
+  if (query.visibility && query.visibility !== 'all') params.set('visibility', query.visibility)
+  if (query.sort) params.set('sort', query.sort)
+  if (query.direction) params.set('direction', query.direction)
+  return params.toString()
+}
+
 export async function fetchAdminNews(
   getAccessToken: GetAccessToken,
-  page = 0,
-  size = 20,
+  query: AdminListingQuery<AdminNewsSort>,
 ): Promise<PageResponse<AdminNewsArticle>> {
   const token = await getAccessToken()
-  const response = await authFetch(`${ADMIN_URL}/news?page=${page}&size=${size}`, token)
+  const response = await authFetch(`${ADMIN_URL}/news?${listingParams(query)}`, token)
   return handleResponse<PageResponse<AdminNewsArticle>>(response)
+}
+
+/** Every news source with its article count, hidden articles included. */
+export async function fetchAdminNewsSources(
+  getAccessToken: GetAccessToken,
+): Promise<AdminSourceSummary[]> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/news/sources`, token)
+  return handleResponse<AdminSourceSummary[]>(response)
+}
+
+export async function bulkUpdateArticles(
+  getAccessToken: GetAccessToken,
+  ids: string[],
+  action: AdminBulkAction,
+): Promise<AdminBulkResult> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/news/bulk`,
+    token,
+    jsonOptions({ ids, action }, 'POST'),
+  )
+  return handleResponse<AdminBulkResult>(response)
+}
+
+export async function bulkUpdateEvents(
+  getAccessToken: GetAccessToken,
+  ids: string[],
+  action: AdminBulkAction,
+): Promise<AdminBulkResult> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/events/bulk`,
+    token,
+    jsonOptions({ ids, action }, 'POST'),
+  )
+  return handleResponse<AdminBulkResult>(response)
 }
 
 export async function toggleArticleVisibility(
@@ -982,16 +1069,16 @@ export async function deleteArticle(
 ): Promise<void> {
   const token = await getAccessToken()
   const response = await authFetch(`${ADMIN_URL}/news/${id}`, token, { method: 'DELETE' })
-  return handleResponse<void>(response)
+  // 204 with no body: handleResponse would reject parsing it after the delete succeeded.
+  return handleNoContent(response)
 }
 
 export async function fetchAdminEvents(
   getAccessToken: GetAccessToken,
-  page = 0,
-  size = 20,
+  query: AdminListingQuery<AdminEventSort>,
 ): Promise<PageResponse<AdminEvent>> {
   const token = await getAccessToken()
-  const response = await authFetch(`${ADMIN_URL}/events?page=${page}&size=${size}`, token)
+  const response = await authFetch(`${ADMIN_URL}/events?${listingParams(query)}`, token)
   return handleResponse<PageResponse<AdminEvent>>(response)
 }
 
@@ -1015,7 +1102,7 @@ export async function deleteEvent(
 ): Promise<void> {
   const token = await getAccessToken()
   const response = await authFetch(`${ADMIN_URL}/events/${id}`, token, { method: 'DELETE' })
-  return handleResponse<void>(response)
+  return handleNoContent(response)
 }
 
 export async function triggerAggregation(
@@ -1433,4 +1520,92 @@ export async function fetchSchoolUsage(
   return handleResponse<SchoolUsageSummary>(
     await authFetch(`${ADMIN_URL}/school/usage?days=${days}`, token),
   )
+}
+
+// ---------------------------------------------------------------------------
+// Newsletter review queue
+// ---------------------------------------------------------------------------
+
+export type NewsletterCandidateStatus = 'PENDING' | 'ACCEPTED' | 'PROMOTED' | 'DISMISSED'
+
+/** One story read out of an email newsletter, whether or not it reached the site. */
+export interface AdminNewsletterCandidate {
+  id: string
+  sourceName: string
+  title: string
+  url: string
+  summary: string
+  section: string | null
+  label: string | null
+  issueSubject: string
+  receivedAt: string
+  /** Best cosine similarity to a hearted article, 0 to 1. */
+  relevance: number
+  /** The hearted article it was closest to; null when nothing was hearted. */
+  nearestFavourite: string | null
+  status: NewsletterCandidateStatus
+  reason: string
+  articleId: string | null
+}
+
+export interface NewsletterReviewSummary {
+  counts: Record<NewsletterCandidateStatus, number>
+  relevanceThreshold: number
+  maxAcceptedPerRun: number
+}
+
+export async function fetchNewsletterCandidates(
+  getAccessToken: GetAccessToken,
+  options: {
+    status: NewsletterCandidateStatus
+    source?: string
+    sort?: 'relevance' | 'received'
+    page?: number
+    size?: number
+  },
+): Promise<PageResponse<AdminNewsletterCandidate>> {
+  const token = await getAccessToken()
+  const params = new URLSearchParams({
+    status: options.status,
+    sort: options.sort ?? 'relevance',
+    page: String(options.page ?? 0),
+    size: String(options.size ?? 20),
+  })
+  if (options.source) params.set('source', options.source)
+  const response = await authFetch(`${ADMIN_URL}/newsletter-candidates?${params}`, token)
+  return handleResponse<PageResponse<AdminNewsletterCandidate>>(response)
+}
+
+export async function fetchNewsletterReviewSummary(
+  getAccessToken: GetAccessToken,
+): Promise<NewsletterReviewSummary> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/newsletter-candidates/summary`, token)
+  return handleResponse<NewsletterReviewSummary>(response)
+}
+
+export async function promoteNewsletterCandidate(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<AdminNewsletterCandidate> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/newsletter-candidates/${encodeURIComponent(id)}/promote`,
+    token,
+    { method: 'POST' },
+  )
+  return handleResponse<AdminNewsletterCandidate>(response)
+}
+
+export async function dismissNewsletterCandidate(
+  getAccessToken: GetAccessToken,
+  id: string,
+): Promise<AdminNewsletterCandidate> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/newsletter-candidates/${encodeURIComponent(id)}/dismiss`,
+    token,
+    { method: 'POST' },
+  )
+  return handleResponse<AdminNewsletterCandidate>(response)
 }

@@ -141,6 +141,16 @@ class ScraperFactoryTest {
     verifyNoInteractions(rssScraper, sitemapHtmlScraper, lumaApiScraper);
   }
 
+  @Test
+  void scrape_neverScrapesAnEmailNewsletter() {
+    ContentSource source = contentSource(
+        "dan@tldrnewsletter.com", "https://tldr.tech", null, SourceType.NEWS,
+        ScrapeStrategy.EMAIL_NEWSLETTER);
+
+    assertThat(scraperFactory.scrape(source)).isEmpty();
+    verifyNoInteractions(rssScraper, sitemapHtmlScraper, lumaApiScraper, linkRoundupScraper);
+  }
+
   private ContentSource contentSource(
       String feedUrl,
       String baseUrl,

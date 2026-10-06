@@ -556,6 +556,14 @@ rate-limit:
 aggregation:
   schedule:
     cron: "0 0 */6 * * *"
+  # Email newsletter sources (EMAIL_NEWSLETTER, e.g. the four TLDR editions), read from the
+  # Gmail mailbox through the school.gmail credential below. A story is saved without review
+  # only when its best similarity to a hearted article reaches the threshold; the rest wait in
+  # /admin/newsletter-review. See NewsletterProperties for how 0.50 was chosen.
+  newsletter:
+    relevance-threshold: ${NEWSLETTER_RELEVANCE_THRESHOLD:0.50}
+    max-accepted-per-run: ${NEWSLETTER_MAX_ACCEPTED_PER_RUN:15}
+    lookback-days: 3
   digest:
     cron: "0 0 8 * * MON"
     model: ${DIGEST_MODEL:gpt-5.6-luna}

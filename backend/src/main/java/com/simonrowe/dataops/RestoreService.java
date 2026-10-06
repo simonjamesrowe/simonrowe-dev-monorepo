@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import com.simonrowe.aggregation.newsletter.NewsletterCandidate;
 import com.simonrowe.homepage.HomePage;
 import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
 import com.simonrowe.migration.changeunits.V022CreatePlatformReleaseIndexes;
@@ -22,6 +23,7 @@ import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
 import com.simonrowe.migration.changeunits.V045CreateCoparentAssistantSchema;
 import com.simonrowe.migration.changeunits.V048CreatePortfolioProjects;
 import com.simonrowe.migration.changeunits.V049SeedTermTimeProjectPage;
+import com.simonrowe.migration.changeunits.V051SeedTldrNewsletterSources;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -80,7 +82,10 @@ public class RestoreService {
       // already on the target survives such a restore.
       HomePage.COLLECTION,
       // No @DBRef; the unique slug index is put back by the post-import hook below.
-      V048CreatePortfolioProjects.COLLECTION
+      V048CreatePortfolioProjects.COLLECTION,
+      // Points at aggregated_articles by plain id only. Its unique url index, which is what
+      // stops a story being read twice, is put back by the post-import hook below.
+      NewsletterCandidate.COLLECTION
   );
 
   private static final List<String> COPARENT_IMPORT_ORDER = List.of(
@@ -235,6 +240,7 @@ public class RestoreService {
         Map.entry(SHORT_LINKS, this::ensureShortLinkIndexes),
         Map.entry(SCHOOL_DOCUMENTS, this::ensureSchoolIndexes),
         Map.entry(V048CreatePortfolioProjects.COLLECTION, this::ensurePortfolioIndexes),
+        Map.entry(NewsletterCandidate.COLLECTION, this::ensureNewsletterCandidateIndexes),
         Map.entry(V049SeedTermTimeProjectPage.MEDIA_COLLECTION, this::ensureMediaIndexes));
   }
 
@@ -382,6 +388,11 @@ public class RestoreService {
    * The unique slug index is what stops two projects sharing an address, and it goes with the
    * collection when the restore drops it. Mongock will not re-run a recorded change unit.
    */
+  void ensureNewsletterCandidateIndexes() {
+    V051SeedTldrNewsletterSources.createIndexes(mongoTemplate);
+    LOG.info("Recreated newsletter candidate indexes after restore");
+  }
+
   void ensurePortfolioIndexes() {
     V048CreatePortfolioProjects.createIndexes(mongoTemplate);
     LOG.info("Recreated portfolio indexes after restore");

@@ -43,6 +43,7 @@ const AggregatedContentAdmin = named(() => import('./pages/admin/AggregatedConte
 const BlogEditor = named(() => import('./pages/admin/BlogEditor'), 'BlogEditor')
 const BlogsAdmin = named(() => import('./pages/admin/BlogsAdmin'), 'BlogsAdmin')
 const ContentSourcesAdmin = named(() => import('./pages/admin/ContentSourcesAdmin'), 'ContentSourcesAdmin')
+const NewsletterReviewAdmin = named(() => import('./pages/admin/NewsletterReviewAdmin'), 'NewsletterReviewAdmin')
 const JobEditor = named(() => import('./pages/admin/JobEditor'), 'JobEditor')
 const JobsAdmin = named(() => import('./pages/admin/JobsAdmin'), 'JobsAdmin')
 const DashboardAdmin = named(() => import('./pages/admin/DashboardAdmin'), 'DashboardAdmin')
@@ -243,6 +244,7 @@ function App() {
           <Route path="software-factory" element={<SoftwareFactoryAdmin />} />
           <Route path="aggregated-content" element={<AggregatedContentAdmin />} />
           <Route path="content-sources" element={<ContentSourcesAdmin />} />
+          <Route path="newsletter-review" element={<NewsletterReviewAdmin />} />
           <Route path="short-links" element={<ShortLinksAdmin />} />
           <Route path="school" element={<SchoolOverviewAdmin />} />
           <Route path="school/approvals" element={<SchoolApprovalsPage />} />

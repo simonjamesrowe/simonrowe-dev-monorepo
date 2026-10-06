@@ -2,7 +2,9 @@ package com.simonrowe.aggregation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.mongodb.core.query.Criteria;
 
 /**
  * The caps on what a free-text filter is allowed to ask of a collection scan.
@@ -33,6 +35,31 @@ class ArticleQueryServiceTest {
     assertThat(ArticleQueryService.terms(tenWords))
         .hasSize(ArticleQueryService.MAX_TERMS)
         .containsExactly("one", "two", "three", "four", "five", "six");
+  }
+
+  @Test
+  void addsNoClausesWhenThereIsNothingToFilterOn() {
+    assertThat(ArticleQueryService.filterClauses(null, "  ", List.of("title"))).isEmpty();
+    assertThat(ArticleQueryService.filterClauses(List.of(" ", ""), null, List.of("title")))
+        .isEmpty();
+    assertThat(ArticleQueryService.combine(List.of()).getCriteriaObject()).isEmpty();
+  }
+
+  @Test
+  void addsOneSourceClauseAndOneClausePerTerm() {
+    List<Criteria> clauses = ArticleQueryService.filterClauses(
+        List.of("Spring Blog"), "kafka tuning", List.of("title", "summary"));
+
+    assertThat(clauses).hasSize(3);
+    assertThat(clauses.get(0).getCriteriaObject().toJson()).contains("Spring Blog");
+  }
+
+  @Test
+  void quotesEachTermSoRegexMetacharactersMatchLiterally() {
+    List<Criteria> clauses = ArticleQueryService.filterClauses(
+        null, "C++", List.of("title"));
+
+    assertThat(clauses.get(0).getCriteriaObject().toJson()).contains("\\\\QC++\\\\E");
   }
 
   @Test
