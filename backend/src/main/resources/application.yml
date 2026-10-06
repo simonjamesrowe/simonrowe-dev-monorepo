@@ -33,6 +33,13 @@ coparent:
 
 mongock:
   enabled: ${MONGOCK_ENABLED:true}
+  # Stated rather than left to Mongock's default, which it says will flip to true in a future
+  # release and which it announces with two WARNs on every boot (SIM-71). Production Mongo is a
+  # standalone server, and transactions need a replica set, so `false` is what every change unit
+  # has always run under. A version that defaulted to true would fail them all on boot instead.
+  # `transactional`, not the `transaction-enabled` the WARN names: Mongock 5.5.1 accepts that
+  # too, but swaps the two WARNs for a third saying it is deprecated.
+  transactional: false
   migration-scan-package:
     - com.simonrowe.migration.changeunits
 
@@ -148,6 +155,14 @@ logging:
     # logger name that no logger has. It starts cleanly and does nothing, which is why
     # LoggingLevelConfigTest asserts the bound key rather than the file's text.
     "[org.springframework.context.support.PostProcessorRegistrationDelegate$BeanPostProcessorChecker]": ERROR
+
+    # Vulnerability scanners probe every host for `/assets../.env`, `/css../.git/config` and the
+    # like. Spring's resource handler rejects each with a 404 and logs one WARN per path,
+    # `Path contains "../" after call to StringUtils#cleanPath` (SIM-78: twelve in two seconds
+    # from one scanner). The WARN reports a request that was refused, not anything that failed,
+    # and nginx's access log still records every probe. Scoped to the one utility class, so the
+    # resource handling package's other warnings still report.
+    org.springframework.web.servlet.resource.ResourceHandlerUtils: ERROR
 
 spring:
   application:

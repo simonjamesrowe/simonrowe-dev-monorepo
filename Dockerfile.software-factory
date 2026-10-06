@@ -118,10 +118,12 @@ COPY --from=build --chown=factory:factory \
 # The training runs as root and writes into root-owned /app, so the service user can read the
 # cache but not replace it. A cache the JVM cannot use (a different JDK, a changed class path)
 # is ignored with a warning rather than failing startup - the default -XX:AOTMode=auto - so the
-# worst case is the old startup time.
+# worst case is the old startup time. The two permission flags are JVM_PERMISSIONS in
+# software-factory/docker/start.sh, repeated here so training and runtime start the same JVM.
 RUN java -Djarmode=tools -jar /app/software-factory.jar extract --destination /app/extracted \
     && rm /app/software-factory.jar \
     && java -Dspring.context.exit=onRefresh -XX:AOTCacheOutput=/app/app.aot \
+       --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow \
        -jar /app/extracted/software-factory.jar \
     && test -s /app/app.aot
 

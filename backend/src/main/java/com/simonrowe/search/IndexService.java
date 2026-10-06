@@ -4,6 +4,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
 import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.AggregatedEvent;
@@ -110,7 +111,8 @@ public class IndexService {
     }
     BulkResponse response = client.bulk(builder.build());
     if (response.errors()) {
-      LOG.error("Bulk index to {} had errors", ElasticsearchConfig.SITE_SEARCH_INDEX);
+      LOG.error("Bulk index to {} had errors: {}", ElasticsearchConfig.SITE_SEARCH_INDEX,
+          describeFailures(response));
     }
   }
 
@@ -128,7 +130,8 @@ public class IndexService {
     }
     BulkResponse response = client.bulk(builder.build());
     if (response.errors()) {
-      LOG.error("Bulk index to {} had errors", ElasticsearchConfig.BLOG_SEARCH_INDEX);
+      LOG.error("Bulk index to {} had errors: {}", ElasticsearchConfig.BLOG_SEARCH_INDEX,
+          describeFailures(response));
     }
   }
 
@@ -387,6 +390,28 @@ public class IndexService {
 
   public void deleteEventContent(final String eventId) throws IOException {
     deleteSiteDocument("event_" + eventId);
+  }
+
+  /**
+   * Says which items failed and why. The line used to be only "Bulk index to site_search had
+   * errors" (SIM-62), which was all anybody had to go on during the 2026-09-28 disk-full outage,
+   * when the cause was Elasticsearch's flood-stage read-only block. One reason is enough: a bulk
+   * request fails for one cause far more often than for several.
+   *
+   * @param response a bulk response whose {@code errors()} is true
+   * @return how many items failed, and the first failure's type and reason
+   */
+  static String describeFailures(final BulkResponse response) {
+    List<BulkResponseItem> failed = response.items().stream()
+        .filter(item -> item.error() != null)
+        .toList();
+    if (failed.isEmpty()) {
+      return "no item reported an error";
+    }
+    BulkResponseItem first = failed.getFirst();
+    return "%d of %d item(s) failed; first: %s %s: %s".formatted(
+        failed.size(), response.items().size(), first.id(), first.error().type(),
+        first.error().reason());
   }
 
   private Instant parseDate(final String dateStr) {

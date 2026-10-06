@@ -404,6 +404,17 @@ factory:
       - reason: "Dependency-Track parsing malformed OSV pypi version ranges"
         container: dependencytrack-apiserver
         contains: "[BovModelConverter] Range"
+      # The Temporal SDK logs one WARN each time a single activity heartbeat RPC misses its 10s
+      # deadline, then simply sends the next one. A heartbeat that stays lost is not this line:
+      # it is the activity's heartbeat timeout, which fails the activity and so the run, and
+      # that is reported on its own. Evidence (SIM-77): all four in the 7 days to 2026-10-06 were
+      # inside the nightly platform backup's first two minutes (10-02 01:01, 10-04 01:02), while
+      # it dumps Temporal's own databases out of langfuse-db, and every one of those backups
+      # logged `Platform backup completed`. Delete this if it appears away from 01:00, because
+      # then Temporal is slow for some reason other than being backed up.
+      - reason: "Temporal heartbeat RPC slow while the platform backup dumps Temporal's database"
+        container: deployer
+        contains: "HeartbeatContextImpl"
     loki:
       # NOTE this is the *push* URL and already contains /loki/api/v1. LokiClient strips the
       # trailing /push to get the query base; appending /api/v1 to the raw value yields

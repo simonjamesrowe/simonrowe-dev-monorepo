@@ -12,10 +12,21 @@ set -eu
 JAR=/app/extracted/software-factory.jar
 CACHE=/app/app.aot
 
+# Grants two things Java 25 otherwise warns about on stderr at every start, once each (SIM-73,
+# SIM-74): grpc-netty-shaded loading its native transport through System::loadLibrary, and
+# protobuf reading arrays through sun.misc.Unsafe. Both are the libraries working as designed and
+# both calls succeed without the flags; the flags grant explicitly what Java 25 already allows and
+# warns about.
+# Dockerfile.software-factory trains the AOT cache with the same two flags, so the cache and the
+# runtime agree. Keep the two lists identical.
+JVM_PERMISSIONS="--enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow"
+
 case " ${JAVA_TOOL_OPTIONS:-} ${JDK_JAVA_OPTIONS:-} " in
   *" -Xshare:"*)
-    exec java -jar "$JAR" "$@"
+    # shellcheck disable=SC2086 # JVM_PERMISSIONS is two words on purpose
+    exec java $JVM_PERMISSIONS -jar "$JAR" "$@"
     ;;
 esac
 
-exec java -XX:AOTCache="$CACHE" -jar "$JAR" "$@"
+# shellcheck disable=SC2086 # JVM_PERMISSIONS is two words on purpose
+exec java $JVM_PERMISSIONS -XX:AOTCache="$CACHE" -jar "$JAR" "$@"
