@@ -2,6 +2,7 @@ package com.simonrowe.search;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -341,6 +342,27 @@ class IndexServiceTest {
     indexService.bulkIndexBlogDocuments(List.of(doc));
 
     verify(esClient).bulk(any(BulkRequest.class));
+  }
+
+  /**
+   * A partly failed bulk is logged, not thrown: the 4-hourly full sync re-sends everything, so
+   * one blocked batch must not abort the rest of the sync. Reading the items is how the log line
+   * learns which ones failed.
+   */
+  @Test
+  void bulkIndexWithFailedItemsReportsThemWithoutThrowing() throws Exception {
+    BulkResponse failed = mock(BulkResponse.class);
+    when(failed.errors()).thenReturn(true);
+    when(failed.items()).thenReturn(List.of(item("blog_1", "index read-only")));
+    when(esClient.bulk(any(BulkRequest.class))).thenReturn(failed);
+
+    indexService.bulkIndexSiteDocuments(List.of(new SiteSearchDocument(
+        "id1", "Name", "blog", "Desc", null, null, null, "/url", null)));
+    indexService.bulkIndexBlogDocuments(List.of(new BlogSearchDocument(
+        "id1", "Title", "Desc", "Content", List.of(), List.of(), null, Instant.now(), "/url")));
+
+    verify(failed, times(2)).errors();
+    verify(failed, atLeast(2)).items();
   }
 
   private static BulkResponseItem item(final String id, final String reason) {
