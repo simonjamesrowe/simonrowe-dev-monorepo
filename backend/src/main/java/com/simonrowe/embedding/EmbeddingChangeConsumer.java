@@ -69,7 +69,7 @@ public class EmbeddingChangeConsumer {
         event.eventType(), event.contentType(), event.contentId());
 
     if (event.eventType() == EventType.DELETED) {
-      embeddingService.removeContent(event.contentId());
+      embeddingService.removeContent(sourceIdFor(event));
       LOG.info("Removed embeddings for deleted {} {}", event.contentType(),
           event.contentId());
       return;
@@ -86,6 +86,23 @@ public class EmbeddingChangeConsumer {
       case AGGREGATED_EVENT -> handleEvent(event.contentId());
       default -> LOG.warn("Unknown content type: {}", event.contentType());
     }
+  }
+
+  /**
+   * The {@code sourceId} the vectors for this content were stored under.
+   *
+   * <p>Aggregated news and events are embedded as {@code news_<id>} and
+   * {@code event_<id>} (see {@link EmbeddingService#embedArticle} and
+   * {@link EmbeddingService#embedEvent}); everything else uses its bare id. Removing by
+   * the bare id for an article deletes nothing, so a deleted article stayed answerable in
+   * chat for ever.
+   */
+  static String sourceIdFor(final ContentChangeEvent event) {
+    return switch (event.contentType()) {
+      case AGGREGATED_ARTICLE -> "news_" + event.contentId();
+      case AGGREGATED_EVENT -> "event_" + event.contentId();
+      default -> event.contentId();
+    };
   }
 
   private void handleBlog(final String contentId) {
