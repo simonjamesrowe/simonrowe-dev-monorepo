@@ -5,11 +5,14 @@ import { AggregatedContentAdmin } from '../../src/pages/admin/AggregatedContentA
 
 vi.mock('../../src/services/adminApi', () => ({
   fetchAdminNews: vi.fn(),
+  fetchAdminNewsSources: vi.fn(),
   fetchAdminEvents: vi.fn(),
   toggleArticleVisibility: vi.fn(),
   toggleEventVisibility: vi.fn(),
   deleteArticle: vi.fn(),
   deleteEvent: vi.fn(),
+  bulkUpdateArticles: vi.fn(),
+  bulkUpdateEvents: vi.fn(),
   triggerAggregation: vi.fn(),
   triggerDigest: vi.fn(),
   triggerSearchSync: vi.fn(),
@@ -22,8 +25,11 @@ vi.mock('../../src/auth/useAuth', () => ({
 }))
 
 import {
+  bulkUpdateArticles,
+  bulkUpdateEvents,
   fetchAdminEvents,
   fetchAdminNews,
+  fetchAdminNewsSources,
   triggerAggregation,
   triggerDigest,
   triggerEmbeddingSync,
@@ -36,6 +42,9 @@ import { useAuth } from '../../src/auth/useAuth'
 
 const mockFetchAdminNews = vi.mocked(fetchAdminNews)
 const mockFetchAdminEvents = vi.mocked(fetchAdminEvents)
+const mockFetchAdminNewsSources = vi.mocked(fetchAdminNewsSources)
+const mockBulkUpdateArticles = vi.mocked(bulkUpdateArticles)
+const mockBulkUpdateEvents = vi.mocked(bulkUpdateEvents)
 const mockTriggerAggregation = vi.mocked(triggerAggregation)
 const mockTriggerDigest = vi.mocked(triggerDigest)
 const mockTriggerSearchSync = vi.mocked(triggerSearchSync)
@@ -50,8 +59,9 @@ function makeArticle(id: string): AdminNewsArticle {
     title: `Article ${id}`,
     sourceName: 'Example Source',
     publishedDate: '2026-01-01T00:00:00Z',
+    fetchedAt: '2026-01-02T00:00:00Z',
     visible: true,
-    url: `https://example.com/${id}`,
+    originalUrl: `https://example.com/${id}`,
   }
 }
 
@@ -62,7 +72,7 @@ function makeEvent(id: string): AdminEvent {
     sourceName: 'Example Source',
     eventDate: '2026-02-01T00:00:00Z',
     visible: true,
-    url: `https://example.com/${id}`,
+    originalUrl: `https://example.com/${id}`,
   }
 }
 
@@ -124,6 +134,10 @@ describe('AggregatedContentAdmin', () => {
     })
     mockFetchAdminNews.mockResolvedValue(newsPage())
     mockFetchAdminEvents.mockResolvedValue(eventsPage())
+    mockFetchAdminNewsSources.mockResolvedValue([
+      { name: 'Example Source', count: 2 },
+      { name: 'Smith, Jones & Co', count: 1 },
+    ])
     mockTriggerAggregation.mockResolvedValue({})
     mockTriggerDigest.mockResolvedValue({})
     mockTriggerSearchSync.mockResolvedValue({})
@@ -152,12 +166,12 @@ describe('AggregatedContentAdmin', () => {
       mockFetchAdminNews.mockResolvedValue(newsPage({ count: 20, totalElements: 45, totalPages: 3 }))
 
       await renderPage()
-      expect(mockFetchAdminNews).toHaveBeenLastCalledWith(mockGetAccessToken, 0)
+      expect(mockFetchAdminNews).toHaveBeenLastCalledWith(mockGetAccessToken, expect.objectContaining({ page: 0 }))
 
       fireEvent.click(screen.getByRole('button', { name: 'Next' }))
 
       await waitFor(() => {
-        expect(mockFetchAdminNews).toHaveBeenLastCalledWith(mockGetAccessToken, 1)
+        expect(mockFetchAdminNews).toHaveBeenLastCalledWith(mockGetAccessToken, expect.objectContaining({ page: 1 }))
       })
       expect(await screen.findByText('Page 2 of 3')).toBeInTheDocument()
     })
@@ -169,13 +183,13 @@ describe('AggregatedContentAdmin', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Next' }))
       await waitFor(() => {
-        expect(mockFetchAdminNews).toHaveBeenLastCalledWith(mockGetAccessToken, 1)
+        expect(mockFetchAdminNews).toHaveBeenLastCalledWith(mockGetAccessToken, expect.objectContaining({ page: 1 }))
       })
 
       fireEvent.click(await screen.findByRole('button', { name: 'Previous' }))
 
       await waitFor(() => {
-        expect(mockFetchAdminNews).toHaveBeenLastCalledWith(mockGetAccessToken, 0)
+        expect(mockFetchAdminNews).toHaveBeenLastCalledWith(mockGetAccessToken, expect.objectContaining({ page: 0 }))
       })
       expect(await screen.findByText('Page 1 of 3')).toBeInTheDocument()
     })
@@ -216,7 +230,7 @@ describe('AggregatedContentAdmin', () => {
       // Advance news to page 2.
       fireEvent.click(screen.getByRole('button', { name: 'Next' }))
       await waitFor(() => {
-        expect(mockFetchAdminNews).toHaveBeenLastCalledWith(mockGetAccessToken, 1)
+        expect(mockFetchAdminNews).toHaveBeenLastCalledWith(mockGetAccessToken, expect.objectContaining({ page: 1 }))
       })
       expect(await screen.findByText('Page 2 of 3')).toBeInTheDocument()
 
@@ -224,12 +238,12 @@ describe('AggregatedContentAdmin', () => {
       showEventsTab()
       expect(await screen.findByText('Page 1 of 3')).toBeInTheDocument()
       expect(mockFetchAdminEvents).toHaveBeenCalledTimes(1)
-      expect(mockFetchAdminEvents).toHaveBeenLastCalledWith(mockGetAccessToken, 0)
+      expect(mockFetchAdminEvents).toHaveBeenLastCalledWith(mockGetAccessToken, expect.objectContaining({ page: 0 }))
 
       // Advance events to page 2, then confirm news kept its own position.
       fireEvent.click(screen.getByRole('button', { name: 'Next' }))
       await waitFor(() => {
-        expect(mockFetchAdminEvents).toHaveBeenLastCalledWith(mockGetAccessToken, 1)
+        expect(mockFetchAdminEvents).toHaveBeenLastCalledWith(mockGetAccessToken, expect.objectContaining({ page: 1 }))
       })
 
       showNewsTab()
@@ -323,6 +337,324 @@ describe('AggregatedContentAdmin', () => {
       })
       expect(mockTriggerEmbeddingSync).toHaveBeenCalledWith(mockGetAccessToken)
       expect(await screen.findByText('Embedding sync triggered.')).toBeInTheDocument()
+    })
+  })
+
+  describe('filters and search', () => {
+    const lastNewsQuery = () => mockFetchAdminNews.mock.calls.at(-1)?.[1]
+
+    it('sends the search text once typing pauses, not on every keystroke', async () => {
+      await renderPage()
+      const callsBefore = mockFetchAdminNews.mock.calls.length
+
+      const box = screen.getByRole('searchbox', { name: 'Search news' })
+      fireEvent.change(box, { target: { value: 'cl' } })
+      fireEvent.change(box, { target: { value: 'claude' } })
+      // Nothing yet: the debounce has not elapsed.
+      expect(mockFetchAdminNews).toHaveBeenCalledTimes(callsBefore)
+
+      await waitFor(() => {
+        expect(lastNewsQuery()).toEqual(expect.objectContaining({ q: 'claude', page: 0 }))
+      })
+      expect(mockFetchAdminNews).toHaveBeenCalledTimes(callsBefore + 1)
+    })
+
+    it('goes back to the first page when a filter changes', async () => {
+      mockFetchAdminNews.mockResolvedValue(newsPage({ count: 20, totalElements: 60, totalPages: 3 }))
+      await renderPage()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+      await waitFor(() => expect(lastNewsQuery()).toEqual(expect.objectContaining({ page: 1 })))
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Visibility' }), {
+        target: { value: 'hidden' },
+      })
+      await waitFor(() => {
+        expect(lastNewsQuery()).toEqual(expect.objectContaining({ page: 0, visibility: 'hidden' }))
+      })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Next' }))
+      await waitFor(() => expect(lastNewsQuery()).toEqual(expect.objectContaining({ page: 1 })))
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Source' }), {
+        target: { value: 'Smith, Jones & Co' },
+      })
+      await waitFor(() => {
+        expect(lastNewsQuery()).toEqual(
+          expect.objectContaining({ page: 0, sources: ['Smith, Jones & Co'], visibility: 'hidden' }),
+        )
+      })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Next' }))
+      fireEvent.change(screen.getByRole('combobox', { name: 'Page size' }), {
+        target: { value: '50' },
+      })
+      await waitFor(() => {
+        expect(lastNewsQuery()).toEqual(expect.objectContaining({ page: 0, size: 50 }))
+      })
+    })
+
+    it('lists every source with its count, plus All sources', async () => {
+      await renderPage()
+
+      const select = screen.getByRole('combobox', { name: 'Source' })
+      await waitFor(() => {
+        expect(select).toHaveTextContent('Smith, Jones & Co (1)')
+      })
+      expect(select).toHaveTextContent('All sources')
+      expect(select).toHaveTextContent('Example Source (2)')
+    })
+
+    it('shows the total number of matching articles', async () => {
+      mockFetchAdminNews.mockResolvedValue(newsPage({ count: 20, totalElements: 412, totalPages: 21 }))
+      await renderPage()
+
+      expect(screen.getByText('412 articles')).toBeInTheDocument()
+    })
+
+    it('searches events by their own query, independently of news', async () => {
+      await renderPage()
+      showEventsTab()
+
+      fireEvent.change(screen.getByRole('searchbox', { name: 'Search events' }), {
+        target: { value: 'london' },
+      })
+      await waitFor(() => {
+        expect(mockFetchAdminEvents).toHaveBeenLastCalledWith(
+          mockGetAccessToken,
+          expect.objectContaining({ q: 'london', page: 0 }),
+        )
+      })
+      expect(lastNewsQuery()?.q).toBeUndefined()
+    })
+
+    it('highlights the active tab', async () => {
+      await renderPage()
+
+      expect(screen.getByRole('button', { name: /^News \(/ })).toHaveClass('active')
+      expect(screen.getByRole('button', { name: /^Events \(/ })).not.toHaveClass('active')
+
+      showEventsTab()
+
+      expect(screen.getByRole('button', { name: /^Events \(/ })).toHaveClass('active')
+      expect(screen.getByRole('button', { name: /^News \(/ })).not.toHaveClass('active')
+    })
+
+    it('links each title to the original in a new tab', async () => {
+      await renderPage()
+
+      const link = screen.getByRole('link', { name: 'Article news-0-0' })
+      expect(link).toHaveAttribute('href', 'https://example.com/news-0-0')
+      expect(link).toHaveAttribute('target', '_blank')
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    })
+
+    it('does not link a title whose URL is not http(s)', async () => {
+      mockFetchAdminNews.mockResolvedValue({
+        ...newsPage({ count: 0, totalElements: 1 }),
+        content: [{ ...makeArticle('bad'), originalUrl: 'javascript:alert(1)' }],
+      })
+      await renderPage()
+
+      expect(screen.getByText('Article bad')).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'Article bad' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('sorting', () => {
+    const lastNewsQuery = () => mockFetchAdminNews.mock.calls.at(-1)?.[1]
+
+    it('starts on published date, newest first', async () => {
+      await renderPage()
+
+      expect(lastNewsQuery()).toEqual(
+        expect.objectContaining({ sort: 'publishedDate', direction: 'desc' }),
+      )
+    })
+
+    it('sorts by a clicked column and flips direction on a second click', async () => {
+      await renderPage()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Title' }))
+      await waitFor(() => {
+        expect(lastNewsQuery()).toEqual(
+          expect.objectContaining({ sort: 'title', direction: 'asc', page: 0 }),
+        )
+      })
+      expect(screen.getByRole('columnheader', { name: 'Title' })).toHaveAttribute(
+        'aria-sort',
+        'ascending',
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Title' }))
+      await waitFor(() => {
+        expect(lastNewsQuery()).toEqual(expect.objectContaining({ sort: 'title', direction: 'desc' }))
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Fetched' }))
+      await waitFor(() => {
+        expect(lastNewsQuery()).toEqual(
+          expect.objectContaining({ sort: 'fetchedAt', direction: 'desc' }),
+        )
+      })
+    })
+
+    it('sorts events by their own columns', async () => {
+      await renderPage()
+      showEventsTab()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Source' }))
+      await waitFor(() => {
+        expect(mockFetchAdminEvents).toHaveBeenLastCalledWith(
+          mockGetAccessToken,
+          expect.objectContaining({ sort: 'sourceName', direction: 'asc' }),
+        )
+      })
+    })
+  })
+
+  describe('bulk actions', () => {
+    it('hides the selected articles and reloads the page', async () => {
+      mockBulkUpdateArticles.mockResolvedValue({
+        action: 'hide',
+        requested: 2,
+        updated: 2,
+        notFound: 0,
+        notFoundIds: [],
+      })
+      await renderPage()
+      const callsBefore = mockFetchAdminNews.mock.calls.length
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select Article news-0-0' }))
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select Article news-0-1' }))
+      expect(screen.getByText('2 selected')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Hide selected' }))
+
+      await waitFor(() => {
+        expect(mockBulkUpdateArticles).toHaveBeenCalledWith(
+          mockGetAccessToken,
+          ['news-0-0', 'news-0-1'],
+          'hide',
+        )
+      })
+      expect(await screen.findByText('Hid 2 articles.')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(mockFetchAdminNews.mock.calls.length).toBeGreaterThan(callsBefore)
+      })
+      expect(screen.queryByText('2 selected')).not.toBeInTheDocument()
+    })
+
+    it('selects every row on the page with the header checkbox', async () => {
+      await renderPage()
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select all articles on this page' }))
+      expect(screen.getByText('2 selected')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select all articles on this page' }))
+      expect(screen.queryByText('2 selected')).not.toBeInTheDocument()
+    })
+
+    it('deletes only after the confirmation, and steps back past a now-empty last page', async () => {
+      mockFetchAdminNews.mockResolvedValue(newsPage({ count: 20, totalElements: 41, totalPages: 3 }))
+      mockBulkUpdateArticles.mockResolvedValue({
+        action: 'delete',
+        requested: 1,
+        updated: 1,
+        notFound: 0,
+        notFoundIds: [],
+      })
+      await renderPage()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+      await waitFor(() => {
+        expect(mockFetchAdminNews).toHaveBeenLastCalledWith(
+          mockGetAccessToken,
+          expect.objectContaining({ page: 1 }),
+        )
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+      await waitFor(() => {
+        expect(mockFetchAdminNews).toHaveBeenLastCalledWith(
+          mockGetAccessToken,
+          expect.objectContaining({ page: 2 }),
+        )
+      })
+
+      fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Article news-0-0' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }))
+
+      const dialog = confirmDialog()
+      expect(dialog).toHaveTextContent('Delete 1 selected article? This action cannot be undone.')
+      expect(mockBulkUpdateArticles).not.toHaveBeenCalled()
+
+      // After the delete the server reports one page fewer.
+      mockFetchAdminNews.mockResolvedValue(newsPage({ count: 20, totalElements: 40, totalPages: 2 }))
+      fireEvent.click(dialogButton('Delete'))
+
+      await waitFor(() => {
+        expect(mockBulkUpdateArticles).toHaveBeenCalledWith(
+          mockGetAccessToken,
+          ['news-0-0'],
+          'delete',
+        )
+      })
+      await waitFor(() => {
+        expect(mockFetchAdminNews).toHaveBeenLastCalledWith(
+          mockGetAccessToken,
+          expect.objectContaining({ page: 1 }),
+        )
+      })
+      expect(await screen.findByText('Deleted 1 article.')).toBeInTheDocument()
+    })
+
+    it('sends nothing when the bulk delete is cancelled', async () => {
+      await renderPage()
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select Article news-0-0' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }))
+      fireEvent.click(dialogButton('Cancel'))
+
+      await waitFor(() => expect(confirmDialog()).toBeNull())
+      expect(mockBulkUpdateArticles).not.toHaveBeenCalled()
+      expect(screen.getByText('1 selected')).toBeInTheDocument()
+    })
+
+    it('reports ids that no longer existed', async () => {
+      mockBulkUpdateEvents.mockResolvedValue({
+        action: 'show',
+        requested: 2,
+        updated: 1,
+        notFound: 1,
+        notFoundIds: ['event-0-1'],
+      })
+      await renderPage()
+      showEventsTab()
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select all events on this page' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Show selected' }))
+
+      await waitFor(() => {
+        expect(mockBulkUpdateEvents).toHaveBeenCalledWith(
+          mockGetAccessToken,
+          ['event-0-0', 'event-0-1'],
+          'show',
+        )
+      })
+      expect(await screen.findByText('Showed 1 event. 1 no longer existed.')).toBeInTheDocument()
+    })
+
+    it('clears the selection when the filters change', async () => {
+      await renderPage()
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select Article news-0-0' }))
+      expect(screen.getByText('1 selected')).toBeInTheDocument()
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Visibility' }), {
+        target: { value: 'visible' },
+      })
+
+      await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument())
     })
   })
 })
