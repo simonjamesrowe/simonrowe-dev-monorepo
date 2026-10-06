@@ -11555,6 +11555,75 @@ body[data-narration-bar] .app-layout__main {
 }
 
 /* ---------------------------------------------------------------------------
+   Server-filtered admin listings (/admin/news-events): search, filters, page size,
+   row selection and the bulk-action bar.
+   --------------------------------------------------------------------------- */
+
+.admin-listing__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Width only; the rest comes from .admin-form__input, which it also carries. */
+.admin-listing__search {
+  flex: 1 1 16rem;
+}
+
+.admin-listing__select {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  max-width: 18rem;
+}
+
+.admin-listing__count {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.admin-listing__bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-subtle);
+  font-size: 0.85rem;
+}
+
+.admin-listing__selected-count {
+  color: var(--color-text-muted);
+  margin-right: auto;
+}
+
+.admin-listing__check-cell {
+  width: 2rem;
+}
+
+.admin-listing__title-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 2px;
+}
+
+.admin-listing__title-link:hover {
+  color: var(--color-primary);
+  text-decoration-color: currentColor;
+}
+
+/* ---------------------------------------------------------------------------
    Term Time approval queue (/admin/school-approvals)
 
    The only route by which school content becomes publicly readable. Styled to

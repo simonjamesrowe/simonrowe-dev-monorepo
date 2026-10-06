@@ -5,43 +5,90 @@ import { Eye, EyeOff, Trash2 } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
 import {
   fetchAdminNews,
+  fetchAdminNewsSources,
   toggleArticleVisibility,
   deleteArticle,
+  bulkUpdateArticles,
   fetchAdminEvents,
   toggleEventVisibility,
   deleteEvent,
+  bulkUpdateEvents,
   triggerAggregation,
   triggerDigest,
   triggerSearchSync,
   triggerEmbeddingSync,
   importArticleUrl,
-  type AdminNewsArticle,
+  type AdminBulkAction,
+  type AdminBulkResult,
   type AdminEvent,
-  type PageResponse,
+  type AdminEventSort,
+  type AdminListingQuery,
+  type AdminNewsArticle,
+  type AdminNewsSort,
+  type AdminSourceSummary,
 } from '../../services/adminApi'
 import { AdminMenu } from '../../components/admin/AdminMenu'
+import {
+  BulkBar,
+  ListingToolbar,
+  SortHeader,
+  TitleLink,
+} from '../../components/admin/AdminListingControls'
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
+import { useAdminListing } from './useAdminListing'
 
 type ActiveTab = 'news' | 'events'
+type ItemKind = 'news' | 'event'
 
 const DIGEST_CONFIRM_MESSAGE =
   'This will use AI to write a new blog post summarising recent blogs and articles, ' +
   'and publish it live on the site immediately. Continue?'
+
+const NEWS_NOUN = { one: 'article', many: 'articles' }
+const EVENTS_NOUN = { one: 'event', many: 'events' }
+
+const PAST_TENSE: Record<AdminBulkAction, string> = {
+  hide: 'Hid',
+  show: 'Showed',
+  delete: 'Deleted',
+}
+
+function bulkNotice(result: AdminBulkResult, noun: { one: string; many: string }): string {
+  const what = `${PAST_TENSE[result.action]} ${result.updated} ${result.updated === 1 ? noun.one : noun.many}.`
+  if (result.notFound === 0) return what
+  return `${what} ${result.notFound} no longer existed.`
+}
+
+const formatDate = (dateStr: string | null) => {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleDateString()
+}
 
 export function AggregatedContentAdmin() {
   const { getAccessToken } = useAuth()
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('news')
 
-  const [news, setNews] = useState<PageResponse<AdminNewsArticle> | null>(null)
-  const [newsPage, setNewsPage] = useState(0)
-  const [newsLoading, setNewsLoading] = useState(true)
-  const [newsError, setNewsError] = useState<string | null>(null)
+  const loadNewsPage = useCallback(
+    (query: AdminListingQuery<AdminNewsSort>) => fetchAdminNews(getAccessToken, query),
+    [getAccessToken],
+  )
+  const loadEventsPage = useCallback(
+    (query: AdminListingQuery<AdminEventSort>) => fetchAdminEvents(getAccessToken, query),
+    [getAccessToken],
+  )
+  const news = useAdminListing<AdminNewsArticle, AdminNewsSort>(
+    loadNewsPage,
+    'publishedDate',
+    'Failed to load news',
+  )
+  const events = useAdminListing<AdminEvent, AdminEventSort>(
+    loadEventsPage,
+    'eventDate',
+    'Failed to load events',
+  )
 
-  const [events, setEvents] = useState<PageResponse<AdminEvent> | null>(null)
-  const [eventsPage, setEventsPage] = useState(0)
-  const [eventsLoading, setEventsLoading] = useState(true)
-  const [eventsError, setEventsError] = useState<string | null>(null)
+  const [sources, setSources] = useState<AdminSourceSummary[]>([])
 
   const [aggregationTriggering, setAggregationTriggering] = useState(false)
   const [aggregationSuccess, setAggregationSuccess] = useState<string | null>(null)
@@ -51,71 +98,49 @@ export function AggregatedContentAdmin() {
   const [importUrl, setImportUrl] = useState('')
   const [importLoading, setImportLoading] = useState(false)
 
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string; type: 'news' | 'event' } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string; type: ItemKind } | null>(null)
+  const [bulkDeleteKind, setBulkDeleteKind] = useState<ItemKind | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null)
 
-  const loadNews = useCallback(async (): Promise<PageResponse<AdminNewsArticle> | null> => {
+  const loadSources = useCallback(async () => {
     try {
-      setNewsLoading(true)
-      setNewsError(null)
-      const data = await fetchAdminNews(getAccessToken, newsPage)
-      setNews(data)
-      return data
-    } catch (err) {
-      setNewsError(err instanceof Error ? err.message : 'Failed to load news')
-      return null
-    } finally {
-      setNewsLoading(false)
+      setSources(await fetchAdminNewsSources(getAccessToken))
+    } catch {
+      // The source filter is a convenience; the table still works without it.
+      setSources([])
     }
-  }, [getAccessToken, newsPage])
-
-  const loadEvents = useCallback(async (): Promise<PageResponse<AdminEvent> | null> => {
-    try {
-      setEventsLoading(true)
-      setEventsError(null)
-      const data = await fetchAdminEvents(getAccessToken, eventsPage)
-      setEvents(data)
-      return data
-    } catch (err) {
-      setEventsError(err instanceof Error ? err.message : 'Failed to load events')
-      return null
-    } finally {
-      setEventsLoading(false)
-    }
-  }, [getAccessToken, eventsPage])
+  }, [getAccessToken])
 
   useEffect(() => {
-    loadNews()
-  }, [loadNews])
-
-  useEffect(() => {
-    loadEvents()
-  }, [loadEvents])
+    loadSources()
+  }, [loadSources])
 
   const handleToggleArticleVisibility = async (id: string, currentVisible: boolean) => {
     try {
-      setNewsError(null)
+      news.setError(null)
       const updated = await toggleArticleVisibility(getAccessToken, id, !currentVisible)
-      setNews((prev) =>
+      news.setData((prev) =>
         prev
           ? { ...prev, content: prev.content.map((item) => (item.id === id ? updated : item)) }
           : prev,
       )
     } catch (err) {
-      setNewsError(err instanceof Error ? err.message : 'Failed to update visibility')
+      news.setError(err instanceof Error ? err.message : 'Failed to update visibility')
     }
   }
 
   const handleToggleEventVisibility = async (id: string, currentVisible: boolean) => {
     try {
-      setEventsError(null)
+      events.setError(null)
       const updated = await toggleEventVisibility(getAccessToken, id, !currentVisible)
-      setEvents((prev) =>
+      events.setData((prev) =>
         prev
           ? { ...prev, content: prev.content.map((item) => (item.id === id ? updated : item)) }
           : prev,
       )
     } catch (err) {
-      setEventsError(err instanceof Error ? err.message : 'Failed to update visibility')
+      events.setError(err instanceof Error ? err.message : 'Failed to update visibility')
     }
   }
 
@@ -123,31 +148,49 @@ export function AggregatedContentAdmin() {
     if (!deleteTarget) return
     const target = deleteTarget
     setDeleteTarget(null)
+    const listing = target.type === 'news' ? news : events
     try {
+      listing.setError(null)
       if (target.type === 'news') {
-        setNewsError(null)
         await deleteArticle(getAccessToken, target.id)
-        // Reload so the current page refills, clamping back if it is now past the end.
-        const reloaded = await loadNews()
-        if (reloaded && newsPage > 0 && newsPage > reloaded.totalPages - 1) {
-          setNewsPage((p) => p - 1)
-        }
+        loadSources()
       } else {
-        setEventsError(null)
         await deleteEvent(getAccessToken, target.id)
-        const reloaded = await loadEvents()
-        if (reloaded && eventsPage > 0 && eventsPage > reloaded.totalPages - 1) {
-          setEventsPage((p) => p - 1)
-        }
       }
+      // Reload so the current page refills, clamping back if it is now past the end.
+      await listing.reloadClamped()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete item'
-      if (target.type === 'news') {
-        setNewsError(message)
-      } else {
-        setEventsError(message)
-      }
+      listing.setError(err instanceof Error ? err.message : 'Failed to delete item')
     }
+  }
+
+  const runBulk = async (kind: ItemKind, action: AdminBulkAction) => {
+    const listing = kind === 'news' ? news : events
+    const ids = Array.from(listing.selected)
+    if (ids.length === 0) return
+    try {
+      setBulkBusy(true)
+      setBulkMessage(null)
+      listing.setError(null)
+      const result =
+        kind === 'news'
+          ? await bulkUpdateArticles(getAccessToken, ids, action)
+          : await bulkUpdateEvents(getAccessToken, ids, action)
+      setBulkMessage(bulkNotice(result, kind === 'news' ? NEWS_NOUN : EVENTS_NOUN))
+      listing.clearSelection()
+      if (kind === 'news' && action === 'delete') loadSources()
+      await listing.reloadClamped()
+    } catch (err) {
+      listing.setError(err instanceof Error ? err.message : 'Bulk action failed')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  const handleBulkDeleteConfirm = async () => {
+    const kind = bulkDeleteKind
+    setBulkDeleteKind(null)
+    if (kind) await runBulk(kind, 'delete')
   }
 
   const handleTriggerAggregation = async () => {
@@ -157,8 +200,8 @@ export function AggregatedContentAdmin() {
       setAggregationError(null)
       await triggerAggregation(getAccessToken)
       setAggregationSuccess('Aggregation triggered successfully.')
-      await loadNews()
-      await loadEvents()
+      await news.reload()
+      await events.reload()
     } catch (err) {
       setAggregationError(err instanceof Error ? err.message : 'Failed to trigger aggregation')
     } finally {
@@ -199,18 +242,11 @@ export function AggregatedContentAdmin() {
     }
   }
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleDateString()
-  }
-
-  const truncate = (text: string, maxLength = 60) => {
-    if (text.length <= maxLength) return text
-    return `${text.slice(0, maxLength)}…`
-  }
-
-  const newsItems = news?.content ?? []
-  const eventItems = events?.content ?? []
+  const newsItems = news.data?.content ?? []
+  const eventItems = events.data?.content ?? []
+  const allNewsSelected = newsItems.length > 0 && newsItems.every((a) => news.selected.has(a.id))
+  const allEventsSelected = eventItems.length > 0 && eventItems.every((e) => events.selected.has(e.id))
+  const bulkDeleteCount = bulkDeleteKind === 'news' ? news.selected.size : events.selected.size
 
   return (
     <div className="admin-page">
@@ -282,8 +318,8 @@ export function AggregatedContentAdmin() {
               } else {
                 setAggregationSuccess(message)
                 setImportUrl('')
-                await loadNews()
-                await loadEvents()
+                await news.reload()
+                await events.reload()
               }
             } catch (err) {
               setAggregationError(err instanceof Error ? err.message : 'Failed to import URL')
@@ -299,34 +335,72 @@ export function AggregatedContentAdmin() {
 
       <div className="admin-tabs">
         <button
-          className={`admin-tab${activeTab === 'news' ? ' admin-tab--active' : ''}`}
+          aria-pressed={activeTab === 'news'}
+          className={activeTab === 'news' ? 'active' : undefined}
           onClick={() => setActiveTab('news')}
           type="button"
         >
-          News ({news?.totalElements ?? 0})
+          News ({news.data?.totalElements ?? 0})
         </button>
         <button
-          className={`admin-tab${activeTab === 'events' ? ' admin-tab--active' : ''}`}
+          aria-pressed={activeTab === 'events'}
+          className={activeTab === 'events' ? 'active' : undefined}
           onClick={() => setActiveTab('events')}
           type="button"
         >
-          Events ({events?.totalElements ?? 0})
+          Events ({events.data?.totalElements ?? 0})
         </button>
       </div>
 
+      {bulkMessage && <div className="admin-success-banner">{bulkMessage}</div>}
+
       {activeTab === 'news' && (
         <section className="admin-section">
-          {newsError && <div className="admin-error-banner">{newsError}</div>}
-          {newsLoading ? (
+          <ListingToolbar
+            label="news"
+            noun={NEWS_NOUN}
+            onSearchChange={news.setSearch}
+            onSizeChange={news.setSize}
+            onSourceChange={news.setSource}
+            onVisibilityChange={news.setVisibility}
+            search={news.search}
+            size={news.size}
+            source={news.source}
+            sources={sources}
+            total={news.data?.totalElements ?? null}
+            visibility={news.visibility}
+          />
+          {news.selected.size > 0 && (
+            <BulkBar
+              busy={bulkBusy}
+              onClear={news.clearSelection}
+              onDelete={() => setBulkDeleteKind('news')}
+              onHide={() => runBulk('news', 'hide')}
+              onShow={() => runBulk('news', 'show')}
+              selectedCount={news.selected.size}
+            />
+          )}
+          {news.error && <div className="admin-error-banner">{news.error}</div>}
+          {news.loading && !news.data ? (
             <div className="admin-loading">Loading news...</div>
           ) : (
             <>
-              <table className="admin-table">
+              <table className="admin-table" aria-busy={news.loading}>
                 <thead>
                   <tr>
-                    <th className="admin-table__th">Title</th>
-                    <th className="admin-table__th">Source</th>
-                    <th className="admin-table__th">Published</th>
+                    <th className="admin-table__th admin-listing__check-cell">
+                      <input
+                        aria-label="Select all articles on this page"
+                        checked={allNewsSelected}
+                        disabled={newsItems.length === 0}
+                        onChange={news.toggleAllOnPage}
+                        type="checkbox"
+                      />
+                    </th>
+                    <SortHeader column="title" direction={news.direction} label="Title" onSort={news.sortBy} sort={news.sort} />
+                    <SortHeader column="sourceName" direction={news.direction} label="Source" onSort={news.sortBy} sort={news.sort} />
+                    <SortHeader column="publishedDate" direction={news.direction} label="Published" onSort={news.sortBy} sort={news.sort} />
+                    <SortHeader column="fetchedAt" direction={news.direction} label="Fetched" onSort={news.sortBy} sort={news.sort} />
                     <th className="admin-table__th">Visible</th>
                     <th className="admin-table__th">Actions</th>
                   </tr>
@@ -334,18 +408,27 @@ export function AggregatedContentAdmin() {
                 <tbody>
                   {newsItems.length === 0 && (
                     <tr>
-                      <td className="admin-table__td admin-table__td--empty" colSpan={5}>
+                      <td className="admin-table__td admin-table__td--empty" colSpan={7}>
                         No news articles found.
                       </td>
                     </tr>
                   )}
                   {newsItems.map((article) => (
                     <tr key={article.id} className="admin-table__row">
+                      <td className="admin-table__td admin-listing__check-cell">
+                        <input
+                          aria-label={`Select ${article.title}`}
+                          checked={news.selected.has(article.id)}
+                          onChange={() => news.toggleSelected(article.id)}
+                          type="checkbox"
+                        />
+                      </td>
                       <td className="admin-table__td" title={article.title}>
-                        {truncate(article.title)}
+                        <TitleLink title={article.title} url={article.originalUrl} />
                       </td>
                       <td className="admin-table__td">{article.sourceName}</td>
                       <td className="admin-table__td">{formatDate(article.publishedDate)}</td>
+                      <td className="admin-table__td">{formatDate(article.fetchedAt)}</td>
                       <td className="admin-table__td">
                         <button
                           className={`admin-btn admin-btn--icon${article.visible ? '' : ' admin-btn--muted'}`}
@@ -370,21 +453,21 @@ export function AggregatedContentAdmin() {
                   ))}
                 </tbody>
               </table>
-              {news && news.totalPages > 1 && (
+              {news.data && news.data.totalPages > 1 && (
                 <div className="pagination">
                   <button
-                    disabled={newsPage === 0}
-                    onClick={() => setNewsPage((p) => p - 1)}
+                    disabled={news.page === 0}
+                    onClick={() => news.setPage((p) => p - 1)}
                     type="button"
                   >
                     Previous
                   </button>
                   <span>
-                    Page {newsPage + 1} of {news.totalPages}
+                    Page {news.page + 1} of {news.data.totalPages}
                   </span>
                   <button
-                    disabled={newsPage >= news.totalPages - 1}
-                    onClick={() => setNewsPage((p) => p + 1)}
+                    disabled={news.page >= news.data.totalPages - 1}
+                    onClick={() => news.setPage((p) => p + 1)}
                     type="button"
                   >
                     Next
@@ -398,17 +481,47 @@ export function AggregatedContentAdmin() {
 
       {activeTab === 'events' && (
         <section className="admin-section">
-          {eventsError && <div className="admin-error-banner">{eventsError}</div>}
-          {eventsLoading ? (
+          <ListingToolbar
+            label="events"
+            noun={EVENTS_NOUN}
+            onSearchChange={events.setSearch}
+            onSizeChange={events.setSize}
+            onVisibilityChange={events.setVisibility}
+            search={events.search}
+            size={events.size}
+            total={events.data?.totalElements ?? null}
+            visibility={events.visibility}
+          />
+          {events.selected.size > 0 && (
+            <BulkBar
+              busy={bulkBusy}
+              onClear={events.clearSelection}
+              onDelete={() => setBulkDeleteKind('event')}
+              onHide={() => runBulk('event', 'hide')}
+              onShow={() => runBulk('event', 'show')}
+              selectedCount={events.selected.size}
+            />
+          )}
+          {events.error && <div className="admin-error-banner">{events.error}</div>}
+          {events.loading && !events.data ? (
             <div className="admin-loading">Loading events...</div>
           ) : (
             <>
-              <table className="admin-table">
+              <table className="admin-table" aria-busy={events.loading}>
                 <thead>
                   <tr>
-                    <th className="admin-table__th">Title</th>
-                    <th className="admin-table__th">Source</th>
-                    <th className="admin-table__th">Event Date</th>
+                    <th className="admin-table__th admin-listing__check-cell">
+                      <input
+                        aria-label="Select all events on this page"
+                        checked={allEventsSelected}
+                        disabled={eventItems.length === 0}
+                        onChange={events.toggleAllOnPage}
+                        type="checkbox"
+                      />
+                    </th>
+                    <SortHeader column="title" direction={events.direction} label="Title" onSort={events.sortBy} sort={events.sort} />
+                    <SortHeader column="sourceName" direction={events.direction} label="Source" onSort={events.sortBy} sort={events.sort} />
+                    <SortHeader column="eventDate" direction={events.direction} label="Event Date" onSort={events.sortBy} sort={events.sort} />
                     <th className="admin-table__th">Visible</th>
                     <th className="admin-table__th">Actions</th>
                   </tr>
@@ -416,15 +529,23 @@ export function AggregatedContentAdmin() {
                 <tbody>
                   {eventItems.length === 0 && (
                     <tr>
-                      <td className="admin-table__td admin-table__td--empty" colSpan={5}>
+                      <td className="admin-table__td admin-table__td--empty" colSpan={6}>
                         No events found.
                       </td>
                     </tr>
                   )}
                   {eventItems.map((event) => (
                     <tr key={event.id} className="admin-table__row">
+                      <td className="admin-table__td admin-listing__check-cell">
+                        <input
+                          aria-label={`Select ${event.title}`}
+                          checked={events.selected.has(event.id)}
+                          onChange={() => events.toggleSelected(event.id)}
+                          type="checkbox"
+                        />
+                      </td>
                       <td className="admin-table__td" title={event.title}>
-                        {truncate(event.title)}
+                        <TitleLink title={event.title} url={event.originalUrl} />
                       </td>
                       <td className="admin-table__td">{event.sourceName}</td>
                       <td className="admin-table__td">{formatDate(event.eventDate)}</td>
@@ -452,21 +573,21 @@ export function AggregatedContentAdmin() {
                   ))}
                 </tbody>
               </table>
-              {events && events.totalPages > 1 && (
+              {events.data && events.data.totalPages > 1 && (
                 <div className="pagination">
                   <button
-                    disabled={eventsPage === 0}
-                    onClick={() => setEventsPage((p) => p - 1)}
+                    disabled={events.page === 0}
+                    onClick={() => events.setPage((p) => p - 1)}
                     type="button"
                   >
                     Previous
                   </button>
                   <span>
-                    Page {eventsPage + 1} of {events.totalPages}
+                    Page {events.page + 1} of {events.data.totalPages}
                   </span>
                   <button
-                    disabled={eventsPage >= events.totalPages - 1}
-                    onClick={() => setEventsPage((p) => p + 1)}
+                    disabled={events.page >= events.data.totalPages - 1}
+                    onClick={() => events.setPage((p) => p + 1)}
                     type="button"
                   >
                     Next
@@ -486,6 +607,20 @@ export function AggregatedContentAdmin() {
         cancelLabel="Cancel"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteKind !== null}
+        title={bulkDeleteKind === 'news' ? 'Delete Articles' : 'Delete Events'}
+        message={`Delete ${bulkDeleteCount} selected ${
+          bulkDeleteKind === 'news'
+            ? bulkDeleteCount === 1 ? 'article' : 'articles'
+            : bulkDeleteCount === 1 ? 'event' : 'events'
+        }? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleBulkDeleteConfirm}
+        onCancel={() => setBulkDeleteKind(null)}
       />
 
       <ConfirmDialog
