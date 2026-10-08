@@ -1,6 +1,7 @@
 package com.simonrowe.coparent.persistence;
 
 import com.simonrowe.coparent.model.Parent;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.bson.types.ObjectId;
@@ -18,6 +19,11 @@ public interface ParentRepository extends MongoRepository<Parent, ObjectId> {
   Optional<Parent> findByIdAndFamilyIdAndStatus(ObjectId id, ObjectId familyId, String status);
 
   List<Parent> findByFamilyIdAndStatus(ObjectId familyId, String status);
+
+  List<Parent> findByFamilyIdAndStatusIn(ObjectId familyId, Collection<String> statuses);
+
+  Optional<Parent> findFirstByFamilyIdAndEmailAndStatus(
+      ObjectId familyId, String email, String status);
 
   long countByFamilyIdAndRoleAndStatus(ObjectId familyId, String role, String status);
 

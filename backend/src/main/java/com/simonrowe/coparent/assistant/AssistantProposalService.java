@@ -392,7 +392,7 @@ public class AssistantProposalService {
         target = expenseTarget(familyId, payload, errors,
             expense -> Expense.UPCOMING.equals(expense.timing()),
             "Select an upcoming expense from this family");
-        requiredFamilyId(payload, "payerId", familyParents(familyId), errors);
+        requiredFamilyId(payload, "payerId", expenseParents(familyId), errors);
         parsedDate(payload, "paidOn", errors);
         requireText(payload, "paidOn", errors);
         if (text(payload.get("amount")) != null) {
@@ -439,7 +439,7 @@ public class AssistantProposalService {
     if (Expense.PAID.equals(timing) && text(payload.get("payerId")) == null) {
       errors.add(new AssistantProposalBatch.FieldError("payerId", "Say who paid"));
     } else {
-      optionalFamilyId(payload, "payerId", familyParents(familyId), errors);
+      optionalFamilyId(payload, "payerId", expenseParents(familyId), errors);
     }
     Object share = payload.get("sharePercent");
     // The review card's editor sends numbers back as text.
@@ -501,6 +501,13 @@ public class AssistantProposalService {
     }
     final String fraction = (value.substring(dot + 1) + "0").substring(0, 2);
     return Long.parseLong(value.substring(0, dot)) * 100 + Long.parseLong(fraction);
+  }
+
+  /** Who can pay a shared expense: the family's parents, and a co-parent invited to join. */
+  private Set<ObjectId> expenseParents(final ObjectId familyId) {
+    return parents.findByFamilyIdAndStatusIn(familyId,
+            List.of(CoparentAccessPolicy.ACTIVE, CoparentAccessPolicy.INVITED)).stream()
+        .map(Parent::id).collect(java.util.stream.Collectors.toSet());
   }
 
   private Set<ObjectId> familyParents(final ObjectId familyId) {

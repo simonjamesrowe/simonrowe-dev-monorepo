@@ -96,7 +96,7 @@ interface OnboardingWizardProps {
   activeFamilyId?: string;
   onCreateFamily?: (name: string, timeZone: string, fullName: string) => void;
   onAddChild?: (child: ChildDraft) => Promise<void> | void;
-  onInviteCoParent?: (familyId: string, email: string, role: ParentRole) => void;
+  onInviteCoParent?: (familyId: string, email: string, role: ParentRole, name?: string) => void;
   onResendInvite?: (invitationId: string) => void;
   onCompleteOnboarding?: (familyId: string) => void;
 }
@@ -135,6 +135,7 @@ export function OnboardingWizard({
   const [childSchool, setChildSchool] = useState('');
   const [childMedicalNotes, setChildMedicalNotes] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<ParentRole>('co-parent');
   const [addedChildren, setAddedChildren] = useState<Partial<Child>[]>([]);
   const [familyError, setFamilyError] = useState<string | null>(null);
@@ -212,7 +213,7 @@ export function OnboardingWizard({
 
   const handleInvite = () => {
     if (activeFamilyId && inviteEmail) {
-      onInviteCoParent?.(activeFamilyId, inviteEmail, inviteRole);
+      onInviteCoParent?.(activeFamilyId, inviteEmail, inviteRole, inviteName.trim() || undefined);
     }
     goNext();
   };
@@ -759,6 +760,20 @@ export function OnboardingWizard({
               )}
 
               <div className="space-y-5">
+                <div>
+                  <label htmlFor="onboarding-invite-name" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Co-Parent Name (optional)
+                  </label>
+                  <input
+                    id="onboarding-invite-name"
+                    type="text"
+                    maxLength={100}
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                    placeholder="How expenses should name them until they join"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 transition placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
                 <div>
                   <label htmlFor="onboarding-invite-email" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                     Co-Parent Email

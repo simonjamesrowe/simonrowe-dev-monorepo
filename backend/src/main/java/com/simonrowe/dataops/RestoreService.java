@@ -25,6 +25,7 @@ import com.simonrowe.migration.changeunits.V048CreatePortfolioProjects;
 import com.simonrowe.migration.changeunits.V049SeedTermTimeProjectPage;
 import com.simonrowe.migration.changeunits.V051SeedTldrNewsletterSources;
 import com.simonrowe.migration.changeunits.V052CreateCoparentExpenses;
+import com.simonrowe.migration.changeunits.V053ReserveInvitedCoparents;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -455,6 +456,7 @@ public class RestoreService {
     V043CreateCoparentCollections.createIndexes(coparentMongoTemplate);
     V045CreateCoparentAssistantSchema.createIndexes(coparentMongoTemplate);
     V052CreateCoparentExpenses.createIndexes(coparentMongoTemplate);
+    V053ReserveInvitedCoparents.createIndexes(coparentMongoTemplate);
     LOG.info("Recreated CoParent indexes after restore");
   }
 

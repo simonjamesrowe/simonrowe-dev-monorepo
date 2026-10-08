@@ -76,6 +76,7 @@ export interface Parent {
   fullName: string;
   email?: string;
   role: ParentRole;
+  /** 'active', or 'invited' for a co-parent who has not accepted yet (expenses only). */
   status: string;
   auth0Id?: string;
   color?: string;
@@ -207,6 +208,8 @@ export interface UpdateChildRequest {
 export interface CreateInvitationRequest {
   email: string;
   role: ParentRole;
+  /** Optional: without it the invited parent is named from their email until they join. */
+  name?: string;
 }
 
 export interface UpdateOnboardingRequest {

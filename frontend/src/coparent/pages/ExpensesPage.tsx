@@ -7,6 +7,7 @@ import { EXPENSE_CATEGORIES } from '../components/expenses/categories';
 import { CategoryTile } from '../components/expenses/CategoryTile';
 import { ExpenseDetailDrawer } from '../components/expenses/ExpenseDetailDrawer';
 import { ExpenseFormDrawer } from '../components/expenses/ExpenseFormDrawer';
+import { InvitedCoparentBanner } from '../components/expenses/InvitedCoparentBanner';
 import {
   EXPENSE_VIEWS,
   expenseStatus,
@@ -28,7 +29,7 @@ import {
   useExpenseSummary,
   useExpenseTransition,
   useFamilies,
-  useParents,
+  useParentsWithInvited,
 } from '../hooks/api';
 import type { Child, Parent } from '../lib/api/client';
 import { apiErrorMessage } from '../lib/api/errorMessage';
@@ -64,7 +65,8 @@ const ExpensesPage = () => {
   const { data: families = [], isLoading: familiesLoading } = useFamilies();
   const familyId = families[0]?.id;
   const meId = useCurrentParentId(familyId);
-  const { data: parents = [] } = useParents(familyId);
+  // With the invited co-parent: a cost can be logged against them before they join.
+  const { data: parents = [] } = useParentsWithInvited(familyId);
   const { data: children = [] } = useChildren(familyId);
   const { data: expenses = [], isLoading } = useExpenses(familyId);
   const { data: summary } = useExpenseSummary(familyId);
@@ -77,7 +79,10 @@ const ExpensesPage = () => {
   const [detailMode, setDetailMode] = useState<DetailMode>(null);
 
   const me = parents.find((parent) => parent.id === meId);
-  const other = parents.find((parent) => parent.id !== meId && parent.status === 'active');
+  const others = parents.filter((parent) => parent.id !== meId);
+  const other = others.find((parent) => parent.status === 'active')
+    ?? others.find((parent) => parent.status === 'invited');
+  const otherInvited = other?.status === 'invited';
   const otherName = firstName(other);
   const detailId = params.get('expense');
   const detail = expenses.find((expense) => expense.id === detailId) ?? null;
@@ -238,6 +243,10 @@ const ExpensesPage = () => {
           </button>
         </div>
       </header>
+
+      {otherInvited && (
+        <InvitedCoparentBanner familyId={familyId} invited={other} canManage={me.role === 'primary'} />
+      )}
 
       <section className="expense-cards" aria-label="Summary">
         <article className={`expense-card expense-balance${square ? ' expense-balance--square' : owedToMe ? '' : ' expense-balance--owe'}`}>
@@ -412,7 +421,9 @@ const ExpensesPage = () => {
             description: failures
               ? `Expense saved. ${failures} receipt${failures === 1 ? '' : 's'} didn't upload. Retry from the expense.`
               : saved.agreement.status === 'pending'
-                ? `${otherName} has been asked to agree.`
+                ? otherInvited
+                  ? `${otherName} can agree to it once they join.`
+                  : `${otherName} has been asked to agree.`
                 : 'Nothing about who owes what changed.',
           });
           setEditing(null);

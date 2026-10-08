@@ -64,7 +64,9 @@ public class AssistantInferenceService {
       paid when something was bought or paid, and upcoming when it is due or still to pay; date
       is the day it was paid or the day it is due. payerId is the parent who paid, or who will
       pay. "I", "me" and "my" mean the signed-in parent, signedInParentId in FAMILY_CONTEXT.
-      For an upcoming cost with nobody named, payerId is null. sharePercent is the signed-in
+      For an upcoming cost with nobody named, payerId is null. A co-parent in invitedCoParents
+      has not joined yet: they can be the payerId of an expense, but never of anything else.
+      sharePercent is the signed-in
       parent's percentage of the cost: 50 unless the source says otherwise, 100 when the
       signed-in parent covers all of it, and 0 when the other parent does. childIds are the
       children the cost is for; leave the list empty when the source does not say. When the

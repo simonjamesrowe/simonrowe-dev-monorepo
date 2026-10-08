@@ -30,7 +30,7 @@ interface FamilySetupHubProps {
   onUpdateFamily?: (id: string, updates: Partial<Family>) => void;
   onAddChild?: (child: ChildDraft) => void;
   onUpdateChild?: (id: string, updates: Partial<ChildDraft>) => void;
-  onInviteCoParent?: (familyId: string, email: string, role: ParentRole) => void;
+  onInviteCoParent?: (familyId: string, email: string, role: ParentRole, name?: string) => void;
   onResendInvite?: (invitationId: string) => void;
   onCancelInvite?: (invitationId: string) => void;
   onAssignRole?: (parentId: string, role: ParentRole) => void;
@@ -116,6 +116,7 @@ export function FamilySetupHub({
   const [childSchool, setChildSchool] = useState('');
   const [childMedicalNotes, setChildMedicalNotes] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<ParentRole>('co-parent');
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [editChildName, setEditChildName] = useState('');
@@ -187,8 +188,9 @@ export function FamilySetupHub({
   const handleInvite = () => {
     const normalizedEmail = inviteEmail.trim();
     if (!activeFamilyId || !normalizedEmail) return;
-    onInviteCoParent?.(activeFamilyId, normalizedEmail, inviteRole);
+    onInviteCoParent?.(activeFamilyId, normalizedEmail, inviteRole, inviteName.trim() || undefined);
     setInviteEmail('');
+    setInviteName('');
     setInviteRole('co-parent');
   };
 
@@ -847,6 +849,20 @@ export function FamilySetupHub({
             </div>
             <div className="p-6">
               <div className="mb-6 rounded-xl border border-slate-200/60 bg-white/60 p-4 dark:border-slate-700/60 dark:bg-slate-800/40">
+                <div className="mb-3">
+                  <label htmlFor="family-invite-name" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Their name (optional)
+                  </label>
+                  <input
+                    id="family-invite-name"
+                    type="text"
+                    maxLength={100}
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                    placeholder="How expenses should name them until they join"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/40 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  />
+                </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="sm:col-span-2">
                     <label htmlFor="family-invite-email" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">

@@ -543,3 +543,36 @@ Things the build settled that the design above left open:
 - **The expense styles are scoped under `.coparent-app`.** CoParent's preflight sets
   `.coparent-app button { padding: 0; background: transparent }`, which beats a single class.
 
+
+## 9. Expenses before the co-parent accepts
+
+A parent can log shared expenses as soon as they have invited their co-parent, before the
+invitation is accepted. Added 2026-10-08.
+
+- **Inviting reserves a parent row.** `InvitedParents.reserve` upserts a `parents` row with
+  status `invited`, keyed on family and email, named from the invite form's optional name
+  or, failing that, from the email (`rhian.jones@…` becomes "Rhian Jones"). Its `auth0Id` is a
+  synthetic `invited:<id>`, because the unique `(familyId, auth0Id)` index treats a missing
+  subject as null and two placeholders in one family would collide. No Auth0 subject can
+  match it, since real ones contain `|`, and every access check asks for `active` anyway.
+- **Accepting adopts that row** (`InvitationService.adoptInvitedParent`): same id, status
+  `active`, the real subject. So every expense logged against it becomes theirs with nothing
+  rewritten. A profile the invitee created at first sign-in supplies the name, colour and
+  avatar and is then deleted. It belongs to no family, so nothing refers to it.
+- **Only expenses see an invited parent.** `ExpenseService.couple()` falls back to it when the
+  family has no other active parent. A family that already has two ignores any open
+  invitation. `GET …/parents?includeInvited=true` is opt-in and is used only by the Expenses
+  page, the dashboard's expense widgets and Quick add's payer list. Calendar, messaging and
+  access control still read `active` parents only.
+- **The rules are unchanged.** Everything logged waits for the invited parent to agree, one
+  expense at a time, once they join. Nothing counts towards the balance until then.
+  `ExpenseMailer` sends nothing to a parent who is not `active`.
+- **Cancelling** an invitation sets the row to `uninvited`. Its expenses stay, and new ones
+  are refused. **Inviting the same email again** brings the same row back, keeping what was
+  logged. An expired invitation keeps its row, so resending carries on.
+- **The primary parent can rename an invited parent** (`PATCH /parents/{id}/invited-name`)
+  until they join. After that the name is theirs.
+- **`V053ReserveInvitedCoparents`** adds the partial unique index
+  `idx_coparent_parent_invited_email` (one `invited`/`uninvited` row per family and email) and
+  reserves a row for every invitation still open whose email is not already a member.
+  `RestoreService.ensureCoparentIndexes` re-creates the index.

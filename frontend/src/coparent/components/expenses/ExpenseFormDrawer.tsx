@@ -500,7 +500,9 @@ export function ExpenseFormDrawer({
 
       <p className="expense-notice">
         <Mail size={16} aria-hidden="true" />
-        {otherName} will be asked to agree, and emailed a link.
+        {other.status === 'invited'
+          ? `${otherName} hasn't joined yet, so nothing is sent now. They can agree to it once they accept your invitation.`
+          : `${otherName} will be asked to agree, and emailed a link.`}
       </p>
     </ExpenseDrawer>
   );

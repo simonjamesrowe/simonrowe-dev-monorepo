@@ -133,6 +133,12 @@ public class AssistantContextFactory {
             "updatedAt", conversation.updatedAt().toString())).toList());
     data.put("events", boundedEvents.stream().map(AssistantContextFactory::eventMetadata).toList());
     data.put("signedInParentId", actor.id().toHexString());
+    // A co-parent invited and not yet joined can pay for or share an expense, and nothing else,
+    // so they are listed apart from "parents", which events and messages choose from.
+    data.put("invitedCoParents", parents
+        .findByFamilyIdAndStatus(familyId, CoparentAccessPolicy.INVITED).stream()
+        .map(parent -> Map.of("id", parent.id().toHexString(), "name", parent.fullName()))
+        .toList());
     // Unsettled expenses only, so a note about paying something back has a target to match.
     // Titles and amounts, never notes or receipt names.
     data.put("openExpenses", expenses
