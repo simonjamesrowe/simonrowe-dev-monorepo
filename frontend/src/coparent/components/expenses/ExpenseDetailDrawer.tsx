@@ -1,5 +1,5 @@
 import { AlertCircle, Check, History, MessageSquare, Pencil, Plus, Trash2, Wallet } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { prepareSchoolNoteImage } from '../../../pages/admin/schoolNoteImage';
 import {
@@ -85,6 +85,8 @@ export function ExpenseDetailDrawer({
   const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
   const [error, setError] = useState<unknown>(null);
   const [lightbox, setLightbox] = useState<{ url: string; receipt: ExpenseReceipt } | null>(null);
+  // The note field a parent just asked for gets the focus, without autoFocus on every render.
+  const noteField = useRef<HTMLElement | null>(null);
   const transition = useExpenseTransition();
   const markPaid = useMarkExpensePaid();
   const remove = useDeleteExpense();
@@ -105,6 +107,10 @@ export function ExpenseDetailDrawer({
     // Only when a different expense is opened, not on every refetch of the same one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expense?.id, initialMode]);
+
+  useEffect(() => {
+    if (mode === 'dispute' || mode === 'reject' || mode === 'claim') noteField.current?.focus();
+  }, [mode]);
 
   if (!expense) {
     return <ExpenseDrawer open={false} title="Expense" description="" onClose={onClose}>{null}</ExpenseDrawer>;
@@ -476,7 +482,7 @@ export function ExpenseDetailDrawer({
               className="expense-input expense-textarea"
               value={note}
               maxLength={500}
-              autoFocus
+              ref={(element) => { noteField.current = element; }}
               onChange={(event) => setNote(event.target.value)}
               placeholder={mode === 'dispute' ? 'e.g. We agreed trainers, not shoes' : 'e.g. Nothing in my account yet'}
             />
@@ -493,7 +499,7 @@ export function ExpenseDetailDrawer({
               className="expense-input"
               value={note}
               maxLength={500}
-              autoFocus
+              ref={(element) => { noteField.current = element; }}
               onChange={(event) => setNote(event.target.value)}
               placeholder="How? e.g. Bank transfer (optional)"
             />

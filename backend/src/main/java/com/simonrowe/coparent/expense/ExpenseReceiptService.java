@@ -6,8 +6,10 @@ import com.simonrowe.coparent.persistence.CoparentAuditService;
 import com.simonrowe.coparent.persistence.ExpenseRepository;
 import com.simonrowe.coparent.shared.CoparentAccessPolicy;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import org.bson.Document;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -43,8 +45,30 @@ public class ExpenseReceiptService {
   private final CoparentAuditService audits;
   private final MongoTemplate mongoTemplate;
 
-  /** A receipt's record and its bytes. */
+  /**
+   * A receipt's record and its bytes. Equality reads the bytes rather than the array reference,
+   * and {@code toString} gives only their length, so a receipt photo never reaches a log line.
+   */
   public record ReceiptFile(Expense.Receipt receipt, int position, byte[] bytes) {
+
+    @Override
+    public boolean equals(final Object other) {
+      return other instanceof ReceiptFile that
+          && position == that.position
+          && Objects.equals(receipt, that.receipt)
+          && Arrays.equals(bytes, that.bytes);
+    }
+
+    @Override
+    public int hashCode() {
+      return 31 * Objects.hash(receipt, position) + Arrays.hashCode(bytes);
+    }
+
+    @Override
+    public String toString() {
+      return "ReceiptFile[receipt=%s, position=%d, bytes=<%d bytes>]"
+          .formatted(receipt, position, bytes == null ? 0 : bytes.length);
+    }
   }
 
   public ExpenseReceiptService(

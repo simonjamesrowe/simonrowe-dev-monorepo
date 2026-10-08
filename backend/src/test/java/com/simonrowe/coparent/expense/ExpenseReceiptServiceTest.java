@@ -2,7 +2,11 @@ package com.simonrowe.coparent.expense;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.simonrowe.coparent.expense.ExpenseReceiptService.ReceiptFile;
+import com.simonrowe.coparent.model.Expense;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import org.bson.types.ObjectId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -48,6 +52,21 @@ class ExpenseReceiptServiceTest {
   @Test
   void longNamesAreCut() {
     assertThat(ExpenseReceiptService.displayName("a".repeat(300) + ".jpg")).hasSize(100);
+  }
+
+  @Test
+  void receiptFilesCompareByTheirBytesAndNeverPrintThem() {
+    final Expense.Receipt receipt = new Expense.Receipt(new ObjectId(), "image/png", 6,
+        "receipt.png", new ObjectId(), Instant.parse("2026-10-08T09:00:00Z"));
+    final ReceiptFile one = new ReceiptFile(receipt, 1, "SECRET".getBytes(StandardCharsets.UTF_8));
+    final ReceiptFile same = new ReceiptFile(receipt, 1,
+        "SECRET".getBytes(StandardCharsets.UTF_8));
+    final ReceiptFile other = new ReceiptFile(receipt, 1,
+        "OTHERS".getBytes(StandardCharsets.UTF_8));
+
+    assertThat(one).isEqualTo(same).hasSameHashCodeAs(same).isNotEqualTo(other);
+    assertThat(one.toString()).contains("<6 bytes>").doesNotContain("SECRET")
+        .doesNotContain("[B@");
   }
 
   private static byte[] bytes(final int... values) {
