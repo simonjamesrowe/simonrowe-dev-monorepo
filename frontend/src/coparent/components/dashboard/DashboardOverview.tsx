@@ -3,7 +3,6 @@ import { useMemo } from 'react';
 import type {
   DashboardProps,
   Event,
-  Expense,
   PermissionRequest,
   QuickAction,
   WidgetCard,
@@ -33,15 +32,8 @@ const formatDate = (value: string) =>
 const formatTime = (value: string) =>
   new Date(value).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
-const formatCurrency = (value: number, currency = 'GBP') =>
-  new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value);
-
-const getStatusTone = (status: PermissionRequest['status'] | Expense['status']) => {
-  if (status === 'approved' || status === 'reimbursed')
+const getStatusTone = (status: PermissionRequest['status']) => {
+  if (status === 'approved')
     return 'text-teal-700 bg-teal-50 dark:bg-teal-900/40 dark:text-teal-200';
   if (status === 'denied') return 'text-rose-700 bg-rose-50 dark:bg-rose-900/40 dark:text-rose-200';
   return 'text-amber-700 bg-amber-50 dark:bg-amber-900/40 dark:text-amber-200';
@@ -79,7 +71,7 @@ export function DashboardOverview({
   messages,
   invitations,
   activityFeed,
-  budgetSummary,
+  expensesPanel,
   approvalsSummary,
   setupChecklist,
   widgetCards,
@@ -283,7 +275,7 @@ export function DashboardOverview({
                   Pending approvals
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Permissions and reimbursements.
+                  Permissions and expenses waiting on you.
                 </p>
               </div>
               <button
@@ -323,75 +315,7 @@ export function DashboardOverview({
         </section>
 
         <section className="grid gap-4 lg:grid-cols-3">
-          <div className={`${cardBase} p-5 lg:col-span-2`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-                  Budget snapshot
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{budgetSummary.month}</p>
-              </div>
-              <button
-                onClick={() => onNavigateSection?.('expenses')}
-                className="text-xs font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-300"
-              >
-                Open expenses
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-3 rounded-2xl border border-slate-200/70 bg-white/80 p-4 sm:grid-cols-3 dark:border-slate-800/70 dark:bg-slate-950/60">
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Spent</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">
-                  {formatCurrency(budgetSummary.totalSpent, budgetSummary.currency)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Limit</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">
-                  {formatCurrency(budgetSummary.totalLimit, budgetSummary.currency)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Remaining</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">
-                  {formatCurrency(budgetSummary.remaining, budgetSummary.currency)}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {budgetSummary.categories.length === 0 && (
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  No budget categories yet.
-                </p>
-              )}
-              {budgetSummary.categories.slice(0, 4).map((category) => (
-                <div
-                  key={category.category}
-                  className="rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/70 dark:bg-slate-950/60"
-                >
-                  <div className="flex items-center justify-between text-sm">
-                    <p className="font-medium text-slate-900 dark:text-white">
-                      {category.category}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {formatCurrency(category.spent, budgetSummary.currency)} /{' '}
-                      {formatCurrency(category.limit, budgetSummary.currency)}
-                    </p>
-                  </div>
-                  <div className="mt-2 h-2 rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div
-                      className="h-2 rounded-full bg-rose-500"
-                      style={{
-                        width: `${Math.min(100, Math.round((category.spent / Math.max(category.limit, 1)) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <div className={`${cardBase} p-5 lg:col-span-2`}>{expensesPanel}</div>
 
           <div className={`${cardBase} p-5`}>
             <div className="flex items-center justify-between">

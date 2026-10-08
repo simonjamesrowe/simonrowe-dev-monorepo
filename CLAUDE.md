@@ -274,6 +274,59 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 051-coparent-expenses: **CoParent has shared expenses.** The pieces:
+  - The API lives under `/api/coparent/families/{familyId}/expenses`
+    (`com.simonrowe.coparent.expense`), backed by an `expenses` collection in the coparent
+    database (`V052CreateCoparentExpenses`).
+  - The Expenses page and the dashboard's balance, approvals and Expenses panel are in
+    `frontend/src/coparent`.
+  - Receipts are kept privately.
+  - Quick add proposes `CREATE_EXPENSE`, `MARK_EXPENSE_PAID` and
+    `CLAIM_EXPENSE_REIMBURSEMENT`.
+
+  The design and an interactive mockup are in `specs/051-coparent-expenses/`. Load-bearing bits:
+  - **Who paid and how it's shared are separate.** `payerId` is either parent, or null while an
+    upcoming expense has no payer yet. `shares` holds both parents' whole percentages, which sum
+    to 100. The parent who didn't pay owes their percentage, rounded half up, and the payer keeps
+    the remainder (`ExpenseMath`), so the shares always add up to the amount.
+  - **One rule decides agreement:** whoever last changed the terms (amount, share, timing, or a
+    payer once one is decided) has agreed to them, and the other parent must agree or dispute.
+    Only paid and agreed expenses that are outstanding or claimed count towards the balance.
+    Repayment is per expense: the parent who owes claims, and the payer confirms (or marks it
+    reimbursed in one step). `POST …/settle` does a batch, still expense by expense.
+  - **Every write carries the `version` the parent was looking at** and is a `findAndReplace`
+    guarded on it. Without that, agreeing to £45 at the moment the other parent edits it to £450
+    would agree to £450. A stale version is a 409.
+  - **Pounds sterling only.** Amounts are `long` pence and `currency` is always `GBP`. A request
+    naming any other currency is a 400, not silently ignored. Email formats through
+    `ExpenseMoney` (pinned to `Locale.UK`), so a US-locale host still writes "£45.00".
+  - **An agreed paid expense can't be deleted**, only edited (which asks the other parent
+    again), so a debt can never vanish from one side. Upcoming expenses can be deleted at any
+    time, because no money has moved yet.
+  - **`ExpenseMailer` is best-effort and sends for three moments only:** new terms to agree, a
+    dispute, and a claimed repayment. It sits behind `coparent.email-enabled`, and a failed
+    send is logged, never thrown.
+  - **Receipts never touch `uploads/`.** That path is served without authorisation.
+    - `CoparentReceiptStore` writes `<familyId>/<receiptId>` under `coparent.receipt-path`. In
+      production that is `/workspace/coparent-receipts/`, on the `coparent-receipts` volume, which
+      `CoparentReceiptPersistenceTest` pins.
+    - The type is sniffed from the file's bytes (JPEG, PNG or PDF), never from its name or
+      `Content-Type`, and an expense holds at most five.
+    - Downloads go through `ExpenseReceiptController` after a membership check, with `nosniff`
+      and a `sandbox` CSP.
+    - The full backup zips the directory under `coparent-receipts/`; restore copies it back with
+      a zip-slip guard.
+  - **Quick add never treats another currency as pounds.** A note saying "$40" proposes a
+    blocked card that keeps `currency: USD` until the parent chooses GBP. The analysed photo
+    stays in the browser and is uploaded as the receipt only if the parent approves with the box
+    ticked.
+  - **The expense CSS is hand-written BEM (`expense-*`), scoped under `.coparent-app`.** The
+    compiled utility blob is frozen, and its preflight
+    `.coparent-app button { padding: 0; background: transparent }` outranks a bare class.
+  - **`expenses` is in `BackupService.COPARENT_BACKUP_COLLECTIONS` and
+    `RestoreService.COPARENT_IMPORT_ORDER`, and `ensureCoparentIndexes()` calls
+    `V052CreateCoparentExpenses.createIndexes`.** A restore drops the collection, and Mongock
+    never re-runs a recorded unit. `CoparentBackupCoverageTest` pins all three.
 - tldr-email-newsletter-source: **News & Events can read email newsletters, and the four TLDR
   editions are the first.** Strategy `EMAIL_NEWSLETTER` (`com.simonrowe.aggregation.newsletter`)
   reads Simon's Gmail with Term Time's read-only `SCHOOL_GMAIL_*` credential. Each story is scored

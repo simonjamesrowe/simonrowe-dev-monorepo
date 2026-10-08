@@ -19,6 +19,7 @@ import com.simonrowe.coparent.model.CalendarEvent;
 import com.simonrowe.coparent.model.Child;
 import com.simonrowe.coparent.model.Conversation;
 import com.simonrowe.coparent.model.EventCategory;
+import com.simonrowe.coparent.model.Expense;
 import com.simonrowe.coparent.model.Family;
 import com.simonrowe.coparent.model.Parent;
 import com.simonrowe.coparent.model.ScheduleChangeRequest;
@@ -27,6 +28,7 @@ import com.simonrowe.coparent.persistence.ChildRepository;
 import com.simonrowe.coparent.persistence.ConversationRepository;
 import com.simonrowe.coparent.persistence.EventCategoryRepository;
 import com.simonrowe.coparent.persistence.EventRepository;
+import com.simonrowe.coparent.persistence.ExpenseRepository;
 import com.simonrowe.coparent.persistence.FamilyRepository;
 import com.simonrowe.coparent.persistence.ParentRepository;
 import com.simonrowe.coparent.persistence.ScheduleChangeRepository;
@@ -99,12 +101,15 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private ConversationRepository conversations;
 
+  @Autowired
+  private ExpenseRepository expenses;
+
   @BeforeEach
   @AfterEach
   void cleanCollections() {
     Mockito.reset(chatModel);
     List.of("families", "parents", "children", "events", "eventcategories",
-        "schedulechangerequests", "conversations", "audits",
+        "schedulechangerequests", "conversations", "audits", Expense.COLLECTION,
         AssistantProposalBatch.COLLECTION).forEach(collection ->
         mongoTemplate.getCollection(collection).deleteMany(new Document()));
   }
@@ -230,7 +235,7 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
             .param("text", "A note with every supported action")
             .with(user("alice")))
         .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.actions.length()", is(11)))
+        .andExpect(jsonPath("$.actions.length()", is(14)))
         .andReturn();
     final String body = created.getResponse().getContentAsString();
     final String batchId = JsonPath.read(body, "$.id");
@@ -250,10 +255,10 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     final AssistantProposalBatch stored = proposals.findById(new ObjectId(batchId)).orElseThrow();
-    assertThat(stored.actions()).hasSize(11).allSatisfy(action ->
+    assertThat(stored.actions()).hasSize(14).allSatisfy(action ->
         assertThat(action.status()).isEqualTo(AssistantProposalBatch.ActionStatus.APPLIED));
     assertThat(mongoTemplate.getCollection("audits")
-        .countDocuments(new Document("entityType", "assistant_action"))).isEqualTo(11);
+        .countDocuments(new Document("entityType", "assistant_action"))).isEqualTo(14);
     assertThat(events.findById(targets.updateEventId()).orElseThrow())
         .satisfies(updated -> {
           assertThat(updated.title()).isEqualTo("Updated appointment");
@@ -268,6 +273,60 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
     assertThat(changes.findById(targets.requestId()).orElseThrow().deletedAt()).isNotNull();
     assertThat(conversations.findById(targets.conversationId()).orElseThrow().messages())
         .extracting(Conversation.Message::content).containsExactly("Existing", "New message");
+    // An approved expense goes to the other parent to agree, exactly as one from the form.
+    assertThat(expenses.findAll()).filteredOn(expense -> "Football boots".equals(expense.title()))
+        .singleElement().satisfies(boots -> {
+          assertThat(boots.amountPence()).isEqualTo(5499);
+          assertThat(boots.payerId()).isEqualTo(new ObjectId(fixture.bobId()));
+          assertThat(boots.agreement().status()).isEqualTo(Expense.PENDING);
+          assertThat(boots.agreement().requestedBy())
+              .isEqualTo(new ObjectId(fixture.aliceId()));
+        });
+    assertThat(expenses.findById(targets.upcomingExpenseId()).orElseThrow().timing())
+        .isEqualTo(Expense.PAID);
+    assertThat(expenses.findById(targets.owedExpenseId()).orElseThrow().reimbursement())
+        .satisfies(reimbursement -> {
+          assertThat(reimbursement.status()).isEqualTo(Expense.CLAIMED);
+          assertThat(reimbursement.note()).isEqualTo("Bank transfer");
+        });
+  }
+
+  @Test
+  void anAmountInAnotherCurrencyBlocksTheExpenseInsteadOfBeingTakenAsPounds() throws Exception {
+    final Fixture fixture = fixture();
+    when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(new ChatResponse(List.of(new Generation(AssistantMessage.builder()
+            .content("").toolCalls(List.of(toolCall(1, "propose_create_expense",
+                expenseArguments(fixture, "Trainers", "40", "USD")))).build()))));
+
+    final MvcResult created = mockMvc.perform(multipart(
+            "/api/coparent/families/{familyId}/assistant/batches", fixture.familyId())
+            .param("text", "Bought Robin trainers for $40")
+            .with(user("alice")))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.actions[0].status", is("BLOCKED")))
+        .andExpect(jsonPath("$.actions[0].fieldErrors[0].field", is("currency")))
+        .andExpect(jsonPath("$.actions[0].payload.currency", is("USD")))
+        .andReturn();
+    assertThat(expenses.count()).isZero();
+
+    // The parent checks the amount and chooses pounds: only then can it be approved.
+    final String body = created.getResponse().getContentAsString();
+    final String batchId = JsonPath.read(body, "$.id");
+    final String actionId = JsonPath.read(body, "$.actions[0].id");
+    mockMvc.perform(patch(
+            "/api/coparent/families/{familyId}/assistant/batches/{batchId}/actions/{actionId}",
+            fixture.familyId(), batchId, actionId)
+            .with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"version":0,"actionType":"CREATE_EXPENSE","payload":%s}
+                """.formatted(expenseArguments(fixture, "Trainers", "32.00", "GBP")
+                .replace("\"sharePercent\":null", "\"sharePercent\":\"60\""))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status", is("PENDING")))
+        .andExpect(jsonPath("$.payload.amount", is("32.00")))
+        .andExpect(jsonPath("$.payload.sharePercent", is(60)));
   }
 
   @Test
@@ -476,8 +535,26 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
         List.of(new Conversation.Message(new ObjectId(), bobId, "Existing", now,
             List.of(bobId))), null,
         Map.of(aliceId.toHexString(), 1, bobId.toHexString(), 0), now, null, null, now, now));
+    final Expense upcoming = expenses.save(seededExpense(familyId, childId, aliceId, bobId,
+        "Ski trip deposit", Expense.UPCOMING, java.time.LocalDate.now().plusDays(10), null,
+        Expense.NONE, now));
+    final Expense owed = expenses.save(seededExpense(familyId, childId, aliceId, bobId,
+        "Dentist check-up", Expense.PAID, java.time.LocalDate.now().minusDays(5), bobId,
+        Expense.OUTSTANDING, now));
     return new ActionTargets(updateEvent.id(), deleteEvent.id(), updateCategory.id(),
-        deleteCategory.id(), request.id(), conversation.id());
+        deleteCategory.id(), request.id(), conversation.id(), upcoming.id(), owed.id());
+  }
+
+  private static Expense seededExpense(final ObjectId familyId, final ObjectId childId,
+      final ObjectId aliceId, final ObjectId bobId, final String title, final String timing,
+      final java.time.LocalDate date, final ObjectId payer, final String reimbursement,
+      final Instant now) {
+    return new Expense(null, familyId, title, "activities", List.of(childId), 6000,
+        Expense.GBP, timing, date, payer,
+        List.of(new Expense.Share(aliceId, 50), new Expense.Share(bobId, 50)),
+        new Expense.Agreement(Expense.AGREED, bobId, aliceId, now, null),
+        new Expense.Reimbursement(reimbursement, null, null, null, null, null), List.of(), null,
+        List.of(), 2, bobId, null, null, now, now);
   }
 
   private static CalendarEvent event(
@@ -546,7 +623,17 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
         toolCall(11, "propose_create_permission_request", """
             {"subject":"Trip","type":"travel","childId":"%s",
             "description":"School trip permission"}
-            """.formatted(childId)));
+            """.formatted(childId)),
+        toolCall(12, "propose_create_expense",
+            expenseArguments(fixture, "Football boots", "54.99", "GBP")),
+        toolCall(13, "propose_mark_expense_paid", """
+            {"expenseId":"%s","targetHint":null,"payerId":"%s","paidOn":"%s","amount":null,
+            "currency":"GBP"}
+            """.formatted(targets.upcomingExpenseId(), fixture.bobId(),
+            java.time.LocalDate.now().minusDays(1))),
+        toolCall(14, "propose_claim_expense_reimbursement", """
+            {"expenseId":"%s","targetHint":null,"note":"Bank transfer"}
+            """.formatted(targets.owedExpenseId())));
     final AssistantMessage output = AssistantMessage.builder().content("")
         .toolCalls(calls).build();
     return new ChatResponse(List.of(new Generation(output)));
@@ -566,6 +653,16 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
             "{\"eventId\":\"%s\",\"targetHint\":null}".formatted(targetId)));
     return new ChatResponse(List.of(new Generation(
         AssistantMessage.builder().content("").toolCalls(calls).build())));
+  }
+
+  private static String expenseArguments(final Fixture fixture, final String title,
+      final String amount, final String currency) {
+    return """
+        {"title":"%s","amount":"%s","currency":"%s","category":"activities",
+        "childIds":["%s"],"timing":"paid","date":"%s","payerId":"%s","sharePercent":null,
+        "notes":null}
+        """.formatted(title, amount, currency, fixture.childId(),
+        java.time.LocalDate.now().minusDays(1), fixture.bobId());
   }
 
   private static String actionId(final String response, final String actionType) {
@@ -604,6 +701,8 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
       ObjectId updateCategoryId,
       ObjectId deleteCategoryId,
       ObjectId requestId,
-      ObjectId conversationId) {
+      ObjectId conversationId,
+      ObjectId upcomingExpenseId,
+      ObjectId owedExpenseId) {
   }
 }

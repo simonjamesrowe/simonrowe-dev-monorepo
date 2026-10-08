@@ -1,11 +1,14 @@
 package com.simonrowe.coparent.assistant;
 
 import com.simonrowe.coparent.model.CalendarEvent;
+import com.simonrowe.coparent.model.Expense;
 import com.simonrowe.coparent.model.Family;
+import com.simonrowe.coparent.model.Parent;
 import com.simonrowe.coparent.persistence.ChildRepository;
 import com.simonrowe.coparent.persistence.ConversationRepository;
 import com.simonrowe.coparent.persistence.EventCategoryRepository;
 import com.simonrowe.coparent.persistence.EventRepository;
+import com.simonrowe.coparent.persistence.ExpenseRepository;
 import com.simonrowe.coparent.persistence.FamilyRepository;
 import com.simonrowe.coparent.persistence.ParentRepository;
 import com.simonrowe.coparent.persistence.ScheduleChangeRepository;
@@ -32,6 +35,7 @@ import tools.jackson.databind.ObjectMapper;
 public class AssistantContextFactory {
 
   private static final int MAX_EVENTS = 500;
+  private static final int MAX_EXPENSES = 100;
 
   private final CoparentAccessPolicy access;
   private final FamilyRepository families;
@@ -41,6 +45,7 @@ public class AssistantContextFactory {
   private final EventRepository events;
   private final ScheduleChangeRepository changes;
   private final ConversationRepository conversations;
+  private final ExpenseRepository expenses;
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final Clock clock;
 
@@ -54,9 +59,10 @@ public class AssistantContextFactory {
       final EventCategoryRepository categories,
       final EventRepository events,
       final ScheduleChangeRepository changes,
-      final ConversationRepository conversations) {
+      final ConversationRepository conversations,
+      final ExpenseRepository expenses) {
     this(access, families, parents, children, categories, events, changes, conversations,
-        Clock.systemUTC());
+        expenses, Clock.systemUTC());
   }
 
   AssistantContextFactory(
@@ -68,6 +74,7 @@ public class AssistantContextFactory {
       final EventRepository events,
       final ScheduleChangeRepository changes,
       final ConversationRepository conversations,
+      final ExpenseRepository expenses,
       final Clock clock) {
     this.access = access;
     this.families = families;
@@ -77,12 +84,13 @@ public class AssistantContextFactory {
     this.events = events;
     this.changes = changes;
     this.conversations = conversations;
+    this.expenses = expenses;
     this.clock = clock;
   }
 
   /** Authorises the family and serialises only the context fields approved for model use. */
   public Context build(final ObjectId familyId) {
-    access.requireMember(familyId);
+    final Parent actor = access.requireMember(familyId);
     final Family family = families.findByIdAndDeletedAtIsNull(familyId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Family not found"));
     final ZoneId zone = safeZone(family.timeZone());
@@ -124,11 +132,34 @@ public class AssistantContextFactory {
             "lastMessageAt", conversation.lastMessageAt().toString(),
             "updatedAt", conversation.updatedAt().toString())).toList());
     data.put("events", boundedEvents.stream().map(AssistantContextFactory::eventMetadata).toList());
+    data.put("signedInParentId", actor.id().toHexString());
+    // Unsettled expenses only, so a note about paying something back has a target to match.
+    // Titles and amounts, never notes or receipt names.
+    data.put("openExpenses", expenses
+        .findByFamilyIdAndDeletedAtIsNullOrderByDateDescCreatedAtDesc(familyId).stream()
+        .filter(expense -> !Expense.REIMBURSED.equals(expense.reimbursement().status()))
+        .limit(MAX_EXPENSES)
+        .map(AssistantContextFactory::expenseMetadata).toList());
     try {
       return new Context(objectMapper.writeValueAsString(data), family, now);
     } catch (JacksonException exception) {
       throw new IllegalStateException("Unable to serialize assistant context", exception);
     }
+  }
+
+  private static Map<String, Object> expenseMetadata(final Expense expense) {
+    final Map<String, Object> result = new LinkedHashMap<>();
+    result.put("id", expense.id().toHexString());
+    result.put("title", expense.title());
+    result.put("amountPounds", "%d.%02d".formatted(expense.amountPence() / 100,
+        expense.amountPence() % 100));
+    result.put("timing", expense.timing());
+    result.put("date", expense.date().toString());
+    result.put("payerId", expense.payerId() == null ? null : expense.payerId().toHexString());
+    result.put("agreement", expense.agreement().status());
+    result.put("reimbursement", expense.reimbursement().status());
+    result.put("updatedAt", expense.updatedAt().toString());
+    return result;
   }
 
   private static Map<String, Object> eventMetadata(final CalendarEvent event) {

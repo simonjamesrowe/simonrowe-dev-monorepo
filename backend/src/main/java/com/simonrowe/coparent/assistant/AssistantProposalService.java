@@ -3,8 +3,10 @@ package com.simonrowe.coparent.assistant;
 import com.simonrowe.coparent.assistant.AssistantInferenceService.ProposedCall;
 import com.simonrowe.coparent.calendar.Recurrence;
 import com.simonrowe.coparent.config.CoparentProperties;
+import com.simonrowe.coparent.expense.ExpenseService;
 import com.simonrowe.coparent.model.CalendarEvent;
 import com.simonrowe.coparent.model.EventCategory;
+import com.simonrowe.coparent.model.Expense;
 import com.simonrowe.coparent.model.Parent;
 import com.simonrowe.coparent.model.ScheduleChangeRequest;
 import com.simonrowe.coparent.persistence.ChildRepository;
@@ -12,6 +14,7 @@ import com.simonrowe.coparent.persistence.AssistantProposalRepository;
 import com.simonrowe.coparent.persistence.ConversationRepository;
 import com.simonrowe.coparent.persistence.EventCategoryRepository;
 import com.simonrowe.coparent.persistence.EventRepository;
+import com.simonrowe.coparent.persistence.ExpenseRepository;
 import com.simonrowe.coparent.persistence.ParentRepository;
 import com.simonrowe.coparent.persistence.ScheduleChangeRepository;
 import com.simonrowe.coparent.shared.CoparentAccessPolicy;
@@ -60,6 +63,7 @@ public class AssistantProposalService {
   private final ConversationRepository conversations;
   private final ParentRepository parents;
   private final ChildRepository children;
+  private final ExpenseRepository expenses;
   private final MongoTemplate mongoTemplate;
   private final Clock clock;
 
@@ -78,9 +82,11 @@ public class AssistantProposalService {
       final ConversationRepository conversations,
       final ParentRepository parents,
       final ChildRepository children,
+      final ExpenseRepository expenses,
       @Qualifier("coparentMongoTemplate") final MongoTemplate mongoTemplate) {
     this(properties, access, inputValidator, contextFactory, inference, batches, events,
-        categories, changes, conversations, parents, children, mongoTemplate, Clock.systemUTC());
+        categories, changes, conversations, parents, children, expenses, mongoTemplate,
+        Clock.systemUTC());
   }
 
   AssistantProposalService(
@@ -96,6 +102,7 @@ public class AssistantProposalService {
       final ConversationRepository conversations,
       final ParentRepository parents,
       final ChildRepository children,
+      final ExpenseRepository expenses,
       final MongoTemplate mongoTemplate,
       final Clock clock) {
     this.properties = properties;
@@ -110,6 +117,7 @@ public class AssistantProposalService {
     this.conversations = conversations;
     this.parents = parents;
     this.children = children;
+    this.expenses = expenses;
     this.mongoTemplate = mongoTemplate;
     this.clock = clock;
   }
@@ -379,12 +387,145 @@ public class AssistantProposalService {
             children.findByFamilyIdAndDeletedAtIsNull(familyId).stream()
                 .map(child -> child.id()).collect(java.util.stream.Collectors.toSet()), errors);
       }
+      case CREATE_EXPENSE -> validateExpense(familyId, payload, errors);
+      case MARK_EXPENSE_PAID -> {
+        target = expenseTarget(familyId, payload, errors,
+            expense -> Expense.UPCOMING.equals(expense.timing()),
+            "Select an upcoming expense from this family");
+        requiredFamilyId(payload, "payerId", familyParents(familyId), errors);
+        parsedDate(payload, "paidOn", errors);
+        requireText(payload, "paidOn", errors);
+        if (text(payload.get("amount")) != null) {
+          poundsSterling(payload, errors);
+        }
+      }
+      case CLAIM_EXPENSE_REIMBURSEMENT -> target = expenseTarget(familyId, payload, errors,
+          expense -> Expense.AGREED.equals(expense.agreement().status())
+              && Expense.OUTSTANDING.equals(expense.reimbursement().status())
+              && expense.payerId() != null && !actor.id().equals(expense.payerId()),
+          "Select an expense you still owe on");
     }
     final AssistantProposalBatch.ActionStatus status = errors.isEmpty()
         ? AssistantProposalBatch.ActionStatus.PENDING
         : AssistantProposalBatch.ActionStatus.BLOCKED;
     return new AssistantProposalBatch.Action(new ObjectId(), type, status, payload, errors, 0,
         target, null, new ObjectId(), null, null, null);
+  }
+
+  /**
+   * Checks a proposed expense the way the form would. Two things are deliberately never
+   * guessed: a missing child is a field error, and an amount in any currency other than pounds
+   * is a field error rather than a conversion.
+   */
+  private void validateExpense(
+      final ObjectId familyId,
+      final Map<String, Object> payload,
+      final List<AssistantProposalBatch.FieldError> errors) {
+    requireText(payload, "title", errors);
+    poundsSterling(payload, errors);
+    final String category = text(payload.get("category"));
+    if (category == null || !ExpenseService.CATEGORIES.contains(category)) {
+      errors.add(new AssistantProposalBatch.FieldError("category", "Choose a category"));
+    }
+    requiredFamilyIds(payload, "childIds", children.findByFamilyIdAndDeletedAtIsNull(familyId)
+        .stream().map(child -> child.id()).collect(java.util.stream.Collectors.toSet()), errors);
+    final String timing = text(payload.get("timing"));
+    if (!Expense.PAID.equals(timing) && !Expense.UPCOMING.equals(timing)) {
+      errors.add(new AssistantProposalBatch.FieldError("timing",
+          "Say whether it has been paid or is coming up"));
+    }
+    requireText(payload, "date", errors);
+    parsedDate(payload, "date", errors);
+    if (Expense.PAID.equals(timing) && text(payload.get("payerId")) == null) {
+      errors.add(new AssistantProposalBatch.FieldError("payerId", "Say who paid"));
+    } else {
+      optionalFamilyId(payload, "payerId", familyParents(familyId), errors);
+    }
+    Object share = payload.get("sharePercent");
+    // The review card's editor sends numbers back as text.
+    if (share instanceof String typed && typed.trim().matches("\\d{1,3}")) {
+      share = Integer.parseInt(typed.trim());
+    } else if (share instanceof String typed && typed.isBlank()) {
+      share = null;
+    }
+    if (share == null) {
+      payload.put("sharePercent", 50);
+    } else if (!(share instanceof Number number) || number.doubleValue() != number.intValue()
+        || number.intValue() < 0 || number.intValue() > 100) {
+      errors.add(new AssistantProposalBatch.FieldError("sharePercent",
+          "Use a whole percentage from 0 to 100"));
+    } else {
+      payload.put("sharePercent", number.intValue());
+    }
+  }
+
+  /** The amount is pounds with up to two decimals, and nothing but pounds. */
+  private static void poundsSterling(
+      final Map<String, Object> payload,
+      final List<AssistantProposalBatch.FieldError> errors) {
+    // The note's own currency is kept until the parent chooses GBP, so saving the card again
+    // without looking cannot turn $40 into £40.
+    final String currency = text(payload.get("currency"));
+    if (currency == null) {
+      errors.add(new AssistantProposalBatch.FieldError("currency",
+          "Choose pounds sterling (GBP)"));
+    } else if (!Expense.GBP.equalsIgnoreCase(currency)) {
+      errors.add(new AssistantProposalBatch.FieldError("currency",
+          "Expenses are in pounds sterling. The note gave %s: check the amount, then choose GBP."
+              .formatted(currency)));
+    } else {
+      payload.put("currency", Expense.GBP);
+    }
+    final Long pence = pence(text(payload.get("amount")));
+    if (pence == null || pence < 1 || pence > ExpenseService.MAX_AMOUNT_PENCE) {
+      errors.add(new AssistantProposalBatch.FieldError("amount",
+          "Enter an amount in pounds, such as 45.00"));
+    } else {
+      payload.put("amount", "%d.%02d".formatted(pence / 100, pence % 100));
+    }
+  }
+
+  /** Parses pounds such as {@code 45}, {@code 45.5} or {@code 45.50} into pence. */
+  public static Long pence(final String pounds) {
+    if (pounds == null) {
+      return null;
+    }
+    final String value = pounds.trim().replaceFirst("^£", "").replace(",", "");
+    // Anchored and bounded: no quantifier a crafted string could make backtrack.
+    if (!value.matches("\\d{1,6}(\\.\\d{1,2})?")) {
+      return null;
+    }
+    final int dot = value.indexOf('.');
+    if (dot < 0) {
+      return Long.parseLong(value) * 100;
+    }
+    final String fraction = (value.substring(dot + 1) + "0").substring(0, 2);
+    return Long.parseLong(value.substring(0, dot)) * 100 + Long.parseLong(fraction);
+  }
+
+  private Set<ObjectId> familyParents(final ObjectId familyId) {
+    return parents.findByFamilyIdAndStatus(familyId, CoparentAccessPolicy.ACTIVE).stream()
+        .map(Parent::id).collect(java.util.stream.Collectors.toSet());
+  }
+
+  private AssistantProposalBatch.TargetSnapshot expenseTarget(
+      final ObjectId familyId,
+      final Map<String, Object> payload,
+      final List<AssistantProposalBatch.FieldError> errors,
+      final java.util.function.Predicate<Expense> eligible,
+      final String message) {
+    final ObjectId id = exactTarget(payload, "expenseId", errors);
+    if (id == null) {
+      return hintTarget("expense", payload);
+    }
+    final Expense expense = expenses.findByIdAndFamilyIdAndDeletedAtIsNull(id, familyId)
+        .orElse(null);
+    if (expense == null || !eligible.test(expense)) {
+      payload.put("expenseId", null);
+      errors.add(new AssistantProposalBatch.FieldError("expenseId", message));
+      return hintTarget("expense", payload);
+    }
+    return new AssistantProposalBatch.TargetSnapshot("expense", id, expense.updatedAt(), null);
   }
 
   private void validateEventReferences(
@@ -738,6 +879,13 @@ public class AssistantProposalService {
         Set.of("conversationId", "targetHint", "message"));
     result.put(AssistantProposalBatch.ActionType.CREATE_PERMISSION_REQUEST,
         Set.of("subject", "type", "childId", "description"));
+    result.put(AssistantProposalBatch.ActionType.CREATE_EXPENSE,
+        Set.of("title", "amount", "currency", "category", "childIds", "timing", "date",
+            "payerId", "sharePercent", "notes"));
+    result.put(AssistantProposalBatch.ActionType.MARK_EXPENSE_PAID,
+        Set.of("expenseId", "targetHint", "payerId", "paidOn", "amount", "currency"));
+    result.put(AssistantProposalBatch.ActionType.CLAIM_EXPENSE_REIMBURSEMENT,
+        Set.of("expenseId", "targetHint", "note"));
     return Map.copyOf(result);
   }
 

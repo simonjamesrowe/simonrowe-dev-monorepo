@@ -4,6 +4,7 @@ import { ListPlus, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { QuickAddDrawer } from '../assistant';
+import { QuickAddContext } from '../assistant/QuickAddContext';
 
 import { MainNav } from './MainNav';
 import { UserMenu } from './UserMenu';
@@ -13,6 +14,8 @@ export interface NavigationItem {
   href: string;
   icon?: React.ReactNode;
   isActive?: boolean;
+  /** A count of things waiting on the signed-in parent, shown beside the label. */
+  badge?: number;
 }
 
 export interface AppShellProps {
@@ -146,7 +149,13 @@ export function AppShell({
       </aside>
 
       {/* Main content */}
-      <main className="min-h-screen pt-16 lg:ml-[260px] lg:pt-0">{children}</main>
+      <main className="min-h-screen pt-16 lg:ml-[260px] lg:pt-0">
+        <QuickAddContext.Provider
+          value={{ available: Boolean(assistantEnabled), open: () => setQuickAddOpen(true) }}
+        >
+          {children}
+        </QuickAddContext.Provider>
+      </main>
       {assistantEnabled && quickAddOpen && (
         <QuickAddDrawer open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
       )}

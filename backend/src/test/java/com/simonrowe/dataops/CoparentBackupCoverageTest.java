@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.simonrowe.AbstractIntegrationTest;
 import com.simonrowe.coparent.assistant.AssistantProposalBatch;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
+import com.simonrowe.migration.changeunits.V052CreateCoparentExpenses;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,7 +35,8 @@ class CoparentBackupCoverageTest extends AbstractIntegrationTest {
       V043CreateCoparentCollections.CATEGORIES,
       V043CreateCoparentCollections.SCHEDULE_CHANGES,
       V043CreateCoparentCollections.CONVERSATIONS,
-      V043CreateCoparentCollections.AUDITS);
+      V043CreateCoparentCollections.AUDITS,
+      V052CreateCoparentExpenses.EXPENSES);
 
   @Autowired
   @Qualifier("coparentMongoTemplate")
@@ -115,6 +117,9 @@ class CoparentBackupCoverageTest extends AbstractIntegrationTest {
         .contains("idx_coparent_permission_id");
     assertThat(indexNames(AssistantProposalBatch.COLLECTION))
         .contains("idx_coparent_assistant_owner_recent", "idx_coparent_assistant_expiry");
+    assertThat(indexNames(V052CreateCoparentExpenses.EXPENSES))
+        .contains("idx_coparent_expense_family_date", "idx_coparent_expense_family_agreement",
+            "idx_coparent_expense_assistant_action");
   }
 
   private List<String> indexNames(final String collection) {

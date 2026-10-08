@@ -36,7 +36,7 @@ class AssistantInferenceServiceTest {
   @Test
   @SuppressWarnings("unchecked")
   void definesCompleteStrictInertToolCatalog() throws Exception {
-    assertThat(service.toolCallbacks()).hasSize(12);
+    assertThat(service.toolCallbacks()).hasSize(15);
     for (var callback : service.toolCallbacks()) {
       final String schemaJson = callback.getToolDefinition().inputSchema();
       assertThat(schemaJson).doesNotContain("%s");
@@ -71,6 +71,23 @@ class AssistantInferenceServiceTest {
       assertThat((List<Object>) days.get("enum")).containsExactly("monday", "tuesday",
           "wednesday", "thursday", "friday", "saturday", "sunday");
     }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void expensesAreProposedInPoundsWithTheFormsCategories() throws Exception {
+    final String schemaJson = service.toolCallbacks().stream()
+        .filter(callback -> callback.getToolDefinition().name().equals("propose_create_expense"))
+        .findFirst().orElseThrow().getToolDefinition().inputSchema();
+    final Map<String, Object> properties = (Map<String, Object>)
+        new tools.jackson.databind.ObjectMapper().readValue(schemaJson,
+            new tools.jackson.core.type.TypeReference<Map<String, Object>>() { })
+            .get("properties");
+    assertThat(properties).containsKeys("amount", "currency", "payerId", "sharePercent",
+        "childIds", "timing");
+    assertThat((List<Object>) ((Map<String, Object>) properties.get("category")).get("enum"))
+        .containsExactly("activities", "childcare", "clothing", "education", "food", "medical",
+            "other", "travel", null);
   }
 
   @Test

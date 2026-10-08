@@ -12,7 +12,7 @@ test('CoParent host boots the React application', async ({ page }) => {
 })
 
 test('CoParent host serves its shell for root and deep links', async ({ request }) => {
-  for (const path of ['/', '/calendar', '/messages', '/auth/callback', '/invitations/accept']) {
+  for (const path of ['/', '/calendar', '/messages', '/expenses', '/auth/callback', '/invitations/accept']) {
     const response = await request.get(path, { headers: { Accept: 'text/html' } })
     expect(response.status(), path).toBe(200)
     const html = await response.text()

@@ -7,12 +7,14 @@ import static org.mockito.Mockito.when;
 import com.simonrowe.coparent.model.CalendarEvent;
 import com.simonrowe.coparent.model.Child;
 import com.simonrowe.coparent.model.Conversation;
+import com.simonrowe.coparent.model.Expense;
 import com.simonrowe.coparent.model.Family;
 import com.simonrowe.coparent.model.Parent;
 import com.simonrowe.coparent.persistence.ChildRepository;
 import com.simonrowe.coparent.persistence.ConversationRepository;
 import com.simonrowe.coparent.persistence.EventCategoryRepository;
 import com.simonrowe.coparent.persistence.EventRepository;
+import com.simonrowe.coparent.persistence.ExpenseRepository;
 import com.simonrowe.coparent.persistence.FamilyRepository;
 import com.simonrowe.coparent.persistence.ParentRepository;
 import com.simonrowe.coparent.persistence.ScheduleChangeRepository;
@@ -44,6 +46,7 @@ class AssistantContextFactoryTest {
     final EventRepository events = mock(EventRepository.class);
     final ScheduleChangeRepository changes = mock(ScheduleChangeRepository.class);
     final ConversationRepository conversations = mock(ConversationRepository.class);
+    final ExpenseRepository expenses = mock(ExpenseRepository.class);
     when(families.findByIdAndDeletedAtIsNull(familyId)).thenReturn(Optional.of(
         new Family(familyId, "Home", "Europe/London", List.of(parentId), List.of(), List.of(),
             null, now, now)));
@@ -71,15 +74,39 @@ class AssistantContextFactoryTest {
     }
     when(events.findByFamilyIdAndDeletedAtIsNullOrderByStartDateAsc(familyId))
         .thenReturn(allEvents);
+    final Parent alex = new Parent(parentId, "auth0|one", familyId, "Alex", "alex@example.com",
+        "primary", "active", null, null, null, now, now);
+    when(access.requireMember(familyId)).thenReturn(alex);
+    final Expense open = expense(familyId, parentId, "Dentist", Expense.OUTSTANDING, now);
+    when(expenses.findByFamilyIdAndDeletedAtIsNullOrderByDateDescCreatedAtDesc(familyId))
+        .thenReturn(List.of(open,
+            expense(familyId, parentId, "Settled long ago", Expense.REIMBURSED, now)));
     final AssistantContextFactory factory = new AssistantContextFactory(access, families, parents,
-        children, categories, events, changes, conversations,
+        children, categories, events, changes, conversations, expenses,
         Clock.fixed(now, ZoneOffset.UTC));
 
     final String json = factory.build(familyId).json();
 
     assertThat(json).doesNotContain("sensitive medical note", "private prior message",
-        "private note", "alex@example.com");
+        "private note", "alex@example.com", "private expense note", "Settled long ago");
+    final var tree = new ObjectMapper().readTree(json);
+    assertThat(tree.get("signedInParentId").asString()).isEqualTo(parentId.toHexString());
+    assertThat(tree.get("openExpenses").size()).isEqualTo(1);
+    assertThat(tree.get("openExpenses").get(0).get("id").asString())
+        .isEqualTo(open.id().toHexString());
+    assertThat(tree.get("openExpenses").get(0).get("amountPounds").asString())
+        .isEqualTo("60.00");
     assertThat(new ObjectMapper().readTree(json).get("events").size()).isEqualTo(500);
     assertThat(json).contains("2026-09-22T11:00+01:00[Europe/London]");
+  }
+
+  private static Expense expense(final ObjectId familyId, final ObjectId payer,
+      final String title, final String reimbursement, final Instant now) {
+    return new Expense(new ObjectId(), familyId, title, "medical", List.of(new ObjectId()),
+        6000, Expense.GBP, Expense.PAID, LocalDate.parse("2026-09-20"), payer,
+        List.of(new Expense.Share(payer, 50), new Expense.Share(new ObjectId(), 50)),
+        new Expense.Agreement(Expense.AGREED, payer, null, null, null),
+        new Expense.Reimbursement(reimbursement, null, null, null, null, null), List.of(),
+        "private expense note", List.of(), 2, payer, null, null, now, now);
   }
 }

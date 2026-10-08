@@ -4,12 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { prepareSchoolNoteImage } from '../../../pages/admin/schoolNoteImage';
 import {
   useApproveAssistantAction,
   useEditAssistantAction,
   useRejectAssistantAction,
 } from '../../hooks/api/useAssistant';
+import { useUploadReceipt } from '../../hooks/api/useExpenses';
 import type { AssistantAction } from '../../types/assistant';
+import { describeExpense, formatMoney, parsePounds } from '../expenses/money';
 
 export interface AssistantEditorOption {
   value: string;
@@ -32,6 +35,9 @@ const labels: Record<string, string> = {
   START_MESSAGE_CONVERSATION: 'Start conversation',
   SEND_MESSAGE: 'Send message',
   CREATE_PERMISSION_REQUEST: 'Create permission request',
+  CREATE_EXPENSE: 'Add expense',
+  MARK_EXPENSE_PAID: 'Mark expense as paid',
+  CLAIM_EXPENSE_REIMBURSEMENT: 'Mark expense paid back',
 };
 
 const requiredFields: Record<string, string[]> = {
@@ -46,7 +52,56 @@ const requiredFields: Record<string, string[]> = {
   START_MESSAGE_CONVERSATION: ['message'],
   SEND_MESSAGE: ['conversationId', 'message'],
   CREATE_PERMISSION_REQUEST: ['type', 'childId', 'description'],
+  CREATE_EXPENSE: ['title', 'amount', 'category', 'childIds', 'timing', 'date'],
+  MARK_EXPENSE_PAID: ['expenseId', 'payerId', 'paidOn'],
+  CLAIM_EXPENSE_REIMBURSEMENT: ['expenseId'],
 };
+
+/** Plain names for the expense fields; anything else falls back to its spaced-out key. */
+const FIELD_LABELS: Record<string, string> = {
+  amount: 'Amount (£)',
+  currency: 'Currency',
+  payerId: 'Who paid, or will pay',
+  sharePercent: 'Your share (%)',
+  childIds: 'For',
+  expenseId: 'Expense',
+  paidOn: 'Paid on',
+  timing: 'Paid or coming up',
+};
+
+/** Who the signed-in parent is, so an expense card can say who owes whom in plain words. */
+export interface ExpenseCardContext {
+  meId: string;
+  otherName: string;
+}
+
+function ExpenseSummaryLine({ payload, context }: {
+  payload: Record<string, unknown>;
+  context: ExpenseCardContext;
+}) {
+  const amount = typeof payload.amount === 'string' ? parsePounds(payload.amount) : null;
+  const share = typeof payload.sharePercent === 'number' ? payload.sharePercent : 50;
+  const payerId = typeof payload.payerId === 'string' ? payload.payerId : null;
+  const summary = describeExpense({
+    amountPence: amount,
+    myPercent: share,
+    payer: payerId === null ? 'undecided' : payerId === context.meId ? 'me' : 'them',
+    timing: payload.timing === 'upcoming' ? 'upcoming' : 'paid',
+    otherName: context.otherName,
+  });
+  return (
+    <div className={`expense-summary expense-summary--${summary.tone}`}>
+      <div>
+        <p className="expense-summary__lead">
+          {typeof payload.title === 'string' ? payload.title : 'Expense'}
+          {amount ? ` · ${formatMoney(amount)}` : ''}
+        </p>
+        <p className="expense-summary__lead">{summary.lead}</p>
+        {summary.outcome && <p className="expense-summary__outcome">{summary.outcome}</p>}
+      </div>
+    </div>
+  );
+}
 
 function editorSchema(action: AssistantAction) {
   return z.record(z.string(), z.unknown()).superRefine((payload, context) => {
@@ -87,18 +142,31 @@ export function AssistantActionCard({
   action,
   online,
   options = EMPTY_OPTIONS,
+  expenseContext,
+  receiptImage,
 }: {
   familyId: string;
   batchId: string;
   action: AssistantAction;
   online: boolean;
   options?: AssistantEditorOptions;
+  expenseContext?: ExpenseCardContext;
+  /**
+   * The photo this batch was read from, still only in the browser. It is attached to the expense
+   * only if the parent leaves the box ticked and approves, so CoParent never keeps a photo the
+   * parent did not choose to keep.
+   */
+  receiptImage?: File | null;
 }) {
   const [expanded, setExpanded] = useState(action.status === 'BLOCKED');
   const schema = useMemo(() => editorSchema(action), [action]);
   const edit = useEditAssistantAction();
   const approve = useApproveAssistantAction();
   const reject = useRejectAssistantAction();
+  const uploadReceipt = useUploadReceipt();
+  const [attachReceipt, setAttachReceipt] = useState(true);
+  const [receiptFailed, setReceiptFailed] = useState(false);
+  const offersReceipt = action.actionType === 'CREATE_EXPENSE' && !!receiptImage;
   const terminal = action.status === 'APPLIED' || action.status === 'REJECTED';
   const isDelete = action.actionType.startsWith('DELETE_')
     || action.actionType === 'WITHDRAW_SCHEDULE_CHANGE';
@@ -120,9 +188,33 @@ export function AssistantActionCard({
     });
   });
 
+  const attach = async (expenseId: string) => {
+    if (!receiptImage) return;
+    const url = URL.createObjectURL(receiptImage);
+    try {
+      // Re-encoding shrinks the photo and drops its EXIF, location included.
+      const blob = Object.assign(await prepareSchoolNoteImage(url), { name: receiptImage.name });
+      await uploadReceipt.mutateAsync({ familyId, expenseId, file: blob });
+    } catch {
+      setReceiptFailed(true);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const decide = (kind: 'approve' | 'reject') => {
     const mutation = kind === 'approve' ? approve : reject;
-    mutation.mutate({ familyId, batchId, action });
+    if (kind !== 'approve' || !offersReceipt || !attachReceipt) {
+      mutation.mutate({ familyId, batchId, action });
+      return;
+    }
+    mutation.mutate({ familyId, batchId, action }, {
+      onSuccess: ({ action: decided }) => {
+        if (decided.status === 'APPLIED' && decided.result?.entityType === 'expense') {
+          void attach(decided.result.entityId);
+        }
+      },
+    });
   };
 
   const busy = edit.isPending || approve.isPending || reject.isPending || action.status === 'APPLYING';
@@ -154,11 +246,28 @@ export function AssistantActionCard({
             </ul>
           )}
 
+          {action.actionType === 'CREATE_EXPENSE' && expenseContext && (
+            <ExpenseSummaryLine payload={action.payload} context={expenseContext} />
+          )}
+          {offersReceipt && !terminal && (
+            <label className="assistant-field assistant-field--inline">
+              <input type="checkbox" checked={attachReceipt}
+                onChange={(event) => setAttachReceipt(event.target.checked)} />
+              <span>Attach this photo as the receipt</span>
+            </label>
+          )}
+          {receiptFailed && (
+            <p className="assistant-card__notice">
+              <AlertTriangle size={16} /> The expense was added, but the receipt did not upload.
+              Add it from the expense.
+            </p>
+          )}
+
           {showEditor && (
             <form className="assistant-card__form" onSubmit={save}>
               {Object.entries(action.payload).map(([key, value]) => (
                 <label key={key} className="assistant-field">
-                  <span>{key.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase())}</span>
+                  <span>{FIELD_LABELS[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase())}</span>
                   {options[key] ? (
                     <select multiple={key.endsWith('Ids')} {...form.register(key)}>
                       {!key.endsWith('Ids') && <option value="">Select…</option>}

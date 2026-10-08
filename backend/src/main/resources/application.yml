@@ -27,6 +27,9 @@ coparent:
   email-from: ${COPARENT_EMAIL_FROM:noreply@simonrowe.dev}
   email-enabled: ${COPARENT_EMAIL_ENABLED:false}
   source-database: ${COPARENT_SOURCE_DATABASE:coparent_legacy}
+  # Expense receipt files. Relative to the working directory locally; production sets an absolute
+  # path on its own volume. Never under uploads/, which is served with no authorisation at all.
+  receipt-path: ${COPARENT_RECEIPT_PATH:coparent-receipts/}
   assistant:
     enabled: ${COPARENT_ASSISTANT_ENABLED:false}
     model: ${COPARENT_ASSISTANT_MODEL:gpt-5.4-nano}

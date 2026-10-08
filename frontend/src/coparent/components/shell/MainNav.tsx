@@ -38,6 +38,11 @@ export function MainNav({ items, onNavigate }: MainNavProps) {
               <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
             )}
             {item.label}
+            {item.badge ? (
+              <span className="expense-nav-badge" aria-label={`${item.badge} waiting on you`}>
+                {item.badge}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>

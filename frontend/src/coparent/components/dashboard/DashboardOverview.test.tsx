@@ -31,18 +31,10 @@ const baseProps: DashboardProps = {
   children: [],
   upcomingEvents: [],
   permissionRequests: [],
-  expenses: [],
   messages: [],
   invitations: [],
   activityFeed: [],
-  budgetSummary: {
-    month: 'February 2026',
-    currency: 'GBP',
-    totalLimit: 0,
-    totalSpent: 0,
-    remaining: 0,
-    categories: [],
-  },
+  expensesPanel: <p>Expenses panel</p>,
   approvalsSummary: {
     totalPending: 0,
     byType: { expenses: 0, scheduleChanges: 0, permissions: 0 },
@@ -86,6 +78,13 @@ describe('DashboardOverview', () => {
     expect(screen.getByText('No events scheduled.')).toBeInTheDocument();
     expect(screen.getByText('No approvals waiting.')).toBeInTheDocument();
     expect(screen.getByText('No unread threads.')).toBeInTheDocument();
+  });
+
+  it('shows the expenses panel where the budget snapshot used to be', () => {
+    render(<DashboardOverview {...baseProps} />);
+
+    expect(screen.getByText('Expenses panel')).toBeInTheDocument();
+    expect(screen.queryByText('Budget snapshot')).not.toBeInTheDocument();
   });
 
   it('invokes drawer callbacks', async () => {

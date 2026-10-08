@@ -2,6 +2,7 @@ package com.simonrowe.coparent.assistant;
 
 import com.simonrowe.coparent.calendar.Recurrence;
 import com.simonrowe.coparent.config.CoparentProperties;
+import com.simonrowe.coparent.expense.ExpenseService;
 import com.simonrowe.observability.LangfuseContentObservationFilter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -55,6 +56,21 @@ public class AssistantInferenceService {
       calendar repeats the event on recurringDays between those two dates. Use a null endDate
       only when the source gives no end at all. The calendar cannot pause a series, so when an
       activity stops for holidays or half terms, say so in notes.
+
+      Expenses: money is pounds sterling. Write amount as pounds with two decimals, such as
+      45.00, and set currency to GBP. If the source gives an amount in another currency, such
+      as $40 or 25 euros, set currency to that currency's ISO code and write the number as given:
+      never convert it and never call it pounds, so the parent is asked to fix it. timing is
+      paid when something was bought or paid, and upcoming when it is due or still to pay; date
+      is the day it was paid or the day it is due. payerId is the parent who paid, or who will
+      pay. "I", "me" and "my" mean the signed-in parent, signedInParentId in FAMILY_CONTEXT.
+      For an upcoming cost with nobody named, payerId is null. sharePercent is the signed-in
+      parent's percentage of the cost: 50 unless the source says otherwise, 100 when the
+      signed-in parent covers all of it, and 0 when the other parent does. childIds are the
+      children the cost is for; leave the list empty when the source does not say. When the
+      source says the signed-in parent paid the other parent back for an expense, use
+      propose_claim_expense_reimbursement on the matching entry in openExpenses. When it says
+      an upcoming expense has now been paid, use propose_mark_expense_paid on that entry.
 
       FAMILY_CONTEXT:
       """;
@@ -185,6 +201,26 @@ public class AssistantInferenceService {
                     "description":%s""").formatted(nullableString(), stringType(),
                     nullableString(), stringType()),
                 "subject", "type", "childId", "description")),
+        tool("propose_create_expense", "Record a shared cost for the children", objectSchema(("""
+                "title":%s,"amount":%s,"currency":%s,"category":%s,"childIds":%s,\
+                "timing":%s,"date":%s,"payerId":%s,"sharePercent":%s,"notes":%s""").formatted(
+                stringType(), stringType(), stringType(),
+                nullableEnum(ExpenseService.CATEGORIES.stream().sorted().toList()),
+                stringArray(), nullableEnum(List.of("paid", "upcoming")), stringType(),
+                nullableString(), nullableInteger(), nullableString()),
+            "title", "amount", "currency", "category", "childIds", "timing", "date", "payerId",
+            "sharePercent", "notes")),
+        tool("propose_mark_expense_paid", "Record that an upcoming expense has been paid",
+            objectSchema(("""
+                    "expenseId":%s,"targetHint":%s,"payerId":%s,"paidOn":%s,\
+                    "amount":%s,"currency":%s""").formatted(nullableString(), nullableString(),
+                    nullableString(), stringType(), nullableString(), stringType()),
+                "expenseId", "targetHint", "payerId", "paidOn", "amount", "currency")),
+        tool("propose_claim_expense_reimbursement",
+            "Record that the signed-in parent paid the other parent back for an expense",
+            objectSchema("\"expenseId\":%s,\"targetHint\":%s,\"note\":%s".formatted(
+                nullableString(), nullableString(), nullableString()),
+                "expenseId", "targetHint", "note")),
         tool("no_action", "Use only when the source has no actionable family task",
             objectSchema("\"reason\":%s".formatted(stringType()), "reason")));
   }
@@ -240,6 +276,10 @@ public class AssistantInferenceService {
 
   private static String nullableString() {
     return "{\"type\":[\"string\",\"null\"]}";
+  }
+
+  private static String nullableInteger() {
+    return "{\"type\":[\"integer\",\"null\"]}";
   }
 
   private static String stringArray() {
