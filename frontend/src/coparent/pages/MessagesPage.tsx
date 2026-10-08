@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { firstName } from '../components/expenses/parentTone';
 import { MessagingAndPermissions } from '../components/messaging';
 import {
   ComposeDrawer,
@@ -18,7 +19,7 @@ import {
   useFamilies,
   useMarkConversationRead,
   useMarkConversationUnread,
-  useParents,
+  useParentsWithInvited,
   useSendMessage,
 } from '../hooks/api';
 const MessagesPage = () => {
@@ -37,7 +38,8 @@ const MessagesPage = () => {
 
   const { data: conversations = [], isLoading: conversationsLoading } =
     useConversations(activeFamilyId);
-  const { data: parents = [] } = useParents(activeFamilyId);
+  // With the invited co-parent: a message can be written to them before they join.
+  const { data: parents = [] } = useParentsWithInvited(activeFamilyId);
   const { data: children = [] } = useChildren(activeFamilyId);
   const { data: currentUser, isLoading: userLoading } = useCurrentUser(!!activeFamilyId);
 
@@ -62,7 +64,12 @@ const MessagesPage = () => {
   );
 
   const currentUserId = currentProfile?.id;
-  const otherParent = parents.find((parent) => parent.id !== currentUserId);
+  const others = parents.filter((parent) => parent.id !== currentUserId);
+  // A co-parent who has joined comes first; the invited one only while nobody else has.
+  const otherParent =
+    others.find((parent) => parent.status === 'active') ??
+    others.find((parent) => parent.status === 'invited');
+  const otherInvited = otherParent?.status === 'invited';
 
   const openConversation = (conversationId: string) =>
     setSearchParams({ conversation: conversationId }, { replace: true });
@@ -146,6 +153,7 @@ const MessagesPage = () => {
         currentUserId={currentUserId}
         selectedConversationId={linkedConversationId}
         canCompose={Boolean(otherParent)}
+        invitedRecipientName={otherInvited ? firstName(otherParent) : undefined}
         onViewConversation={handleViewConversation}
         onSendMessage={handleSendMessage}
         onMarkAsRead={handleMarkRead}
@@ -158,6 +166,7 @@ const MessagesPage = () => {
       <ComposeDrawer
         mode={composeMode}
         recipientName={otherParent?.fullName ?? 'your co-parent'}
+        recipientInvited={otherInvited}
         children={children.map((child) => ({ id: child.id, fullName: child.fullName }))}
         onClose={() => {
           setComposeMode(null);

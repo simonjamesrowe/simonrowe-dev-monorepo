@@ -65,7 +65,8 @@ public class AssistantInferenceService {
       is the day it was paid or the day it is due. payerId is the parent who paid, or who will
       pay. "I", "me" and "my" mean the signed-in parent, signedInParentId in FAMILY_CONTEXT.
       For an upcoming cost with nobody named, payerId is null. A co-parent in invitedCoParents
-      has not joined yet: they can be the payerId of an expense, but never of anything else.
+      has not joined yet: they can be the payerId of an expense, or the recipientId of a new
+      message when "parents" holds nobody else, but they never take part in an event.
       sharePercent is the signed-in
       parent's percentage of the cost: 50 unless the source says otherwise, 100 when the
       signed-in parent covers all of it, and 0 when the other parent does. childIds are the

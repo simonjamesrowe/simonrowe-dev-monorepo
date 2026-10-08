@@ -7,8 +7,13 @@ export interface MessagingAndPermissionsProps {
   currentUserId: string;
   /** A conversation to show first, e.g. from a `?conversation=` link */
   selectedConversationId?: string;
-  /** False when there is nobody to write to yet (no co-parent has joined) */
+  /** False when there is nobody to write to yet (no co-parent has joined or been invited) */
   canCompose?: boolean;
+  /**
+   * The first name of a co-parent who has been invited and not joined yet. What is sent now
+   * waits for them, and the page says so.
+   */
+  invitedRecipientName?: string;
   /** Called when user wants to view a conversation's details */
   onViewConversation?: (id: string) => void;
   /** Called when user wants to send a new message in a conversation */

@@ -27,6 +27,8 @@ export interface ComposeDrawerProps {
   mode: ComposeMode | null;
   /** Name of the co-parent who will receive it, shown so nobody wonders where it goes. */
   recipientName: string;
+  /** True while the recipient has been invited and not joined, so it waits for them. */
+  recipientInvited?: boolean;
   children: ComposeChild[];
   onClose: () => void;
   onSubmit: (submission: ComposeSubmission) => Promise<void>;
@@ -53,6 +55,7 @@ const labelClass = 'mb-2 block text-sm font-medium text-slate-700 dark:text-slat
 export function ComposeDrawer({
   mode,
   recipientName,
+  recipientInvited = false,
   children,
   onClose,
   onSubmit,
@@ -134,6 +137,11 @@ export function ComposeDrawer({
                     {title}
                   </h2>
                   <p className="text-sm text-slate-500 dark:text-slate-400">To {recipientName}</p>
+                  {recipientInvited && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Not joined yet. They&apos;ll see this when they accept the invitation.
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"

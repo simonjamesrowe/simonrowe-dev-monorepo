@@ -366,6 +366,41 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void anInvitedCoparentCanBeWrittenToBeforeTheyJoin() throws Exception {
+    final Fixture fixture = fixture();
+    final Instant now = Instant.now();
+    parents.save(new Parent(new ObjectId(fixture.bobId()), "invited:bob",
+        new ObjectId(fixture.familyId()), "Bob", "bob@example.com", "co-parent", "invited",
+        null, null, null, now, now));
+    when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(new ChatResponse(List.of(new Generation(AssistantMessage.builder()
+            .content("").toolCalls(List.of(toolCall(1, "propose_start_message_conversation",
+                """
+                {"recipientId":"%s","subject":"Half term","message":"Who has Robin?"}
+                """.formatted(fixture.bobId())))).build()))));
+
+    final MvcResult created = mockMvc.perform(multipart(
+            "/api/coparent/families/{familyId}/assistant/batches", fixture.familyId())
+            .param("text", "Ask Bob who has Robin at half term")
+            .with(user("alice")))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.actions[0].status", is("PENDING")))
+        .andReturn();
+    final String body = created.getResponse().getContentAsString();
+    final String approve =
+        "/api/coparent/families/{familyId}/assistant/batches/{batchId}/actions/{actionId}/approve";
+    mockMvc.perform(post(approve, fixture.familyId(), JsonPath.read(body, "$.id"),
+            JsonPath.read(body, "$.actions[0].id"))
+            .with(user("alice")).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"version\":0}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status", is("APPLIED")));
+
+    assertThat(conversations.findAll()).singleElement().satisfies(conversation ->
+        assertThat(conversation.parent2Id().toHexString()).isEqualTo(fixture.bobId()));
+  }
+
+  @Test
   void concurrentApprovalsFinalizeOnlyTheirOwnCards() throws Exception {
     final Fixture fixture = fixture();
     when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))

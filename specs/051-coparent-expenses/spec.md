@@ -559,11 +559,12 @@ invitation is accepted. Added 2026-10-08.
   `active`, the real subject. So every expense logged against it becomes theirs with nothing
   rewritten. A profile the invitee created at first sign-in supplies the name, colour and
   avatar and is then deleted. It belongs to no family, so nothing refers to it.
-- **Only expenses see an invited parent.** `ExpenseService.couple()` falls back to it when the
-  family has no other active parent. A family that already has two ignores any open
-  invitation. `GET …/parents?includeInvited=true` is opt-in and is used only by the Expenses
-  page, the dashboard's expense widgets and Quick add's payer list. Calendar, messaging and
-  access control still read `active` parents only.
+- **Only expenses and messages see an invited parent.** `ExpenseService.couple()` and
+  `MessagingService.recipients()` fall back to it when the family has no other active parent.
+  A family that already has two ignores any open invitation. `GET …/parents?includeInvited=true`
+  is opt-in and is used only by the Expenses and Messages pages, the dashboard's expense
+  widgets and Quick add's payer list. Calendar and access control still read `active` parents
+  only.
 - **The rules are unchanged.** Everything logged waits for the invited parent to agree, one
   expense at a time, once they join. Nothing counts towards the balance until then.
   `ExpenseMailer` sends nothing to a parent who is not `active`.
@@ -576,3 +577,18 @@ invitation is accepted. Added 2026-10-08.
   `idx_coparent_parent_invited_email` (one `invited`/`uninvited` row per family and email) and
   reserves a row for every invitation still open whose email is not already a member.
   `RestoreService.ensureCoparentIndexes` re-creates the index.
+
+### 9.1 Messages before the co-parent accepts
+
+Added 2026-10-08. A message thread or permission request can be started as soon as the
+co-parent is invited, addressed to the row the invitation reserved.
+
+- **Same fallback as expenses.** `MessagingService.recipients()` offers the other active
+  parents, or the invited one only while there are none. A third person invited into a family
+  that already has two parents can never be written to.
+- **It waits for them.** The thread's unread count is keyed on the reserved id, which
+  accepting adopts, so it arrives unread when they sign in. Messages show as `sent`, not
+  `delivered`, until the recipient is `active`.
+- **Cancelling keeps the thread and its name** (the parent map reads `active`, `invited` and
+  `uninvited` rows for names), and refuses new threads with "Invite your co-parent".
+- Quick add's `START_MESSAGE_CONVERSATION` validates its `recipientId` against the same rule.
