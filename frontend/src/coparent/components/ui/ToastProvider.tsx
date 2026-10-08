@@ -64,63 +64,67 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed bottom-4 left-4 right-4 z-50 flex flex-col gap-2 md:left-auto md:right-4 md:w-96">
-        {toasts.map((toast) => {
-          const tone = toneStyles[toast.variant];
-          return (
-            <div
-              key={toast.id}
-              className={`rounded-lg border ${tone.border} ${tone.bg} p-4 shadow-lg`}
-              role="status"
-              aria-live="polite"
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${tone.iconBg}`}
-                >
-                  <svg
-                    className={`h-5 w-5 ${tone.icon}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+      {/* The provider sits above the app's .coparent-app wrapper, and every utility class is
+          scoped under it, so without this the region rendered unstyled below the page. */}
+      <div className="coparent-app">
+        <div className="fixed bottom-4 left-4 right-4 z-50 flex flex-col gap-2 md:left-auto md:right-4 md:w-96">
+          {toasts.map((toast) => {
+            const tone = toneStyles[toast.variant];
+            return (
+              <div
+                key={toast.id}
+                className={`rounded-lg border ${tone.border} ${tone.bg} p-4 shadow-lg`}
+                role="status"
+                aria-live="polite"
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${tone.iconBg}`}
                   >
-                    {toast.variant === 'success' ? (
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                      />
-                    ) : toast.variant === 'error' ? (
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-                      />
-                    ) : (
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11.25 11.25 12 11.25m0 0 .75 0M12 11.25V16.5m0-9A9 9 0 1 0 21 12a9 9 0 0 0-9-9Z"
-                      />
-                    )}
-                  </svg>
-                </div>
+                    <svg
+                      className={`h-5 w-5 ${tone.icon}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      {toast.variant === 'success' ? (
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                        />
+                      ) : toast.variant === 'error' ? (
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+                        />
+                      ) : (
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M11.25 11.25 12 11.25m0 0 .75 0M12 11.25V16.5m0-9A9 9 0 1 0 21 12a9 9 0 0 0-9-9Z"
+                        />
+                      )}
+                    </svg>
+                  </div>
 
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-slate-900 dark:text-white">{toast.title}</p>
-                  {toast.description && (
-                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                      {toast.description}
-                    </p>
-                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900 dark:text-white">{toast.title}</p>
+                    {toast.description && (
+                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                        {toast.description}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </ToastContext.Provider>
   );
