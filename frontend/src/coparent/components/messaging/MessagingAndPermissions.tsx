@@ -76,6 +76,7 @@ export function MessagingAndPermissions({
   currentUserId,
   selectedConversationId,
   canCompose = true,
+  invitedRecipientName,
   onViewConversation,
   onSendMessage,
   onMarkAsRead,
@@ -159,6 +160,12 @@ export function MessagingAndPermissions({
             {!canCompose && (
               <p className="w-full text-xs text-slate-500 dark:text-slate-400">
                 Invite your co-parent to start conversations and requests.
+              </p>
+            )}
+            {canCompose && invitedRecipientName && (
+              <p className="w-full max-w-xs text-xs text-slate-500 dark:text-slate-400">
+                {invitedRecipientName} hasn&apos;t joined yet. Anything you send waits for them
+                and is there when they accept the invitation.
               </p>
             )}
             <button

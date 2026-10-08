@@ -181,8 +181,8 @@ public class FamilyService {
   }
 
   /**
-   * Lists the family's parents, with the invited co-parent too when asked. Only expenses ask:
-   * an invited parent can share a cost before joining, but cannot be messaged or scheduled.
+   * Lists the family's parents, with the invited co-parent too when asked. Expenses and messages
+   * ask: an invited parent can share a cost or be written to before joining, but not scheduled.
    */
   public List<Parent> listParents(final ObjectId familyId, final boolean includeInvited) {
     access.requireMember(familyId);

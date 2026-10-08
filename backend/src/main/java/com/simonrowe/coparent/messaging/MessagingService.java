@@ -1,5 +1,9 @@
 package com.simonrowe.coparent.messaging;
 
+import static com.simonrowe.coparent.shared.CoparentAccessPolicy.ACTIVE;
+import static com.simonrowe.coparent.shared.CoparentAccessPolicy.INVITED;
+import static com.simonrowe.coparent.shared.CoparentAccessPolicy.UNINVITED;
+
 import com.simonrowe.coparent.model.Child;
 import com.simonrowe.coparent.model.Conversation;
 import com.simonrowe.coparent.model.Parent;
@@ -10,6 +14,7 @@ import com.simonrowe.coparent.persistence.ParentRepository;
 import com.simonrowe.coparent.shared.CoparentAccessPolicy;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +37,13 @@ public class MessagingService {
 
   private static final Set<String> PERMISSION_TYPES =
       Set.of("medical", "travel", "schedule", "extracurricular");
+  /**
+   * Whose names a thread can show: an invited co-parent can be written to before they join, and
+   * a cancelled invitation leaves its threads where they were, still naming that person.
+   */
+  private static final List<String> NAMED_STATUSES = List.of(ACTIVE, INVITED, UNINVITED);
+  private static final String NO_RECIPIENT =
+      "Invite your co-parent before starting a conversation";
 
   private final ConversationRepository conversations;
   private final ParentRepository parents;
@@ -86,13 +98,14 @@ public class MessagingService {
       final ObjectId assistantActionId) {
     final Parent actor = access.requireMember(familyId);
     final Map<ObjectId, Parent> familyParents = parentMap(familyId);
+    final List<Parent> candidates = recipients(familyParents, actor);
     final Parent recipient = recipientId == null
-        ? familyParents.values().stream().filter(parent -> !parent.id().equals(actor.id()))
-            .findFirst().orElse(null)
-        : familyParents.get(recipientId);
-    if (recipient == null || recipient.id().equals(actor.id())) {
+        ? candidates.stream().findFirst().orElse(null)
+        : candidates.stream().filter(parent -> parent.id().equals(recipientId))
+            .findFirst().orElse(null);
+    if (recipient == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-          "A co-parent recipient is required");
+          candidates.isEmpty() ? NO_RECIPIENT : "A co-parent recipient is required");
     }
     final String content = requireText(rawMessage, "Message content is required");
     final Instant now = Instant.now();
@@ -133,10 +146,8 @@ public class MessagingService {
       final ObjectId assistantActionId) {
     final Parent actor = access.requireMember(familyId);
     final Map<ObjectId, Parent> familyParents = parentMap(familyId);
-    final Parent recipient = familyParents.values().stream()
-        .filter(parent -> !parent.id().equals(actor.id())).findFirst()
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-            "A co-parent recipient is required"));
+    final Parent recipient = recipients(familyParents, actor).stream().findFirst()
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, NO_RECIPIENT));
     if (!PERMISSION_TYPES.contains(type)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
           "Invalid permission request type");
@@ -302,9 +313,33 @@ public class MessagingService {
 
   private Map<ObjectId, Parent> parentMap(final ObjectId familyId) {
     final Map<ObjectId, Parent> result = new HashMap<>();
-    parents.findByFamilyIdAndStatus(familyId, CoparentAccessPolicy.ACTIVE)
+    parents.findByFamilyIdAndStatusIn(familyId, NAMED_STATUSES)
         .forEach(parent -> result.put(parent.id(), parent));
     return result;
+  }
+
+  /**
+   * Who a new thread can be addressed to: the other active parents, or, while nobody else has
+   * joined, the co-parent who has been invited. Their thread waits on the row the invitation
+   * reserved, which accepting turns into their membership, so it is theirs when they sign in.
+   * An invitation to a third person never takes a thread away from a parent already here.
+   */
+  private static List<Parent> recipients(
+      final Map<ObjectId, Parent> familyParents,
+      final Parent actor) {
+    final List<Parent> active = othersWithStatus(familyParents, actor, ACTIVE);
+    return active.isEmpty() ? othersWithStatus(familyParents, actor, INVITED) : active;
+  }
+
+  private static List<Parent> othersWithStatus(
+      final Map<ObjectId, Parent> familyParents,
+      final Parent actor,
+      final String status) {
+    return familyParents.values().stream()
+        .filter(parent -> !parent.id().equals(actor.id()))
+        .filter(parent -> status.equals(parent.status()))
+        .sorted(Comparator.comparing(Parent::id))
+        .toList();
   }
 
   private static Conversation withMessagesAndUnread(
@@ -381,7 +416,9 @@ public class MessagingService {
     if (message.readBy().contains(recipientId)) {
       return "read";
     }
-    return parentMap.containsKey(recipientId) ? "delivered" : "sent";
+    // "Sent" until the recipient has an account to receive it, as for an invited co-parent.
+    final Parent recipient = parentMap.get(recipientId);
+    return recipient != null && ACTIVE.equals(recipient.status()) ? "delivered" : "sent";
   }
 
   /** Browser-facing conversation with caller-relative unread state. */

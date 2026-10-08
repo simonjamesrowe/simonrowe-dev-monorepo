@@ -365,10 +365,7 @@ public class AssistantProposalService {
       case WITHDRAW_SCHEDULE_CHANGE -> target = changeTarget(familyId, actor, payload, errors);
       case START_MESSAGE_CONVERSATION -> {
         requireText(payload, "message", errors);
-        optionalFamilyId(payload, "recipientId", parents
-            .findByFamilyIdAndStatus(familyId, CoparentAccessPolicy.ACTIVE).stream()
-            .map(Parent::id).filter(id -> !id.equals(actor.id()))
-            .collect(java.util.stream.Collectors.toSet()), errors);
+        optionalFamilyId(payload, "recipientId", messageRecipients(familyId, actor), errors);
       }
       case SEND_MESSAGE -> {
         requireText(payload, "message", errors);
@@ -508,6 +505,25 @@ public class AssistantProposalService {
     return parents.findByFamilyIdAndStatusIn(familyId,
             List.of(CoparentAccessPolicy.ACTIVE, CoparentAccessPolicy.INVITED)).stream()
         .map(Parent::id).collect(java.util.stream.Collectors.toSet());
+  }
+
+  /**
+   * Who a new thread can go to: the other active parents, or the invited co-parent while
+   * nobody else has joined, exactly as {@code MessagingService} decides it.
+   */
+  private Set<ObjectId> messageRecipients(final ObjectId familyId, final Parent actor) {
+    final Set<ObjectId> active = othersWithStatus(familyId, actor, CoparentAccessPolicy.ACTIVE);
+    return active.isEmpty()
+        ? othersWithStatus(familyId, actor, CoparentAccessPolicy.INVITED) : active;
+  }
+
+  private Set<ObjectId> othersWithStatus(
+      final ObjectId familyId,
+      final Parent actor,
+      final String status) {
+    return parents.findByFamilyIdAndStatus(familyId, status).stream()
+        .map(Parent::id).filter(id -> !id.equals(actor.id()))
+        .collect(java.util.stream.Collectors.toSet());
   }
 
   private Set<ObjectId> familyParents(final ObjectId familyId) {

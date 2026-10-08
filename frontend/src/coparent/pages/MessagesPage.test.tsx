@@ -13,7 +13,7 @@ const createPermissionMutate = vi.fn();
 vi.mock('../hooks/api', () => ({
   useFamilies: vi.fn(),
   useConversations: vi.fn(),
-  useParents: vi.fn(),
+  useParentsWithInvited: vi.fn(),
   useChildren: vi.fn(),
   useCurrentUser: vi.fn(),
   useCreateMessageConversation: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('../hooks/api', () => ({
 
 const mockedUseFamilies = vi.mocked(apiHooks.useFamilies);
 const mockedUseConversations = vi.mocked(apiHooks.useConversations);
-const mockedUseParents = vi.mocked(apiHooks.useParents);
+const mockedUseParents = vi.mocked(apiHooks.useParentsWithInvited);
 const mockedUseChildren = vi.mocked(apiHooks.useChildren);
 const mockedUseCurrentUser = vi.mocked(apiHooks.useCurrentUser);
 const mockedUseCreateMessageConversation = vi.mocked(apiHooks.useCreateMessageConversation);
@@ -106,7 +106,7 @@ describe('MessagesPage', () => {
           status: 'active',
         },
       ],
-    } as unknown as ReturnType<typeof apiHooks.useParents>);
+    } as unknown as ReturnType<typeof apiHooks.useParentsWithInvited>);
 
     mockedUseChildren.mockReturnValue({
       data: [
@@ -266,5 +266,72 @@ describe('MessagesPage', () => {
       'Recipient is not in this family',
     );
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('writes to a co-parent who has been invited and not joined yet', async () => {
+    const user = userEvent.setup();
+    mockedUseParents.mockReturnValue({
+      data: [
+        {
+          id: 'parent-1',
+          familyId: 'fam-1',
+          fullName: 'Alex Rowe',
+          email: 'alex@example.com',
+          role: 'primary',
+          status: 'active',
+        },
+        {
+          id: 'parent-invited',
+          familyId: 'fam-1',
+          fullName: 'Rhian Jones',
+          email: 'rhian@example.com',
+          role: 'co-parent',
+          status: 'invited',
+        },
+      ],
+    } as unknown as ReturnType<typeof apiHooks.useParentsWithInvited>);
+    render(
+      <MemoryRouter>
+        <MessagesPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Rhian hasn.t joined yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/Invite your co-parent/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'New message' }));
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getByText('To Rhian Jones')).toBeInTheDocument();
+    expect(within(drawer).getByText(/Not joined yet/)).toBeInTheDocument();
+    await user.type(within(drawer).getByLabelText('Subject'), 'Half term');
+    await user.type(within(drawer).getByLabelText('Message'), 'Who has the kids?');
+    await user.click(within(drawer).getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() => {
+      expect(createMessageMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ recipientId: 'parent-invited' }),
+      );
+    });
+  });
+
+  it('writes to the co-parent who joined, never to a third person still invited', async () => {
+    const user = userEvent.setup();
+    mockedUseParents.mockReturnValue({
+      data: [
+        { id: 'parent-1', fullName: 'Alex Rowe', role: 'primary', status: 'active' },
+        { id: 'parent-invited', fullName: 'Carol Smith', role: 'co-parent', status: 'invited' },
+        { id: 'parent-2', fullName: 'Sam Rowe', role: 'co-parent', status: 'active' },
+      ],
+    } as unknown as ReturnType<typeof apiHooks.useParentsWithInvited>);
+    render(
+      <MemoryRouter>
+        <MessagesPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText(/hasn.t joined yet/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'New message' }));
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getByText('To Sam Rowe')).toBeInTheDocument();
+    expect(within(drawer).queryByText(/Not joined yet/)).not.toBeInTheDocument();
   });
 });

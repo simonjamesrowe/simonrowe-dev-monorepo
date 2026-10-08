@@ -41,8 +41,8 @@ export function useParents(familyId: string | undefined) {
 
 /**
  * The family's parents plus a co-parent who has been invited and not joined yet. Only for
- * expenses: an invited parent can share a cost, but cannot be messaged or put on the calendar,
- * so every other screen keeps using useParents.
+ * expenses and messages: an invited parent can share a cost or be written to, but cannot be put
+ * on the calendar, so every other screen keeps using useParents.
  */
 export function useParentsWithInvited(familyId: string | undefined) {
   return useQuery({

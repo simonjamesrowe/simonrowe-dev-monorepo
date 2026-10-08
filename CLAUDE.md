@@ -284,11 +284,12 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     with only `familyId`, so two placeholders in one family would collide on a null subject.
     Every Auth0 subject contains `|` and this value does not, so it can never sign in, and every
     access check asks for `active` anyway.
-  - **Only expenses read invited parents.** `ExpenseService.couple()` falls back to the invited
-    parent when no other parent is active. `GET …/parents?includeInvited=true` is opt-in, and
-    only the Expenses page, the dashboard's expense widgets and Quick add's payer list use it.
-    The Messages page picks "the other parent" from the default list, which is how it still
-    cannot offer to message someone with no account.
+  - **Only expenses and messages read invited parents.** `ExpenseService.couple()` and
+    `MessagingService.recipients()` fall back to the invited parent when no other parent is
+    active, so a thread or permission request can wait for them, and arrives unread when they
+    accept. `GET …/parents?includeInvited=true` is opt-in, and only the Expenses and Messages
+    pages, the dashboard's expense widgets and Quick add's payer list use it. The calendar
+    still cannot name someone with no account.
   - **Accepting deletes the invitee's own unassigned profile** after copying its name, colour
     and avatar onto the placeholder. Before this change, accept kept that profile and minted a
     new id, the reverse.

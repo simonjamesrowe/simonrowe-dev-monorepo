@@ -181,17 +181,14 @@ class InvitedCoparentExpenseIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void anInvitedParentCannotBeMessagedOrSeenOutsideExpenses() throws Exception {
+  void invitedParentsAreNotMembersOfTheFamily() throws Exception {
     final Fixture f = familyWithInvite("Rhian");
 
-    mockMvc.perform(post("/api/coparent/families/{familyId}/conversations/message", f.familyId())
-            .with(user("alice")).contentType(MediaType.APPLICATION_JSON)
-            .content("""
-                {"recipientId":"%s","subject":"Hi","message":"Hello"}
-                """.formatted(f.invitedId())))
-        .andExpect(status().is4xxClientError());
     mockMvc.perform(get("/api/coparent/me").with(user("alice")))
         .andExpect(jsonPath("$.profiles", hasSize(1)));
+    mockMvc.perform(get("/api/coparent/families/{familyId}/conversations", f.familyId())
+            .with(user("rhian")))
+        .andExpect(status().isNotFound());
   }
 
   // ---- helpers -----------------------------------------------------------------------------
