@@ -330,6 +330,42 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void anInvitedCoparentCanPayForAnExpenseBeforeTheyJoin() throws Exception {
+    final Fixture fixture = fixture();
+    final Instant now = Instant.now();
+    parents.save(new Parent(new ObjectId(fixture.bobId()), "invited:bob",
+        new ObjectId(fixture.familyId()), "Bob", "bob@example.com", "co-parent", "invited",
+        null, null, null, now, now));
+    when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(new ChatResponse(List.of(new Generation(AssistantMessage.builder()
+            .content("").toolCalls(List.of(toolCall(1, "propose_create_expense",
+                expenseArguments(fixture, "Trainers", "40.00", "GBP")))).build()))));
+
+    final MvcResult created = mockMvc.perform(multipart(
+            "/api/coparent/families/{familyId}/assistant/batches", fixture.familyId())
+            .param("text", "Bob bought Robin trainers for £40")
+            .with(user("alice")))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.actions[0].status", is("PENDING")))
+        .andReturn();
+    final String body = created.getResponse().getContentAsString();
+    final String approve =
+        "/api/coparent/families/{familyId}/assistant/batches/{batchId}/actions/{actionId}/approve";
+    mockMvc.perform(post(approve, fixture.familyId(), JsonPath.read(body, "$.id"),
+            JsonPath.read(body, "$.actions[0].id"))
+            .with(user("alice")).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"version\":0}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status", is("APPLIED")));
+
+    assertThat(expenses.findAll()).singleElement().satisfies(expense -> {
+      assertThat(expense.payerId().toHexString()).isEqualTo(fixture.bobId());
+      assertThat(expense.agreement().requestedBy().toHexString()).isEqualTo(fixture.aliceId());
+      assertThat(expense.agreement().status()).isEqualTo(Expense.PENDING);
+    });
+  }
+
+  @Test
   void concurrentApprovalsFinalizeOnlyTheirOwnCards() throws Exception {
     final Fixture fixture = fixture();
     when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))

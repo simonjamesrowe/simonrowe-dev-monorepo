@@ -40,6 +40,8 @@ export function useCreateInvitation() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: invitationKeys.list(data.familyId) });
       queryClient.invalidateQueries({ queryKey: familyKeys.detail(data.familyId) });
+      // An invitation reserves the invited parent, whom expenses can then name.
+      queryClient.invalidateQueries({ queryKey: parentKeys.list(data.familyId) });
     },
   });
 }
@@ -68,6 +70,8 @@ export function useCancelInvitation() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: invitationKeys.list(data.familyId) });
+      // Cancelling retires the invited parent, so expenses stop offering them.
+      queryClient.invalidateQueries({ queryKey: parentKeys.list(data.familyId) });
     },
   });
 }

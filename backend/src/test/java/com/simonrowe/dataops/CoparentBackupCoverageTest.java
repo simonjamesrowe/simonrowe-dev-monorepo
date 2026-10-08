@@ -110,7 +110,8 @@ class CoparentBackupCoverageTest extends AbstractIntegrationTest {
     restoreService.ensureCoparentIndexes();
 
     assertThat(indexNames(V043CreateCoparentCollections.PARENTS))
-        .contains("idx_coparent_parent_subject", "idx_coparent_parent_family_subject");
+        .contains("idx_coparent_parent_subject", "idx_coparent_parent_family_subject",
+            "idx_coparent_parent_invited_email");
     assertThat(indexNames(V043CreateCoparentCollections.INVITATIONS))
         .contains("idx_coparent_invitation_token");
     assertThat(indexNames(V043CreateCoparentCollections.CONVERSATIONS))

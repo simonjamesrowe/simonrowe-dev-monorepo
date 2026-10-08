@@ -174,6 +174,7 @@ describe('FamilySetupHub child editor', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Add Child' }));
 
+    await user.type(screen.getByLabelText('Their name (optional)'), '  Rhian ');
     await user.type(screen.getByPlaceholderText('coparent@example.com'), 'new@example.com');
     await user.selectOptions(screen.getByRole('combobox'), 'primary');
     await user.click(screen.getByRole('button', { name: 'Send Invite' }));
@@ -191,7 +192,7 @@ describe('FamilySetupHub child editor', () => {
       school: 'River School',
       medicalNotes: 'Nut allergy',
     });
-    expect(onInviteCoParent).toHaveBeenCalledWith('fam-1', 'new@example.com', 'primary');
+    expect(onInviteCoParent).toHaveBeenCalledWith('fam-1', 'new@example.com', 'primary', 'Rhian');
     expect(onResendInvite).toHaveBeenCalledWith('inv-1');
     expect(onCancelInvite).toHaveBeenCalledWith('inv-1');
     expect(container).toHaveTextContent('Rowe Family');

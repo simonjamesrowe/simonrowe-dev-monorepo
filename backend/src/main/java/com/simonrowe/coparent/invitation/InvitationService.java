@@ -42,6 +42,7 @@ public class InvitationService {
   private final CoparentIdentity identity;
   private final CoparentAuditService audits;
   private final InvitationMailer mailer;
+  private final InvitedParents invitedParents;
   private final MongoTemplate mongoTemplate;
 
   /** Creates the invitation service with persistence, security and delivery dependencies. */
@@ -53,6 +54,7 @@ public class InvitationService {
       final CoparentIdentity identity,
       final CoparentAuditService audits,
       final InvitationMailer mailer,
+      final InvitedParents invitedParents,
       @Qualifier("coparentMongoTemplate") final MongoTemplate mongoTemplate) {
     this.invitations = invitations;
     this.families = families;
@@ -61,15 +63,32 @@ public class InvitationService {
     this.identity = identity;
     this.audits = audits;
     this.mailer = mailer;
+    this.invitedParents = invitedParents;
     this.mongoTemplate = mongoTemplate;
   }
 
-  /** Creates a seven-day invitation for a non-member email. */
+  /** Creates a seven-day invitation for a non-member email, with no name given. */
   public Invitation create(final ObjectId familyId, final String rawEmail, final String role) {
+    return create(familyId, rawEmail, role, null);
+  }
+
+  /**
+   * Creates a seven-day invitation for a non-member email, and reserves the invited parent so
+   * shared expenses can name them before they accept. {@code name} is optional.
+   */
+  public Invitation create(
+      final ObjectId familyId,
+      final String rawEmail,
+      final String role,
+      final String name) {
     final Parent inviter = access.requirePrimary(familyId);
     final Family family = requireFamily(familyId);
     final String email = normaliseEmail(rawEmail);
     validateRole(role);
+    if (name != null && name.strip().length() > InvitedParents.MAX_NAME) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Keep the name to %d characters".formatted(InvitedParents.MAX_NAME));
+    }
     if (parents.existsByFamilyIdAndEmailIgnoreCaseAndStatus(
         familyId, email, CoparentAccessPolicy.ACTIVE)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -87,6 +106,7 @@ public class InvitationService {
     invitationIds.add(saved.id());
     families.save(new Family(family.id(), family.name(), family.timeZone(), family.parentIds(),
         family.childIds(), invitationIds, family.deletedAt(), family.createdAt(), now));
+    invitedParents.reserve(familyId, email, role, name, now);
     deliver(saved, inviter, family);
     audits.record(familyId, "invitation", saved.id(), "create",
         Map.of("email", email, "role", role, "expiresAt", saved.expiresAt()));
@@ -114,6 +134,7 @@ public class InvitationService {
     final Invitation saved = invitations.save(new Invitation(current.id(), current.familyId(),
         current.email(), current.role(), PENDING, UUID.randomUUID().toString(), now,
         now.plus(7, ChronoUnit.DAYS), null, null, null, null, current.createdAt(), now));
+    invitedParents.reserve(saved.familyId(), saved.email(), saved.role(), null, now);
     deliver(saved, inviter, family);
     audits.record(saved.familyId(), "invitation", saved.id(), "resend",
         Map.of("expiresAt", saved.expiresAt()));
@@ -132,6 +153,7 @@ public class InvitationService {
     final Invitation saved = invitations.save(new Invitation(current.id(), current.familyId(),
         current.email(), current.role(), "canceled", current.token(), current.sentAt(),
         current.expiresAt(), null, now, null, null, current.createdAt(), now));
+    invitedParents.retire(saved.familyId(), saved.email(), now);
     audits.record(saved.familyId(), "invitation", saved.id(), "cancel", Map.of());
     return saved;
   }
@@ -174,6 +196,9 @@ public class InvitationService {
     Parent parent = parents.findByFamilyIdAndAuth0IdAndStatus(
         family.id(), identity.subject(), CoparentAccessPolicy.ACTIVE).orElse(null);
     if (parent == null) {
+      parent = adoptInvitedParent(family, invitation, now);
+    }
+    if (parent == null) {
       final Parent unassigned = parents.findFirstByAuth0IdAndFamilyIdIsNull(identity.subject())
           .orElse(null);
       parent = parents.save(new Parent(unassigned == null ? null : unassigned.id(),
@@ -198,6 +223,36 @@ public class InvitationService {
     audits.record(family.id(), "invitation", invitation.id(), "accept",
         Map.of("parentId", parent.id().toHexString()));
     return new Acceptance(invitation, family);
+  }
+
+  /**
+   * Turns the parent reserved at invite time into the caller's membership, keeping its id, so
+   * every expense logged against it is theirs. Their own profile from first sign-in, if any,
+   * supplies the name, colour and avatar and is then removed: it belongs to no family, so
+   * nothing refers to it. Null when no invited parent was reserved for this email.
+   */
+  private Parent adoptInvitedParent(
+      final Family family,
+      final Invitation invitation,
+      final Instant now) {
+    final Parent invited = parents.findFirstByFamilyIdAndEmailAndStatus(
+        family.id(), invitation.email(), CoparentAccessPolicy.INVITED).orElse(null);
+    if (invited == null) {
+      return null;
+    }
+    final Parent unassigned = parents.findFirstByAuth0IdAndFamilyIdIsNull(identity.subject())
+        .orElse(null);
+    final String name = unassigned != null && unassigned.fullName() != null
+        && !unassigned.fullName().isBlank() ? unassigned.fullName() : invited.fullName();
+    final Parent adopted = parents.save(new Parent(invited.id(), identity.subject(), family.id(),
+        name, identity.email(), invitation.role(), CoparentAccessPolicy.ACTIVE,
+        unassigned == null ? invited.color() : unassigned.color(),
+        unassigned == null ? invited.avatarUrl() : unassigned.avatarUrl(), now,
+        invited.createdAt(), now));
+    if (unassigned != null) {
+      parents.deleteById(unassigned.id());
+    }
+    return adopted;
   }
 
   private void deliver(

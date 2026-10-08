@@ -81,8 +81,13 @@ const FamilySetupPage = () => {
     await updateFamily.mutateAsync({ id, ...updates });
   };
 
-  const handleInvite = async (familyId: string, email: string, role: 'primary' | 'co-parent') => {
-    await createInvitation.mutateAsync({ familyId, email, role });
+  const handleInvite = async (
+    familyId: string,
+    email: string,
+    role: 'primary' | 'co-parent',
+    name?: string,
+  ) => {
+    await createInvitation.mutateAsync({ familyId, email, role, name });
   };
 
   const handleResend = async (invitationId: string) => {

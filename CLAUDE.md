@@ -274,6 +274,32 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- coparent-expenses-before-invite-accepted: **Shared expenses can be logged before the co-parent
+  accepts their invitation.** Inviting reserves a `parents` row with status `invited` (keyed on
+  family and email, named from the invite's optional name or the email), and accepting adopts
+  that same row, so every expense logged against it becomes theirs with no ids rewritten.
+  Load-bearing bits:
+  - **The placeholder's `auth0Id` is a synthetic `invited:<id>`, on purpose.** The unique
+    `(familyId, auth0Id)` index is sparse, but a compound sparse index still indexes a document
+    with only `familyId`, so two placeholders in one family would collide on a null subject.
+    Every Auth0 subject contains `|` and this value does not, so it can never sign in, and every
+    access check asks for `active` anyway.
+  - **Only expenses read invited parents.** `ExpenseService.couple()` falls back to the invited
+    parent when no other parent is active. `GET …/parents?includeInvited=true` is opt-in, and
+    only the Expenses page, the dashboard's expense widgets and Quick add's payer list use it.
+    The Messages page picks "the other parent" from the default list, which is how it still
+    cannot offer to message someone with no account.
+  - **Accepting deletes the invitee's own unassigned profile** after copying its name, colour
+    and avatar onto the placeholder. Before this change, accept kept that profile and minted a
+    new id, the reverse.
+  - Everything still waits for the invited parent to agree, one by one, after they join.
+    `ExpenseMailer` sends nothing to a parent who is not `active`. Cancelling makes the row
+    `uninvited` (its expenses stay), and inviting the same email again reuses it.
+  - `V053ReserveInvitedCoparents` creates the partial unique index
+    `idx_coparent_parent_invited_email` and backfills a row for every open invitation. Rhian's
+    invitation, sent before this change, gets its row from there. `RestoreService` re-creates the
+    index, and `CoparentBackupCoverageTest` pins it.
+  See `specs/051-coparent-expenses/spec.md` §9.
 - 051-coparent-expenses: **CoParent has shared expenses.** The pieces:
   - The API lives under `/api/coparent/families/{familyId}/expenses`
     (`com.simonrowe.coparent.expense`), backed by an `expenses` collection in the coparent

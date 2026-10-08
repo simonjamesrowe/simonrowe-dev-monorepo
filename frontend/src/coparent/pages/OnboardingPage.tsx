@@ -69,8 +69,13 @@ const OnboardingPage = () => {
     }
   };
 
-  const handleInvite = async (familyId: string, email: string, role: 'primary' | 'co-parent') => {
-    await createInvitation.mutateAsync({ familyId, email, role });
+  const handleInvite = async (
+    familyId: string,
+    email: string,
+    role: 'primary' | 'co-parent',
+    name?: string,
+  ) => {
+    await createInvitation.mutateAsync({ familyId, email, role, name });
     if (!onboarding?.completedSteps?.includes('invite')) {
       await updateOnboarding.mutateAsync({
         familyId,

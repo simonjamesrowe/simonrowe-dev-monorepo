@@ -29,6 +29,7 @@ vi.mock('../../hooks/api', () => ({
   useExpenses: () => ({ data: [] }),
   useFamilies: () => ({ data: familyData }),
   useParents: () => ({ data: [] }),
+  useParentsWithInvited: () => ({ data: [] }),
   useScheduleChangeRequests: () => ({ data: [] }),
 }));
 

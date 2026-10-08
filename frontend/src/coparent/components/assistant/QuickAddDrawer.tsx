@@ -22,6 +22,7 @@ import {
   useExpenses,
   useFamilies,
   useParents,
+  useParentsWithInvited,
   useScheduleChangeRequests,
 } from '../../hooks/api';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
@@ -51,6 +52,8 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
   const conversations = useConversations(familyId || undefined);
   const children = useChildren(familyId || undefined);
   const parents = useParents(familyId || undefined);
+  // An invited co-parent can pay for an expense before joining, and appears nowhere else.
+  const expenseParents = useParentsWithInvited(familyId || undefined);
   const currentUser = useCurrentUser();
   const expenses = useExpenses(familyId || undefined);
   // The photo each batch was read from, kept only in this tab, so an approved expense can
@@ -86,7 +89,7 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
     parentIds: parents.data?.map((parent) => ({ value: parent.id, label: parent.fullName })) ?? [],
     recipientId: parents.data?.filter((parent) => parent.id !== currentParentId)
       .map((parent) => ({ value: parent.id, label: parent.fullName })) ?? [],
-    payerId: parents.data?.map((parent) => ({ value: parent.id, label: parent.fullName })) ?? [],
+    payerId: expenseParents.data?.map((parent) => ({ value: parent.id, label: parent.fullName })) ?? [],
     expenseId: expenses.data?.filter((expense) => expense.reimbursement.status !== 'reimbursed')
       .map((expense) => ({
         value: expense.id,
@@ -98,9 +101,9 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
     // Pounds sterling only: choosing this is how a parent fixes a note that gave dollars.
     currency: [{ value: 'GBP', label: 'GBP (£)' }],
   }), [categories.data, children.data, conversations.data, currentParentId, events.data,
-    expenses.data, parents.data, requests.data]);
+    expenseParents.data, expenses.data, parents.data, requests.data]);
 
-  const otherParentName = parents.data?.find((parent) => parent.id !== currentParentId)
+  const otherParentName = expenseParents.data?.find((parent) => parent.id !== currentParentId)
     ?.fullName.split(/\s+/)[0] ?? 'your co-parent';
   const expenseContext = currentParentId
     ? { meId: currentParentId, otherName: otherParentName }

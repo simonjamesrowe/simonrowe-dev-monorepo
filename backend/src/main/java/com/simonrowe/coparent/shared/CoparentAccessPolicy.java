@@ -12,6 +12,13 @@ import org.springframework.web.server.ResponseStatusException;
 public class CoparentAccessPolicy {
 
   public static final String ACTIVE = "active";
+  /**
+   * A co-parent who has been invited and not yet accepted. The row gives expenses someone to
+   * name before they join; nothing else reads it, because every other query asks for ACTIVE.
+   */
+  public static final String INVITED = "invited";
+  /** An invited co-parent whose invitation was cancelled. Kept so their expenses still resolve. */
+  public static final String UNINVITED = "uninvited";
   public static final String PRIMARY = "primary";
 
   private final CoparentIdentity identity;

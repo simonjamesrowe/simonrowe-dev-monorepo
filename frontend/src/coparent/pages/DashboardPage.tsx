@@ -20,6 +20,7 @@ import {
   useFamilies,
   useInvitations,
   useParents,
+  useParentsWithInvited,
   useResendInvitation,
   useUpdateCurrentUser,
   useCurrentUser,
@@ -258,7 +259,12 @@ const DashboardPage = () => {
   }, [conversations]);
 
   const meParent = parents.find((parent) => parent.id === currentParentId);
-  const otherParent = parents.find((parent) => parent.id !== currentParentId && parent.status === 'active');
+  // Expenses can name a co-parent who has been invited and not joined yet, so the expense
+  // widgets look them up too. Nothing else on the dashboard uses this parent.
+  const { data: expenseParents = [] } = useParentsWithInvited(activeFamilyId);
+  const otherParents = expenseParents.filter((parent) => parent.id !== currentParentId);
+  const otherParent = otherParents.find((parent) => parent.status === 'active')
+    ?? otherParents.find((parent) => parent.status === 'invited');
   const otherName = firstName(otherParent);
 
   // Expenses the other parent sent, waiting on this parent's OK, shown beside permissions.

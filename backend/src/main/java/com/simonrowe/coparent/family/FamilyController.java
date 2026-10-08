@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -82,9 +83,19 @@ public class FamilyController {
   }
 
   @GetMapping("/families/{familyId}/parents")
-  List<ParentResponse> listParents(@PathVariable final String familyId) {
-    return service.listParents(CoparentIds.parse(familyId)).stream()
+  List<ParentResponse> listParents(
+      @PathVariable final String familyId,
+      @RequestParam(defaultValue = "false") final boolean includeInvited) {
+    return service.listParents(CoparentIds.parse(familyId), includeInvited).stream()
         .map(ParentResponse::from).toList();
+  }
+
+  @PatchMapping("/parents/{parentId}/invited-name")
+  ParentResponse renameInvited(
+      @PathVariable final String parentId,
+      @Valid @RequestBody final ProfileRequest request) {
+    return ParentResponse.from(
+        service.renameInvited(CoparentIds.parse(parentId), request.fullName()));
   }
 
   @PatchMapping("/parents/{parentId}/role")

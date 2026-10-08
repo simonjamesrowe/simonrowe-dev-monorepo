@@ -5,6 +5,7 @@ import com.simonrowe.coparent.shared.CoparentIds;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -33,7 +34,7 @@ public class InvitationController {
       @PathVariable final String familyId,
       @Valid @RequestBody final CreateInvitationRequest request) {
     return InvitationResponse.from(service.create(
-        CoparentIds.parse(familyId), request.email(), request.role()));
+        CoparentIds.parse(familyId), request.email(), request.role(), request.name()));
   }
 
   @GetMapping("/families/{familyId}/invitations")
@@ -60,7 +61,11 @@ public class InvitationController {
         new FamilySummary(acceptance.family().id().toHexString(), acceptance.family().name()));
   }
 
-  record CreateInvitationRequest(@NotBlank @Email String email, @NotBlank String role) {
+  /** {@code name} is optional: without it the invited parent is named from their email. */
+  record CreateInvitationRequest(
+      @NotBlank @Email String email,
+      @NotBlank String role,
+      @Size(max = InvitedParents.MAX_NAME) String name) {
   }
 
   record AcceptInvitationRequest(@NotBlank String token) {

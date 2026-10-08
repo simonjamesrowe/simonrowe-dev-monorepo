@@ -1,5 +1,6 @@
 package com.simonrowe.coparent.family;
 
+import com.simonrowe.coparent.invitation.InvitedParents;
 import com.simonrowe.coparent.model.Family;
 import com.simonrowe.coparent.model.Parent;
 import com.simonrowe.coparent.persistence.CoparentAuditService;
@@ -176,8 +177,40 @@ public class FamilyService {
 
   /** Lists active parent profiles for an authorised family. */
   public List<Parent> listParents(final ObjectId familyId) {
+    return listParents(familyId, false);
+  }
+
+  /**
+   * Lists the family's parents, with the invited co-parent too when asked. Only expenses ask:
+   * an invited parent can share a cost before joining, but cannot be messaged or scheduled.
+   */
+  public List<Parent> listParents(final ObjectId familyId, final boolean includeInvited) {
     access.requireMember(familyId);
-    return parents.findByFamilyIdAndStatus(familyId, ACTIVE);
+    return includeInvited
+        ? parents.findByFamilyIdAndStatusIn(familyId, List.of(ACTIVE, CoparentAccessPolicy.INVITED))
+        : parents.findByFamilyIdAndStatus(familyId, ACTIVE);
+  }
+
+  /** Renames a co-parent who has not joined yet. Once they join, the name is theirs to set. */
+  public Parent renameInvited(final ObjectId parentId, final String fullName) {
+    final String name = requireName(fullName);
+    if (name.length() > InvitedParents.MAX_NAME) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Keep the name to %d characters".formatted(InvitedParents.MAX_NAME));
+    }
+    final Parent target = parents.findById(parentId)
+        .filter(parent -> parent.familyId() != null)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Parent not found"));
+    access.requirePrimary(target.familyId());
+    if (!CoparentAccessPolicy.INVITED.equals(target.status())) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "Only a co-parent who has not joined yet can be renamed here");
+    }
+    final Parent saved = parents.save(new Parent(target.id(), target.auth0Id(), target.familyId(),
+        name, target.email(), target.role(), target.status(), target.color(),
+        target.avatarUrl(), target.lastSignedInAt(), target.createdAt(), Instant.now()));
+    audits.record(saved.familyId(), "parent", saved.id(), "rename-invited", Map.of());
+    return saved;
   }
 
   /** Changes another parent's role while preserving at least one primary parent. */

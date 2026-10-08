@@ -13121,6 +13121,19 @@ body[data-narration-bar] .app-layout__main {
 .coparent-app .expense-callout { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 14px; border-radius: 14px; font-size: 14px; line-height: 1.45; }
 .coparent-app .expense-callout--rose { border: 1px solid var(--expense-rose-line); background: var(--expense-rose-tint); color: var(--expense-rose-text); }
 .coparent-app .expense-callout--amber { background: var(--expense-amber-soft); color: var(--expense-amber-text); }
+/* the co-parent has been invited and has not joined yet */
+.coparent-app .expense-invited { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 22px; padding: 16px 18px; border: 1px solid var(--expense-amber-line, var(--expense-border)); border-radius: 18px; background: var(--expense-amber-soft); color: var(--expense-amber-text); }
+.coparent-app .expense-invited__icon { flex: none; margin-top: 2px; }
+.coparent-app .expense-invited__body { flex: 1; min-width: 0; }
+.coparent-app .expense-invited__title { margin: 0 0 4px; font-weight: 700; }
+.coparent-app .expense-invited__text { margin: 0; font-size: 14px; line-height: 1.5; }
+.coparent-app .expense-invited__rename { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.coparent-app .expense-invited__rename .expense-input { flex: 1; min-width: 180px; }
+.coparent-app .expense-invited__actions { display: flex; flex: none; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 640px) {
+  .coparent-app .expense-invited { flex-wrap: wrap; }
+  .coparent-app .expense-invited__actions { width: 100%; }
+}
 .coparent-app .expense-callout--teal { border: 1px solid var(--expense-teal-line); background: var(--expense-teal-tint); color: var(--expense-teal-strong); }
 .coparent-app .expense-callout--button { width: 100%; text-align: left; }
 

@@ -57,6 +57,17 @@ class ExpenseMailerTest {
   }
 
   @Test
+  void sendsNothingToCoparentsWhoHaveNotJoinedYet() {
+    final Parent invited = new Parent(SAM, "invited:x", ExpenseFixtures.FAMILY, "Sam Taylor",
+        "sam@example.com", "co-parent", "invited", null, null, null, null, null);
+
+    mailer(true).needsAgreement(invited, ALEX_PARENT,
+        ExpenseFixtures.paid(4500, ALEX, 50, Expense.PENDING, Expense.NONE));
+
+    verify(sender, never()).send(any(SimpleMailMessage.class));
+  }
+
+  @Test
   void failedSendIsSwallowedSoTheChangeStillSucceeds() {
     doThrow(new MailSendException("smtp down")).when(sender).send(any(SimpleMailMessage.class));
 

@@ -3,6 +3,7 @@ package com.simonrowe.coparent.expense;
 import com.simonrowe.coparent.config.CoparentProperties;
 import com.simonrowe.coparent.model.Expense;
 import com.simonrowe.coparent.model.Parent;
+import com.simonrowe.coparent.shared.CoparentAccessPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailException;
@@ -65,6 +66,11 @@ public class ExpenseMailer {
 
   private void send(final Parent to, final String subject, final String body) {
     if (!properties.emailEnabled() || to.email() == null || to.email().isBlank()) {
+      return;
+    }
+    // A co-parent who has not accepted their invitation has no account to review anything in.
+    // They find everything waiting for them under Needs action when they join.
+    if (!CoparentAccessPolicy.ACTIVE.equals(to.status())) {
       return;
     }
     final SimpleMailMessage message = new SimpleMailMessage();

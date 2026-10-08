@@ -578,11 +578,18 @@ public class ExpenseService {
   private record Couple(Parent actor, Parent other) {
   }
 
-  /** The caller and the family's other parent. Shared expenses need exactly two. */
+  /**
+   * The caller and the family's other parent. Shared expenses need exactly two. Until the
+   * co-parent accepts their invitation, the parent their invitation reserved stands in: what
+   * is logged against it waits for their agreement, and accepting makes that same row theirs.
+   * A family that already has two active parents ignores any invitation still open.
+   */
   private Couple couple(final ObjectId familyId) {
     final Parent actor = access.requireMember(familyId);
-    final List<Parent> others = parents.findByFamilyIdAndStatus(familyId, ACTIVE).stream()
-        .filter(parent -> !parent.id().equals(actor.id())).toList();
+    List<Parent> others = othersWithStatus(familyId, actor, ACTIVE);
+    if (others.isEmpty()) {
+      others = othersWithStatus(familyId, actor, CoparentAccessPolicy.INVITED);
+    }
     if (others.isEmpty()) {
       throw conflict("Invite your co-parent before adding shared expenses");
     }
@@ -590,6 +597,14 @@ public class ExpenseService {
       throw conflict("Shared expenses need exactly two parents in the family");
     }
     return new Couple(actor, others.getFirst());
+  }
+
+  private List<Parent> othersWithStatus(
+      final ObjectId familyId,
+      final Parent actor,
+      final String status) {
+    return parents.findByFamilyIdAndStatus(familyId, status).stream()
+        .filter(parent -> !parent.id().equals(actor.id())).toList();
   }
 
   private Expense find(final ObjectId familyId, final ObjectId expenseId) {
