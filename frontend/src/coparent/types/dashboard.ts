@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 // =============================================================================
 // Dashboard Types (UI-facing)
 // =============================================================================
@@ -57,22 +59,6 @@ export interface Event {
   childId: string | null;
   status: EventStatus;
   notes: string;
-}
-
-export type ExpenseStatus = 'pending' | 'approved' | 'reimbursed' | 'denied';
-
-export interface Expense {
-  id: string;
-  title: string;
-  category: string;
-  amount: number;
-  currency: string;
-  date: string;
-  status: ExpenseStatus;
-  paidByParentId: string;
-  childId: string | null;
-  receiptUrls: string[];
-  description: string;
 }
 
 export type PermissionRequestType =
@@ -141,21 +127,6 @@ export interface ActivityFeedItem {
   entityId: string;
 }
 
-export interface BudgetCategory {
-  category: string;
-  limit: number;
-  spent: number;
-}
-
-export interface BudgetSummary {
-  month: string;
-  currency: string;
-  totalLimit: number;
-  totalSpent: number;
-  remaining: number;
-  categories: BudgetCategory[];
-}
-
 export interface ApprovalsSummary {
   totalPending: number;
   byType: {
@@ -217,11 +188,11 @@ export interface DashboardProps {
   children: Child[];
   upcomingEvents: Event[];
   permissionRequests: PermissionRequest[];
-  expenses: Expense[];
   messages: Message[];
   invitations: Invitation[];
   activityFeed: ActivityFeedItem[];
-  budgetSummary: BudgetSummary;
+  /** The Expenses panel, rendered where the dashboard's money section sits. */
+  expensesPanel?: ReactNode;
   approvalsSummary: ApprovalsSummary;
   setupChecklist: SetupChecklist;
   widgetCards: WidgetCard[];

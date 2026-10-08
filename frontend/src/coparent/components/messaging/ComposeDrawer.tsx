@@ -30,6 +30,8 @@ export interface ComposeDrawerProps {
   children: ComposeChild[];
   onClose: () => void;
   onSubmit: (submission: ComposeSubmission) => Promise<void>;
+  /** A subject to start from, such as "About: School shoes (£45.00)" from an expense. */
+  initialSubject?: string;
 }
 
 const PERMISSION_TYPES: { value: PermissionRequestType; label: string }[] = [
@@ -54,6 +56,7 @@ export function ComposeDrawer({
   children,
   onClose,
   onSubmit,
+  initialSubject = '',
 }: ComposeDrawerProps) {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -66,12 +69,12 @@ export function ComposeDrawer({
   // reappear as the subject of the next message.
   useEffect(() => {
     if (!mode) return;
-    setSubject('');
+    setSubject(initialSubject);
     setBody('');
     setType('schedule');
     setChildId('');
     setError(null);
-  }, [mode]);
+  }, [mode, initialSubject]);
 
   const isPermission = mode === 'permission';
   const valid =

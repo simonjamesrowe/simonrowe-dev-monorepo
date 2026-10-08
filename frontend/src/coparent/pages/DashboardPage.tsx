@@ -8,6 +8,9 @@ import {
   ProfileDrawer,
 } from '../components/dashboard';
 import { dateToYmd, expandRecurringEvents } from '../components/calendar/recurrence';
+import { DashboardExpensesPanel } from '../components/expenses/DashboardExpensesPanel';
+import { formatMoney } from '../components/expenses/money';
+import { firstName } from '../components/expenses/parentTone';
 import { useToast } from '../components/ui/ToastProvider';
 import {
   useCancelInvitation,
@@ -21,10 +24,12 @@ import {
   useUpdateCurrentUser,
   useCurrentUser,
   useCurrentParentId,
+  useExpenses,
+  useExpenseSummary,
+  useExpenseTransition,
 } from '../hooks/api';
 import type {
   ApprovalsSummary,
-  BudgetSummary,
   Child as DashboardChild,
   Event as DashboardEvent,
   Family as DashboardFamily,
@@ -78,6 +83,9 @@ const DashboardPage = () => {
   const { data: conversations = [], isLoading: conversationsLoading } =
     useConversations(activeFamilyId);
   const { data: calendarEvents = [], isLoading: eventsLoading } = useEvents(activeFamilyId);
+  const { data: expenses = [] } = useExpenses(activeFamilyId);
+  const { data: expenseSummary } = useExpenseSummary(activeFamilyId);
+  const expenseTransition = useExpenseTransition();
 
   const updateCurrentUser = useUpdateCurrentUser();
   const resendInvitation = useResendInvitation();
@@ -249,26 +257,46 @@ const DashboardPage = () => {
     });
   }, [conversations]);
 
+  const meParent = parents.find((parent) => parent.id === currentParentId);
+  const otherParent = parents.find((parent) => parent.id !== currentParentId && parent.status === 'active');
+  const otherName = firstName(otherParent);
+
+  // Expenses the other parent sent, waiting on this parent's OK, shown beside permissions.
+  const expenseApprovals = useMemo<DashboardPermissionRequest[]>(
+    () =>
+      expenses
+        .filter(
+          (expense) =>
+            expense.agreement.status === 'pending' && expense.agreement.requestedBy !== currentParentId,
+        )
+        .map((expense) => ({
+          id: expense.id,
+          title: `${expense.title} · ${formatMoney(expense.amountPence)}`,
+          type: 'purchase',
+          status: 'pending',
+          requestedByParentId: expense.agreement.requestedBy,
+          resolvedByParentId: null,
+          requestedAt: expense.updatedAt,
+          resolvedAt: null,
+          summary: `${otherName} added it · your share ${formatMoney(
+            expense.shares.find((share) => share.parentId === currentParentId)?.sharePence ?? 0,
+          )}`,
+          relatedEntityType: 'expense' as const,
+          relatedEntityId: expense.id,
+        })),
+    [currentParentId, expenses, otherName],
+  );
+
   const approvalsSummary = useMemo<ApprovalsSummary>(() => {
     const pendingPermissions = dashboardPermissionRequests.filter(
       (request) => request.status === 'pending',
     ).length;
+    const pendingExpenses = expenseApprovals.length;
     return {
-      totalPending: pendingPermissions,
-      byType: { expenses: 0, scheduleChanges: 0, permissions: pendingPermissions },
+      totalPending: pendingPermissions + pendingExpenses,
+      byType: { expenses: pendingExpenses, scheduleChanges: 0, permissions: pendingPermissions },
     };
-  }, [dashboardPermissionRequests]);
-
-  const budgetSummary = useMemo<BudgetSummary>(() => {
-    return {
-      month: new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
-      currency: 'GBP',
-      totalLimit: 0,
-      totalSpent: 0,
-      remaining: 0,
-      categories: [],
-    };
-  }, []);
+  }, [dashboardPermissionRequests, expenseApprovals]);
 
   const setupChecklist = useMemo<SetupChecklist>(() => {
     const items = [
@@ -307,14 +335,19 @@ const DashboardPage = () => {
         sectionId: 'permissions',
       },
       {
-        id: 'wid-spend',
-        title: 'Monthly Spend',
-        value: '£0',
-        description: '£0 remaining',
+        id: 'wid-balance',
+        title: 'Balance',
+        value: formatMoney(expenseSummary?.balance.netPence ?? 0),
+        description:
+          !expenseSummary || expenseSummary.balance.netPence === 0
+            ? 'All square'
+            : expenseSummary.balance.creditorParentId === currentParentId
+              ? `${otherName} owes you`
+              : `You owe ${otherName}`,
         trend: 'flat',
-        delta: '0%',
+        delta: '0',
         size: 'md',
-        sectionId: 'expenses',
+        sectionId: 'expenses-owed',
       },
       {
         id: 'wid-unread',
@@ -349,6 +382,9 @@ const DashboardPage = () => {
     ];
   }, [
     approvalsSummary.totalPending,
+    currentParentId,
+    expenseSummary,
+    otherName,
     dashboardMessages,
     dashboardUpcomingEvents.length,
     family,
@@ -358,7 +394,7 @@ const DashboardPage = () => {
 
   const quickActions = useMemo<QuickAction[]>(
     () => [
-      { id: 'add-expense', label: 'Add Expense', helper: 'Upload a receipt', shortcut: 'E' },
+      { id: 'add-expense', label: 'Add Expense', helper: 'Log a cost or snap a receipt', shortcut: 'E' },
       {
         id: 'create-event',
         label: 'Create Event',
@@ -456,6 +492,7 @@ const DashboardPage = () => {
   const handleNavigateSection = (sectionId: string) => {
     if (sectionId === 'calendar') navigate('/calendar');
     else if (sectionId === 'expenses') navigate('/expenses');
+    else if (sectionId === 'expenses-owed') navigate('/expenses?view=owed');
     else if (sectionId === 'messaging') navigate('/messages');
     else if (sectionId === 'family') navigate('/family-setup');
     else if (sectionId === 'dashboard') navigate('/dashboard');
@@ -479,12 +516,30 @@ const DashboardPage = () => {
         parents={dashboardParents}
         children={dashboardChildren}
         upcomingEvents={dashboardUpcomingEvents}
-        permissionRequests={dashboardPermissionRequests}
-        expenses={[]}
+        permissionRequests={[...expenseApprovals, ...dashboardPermissionRequests]}
         messages={dashboardMessages}
         invitations={dashboardInvitations}
         activityFeed={[]}
-        budgetSummary={budgetSummary}
+        expensesPanel={
+          <DashboardExpensesPanel
+            me={meParent}
+            other={otherParent}
+            expenses={expenses}
+            summary={expenseSummary}
+            onOpenExpenses={() => navigate('/expenses')}
+            onOpenExpense={(expense) => navigate(`/expenses?expense=${encodeURIComponent(expense.id)}`)}
+            onSettleUp={() => navigate('/expenses?settle=1')}
+            onAgree={async (expense) => {
+              if (!activeFamilyId) return;
+              try {
+                await expenseTransition.mutateAsync({ familyId: activeFamilyId, expense, transition: 'agree' });
+                showToast({ variant: 'success', title: 'Agreed', description: `${expense.title} is agreed.` });
+              } catch {
+                showToast({ variant: 'error', title: 'That did not work', description: 'Reload and try again.' });
+              }
+            }}
+          />
+        }
         approvalsSummary={approvalsSummary}
         setupChecklist={setupChecklist}
         widgetCards={widgetCards}
@@ -498,6 +553,10 @@ const DashboardPage = () => {
         onCancelInvitation={handleCancelInvitation}
         onNavigateSection={handleNavigateSection}
         onViewApproval={(permissionId) => {
+          if (expenseApprovals.some((approval) => approval.id === permissionId)) {
+            navigate(`/expenses?expense=${encodeURIComponent(permissionId)}`);
+            return;
+          }
           const conversation = conversations.find(
             (entry) => entry.permissionRequest?.id === permissionId,
           );
@@ -518,7 +577,7 @@ const DashboardPage = () => {
         onOpenMessageThread={(threadId) =>
           navigate(`/messages?conversation=${encodeURIComponent(threadId)}`)
         }
-        onQuickAddExpense={() => navigate('/expenses')}
+        onQuickAddExpense={() => navigate('/expenses?new=1')}
         onQuickCreateEvent={() => navigate('/calendar')}
         onQuickSendMessage={() => navigate('/messages')}
       />

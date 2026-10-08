@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Calendar,
   MessageSquare,
-  DollarSign,
+  PoundSterling,
   FileText,
   Image,
   Settings,
@@ -19,7 +19,7 @@ import {
 } from './components/auth';
 import { UpdateNotification, OfflineIndicator, InstallPrompt } from './components/pwa';
 import type { NavigationItem } from './components/shell';
-import { AppShell } from './components/shell';
+import { ShellWithBadges } from './components/shell';
 import { useApiClient, useAssistantConfig } from './hooks/api';
 import { useIdleTimeout } from './hooks/useIdleTimeout';
 import { initDB, initSync } from './lib/pwa';
@@ -109,7 +109,7 @@ const App = () => {
     {
       label: 'Expenses',
       href: '/expenses',
-      icon: <DollarSign className="h-5 w-5" />,
+      icon: <PoundSterling className="h-5 w-5" />,
       isActive: location.pathname === '/expenses',
     },
     {
@@ -143,7 +143,7 @@ const App = () => {
           element={
             <ProtectedRoute>
               <OnboardingGuard>
-                <AppShell
+                <ShellWithBadges
                   navigationItems={navigationItems}
                   user={user}
                   onNavigate={handleNavigate}
@@ -164,7 +164,7 @@ const App = () => {
                     <Route path="/onboarding" element={<OnboardingPage />} />
                     <Route path="/family-setup" element={<FamilySetupPage />} />
                   </Routes>
-                </AppShell>
+                </ShellWithBadges>
               </OnboardingGuard>
             </ProtectedRoute>
           }

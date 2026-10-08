@@ -867,8 +867,15 @@ services:
       COPARENT_EMAIL_FROM: ${COPARENT_EMAIL_FROM:-noreply@simonrowe.dev}
       COPARENT_EMAIL_ENABLED: ${COPARENT_EMAIL_ENABLED:-false}
       COPARENT_SOURCE_DATABASE: ${COPARENT_SOURCE_DATABASE:-coparent_legacy}
+      # ABSOLUTE and matched by the named volume below, for the same reason as
+      # SCHOOL_ATTACHMENT_PATH: a relative path lands in the writable layer and every deploy
+      # deletes the receipts.
+      COPARENT_RECEIPT_PATH: /workspace/coparent-receipts/
     volumes:
       - backend-uploads:/workspace/uploads
+      # CoParent expense receipts, served only by ExpenseReceiptController after a family
+      # membership check. Kept out of backend-uploads for the reason given below.
+      - coparent-receipts:/workspace/coparent-receipts
       # The original bytes of PDFs that arrived as school email attachments, served by
       # SchoolAttachmentController. Deliberately NOT inside backend-uploads: /workspace/uploads
       # is published by a ResourceHandlerRegistry mapping with no authorisation of any kind,
@@ -1601,6 +1608,9 @@ volumes:
   # Term Time email attachments. Separate from backend-uploads because that path is served
   # unauthenticated; see the mount on `backend` for the full reasoning.
   school-attachments:
+  # CoParent expense receipts. Separate from backend-uploads because that path is served
+  # unauthenticated; see the mount on `backend`.
+  coparent-receipts:
   portainer-data:
   langfuse-db-data:
   langfuse-clickhouse-data:

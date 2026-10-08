@@ -27,7 +27,11 @@ const MessagesPage = () => {
   // name older links used.
   const linkedConversationId =
     searchParams.get('conversation') || searchParams.get('thread') || undefined;
-  const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
+  // `?compose=message&subject=…` opens a new message straight away, as an expense's Discuss does.
+  const [composeMode, setComposeMode] = useState<ComposeMode | null>(
+    searchParams.get('compose') === 'message' ? 'message' : null,
+  );
+  const [composeSubject, setComposeSubject] = useState(searchParams.get('subject') ?? '');
   const { data: families = [], isLoading: familiesLoading } = useFamilies();
   const [activeFamilyId, setActiveFamilyId] = useState<string | undefined>();
 
@@ -155,8 +159,13 @@ const MessagesPage = () => {
         mode={composeMode}
         recipientName={otherParent?.fullName ?? 'your co-parent'}
         children={children.map((child) => ({ id: child.id, fullName: child.fullName }))}
-        onClose={() => setComposeMode(null)}
+        onClose={() => {
+          setComposeMode(null);
+          // The linked subject is for the one message it opened, not every message after it.
+          setComposeSubject('');
+        }}
         onSubmit={handleCompose}
+        initialSubject={composeSubject}
       />
     </>
   );

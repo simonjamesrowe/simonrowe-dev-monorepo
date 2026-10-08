@@ -1,0 +1,1372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoParent · Expenses — interactive mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:#dfe5ea;color:#0f172a;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+
+/* ---------- mockup chrome (not part of the product) ---------- */
+.mock-bar{height:56px;display:flex;align-items:center;gap:22px;padding:0 20px;background:#0b1220;color:#e2e8f0;font-size:13px;position:relative;z-index:100}
+.mock-bar__brand{font-weight:600;letter-spacing:.01em;display:flex;align-items:center;gap:8px}
+.mock-bar__tag{font-size:11px;padding:2px 8px;border-radius:999px;background:#1e293b;color:#94a3b8}
+.mock-group{display:flex;align-items:center;gap:8px}
+.mock-group__label{color:#94a3b8}
+.mock-seg{display:inline-flex;background:#1e293b;border-radius:9px;padding:3px}
+.mock-seg button{border:0;background:transparent;color:#cbd5e1;padding:5px 11px;border-radius:7px}
+.mock-seg button.is-on{background:#0d9488;color:#fff}
+.mock-bar__spacer{flex:1}
+.mock-link{background:none;border:1px solid #334155;color:#cbd5e1;border-radius:8px;padding:5px 10px}
+.stage{height:calc(100vh - 56px);display:flex;justify-content:center;align-items:stretch;position:relative}
+.stage--mobile{align-items:center;padding:18px}
+
+/* ---------- product ---------- */
+.app{
+  --bg:#f5f7f9;--surface:#ffffff;--surface-2:#f8fafc;--surface-3:#f1f5f9;--border:#e2e8f0;--border-strong:#cbd5e1;
+  --text:#0f172a;--text-2:#334155;--muted:#64748b;
+  --teal:#0d9488;--teal-strong:#0f766e;--teal-soft:#ccfbf1;--teal-tint:#f0fdfa;--teal-line:#5eead4;
+  --rose:#e11d48;--rose-text:#be123c;--rose-soft:#ffe4e6;--rose-tint:#fff1f2;--rose-line:#fda4af;
+  --amber:#f59e0b;--amber-text:#92400e;--amber-soft:#fef3c7;
+  --violet:#8b5cf6;--violet-text:#5b21b6;--violet-soft:#ede9fe;
+  --sky:#0ea5e9;--sky-text:#0369a1;--sky-soft:#e0f2fe;
+  --emerald:#10b981;--emerald-text:#047857;--emerald-soft:#d1fae5;
+  --cyan-soft:#cffafe;--cyan-text:#0e7490;--orange-soft:#ffedd5;--orange-text:#c2410c;
+  --shadow:0 1px 2px rgba(15,23,42,.05),0 1px 3px rgba(15,23,42,.06);
+  --shadow-lg:0 24px 48px -12px rgba(15,23,42,.25);
+  position:relative;overflow:hidden;width:100%;height:100%;display:flex;background:var(--bg);color:var(--text);font-size:15px
+}
+.app.theme-dark{
+  --bg:#0a1120;--surface:#0f172a;--surface-2:#111b2e;--surface-3:#16223a;--border:#1e293b;--border-strong:#334155;
+  --text:#e2e8f0;--text-2:#cbd5e1;--muted:#94a3b8;
+  --teal:#14b8a6;--teal-strong:#0d9488;--teal-soft:rgba(20,184,166,.18);--teal-tint:rgba(20,184,166,.08);--teal-line:rgba(94,234,212,.35);
+  --rose:#fb7185;--rose-text:#fda4af;--rose-soft:rgba(244,63,94,.18);--rose-tint:rgba(244,63,94,.08);--rose-line:rgba(253,164,175,.35);
+  --amber:#fbbf24;--amber-text:#fcd34d;--amber-soft:rgba(245,158,11,.18);
+  --violet:#a78bfa;--violet-text:#c4b5fd;--violet-soft:rgba(139,92,246,.2);
+  --sky:#38bdf8;--sky-text:#7dd3fc;--sky-soft:rgba(14,165,233,.2);
+  --emerald:#34d399;--emerald-text:#6ee7b7;--emerald-soft:rgba(16,185,129,.18);
+  --cyan-soft:rgba(6,182,212,.18);--cyan-text:#67e8f9;--orange-soft:rgba(249,115,22,.18);--orange-text:#fdba74;
+  --shadow:0 1px 2px rgba(0,0,0,.3);--shadow-lg:0 24px 48px -12px rgba(0,0,0,.6)
+}
+.stage--mobile .app{width:390px;height:min(844px,calc(100vh - 92px));border-radius:42px;border:11px solid #0b1220;box-shadow:0 30px 60px -20px rgba(15,23,42,.5)}
+svg.ic{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* sidebar */
+.side{width:260px;flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:22px 16px;gap:4px;z-index:40;transition:transform .2s}
+.side__logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:19px;color:var(--teal-strong);padding:0 10px 22px}
+.theme-dark .side__logo{color:var(--teal)}
+.side__mark{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#14b8a6,#f43f5e);display:grid;place-items:center;color:#fff}
+.side__label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:6px 12px}
+.nav{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;color:var(--text-2);background:none;border:0;width:100%;text-align:left;font-weight:500;transition:background .2s,color .2s}
+.nav:hover{background:var(--surface-3)}
+.nav.is-on{background:var(--teal-soft);color:var(--teal-strong)}
+.theme-dark .nav.is-on{color:var(--teal)}
+.nav__badge{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:var(--amber);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;padding:0 6px}
+.theme-dark .nav__badge{color:#1f1300}
+.side__spacer{flex:1}
+.side__quick{display:flex;align-items:center;justify-content:center;gap:8px;border:1px dashed var(--teal-line);background:var(--teal-tint);color:var(--teal-strong);border-radius:12px;padding:10px;font-weight:600;margin-bottom:8px}
+.theme-dark .side__quick{color:var(--teal)}
+.me{display:flex;align-items:center;gap:10px;padding:10px;border-top:1px solid var(--border);margin-top:6px;padding-top:14px}
+.avatar{width:34px;height:34px;border-radius:999px;display:grid;place-items:center;color:#fff;font-weight:600;font-size:14px;flex:none}
+.avatar--violet{background:var(--violet)}.avatar--sky{background:var(--sky)}
+.me__name{font-weight:600;font-size:14px}.me__sub{font-size:12px;color:var(--muted)}
+
+/* main */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.m-head{display:none;height:60px;flex:none;align-items:center;justify-content:space-between;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--border)}
+.m-head__logo{font-weight:700;color:var(--teal-strong);display:flex;gap:8px;align-items:center}
+.icon-btn{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--surface);display:grid;place-items:center;color:var(--text-2)}
+.scroll{flex:1;overflow-y:auto;scroll-behavior:smooth}
+.page{max-width:1120px;margin:0 auto;padding:32px 36px 60px}
+.page__head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px}
+.page__title{font-size:30px;font-weight:700;letter-spacing:-.02em;margin:0}
+.page__sub{margin:6px 0 0;color:var(--muted)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;padding:10px 16px;font-weight:600;font-size:14px;border:1px solid transparent;white-space:nowrap;transition:background .15s,transform .05s}
+.btn:active{transform:translateY(1px)}
+.btn--primary{background:var(--teal-strong);color:#fff;box-shadow:0 8px 18px -8px rgba(13,148,136,.6)}
+.btn--primary:hover{background:#115e59}
+.btn--primary:disabled{background:var(--border-strong);color:var(--surface);box-shadow:none;cursor:not-allowed}
+.btn--ghost{background:var(--surface);border-color:var(--border-strong);color:var(--text-2)}
+.btn--ghost:hover{background:var(--surface-3)}
+.btn--teal{background:var(--surface);border-color:var(--teal);color:var(--teal-strong)}
+.theme-dark .btn--teal{color:var(--teal)}
+.btn--danger{background:var(--surface);border-color:var(--rose-line);color:var(--rose-text)}
+.btn--danger:hover{background:var(--rose-tint)}
+.btn--sm{padding:7px 12px;font-size:13px;border-radius:10px}
+.btn--link{background:none;border:0;padding:4px 0;color:var(--rose-text);font-weight:600;font-size:13px}
+.btn--text{background:none;border:0;padding:8px 6px;color:var(--muted);font-weight:500}
+.btn--text:hover{color:var(--text)}
+
+/* cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow)}
+.cards{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:16px;margin-bottom:26px}
+.stat-card{padding:20px 22px;display:flex;flex-direction:column;gap:4px}
+.eyebrow{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 6px}
+.stat{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:0}
+.stat--amber{color:#b45309}.theme-dark .stat--amber{color:var(--amber)}
+.muted{color:var(--muted);margin:0;font-size:14px}
+.balance{padding:22px 24px;border:2px solid var(--teal);display:grid;grid-template-columns:1fr auto;gap:6px 16px;align-items:end;background:linear-gradient(135deg,var(--teal-tint),var(--surface) 60%)}
+.balance--owe{border-color:var(--rose);background:linear-gradient(135deg,var(--rose-tint),var(--surface) 60%)}
+.balance--square{border-color:var(--border-strong);background:var(--surface)}
+.balance__who{font-size:17px;font-weight:500;margin:0}
+.balance__amount{font-size:42px;font-weight:700;letter-spacing:-.03em;margin:2px 0 4px;color:var(--teal-strong)}
+.theme-dark .balance__amount{color:var(--teal)}
+.balance--owe .balance__amount{color:var(--rose-text)}
+.balance--square .balance__amount{color:var(--text)}
+.balance__meta{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted)}
+.balance__meta strong{color:#b45309;font-weight:600}.theme-dark .balance__meta strong{color:var(--amber)}
+
+/* tabs & filters */
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{border:1px solid var(--border-strong);background:var(--surface);color:var(--text-2);border-radius:999px;padding:8px 14px;font-weight:500;font-size:14px;display:inline-flex;align-items:center;gap:8px}
+.tab__count{font-size:12px;font-weight:700;min-width:20px;height:20px;border-radius:999px;display:grid;place-items:center;background:var(--surface-3);color:var(--text-2);padding:0 6px}
+.tab.is-on{background:var(--teal-strong);border-color:var(--teal-strong);color:#fff}
+.tab.is-on .tab__count{background:rgba(255,255,255,.22);color:#fff}
+.filters{display:flex;gap:8px}
+.select{appearance:none;border:1px solid var(--border-strong);background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2364748b' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;border-radius:12px;padding:8px 34px 8px 12px;font-size:14px;color:var(--text-2)}
+
+/* list */
+.month{display:flex;align-items:center;gap:14px;font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--muted);margin:22px 0 10px}
+.month::after{content:"";flex:1;height:1px;background:var(--border)}
+.list{display:flex;flex-direction:column;gap:10px}
+.row{display:grid;grid-template-columns:52px minmax(0,1fr) 170px 230px;align-items:center;gap:18px;padding:16px 18px;background:var(--surface);border:1px solid var(--border);border-radius:18px;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s;box-shadow:var(--shadow)}
+.row:hover{border-color:var(--teal-line);box-shadow:0 6px 18px -10px rgba(13,148,136,.45)}
+.row--needs{border-left:4px solid var(--amber);padding-left:15px}
+.row--flash{animation:flash 1.6s ease}
+@keyframes flash{0%{box-shadow:0 0 0 4px var(--teal-line)}100%{box-shadow:var(--shadow)}}
+.tile{width:52px;height:52px;border-radius:16px;display:grid;place-items:center}
+.tile svg.ic{width:24px;height:24px}
+.tile--rose{background:var(--rose-soft);color:var(--rose-text)}.tile--violet{background:var(--violet-soft);color:var(--violet-text)}
+.tile--sky{background:var(--sky-soft);color:var(--sky-text)}.tile--amber{background:var(--amber-soft);color:var(--amber-text)}
+.tile--emerald{background:var(--emerald-soft);color:var(--emerald-text)}.tile--cyan{background:var(--cyan-soft);color:var(--cyan-text)}
+.tile--orange{background:var(--orange-soft);color:var(--orange-text)}.tile--slate{background:var(--surface-3);color:var(--text-2)}
+.row__title{margin:0 0 5px;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row__meta{margin:0;color:var(--muted);font-size:13.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.row__meta .sep{opacity:.5}
+.row__money{text-align:right}
+.row__amount{margin:0;font-size:18px;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.row__share{margin:3px 0 0;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.row__status{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.row__actions{display:flex;gap:8px}
+.dot{width:10px;height:10px;border-radius:999px;display:inline-block;flex:none}
+.dot--violet{background:var(--violet)}.dot--sky{background:var(--sky)}.dot--none{background:transparent;border:2px dashed var(--border-strong);width:11px;height:11px}
+.chip{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;white-space:nowrap;border:1px solid transparent}
+.chip::before{content:"";width:7px;height:7px;border-radius:999px;background:currentColor;opacity:.9}
+.chip--slate{background:var(--surface-3);color:var(--text-2);border-color:var(--border-strong)}
+.chip--amber{background:var(--amber-soft);color:var(--amber-text);border-color:rgba(245,158,11,.45)}
+.chip--rose{background:var(--rose-soft);color:var(--rose-text);border-color:var(--rose-line)}
+.chip--teal{background:var(--teal-soft);color:var(--teal-strong);border-color:var(--teal-line)}
+.theme-dark .chip--teal{color:var(--teal)}
+.chip--emerald{background:var(--emerald-soft);color:var(--emerald-text);border-color:rgba(16,185,129,.4)}
+.empty{padding:40px;text-align:center;color:var(--muted);border:1px dashed var(--border-strong);border-radius:18px}
+
+/* drawer */
+.overlay{position:absolute;inset:0;background:rgba(15,23,42,.42);z-index:70;animation:fade .2s}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:min(540px,100%);background:var(--surface);z-index:80;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);border-left:1px solid var(--border)}
+.drawer--enter{animation:slide .26s cubic-bezier(.2,.8,.2,1)}
+@keyframes slide{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.drawer__head{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border)}
+.drawer__title{margin:0;font-size:20px;font-weight:700}
+.drawer__body{flex:1;overflow-y:auto;padding:22px 24px;display:flex;flex-direction:column;gap:18px}
+.drawer__body > *{flex-shrink:0}
+.drawer__foot{padding:16px 24px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--surface)}
+.drawer__foot .grow{flex:1}
+
+/* form */
+.field{display:flex;flex-direction:column;gap:8px}
+.field__label{font-size:14px;font-weight:600;color:var(--text-2)}
+.field__hint{font-size:12.5px;color:var(--muted);font-weight:400}
+.input,.textarea{width:100%;border:1px solid var(--border-strong);background:var(--surface);border-radius:12px;padding:11px 14px;font-size:15px;outline:none;transition:border-color .15s,box-shadow .15s}
+.input:focus,.textarea:focus,.select:focus{border-color:var(--teal);box-shadow:0 0 0 4px rgba(13,148,136,.15)}
+.input--money{padding-left:30px;font-variant-numeric:tabular-nums}
+.money-wrap{position:relative}
+.money-wrap::before{content:"£";position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:500}
+.textarea{min-height:76px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:14px;padding:4px;gap:4px}
+.seg button{flex:1;border:0;background:transparent;border-radius:10px;padding:9px 10px;font-weight:500;color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:14px;white-space:nowrap}
+.seg button.is-on{background:var(--surface);color:var(--text);box-shadow:var(--shadow);font-weight:600}
+.seg--timing button.is-on{background:var(--teal-strong);color:#fff}
+.seg button.is-on.p-violet{background:var(--violet-soft);color:var(--violet-text);box-shadow:inset 0 0 0 1.5px var(--violet)}
+.seg button.is-on.p-sky{background:var(--sky-soft);color:var(--sky-text);box-shadow:inset 0 0 0 1.5px var(--sky)}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{border:1px solid var(--border-strong);background:var(--surface);border-radius:999px;padding:8px 14px;font-weight:500;font-size:14px;color:var(--text-2);display:inline-flex;align-items:center;gap:6px}
+.pill.is-on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong);font-weight:600}
+.theme-dark .pill.is-on{color:var(--teal)}
+.custom{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border);font-size:14px}
+.custom input[type=range]{flex:1;accent-color:var(--teal)}
+.custom__val{font-variant-numeric:tabular-nums;font-weight:600;min-width:150px;text-align:right}
+.summary{border-radius:16px;padding:14px 16px;background:var(--teal-tint);border:1px solid var(--teal-line);display:flex;gap:12px;align-items:flex-start}
+.summary--owe{background:var(--rose-tint);border-color:var(--rose-line)}
+.summary--none{background:var(--surface-2);border-color:var(--border)}
+.summary__icon{width:34px;height:34px;border-radius:10px;background:var(--surface);display:grid;place-items:center;color:var(--teal-strong);flex:none}
+.summary--owe .summary__icon{color:var(--rose-text)}
+.summary p{margin:0;line-height:1.45}
+.summary__lead{font-weight:500}
+.summary__owed{font-weight:700;color:var(--teal-strong)}
+.theme-dark .summary__owed{color:var(--teal)}
+.summary--owe .summary__owed{color:var(--rose-text)}
+.notice{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--muted)}
+.notice--warn{color:var(--amber-text);background:var(--amber-soft);border-radius:12px;padding:10px 12px}
+.receipts{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.thumb{width:64px;height:64px;border-radius:12px;border:1px solid var(--border-strong);background:var(--surface-3);overflow:hidden;position:relative;display:grid;place-items:center;cursor:zoom-in;padding:0}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb--pdf{background:var(--rose-soft);color:var(--rose-text);font-weight:700;font-size:12px;flex-direction:column;gap:2px}
+.thumb__x{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:999px;border:0;background:rgba(15,23,42,.7);color:#fff;display:grid;place-items:center;padding:0}
+.thumb__x svg.ic{width:12px;height:12px}
+.add-receipt{height:64px;border:1.5px dashed var(--teal-line);background:var(--teal-tint);color:var(--teal-strong);border-radius:12px;padding:0 16px;display:inline-flex;align-items:center;gap:8px;font-weight:600}
+.theme-dark .add-receipt{color:var(--teal)}
+
+/* detail */
+.detail__top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.detail__amount{font-size:38px;font-weight:700;letter-spacing:-.03em;margin:0;font-variant-numeric:tabular-nums}
+.detail__sub{margin:4px 0 0;color:var(--muted);display:flex;align-items:center;gap:8px}
+.facts{display:grid;grid-template-columns:140px 1fr;gap:12px 14px;padding:16px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:14.5px}
+.facts dt{color:var(--muted)}
+.facts dd{margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.facts dd strong{font-weight:600}
+.owed-line{color:var(--teal-strong);font-weight:600}.theme-dark .owed-line{color:var(--teal)}
+.owed-line--owe{color:var(--rose-text)}
+.section-title{font-size:14px;font-weight:700;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;position:relative}
+.timeline li{display:grid;grid-template-columns:96px 1fr;gap:10px;font-size:14px}
+.timeline time{color:var(--muted);font-variant-numeric:tabular-nums}
+.timeline .is-dispute{color:var(--rose-text)}
+.panel{border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.panel--rose{background:var(--rose-tint);border:1px solid var(--rose-line)}
+.panel--teal{background:var(--teal-tint);border:1px solid var(--teal-line)}
+.panel__title{margin:0;font-weight:600;font-size:14px}
+.callout{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;font-size:14px;line-height:1.45}
+.callout--rose{background:var(--rose-tint);color:var(--rose-text);border:1px solid var(--rose-line)}
+.callout--amber{background:var(--amber-soft);color:var(--amber-text)}
+.callout--teal{background:var(--teal-tint);color:var(--teal-strong);border:1px solid var(--teal-line)}
+.theme-dark .callout--teal{color:var(--teal)}
+
+/* settle */
+.settle-total{font-size:18px;font-weight:600;margin:0}
+.settle-list{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.settle-item{display:grid;grid-template-columns:24px 1fr auto;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;background:var(--surface)}
+.settle-item:last-child{border-bottom:0}
+.settle-item input{width:18px;height:18px;accent-color:var(--teal)}
+.settle-item__title{font-weight:600;margin:0}
+.settle-item__dir{font-size:13px;color:var(--muted);margin:2px 0 0}
+.settle-item__amt{font-weight:700;font-variant-numeric:tabular-nums}
+.settle-item__amt--neg{color:var(--rose-text)}
+.net{display:flex;justify-content:space-between;align-items:center;padding:16px;border-radius:16px;background:var(--surface-2);border:1px solid var(--border);font-size:17px;font-weight:600}
+
+/* dashboard */
+.hero{padding:26px 28px;border-radius:26px;background:linear-gradient(120deg,#ccfbf1 0%,#f0fdfa 45%,#ffe4e6 100%);border:1px solid #99f6e4;display:flex;justify-content:space-between;gap:20px;align-items:flex-end;margin-bottom:18px}
+.theme-dark .hero{background:linear-gradient(120deg,rgba(20,184,166,.25),rgba(15,23,42,.6) 50%,rgba(244,63,94,.18));border-color:rgba(94,234,212,.3)}
+.hero__title{font-size:28px;font-weight:700;margin:4px 0 14px;letter-spacing:-.02em}
+.hero__pills{display:flex;gap:8px;flex-wrap:wrap}
+.hero-pill{border-radius:999px;padding:7px 14px;font-size:13.5px;font-weight:600;background:var(--surface);border:1px solid var(--border-strong);color:var(--text-2)}
+.hero-pill--teal{background:var(--teal-strong);border-color:var(--teal-strong);color:#fff}
+.hero-pill--rose{background:var(--rose-soft);border-color:var(--rose-line);color:var(--rose-text)}
+.hero__actions{display:flex;gap:10px;flex-wrap:wrap}
+.qa{border-radius:14px;padding:11px 16px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text-2)}
+.qa--rose{background:var(--rose-soft);border-color:var(--rose-line);color:var(--rose-text)}
+.widgets{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px}
+.widget{padding:18px 20px;cursor:pointer}
+.widget--balance{border:2px solid var(--teal)}
+.widget--owe{border-color:var(--rose)}
+.widget__value{font-size:32px;font-weight:700;letter-spacing:-.02em;margin:2px 0}
+.widget__value--teal{color:var(--teal-strong)}.theme-dark .widget__value--teal{color:var(--teal)}
+.widget__value--rose{color:var(--rose-text)}
+.widget__value--amber{color:#b45309}.theme-dark .widget__value--amber{color:var(--amber)}
+.dash{display:grid;grid-template-columns:1fr 1.15fr;gap:18px}
+.dash__col{display:flex;flex-direction:column;gap:18px}
+.dpanel{padding:20px 22px}
+.dpanel__head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.dpanel__title{margin:0;font-size:17px;font-weight:700}
+.ditem{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);cursor:pointer}
+.ditem + .ditem{margin-top:8px}
+.ditem__body{flex:1;min-width:0}
+.ditem__title{margin:0;font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ditem__sub{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.tag{font-size:11px;font-weight:700;letter-spacing:.06em;padding:4px 8px;border-radius:8px;flex:none}
+.tag--amber{background:var(--amber-soft);color:var(--amber-text)}
+.tag--sky{background:var(--sky-soft);color:var(--sky-text)}
+.tag--violet{background:var(--violet-soft);color:var(--violet-text)}
+.balance-strip{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:16px;background:var(--teal-tint);border:1px solid var(--teal-line);margin-bottom:16px}
+.balance-strip--owe{background:var(--rose-tint);border-color:var(--rose-line)}
+.balance-strip__text{margin:0;font-weight:600;color:var(--teal-strong)}.theme-dark .balance-strip__text{color:var(--teal)}
+.balance-strip--owe .balance-strip__text{color:var(--rose-text)}
+.sub-eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+.bar-row{display:grid;grid-template-columns:96px 1fr 76px;gap:10px;align-items:center;font-size:13.5px;margin-top:8px}
+.bar{height:10px;border-radius:999px;background:var(--surface-3);overflow:hidden}
+.bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#fb7185,#e11d48)}
+.bar-row__amt{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* lightbox, toasts */
+.lightbox{position:absolute;inset:0;background:rgba(2,6,23,.82);z-index:95;display:grid;place-items:center;animation:fade .2s}
+.lightbox__inner{background:var(--surface);border-radius:20px;padding:16px;max-width:min(420px,90%);display:flex;flex-direction:column;gap:10px;align-items:center}
+.lightbox img{max-height:62vh;max-width:100%;border-radius:10px}
+.lightbox__pdf{width:280px;height:360px;border-radius:12px;background:var(--rose-tint);color:var(--rose-text);display:grid;place-items:center;font-weight:700;border:1px solid var(--rose-line)}
+.toasts{position:fixed;right:22px;bottom:22px;display:flex;flex-direction:column;gap:10px;z-index:200;width:360px}
+.stage--mobile ~ .toasts{left:50%;right:auto;transform:translateX(-50%);bottom:auto;top:76px;width:340px}
+.toast{background:#0f172a;color:#e2e8f0;border-radius:16px;padding:14px 16px;display:flex;gap:12px;box-shadow:0 18px 40px -12px rgba(2,6,23,.55);animation:slide .25s ease;font-size:14px}
+.toast__icon{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;flex:none;background:#134e4a;color:#5eead4}
+.toast--mail .toast__icon{background:#3b0764;color:#d8b4fe}
+.toast__title{margin:0;font-weight:600;color:#fff}
+.toast__body{margin:3px 0 0;color:#94a3b8;font-size:13px;line-height:1.4}
+.toast.is-out{opacity:0;transform:translateY(6px);transition:all .3s}
+
+/* ---------- mobile ---------- */
+.is-mobile{font-size:14.5px}
+.is-mobile .side{position:absolute;top:0;bottom:0;left:0;transform:translateX(-102%);box-shadow:var(--shadow-lg)}
+.is-mobile.nav-open .side{transform:none}
+.is-mobile .m-head{display:flex}
+.is-mobile .page{padding:18px 16px 40px}
+.is-mobile .page__title{font-size:24px}
+.is-mobile .page__sub{font-size:13.5px}
+.is-mobile .cards{grid-template-columns:1fr 1fr;gap:10px}
+.is-mobile .cards .balance{grid-column:1/-1}
+.is-mobile .stat-card{padding:14px 16px}
+.is-mobile .stat{font-size:21px}
+.is-mobile .balance__amount{font-size:34px}
+.is-mobile .toolbar{flex-direction:column;align-items:stretch}
+.is-mobile .tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.is-mobile .tab{flex:none}
+.is-mobile .filters .select{flex:1}
+.is-mobile .row{grid-template-columns:44px minmax(0,1fr) auto;gap:6px 12px;padding:14px}
+.is-mobile .row--needs{padding-left:11px}
+.is-mobile .tile{width:44px;height:44px;border-radius:13px}
+.is-mobile .row__main{grid-column:2}
+.is-mobile .row__money{grid-column:3;grid-row:1}
+.is-mobile .row__amount{font-size:16px}
+.is-mobile .row__share{display:none}
+.is-mobile .row__status{grid-column:1/-1;align-items:stretch;margin-top:6px}
+.is-mobile .row__status .chip{align-self:flex-start}
+.is-mobile .row__actions .btn{flex:1}
+.is-mobile .drawer{width:100%;border-left:0}
+.is-mobile .drawer__body{padding:18px}
+.is-mobile .drawer__foot{padding:12px 18px;flex-wrap:wrap}
+.is-mobile .seg button{padding:9px 6px;font-size:13px}
+.is-mobile .grid2{grid-template-columns:1fr}
+.is-mobile .facts{grid-template-columns:118px 1fr}
+.is-mobile .hero{flex-direction:column;align-items:flex-start;padding:20px}
+.is-mobile .widgets{grid-template-columns:1fr 1fr;gap:10px}
+.is-mobile .dash{grid-template-columns:1fr}
+.is-mobile .custom{flex-wrap:wrap}
+.is-mobile .custom__val{min-width:0;text-align:left}
+.is-mobile .filters{width:100%}
+.is-mobile .filters .select{min-width:0;width:50%}
+.is-mobile .head-actions__quick{display:none}
+.is-mobile .label-long{display:none}
+.is-mobile .page__head{align-items:center}
+.label-short{display:none}
+.is-mobile .label-short{display:inline}
+.head-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+/* quick add (assistant) */
+.qa-steps{display:flex;align-items:center;gap:10px;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.qa-step{display:flex;align-items:center;gap:10px;border:0;background:none;padding:0;text-align:left;color:var(--muted)}
+.qa-step__n{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--surface-3);border:1px solid var(--border-strong)}
+.qa-step strong{display:block;font-size:13.5px;color:var(--text-2)}
+.qa-step small{font-size:12px}
+.qa-step.is-on .qa-step__n{background:var(--teal-strong);color:#fff;border-color:var(--teal-strong)}
+.qa-step.is-done .qa-step__n{background:var(--teal-soft);color:var(--teal-strong);border-color:var(--teal-line)}
+.qa-steps__line{flex:1;height:2px;background:var(--border);border-radius:2px}
+.qa-eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--teal-strong);margin:0 0 4px}
+.theme-dark .qa-eyebrow{color:var(--teal)}
+.qa-heading{margin:0;font-size:18px;font-weight:700}
+.qa-lead{margin:6px 0 0;color:var(--muted);font-size:14px;line-height:1.45}
+.qa-examples{display:flex;flex-wrap:wrap;gap:8px}
+.qa-example{border:1px dashed var(--border-strong);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--text-2)}
+.qa-upload{display:flex;align-items:center;gap:14px;padding:14px;border:1.5px dashed var(--teal-line);border-radius:16px;background:var(--teal-tint);cursor:pointer}
+.qa-upload__icon{width:44px;height:44px;border-radius:12px;background:var(--surface);display:grid;place-items:center;color:var(--teal-strong)}
+.qa-upload strong{display:block}
+.qa-upload small{color:var(--muted)}
+.qa-upload img{width:56px;height:56px;border-radius:10px;object-fit:cover;border:1px solid var(--border-strong)}
+.qa-disclosure{font-size:12.5px;color:var(--muted);margin:0;line-height:1.45}
+.qa-busy{display:flex;align-items:center;gap:12px;padding:16px;border-radius:16px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2)}
+.spinner{width:20px;height:20px;border-radius:999px;border:3px solid var(--teal-soft);border-top-color:var(--teal);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.qcard{border:1px solid var(--border);border-radius:18px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow)}
+.qcard__head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.qcard__rail{width:4px;align-self:stretch;border-radius:4px;background:var(--teal)}
+.qcard--blocked .qcard__rail{background:var(--amber)}
+.qcard--applied .qcard__rail{background:var(--emerald)}
+.qcard--rejected .qcard__rail{background:var(--border-strong)}
+.qcard__type{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+.qcard__status{margin-left:auto;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.qcard--blocked .qcard__status{color:var(--amber-text)}
+.qcard--applied .qcard__status{color:var(--emerald-text)}
+.qcard__body{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.qcard__line{display:flex;gap:12px;align-items:center}
+.qcard__title{margin:0;font-weight:600}
+.qcard__sub{margin:2px 0 0;color:var(--muted);font-size:13px}
+.qcard__actions{display:flex;gap:8px;align-items:center}
+.qcard__edit{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:14px;background:var(--surface-2);border:1px solid var(--border)}
+.qcard__edit .grid2{gap:10px}
+.qcard--rejected .qcard__body{opacity:.6}
+.qcard .summary{padding:10px 12px}
+.qcard .summary__icon{width:28px;height:28px}
+.attach{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--text-2)}
+.attach img{width:44px;height:44px;border-radius:9px;object-fit:cover;border:1px solid var(--border-strong)}
+.attach input{width:16px;height:16px;accent-color:var(--teal)}
+</style>
+</head>
+<body>
+<div class="mock-bar">
+  <div class="mock-bar__brand">CoParent · Expenses <span class="mock-bar__tag">interactive mockup</span></div>
+  <div class="mock-group"><span class="mock-group__label">Screen</span><div class="mock-seg" data-ctl="screen"><button data-v="dashboard">Dashboard</button><button data-v="expenses">Expenses</button></div></div>
+  <div class="mock-group"><span class="mock-group__label">Signed in as</span><div class="mock-seg" data-ctl="me"><button data-v="alex">Alex</button><button data-v="sam">Sam</button></div></div>
+  <div class="mock-group"><span class="mock-group__label">Device</span><div class="mock-seg" data-ctl="device"><button data-v="desktop">Desktop</button><button data-v="mobile">Mobile</button></div></div>
+  <div class="mock-group"><span class="mock-group__label">Theme</span><div class="mock-seg" data-ctl="theme"><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
+  <div class="mock-bar__spacer"></div>
+  <button class="mock-link" id="reset">Reset data</button>
+</div>
+<div class="stage" id="stage"><div class="app" id="app"></div></div>
+<div class="toasts" id="toasts"></div>
+<input type="file" id="file" accept="image/*,application/pdf" multiple hidden>
+
+<script>
+(() => {
+const TODAY = '2026-10-08';
+const PARENTS = {
+  alex: { id: 'alex', name: 'Alex', full: 'Alex Rowe', tone: 'violet' },
+  sam: { id: 'sam', name: 'Sam', full: 'Sam Taylor', tone: 'sky' },
+};
+const CHILDREN = [{ id: 'mia', name: 'Mia' }, { id: 'leo', name: 'Leo' }];
+const CATEGORIES = {
+  education: { label: 'Education', icon: 'cap', tone: 'amber' },
+  clothing: { label: 'Clothing', icon: 'shirt', tone: 'rose' },
+  medical: { label: 'Medical', icon: 'steth', tone: 'sky' },
+  activities: { label: 'Activities', icon: 'trophy', tone: 'violet' },
+  childcare: { label: 'Childcare', icon: 'baby', tone: 'emerald' },
+  travel: { label: 'Travel', icon: 'plane', tone: 'cyan' },
+  food: { label: 'Food', icon: 'utensils', tone: 'orange' },
+  other: { label: 'Other', icon: 'receipt', tone: 'slate' },
+};
+const ICONS = {
+  dashboard: '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  pound: '<path d="M18 7c0-5.333-8-5.333-8 0"/><path d="M10 7v14"/><path d="M6 21h12"/><path d="M6 13h10"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  sparkles: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>',
+  clip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+  alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  scale: '<path d="M12 3v18M7 21h10M5 7h14M5 7l-3 7a3.5 3.5 0 0 0 6 0zM19 7l-3 7a3.5 3.5 0 0 0 6 0z"/>',
+  cap: '<path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/><path d="M22 10v6"/>',
+  shirt: '<path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/>',
+  steth: '<path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 12 0V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 12 0v-4"/><circle cx="20" cy="10" r="2"/>',
+  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0z"/>',
+  baby: '<circle cx="12" cy="12" r="9"/><path d="M9 11h.01M15 11h.01M9.5 15a3.5 3.5 0 0 0 5 0"/>',
+  plane: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
+  utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/>',
+  receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11"/>',
+  trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  pencil: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>',
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/>',
+  arrow: '<path d="M5 12h14M13 5l7 7-7 7"/>',
+  back: '<path d="M19 12H5M11 19l-7-7 7-7"/>',
+  wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+};
+const ic = (name, size) => `<svg class="ic" viewBox="0 0 24 24"${size ? ` style="width:${size}px;height:${size}px"` : ''}>${ICONS[name] || ''}</svg>`;
+
+const RECEIPT_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420" viewBox="0 0 300 420"><rect width="300" height="420" fill="#e2e8f0"/><g transform="rotate(-3 150 210)"><path d="M40 24h220v360l-18-9-18 9-18-9-18 9-18-9-18 9-18-9-18 9-18-9-18 9-18-9-18 9z" fill="#fff" stroke="#cbd5e1"/><g font-family="Courier New, monospace" fill="#1e293b"><text x="150" y="66" font-size="22" text-anchor="middle" font-weight="bold">CLARKS</text><text x="150" y="88" font-size="11" text-anchor="middle">Lewisham Shopping Centre</text><text x="60" y="134" font-size="13">Girls school shoe</text><text x="240" y="134" font-size="13" text-anchor="end">42.00</text><text x="60" y="156" font-size="13">Shoe care spray</text><text x="240" y="156" font-size="13" text-anchor="end">3.00</text><text x="60" y="200" font-size="15" font-weight="bold">TOTAL</text><text x="240" y="200" font-size="15" text-anchor="end" font-weight="bold">£45.00</text><text x="60" y="230" font-size="11">VISA ****4821</text><text x="60" y="246" font-size="11">03/10/2026 17:42</text><text x="150" y="320" font-size="12" text-anchor="middle">Thank you</text></g><line x1="60" y1="106" x2="240" y2="106" stroke="#94a3b8" stroke-dasharray="4 3"/><line x1="60" y1="176" x2="240" y2="176" stroke="#94a3b8" stroke-dasharray="4 3"/></g></svg>`);
+
+function seed() {
+  const S = (o) => Object.assign({ receipts: [], notes: '', version: 1, reimbursement: { status: 'none' }, deleted: false }, o);
+  return [
+    S({ id: 'e1', title: 'School shoes', category: 'clothing', childIds: ['mia'], amountPence: 4500, timing: 'paid', date: '2026-10-03', payerId: 'alex', shares: { alex: 50, sam: 50 },
+      agreement: { status: 'pending', requestedBy: 'alex' }, receipts: [{ id: 'r1', name: 'clarks-receipt.jpg', kind: 'image', url: RECEIPT_IMG }],
+      notes: 'Clarks — the ones she picked', history: [{ at: '3 Oct 18:04', by: 'alex', text: 'added it' }] }),
+    S({ id: 'e2', title: 'Ski trip deposit', category: 'activities', childIds: ['leo'], amountPence: 24000, timing: 'upcoming', date: '2026-10-20', payerId: 'sam', shares: { alex: 50, sam: 50 },
+      agreement: { status: 'pending', requestedBy: 'sam' }, notes: 'School ski trip in February — the deposit is due on the 20th', history: [{ at: '6 Oct 20:15', by: 'sam', text: 'added it' }] }),
+    S({ id: 'e3', title: 'Dentist check-up', category: 'medical', childIds: ['mia'], amountPence: 6000, timing: 'paid', date: '2026-10-01', payerId: 'sam', shares: { alex: 50, sam: 50 },
+      agreement: { status: 'agreed', requestedBy: 'sam', respondedBy: 'alex' }, reimbursement: { status: 'outstanding' }, receipts: [{ id: 'r3', name: 'dentist-invoice.pdf', kind: 'pdf' }],
+      history: [{ at: '1 Oct 12:30', by: 'sam', text: 'added it' }, { at: '1 Oct 19:02', by: 'alex', text: 'agreed' }] }),
+    S({ id: 'e4', title: 'Swimming lessons, autumn term', category: 'activities', childIds: ['mia', 'leo'], amountPence: 8000, timing: 'paid', date: '2026-09-28', payerId: 'alex', shares: { alex: 50, sam: 50 },
+      agreement: { status: 'agreed', requestedBy: 'alex', respondedBy: 'sam' }, reimbursement: { status: 'claimed', note: 'Bank transfer' },
+      history: [{ at: '28 Sep 09:10', by: 'alex', text: 'added it' }, { at: '28 Sep 21:40', by: 'sam', text: 'agreed' }, { at: '7 Oct 08:55', by: 'sam', text: 'marked it as paid back: “Bank transfer”' }] }),
+    S({ id: 'e5', title: 'Autumn uniform', category: 'clothing', childIds: ['leo'], amountPence: 6490, timing: 'paid', date: '2026-09-22', payerId: 'alex', shares: { alex: 50, sam: 50 },
+      agreement: { status: 'agreed', requestedBy: 'alex', respondedBy: 'sam' }, reimbursement: { status: 'outstanding' },
+      history: [{ at: '22 Sep 16:20', by: 'alex', text: 'added it' }, { at: '23 Sep 07:45', by: 'sam', text: 'agreed' }] }),
+    S({ id: 'e6', title: 'Football boots', category: 'activities', childIds: ['leo'], amountPence: 5499, timing: 'paid', date: '2026-10-06', payerId: 'alex', shares: { alex: 50, sam: 50 },
+      agreement: { status: 'disputed', requestedBy: 'alex', respondedBy: 'sam', note: 'We said we’d wait until his birthday' },
+      history: [{ at: '6 Oct 17:30', by: 'alex', text: 'added it' }, { at: '7 Oct 07:12', by: 'sam', text: 'disputed: “We said we’d wait until his birthday”', dispute: true }] }),
+    S({ id: 'e7', title: 'Science Museum trip', category: 'education', childIds: ['leo'], amountPence: 1800, timing: 'upcoming', date: '2026-10-30', payerId: null, shares: { alex: 50, sam: 50 },
+      agreement: { status: 'agreed', requestedBy: 'alex', respondedBy: 'sam' }, history: [{ at: '2 Oct 13:00', by: 'alex', text: 'added it' }, { at: '2 Oct 18:31', by: 'sam', text: 'agreed' }] }),
+    S({ id: 'e8', title: 'After-school club, September', category: 'childcare', childIds: ['mia'], amountPence: 15000, timing: 'paid', date: '2026-09-15', payerId: 'alex', shares: { alex: 60, sam: 40 },
+      agreement: { status: 'agreed', requestedBy: 'alex', respondedBy: 'sam' }, reimbursement: { status: 'reimbursed' },
+      history: [{ at: '15 Sep 10:00', by: 'alex', text: 'added it' }, { at: '15 Sep 20:12', by: 'sam', text: 'agreed' }, { at: '19 Sep 09:00', by: 'sam', text: 'marked it as paid back' }, { at: '19 Sep 12:41', by: 'alex', text: 'confirmed it was received' }] }),
+    S({ id: 'e9', title: 'Birthday party present', category: 'other', childIds: ['mia'], amountPence: 2500, timing: 'paid', date: '2026-09-20', payerId: 'sam', shares: { alex: 0, sam: 100 },
+      agreement: { status: 'agreed', requestedBy: 'sam', respondedBy: 'alex' }, history: [{ at: '20 Sep 11:00', by: 'sam', text: 'added it' }, { at: '20 Sep 14:22', by: 'alex', text: 'agreed' }] }),
+  ];
+}
+
+let ui = { screen: 'expenses', me: 'alex', device: 'desktop', theme: 'light', tab: null, child: 'all', category: 'all', drawer: null, enter: false, navOpen: false, lightbox: null, flash: null };
+let expenses = seed();
+let seq = 100;
+
+// ---------- money & helpers ----------
+const fmt = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
+const money = (p) => fmt.format(p / 100);
+const other = (id) => (id === 'alex' ? 'sam' : 'alex');
+const nm = (id) => PARENTS[id].name;
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const d = (iso) => new Date(iso + 'T12:00:00');
+const fmtShort = (iso) => d(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const fmtLong = (iso) => d(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const monthKey = (iso) => iso.slice(0, 7);
+const monthLabel = (iso) => d(iso).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+const now = () => { const t = new Date(); return `8 Oct ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`; };
+const childNames = (ids) => ids.map((id) => CHILDREN.find((c) => c.id === id)?.name).filter(Boolean).join(', ');
+const parsePence = (s) => { const v = String(s ?? '').trim(); if (!/^\d{1,6}(\.\d{1,2})?$/.test(v)) return null; const [a, b = ''] = v.split('.'); const p = Number(a) * 100 + Number((b + '00').slice(0, 2)); return p > 0 ? p : null; };
+const roundPct = (amount, pct) => Math.floor((amount * pct + 50) / 100);
+const debtor = (e) => other(e.payerId);
+const owedRaw = (e) => (e.payerId ? roundPct(e.amountPence, e.shares[debtor(e)]) : 0);
+const shareOf = (e, p) => {
+  if (e.payerId) { const o = owedRaw(e); return p === e.payerId ? e.amountPence - o : o; }
+  const a = roundPct(e.amountPence, e.shares.alex); return p === 'alex' ? a : e.amountPence - a;
+};
+const live = () => expenses.filter((e) => !e.deleted);
+const byId = (id) => expenses.find((e) => e.id === id);
+const counts = (e) => e.timing === 'paid' && e.agreement.status === 'agreed' && ['outstanding', 'claimed'].includes(e.reimbursement.status);
+
+function status(e, me) {
+  const T = nm(other(me));
+  const a = e.agreement;
+  if (a.status === 'pending') return a.requestedBy === me
+    ? { label: `Waiting for ${T}`, tone: 'slate' }
+    : { label: 'Needs your OK', tone: 'amber', needs: true, acts: ['dispute', 'agree'] };
+  if (a.status === 'disputed') return a.requestedBy === me
+    ? { label: `${T} disputed`, tone: 'rose', needs: true, acts: ['edit'] }
+    : { label: 'You disputed', tone: 'rose' };
+  if (e.timing === 'upcoming') {
+    const overdue = e.date < TODAY;
+    return { label: overdue ? 'Overdue' : `Agreed · due ${fmtShort(e.date)}`, tone: overdue ? 'amber' : 'teal', acts: ['markPaid'] };
+  }
+  const r = e.reimbursement.status; const o = owedRaw(e);
+  if (r === 'none') return { label: 'No reimbursement needed', tone: 'emerald', settled: true };
+  if (r === 'reimbursed') return { label: 'Settled', tone: 'emerald', settled: true };
+  const iOwe = debtor(e) === me;
+  if (r === 'outstanding') return iOwe
+    ? { label: `You owe ${T} ${money(o)}`, tone: 'rose', needs: true, acts: ['claim'] }
+    : { label: `${T} owes you ${money(o)}`, tone: 'teal', acts: ['markReimbursed'] };
+  return iOwe
+    ? { label: `Paid back · awaiting ${T}`, tone: 'slate' }
+    : { label: `${T} says paid · confirm`, tone: 'amber', needs: true, acts: ['reject', 'confirm'] };
+}
+
+function summarise(me) {
+  const T = other(me);
+  const all = live();
+  let net = 0, count = 0, awaitingMe = 0, awaitingThem = 0;
+  for (const e of all.filter(counts)) {
+    const o = owedRaw(e); if (!o) continue; count++;
+    if (e.payerId === me) { net += o; if (e.reimbursement.status === 'claimed') awaitingMe += o; }
+    else { net -= o; if (e.reimbursement.status === 'claimed') awaitingThem += o; }
+  }
+  const needsOk = all.filter((e) => e.agreement.status === 'pending' && e.agreement.requestedBy !== me);
+  const waiting = all.filter((e) => e.agreement.status === 'pending' && e.agreement.requestedBy === me);
+  const horizon = '2026-11-07';
+  const upcoming = all.filter((e) => e.timing === 'upcoming' && e.agreement.status !== 'disputed' && e.date <= horizon).sort((a, b) => a.date.localeCompare(b.date));
+  const month = all.filter((e) => e.timing === 'paid' && e.agreement.status !== 'disputed' && monthKey(e.date) === monthKey(TODAY));
+  const byCat = {};
+  month.forEach((e) => { byCat[e.category] = (byCat[e.category] || 0) + e.amountPence; });
+  return {
+    net, count, awaitingMe, awaitingThem, them: T,
+    needs: all.filter((e) => status(e, me).needs),
+    needsOk: { list: needsOk, count: needsOk.length, total: needsOk.reduce((s, e) => s + e.amountPence, 0) },
+    waiting: waiting.length,
+    upcoming: { list: upcoming, total: upcoming.reduce((s, e) => s + e.amountPence, 0), mine: upcoming.reduce((s, e) => s + shareOf(e, me), 0) },
+    month: { total: month.reduce((s, e) => s + e.amountPence, 0), mine: month.reduce((s, e) => s + shareOf(e, me), 0), byCat: Object.entries(byCat).sort((a, b) => b[1] - a[1]) },
+    settleable: settleItems(me),
+  };
+}
+
+function settleItems(me) {
+  return live().filter((e) => counts(e) && owedRaw(e) > 0 && (e.reimbursement.status === 'outstanding' || e.payerId === me));
+}
+
+// ---------- rendering ----------
+const app = document.getElementById('app');
+const stage = document.getElementById('stage');
+
+function render() {
+  const scroll = app.querySelector('.scroll')?.scrollTop ?? 0;
+  const dscroll = app.querySelector('.drawer__body')?.scrollTop ?? 0;
+  const focused = document.activeElement?.dataset?.field;
+  stage.className = 'stage' + (ui.device === 'mobile' ? ' stage--mobile' : '');
+  app.className = `app theme-${ui.theme}${ui.device === 'mobile' ? ' is-mobile' : ''}${ui.navOpen ? ' nav-open' : ''}`;
+  app.innerHTML = sidebar() + `<div class="main">${mobileHead()}<div class="scroll">${ui.screen === 'expenses' ? expensesPage() : dashboardPage()}</div></div>`
+    + (ui.navOpen ? '<div class="overlay" data-act="closeNav" style="z-index:35"></div>' : '')
+    + drawer() + lightbox();
+  const s = app.querySelector('.scroll'); if (s) s.scrollTop = scroll;
+  const ds = app.querySelector('.drawer__body'); if (ds && !ui.enter) ds.scrollTop = dscroll;
+  if (focused) { const el = app.querySelector(`[data-field="${focused}"]`); if (el) { el.focus(); if (el.setSelectionRange && el.type === 'text') { const n = el.value.length; el.setSelectionRange(n, n); } } }
+  ui.enter = false; ui.flash = null;
+  document.querySelectorAll('.mock-seg').forEach((seg) => seg.querySelectorAll('button').forEach((b) => b.classList.toggle('is-on', ui[seg.dataset.ctl] === b.dataset.v)));
+}
+
+function sidebar() {
+  const n = summarise(ui.me).needs.length;
+  const item = (key, icon, label, badge) => `<button class="nav${ui.screen === key ? ' is-on' : ''}" data-act="nav" data-to="${key}">${ic(icon)}<span>${label}</span>${badge ? `<span class="nav__badge">${badge}</span>` : ''}</button>`;
+  const me = PARENTS[ui.me];
+  return `<aside class="side">
+    <div class="side__logo"><span class="side__mark">${ic('users', 18)}</span>CoParent</div>
+    <div class="side__label">Main</div>
+    ${item('dashboard', 'dashboard', 'Dashboard')}
+    ${item('calendar', 'calendar', 'Calendar')}
+    ${item('messages', 'message', 'Messages')}
+    ${item('expenses', 'pound', 'Expenses', n || '')}
+    ${item('documents', 'file', 'Documents')}
+    ${item('timeline', 'clock', 'Timeline')}
+    <div class="side__spacer"></div>
+    <button class="side__quick" data-act="quick">${ic('sparkles')} Quick add</button>
+    ${item('settings', 'settings', 'Settings')}
+    <div class="me"><span class="avatar avatar--${me.tone}">${me.name[0]}</span><div><div class="me__name">${me.full}</div><div class="me__sub">The Rowe-Taylor family</div></div></div>
+  </aside>`;
+}
+ICONS.users = '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>';
+
+function mobileHead() {
+  return `<header class="m-head"><span class="m-head__logo"><span class="side__mark" style="width:28px;height:28px">${ic('users', 15)}</span>CoParent</span>
+    <span style="display:flex;gap:8px"><button class="icon-btn" data-act="quick" aria-label="Quick add">${ic('sparkles')}</button><button class="icon-btn" data-act="openNav" aria-label="Menu">${ic('menu')}</button></span></header>`;
+}
+
+function chip(st) { return `<span class="chip chip--${st.tone}">${esc(st.label)}</span>`; }
+function dot(pid) { return `<span class="dot dot--${pid ? PARENTS[pid].tone : 'none'}"></span>`; }
+
+function payerText(e, me) {
+  if (!e.payerId) return 'Payer not decided';
+  const you = e.payerId === me;
+  if (e.timing === 'paid') return you ? 'Paid by you' : `Paid by ${nm(e.payerId)}`;
+  return you ? 'You will pay' : `${nm(e.payerId)} will pay`;
+}
+
+function shareLine(e, me) {
+  const T = other(me);
+  if (e.timing === 'paid' && e.payerId === me) return `${nm(T)}'s share ${money(shareOf(e, T))}`;
+  return `Your share ${money(shareOf(e, me))}`;
+}
+
+function currentTab(sum) {
+  if (ui.tab) return ui.tab;
+  return sum.needs.length ? 'needs' : 'all';
+}
+
+function tabFilter(tab, e, me) {
+  const st = status(e, me);
+  if (tab === 'needs') return !!st.needs;
+  if (tab === 'upcoming') return e.timing === 'upcoming';
+  if (tab === 'owed') return counts(e) && owedRaw(e) > 0;
+  if (tab === 'settled') return e.timing === 'paid' && e.agreement.status === 'agreed' && ['none', 'reimbursed'].includes(e.reimbursement.status);
+  return true;
+}
+
+function balanceCard(sum, compact) {
+  const T = nm(sum.them);
+  const cls = sum.net > 0 ? '' : sum.net < 0 ? ' balance--owe' : ' balance--square';
+  const who = sum.net > 0 ? `${T} owes you` : sum.net < 0 ? `You owe ${T}` : 'All square';
+  const meta = [];
+  if (sum.count) meta.push(`across ${sum.count} expense${sum.count === 1 ? '' : 's'}`);
+  if (sum.awaitingMe) meta.push(`<strong>${money(sum.awaitingMe)} waiting for you to confirm</strong>`);
+  if (sum.awaitingThem) meta.push(`${money(sum.awaitingThem)} paid back, awaiting ${T}`);
+  return `<article class="card balance${cls}">
+    <div><p class="eyebrow">Balance</p><p class="balance__who">${who}</p><p class="balance__amount">${money(Math.abs(sum.net))}</p></div>
+    ${sum.settleable.length ? `<button class="btn btn--primary" data-act="settle">${ic('scale')}Settle up</button>` : ''}
+    <div class="balance__meta">${meta.map((m) => `<span>${m}</span>`).join('') || 'Nothing outstanding'}</div>
+  </article>`;
+}
+
+function expensesPage() {
+  const me = ui.me; const sum = summarise(me); const tab = currentTab(sum);
+  const tabs = [['needs', 'Needs action'], ['upcoming', 'Upcoming'], ['owed', 'Owed'], ['settled', 'Settled'], ['all', 'All']];
+  const all = live();
+  const rows = all.filter((e) => tabFilter(tab, e, me))
+    .filter((e) => ui.child === 'all' || e.childIds.includes(ui.child))
+    .filter((e) => ui.category === 'all' || e.category === ui.category)
+    .sort((a, b) => (tab === 'upcoming' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)));
+  let list = '';
+  if (!rows.length) list = `<div class="empty">${tab === 'needs' ? 'Nothing needs you right now.' : 'No expenses here yet.'}</div>`;
+  else if (tab === 'upcoming') list = rows.map(row).join('');
+  else {
+    let cur = null;
+    rows.forEach((e) => { const k = monthKey(e.date); if (k !== cur) { cur = k; list += `<div class="month">${monthLabel(e.date).toUpperCase()}</div>`; } list += row(e); });
+  }
+  const T = nm(other(me));
+  return `<div class="page">
+    <header class="page__head">
+      <div><h1 class="page__title">Expenses</h1><p class="page__sub">Shared costs for Mia and Leo</p></div>
+      <div class="head-actions"><button class="btn btn--ghost head-actions__quick" data-act="quick">${ic('sparkles')}Paste a note or receipt</button><button class="btn btn--primary" data-act="new">${ic('plus')}<span class="label-long">Add expense</span><span class="label-short">Add</span></button></div>
+    </header>
+    <section class="cards">
+      ${balanceCard(sum)}
+      <article class="card stat-card"><p class="eyebrow">Needs your OK</p>
+        <p class="stat stat--amber">${sum.needsOk.count} expense${sum.needsOk.count === 1 ? '' : 's'}</p>
+        <p class="muted">${money(sum.needsOk.total)} total${sum.waiting ? ` · ${sum.waiting} waiting for ${T}` : ''}</p>
+        ${sum.needsOk.count ? '<div style="margin-top:10px"><button class="btn btn--teal btn--sm" data-act="tab" data-tab="needs">Review</button></div>' : ''}
+      </article>
+      <article class="card stat-card"><p class="eyebrow">Coming up</p>
+        <p class="stat">${money(sum.upcoming.total)}</p>
+        <p class="muted">${sum.upcoming.list.length} due in the next 30 days</p>
+        <p class="muted">Your share ${money(sum.upcoming.mine)}</p>
+      </article>
+    </section>
+    <div class="toolbar">
+      <nav class="tabs">${tabs.map(([k, l]) => { const c = all.filter((e) => tabFilter(k, e, me)).length; return `<button class="tab${tab === k ? ' is-on' : ''}" data-act="tab" data-tab="${k}">${l}${k !== 'all' && k !== 'settled' && c ? `<span class="tab__count">${c}</span>` : ''}</button>`; }).join('')}</nav>
+      <div class="filters">
+        <select class="select" data-filter="child"><option value="all">All children</option>${CHILDREN.map((c) => `<option value="${c.id}"${ui.child === c.id ? ' selected' : ''}>${c.name}</option>`).join('')}</select>
+        <select class="select" data-filter="category"><option value="all">All types</option>${Object.entries(CATEGORIES).map(([k, c]) => `<option value="${k}"${ui.category === k ? ' selected' : ''}>${c.label}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="list">${list}</div>
+  </div>`;
+}
+
+function rowActions(e, st) {
+  const b = [];
+  for (const a of st.acts || []) {
+    if (a === 'agree') b.push(`<button class="btn btn--primary btn--sm" data-act="agree" data-id="${e.id}">${ic('check', 16)}Agree</button>`);
+    if (a === 'dispute') b.push(`<button class="btn btn--danger btn--sm" data-act="openDispute" data-id="${e.id}">Dispute</button>`);
+    if (a === 'claim') b.push(`<button class="btn btn--teal btn--sm" data-act="openClaim" data-id="${e.id}">Mark paid back</button>`);
+    if (a === 'confirm') b.push(`<button class="btn btn--primary btn--sm" data-act="confirm" data-id="${e.id}">${ic('check', 16)}Confirm received</button>`);
+    if (a === 'edit') b.push(`<button class="btn btn--ghost btn--sm" data-act="edit" data-id="${e.id}">${ic('pencil', 15)}Edit</button>`);
+    if (a === 'markPaid') b.push(`<button class="btn btn--teal btn--sm" data-act="openMarkPaid" data-id="${e.id}">Mark as paid</button>`);
+  }
+  return b.join('');
+}
+
+function row(e) {
+  const me = ui.me; const st = status(e, me); const cat = CATEGORIES[e.category];
+  const meta = [payerText(e, me), childNames(e.childIds), cat.label, e.timing === 'paid' ? fmtShort(e.date) : `Due ${fmtShort(e.date)}`];
+  if (e.receipts.length) meta.push(`${ic('clip', 13)} ${e.receipts.length}`);
+  return `<article class="row${st.needs ? ' row--needs' : ''}${ui.flash === e.id ? ' row--flash' : ''}" data-act="open" data-id="${e.id}" data-row="${e.id}">
+    <div class="tile tile--${cat.tone}">${ic(cat.icon)}</div>
+    <div class="row__main"><h3 class="row__title">${esc(e.title)}</h3><p class="row__meta">${dot(e.payerId)}${meta.map((m) => `<span>${m}</span>`).join('<span class="sep">·</span>')}</p></div>
+    <div class="row__money"><p class="row__amount">${money(e.amountPence)}</p><p class="row__share">${shareLine(e, me)}</p></div>
+    <div class="row__status">${chip(st)}<div class="row__actions">${rowActions(e, st)}</div></div>
+  </article>`;
+}
+
+// ---------- dashboard ----------
+function dashboardPage() {
+  const me = ui.me; const sum = summarise(me); const T = nm(sum.them);
+  const approvals = sum.needsOk.count + 1;
+  const balClass = sum.net < 0 ? ' widget--owe' : '';
+  const balWho = sum.net > 0 ? `${T} owes you` : sum.net < 0 ? `You owe ${T}` : 'All square';
+  const maxCat = Math.max(1, ...sum.month.byCat.map((c) => c[1]));
+  return `<div class="page">
+    <section class="hero">
+      <div><p class="eyebrow">Family dashboard</p><h1 class="hero__title">Welcome back, ${nm(me)}</h1>
+        <div class="hero__pills"><span class="hero-pill hero-pill--teal">${approvals} approvals</span><span class="hero-pill">4 upcoming events</span><span class="hero-pill hero-pill--rose">1 unread</span></div></div>
+      <div class="hero__actions"><button class="qa qa--rose" data-act="new">${ic('plus')}Add expense</button><button class="qa" data-act="soon" data-what="Create event">${ic('calendar')}Create event</button><button class="qa" data-act="soon" data-what="Send message">${ic('message')}Send message</button></div>
+    </section>
+    <section class="widgets">
+      <article class="card widget" data-act="soon" data-what="Calendar"><p class="eyebrow">Upcoming events</p><p class="widget__value">4</p><p class="muted">Next 14 days</p></article>
+      <article class="card widget" data-act="nav" data-to="expenses"><p class="eyebrow">Pending approvals</p><p class="widget__value widget__value--amber">${approvals}</p><p class="muted">${sum.needsOk.count} expense${sum.needsOk.count === 1 ? '' : 's'} · 1 schedule</p></article>
+      <article class="card widget widget--balance${balClass}" data-act="tabNav" data-tab="owed"><p class="eyebrow">Balance</p><p class="muted" style="color:var(--text);font-weight:500">${balWho}</p><p class="widget__value ${sum.net < 0 ? 'widget__value--rose' : 'widget__value--teal'}">${money(Math.abs(sum.net))}</p></article>
+      <article class="card widget" data-act="soon" data-what="Messages"><p class="eyebrow">Unread messages</p><p class="widget__value">1</p><p class="muted">Inbox</p></article>
+    </section>
+    <section class="dash">
+      <div class="dash__col">
+        <article class="card dpanel"><div class="dpanel__head"><h2 class="dpanel__title">Pending approvals</h2></div>
+          ${sum.needsOk.list.map((e) => `<div class="ditem" data-act="open" data-id="${e.id}"><span class="tag tag--amber">EXPENSE</span><div class="ditem__body"><p class="ditem__title">${esc(e.title)} · ${money(e.amountPence)}</p><p class="ditem__sub">${nm(e.agreement.requestedBy)} ${e.agreement.status === 'pending' && byId(e.id).history.length > 1 ? 'changed it' : 'added it'} · your share ${money(shareOf(e, me))}</p></div>${ic('arrow')}</div>`).join('')}
+          <div class="ditem" data-act="soon" data-what="Schedule changes"><span class="tag tag--sky">SCHEDULE</span><div class="ditem__body"><p class="ditem__title">Swap the weekend of 17 Oct</p><p class="ditem__sub">${T} requested</p></div>${ic('arrow')}</div>
+        </article>
+        <article class="card dpanel"><div class="dpanel__head"><h2 class="dpanel__title">Upcoming events</h2></div>
+          <div class="ditem"><span class="tag tag--violet">CUSTODY</span><div class="ditem__body"><p class="ditem__title">Weekend with Alex</p><p class="ditem__sub">Fri 9 Oct, 16:00 – Sun 11 Oct</p></div></div>
+          <div class="ditem"><span class="tag tag--sky">SCHOOL</span><div class="ditem__body"><p class="ditem__title">Parents' evening, Kilmorie</p><p class="ditem__sub">Tue 13 Oct, 17:30</p></div></div>
+          <div class="ditem"><span class="tag tag--amber">ACTIVITY</span><div class="ditem__body"><p class="ditem__title">Leo's football match</p><p class="ditem__sub">Sat 17 Oct, 10:00</p></div></div>
+        </article>
+      </div>
+      <article class="card dpanel">
+        <div class="dpanel__head"><h2 class="dpanel__title">Expenses</h2><button class="btn--link" data-act="nav" data-to="expenses">Open expenses</button></div>
+        <div class="balance-strip${sum.net < 0 ? ' balance-strip--owe' : ''}"><p class="balance-strip__text">${balWho} ${money(Math.abs(sum.net))} · ${sum.count} expense${sum.count === 1 ? '' : 's'}</p>${sum.settleable.length ? `<button class="btn btn--primary btn--sm" data-act="settle">Settle up</button>` : ''}</div>
+        <p class="sub-eyebrow">Needs your OK</p>
+        ${sum.needsOk.list.length ? sum.needsOk.list.slice(0, 3).map((e) => `<div class="ditem" data-act="open" data-id="${e.id}"><div class="tile tile--${CATEGORIES[e.category].tone}" style="width:38px;height:38px;border-radius:11px">${ic(CATEGORIES[e.category].icon, 18)}</div><div class="ditem__body"><p class="ditem__title">${esc(e.title)} · ${money(e.amountPence)}</p><p class="ditem__sub">Your share ${money(shareOf(e, me))}</p></div><button class="btn btn--primary btn--sm" data-act="agree" data-id="${e.id}">Agree</button></div>`).join('') : '<p class="muted">You’re all caught up.</p>'}
+        <p class="sub-eyebrow">Coming up · next 30 days · your share ${money(sum.upcoming.mine)}</p>
+        ${sum.upcoming.list.map((e) => `<div class="ditem" data-act="open" data-id="${e.id}"><div class="ditem__body"><p class="ditem__title">${esc(e.title)} · ${money(e.amountPence)}</p><p class="ditem__sub">Due ${fmtShort(e.date)} · ${payerText(e, me)}</p></div>${chip(status(e, me))}</div>`).join('') || '<p class="muted">Nothing due.</p>'}
+        <p class="sub-eyebrow">This month · ${money(sum.month.total)} · your share ${money(sum.month.mine)}</p>
+        ${sum.month.byCat.map(([k, v]) => `<div class="bar-row"><span>${CATEGORIES[k].label}</span><div class="bar"><span style="width:${Math.round((v / maxCat) * 100)}%"></span></div><span class="bar-row__amt">${money(v)}</span></div>`).join('')}
+      </article>
+    </section>
+  </div>`;
+}
+
+// ---------- drawers ----------
+function drawer() {
+  const dr = ui.drawer; if (!dr) return '';
+  const enter = ui.enter ? ' drawer--enter' : '';
+  let inner = '';
+  if (dr.type === 'form') inner = formDrawer(dr);
+  if (dr.type === 'detail') inner = detailDrawer(dr);
+  if (dr.type === 'settle') inner = settleDrawer(dr);
+  if (dr.type === 'quick') inner = quickDrawer(dr);
+  return `<div class="overlay" data-act="close"></div><aside class="drawer${enter}" role="dialog">${inner}</aside>`;
+}
+
+function newForm(e) {
+  const me = ui.me;
+  if (!e) return { id: null, title: '', amount: '', category: 'clothing', childIds: CHILDREN.length === 1 ? [CHILDREN[0].id] : [], timing: 'paid', payer: 'me', date: TODAY, shareMode: 'equal', myPct: 50, notes: '', receipts: [] };
+  const mode = e.shares.alex === 50 ? 'equal' : e.shares[me] === 100 ? 'me' : e.shares[other(me)] === 100 ? 'them' : 'custom';
+  return { id: e.id, title: e.title, amount: (e.amountPence / 100).toFixed(2), category: e.category, childIds: [...e.childIds], timing: e.timing, payer: !e.payerId ? 'undecided' : e.payerId === me ? 'me' : 'them', date: e.date, shareMode: mode, myPct: e.shares[me], notes: e.notes, receipts: [...e.receipts] };
+}
+
+function formShares(f) {
+  const me = ui.me; const T = other(me);
+  const p = f.shareMode === 'equal' ? 50 : f.shareMode === 'me' ? 100 : f.shareMode === 'them' ? 0 : Number(f.myPct);
+  return { [me]: p, [T]: 100 - p };
+}
+
+function formSummary(f) {
+  const me = ui.me; const T = nm(other(me));
+  const amt = parsePence(f.amount);
+  if (!amt) return { cls: 'summary--none', icon: 'info', html: '<p class="summary__lead">Enter an amount to see who owes what.</p>' };
+  const sh = formShares(f); const myPct = sh[me];
+  const myShareIf = (payer) => { if (payer === 'me') { const o = roundPct(amt, 100 - myPct); return amt - o; } return roundPct(amt, myPct); };
+  const A = money(amt);
+  if (f.timing === 'paid') {
+    if (f.payer === 'me') {
+      const o = roundPct(amt, 100 - myPct);
+      return o > 0
+        ? { cls: '', icon: 'wallet', html: `<p class="summary__lead">You paid ${A}. Your share is ${money(amt - o)}.</p><p class="summary__owed">${T} will owe you ${money(o)} once ${T} agrees.</p>` }
+        : { cls: 'summary--none', icon: 'check', html: `<p class="summary__lead">You paid ${A} and you're covering all of it.</p><p>Nothing is owed. ${T} will still be asked to agree.</p>` };
+    }
+    const o = roundPct(amt, myPct);
+    return o > 0
+      ? { cls: 'summary--owe', icon: 'wallet', html: `<p class="summary__lead">${T} paid ${A}. Your share is ${money(o)}.</p><p class="summary__owed">You'll owe ${T} ${money(o)} once ${T} agrees.</p>` }
+      : { cls: 'summary--none', icon: 'check', html: `<p class="summary__lead">${T} paid ${A} and is covering all of it.</p><p>Nothing is owed.</p>` };
+  }
+  if (f.payer === 'undecided') {
+    const mine = roundPct(amt, myPct);
+    return { cls: 'summary--none', icon: 'calendar', html: `<p class="summary__lead">${A} due ${fmtShort(f.date)}. Nobody is down to pay yet.</p><p>Your share will be ${money(mine)}, ${T}'s ${money(amt - mine)}.</p>` };
+  }
+  const payerName = f.payer === 'me' ? 'You' : T;
+  const mine = myShareIf(f.payer);
+  const owedLine = f.payer === 'me' ? (amt - mine > 0 ? `${T} will owe you ${money(amt - mine)} once it's paid.` : 'Nothing will be owed.') : (mine > 0 ? `You'll owe ${T} ${money(mine)} once it's paid.` : 'Nothing will be owed.');
+  return { cls: '', icon: 'calendar', html: `<p class="summary__lead">${payerName} will pay ${A} when it's due on ${fmtShort(f.date)}. Your share will be ${money(mine)}.</p><p class="summary__owed">${owedLine}</p>` };
+}
+
+function formValid(f) {
+  return f.title.trim().length > 0 && parsePence(f.amount) && f.childIds.length > 0 && !!f.date && (f.timing === 'upcoming' || f.payer !== 'undecided');
+}
+
+function receiptThumbs(list, removable) {
+  return list.map((r) => `<div class="thumb${r.kind === 'pdf' ? ' thumb--pdf' : ''}" data-act="viewReceipt" data-rid="${r.id}">${r.kind === 'pdf' ? `${ic('file', 20)}PDF` : `<img src="${r.url}" alt="${esc(r.name)}">`}${removable ? `<button class="thumb__x" data-act="removeReceipt" data-rid="${r.id}" aria-label="Remove">${ic('x')}</button>` : ''}</div>`).join('');
+}
+
+function formDrawer(dr) {
+  const f = dr.form; const me = ui.me; const T = nm(other(me));
+  const editing = !!f.id; const e = editing ? byId(f.id) : null;
+  const agreedWarn = editing && e.agreement.status === 'agreed';
+  const sm = formSummary(f);
+  const payerBtn = (v, label, tone) => `<button class="${f.payer === v ? 'is-on' : ''}${tone && f.payer === v ? ' p-' + tone : ''}" data-act="f" data-k="payer" data-v="${v}">${tone ? `<span class="dot dot--${tone}"></span>` : ''}${label}</button>`;
+  const shareBtn = (v, label) => `<button class="pill${f.shareMode === v ? ' is-on' : ''}" data-act="f" data-k="shareMode" data-v="${v}">${f.shareMode === v ? ic('check', 15) : ''}${label}</button>`;
+  return `<header class="drawer__head"><h2 class="drawer__title">${editing ? 'Edit expense' : 'Add expense'}</h2><button class="icon-btn" data-act="close" aria-label="Close">${ic('x')}</button></header>
+  <div class="drawer__body">
+    ${editing ? '' : `<button class="callout callout--teal" style="text-align:left;cursor:pointer;font:inherit" data-act="quick">${ic('sparkles')}<span><strong>Got a note or a receipt?</strong> Paste it into Quick add and it fills this in for you.</span></button>`}
+    ${agreedWarn ? `<div class="callout callout--amber">${ic('alert')}<span>This expense is agreed. Changing the amount, the share or who paid will ask ${T} to agree again.</span></div>` : ''}
+    <label class="field"><span class="field__label">What was it for?</span><input class="input" data-field="title" value="${esc(f.title)}" placeholder="e.g. School shoes" maxlength="120"></label>
+    <div class="grid2">
+      <label class="field"><span class="field__label">Amount</span><span class="money-wrap"><input class="input input--money" data-field="amount" inputmode="decimal" value="${esc(f.amount)}" placeholder="0.00"></span></label>
+      <label class="field"><span class="field__label">Category</span><select class="select" data-field="category" style="padding:11px 34px 11px 14px;font-size:15px">${Object.entries(CATEGORIES).map(([k, c]) => `<option value="${k}"${f.category === k ? ' selected' : ''}>${c.label}</option>`).join('')}</select></label>
+    </div>
+    <div class="field"><span class="field__label">For</span><div class="pills">${CHILDREN.map((c) => `<button class="pill${f.childIds.includes(c.id) ? ' is-on' : ''}" data-act="toggleChild" data-cid="${c.id}">${f.childIds.includes(c.id) ? ic('check', 15) : ''}${c.name}</button>`).join('')}</div></div>
+    <div class="field"><span class="field__label">Has it been paid?</span>
+      <div class="seg seg--timing"><button class="${f.timing === 'paid' ? 'is-on' : ''}" data-act="f" data-k="timing" data-v="paid">${ic('check', 16)}Already paid</button><button class="${f.timing === 'upcoming' ? 'is-on' : ''}" data-act="f" data-k="timing" data-v="upcoming">${ic('calendar', 16)}Coming up</button></div></div>
+    <div class="grid2" style="grid-template-columns:${ui.device === 'mobile' ? '1fr' : '1.35fr 1fr'}">
+      <div class="field"><span class="field__label">${f.timing === 'paid' ? 'Who paid?' : 'Who will pay?'}</span>
+        <div class="seg">${payerBtn('me', `You (${nm(me)})`, PARENTS[me].tone)}${payerBtn('them', T, PARENTS[other(me)].tone)}${f.timing === 'upcoming' ? payerBtn('undecided', 'Not decided') : ''}</div></div>
+      <label class="field"><span class="field__label">${f.timing === 'paid' ? 'Paid on' : 'Due by'}</span><input class="input" type="date" data-field="date" value="${f.date}"></label>
+    </div>
+    <div class="field"><span class="field__label">How should it be shared?</span>
+      <div class="pills">${shareBtn('equal', '50 / 50')}${shareBtn('me', 'You cover it')}${shareBtn('them', `${T} covers it`)}${shareBtn('custom', 'Custom')}</div>
+      ${f.shareMode === 'custom' ? `<div class="custom"><span>You</span><input type="range" min="0" max="100" step="5" data-field="myPct" value="${f.myPct}"><span class="custom__val" id="pct-label">You ${f.myPct}% · ${T} ${100 - f.myPct}%</span></div>` : ''}
+    </div>
+    <div class="summary ${sm.cls}" id="form-summary"><span class="summary__icon">${ic(sm.icon)}</span><div>${sm.html}</div></div>
+    <div class="field"><span class="field__label">Receipts <span class="field__hint">· photos or PDFs, up to 5</span></span>
+      <div class="receipts">${receiptThumbs(f.receipts, true)}${f.receipts.length < 5 ? `<button class="add-receipt" data-act="pickReceipt">${ic('camera')}Add photo or PDF</button>` : ''}</div></div>
+    <label class="field"><span class="field__label">Notes <span class="field__hint">· optional</span></span><textarea class="textarea" data-field="notes" placeholder="Anything ${T} should know">${esc(f.notes)}</textarea></label>
+    <div class="notice">${ic('mail', 16)}<span>${T} will be asked to agree, and emailed a link.</span></div>
+  </div>
+  <footer class="drawer__foot"><span class="grow"></span><button class="btn btn--ghost" data-act="close">Cancel</button><button class="btn btn--primary" id="form-save" data-act="save"${formValid(f) ? '' : ' disabled'}>${editing ? 'Save changes' : 'Add expense'}</button></footer>`;
+}
+
+function canDelete(e, me) {
+  if (e.timing === 'upcoming') return true;
+  return e.agreement.requestedBy === me && ['pending', 'disputed'].includes(e.agreement.status);
+}
+function canEdit(e) { return !['claimed', 'reimbursed'].includes(e.reimbursement.status); }
+
+function detailDrawer(dr) {
+  const e = byId(dr.id); if (!e || e.deleted) return '';
+  const me = ui.me; const T = other(me); const st = status(e, me); const cat = CATEGORIES[e.category];
+  const o = owedRaw(e);
+  const shareTxt = e.shares.alex === 50 ? '50 / 50' : e.shares.alex === 100 ? 'Alex covers it' : e.shares.sam === 100 ? 'Sam covers it' : `Alex ${e.shares.alex}% · Sam ${e.shares.sam}%`;
+  let owedTxt = '';
+  if (e.payerId && o > 0) {
+    const d = debtor(e); const who = d === me ? `You owe ${nm(e.payerId)}` : `${nm(d)} owes ${e.payerId === me ? 'you' : nm(e.payerId)}`;
+    const suffix = e.agreement.status !== 'agreed' ? ' once agreed' : e.timing === 'upcoming' ? ' once paid' : e.reimbursement.status === 'reimbursed' ? ' · settled' : e.reimbursement.status === 'claimed' ? ' · paid back, awaiting confirmation' : '';
+    owedTxt = `<dt>Owed</dt><dd class="owed-line${d === me ? ' owed-line--owe' : ''}">${who} ${money(o)}${suffix}</dd>`;
+  } else if (e.payerId) owedTxt = '<dt>Owed</dt><dd>Nothing — one parent covers it</dd>';
+  let panel = '';
+  if (dr.mode === 'dispute') panel = `<div class="panel panel--rose"><p class="panel__title">Why are you disputing this? ${nm(e.agreement.requestedBy)} will see your reason.</p><textarea class="textarea" data-field="note" placeholder="e.g. We agreed trainers, not shoes">${esc(dr.note || '')}</textarea></div>`;
+  if (dr.mode === 'claim') panel = `<div class="panel panel--teal"><p class="panel__title">Mark ${money(o)} as paid back to ${nm(e.payerId)}</p><input class="input" data-field="note" value="${esc(dr.note || '')}" placeholder="How? e.g. Bank transfer (optional)"><p class="muted" style="font-size:13px">${nm(e.payerId)} will be asked to confirm they received it.</p></div>`;
+  if (dr.mode === 'markPaid') {
+    const mp = dr.mp;
+    panel = `<div class="panel panel--teal"><p class="panel__title">Mark as paid</p>
+      <div class="seg">${['alex', 'sam'].map((p) => `<button class="${mp.payer === p ? 'is-on p-' + PARENTS[p].tone : ''}" data-act="mp" data-k="payer" data-v="${p}"><span class="dot dot--${PARENTS[p].tone}"></span>${p === me ? 'You' : nm(p)} paid</button>`).join('')}</div>
+      <div class="grid2"><label class="field"><span class="field__label">Amount actually paid</span><span class="money-wrap"><input class="input input--money" data-field="mpAmount" value="${esc(mp.amount)}"></span></label><label class="field"><span class="field__label">Paid on</span><input class="input" type="date" data-field="mpDate" value="${mp.date}"></label></div>
+      <p class="muted" style="font-size:13px">Same amount and the agreed payer keeps the agreement. Anything else asks ${nm(T)} to agree again.</p></div>`;
+  }
+  const disputeCallout = e.agreement.status === 'disputed' ? `<div class="callout callout--rose">${ic('alert')}<span><strong>${e.agreement.respondedBy === me ? 'You' : nm(e.agreement.respondedBy)} disputed this:</strong> “${esc(e.agreement.note)}”${e.agreement.requestedBy === me ? '<br>Edit it to send a new version, or withdraw it.' : ''}</span></div>` : '';
+  const claimCallout = e.reimbursement.status === 'claimed' && e.payerId === me ? `<div class="callout callout--amber">${ic('wallet')}<span><strong>${nm(T)} says they paid you back ${money(o)}</strong>${e.reimbursement.note ? ` · “${esc(e.reimbursement.note)}”` : ''}. Confirm when it arrives.</span></div>` : '';
+  // footer
+  const left = [`<button class="btn btn--ghost" data-act="discuss" data-id="${e.id}">${ic('message', 16)}Discuss</button>`];
+  if (canEdit(e) && !dr.mode && !(st.acts || []).includes('edit')) left.push(`<button class="btn btn--text" data-act="edit" data-id="${e.id}">${ic('pencil', 15)}Edit</button>`);
+  if (canDelete(e, me) && !dr.mode) left.push(`<button class="btn btn--text" data-act="delete" data-id="${e.id}" style="color:var(--rose-text)">${ic('trash', 15)}${e.agreement.status === 'agreed' ? 'Delete' : 'Withdraw'}</button>`);
+  let right = [];
+  if (dr.mode === 'dispute') right = [`<button class="btn btn--ghost" data-act="cancelMode">Cancel</button>`, `<button class="btn btn--primary" style="background:var(--rose)" data-act="sendDispute" data-id="${e.id}" id="dispute-send"${(dr.note || '').trim() ? '' : ' disabled'}>Send dispute</button>`];
+  else if (dr.mode === 'claim') right = [`<button class="btn btn--ghost" data-act="cancelMode">Cancel</button>`, `<button class="btn btn--primary" data-act="sendClaim" data-id="${e.id}">${ic('check', 16)}Mark paid back</button>`];
+  else if (dr.mode === 'markPaid') right = [`<button class="btn btn--ghost" data-act="cancelMode">Cancel</button>`, `<button class="btn btn--primary" data-act="sendMarkPaid" data-id="${e.id}">${ic('check', 16)}Mark as paid</button>`];
+  else for (const a of st.acts || []) {
+    if (a === 'agree') right.push(`<button class="btn btn--primary" data-act="agree" data-id="${e.id}">${ic('check', 16)}Agree</button>`);
+    if (a === 'dispute') right.unshift(`<button class="btn btn--danger" data-act="mode" data-mode="dispute">Dispute</button>`);
+    if (a === 'claim') right.push(`<button class="btn btn--primary" data-act="mode" data-mode="claim">Mark paid back</button>`);
+    if (a === 'confirm') right.push(`<button class="btn btn--primary" data-act="confirm" data-id="${e.id}">${ic('check', 16)}Confirm received</button>`);
+    if (a === 'reject') right.unshift(`<button class="btn btn--ghost" data-act="reject" data-id="${e.id}">Not received yet</button>`);
+    if (a === 'markPaid') right.push(`<button class="btn btn--primary" data-act="mode" data-mode="markPaid">Mark as paid</button>`);
+    if (a === 'markReimbursed') right.push(`<button class="btn btn--teal" data-act="markReimbursed" data-id="${e.id}">Mark as reimbursed</button>`);
+    if (a === 'edit') right.push(`<button class="btn btn--primary" data-act="edit" data-id="${e.id}">${ic('pencil', 15)}Edit and resend</button>`);
+  }
+  if (ui.device === 'mobile' && dr.mode) left.splice(0);
+  return `<header class="drawer__head"><h2 class="drawer__title">${esc(e.title)}</h2><button class="icon-btn" data-act="close" aria-label="Close">${ic('x')}</button></header>
+  <div class="drawer__body">
+    <div class="detail__top"><div><p class="detail__amount">${money(e.amountPence)}</p><p class="detail__sub"><span class="tile tile--${cat.tone}" style="width:26px;height:26px;border-radius:8px">${ic(cat.icon, 14)}</span>${cat.label} · ${childNames(e.childIds)}</p></div>${chip(st)}</div>
+    ${disputeCallout}${claimCallout}
+    <dl class="facts">
+      <dt>${e.timing === 'paid' ? 'Paid by' : 'Paying'}</dt><dd>${dot(e.payerId)}<strong>${e.payerId ? (e.payerId === me ? `You (${nm(me)})` : nm(e.payerId)) : 'Not decided yet'}</strong>${e.timing === 'paid' ? ` · ${fmtLong(e.date)}` : ` · due ${fmtLong(e.date)}`}</dd>
+      <dt>Shared</dt><dd>${shareTxt}</dd>
+      <dt>Shares</dt><dd>${nm('alex')} <strong>${money(shareOf(e, 'alex'))}</strong> · ${nm('sam')} <strong>${money(shareOf(e, 'sam'))}</strong></dd>
+      ${owedTxt}
+      <dt>Receipts</dt><dd><div class="receipts">${e.receipts.length ? receiptThumbs(e.receipts, false) : '<span class="muted">None yet</span>'}${canEdit(e) ? `<button class="add-receipt" style="height:44px;padding:0 12px" data-act="pickReceiptDetail" data-id="${e.id}">${ic('plus', 16)}Add</button>` : ''}</div></dd>
+      ${e.notes ? `<dt>Notes</dt><dd>${esc(e.notes)}</dd>` : ''}
+    </dl>
+    ${panel}
+    <div><p class="section-title">${ic('history', 16)}History</p><ul class="timeline">${[...e.history].reverse().map((h) => `<li><time>${h.at}</time><span${h.dispute ? ' class="is-dispute"' : ''}><strong>${h.by === me ? 'You' : nm(h.by)}</strong> ${esc(h.text)}</span></li>`).join('')}</ul></div>
+  </div>
+  <footer class="drawer__foot">${left.join('')}<span class="grow"></span>${right.join('')}</footer>`;
+}
+
+function settleDrawer(dr) {
+  const me = ui.me; const T = nm(other(me)); const items = settleItems(me);
+  let net = 0;
+  const rows = items.map((e) => {
+    const o = owedRaw(e); const mine = e.payerId === me; const on = dr.sel[e.id] !== false;
+    const claimed = e.reimbursement.status === 'claimed';
+    // Already sent by the other parent: ticking confirms it arrived, so it moves no money now.
+    if (on && !claimed) net += mine ? o : -o;
+    const dir = mine ? (claimed ? `${T} already sent it · you confirm it arrived` : `${T} owes you`) : `You owe ${T}`;
+    return `<label class="settle-item"><input type="checkbox" data-act="settleToggle" data-id="${e.id}"${on ? ' checked' : ''}><div><p class="settle-item__title">${esc(e.title)}</p><p class="settle-item__dir">${dir}</p></div><span class="settle-item__amt${mine ? '' : ' settle-item__amt--neg'}"${claimed ? ' style="color:var(--muted);font-weight:500"' : ''}>${claimed ? 'received ' : mine ? '' : '−'}${money(o)}</span></label>`;
+  }).join('');
+  const sum = summarise(me);
+  const overall = sum.net > 0 ? `Overall, ${T} owes you ${money(sum.net)}` : sum.net < 0 ? `Overall, you owe ${T} ${money(-sum.net)}` : 'You are all square';
+  const netTxt = net > 0 ? `${T} pays you ${money(net)}` : net < 0 ? `You pay ${T} ${money(-net)}` : 'Nothing changes hands';
+  const anyOn = items.some((e) => dr.sel[e.id] !== false);
+  return `<header class="drawer__head"><h2 class="drawer__title">Settle up with ${T}</h2><button class="icon-btn" data-act="close" aria-label="Close">${ic('x')}</button></header>
+  <div class="drawer__body">
+    <p class="settle-total">${overall}</p>
+    <div class="settle-list">${rows || '<p class="muted" style="padding:16px">Nothing to settle.</p>'}</div>
+    <div class="net"><span>Net</span><span>${netTxt}</span></div>
+    <div class="callout callout--teal">${ic('info')}<span>Ticking marks ${T}'s debts to you as reimbursed, and yours to ${T} as paid back. ${T} confirms the ones you paid.</span></div>
+  </div>
+  <footer class="drawer__foot"><span class="grow"></span><button class="btn btn--ghost" data-act="close">Cancel</button><button class="btn btn--primary" data-act="doSettle"${anyOn ? '' : ' disabled'}>${ic('check', 16)}Mark selected settled</button></footer>`;
+}
+
+// ---------- quick add (assistant) ----------
+const COAT_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420" viewBox="0 0 300 420"><rect width="300" height="420" fill="#cbd5e1"/><g transform="rotate(4 150 210)"><path d="M45 30h210v350l-17-8-17 8-18-8-17 8-18-8-17 8-18-8-17 8-17-8-18 8-17-8-18 8z" fill="#fff" stroke="#94a3b8"/><g font-family="Courier New, monospace" fill="#1e293b"><text x="150" y="74" font-size="24" text-anchor="middle" font-weight="bold">NEXT</text><text x="150" y="96" font-size="11" text-anchor="middle">Bromley · Store 0412</text><text x="62" y="140" font-size="13">Kids padded coat</text><text x="238" y="140" font-size="13" text-anchor="end">39.00</text><text x="62" y="160" font-size="11">Age 9-10 · Navy</text><text x="62" y="204" font-size="15" font-weight="bold">TOTAL</text><text x="238" y="204" font-size="15" text-anchor="end" font-weight="bold">£39.00</text><text x="62" y="234" font-size="11">CONTACTLESS ****4821</text><text x="62" y="250" font-size="11">08/10/2026 09:12</text></g><line x1="62" y1="112" x2="238" y2="112" stroke="#94a3b8" stroke-dasharray="4 3"/><line x1="62" y1="180" x2="238" y2="180" stroke="#94a3b8" stroke-dasharray="4 3"/></g></svg>`);
+const SAMPLE_NOTE = `Sam paid £32.50 for Mia's swimming goggles and cap on Monday, split it 50/50.
+I bought Leo's new school jumper for £18 yesterday.
+The Year 6 residential trip deposit is £75, due on the 30th.
+I sent Sam the £30 for the dentist by bank transfer.`;
+
+const isoOf = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+function parseDate(s, upcoming) {
+  if (/\byesterday\b/.test(s)) return '2026-10-07';
+  if (/\btoday\b/.test(s)) return TODAY;
+  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  for (let i = 0; i < 7; i++) if (s.includes(days[i])) {
+    const base = d(TODAY); const cur = base.getDay();
+    const diff = upcoming ? ((i - cur + 7) % 7 || 7) : -((cur - i + 7) % 7 || 7);
+    base.setDate(base.getDate() + diff); return isoOf(base);
+  }
+  const m = s.match(/\b(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)\b/) || s.match(/\b(\d{1,2})\s+oct/);
+  if (m) { const n = Number(m[1]); if (n >= 1 && n <= 31) return `2026-10-${String(n).padStart(2, '0')}`; }
+  return TODAY;
+}
+function guessCategory(s) {
+  const rules = [['medical', /dentist|doctor|prescription|optician|glasses|pharmacy|medicine/], ['activities', /swim|football|club|lesson|ski|dance|karate|music|goggles/], ['education', /school trip|residential|museum|book|tuition|stationery|calculator/], ['clothing', /uniform|shoe|coat|jumper|clothes|trainers|boots|dress/], ['childcare', /childcare|nursery|childminder|after-school|babysit/], ['travel', /train|flight|bus|petrol|taxi|travel/], ['food', /lunch|food|dinner|snack/]];
+  return (rules.find(([, re]) => re.test(s)) || ['other'])[0];
+}
+function guessTitle(seg) {
+  const m = seg.match(/(?:\bfor|\bbought|\bgot|paid for)\s+(?:(?:mia|leo)'s\s+|the\s+|a\s+|an\s+|new\s+)*([a-z][a-z\- ]{2,40}?)(?=\s+(?:for|at|on|from|yesterday|today|last|this|next|due|which|split|by|£)\b|[,.]|$)/i)
+    || seg.match(/^(?:the\s+)?([a-z0-9][a-z0-9\- ]{2,50}?)\s+(?:is|was|of|costs?)\s+£/i);
+  if (!m) return null;
+  const t = m[1].trim(); return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function parseNote(text, image) {
+  const me = ui.me; const T = other(me); const tName = nm(T).toLowerCase();
+  const out = [];
+  if (image) {
+    out.push({ id: 'q' + (++seq), type: 'create', status: 'proposed', fromImage: true, expanded: false, attach: true,
+      form: Object.assign(newForm(), { title: 'Kids padded coat', amount: '39.00', category: 'clothing', childIds: ['mia'], timing: 'paid', payer: 'me', date: TODAY, receipts: [image] }) });
+  }
+  const segs = text.split(/\n+|\.\s+(?=[A-Z])/).map((s) => s.trim()).filter(Boolean);
+  for (const seg of segs) {
+    const s = seg.toLowerCase();
+    const m = seg.match(/£\s?(\d{1,6}(?:\.\d{1,2})?)/); if (!m) continue;
+    const amount = Number(m[1]).toFixed(2);
+    if (/\b(sent|transferred|paid)\b[^.]*\b(back|for the)\b|\bsent\b/.test(s)) {
+      const target = live().find((e) => counts(e) && e.reimbursement.status === 'outstanding' && debtor(e) === me && s.includes(e.title.toLowerCase().split(/[\s,]/)[0]));
+      if (target) { out.push({ id: 'q' + (++seq), type: 'claim', status: 'proposed', targetId: target.id, amountPence: parsePence(amount), note: /bank|transfer/.test(s) ? 'Bank transfer' : /cash/.test(s) ? 'Cash' : '' }); continue; }
+    }
+    const upcoming = /\b(due|need to pay|needs paying|coming up|will pay|'ll pay|deposit is)\b/.test(s);
+    let payer = new RegExp(`\\b${tName}\\b[^.]*\\b(paid|bought|got|spent|covered)\\b`).test(s) ? 'them' : 'me';
+    if (upcoming) payer = new RegExp(`\\b${tName}\\b[^.]*\\b(will pay|'ll pay)`).test(s) ? 'them' : /\bi(?:'ll| will) pay\b/.test(s) ? 'me' : 'undecided';
+    const childIds = /\b(both|the kids|the children)\b/.test(s) ? CHILDREN.map((c) => c.id) : CHILDREN.filter((c) => new RegExp(`\\b${c.name.toLowerCase()}\\b`).test(s)).map((c) => c.id);
+    let shareMode = 'equal';
+    if (/\b(i'll cover|my treat|on me|i'm covering)\b/.test(s)) shareMode = 'me';
+    else if (new RegExp(`\\b${tName} (?:will )?covers?\\b`).test(s)) shareMode = 'them';
+    const category = guessCategory(s);
+    const form = Object.assign(newForm(), { title: guessTitle(seg) || CATEGORIES[category].label, amount, category, childIds, timing: upcoming ? 'upcoming' : 'paid', payer, date: parseDate(s, upcoming), shareMode });
+    out.push({ id: 'q' + (++seq), type: 'create', status: childIds.length ? 'proposed' : 'blocked', expanded: !childIds.length, form, source: seg });
+  }
+  return out;
+}
+
+function quickDrawer(dr) {
+  const T = nm(other(ui.me));
+  const steps = `<nav class="qa-steps"><button class="qa-step ${dr.step === 'capture' ? 'is-on' : 'is-done'}" data-act="qStep" data-step="capture"><span class="qa-step__n">1</span><span><strong>Describe it</strong><small>Paste a note or add a receipt</small></span></button><span class="qa-steps__line"></span><button class="qa-step ${dr.step === 'review' ? 'is-on' : ''}" data-act="qStep" data-step="review"${dr.proposals.length ? '' : ' disabled'}><span class="qa-step__n">2</span><span><strong>Review actions</strong><small>Approve one by one</small></span></button></nav>`;
+  let body = '';
+  if (dr.step === 'capture') {
+    body = `<div><p class="qa-eyebrow">Step 1 of 2</p><h3 class="qa-heading">What should we pick out?</h3><p class="qa-lead">Paste a message, list what you've spent, or add a photo of a receipt. Nothing changes until you approve an action.</p></div>
+      <label class="field"><span class="field__label">Note</span><textarea class="textarea" style="min-height:150px" data-field="qtext" placeholder="For example: Sam paid £32.50 for Mia's swimming goggles on Monday, split it 50/50.">${esc(dr.text)}</textarea></label>
+      <div class="qa-examples"><button class="qa-example" data-act="qExample">Try an example note</button></div>
+      ${dr.image ? `<div class="qa-upload" style="cursor:default"><img src="${dr.image.url}" alt="Receipt photo"><div style="flex:1"><strong>${esc(dr.image.name)}</strong><small>Read for the amount, shop and date, and attached as the receipt if you approve.</small></div><button class="btn btn--text" data-act="qRemoveImage">${ic('trash', 16)}Remove</button></div>`
+        : `<div class="qa-upload" data-act="qPickImage"><span class="qa-upload__icon">${ic('camera', 22)}</span><div><strong>Add a receipt photo</strong><small>JPEG, PNG or WebP · up to 10 MB</small></div></div>`}
+      ${dr.busy ? `<div class="qa-busy"><span class="spinner"></span>Finding expenses and actions…</div>` : ''}
+      <p class="qa-disclosure">Sent to the configured AI provider for analysis. CoParent keeps the note only long enough to propose actions. A photo is kept only if you approve attaching it as a receipt.</p>`;
+  } else {
+    const n = dr.proposals.length;
+    body = `<div style="display:flex;justify-content:space-between;align-items:center"><button class="btn btn--text" data-act="qStep" data-step="capture">${ic('back', 16)}New input</button><span class="muted" style="font-size:13px">Private to you until approved</span></div>
+      <div><p class="qa-eyebrow">Step 2 of 2</p><h3 class="qa-heading">${n} proposed action${n === 1 ? '' : 's'}</h3><p class="qa-lead">Check each card, fix anything that's wrong, then approve or reject it. Approved expenses go to ${T} to agree, as usual.</p></div>
+      ${dr.proposals.length ? dr.proposals.map(qcard).join('') : '<p class="empty">No expenses found in that note.</p>'}`;
+  }
+  const foot = dr.step === 'capture'
+    ? `<span class="grow"></span><button class="btn btn--ghost" data-act="close">Cancel</button><button class="btn btn--primary" data-act="qAnalyse"${(dr.text.trim() || dr.image) && !dr.busy ? '' : ' disabled'}>${dr.busy ? '<span class="spinner" style="width:16px;height:16px;border-width:2px"></span>Finding actions…' : `${ic('sparkles', 16)}Next: review actions`}</button>`
+    : `<span class="muted" style="font-size:13px">${dr.proposals.filter((p) => p.status === 'applied').length} of ${dr.proposals.length} approved</span><span class="grow"></span><button class="btn btn--ghost" data-act="close">Done</button>`;
+  return `<header class="drawer__head"><div><p class="qa-eyebrow" style="margin:0">Private proposal workspace</p><h2 class="drawer__title">Quick add</h2></div><button class="icon-btn" data-act="close" aria-label="Close">${ic('x')}</button></header>
+  ${steps}<div class="drawer__body">${body}</div><footer class="drawer__foot">${foot}</footer>`;
+}
+
+function qcard(p) {
+  const me = ui.me; const T = nm(other(me));
+  const statusLabel = { proposed: 'Proposed', blocked: 'Needs a fix', applied: 'Approved', rejected: 'Rejected' }[p.status];
+  if (p.type === 'claim') {
+    const e = byId(p.targetId); const o = owedRaw(e);
+    const body = p.status === 'applied'
+      ? `<div class="callout callout--teal">${ic('check')}<span>Marked as paid back. ${T} has been asked to confirm.</span></div><div class="qcard__actions"><button class="btn btn--ghost btn--sm" data-act="open" data-id="${e.id}">View expense</button></div>`
+      : `<div class="qcard__line"><div class="tile tile--${CATEGORIES[e.category].tone}" style="width:42px;height:42px;border-radius:12px">${ic(CATEGORIES[e.category].icon, 20)}</div><div><p class="qcard__title">${esc(e.title)} · you owe ${T} ${money(o)}</p><p class="qcard__sub">Matched to an existing expense${p.note ? ` · “${esc(p.note)}”` : ''}</p></div></div>
+        ${p.amountPence !== o ? `<div class="callout callout--amber">${ic('alert')}<span>The note says ${money(p.amountPence)} but you owe ${money(o)}.</span></div>` : ''}
+        ${p.status === 'rejected' ? '' : `<div class="qcard__actions"><button class="btn btn--primary btn--sm" data-act="qApprove" data-pid="${p.id}">${ic('check', 15)}Approve</button><button class="btn btn--ghost btn--sm" data-act="qReject" data-pid="${p.id}">Reject</button></div>`}`;
+    return `<article class="qcard qcard--${p.status}"><header class="qcard__head"><span class="qcard__rail"></span><span class="qcard__type">${ic('wallet', 16)}Mark paid back</span><span class="qcard__status">${statusLabel}</span></header><div class="qcard__body">${body}</div></article>`;
+  }
+  const f = p.form; const cat = CATEGORIES[f.category]; const sm = formSummary(f);
+  const payerTxt = f.payer === 'me' ? (f.timing === 'paid' ? 'Paid by you' : 'You will pay') : f.payer === 'them' ? (f.timing === 'paid' ? `Paid by ${T}` : `${T} will pay`) : 'Payer not decided';
+  const kids = childNames(f.childIds) || '<span style="color:var(--amber-text);font-weight:600">No child yet</span>';
+  if (p.status === 'applied') {
+    return `<article class="qcard qcard--applied"><header class="qcard__head"><span class="qcard__rail"></span><span class="qcard__type">${ic('pound', 16)}Add expense</span><span class="qcard__status">Approved</span></header><div class="qcard__body"><div class="callout callout--teal">${ic('check')}<span><strong>${esc(f.title)} · ${money(parsePence(f.amount))}</strong> added. ${T} has been asked to agree${f.receipts.length && p.attach ? ', and the receipt is attached' : ''}.</span></div><div class="qcard__actions"><button class="btn btn--ghost btn--sm" data-act="open" data-id="${p.expenseId}">View expense</button></div></div></article>`;
+  }
+  const payerBtn = (v, label, tone) => `<button class="${f.payer === v ? 'is-on' : ''}${tone && f.payer === v ? ' p-' + tone : ''}" data-act="qf" data-pid="${p.id}" data-k="payer" data-v="${v}">${tone ? `<span class="dot dot--${tone}"></span>` : ''}${label}</button>`;
+  const editor = p.expanded ? `<div class="qcard__edit">
+      <div class="grid2"><label class="field"><span class="field__label">What for</span><input class="input" data-qfield="title" data-pid="${p.id}" value="${esc(f.title)}"></label><label class="field"><span class="field__label">Amount</span><span class="money-wrap"><input class="input input--money" data-qfield="amount" data-pid="${p.id}" value="${esc(f.amount)}"></span></label></div>
+      <div class="field"><span class="field__label">For</span><div class="pills">${CHILDREN.map((c) => `<button class="pill${f.childIds.includes(c.id) ? ' is-on' : ''}" data-act="qToggleChild" data-pid="${p.id}" data-cid="${c.id}">${f.childIds.includes(c.id) ? ic('check', 15) : ''}${c.name}</button>`).join('')}</div></div>
+      <div class="field"><span class="field__label">${f.timing === 'paid' ? 'Who paid?' : 'Who will pay?'}</span><div class="seg">${payerBtn('me', `You (${nm(me)})`, PARENTS[me].tone)}${payerBtn('them', T, PARENTS[other(me)].tone)}${f.timing === 'upcoming' ? payerBtn('undecided', 'Not decided') : ''}</div></div>
+      <div class="field"><span class="field__label">Shared</span><div class="pills">${[['equal', '50 / 50'], ['me', 'You cover it'], ['them', `${T} covers it`]].map(([v, l]) => `<button class="pill${f.shareMode === v ? ' is-on' : ''}" data-act="qf" data-pid="${p.id}" data-k="shareMode" data-v="${v}">${l}</button>`).join('')}</div></div>
+    </div>` : '';
+  const ok = formValid(f);
+  return `<article class="qcard qcard--${p.status}"><header class="qcard__head"><span class="qcard__rail"></span><span class="qcard__type">${ic('pound', 16)}Add expense${p.fromImage ? ' · from receipt' : ''}</span><span class="qcard__status">${statusLabel}</span></header>
+    <div class="qcard__body">
+      <div class="qcard__line"><div class="tile tile--${cat.tone}" style="width:42px;height:42px;border-radius:12px">${ic(cat.icon, 20)}</div><div style="flex:1;min-width:0"><p class="qcard__title">${esc(f.title)} · ${parsePence(f.amount) ? money(parsePence(f.amount)) : '—'}</p><p class="qcard__sub">${dot(f.payer === 'undecided' ? null : f.payer === 'me' ? me : other(me))} ${payerTxt} · ${kids} · ${cat.label} · ${f.timing === 'paid' ? fmtShort(f.date) : `Due ${fmtShort(f.date)}`}</p></div></div>
+      ${p.status === 'blocked' && !f.childIds.length ? `<div class="callout callout--amber">${ic('alert')}<span>Which child is this for? Pick one below.</span></div>` : ''}
+      <div class="summary ${sm.cls}"><span class="summary__icon">${ic(sm.icon, 16)}</span><div style="font-size:14px">${sm.html}</div></div>
+      ${f.receipts.length ? `<label class="attach"><input type="checkbox" data-act="qAttach" data-pid="${p.id}"${p.attach ? ' checked' : ''}><img src="${f.receipts[0].url}" alt="">Attach this photo as the receipt</label>` : ''}
+      ${editor}
+      ${p.status === 'rejected' ? '' : `<div class="qcard__actions"><button class="btn btn--primary btn--sm" data-act="qApprove" data-pid="${p.id}"${ok ? '' : ' disabled'}>${ic('check', 15)}Approve</button><button class="btn btn--ghost btn--sm" data-act="qReject" data-pid="${p.id}">Reject</button><span class="grow" style="flex:1"></span><button class="btn btn--text" data-act="qEdit" data-pid="${p.id}">${ic('pencil', 15)}${p.expanded ? 'Done editing' : 'Edit'}</button></div>`}
+    </div></article>`;
+}
+
+function lightbox() {
+  const r = ui.lightbox; if (!r) return '';
+  return `<div class="lightbox" data-act="closeLightbox"><div class="lightbox__inner">${r.kind === 'pdf' ? `<div class="lightbox__pdf">${ic('file', 40)}<br>${esc(r.name)}</div>` : `<img src="${r.url}" alt="${esc(r.name)}">`}<span class="muted">${esc(r.name)} · tap anywhere to close</span></div></div>`;
+}
+
+// ---------- toasts ----------
+const toastRoot = document.getElementById('toasts');
+function toast(title, body, kind) {
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind === 'mail' ? ' toast--mail' : '');
+  el.innerHTML = `<span class="toast__icon">${ic(kind === 'mail' ? 'mail' : 'check')}</span><div><p class="toast__title">${title}</p>${body ? `<p class="toast__body">${body}</p>` : ''}</div>`;
+  toastRoot.appendChild(el);
+  setTimeout(() => { el.classList.add('is-out'); setTimeout(() => el.remove(), 320); }, kind === 'mail' ? 5200 : 4200);
+}
+const mail = (to, text) => toast(`Email sent to ${nm(to)}`, text, 'mail');
+
+// ---------- mutations ----------
+function createExpense(f, how) {
+  const me = ui.me; const T = other(me);
+  const payerId = f.payer === 'me' ? me : f.payer === 'them' ? T : null;
+  const e = { id: 'n' + (++seq), title: f.title.trim(), category: f.category, childIds: [...f.childIds], amountPence: parsePence(f.amount), timing: f.timing, date: f.date, payerId, shares: formShares(f), agreement: { status: 'pending', requestedBy: me }, reimbursement: { status: 'none' }, receipts: [...f.receipts], notes: f.notes || '', history: [], version: 0, deleted: false };
+  log(e, how); expenses.unshift(e);
+  mail(T, `${nm(me)} added “${e.title}”, ${money(e.amountPence)}. Your share ${money(shareOf(e, T))}. Review it in CoParent.`);
+  return e;
+}
+function log(e, text, extra) { e.history.push(Object.assign({ at: now(), by: ui.me, text }, extra || {})); e.version++; }
+function settleOnAgree(e) { e.reimbursement = { status: e.timing === 'paid' && owedRaw(e) > 0 ? 'outstanding' : 'none' }; }
+
+const actions = {
+  agree(id) {
+    const e = byId(id); const me = ui.me;
+    e.agreement = { status: 'agreed', requestedBy: e.agreement.requestedBy, respondedBy: me };
+    if (e.timing === 'paid') settleOnAgree(e);
+    log(e, 'agreed');
+    const o = owedRaw(e);
+    toast('Agreed', e.timing === 'paid' && o > 0 ? `${e.title} now counts towards the balance: ${debtor(e) === me ? `you owe ${nm(e.payerId)}` : `${nm(debtor(e))} owes you`} ${money(o)}.` : `${e.title} is agreed.`);
+    ui.flash = id;
+  },
+  sendDispute(id) {
+    const e = byId(id); const note = (ui.drawer.note || '').trim(); if (!note) return;
+    e.agreement = { status: 'disputed', requestedBy: e.agreement.requestedBy, respondedBy: ui.me, note };
+    log(e, `disputed: “${note}”`, { dispute: true });
+    ui.drawer.mode = null; ui.drawer.note = '';
+    toast('Dispute sent', `${nm(e.agreement.requestedBy)} can edit it or withdraw it.`);
+    mail(e.agreement.requestedBy, `${nm(ui.me)} disputed “${e.title}” (${money(e.amountPence)}): “${note}”`);
+  },
+  sendClaim(id) {
+    const e = byId(id); const note = (ui.drawer.note || '').trim();
+    e.reimbursement = { status: 'claimed', note }; log(e, `marked it as paid back${note ? `: “${note}”` : ''}`);
+    ui.drawer.mode = null; ui.drawer.note = '';
+    toast('Marked as paid back', `${nm(e.payerId)} will confirm they received ${money(owedRaw(e))}.`);
+    mail(e.payerId, `${nm(ui.me)} says they paid you back ${money(owedRaw(e))} for “${e.title}”. Confirm when it arrives.`);
+  },
+  confirm(id) { const e = byId(id); e.reimbursement = { status: 'reimbursed' }; log(e, 'confirmed it was received'); toast('Settled', `${e.title} is settled.`); ui.flash = id; },
+  reject(id) { const e = byId(id); e.reimbursement = { status: 'outstanding' }; log(e, 'said it hasn’t arrived yet'); toast('Marked as not received', `${nm(other(ui.me))} will see it’s still outstanding.`); },
+  markReimbursed(id) { const e = byId(id); e.reimbursement = { status: 'reimbursed' }; log(e, 'marked it as reimbursed'); toast('Settled', `${e.title} is settled.`); },
+  sendMarkPaid(id) {
+    const e = byId(id); const mp = ui.drawer.mp; const amt = parsePence(mp.amount); if (!amt) return;
+    const termsChanged = amt !== e.amountPence || (e.payerId && e.payerId !== mp.payer);
+    e.timing = 'paid'; e.date = mp.date; e.payerId = mp.payer; e.amountPence = amt;
+    if (termsChanged || e.agreement.status !== 'agreed') {
+      e.agreement = { status: 'pending', requestedBy: ui.me }; e.reimbursement = { status: 'none' };
+      log(e, `marked it as paid${mp.payer === ui.me ? '' : ` by ${nm(mp.payer)}`} (${money(amt)})`);
+      toast('Marked as paid', `The terms changed, so ${nm(other(ui.me))} will be asked to agree again.`);
+      mail(other(ui.me), `${nm(ui.me)} marked “${e.title}” as paid at ${money(amt)}. Please review.`);
+    } else {
+      settleOnAgree(e); log(e, `marked it as paid${mp.payer === ui.me ? '' : ` by ${nm(mp.payer)}`}`);
+      toast('Marked as paid', owedRaw(e) ? `Still agreed. ${debtor(e) === ui.me ? `You owe ${nm(e.payerId)}` : `${nm(debtor(e))} owes you`} ${money(owedRaw(e))}.` : 'Still agreed.');
+    }
+    ui.drawer.mode = null; ui.flash = id;
+  },
+  save() {
+    const f = ui.drawer.form; if (!formValid(f)) return;
+    const me = ui.me; const T = other(me);
+    const payerId = f.payer === 'me' ? me : f.payer === 'them' ? T : null;
+    const shares = formShares(f); const amountPence = parsePence(f.amount);
+    if (!f.id) {
+      const e = createExpense(f, 'added it');
+      ui.drawer = null; ui.tab = 'all'; ui.flash = e.id;
+      toast('Expense added', `${nm(T)} has been asked to agree.`);
+      return;
+    }
+    const e = byId(f.id);
+    const changes = [];
+    if (amountPence !== e.amountPence) changes.push(`the amount to ${money(amountPence)}`);
+    if (shares.alex !== e.shares.alex) changes.push('the share');
+    if (payerId !== e.payerId) changes.push('who paid');
+    if (f.timing !== e.timing) changes.push(f.timing === 'paid' ? 'it to paid' : 'it to upcoming');
+    const terms = changes.length > 0 || e.agreement.status !== 'agreed';
+    Object.assign(e, { title: f.title.trim(), category: f.category, childIds: [...f.childIds], amountPence, timing: f.timing, date: f.date, payerId, shares, notes: f.notes, receipts: [...f.receipts] });
+    if (terms) { e.agreement = { status: 'pending', requestedBy: me }; e.reimbursement = { status: 'none' }; }
+    log(e, changes.length ? `changed ${changes.join(', ')}` : 'edited it');
+    ui.drawer = null; ui.flash = e.id;
+    if (terms) { toast('Changes sent', `${nm(T)} has been asked to agree again.`); mail(T, `${nm(me)} changed “${e.title}”${changes.length ? ` (${changes.join(', ')})` : ''}. Please review.`); }
+    else toast('Saved', 'Nothing about who owes what changed.');
+  },
+  delete(id) {
+    const e = byId(id); e.deleted = true; ui.drawer = null;
+    toast(e.agreement.status === 'agreed' ? 'Expense deleted' : 'Expense withdrawn', `${nm(other(ui.me))} can still see it in the audit history.`);
+  },
+  doSettle() {
+    const me = ui.me; const sel = ui.drawer.sel; let claimed = 0, marked = 0;
+    settleItems(me).filter((e) => sel[e.id] !== false).forEach((e) => {
+      if (e.payerId === me) { const was = e.reimbursement.status; e.reimbursement = { status: 'reimbursed' }; log(e, was === 'claimed' ? 'confirmed it was received (settle up)' : 'marked it as reimbursed (settle up)'); marked++; }
+      else { e.reimbursement = { status: 'claimed', note: 'Settle up' }; log(e, 'marked it as paid back (settle up)'); claimed++; }
+    });
+    ui.drawer = null;
+    toast('Settled up', [marked && `${marked} marked as reimbursed`, claimed && `${claimed} marked as paid back, awaiting ${nm(other(me))}`].filter(Boolean).join(' · '));
+    if (claimed) mail(other(me), `${nm(me)} settled up and marked ${claimed} expense${claimed === 1 ? '' : 's'} as paid back. Please confirm.`);
+  },
+};
+
+// ---------- events ----------
+function openDetail(id, mode) {
+  const e = byId(id);
+  ui.drawer = { type: 'detail', id, mode: mode || null, note: '', mp: { payer: e.payerId || ui.me, amount: (e.amountPence / 100).toFixed(2), date: TODAY } };
+  ui.enter = true;
+}
+
+app.addEventListener('click', (ev) => {
+  const t = ev.target.closest('[data-act]'); if (!t) return;
+  const a = t.dataset.act; const id = t.dataset.id;
+  if (a === 'settleToggle') { ui.drawer.sel[id] = t.checked; render(); return; }
+  const qp = () => ui.drawer.proposals.find((p) => p.id === t.dataset.pid);
+  if (a === 'qAttach') { qp().attach = t.checked; render(); return; }
+  ev.preventDefault();
+  switch (a) {
+    case 'quick': ui.drawer = { type: 'quick', step: 'capture', text: '', image: null, busy: false, proposals: [] }; ui.enter = true; ui.navOpen = false; break;
+    case 'qStep': if (t.dataset.step === 'review' && !ui.drawer.proposals.length) return; ui.drawer.step = t.dataset.step; break;
+    case 'qExample': ui.drawer.text = SAMPLE_NOTE; break;
+    case 'qPickImage': pickTarget = 'quick'; fileInput.click(); return;
+    case 'qRemoveImage': if (ui.drawer.image?.url?.startsWith('blob:')) URL.revokeObjectURL(ui.drawer.image.url); ui.drawer.image = null; break;
+    case 'qAnalyse': {
+      const dr = ui.drawer; if (dr.busy || (!dr.text.trim() && !dr.image)) return;
+      dr.busy = true;
+      setTimeout(() => { if (ui.drawer !== dr) return; dr.proposals = parseNote(dr.text, dr.image); dr.busy = false; dr.step = 'review'; dr.image = null; dr.text = ''; render(); }, 1600);
+      break;
+    }
+    case 'qf': { const p = qp(); p.form[t.dataset.k] = t.dataset.v; if (p.status === 'blocked' && formValid(p.form)) p.status = 'proposed'; break; }
+    case 'qToggleChild': { const p = qp(); const f = p.form; const c = t.dataset.cid; f.childIds = f.childIds.includes(c) ? f.childIds.filter((x) => x !== c) : [...f.childIds, c]; if (p.status === 'blocked' && formValid(f)) p.status = 'proposed'; break; }
+    case 'qEdit': { const p = qp(); p.expanded = !p.expanded; break; }
+    case 'qReject': qp().status = 'rejected'; break;
+    case 'qApprove': {
+      const p = qp(); const me = ui.me; const T = other(me);
+      if (p.type === 'claim') {
+        const e = byId(p.targetId); e.reimbursement = { status: 'claimed', note: p.note }; log(e, `marked it as paid back${p.note ? `: “${p.note}”` : ''} (Quick add)`);
+        p.status = 'applied'; toast('Marked as paid back', `${nm(T)} will confirm they received ${money(owedRaw(e))}.`);
+        mail(T, `${nm(me)} says they paid you back ${money(owedRaw(e))} for “${e.title}”. Confirm when it arrives.`);
+      } else {
+        if (!formValid(p.form)) return;
+        const f = Object.assign({}, p.form, { receipts: p.attach ? p.form.receipts : [] });
+        const e = createExpense(f, 'added it with Quick add'); p.status = 'applied'; p.expenseId = e.id; ui.flash = e.id;
+        toast('Expense added', `${nm(T)} has been asked to agree.`);
+      }
+      break;
+    }
+    case 'nav': if (['dashboard', 'expenses'].includes(t.dataset.to)) { ui.screen = t.dataset.to; ui.navOpen = false; ui.drawer = null; } else toast('Not part of this mockup', `${t.dataset.to[0].toUpperCase() + t.dataset.to.slice(1)} already exists in CoParent.`); break;
+    case 'tabNav': ui.screen = 'expenses'; ui.tab = t.dataset.tab; break;
+    case 'soon': toast('Not part of this mockup', `${t.dataset.what} is outside the expenses design.`); return;
+    case 'openNav': ui.navOpen = true; break;
+    case 'closeNav': ui.navOpen = false; break;
+    case 'tab': ui.tab = t.dataset.tab; break;
+    case 'new': ui.drawer = { type: 'form', form: newForm() }; ui.enter = true; break;
+    case 'edit': ui.drawer = { type: 'form', form: newForm(byId(id)) }; ui.enter = true; break;
+    case 'open': openDetail(id); break;
+    case 'openDispute': openDetail(id, 'dispute'); break;
+    case 'openClaim': openDetail(id, 'claim'); break;
+    case 'openMarkPaid': openDetail(id, 'markPaid'); break;
+    case 'mode': ui.drawer.mode = t.dataset.mode; break;
+    case 'cancelMode': ui.drawer.mode = null; break;
+    case 'close': ui.drawer = null; break;
+    case 'settle': ui.drawer = { type: 'settle', sel: {} }; ui.enter = true; break;
+    case 'f': ui.drawer.form[t.dataset.k] = t.dataset.v; if (t.dataset.k === 'timing' && t.dataset.v === 'paid' && ui.drawer.form.payer === 'undecided') ui.drawer.form.payer = 'me'; break;
+    case 'mp': ui.drawer.mp[t.dataset.k] = t.dataset.v; break;
+    case 'toggleChild': { const f = ui.drawer.form; const c = t.dataset.cid; f.childIds = f.childIds.includes(c) ? f.childIds.filter((x) => x !== c) : [...f.childIds, c]; break; }
+    case 'pickReceipt': pickTarget = 'form'; fileInput.click(); return;
+    case 'pickReceiptDetail': pickTarget = id; fileInput.click(); return;
+    case 'removeReceipt': ev.stopPropagation(); ui.drawer.form.receipts = ui.drawer.form.receipts.filter((r) => { if (r.id === t.dataset.rid && r.url?.startsWith('blob:')) URL.revokeObjectURL(r.url); return r.id !== t.dataset.rid; }); break;
+    case 'viewReceipt': { const pool = ui.drawer?.type === 'form' ? ui.drawer.form.receipts : byId(ui.drawer.id).receipts; ui.lightbox = pool.find((r) => r.id === t.dataset.rid); break; }
+    case 'closeLightbox': ui.lightbox = null; break;
+    case 'discuss': toast('Opens Messages', `A new message to ${nm(other(ui.me))}, subject “About: ${byId(id).title} (${money(byId(id).amountPence)})”.`); return;
+    case 'agree': case 'confirm': case 'reject': case 'markReimbursed': actions[a](id); if (ui.drawer?.type === 'detail' && a !== 'reject' && a !== 'markReimbursed' && a !== 'confirm') { /* keep drawer open to show new state */ } break;
+    case 'sendDispute': case 'sendClaim': case 'sendMarkPaid': case 'delete': actions[a](id); break;
+    case 'save': case 'doSettle': actions[a](); break;
+    default: return;
+  }
+  render();
+});
+
+app.addEventListener('input', (ev) => {
+  const dr = ui.drawer; if (!dr) return;
+  if (dr.type === 'quick') {
+    if (ev.target.dataset.field === 'qtext') { dr.text = ev.target.value; const b = app.querySelector('[data-act="qAnalyse"]'); if (b) b.disabled = !(dr.text.trim() || dr.image); }
+    const qf = ev.target.dataset.qfield; if (qf) { const p = dr.proposals.find((x) => x.id === ev.target.dataset.pid); p.form[qf] = ev.target.value; }
+    return;
+  }
+  const k = ev.target.dataset.field; if (!k) return;
+  if (dr.type === 'form') {
+    dr.form[k] = ev.target.value;
+    const sm = formSummary(dr.form); const box = document.getElementById('form-summary');
+    if (box) { box.className = `summary ${sm.cls}`; box.innerHTML = `<span class="summary__icon">${ic(sm.icon)}</span><div>${sm.html}</div>`; }
+    const save = document.getElementById('form-save'); if (save) save.disabled = !formValid(dr.form);
+    const pl = document.getElementById('pct-label'); if (pl) pl.textContent = `You ${dr.form.myPct}% · ${nm(other(ui.me))} ${100 - dr.form.myPct}%`;
+  } else if (dr.type === 'detail') {
+    if (k === 'note') { dr.note = ev.target.value; const b = document.getElementById('dispute-send'); if (b) b.disabled = !dr.note.trim(); }
+    if (k === 'mpAmount') dr.mp.amount = ev.target.value;
+    if (k === 'mpDate') dr.mp.date = ev.target.value;
+  }
+});
+
+app.addEventListener('change', (ev) => {
+  const f = ev.target.dataset.filter;
+  if (f) { ui[f] = ev.target.value; render(); return; }
+  const k = ev.target.dataset.field;
+  if (ui.drawer?.type === 'form' && (k === 'category' || k === 'date')) { ui.drawer.form[k] = ev.target.value; render(); }
+  if (ui.drawer?.type === 'quick' && ev.target.dataset.qfield) render();
+});
+
+let pickTarget = null;
+const fileInput = document.getElementById('file');
+fileInput.addEventListener('change', () => {
+  const files = [...fileInput.files];
+  const add = files.map((file) => ({ id: 'u' + (++seq), name: file.name, kind: file.type === 'application/pdf' ? 'pdf' : 'image', url: file.type === 'application/pdf' ? null : URL.createObjectURL(file) }));
+  if (!pickTarget && ui.drawer) pickTarget = ui.drawer.type === 'quick' ? 'quick' : ui.drawer.type === 'form' ? 'form' : ui.drawer.id;
+  if (pickTarget === 'quick') { ui.drawer.image = add.find((r) => r.kind === 'image') || null; fileInput.value = ''; render(); return; }
+  if (pickTarget === 'form') ui.drawer.form.receipts = [...ui.drawer.form.receipts, ...add].slice(0, 5);
+  else { const e = byId(pickTarget); e.receipts = [...e.receipts, ...add].slice(0, 5); log(e, `added ${add.length} receipt${add.length === 1 ? '' : 's'}`); toast('Receipt added', 'Stored privately for your family.'); }
+  fileInput.value = '';
+  render();
+});
+
+document.querySelectorAll('.mock-seg').forEach((seg) => seg.addEventListener('click', (ev) => {
+  const b = ev.target.closest('button'); if (!b) return;
+  const k = seg.dataset.ctl; ui[k] = b.dataset.v;
+  if (k === 'me') { ui.tab = null; ui.drawer = null; }
+  if (k === 'device') ui.navOpen = false;
+  render();
+}));
+document.getElementById('reset').addEventListener('click', () => { expenses = seed(); ui.tab = null; ui.drawer = null; render(); toast('Data reset', 'Back to the starting example.'); });
+
+// exposed for scripted demos
+window.mock = { ui, get expenses() { return expenses; }, set: (o) => { Object.assign(ui, o); render(); }, reset: () => { expenses = seed(); Object.assign(ui, { tab: null, drawer: null, lightbox: null, navOpen: false }); render(); } };
+const params = new URLSearchParams(location.search);
+['screen', 'me', 'device', 'theme'].forEach((k) => { if (params.get(k)) ui[k] = params.get(k); });
+render();
+})();
+</script>
+</body>
+</html>

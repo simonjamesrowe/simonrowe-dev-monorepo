@@ -77,8 +77,23 @@ public class BackupService {
   );
   private static final Set<String> COPARENT_BACKUP_COLLECTIONS = Set.of(
       "families", "parents", "children", "invitations", "onboardingstates", "events",
-      "eventcategories", "schedulechangerequests", "conversations", "audits"
+      "eventcategories", "schedulechangerequests", "conversations", "audits", "expenses"
   );
+
+  /** Writes every file under {@code dir} into the archive below {@code prefix}. */
+  static void exportDirectory(final ZipOutputStream zos, final Path dir,
+      final String prefix) throws IOException {
+    if (!Files.isDirectory(dir)) {
+      return;
+    }
+    try (Stream<Path> walk = Files.walk(dir)) {
+      for (Path file : walk.filter(Files::isRegularFile).toList()) {
+        zos.putNextEntry(new ZipEntry(prefix + dir.relativize(file)));
+        Files.copy(file, zos);
+        zos.closeEntry();
+      }
+    }
+  }
 
   private void exportIndex(final ZipOutputStream zos, final String index) {
     try {
@@ -99,6 +114,7 @@ public class BackupService {
   private final com.simonrowe.embedding.ElasticsearchBackupService esBackupService;
   private final String uploadsPath;
   private final String schoolAttachmentPath;
+  private final String coparentReceiptPath;
 
   public BackupService(
       final MongoClient mongoClient,
@@ -108,7 +124,8 @@ public class BackupService {
       final DataOperationsService operationsService,
       final com.simonrowe.embedding.ElasticsearchBackupService esBackupService,
       @Value("${uploads.path:backend/uploads/}") final String uploadsPath,
-      @Value("${school.attachment-path:school-attachments/}") final String schoolAttachmentPath
+      @Value("${school.attachment-path:school-attachments/}") final String schoolAttachmentPath,
+      @Value("${coparent.receipt-path:coparent-receipts/}") final String coparentReceiptPath
   ) {
     this.mongoClient = mongoClient;
     this.databaseName = mongoTemplate.getDb().getName();
@@ -118,6 +135,7 @@ public class BackupService {
     this.esBackupService = esBackupService;
     this.uploadsPath = uploadsPath;
     this.schoolAttachmentPath = schoolAttachmentPath;
+    this.coparentReceiptPath = coparentReceiptPath;
   }
 
   /**
@@ -212,6 +230,9 @@ public class BackupService {
             }
           }
         }
+
+        // CoParent expense receipts. Not re-derivable from anything: the bytes exist only here.
+        exportDirectory(zos, Path.of(coparentReceiptPath), "coparent-receipts/");
 
         operationsService.updateProgress("Exporting vector embeddings...", 70);
         // Two indexes, each its own entry. The entry name has always carried the index name,

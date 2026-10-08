@@ -1,17 +1,21 @@
 package com.simonrowe.coparent.assistant;
 
 import com.simonrowe.coparent.calendar.CalendarService;
+import com.simonrowe.coparent.expense.ExpenseService;
 import com.simonrowe.coparent.messaging.MessagingService;
 import com.simonrowe.coparent.model.CalendarEvent;
 import com.simonrowe.coparent.model.EventCategory;
+import com.simonrowe.coparent.model.Expense;
 import com.simonrowe.coparent.model.ScheduleChangeRequest;
 import com.simonrowe.coparent.persistence.CoparentAuditService;
 import com.simonrowe.coparent.persistence.ConversationRepository;
 import com.simonrowe.coparent.persistence.EventCategoryRepository;
 import com.simonrowe.coparent.persistence.EventRepository;
+import com.simonrowe.coparent.persistence.ExpenseRepository;
 import com.simonrowe.coparent.persistence.ScheduleChangeRepository;
 import java.time.Instant;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,6 +38,8 @@ public class AssistantActionExecutor {
   private final EventCategoryRepository categories;
   private final ScheduleChangeRepository changes;
   private final ConversationRepository conversations;
+  private final ExpenseService expenseService;
+  private final ExpenseRepository expenses;
 
   public AssistantActionExecutor(
       final AssistantProposalService proposals,
@@ -43,7 +49,9 @@ public class AssistantActionExecutor {
       final EventRepository events,
       final EventCategoryRepository categories,
       final ScheduleChangeRepository changes,
-      final ConversationRepository conversations) {
+      final ConversationRepository conversations,
+      final ExpenseService expenseService,
+      final ExpenseRepository expenses) {
     this.proposals = proposals;
     this.calendar = calendar;
     this.messaging = messaging;
@@ -52,6 +60,8 @@ public class AssistantActionExecutor {
     this.categories = categories;
     this.changes = changes;
     this.conversations = conversations;
+    this.expenseService = expenseService;
+    this.expenses = expenses;
   }
 
   /** Atomically claims, executes, and records one action decision. */
@@ -281,7 +291,52 @@ public class AssistantActionExecutor {
         yield new AssistantProposalBatch.ResultReference("conversation", conversationId,
             "/messages?conversation=" + conversationId.toHexString());
       }
+      // The same service calls the expense form makes, so the other parent is still asked to
+      // agree and a retried approval finds the expense its first attempt created.
+      case CREATE_EXPENSE -> expenseResult(expenses.findByAssistantActionId(action.id())
+          .orElseGet(() -> expenseService.create(familyId, expenseValues(familyId, payload),
+              action.operationId(), action.id())));
+      case MARK_EXPENSE_PAID -> {
+        final ObjectId expenseId = id(payload, "expenseId");
+        final Expense current = expenseService.get(familyId, expenseId);
+        if (!Expense.UPCOMING.equals(current.timing())) {
+          yield expenseResult(current);
+        }
+        requireUnchanged(action, current.updatedAt());
+        final Long amount = AssistantProposalService.pence(string(payload, "amount", null));
+        yield expenseResult(expenseService.markPaid(familyId, expenseId, current.version(),
+            id(payload, "payerId"), LocalDate.parse(string(payload, "paidOn", null)),
+            amount == null ? current.amountPence() : amount));
+      }
+      case CLAIM_EXPENSE_REIMBURSEMENT -> {
+        final ObjectId expenseId = id(payload, "expenseId");
+        final Expense current = expenseService.get(familyId, expenseId);
+        if (!Expense.OUTSTANDING.equals(current.reimbursement().status())) {
+          yield expenseResult(current);
+        }
+        requireUnchanged(action, current.updatedAt());
+        yield expenseResult(expenseService.claim(familyId, expenseId, current.version(),
+            string(payload, "note", null)));
+      }
     };
+  }
+
+  private ExpenseService.ExpenseValues expenseValues(
+      final ObjectId familyId, final Map<String, Object> payload) {
+    final Long pence = AssistantProposalService.pence(string(payload, "amount", null));
+    final int percent = payload.get("sharePercent") instanceof Number number
+        ? number.intValue() : 50;
+    final String date = string(payload, "date", null);
+    return new ExpenseService.ExpenseValues(string(payload, "title", null),
+        string(payload, "category", null), ids(payload, "childIds", List.of()),
+        pence == null ? 0 : pence, string(payload, "timing", null),
+        date == null ? null : LocalDate.parse(date), optionalId(payload, "payerId"),
+        expenseService.callerShares(familyId, percent), string(payload, "notes", null));
+  }
+
+  private static AssistantProposalBatch.ResultReference expenseResult(final Expense expense) {
+    return new AssistantProposalBatch.ResultReference(
+        "expense", expense.id(), "/expenses?expense=" + expense.id().toHexString());
   }
 
   private static CalendarService.EventValues eventValues(

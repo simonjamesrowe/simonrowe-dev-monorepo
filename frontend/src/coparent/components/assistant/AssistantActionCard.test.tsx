@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,6 +20,38 @@ vi.mock('../../hooks/api/useAssistant', () => ({
   useEditAssistantAction: () => editMutation,
   useRejectAssistantAction: () => rejectMutation,
 }));
+
+const uploadMutation = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
+vi.mock('../../hooks/api/useExpenses', () => ({
+  useUploadReceipt: () => uploadMutation,
+}));
+
+vi.mock('../../../pages/admin/schoolNoteImage', () => ({
+  prepareSchoolNoteImage: vi.fn().mockResolvedValue(new Blob(['jpeg'], { type: 'image/jpeg' })),
+}));
+
+const expenseAction: AssistantAction = {
+  id: 'action-expense',
+  actionType: 'CREATE_EXPENSE',
+  status: 'PENDING',
+  payload: {
+    title: 'Kids padded coat',
+    amount: '39.00',
+    currency: 'GBP',
+    category: 'clothing',
+    childIds: ['child-1'],
+    timing: 'paid',
+    date: '2026-10-08',
+    payerId: 'parent-2',
+    sharePercent: 50,
+    notes: null,
+  },
+  fieldErrors: [],
+  revision: 0,
+  targetSnapshot: null,
+  result: null,
+  failureMessage: null,
+};
 
 describe('AssistantActionCard', () => {
   beforeEach(() => {
@@ -168,5 +200,76 @@ describe('AssistantActionCard', () => {
     expect(rejectMutation.mutate).toHaveBeenCalledWith({
       familyId: 'family-1', batchId: 'batch-1', action,
     });
+  });
+
+  it('says in pounds who will owe whom on an expense card', async () => {
+    const user = userEvent.setup();
+    render(
+      <AssistantActionCard
+        familyId="family-1"
+        batchId="batch-1"
+        action={expenseAction}
+        online
+        expenseContext={{ meId: 'parent-1', otherName: 'Sam' }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Add expense pending/i }));
+    expect(screen.getByText('Kids padded coat · £39.00')).toBeInTheDocument();
+    expect(screen.getByText('Sam paid £39.00. Your share is £19.50.')).toBeInTheDocument();
+    expect(screen.getByText("You'll owe Sam £19.50 once Sam agrees.")).toBeInTheDocument();
+  });
+
+  it('attaches the analysed photo as the receipt only once the expense is approved', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:photo'), revokeObjectURL: vi.fn() });
+    approveMutation.mutate.mockImplementation((_variables, options) => options?.onSuccess?.({
+      action: { ...expenseAction, status: 'APPLIED', result: { entityType: 'expense', entityId: 'expense-9', route: '/expenses?expense=expense-9' } },
+    }));
+    const photo = new File(['jpeg'], 'receipt.jpg', { type: 'image/jpeg' });
+    render(
+      <AssistantActionCard
+        familyId="family-1"
+        batchId="batch-1"
+        action={expenseAction}
+        online
+        receiptImage={photo}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Add expense pending/i }));
+    expect(screen.getByRole('checkbox', { name: 'Attach this photo as the receipt' })).toBeChecked();
+    expect(uploadMutation.mutateAsync).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
+
+    await waitFor(() => expect(uploadMutation.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ familyId: 'family-1', expenseId: 'expense-9' }),
+    ));
+    vi.unstubAllGlobals();
+    approveMutation.mutate.mockReset();
+  });
+
+  it('keeps the photo out of CoParent when the box is unticked', async () => {
+    const user = userEvent.setup();
+    uploadMutation.mutateAsync.mockClear();
+    approveMutation.mutate.mockImplementation((_variables, options) => options?.onSuccess?.({
+      action: { ...expenseAction, status: 'APPLIED', result: { entityType: 'expense', entityId: 'expense-9', route: '' } },
+    }));
+    render(
+      <AssistantActionCard
+        familyId="family-1"
+        batchId="batch-1"
+        action={expenseAction}
+        online
+        receiptImage={new File(['jpeg'], 'receipt.jpg', { type: 'image/jpeg' })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Add expense pending/i }));
+    await user.click(screen.getByRole('checkbox', { name: 'Attach this photo as the receipt' }));
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
+
+    expect(uploadMutation.mutateAsync).not.toHaveBeenCalled();
+    approveMutation.mutate.mockReset();
   });
 });

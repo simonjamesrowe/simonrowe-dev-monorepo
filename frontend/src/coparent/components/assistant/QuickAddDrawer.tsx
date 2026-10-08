@@ -19,6 +19,7 @@ import {
   useConversations,
   useCurrentUser,
   useEvents,
+  useExpenses,
   useFamilies,
   useParents,
   useScheduleChangeRequests,
@@ -51,6 +52,10 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
   const children = useChildren(familyId || undefined);
   const parents = useParents(familyId || undefined);
   const currentUser = useCurrentUser();
+  const expenses = useExpenses(familyId || undefined);
+  // The photo each batch was read from, kept only in this tab, so an approved expense can
+  // attach it as the receipt. Never sent anywhere unless the parent approves with it ticked.
+  const [batchImages, setBatchImages] = useState<Record<string, File>>({});
 
   useEffect(() => {
     if (!familyId && families.data?.length) setFamilyId(families.data[0].id);
@@ -81,8 +86,25 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
     parentIds: parents.data?.map((parent) => ({ value: parent.id, label: parent.fullName })) ?? [],
     recipientId: parents.data?.filter((parent) => parent.id !== currentParentId)
       .map((parent) => ({ value: parent.id, label: parent.fullName })) ?? [],
+    payerId: parents.data?.map((parent) => ({ value: parent.id, label: parent.fullName })) ?? [],
+    expenseId: expenses.data?.filter((expense) => expense.reimbursement.status !== 'reimbursed')
+      .map((expense) => ({
+        value: expense.id,
+        label: `${expense.title} · £${(expense.amountPence / 100).toFixed(2)}`,
+      })) ?? [],
+    category: ['activities', 'childcare', 'clothing', 'education', 'food', 'medical', 'other',
+      'travel'].map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })),
+    timing: [{ value: 'paid', label: 'Already paid' }, { value: 'upcoming', label: 'Coming up' }],
+    // Pounds sterling only: choosing this is how a parent fixes a note that gave dollars.
+    currency: [{ value: 'GBP', label: 'GBP (£)' }],
   }), [categories.data, children.data, conversations.data, currentParentId, events.data,
-    parents.data, requests.data]);
+    expenses.data, parents.data, requests.data]);
+
+  const otherParentName = parents.data?.find((parent) => parent.id !== currentParentId)
+    ?.fullName.split(/\s+/)[0] ?? 'your co-parent';
+  const expenseContext = currentParentId
+    ? { meId: currentParentId, otherName: otherParentName }
+    : undefined;
 
   const clearImage = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -96,6 +118,7 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
     setInputError(null);
     setBatchId(undefined);
     setStep('capture');
+    setBatchImages({});
     analyse.reset();
     onClose();
   };
@@ -132,6 +155,7 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
     }
     try {
       const created = await analyse.mutateAsync({ familyId, text, image });
+      if (image) setBatchImages((current) => ({ ...current, [created.id]: image }));
       setBatchId(created.id);
       setText('');
       clearImage();
@@ -317,6 +341,8 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
                   action={action}
                   online={online}
                   options={editorOptions}
+                  expenseContext={expenseContext}
+                  receiptImage={batchImages[batch.data.id] ?? null}
                 />
               ))}
               {!batchId && <p className="assistant-review__empty">Your review cards will appear here.</p>}

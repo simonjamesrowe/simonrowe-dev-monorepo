@@ -24,6 +24,7 @@ import com.simonrowe.migration.changeunits.V045CreateCoparentAssistantSchema;
 import com.simonrowe.migration.changeunits.V048CreatePortfolioProjects;
 import com.simonrowe.migration.changeunits.V049SeedTermTimeProjectPage;
 import com.simonrowe.migration.changeunits.V051SeedTldrNewsletterSources;
+import com.simonrowe.migration.changeunits.V052CreateCoparentExpenses;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -98,7 +99,8 @@ public class RestoreService {
       V043CreateCoparentCollections.CATEGORIES,
       V043CreateCoparentCollections.SCHEDULE_CHANGES,
       V043CreateCoparentCollections.CONVERSATIONS,
-      V043CreateCoparentCollections.AUDITS);
+      V043CreateCoparentCollections.AUDITS,
+      V052CreateCoparentExpenses.EXPENSES);
 
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
       "skill_groups", "jobs", "blogs", "code_examples", "narrations"
@@ -114,6 +116,7 @@ public class RestoreService {
   private final NarrationRestoreValidator narrationRestoreValidator;
   private final String uploadsPath;
   private final String schoolAttachmentPath;
+  private final String coparentReceiptPath;
 
   public RestoreService(
       final MongoTemplate mongoTemplate,
@@ -125,7 +128,8 @@ public class RestoreService {
       final com.simonrowe.embedding.ElasticsearchBackupService esBackupService,
       final NarrationRestoreValidator narrationRestoreValidator,
       @Value("${uploads.path:backend/uploads/}") final String uploadsPath,
-      @Value("${school.attachment-path:school-attachments/}") final String schoolAttachmentPath
+      @Value("${school.attachment-path:school-attachments/}") final String schoolAttachmentPath,
+      @Value("${coparent.receipt-path:coparent-receipts/}") final String coparentReceiptPath
   ) {
     this.mongoTemplate = mongoTemplate;
     this.coparentMongoTemplate = coparentMongoTemplate;
@@ -137,6 +141,7 @@ public class RestoreService {
     this.narrationRestoreValidator = narrationRestoreValidator;
     this.uploadsPath = uploadsPath;
     this.schoolAttachmentPath = schoolAttachmentPath;
+    this.coparentReceiptPath = coparentReceiptPath;
   }
 
   public void performRestore(final String backupFileId) {
@@ -163,6 +168,7 @@ public class RestoreService {
       try {
         restoreMediaFiles(mediaZip);
         restoreSchoolAttachments(tempZip);
+        restoreCoparentReceipts(tempZip);
       } finally {
         if (mediaZip != null && !mediaZip.equals(tempZip)) {
           deleteTempFile(mediaZip);
@@ -448,6 +454,7 @@ public class RestoreService {
   void ensureCoparentIndexes() {
     V043CreateCoparentCollections.createIndexes(coparentMongoTemplate);
     V045CreateCoparentAssistantSchema.createIndexes(coparentMongoTemplate);
+    V052CreateCoparentExpenses.createIndexes(coparentMongoTemplate);
     LOG.info("Recreated CoParent indexes after restore");
   }
 
@@ -529,21 +536,39 @@ public class RestoreService {
    * @throws IOException if the archive cannot be read
    */
   private void restoreSchoolAttachments(final Path zipFile) throws IOException {
-    final Path dir = Path.of(schoolAttachmentPath);
+    restoreDirectoryEntries(zipFile, "school-attachments/", Path.of(schoolAttachmentPath),
+        "school attachment");
+  }
+
+  /**
+   * Restores CoParent expense receipts into their private directory. Additive for the same
+   * reason as {@link #restoreSchoolAttachments}: a receipt is reachable only through an
+   * expense row, and those rows come from the same archive.
+   *
+   * @param zipFile the backup archive
+   * @throws IOException if the archive cannot be read
+   */
+  void restoreCoparentReceipts(final Path zipFile) throws IOException {
+    restoreDirectoryEntries(zipFile, "coparent-receipts/", Path.of(coparentReceiptPath),
+        "CoParent receipt");
+  }
+
+  /** Copies every archive entry under {@code prefix} into {@code dir}, refusing escapes. */
+  private void restoreDirectoryEntries(final Path zipFile, final String prefix, final Path dir,
+      final String label) throws IOException {
+    final Path root = dir.toAbsolutePath().normalize();
     int restored = 0;
     try (var zip = new java.util.zip.ZipFile(zipFile.toFile())) {
       var entries = zip.entries();
       while (entries.hasMoreElements()) {
         var entry = entries.nextElement();
-        if (!entry.getName().startsWith("school-attachments/") || entry.isDirectory()) {
+        if (!entry.getName().startsWith(prefix) || entry.isDirectory()) {
           continue;
         }
-        final String relative = entry.getName().substring("school-attachments/".length());
-        final Path target = dir.resolve(relative).normalize();
+        final Path target = root.resolve(entry.getName().substring(prefix.length())).normalize();
         // Zip-slip guard: an entry named ../../etc/passwd would otherwise escape the directory.
-        if (!target.startsWith(dir.toAbsolutePath().normalize())
-            && !target.normalize().startsWith(dir.normalize())) {
-          LOG.warn("Skipping school attachment entry escaping the target directory: {}",
+        if (!target.startsWith(root)) {
+          LOG.warn("Skipping {} entry escaping the target directory: {}", label,
               entry.getName());
           continue;
         }
@@ -555,7 +580,7 @@ public class RestoreService {
       }
     }
     if (restored > 0) {
-      LOG.info("Restored {} school attachment(s)", restored);
+      LOG.info("Restored {} {}(s)", restored, label);
     }
   }
 

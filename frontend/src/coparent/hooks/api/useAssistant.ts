@@ -10,6 +10,7 @@ import type {
 
 import { conversationKeys } from './useConversations';
 import { eventKeys } from './useEvents';
+import { expenseKeys } from './useExpenses';
 import { scheduleChangeRequestKeys } from './useScheduleChangeRequests';
 
 export const assistantKeys = {
@@ -134,6 +135,10 @@ function invalidateDomain(queryClient: ReturnType<typeof useQueryClient>, family
   if (actionType.includes('MESSAGE') || actionType.includes('CONVERSATION')
     || actionType.includes('PERMISSION')) {
     queryClient.invalidateQueries({ queryKey: conversationKeys.list(familyId) });
+  }
+  if (actionType.includes('EXPENSE')) {
+    queryClient.invalidateQueries({ queryKey: expenseKeys.list(familyId) });
+    queryClient.invalidateQueries({ queryKey: expenseKeys.summary(familyId) });
   }
 }
 
