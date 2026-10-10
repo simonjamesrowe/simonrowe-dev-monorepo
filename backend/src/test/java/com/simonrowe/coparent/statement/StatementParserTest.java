@@ -142,6 +142,46 @@ class StatementParserTest {
   }
 
   @Test
+  void splitsSantanderDescriptionsIntoPayeeAndDetails() {
+    assertThat(StatementParser.santanderParts("CARD PAYMENT TO TOWN CAFE ON 2 ON 01-10-2026"))
+        .containsExactly("TOWN CAFE ON 2", "Card payment on 01-10-2026");
+    assertThat(StatementParser.santanderParts(
+        "DIRECT DEBIT PAYMENT TO WATER CO REF 12 REF 34, MANDATE NO 0001"))
+        .containsExactly("WATER CO", "Direct debit, ref 12 REF 34");
+    assertThat(StatementParser.santanderParts(
+        "BILL PAYMENT TO A TUTOR REFERENCE Robin maths, MANDATE NO00143"))
+        .containsExactly("A TUTOR", "Payment, ref Robin maths");
+    assertThat(StatementParser.santanderParts(
+        "STANDING ORDER VIA FASTER PAYMENT TO EXAMPLE CLUB REFERENCE Robin , MANDAT"))
+        .containsExactly("EXAMPLE CLUB", "Standing order, ref Robin");
+    // A reference that merely contains ", M" followed by ordinary words is kept whole.
+    assertThat(StatementParser.santanderParts(
+        "BILL PAYMENT TO A FRIEND REFERENCE lunch, Monday treat"))
+        .containsExactly("A FRIEND", "Payment, ref lunch, Monday treat");
+    // Without its mandate number a direct debit is not split, exactly as before.
+    assertThat(StatementParser.santanderParts("DIRECT DEBIT PAYMENT TO WATER CO REF 34, MAND"))
+        .containsExactly("DIRECT DEBIT PAYMENT TO WATER CO REF 34, MAND", "");
+    assertThat(StatementParser.santanderParts("DIRECT DEBIT PAYMENT TO WATER CO REF 34"))
+        .containsExactly("DIRECT DEBIT PAYMENT TO WATER CO REF 34", "");
+    assertThat(StatementParser.santanderParts("CARD PAYMENT TO SHOP ON SOMEDAY"))
+        .containsExactly("CARD PAYMENT TO SHOP ON SOMEDAY", "");
+    assertThat(StatementParser.santanderParts("MONTHLY FEE")).containsExactly("MONTHLY FEE", "");
+  }
+
+  @Test
+  void recognisesOnlyWhatIsLeftOfMandateNumbers() {
+    assertThat(List.of("MANDATE NO 0143", "MANDATE NO00155", "MAN", "M", "MANDAT"))
+        .allMatch(StatementParser::isMandateSuffix);
+    assertThat(List.of("M1A", "Monday treat", "MANDATE NO 12A", "", "X MANDATE"))
+        .noneMatch(StatementParser::isMandateSuffix);
+    assertThat(StatementParser.santanderParts("BILL PAYMENT TO A SHOP REFERENCE order, M1A"))
+        .containsExactly("A SHOP", "Payment, ref order, M1A");
+    assertThat(StatementParser.santanderParts(
+        "BILL PAYMENT TO A CLUB REFERENCE fees ,  MANDATE NO 7"))
+        .containsExactly("A CLUB", "Payment, ref fees");
+  }
+
+  @Test
   void readsPenceExactlyAndRefusesFractionsOfPennies() {
     assertThat(StatementParser.pence("-2,502.73")).isEqualTo(-250273L);
     assertThat(StatementParser.pence("£4.5")).isEqualTo(450L);
