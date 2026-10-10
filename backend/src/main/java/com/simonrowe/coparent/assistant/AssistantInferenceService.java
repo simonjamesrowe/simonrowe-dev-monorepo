@@ -49,7 +49,10 @@ public class AssistantInferenceService {
       source that lists ten activities needs ten calls: never merge items, summarise them, or
       stop after the first. Each activity for each child is a separate event.
 
-      Calendar events: dates are YYYY-MM-DD and times are 24-hour HH:mm. type is one of
+      Calendar events: dates are YYYY-MM-DD and times are 24-hour HH:mm, so convert any
+      12-hour time: 6pm is 18:00, 6:30pm is 18:30 and 12pm is 12:00. In a range such as
+      "6-7pm" both ends take the pm unless the first is marked am. Never keep a time you think
+      is wrong and explain it in notes; write the time the source means. type is one of
       activity, school, medical, holiday or custody unless a family category name fits better.
       A regular activity is one recurring event: set recurringFrequency and recurringDays, set
       startDate to its first occurrence and endDate to the last date the series runs; the
@@ -245,7 +248,7 @@ public class AssistantInferenceService {
         "allDay":{"type":["boolean","null"]},"parentId":%s,"parentIds":%s,"childIds":%s,\
         "location":%s,"notes":%s,"recurringFrequency":%s,"recurringDays":%s""".formatted(
             targets, nullableString(), nullableString(), nullableString(), nullableString(),
-            nullableString(), nullableString(), nullableString(), stringArray(), stringArray(),
+            nullableTime(), nullableTime(), nullableString(), stringArray(), stringArray(),
             nullableString(), nullableString(), nullableEnum(Recurrence.FREQUENCIES),
             enumArray(Recurrence.DAYS));
     final List<String> required = new ArrayList<>();
@@ -279,6 +282,16 @@ public class AssistantInferenceService {
 
   private static String nullableString() {
     return "{\"type\":[\"string\",\"null\"]}";
+  }
+
+  /**
+   * A time of day. The description travels with the field, so the model sees the 24-hour rule
+   * where it writes the value: a Quick add note saying "6-7pm" was once stored as 06:00.
+   */
+  private static String nullableTime() {
+    return """
+        {"type":["string","null"],\
+        "description":"24-hour HH:mm. 6pm is 18:00 and 6:30pm is 18:30."}""";
   }
 
   private static String nullableInteger() {
