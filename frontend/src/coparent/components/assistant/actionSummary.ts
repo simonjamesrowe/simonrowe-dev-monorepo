@@ -7,7 +7,7 @@ import type { AssistantAction } from '../../types/assistant';
 import { describeEvent, describeWhen, describeRepeat, formatDay, joinNames } from '../calendar/eventSummary';
 import { formatMoney, parsePounds, previewShares, type PayerChoice } from '../expenses/money';
 
-import type { AssistantEditorOptions } from './AssistantActionCard';
+import type { AssistantEditorOptions } from './fieldControls';
 
 export const ACTION_LABELS: Record<string, string> = {
   CREATE_EVENT: 'Create event',
@@ -300,4 +300,50 @@ export function summarizeAction(action: AssistantAction, context: ActionSummaryC
     default:
       return { label, detail: null };
   }
+}
+
+export interface ExpenseShareNote {
+  tone: 'owed' | 'owe' | 'neutral';
+  text: string;
+}
+
+/**
+ * What an open expense card adds to its summary line: how the cost is split, and when it counts.
+ * The line already gives the title, the amount and who paid, so the note repeats none of them.
+ */
+export function expenseShareNote(
+  payload: Record<string, unknown>,
+  meId: string,
+  otherName: string,
+): ExpenseShareNote {
+  const foreign = text(payload.currency) !== null && payload.currency !== 'GBP';
+  const pence = foreign ? null : parsePounds(text(payload.amount) ?? '');
+  if (!pence) {
+    return {
+      tone: 'neutral',
+      text: foreign
+        ? 'Change the amount to pounds to see who owes what.'
+        : 'Enter an amount to see who owes what.',
+    };
+  }
+  const payerId = text(payload.payerId);
+  const payer: PayerChoice = payerId === null ? 'undecided' : payerId === meId ? 'me' : 'them';
+  const myPercent = typeof payload.sharePercent === 'number' ? payload.sharePercent : 50;
+  const { mine, theirs, owedToMe } = previewShares(pence, myPercent, payer);
+  const tone = owedToMe > 0 ? 'owed' : owedToMe < 0 ? 'owe' : 'neutral';
+  if (payload.timing === 'upcoming') {
+    return {
+      tone,
+      text: `Your share will be ${formatMoney(mine)} and ${otherName}'s ${formatMoney(theirs)}. `
+        + 'Nothing is owed until it is paid.',
+    };
+  }
+  if (payer === 'undecided') return { tone: 'neutral', text: 'Choose who paid to see who owes what.' };
+  const shares = `Your share is ${formatMoney(mine)} and ${otherName}'s is ${formatMoney(theirs)}.`;
+  return {
+    tone,
+    text: owedToMe === 0
+      ? `${shares} ${otherName} will still be asked to agree.`
+      : `${shares} It counts towards the balance once ${otherName} agrees.`,
+  };
 }

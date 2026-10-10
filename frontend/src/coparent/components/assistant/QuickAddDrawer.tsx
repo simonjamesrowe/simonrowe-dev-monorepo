@@ -27,8 +27,10 @@ import {
 } from '../../hooks/api';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 
-import { AssistantActionCard, type AssistantEditorOptions } from './AssistantActionCard';
+import { AssistantActionCard } from './AssistantActionCard';
 import type { SummaryEvent } from './actionSummary';
+import { formatBatchDate } from './batchDate';
+import type { AssistantEditorOptions } from './fieldControls';
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
@@ -77,6 +79,9 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
     originalEventId: events.data?.map((event) => ({ value: event.id, label: event.title })) ?? [],
     categoryId: categories.data?.filter((category) => !category.isSystem)
       .map((category) => ({ value: category.id, label: category.name })) ?? [],
+    // An event's type is a word, so the family's own categories are offered by name, after the
+    // default types the editor always shows.
+    eventType: categories.data?.map((category) => ({ value: category.name, label: category.name })) ?? [],
     requestId: requests.data?.filter((request) => request.status === 'pending'
       && request.requestedBy === currentParentId)
       .map((request) => ({ value: request.id, label: request.reason })) ?? [],
@@ -337,7 +342,7 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
                       onClick={() => setBatchId(item.id)}
                     >
                       <span>{item.actionCount} action{item.actionCount === 1 ? '' : 's'}</span>
-                      <time>{new Date(item.createdAt).toLocaleDateString()}</time>
+                      <time dateTime={item.createdAt}>{formatBatchDate(item.createdAt)}</time>
                     </button>
                   ))}
                 </div>
