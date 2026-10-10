@@ -53,16 +53,13 @@ public final class StatementParser {
   private static final Pattern WHITESPACE = Pattern.compile("\\s++");
   private static final Pattern CURRENCY_SUFFIX = Pattern.compile("^(\\S{1,20}+)\\s++([A-Z]{3})$");
   private static final Pattern LAST_FOUR = Pattern.compile("(\\d{4})\\s*+$");
-  // Applied to single description lines, already capped at MAX_DESCRIPTION characters.
-  private static final Pattern SANTANDER_CARD =
-      Pattern.compile("^CARD PAYMENT TO (.+?) +ON (\\d{2}-\\d{2}-\\d{4})$");
-  private static final Pattern SANTANDER_DEBIT =
-      Pattern.compile("^DIRECT DEBIT PAYMENT TO (.+?) REF (.+?), MANDATE NO \\d++$");
-  // The export cuts long lines short, so the mandate suffix can end mid-word ("MAN", "MANDAT").
-  private static final String TRANSFER_HEAD =
-      "^(BILL PAYMENT|STANDING ORDER)(?: VIA FASTER PAYMENT)? TO (.+?) REFERENCE (.+?)";
-  private static final String MANDATE_TAIL = " *+(?:, *+M[A-Z ]*+\\d*+)?$";
-  private static final Pattern SANTANDER_TRANSFER = Pattern.compile(TRANSFER_HEAD + MANDATE_TAIL);
+  private static final Pattern PAYMENT_DATE = Pattern.compile("\\d{2}-\\d{2}-\\d{4}");
+  private static final String CARD_PAYMENT = "CARD PAYMENT TO ";
+  private static final String DIRECT_DEBIT = "DIRECT DEBIT PAYMENT TO ";
+  private static final List<String> BILL_PAYMENTS = List.of(
+      "BILL PAYMENT VIA FASTER PAYMENT TO ", "BILL PAYMENT TO ");
+  private static final List<String> STANDING_ORDERS = List.of(
+      "STANDING ORDER VIA FASTER PAYMENT TO ", "STANDING ORDER TO ");
 
   /** A statement that could not be read. The message is safe to show the parent. */
   public static final class UnreadableStatementException extends RuntimeException {
@@ -245,28 +242,66 @@ public final class StatementParser {
       return;
     }
     final String raw = cap(clean(descriptionText), MAX_DESCRIPTION);
-    final Matcher card = SANTANDER_CARD.matcher(raw);
-    final Matcher debit = SANTANDER_DEBIT.matcher(raw);
-    final Matcher transfer = SANTANDER_TRANSFER.matcher(raw);
-    final String description;
-    final String details;
-    if (card.matches()) {
-      description = card.group(1);
-      details = "Card payment on " + card.group(2);
-    } else if (debit.matches()) {
-      description = debit.group(1);
-      details = "Direct debit, ref " + debit.group(2);
-    } else if (transfer.matches()) {
-      description = transfer.group(2);
-      details = "%s, ref %s".formatted(
-          "BILL PAYMENT".equals(transfer.group(1)) ? "Payment" : "Standing order",
-          transfer.group(3));
-    } else {
-      description = raw;
-      details = "";
-    }
+    final String[] parts = santanderParts(raw);
+    final String description = parts[0];
+    final String details = parts[1];
     builder.add(date, -pence, description, details,
         String.join("|", dateText, descriptionText, amountText, balance));
+  }
+
+  /**
+   * The payee and the rest of a Santander description, read with plain string searches rather
+   * than a regular expression: these lines come from a bank and are untrusted, and nothing here
+   * can backtrack.
+   */
+  static String[] santanderParts(final String raw) {
+    if (raw.startsWith(CARD_PAYMENT)) {
+      final int on = raw.lastIndexOf(" ON ");
+      final String paid = on < 0 ? "" : raw.substring(on + 4).strip();
+      if (on > CARD_PAYMENT.length() && PAYMENT_DATE.matcher(paid).matches()) {
+        return new String[] {raw.substring(CARD_PAYMENT.length(), on).strip(),
+            "Card payment on " + paid};
+      }
+    }
+    if (raw.startsWith(DIRECT_DEBIT)) {
+      final int mandate = raw.lastIndexOf(", MANDATE NO ");
+      final String head = mandate < 0 ? raw : raw.substring(0, mandate);
+      final int ref = head.lastIndexOf(" REF ");
+      if (ref > DIRECT_DEBIT.length()) {
+        return new String[] {head.substring(DIRECT_DEBIT.length(), ref).strip(),
+            "Direct debit, ref " + head.substring(ref + 5).strip()};
+      }
+    }
+    final String[] payment = transfer(raw, BILL_PAYMENTS, "Payment");
+    if (payment != null) {
+      return payment;
+    }
+    final String[] order = transfer(raw, STANDING_ORDERS, "Standing order");
+    return order != null ? order : new String[] {raw, ""};
+  }
+
+  /** A payment to a person or business with a reference: its payee and details, or null. */
+  private static String[] transfer(final String raw, final List<String> prefixes,
+      final String kind) {
+    for (final String prefix : prefixes) {
+      if (!raw.startsWith(prefix)) {
+        continue;
+      }
+      final int reference = raw.indexOf(" REFERENCE ", prefix.length());
+      if (reference <= prefix.length()) {
+        return null;
+      }
+      String ref = raw.substring(reference + " REFERENCE ".length());
+      // The export cuts long lines short, so the mandate suffix can end mid-word ("MAN").
+      final int mandate = ref.lastIndexOf(", M");
+      if (mandate >= 0 && ref.substring(mandate + 2).chars()
+          .allMatch(c -> Character.isUpperCase(c) || Character.isDigit(c) || c == ' ')) {
+        ref = ref.substring(0, mandate);
+      }
+      return new String[] {raw.substring(prefix.length(), reference).strip(),
+          "%s, ref %s".formatted(kind, ref.strip())};
+    }
+    return null;
   }
 
   private ParsedStatement santanderCreditCard(final String text) {
@@ -297,7 +332,7 @@ public final class StatementParser {
       if (card != null && lastFour == null) {
         lastFour = lastFour(card);
       }
-      rows.add(new Row(line, fields, index, description));
+      rows.add(new Row(List.of(fields), index, description));
     }
     final Builder builder = new Builder(StatementFormat.SANTANDER_CREDIT_CARD, lastFour);
     for (final Row row : rows) {
@@ -306,19 +341,19 @@ public final class StatementParser {
     return builder.build();
   }
 
-  private record Row(String line, String[] fields, int descriptionIndex, String description) {
+  private record Row(List<String> fields, int descriptionIndex, String description) {
   }
 
   private void santanderCardRow(final Builder builder, final Row row) {
-    final LocalDate date = date(row.fields()[0].trim(), ISO_DATE);
+    final LocalDate date = date(row.fields().getFirst().trim(), ISO_DATE);
     if (date == null || row.description() == null) {
       builder.unreadable();
       return;
     }
     // Money out is the last column, so a payment out ends the line; money in is followed by
     // the empty money-out column. The column, not the sign, says which way it went.
-    final String[] after = java.util.Arrays.copyOfRange(row.fields(),
-        row.descriptionIndex() + 1, row.fields().length);
+    final String[] after = row.fields().subList(row.descriptionIndex() + 1, row.fields().size())
+        .toArray(String[]::new);
     int last = after.length - 1;
     while (last >= 0 && after[last].isBlank()) {
       last--;
@@ -334,7 +369,8 @@ public final class StatementParser {
     final String details = parts.size() >= 3
         ? String.join(", ", parts.subList(0, parts.size() - 1)) : "";
     builder.add(date, moneyOut ? pence : -pence, description, details,
-        String.join("|", row.fields()[0].trim(), clean(row.description()), after[last].trim(),
+        String.join("|", row.fields().getFirst().trim(), clean(row.description()),
+            after[last].trim(),
             moneyOut ? "out" : "in"));
   }
 
