@@ -298,7 +298,7 @@ const DashboardPage = () => {
         <div className="cp-brief__actions">
           <button
             type="button"
-            className="cp-brief__btn cp-brief__btn--primary"
+            className="cp-button cp-button--primary cp-button--sm"
             onClick={() => navigate('/onboarding')}
           >
             Go to onboarding

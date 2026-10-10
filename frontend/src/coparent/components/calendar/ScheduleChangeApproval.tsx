@@ -342,7 +342,8 @@ export function ScheduleChangeApproval({
                     {selectedEvent && (
                       <button
                         onClick={() => onViewEvent?.(selectedEvent.id)}
-                        className="rounded-full border border-slate-200/70 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 dark:border-slate-700/70 dark:text-slate-300 dark:hover:border-slate-600"
+                        type="button"
+                        className="cp-button cp-button--secondary cp-button--sm"
                       >
                         View original event
                       </button>
@@ -490,7 +491,7 @@ export function ScheduleChangeApproval({
                           type="button"
                           disabled={busy}
                           onClick={() => act(() => onWithdrawRequest(selectedRequest.id))}
-                          className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="cp-button cp-button--secondary"
                         >
                           Withdraw request
                         </button>
@@ -529,7 +530,8 @@ export function ScheduleChangeApproval({
                                 ),
                               )
                             }
-                            className="rounded-xl border border-rose-200 px-5 py-2.5 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:hover:bg-rose-900/20"
+                            type="button"
+                            className="cp-button cp-button--danger"
                           >
                             Decline
                           </button>
@@ -543,7 +545,8 @@ export function ScheduleChangeApproval({
                                 ),
                               )
                             }
-                            className="rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition-all hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30"
+                            type="button"
+                            className="cp-button cp-button--primary"
                           >
                             Approve change
                           </button>

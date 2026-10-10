@@ -324,12 +324,12 @@ export function ExpenseFormDrawer({
             </p>
           )}
           <span className="expense-grow" />
-          <button type="button" className="expense-button expense-button--ghost" onClick={onClose}>
+          <button type="button" className="cp-button cp-button--secondary" onClick={onClose}>
             Cancel
           </button>
           <button
             type="button"
-            className="expense-button expense-button--primary"
+            className="cp-button cp-button--primary"
             onClick={save}
             disabled={!valid || saving}
           >

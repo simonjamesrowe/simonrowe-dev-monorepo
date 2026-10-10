@@ -5,10 +5,7 @@ interface PendingRequestsBadgeProps {
 
 export function PendingRequestsBadge({ count, onClick }: PendingRequestsBadgeProps) {
   return (
-    <button
-      onClick={onClick}
-      className="group relative inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-rose-700 transition-all duration-200 hover:bg-rose-100 hover:shadow-lg hover:shadow-rose-500/10 dark:border-rose-800 dark:bg-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-900/50"
-    >
+    <button type="button" onClick={onClick} className="cp-button cp-button--secondary group relative">
       {/* Animated ping effect */}
       <span className="absolute -right-1 -top-1 flex h-4 w-4">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
@@ -32,7 +29,7 @@ export function PendingRequestsBadge({ count, onClick }: PendingRequestsBadgePro
         />
       </svg>
 
-      <span className="text-sm font-medium">
+      <span>
         {count} pending {count === 1 ? 'request' : 'requests'}
       </span>
     </button>

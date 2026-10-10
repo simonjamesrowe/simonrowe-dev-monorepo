@@ -72,10 +72,10 @@ export function InvitedCoparentBanner({
               value={name}
               onChange={(event) => setName(event.target.value)}
             />
-            <button type="button" className="expense-button expense-button--primary expense-button--sm" disabled={!name.trim() || rename.isPending} onClick={saveName}>
+            <button type="button" className="cp-button cp-button--primary cp-button--sm" disabled={!name.trim() || rename.isPending} onClick={saveName}>
               Save name
             </button>
-            <button type="button" className="expense-button expense-button--ghost expense-button--sm" onClick={() => { setEditing(false); setName(invited.fullName); }}>
+            <button type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={() => { setEditing(false); setName(invited.fullName); }}>
               Cancel
             </button>
           </div>
@@ -83,11 +83,11 @@ export function InvitedCoparentBanner({
       </div>
       {canManage && !editing && (
         <div className="expense-invited__actions">
-          <button type="button" className="expense-button expense-button--ghost expense-button--sm" onClick={() => setEditing(true)}>
+          <button type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={() => setEditing(true)}>
             <Pencil size={14} aria-hidden="true" /> Change name
           </button>
           {invitation && (
-            <button type="button" className="expense-button expense-button--teal expense-button--sm" disabled={resend.isPending} onClick={resendInvite}>
+            <button type="button" className="cp-button cp-button--secondary cp-button--sm" disabled={resend.isPending} onClick={resendInvite}>
               Resend invite
             </button>
           )}

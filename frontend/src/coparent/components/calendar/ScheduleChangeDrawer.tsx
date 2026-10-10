@@ -1,5 +1,6 @@
-import { X } from 'lucide-react';
 import { Drawer } from 'vaul';
+
+import { CloseButton } from '../ui/CloseButton';
 
 import { ScheduleChangeApproval, type ScheduleChangeApprovalProps } from './ScheduleChangeApproval';
 
@@ -29,13 +30,7 @@ export function ScheduleChangeDrawer({ open, onClose, ...approval }: ScheduleCha
                 <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
                   Change requests
                 </h2>
-                <button
-                  onClick={onClose}
-                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                  aria-label="Close"
-                >
-                  <X size={20} />
-                </button>
+                <CloseButton onClick={onClose} />
               </div>
               <div className="flex-1 overflow-y-auto" data-vaul-no-drag>
                 <ScheduleChangeApproval {...approval} />

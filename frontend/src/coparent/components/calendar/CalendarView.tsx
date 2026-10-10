@@ -132,7 +132,7 @@ export function CalendarView({
                 <button
                   type="button"
                   onClick={() => onViewRequest?.()}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  className="cp-button cp-button--secondary"
                 >
                   Change requests
                 </button>
@@ -150,8 +150,9 @@ export function CalendarView({
 
               {/* Add Event Button */}
               <button
+                type="button"
                 onClick={handleCreateEventClick}
-                className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-teal-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30 active:translate-y-0"
+                className="cp-button cp-button--primary"
               >
                 <svg
                   className="h-4 w-4"

@@ -169,16 +169,18 @@ export function MessagingAndPermissions({
               </p>
             )}
             <button
+              type="button"
               onClick={onCreatePermissionRequest}
               disabled={!canCompose}
-              className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 dark:border-rose-900/60 dark:bg-rose-900/30 dark:text-rose-200"
+              className="cp-button cp-button--secondary"
             >
               New permission
             </button>
             <button
+              type="button"
               onClick={onCreateMessage}
               disabled={!canCompose}
-              className="inline-flex items-center gap-2 rounded-full bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-teal-500/25 transition hover:-translate-y-0.5 hover:bg-teal-700 active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:bg-teal-500 dark:text-slate-950"
+              className="cp-button cp-button--primary"
             >
               New message
             </button>
@@ -315,14 +317,16 @@ export function MessagingAndPermissions({
                       {activeConversation.unreadCount > 0 ? (
                         <button
                           onClick={() => onMarkAsRead?.(activeConversation.id)}
-                          className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 hover:border-slate-300 hover:text-slate-800 dark:border-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                          type="button"
+                          className="cp-button cp-button--secondary cp-button--sm"
                         >
                           Mark read
                         </button>
                       ) : (
                         <button
                           onClick={() => onMarkAsUnread?.(activeConversation.id)}
-                          className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 hover:border-slate-300 hover:text-slate-800 dark:border-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                          type="button"
+                          className="cp-button cp-button--secondary cp-button--sm"
                         >
                           Mark unread
                         </button>
@@ -357,8 +361,9 @@ export function MessagingAndPermissions({
                       />
                     </div>
                     <button
+                      type="button"
                       onClick={handleSendMessage}
-                      className="inline-flex items-center justify-center rounded-2xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:-translate-y-0.5 hover:bg-teal-700 active:translate-y-0 dark:bg-teal-500 dark:text-slate-950"
+                      className="cp-button cp-button--primary"
                     >
                       Send
                     </button>
@@ -526,14 +531,16 @@ function PermissionPanel({
           )}
           <div className="mt-4 flex flex-wrap gap-3">
             <button
+              type="button"
               onClick={() => onApprove(permission.id)}
-              className="inline-flex items-center justify-center rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:-translate-y-0.5 hover:bg-teal-700 active:translate-y-0 dark:bg-teal-500 dark:text-slate-950"
+              className="cp-button cp-button--primary"
             >
               Approve request
             </button>
             <button
+              type="button"
               onClick={() => onDeny(permission.id)}
-              className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-900/30 dark:text-rose-200"
+              className="cp-button cp-button--danger"
             >
               Deny request
             </button>

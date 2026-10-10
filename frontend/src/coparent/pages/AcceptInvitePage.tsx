@@ -127,7 +127,7 @@ const AcceptInvitePage = () => {
           </p>
           <button
             onClick={handleGoToDashboard}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-6 py-3 font-semibold text-white shadow-lg shadow-teal-500/25 transition-all hover:bg-teal-700"
+            className="cp-button cp-button--primary"
           >
             Go to Dashboard
           </button>
@@ -162,14 +162,14 @@ const AcceptInvitePage = () => {
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <button
             onClick={handleGoToLogin}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            className="cp-button cp-button--secondary"
           >
             Return to Login
           </button>
           {isAuthenticated && (
             <button
               onClick={handleGoToDashboard}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-6 py-3 font-semibold text-white shadow-lg shadow-teal-500/25 transition-all hover:bg-teal-700"
+              className="cp-button cp-button--primary"
             >
               Go to Dashboard
             </button>

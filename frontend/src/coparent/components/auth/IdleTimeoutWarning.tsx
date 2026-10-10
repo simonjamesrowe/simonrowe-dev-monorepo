@@ -66,14 +66,14 @@ export function IdleTimeoutWarning({
               <button
                 type="button"
                 onClick={onLogout}
-                className="inline-flex items-center justify-center rounded-xl border border-amber-200 px-5 py-2.5 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-500/40 dark:text-amber-200 dark:hover:bg-amber-500/20"
+                className="cp-button cp-button--secondary"
               >
                 Log Out Now
               </button>
               <button
                 type="button"
                 onClick={onStayLoggedIn}
-                className="inline-flex items-center justify-center rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30 active:translate-y-0"
+                className="cp-button cp-button--primary"
               >
                 Stay Logged In
               </button>

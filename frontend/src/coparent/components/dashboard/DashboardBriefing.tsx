@@ -98,7 +98,7 @@ function ActionButtons({ actions }: { actions: BriefingAction[] }) {
         <button
           key={action.label}
           type="button"
-          className={`cp-brief__btn${action.primary ? ' cp-brief__btn--primary' : ''}`}
+          className={`cp-button cp-button--sm ${action.primary ? 'cp-button--primary' : 'cp-button--secondary'}`}
           onClick={action.onClick}
           disabled={action.disabled}
         >
@@ -249,11 +249,11 @@ export function DashboardBriefing({
       <div className="cp-brief__top">
         <span className="cp-brief__eyebrow">{longDate(now)}</span>
         <div className="cp-brief__actions">
-          <button type="button" className="cp-brief__btn" onClick={onAddEvent}>
+          <button type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={onAddEvent}>
             Add event
           </button>
           {onQuickAdd && (
-            <button type="button" className="cp-brief__btn cp-brief__btn--primary" onClick={onQuickAdd}>
+            <button type="button" className="cp-button cp-button--primary cp-button--sm" onClick={onQuickAdd}>
               Quick add
             </button>
           )}

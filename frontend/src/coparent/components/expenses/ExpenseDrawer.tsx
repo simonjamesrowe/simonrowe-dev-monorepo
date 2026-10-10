@@ -1,6 +1,7 @@
-import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Drawer } from 'vaul';
+
+import { CloseButton } from '../ui/CloseButton';
 
 /**
  * The right-hand drawer every expense screen uses. Vaul portals to <body>, outside the
@@ -38,9 +39,7 @@ export function ExpenseDrawer({
                 <Drawer.Title className="expense-drawer__title">{title}</Drawer.Title>
                 <Drawer.Description className="sr-only">{description}</Drawer.Description>
               </div>
-              <button type="button" className="expense-icon-button" onClick={onClose} aria-label="Close">
-                <X size={18} />
-              </button>
+              <CloseButton onClick={onClose} />
             </header>
             <div className="expense-drawer__body">{children}</div>
             {footer && <footer className="expense-drawer__foot">{footer}</footer>}

@@ -9,6 +9,7 @@ import type {
   ParentRole,
 } from '../../lib/api/client';
 import { formatDate } from '../../lib/formatters/date';
+import { CloseButton } from '../ui/CloseButton';
 
 type ChildDraft = {
   fullName: string;
@@ -232,13 +233,7 @@ export function FamilySetupHub({
                   {editingChild.fullName}
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={closeEditor}
-                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300"
-              >
-                Close
-              </button>
+              <CloseButton onClick={closeEditor} />
             </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -305,18 +300,14 @@ export function FamilySetupHub({
             </div>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={closeEditor}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:text-slate-200"
-              >
+              <button type="button" onClick={closeEditor} className="cp-button cp-button--secondary">
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSaveChild}
                 disabled={!editChildName.trim() || !editChildDob}
-                className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-teal-500/20 transition hover:bg-teal-700 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                className="cp-button cp-button--primary"
               >
                 Save changes
               </button>
@@ -433,7 +424,7 @@ export function FamilySetupHub({
                 <button
                   type="button"
                   onClick={() => onUpdateFamily?.(activeFamily.id, {})}
-                  className="text-sm font-medium text-teal-600 transition hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
+                  className="cp-button cp-button--secondary cp-button--sm"
                 >
                   Edit
                 </button>
@@ -530,7 +521,7 @@ export function FamilySetupHub({
                                   parent.role === 'primary' ? 'co-parent' : 'primary',
                                 )
                               }
-                              className="text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-300"
+                              className="cp-icon-button cp-icon-button--sm"
                             >
                               <svg
                                 className="h-4 w-4"
@@ -659,7 +650,7 @@ export function FamilySetupHub({
                     type="button"
                     onClick={handleAddChild}
                     disabled={!childName.trim() || !childDob}
-                    className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/20 transition-all hover:bg-amber-700 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="cp-button cp-button--primary"
                   >
                     <svg
                       className="h-4 w-4"
@@ -786,7 +777,7 @@ export function FamilySetupHub({
                     type="button"
                     onClick={handleAddChild}
                     disabled={!childName.trim() || !childDob}
-                    className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-amber-500/20 transition-all hover:bg-amber-700 hover:shadow-lg hover:shadow-amber-500/30 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="cp-button cp-button--primary"
                   >
                     <svg
                       className="h-4 w-4"
@@ -832,7 +823,7 @@ export function FamilySetupHub({
                   type="button"
                   onClick={handleInvite}
                   disabled={!inviteEmail.trim()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white shadow-md shadow-rose-500/20 transition-all hover:bg-rose-700 hover:shadow-lg hover:shadow-rose-500/30 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                  className="cp-button cp-button--secondary cp-button--sm"
                 >
                   <svg
                     className="h-4 w-4"
@@ -897,7 +888,7 @@ export function FamilySetupHub({
                     type="button"
                     onClick={handleInvite}
                     disabled={!inviteEmail.trim()}
-                    className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-rose-500/20 transition-all hover:bg-rose-700 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="cp-button cp-button--primary"
                   >
                     Send Invite
                   </button>
@@ -940,14 +931,14 @@ export function FamilySetupHub({
                             <button
                               type="button"
                               onClick={() => onResendInvite?.(invite.id)}
-                              className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                              className="cp-button cp-button--secondary cp-button--sm flex-1"
                             >
                               Resend
                             </button>
                             <button
                               type="button"
                               onClick={() => onCancelInvite?.(invite.id)}
-                              className="flex-1 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-600 transition hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-700 dark:text-rose-400 dark:hover:bg-rose-900/20"
+                              className="cp-button cp-button--danger cp-button--sm flex-1"
                             >
                               Cancel
                             </button>
@@ -989,7 +980,7 @@ export function FamilySetupHub({
                     type="button"
                     onClick={handleInvite}
                     disabled={!inviteEmail.trim()}
-                    className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-rose-500/20 transition-all hover:bg-rose-700 hover:shadow-lg hover:shadow-rose-500/30 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="cp-button cp-button--primary"
                   >
                     <svg
                       className="h-4 w-4"
