@@ -12,6 +12,7 @@ const createEventMutate = vi.fn();
 vi.mock('../hooks/api', () => ({
   useFamilies: vi.fn(),
   useParents: vi.fn(),
+  useParentsWithInvited: vi.fn(),
   useChildren: vi.fn(),
   useEvents: vi.fn(),
   useScheduleChangeRequests: vi.fn(),
@@ -59,6 +60,9 @@ describe('CalendarPage', () => {
       isLoading: false,
     } as unknown as ReturnType<typeof apiHooks.useFamilies>);
 
+    vi.mocked(apiHooks.useParentsWithInvited).mockImplementation(
+      (familyId) => mockedUseParents(familyId) as unknown as ReturnType<typeof apiHooks.useParentsWithInvited>,
+    );
     mockedUseParents.mockReturnValue({
       data: [
         {
@@ -130,7 +134,7 @@ describe('CalendarPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Family Calendar' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Family calendar' })).toBeInTheDocument();
     });
   });
 
@@ -144,12 +148,12 @@ describe('CalendarPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add Event' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Add event' })).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: 'Add Event' }));
-    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Test Event');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    await user.type(screen.getByPlaceholderText('e.g. Football training'), 'Test Event');
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
 
     await waitFor(() => {
       expect(createEventMutate).toHaveBeenCalled();

@@ -238,7 +238,7 @@ describe('ExpensesPage', () => {
     expect(banner).toHaveTextContent('rhian@example.com');
     expect(screen.queryByText('Invite your co-parent to start sharing costs.')).not.toBeInTheDocument();
 
-    await user.click(within(banner).getByRole('button', { name: 'Resend invite' }));
+    await user.click(within(banner).getByRole('button', { name: 'Resend invitation' }));
     expect(resendMutate).toHaveBeenCalledWith({ id: 'inv-1', familyId: 'fam-1' });
 
     await user.click(within(banner).getByRole('button', { name: /Change name/ }));

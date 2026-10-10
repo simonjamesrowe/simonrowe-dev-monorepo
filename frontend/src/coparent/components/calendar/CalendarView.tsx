@@ -119,7 +119,7 @@ export function CalendarView({
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-slate-800 sm:text-3xl dark:text-slate-100">
-                Family Calendar
+                Family calendar
               </h1>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 Shared schedule for {children.map((c) => c.name).join(' & ')}
@@ -148,8 +148,9 @@ export function CalendarView({
                 />
               )}
 
-              {/* Add Event Button */}
+              {/* Add event button: icon only on a phone, so it carries its name in aria-label */}
               <button
+                aria-label="Add event"
                 type="button"
                 onClick={handleCreateEventClick}
                 className="cp-button cp-button--primary"
@@ -163,7 +164,7 @@ export function CalendarView({
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
-                <span className="hidden sm:inline">Add Event</span>
+                <span className="hidden sm:inline">Add event</span>
               </button>
             </div>
           </div>
@@ -229,7 +230,7 @@ export function CalendarView({
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             {
-              label: 'This Month',
+              label: 'This month',
               value: monthOccurrences.length,
               suffix: 'events',
             },

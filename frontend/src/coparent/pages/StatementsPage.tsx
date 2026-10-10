@@ -465,7 +465,7 @@ const StatementsPage = () => {
         </Link>
       ) : transaction.status === 'dismissed' ? (
         <button type="button" className="cp-button cp-button--quiet" onClick={() => forgetDecision(transaction)}>
-          Forget
+          Forget decision
         </button>
       ) : null}
     </article>
@@ -577,7 +577,7 @@ const StatementsPage = () => {
               disabled={uploading}
               onClick={() => fileInput.current?.click()}
             >
-              {uploading ? 'Working…' : 'Choose files'}
+              {uploading ? 'Uploading…' : 'Choose files'}
             </button>
             <input
               ref={fileInput}

@@ -115,7 +115,7 @@ const DashboardPage = () => {
       await resendInvitation.mutateAsync({ id: invitationId, familyId: activeFamilyId });
       showToast({ variant: 'success', title: 'Invitation resent', description: 'A new invitation email is on its way.' });
     } catch {
-      showToast({ variant: 'error', title: 'Resend failed', description: 'Please try again.' });
+      showToast({ variant: 'error', title: 'Invitation not sent', description: 'Try again.' });
     }
   };
 
@@ -134,7 +134,7 @@ const DashboardPage = () => {
       title: `${expense.title} · ${formatMoney(expense.amountPence)}`,
       detail: `${otherName} added it and asks you to agree. Your share is ${formatMoney(myShare)}.`,
       actions: [
-        { label: 'Open', onClick: () => navigate(`/expenses?expense=${encodeURIComponent(expense.id)}`) },
+        { label: 'Open expense', onClick: () => navigate(`/expenses?expense=${encodeURIComponent(expense.id)}`) },
         {
           label: 'Agree',
           primary: true,
@@ -169,7 +169,7 @@ const DashboardPage = () => {
         detail: preview(request.reason || 'No reason given.'),
         actions: [
           {
-            label: 'Review',
+            label: 'Review request',
             primary: true,
             onClick: () => navigate(`/calendar?request=${encodeURIComponent(request.id)}`),
           },
@@ -195,7 +195,7 @@ const DashboardPage = () => {
         kind: 'message',
         title: conversation.subject || `Message from ${otherName}`,
         detail: preview(last?.content ?? 'New message.'),
-        actions: [{ label: 'Read', primary: true, onClick: openThread }],
+        actions: [{ label: 'Read message', primary: true, onClick: openThread }],
       });
     }
   });
@@ -215,7 +215,7 @@ const DashboardPage = () => {
         detail: `${sent ? `Invitation sent ${sent}. ` : ''}They can't see the calendar or agree to expenses until they join.`,
         actions: [
           {
-            label: 'Resend',
+            label: 'Resend invitation',
             primary: true,
             disabled: resendInvitation.isPending,
             onClick: () => void resend(invitation.id),

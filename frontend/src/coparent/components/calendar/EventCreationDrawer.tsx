@@ -269,7 +269,7 @@ export function EventCreationDrawer({
                     disabled={!isValid || isSubmitting}
                     className="cp-button cp-button--primary"
                   >
-                    {isSubmitting ? 'Saving…' : 'Save'}
+                    {isSubmitting ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Add event'}
                   </button>
                 </div>
               </div>

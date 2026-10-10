@@ -38,8 +38,7 @@ export function UpdateNotification() {
           <div className="flex-1">
             <h3 className="mb-1 font-semibold text-slate-900 dark:text-white">Update Available</h3>
             <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
-              A new version of CoParent is available. Update now to get the latest features and
-              improvements.
+              A new version of CoParent is ready. Update to start using it.
             </p>
 
             <div className="flex gap-2">
@@ -47,7 +46,7 @@ export function UpdateNotification() {
                 onClick={skipWaiting}
                 className="cp-button cp-button--primary cp-button--sm"
               >
-                Update Now
+                Update now
               </button>
               <button
                 onClick={() => setLater(true)}

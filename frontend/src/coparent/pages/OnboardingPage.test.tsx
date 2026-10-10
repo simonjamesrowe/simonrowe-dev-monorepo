@@ -90,7 +90,7 @@ describe('OnboardingPage', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { name: 'Name Your Family' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Name your family' })).toBeInTheDocument();
     expect(screen.getByText('Family')).toBeInTheDocument();
     expect(screen.getByText('Children')).toBeInTheDocument();
   });
@@ -105,9 +105,9 @@ describe('OnboardingPage', () => {
     );
 
     await user.type(screen.getByPlaceholderText('Enter your full name'), 'Alex Rowe');
-    await user.type(screen.getByPlaceholderText('e.g., The Kingston Family'), 'Rowe Family');
+    await user.type(screen.getByPlaceholderText('e.g. The Kingston family'), 'Rowe Family');
     await user.type(
-      screen.getByPlaceholderText('Start typing a city (e.g., London)'),
+      screen.getByPlaceholderText('Start typing a city, e.g. London'),
       'New York, USA',
     );
 
@@ -123,7 +123,7 @@ describe('OnboardingPage', () => {
       );
     });
 
-    expect(screen.getByRole('heading', { name: 'Add Your Children' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Add your children' })).toBeInTheDocument();
   });
 
   it('adds a child from the child step', async () => {
@@ -136,22 +136,22 @@ describe('OnboardingPage', () => {
     );
 
     await user.type(screen.getByPlaceholderText('Enter your full name'), 'Alex Rowe');
-    await user.type(screen.getByPlaceholderText('e.g., The Kingston Family'), 'Rowe Family');
+    await user.type(screen.getByPlaceholderText('e.g. The Kingston family'), 'Rowe Family');
     await user.type(
-      screen.getByPlaceholderText('Start typing a city (e.g., London)'),
+      screen.getByPlaceholderText('Start typing a city, e.g. London'),
       'New York, USA',
     );
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Add Your Children' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Add your children' })).toBeInTheDocument();
     });
 
     await user.type(screen.getByPlaceholderText('First and last name'), 'Theo Rowe');
     const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement | null;
     expect(dateInput).not.toBeNull();
     await user.type(dateInput as HTMLInputElement, '2016-04-22');
-    await user.click(screen.getByRole('button', { name: 'Add Child' }));
+    await user.click(screen.getByRole('button', { name: 'Add child' }));
 
     await waitFor(() => {
       expect(createChildMutate).toHaveBeenCalledWith({

@@ -213,15 +213,11 @@ export function ScheduleChangeApproval({
       <div className="relative mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
-              Review & Decide
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-800 sm:text-3xl dark:text-slate-100">
-              Schedule Change Approvals
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-800 sm:text-3xl dark:text-slate-100">
+              Schedule change requests
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-              Compare original custody plans to proposed changes, then approve or decline with a
-              response note.
+              Compare what is booked with what is proposed, then approve or decline it.
             </p>
           </div>
 
@@ -515,7 +511,7 @@ export function ScheduleChangeApproval({
                             value={responseNote}
                             onChange={(event) => setResponseNote(event.target.value)}
                             rows={3}
-                            placeholder="Add context for your decision..."
+                            placeholder="Anything they should know about your decision"
                             className="w-full resize-none rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition-shadow placeholder:text-slate-400 focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-slate-700/70 dark:bg-slate-900 dark:text-slate-100"
                           />
                         </div>

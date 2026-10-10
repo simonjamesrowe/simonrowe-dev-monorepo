@@ -68,14 +68,14 @@ export function IdleTimeoutWarning({
                 onClick={onLogout}
                 className="cp-button cp-button--secondary"
               >
-                Log Out Now
+                Log out now
               </button>
               <button
                 type="button"
                 onClick={onStayLoggedIn}
                 className="cp-button cp-button--primary"
               >
-                Stay Logged In
+                Stay logged in
               </button>
             </div>
           </div>

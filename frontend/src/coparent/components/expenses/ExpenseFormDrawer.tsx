@@ -380,7 +380,7 @@ export function ExpenseFormDrawer({
             {errors.title && <small className="expense-field__error">{errors.title}</small>}
           </label>
 
-          <div className="expense-grid2">
+          <div className="expense-grid2 expense-grid2--keep">
             <label className="expense-field">
               <span className="expense-field__label">Amount</span>
               <span className="expense-money-input">

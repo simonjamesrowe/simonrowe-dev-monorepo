@@ -325,7 +325,7 @@ export function ExpenseDetailDrawer({
             type="button"
             className="cp-button cp-button--secondary"
             disabled={busy}
-            onClick={() => step('reimbursement/mark', 'Settled', `${expense.title} is settled.`)}
+            onClick={() => step('reimbursement/mark', 'Marked as reimbursed', `${expense.title} is settled.`)}
           >
             Mark as reimbursed
           </button>,
@@ -345,7 +345,7 @@ export function ExpenseDetailDrawer({
             type="button"
             className="cp-button cp-button--primary"
             disabled={busy}
-            onClick={() => step('reimbursement/confirm', 'Settled', `${expense.title} is settled.`)}
+            onClick={() => step('reimbursement/confirm', 'Marked as received', `${expense.title} is settled.`)}
           >
             <Check size={16} aria-hidden="true" /> Confirm received
           </button>,

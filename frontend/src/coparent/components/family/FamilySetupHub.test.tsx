@@ -76,10 +76,10 @@ describe('FamilySetupHub child editor', () => {
     );
 
     const editor = within(screen.getByRole('dialog', { name: 'Theo Rowe' }));
-    const dob = editor.getByLabelText('Date of Birth');
-    const fullName = editor.getByLabelText('Full Name');
+    const dob = editor.getByLabelText('Date of birth');
+    const fullName = editor.getByLabelText('Full name');
     const school = editor.getByLabelText('School (optional)');
-    const medicalNotes = editor.getByLabelText('Medical Notes (optional)');
+    const medicalNotes = editor.getByLabelText('Medical notes (optional)');
     await user.clear(fullName);
     await user.type(fullName, 'Theo James Rowe');
     await user.clear(dob);
@@ -121,7 +121,7 @@ describe('FamilySetupHub child editor', () => {
 
     const editor = within(screen.getByRole('dialog', { name: 'Theo Rowe' }));
     await user.clear(editor.getByLabelText('School (optional)'));
-    await user.clear(editor.getByLabelText('Medical Notes (optional)'));
+    await user.clear(editor.getByLabelText('Medical notes (optional)'));
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     // An omitted field means "unchanged" to the API, so a clear has to be sent as ''.
@@ -172,17 +172,17 @@ describe('FamilySetupHub child editor', () => {
       screen.getByPlaceholderText('Allergies, medications, or notes'),
       'Nut allergy',
     );
-    await user.click(screen.getByRole('button', { name: 'Add Child' }));
+    await user.click(screen.getByRole('button', { name: 'Add child' }));
 
     await user.type(screen.getByLabelText('Their name (optional)'), '  Rhian ');
     await user.type(screen.getByPlaceholderText('coparent@example.com'), 'new@example.com');
     await user.selectOptions(screen.getByRole('combobox'), 'primary');
-    await user.click(screen.getByRole('button', { name: 'Send Invite' }));
+    await user.click(screen.getByRole('button', { name: 'Send invitation' }));
 
     const invitationCard = screen.getByText('sam@example.com').closest('div.rounded-xl');
     expect(invitationCard).not.toBeNull();
-    await user.click(within(invitationCard as HTMLElement).getByRole('button', { name: 'Resend' }));
-    await user.click(within(invitationCard as HTMLElement).getByRole('button', { name: 'Cancel' }));
+    await user.click(within(invitationCard as HTMLElement).getByRole('button', { name: 'Resend invitation' }));
+    await user.click(within(invitationCard as HTMLElement).getByRole('button', { name: 'Cancel invitation' }));
 
     expect(onUpdateFamily).toHaveBeenCalledWith('fam-1', {});
     expect(onAssignRole).toHaveBeenCalledWith('par-2', 'primary');

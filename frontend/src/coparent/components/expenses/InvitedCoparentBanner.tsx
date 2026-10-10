@@ -88,7 +88,7 @@ export function InvitedCoparentBanner({
           </button>
           {invitation && (
             <button type="button" className="cp-button cp-button--secondary cp-button--sm" disabled={resend.isPending} onClick={resendInvite}>
-              Resend invite
+              Resend invitation
             </button>
           )}
         </div>

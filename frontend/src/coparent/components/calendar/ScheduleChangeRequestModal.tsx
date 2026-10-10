@@ -15,6 +15,8 @@ export interface ScheduleChangeRequestModalProps {
   parents: Record<string, Parent>;
   /** ID of the current logged-in parent (the requester) */
   currentParentId: string;
+  /** Parents in `parents` who have been invited and not joined yet, so cannot be notified. */
+  invitedParentIds?: string[];
   /** Called when the modal should close */
   onClose?: () => void;
   /** Called when the user submits the request */
@@ -30,10 +32,11 @@ function formatDate(dateStr: string): string {
   });
 }
 
+/** How many days a span covers, counting both ends: an event on one day is 1 day, not 0. */
 function getDaysBetween(start: string, end: string): number {
   const startDate = new Date(start + 'T12:00:00');
   const endDate = new Date(end + 'T12:00:00');
-  return Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 }
 
 export function ScheduleChangeRequestModal({
@@ -41,6 +44,7 @@ export function ScheduleChangeRequestModal({
   originalEvent,
   parents,
   currentParentId,
+  invitedParentIds = [],
   onClose,
   onSubmit,
 }: ScheduleChangeRequestModalProps) {
@@ -67,6 +71,7 @@ export function ScheduleChangeRequestModal({
   if (!isOpen || !originalEvent) return null;
 
   const otherParent = Object.values(parents).find((p) => p.id !== currentParentId);
+  const otherParentInvited = Boolean(otherParent && invitedParentIds.includes(otherParent.id));
   const eventOwner = originalEvent.parentId ? parents[originalEvent.parentId] : null;
 
   const originalDays = getDaysBetween(
@@ -379,8 +384,9 @@ export function ScheduleChangeRequestModal({
                     />
                   </svg>
                   <p className="text-xs text-amber-700 dark:text-amber-300">
-                    {otherParent?.name || 'The other parent'} will be notified and must approve this
-                    change before it takes effect.
+                    {otherParentInvited
+                      ? `${otherParent?.name} hasn't joined yet. They'll see this request, and can approve it, once they accept your invitation.`
+                      : `${otherParent?.name || 'The other parent'} will be notified and must approve this change before it takes effect.`}
                   </p>
                 </div>
               </div>

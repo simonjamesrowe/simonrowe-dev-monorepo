@@ -127,7 +127,7 @@ const ExpensesPage = () => {
       await transition.mutateAsync({ familyId, expense, transition: name });
       showToast({
         variant: 'success',
-        title: name === 'agree' ? 'Agreed' : 'Settled',
+        title: name === 'agree' ? 'Agreed' : 'Marked as received',
         description:
           name === 'agree' && expense.timing === 'paid' && expense.owedPence > 0
             ? `${expense.title} now counts towards the balance.`
@@ -445,7 +445,7 @@ const ExpensesPage = () => {
           setParam('new', null);
           showToast({
             variant: failures ? 'error' : 'success',
-            title: editing ? 'Saved' : 'Expense added',
+            title: editing ? 'Changes saved' : 'Expense added',
             description: failures
               ? `Expense saved. ${failures} receipt${failures === 1 ? '' : 's'} didn't upload. Retry from the expense.`
               : saved.agreement.status === 'pending'

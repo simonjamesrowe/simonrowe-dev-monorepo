@@ -119,7 +119,7 @@ const AcceptInvitePage = () => {
             </svg>
           </div>
           <h2 className="mb-2 text-xl font-bold text-slate-900 dark:text-white">
-            Invitation Accepted!
+            Invitation accepted
           </h2>
           <p className="mb-6 text-slate-500 dark:text-slate-400">
             You have successfully joined{' '}
@@ -129,7 +129,7 @@ const AcceptInvitePage = () => {
             onClick={handleGoToDashboard}
             className="cp-button cp-button--primary"
           >
-            Go to Dashboard
+            Go to dashboard
           </button>
         </div>
       </div>
@@ -156,7 +156,7 @@ const AcceptInvitePage = () => {
           </svg>
         </div>
         <h2 className="mb-2 text-xl font-bold text-slate-900 dark:text-white">
-          Unable to Accept Invitation
+          The invitation could not be accepted
         </h2>
         <p className="mb-6 text-slate-500 dark:text-slate-400">{errorMessage}</p>
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
@@ -164,14 +164,14 @@ const AcceptInvitePage = () => {
             onClick={handleGoToLogin}
             className="cp-button cp-button--secondary"
           >
-            Return to Login
+            Return to login
           </button>
           {isAuthenticated && (
             <button
               onClick={handleGoToDashboard}
               className="cp-button cp-button--primary"
             >
-              Go to Dashboard
+              Go to dashboard
             </button>
           )}
         </div>

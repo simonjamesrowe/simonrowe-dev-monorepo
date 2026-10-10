@@ -222,7 +222,7 @@ describe('MessagesPage', () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole('button', { name: 'New permission' }));
+    await user.click(screen.getByRole('button', { name: 'New permission request' }));
     const drawer = await screen.findByRole('dialog');
     const send = within(drawer).getByRole('button', { name: 'Send request' });
     await user.type(within(drawer).getByLabelText('What are you asking for?'), 'Trip to Cornwall');

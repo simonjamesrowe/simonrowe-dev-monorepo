@@ -13314,7 +13314,8 @@ body[data-narration-bar] .app-layout__main {
   .coparent-app .expense-drawer { max-width: none; border-left: 0; }
   .coparent-app .expense-drawer__body { padding: 18px; }
   .coparent-app .expense-drawer__foot { padding: 12px 18px; }
-  .coparent-app .expense-grid2, .coparent-app .expense-grid2--wide-first { grid-template-columns: 1fr; }
+  /* --keep pairs that fit a phone side by side, such as amount and category. */
+  .coparent-app .expense-grid2:not(.expense-grid2--keep), .coparent-app .expense-grid2--wide-first { grid-template-columns: 1fr; }
   .coparent-app .expense-facts { grid-template-columns: 118px 1fr; }
 }
 

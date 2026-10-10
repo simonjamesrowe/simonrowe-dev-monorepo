@@ -115,7 +115,7 @@ describe('DashboardPage', () => {
     const needs = screen.getByRole('region', { name: 'Needs you' });
     expect(needs).toHaveTextContent("Rhian hasn't joined yet");
     expect(needs).toHaveTextContent('Invitation sent Thursday 8 October.');
-    await user.click(within(needs).getByRole('button', { name: 'Resend' }));
+    await user.click(within(needs).getByRole('button', { name: 'Resend invitation' }));
     expect(resend).toHaveBeenCalledWith({ id: 'inv', familyId: 'fam' });
   });
 

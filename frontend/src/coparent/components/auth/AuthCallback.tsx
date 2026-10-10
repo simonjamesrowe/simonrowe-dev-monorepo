@@ -55,9 +55,9 @@ export function AuthCallback() {
   if (error) {
     return (
       <CallbackError
-        title="Authentication Error"
+        title="Sign-in failed"
         message={error.message || 'An error occurred during authentication'}
-        secondaryLabel="Return to Login"
+        secondaryLabel="Return to login"
         onSecondary={() => navigate('/login', { replace: true })}
       />
     );

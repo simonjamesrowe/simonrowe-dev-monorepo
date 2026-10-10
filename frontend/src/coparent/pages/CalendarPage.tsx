@@ -8,6 +8,7 @@ import { ScheduleChangeRequestModal } from '../components/calendar/ScheduleChang
 import {
   useFamilies,
   useParents,
+  useParentsWithInvited,
   useChildren,
   useEvents,
   useScheduleChangeRequests,
@@ -100,6 +101,9 @@ const CalendarPage = () => {
   const initialDate = searchParams.get('date') || todayYmd;
 
   const { data: parents = [] } = useParents(activeFamilyId);
+  // A change request names the co-parent even before they join; nothing else on the calendar
+  // shows an invited parent.
+  const { data: parentsWithInvited = [] } = useParentsWithInvited(activeFamilyId);
   const { data: children = [] } = useChildren(activeFamilyId);
   const { data: events = [] } = useEvents(activeFamilyId);
   const { data: scheduleChangeRequests = [] } = useScheduleChangeRequests(activeFamilyId);
@@ -350,7 +354,20 @@ const CalendarPage = () => {
       <ScheduleChangeRequestModal
         isOpen={changeTarget !== null}
         originalEvent={changeTarget}
-        parents={Object.fromEntries(transformedParents.map((parent) => [parent.id, parent]))}
+        parents={Object.fromEntries(
+          parentsWithInvited.map((p) => [
+            p.id,
+            {
+              id: p.id,
+              name: p.fullName.split(' ')[0] || p.fullName,
+              fullName: p.fullName,
+              email: p.email || '',
+              color: p.color || (p.role === 'primary' ? 'violet' : 'sky'),
+              avatarUrl: p.avatarUrl || null,
+            },
+          ]),
+        )}
+        invitedParentIds={parentsWithInvited.filter((p) => p.status === 'invited').map((p) => p.id)}
         currentParentId={currentParentId}
         onClose={() => setChangeTarget(null)}
         onSubmit={handleSubmitChange}

@@ -224,7 +224,7 @@ export function DayView({
         {allDayEvents.length > 0 && (
           <div className="mb-6">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              All Day
+              All day
             </h3>
             <div className="space-y-2">
               {allDayEvents.map((event) => {

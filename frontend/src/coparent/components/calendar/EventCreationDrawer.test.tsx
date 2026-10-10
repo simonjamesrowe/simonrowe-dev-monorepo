@@ -90,7 +90,7 @@ describe('EventCreationDrawer', () => {
       ],
     });
 
-    const save = screen.getByRole('button', { name: 'Save' });
+    const save = screen.getByRole('button', { name: 'Save changes' });
     await user.click(save);
     expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Saving…' }));
