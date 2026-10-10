@@ -264,9 +264,13 @@ public final class StatementParser {
       }
     }
     if (raw.startsWith(DIRECT_DEBIT)) {
+      // As the pattern this replaces did, a direct debit is split only when it ends with its
+      // mandate number; anything else is shown whole.
       final int mandate = raw.lastIndexOf(", MANDATE NO ");
-      final String head = mandate < 0 ? raw : raw.substring(0, mandate);
-      final int ref = head.lastIndexOf(" REF ");
+      final String number = mandate < 0 ? "" : raw.substring(mandate + ", MANDATE NO ".length());
+      final boolean complete = !number.isEmpty() && number.chars().allMatch(Character::isDigit);
+      final String head = complete ? raw.substring(0, mandate) : "";
+      final int ref = head.indexOf(" REF ", DIRECT_DEBIT.length());
       if (ref > DIRECT_DEBIT.length()) {
         return new String[] {head.substring(DIRECT_DEBIT.length(), ref).strip(),
             "Direct debit, ref " + head.substring(ref + 5).strip()};

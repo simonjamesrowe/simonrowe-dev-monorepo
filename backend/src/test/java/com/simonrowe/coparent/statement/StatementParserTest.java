@@ -147,7 +147,7 @@ class StatementParserTest {
         .containsExactly("TOWN CAFE ON 2", "Card payment on 01-10-2026");
     assertThat(StatementParser.santanderParts(
         "DIRECT DEBIT PAYMENT TO WATER CO REF 12 REF 34, MANDATE NO 0001"))
-        .containsExactly("WATER CO REF 12", "Direct debit, ref 34");
+        .containsExactly("WATER CO", "Direct debit, ref 12 REF 34");
     assertThat(StatementParser.santanderParts(
         "BILL PAYMENT TO A TUTOR REFERENCE Robin maths, MANDATE NO00143"))
         .containsExactly("A TUTOR", "Payment, ref Robin maths");
@@ -158,6 +158,11 @@ class StatementParserTest {
     assertThat(StatementParser.santanderParts(
         "BILL PAYMENT TO A FRIEND REFERENCE lunch, Monday treat"))
         .containsExactly("A FRIEND", "Payment, ref lunch, Monday treat");
+    // Without its mandate number a direct debit is not split, exactly as before.
+    assertThat(StatementParser.santanderParts("DIRECT DEBIT PAYMENT TO WATER CO REF 34, MAND"))
+        .containsExactly("DIRECT DEBIT PAYMENT TO WATER CO REF 34, MAND", "");
+    assertThat(StatementParser.santanderParts("DIRECT DEBIT PAYMENT TO WATER CO REF 34"))
+        .containsExactly("DIRECT DEBIT PAYMENT TO WATER CO REF 34", "");
     assertThat(StatementParser.santanderParts("CARD PAYMENT TO SHOP ON SOMEDAY"))
         .containsExactly("CARD PAYMENT TO SHOP ON SOMEDAY", "");
     assertThat(StatementParser.santanderParts("MONTHLY FEE")).containsExactly("MONTHLY FEE", "");
