@@ -119,7 +119,7 @@ describe('ScheduleChangeRequestModal', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel date' }));
     expect(screen.queryByLabelText('Start Date')).not.toBeInTheDocument();
     await user.type(screen.getByLabelText(/Reason/), 'Pool is closed that week');
-    await user.click(screen.getByRole('button', { name: /Send Request/ }));
+    await user.click(screen.getByRole('button', { name: /Send request/ }));
 
     expect(onSubmit).toHaveBeenCalledWith({
       proposedChange: {
@@ -145,7 +145,7 @@ describe('ScheduleChangeRequestModal', () => {
     );
 
     await user.type(screen.getByLabelText(/Reason/), 'Swap for the trip please');
-    await user.click(screen.getByRole('button', { name: /Send Request/ }));
+    await user.click(screen.getByRole('button', { name: /Send request/ }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Choose which occurrence');
     expect(onClose).not.toHaveBeenCalled();

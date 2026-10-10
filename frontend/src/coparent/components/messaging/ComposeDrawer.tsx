@@ -117,7 +117,7 @@ export function ComposeDrawer({
         {/* Utilities are scoped to .coparent-app and Vaul portals to <body>, outside it. */}
         <div className="coparent-app">
           <Drawer.Overlay className="fixed inset-0 z-40 bg-black/40" />
-          <Drawer.Content className="fixed bottom-0 right-0 top-0 z-50 w-full max-w-lg bg-white shadow-xl outline-none dark:bg-slate-900">
+          <Drawer.Content className="compose-drawer fixed bottom-0 right-0 top-0 z-50 w-full bg-white shadow-xl outline-none dark:bg-slate-900">
             <Drawer.Title className="sr-only">{title}</Drawer.Title>
             <Drawer.Description className="sr-only">
               {isPermission
@@ -153,69 +153,72 @@ export function ComposeDrawer({
                 </button>
               </div>
 
-              <div className="flex-1 space-y-5 overflow-y-auto p-6">
-                {isPermission && (
-                  <>
-                    <div>
-                      <label htmlFor="compose-type" className={labelClass}>
-                        Type
-                      </label>
-                      <select
-                        id="compose-type"
-                        value={type}
-                        onChange={(event) => setType(event.target.value as PermissionRequestType)}
-                        className={fieldClass}
-                      >
-                        {PERMISSION_TYPES.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label htmlFor="compose-child" className={labelClass}>
-                        Child
-                      </label>
-                      <select
-                        id="compose-child"
-                        value={childId}
-                        onChange={(event) => setChildId(event.target.value)}
-                        className={fieldClass}
-                      >
-                        <option value="">Choose a child</option>
-                        {children.map((child) => (
-                          <option key={child.id} value={child.id}>
-                            {child.fullName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </>
-                )}
-                <div>
-                  <label htmlFor="compose-subject" className={labelClass}>
-                    Subject{isPermission ? ' (optional)' : ''}
-                  </label>
-                  <input
-                    id="compose-subject"
-                    value={subject}
-                    onChange={(event) => setSubject(event.target.value)}
-                    placeholder={isPermission ? 'e.g. Half term trip' : 'e.g. Half term pickup'}
-                    className={fieldClass}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="compose-body" className={labelClass}>
-                    {isPermission ? 'What are you asking for?' : 'Message'}
-                  </label>
-                  <textarea
-                    id="compose-body"
-                    value={body}
-                    onChange={(event) => setBody(event.target.value)}
-                    rows={6}
-                    className={fieldClass}
-                  />
+              <div className="flex-1 overflow-y-auto p-6">
+                {/* Type beside child on a wide screen; the words get the full width. */}
+                <div className="cp-form-cols">
+                  {isPermission && (
+                    <>
+                      <div>
+                        <label htmlFor="compose-type" className={labelClass}>
+                          Type
+                        </label>
+                        <select
+                          id="compose-type"
+                          value={type}
+                          onChange={(event) => setType(event.target.value as PermissionRequestType)}
+                          className={fieldClass}
+                        >
+                          {PERMISSION_TYPES.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="compose-child" className={labelClass}>
+                          Child
+                        </label>
+                        <select
+                          id="compose-child"
+                          value={childId}
+                          onChange={(event) => setChildId(event.target.value)}
+                          className={fieldClass}
+                        >
+                          <option value="">Choose a child</option>
+                          {children.map((child) => (
+                            <option key={child.id} value={child.id}>
+                              {child.fullName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
+                  <div className="cp-form-wide">
+                    <label htmlFor="compose-subject" className={labelClass}>
+                      Subject{isPermission ? ' (optional)' : ''}
+                    </label>
+                    <input
+                      id="compose-subject"
+                      value={subject}
+                      onChange={(event) => setSubject(event.target.value)}
+                      placeholder={isPermission ? 'e.g. Half term trip' : 'e.g. Half term pickup'}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div className="cp-form-wide">
+                    <label htmlFor="compose-body" className={labelClass}>
+                      {isPermission ? 'What are you asking for?' : 'Message'}
+                    </label>
+                    <textarea
+                      id="compose-body"
+                      value={body}
+                      onChange={(event) => setBody(event.target.value)}
+                      rows={8}
+                      className={fieldClass}
+                    />
+                  </div>
                 </div>
               </div>
 
