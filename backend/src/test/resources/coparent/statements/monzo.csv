@@ -1,0 +1,7 @@
+Transaction ID,Date,Time,Type,Name,Emoji,Category,Amount,Currency,Local amount,Local currency,Notes and #tags,Address,Receipt,Description,Category split,Money Out,Money In
+tx_example_1,23/07/2026,11:33:50,Card payment,Example Taxis,,Transport,-10.90,GBP,-10.90,GBP,,1 Example Road,,EXAMPLE TAXIS           London        GBR,,-10.90,
+tx_example_2,23/07/2026,12:20:55,Card payment,Example Taxis,,Transport,-10.90,GBP,-10.90,GBP,,1 Example Road,,EXAMPLE TAXIS           London        GBR,,-10.90,
+tx_example_3,24/07/2026,09:00:00,Card payment,"Swim School, Junior",,Entertainment,-60.00,GBP,-60.00,GBP,"lessons, autumn
+term",,,SWIM SCHOOL             London        GBR,,-60.00,
+tx_example_4,25/07/2026,17:35:49,Faster payment,A Friend,,Transfers,150.00,GBP,150.00,GBP,savings,,,savings,,,150.00
+tx_example_5,19/09/2026,17:06:59,Card payment,eBay,,Shopping,0.00,GBP,0.00,GBP,Active card check,,,PAYPAL *EBAY           San Jose      USA,,0.00,

@@ -1,4 +1,4 @@
-import { Check, Paperclip, Pencil, Plus, Scale, Sparkles, UserPlus } from 'lucide-react';
+import { Check, Paperclip, Pencil, Plus, Scale, Sparkles, Upload, UserPlus, WandSparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -30,6 +30,7 @@ import {
   useExpenseTransition,
   useFamilies,
   useParentsWithInvited,
+  useStatementOverview,
 } from '../hooks/api';
 import type { Child, Parent } from '../lib/api/client';
 import { apiErrorMessage } from '../lib/api/errorMessage';
@@ -70,6 +71,8 @@ const ExpensesPage = () => {
   const { data: children = [] } = useChildren(familyId);
   const { data: expenses = [], isLoading } = useExpenses(familyId);
   const { data: summary } = useExpenseSummary(familyId);
+  // Private to the signed-in parent: their own statements' suggestions waiting for them.
+  const { data: statements } = useStatementOverview(familyId);
   const transition = useExpenseTransition();
   const [childFilter, setChildFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState<'all' | ExpenseCategory>('all');
@@ -238,11 +241,36 @@ const ExpensesPage = () => {
               <Sparkles size={16} aria-hidden="true" /> Paste a note or receipt
             </button>
           )}
+          <button type="button" className="expense-button expense-button--ghost" onClick={() => navigate('/expenses/statements')}>
+            <Upload size={16} aria-hidden="true" /> Import statements
+          </button>
           <button type="button" className="expense-button expense-button--primary" onClick={() => { setEditing(null); setFormOpen(true); }}>
             <Plus size={16} aria-hidden="true" /> Add expense
           </button>
         </div>
       </header>
+
+      {statements && statements.toReview > 0 && (
+        <div className="statement-banner" data-testid="statement-banner">
+          <span className="statement-banner__icon" aria-hidden="true">
+            <WandSparkles size={18} />
+          </span>
+          <p className="statement-banner__text">
+            <strong>
+              {statements.toReview} transaction{statements.toReview === 1 ? '' : 's'} from your statements{' '}
+              {statements.toReview === 1 ? 'looks' : 'look'} like shared costs
+            </strong>
+            <span>Only you can see {statements.toReview === 1 ? 'it' : 'these'} until you turn one into an expense.</span>
+          </p>
+          <button
+            type="button"
+            className="expense-button expense-button--primary expense-button--sm"
+            onClick={() => navigate('/expenses/statements?tab=review')}
+          >
+            Review {statements.toReview}
+          </button>
+        </div>
+      )}
 
       {otherInvited && (
         <InvitedCoparentBanner familyId={familyId} invited={other} canManage={me.role === 'primary'} />

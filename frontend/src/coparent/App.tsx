@@ -34,6 +34,7 @@ import LoginPage from './pages/LoginPage';
 import MessagesPage from './pages/MessagesPage';
 import OnboardingPage from './pages/OnboardingPage';
 import SettingsPage from './pages/SettingsPage';
+import StatementsPage from './pages/StatementsPage';
 import TimelinePage from './pages/TimelinePage';
 
 const App = () => {
@@ -110,7 +111,7 @@ const App = () => {
       label: 'Expenses',
       href: '/expenses',
       icon: <PoundSterling className="h-5 w-5" />,
-      isActive: location.pathname === '/expenses',
+      isActive: location.pathname.startsWith('/expenses'),
     },
     {
       label: 'Documents',
@@ -158,6 +159,7 @@ const App = () => {
                     <Route path="/calendar" element={<CalendarPage />} />
                     <Route path="/messages" element={<MessagesPage />} />
                     <Route path="/expenses" element={<ExpensesPage />} />
+                    <Route path="/expenses/statements" element={<StatementsPage />} />
                     <Route path="/documents" element={<DocumentsPage />} />
                     <Route path="/timeline" element={<TimelinePage />} />
                     <Route path="/settings" element={<SettingsPage />} />

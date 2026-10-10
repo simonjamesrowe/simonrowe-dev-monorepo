@@ -9,3 +9,4 @@ export * from './useEvents';
 export * from './useScheduleChangeRequests';
 export * from './useAssistant';
 export * from './useExpenses';
+export * from './useStatements';

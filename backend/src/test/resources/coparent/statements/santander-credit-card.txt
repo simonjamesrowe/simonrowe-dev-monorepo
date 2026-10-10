@@ -1,0 +1,9 @@
+2026-09-182026-10-075678
+Date			Card no.			Description				Money in	Money out
+------------------------------------------------------------
+2026-10-07		** 5678		PURCHASE - DOMESTIC            LONDON                     EXAMPLE SHOES LTD           				34.99
+2026-10-05		** 5678		PURCHASE - DOMESTIC            LONDON                     EXAMPLE BOOKS               				12.95
+2026-10-05		** 5678		PURCHASE - DOMESTIC            LONDON                     EXAMPLE BOOKS               				12.95
+2026-10-01		** 5678		ACCOUNT FEE                      				3.00
+2026-09-18				CASHBACK AWARDED LAST MONTH      		6.45		
+------------------------------------------------------------

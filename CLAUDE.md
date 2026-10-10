@@ -274,6 +274,27 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 052-statement-import: **CoParent finds shared costs in uploaded bank statements**
+  (`/expenses/statements`, `com.simonrowe.coparent.statement`). Starling, Monzo and Amex CSVs and
+  Santander current-account and credit-card TXT exports are parsed deterministically; a model only
+  suggests which spending rows look like shared children's costs, and the parent turns each into an
+  ordinary expense. Load-bearing bits:
+  - **No statement is stored.** Each row is a one-way fingerprint; `statement_transactions` is
+    unique on `(ownerParentId, fingerprint)`, and that index is the whole of "re-uploading adds
+    nothing". Only suggestions awaiting a decision keep details; deciding keeps just the merchant.
+  - **Private to the uploader**, every query is scoped to `ownerParentId`. The co-parent sees an
+    expense only once one is created.
+  - **The payer is chosen, not assumed**: a joint account's payment can be either parent's.
+  - **Checking is driven from the page in batches of 40**, so no request runs long and nothing
+    waits server-side to be classified. Each model call is bounded at 45s because one was seen to
+    hang for 30 minutes (the SDK default is 10).
+  - **Structured output (`response_format` JSON schema), not tools**, so the model has nothing to
+    call. Its childIds, categories and indexes are checked before anything is kept.
+  - Both collections are in the CoParent backup and `RestoreService.ensureCoparentIndexes()`
+    re-creates their indexes (`V054CreateCoparentStatements`); `CoparentBackupCoverageTest` pins it.
+  - Test fixtures are synthetic files in each bank's exact layout. **Never commit a real
+    statement**: the repo is public.
+  See `specs/052-statement-import/spec.md`.
 - coparent-expenses-before-invite-accepted: **Shared expenses can be logged before the co-parent
   accepts their invitation.** Inviting reserves a `parents` row with status `invited` (keyed on
   family and email, named from the invite's optional name or the email), and accepting adopts
