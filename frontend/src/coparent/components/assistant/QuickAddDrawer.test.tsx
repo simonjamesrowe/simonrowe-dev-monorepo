@@ -135,6 +135,10 @@ describe('QuickAddDrawer', () => {
     render(<QuickAddDrawer open onClose={vi.fn()} />);
 
     await user.click(await screen.findByRole('button', { name: /^2 Review actions/i }));
+    // The app's short date, not the browser's numeric one; the year shows only when it differs.
+    const year = new Date().getFullYear() === 2026 ? '' : ' 2026';
+    expect(screen.getByRole('button', { name: /2 actions/i }))
+      .toHaveTextContent(`Wed 23 Sep${year}`);
     await user.click(screen.getByRole('button', { name: /2 actions/i }));
 
     expect(screen.getByRole('heading', { name: 'Review each proposed action' }))

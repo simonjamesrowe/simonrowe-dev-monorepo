@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { AssistantAction, AssistantActionType } from '../../types/assistant';
 
-import { ACTION_LABELS, summarizeAction, truncate, type ActionSummaryContext } from './actionSummary';
+import {
+  ACTION_LABELS,
+  expenseShareNote,
+  summarizeAction,
+  truncate,
+  type ActionSummaryContext,
+} from './actionSummary';
 
 const action = (actionType: AssistantActionType, payload: Record<string, unknown>): AssistantAction => ({
   id: `action-${actionType}`,
@@ -217,5 +223,36 @@ describe('truncate', () => {
     expect(truncate('Short note')).toBe('Short note');
     expect(truncate('one two three four five', 12)).toBe('one two…');
     expect(truncate('a'.repeat(20), 10)).toBe(`${'a'.repeat(9)}…`);
+  });
+});
+
+describe('expenseShareNote', () => {
+  const expense = (payload: Record<string, unknown>) => expenseShareNote({
+    title: 'School trip', amount: '45.00', currency: 'GBP', timing: 'paid', sharePercent: 50,
+    payerId: 'me', ...payload,
+  }, 'me', 'Rhian');
+
+  it('gives the split and when it counts, never the title, amount or payer again', () => {
+    expect(expense({})).toEqual({
+      tone: 'owed',
+      text: "Your share is £22.50 and Rhian's is £22.50. It counts towards the balance once Rhian agrees.",
+    });
+    expect(expense({ payerId: 'rhian', sharePercent: 100 }).tone).toBe('owe');
+    expect(expense({ sharePercent: 100 }).text)
+      .toBe("Your share is £45.00 and Rhian's is £0.00. Rhian will still be asked to agree.");
+    [expense({}), expense({ timing: 'upcoming' })].forEach((note) => {
+      expect(note.text).not.toMatch(/School trip|£45\.00 ·|you paid|Rhian paid/i);
+    });
+  });
+
+  it('says nothing is owed until an upcoming cost is paid', () => {
+    expect(expense({ timing: 'upcoming', payerId: null, sharePercent: 60 }).text)
+      .toBe("Your share will be £27.00 and Rhian's £18.00. Nothing is owed until it is paid.");
+  });
+
+  it('asks for what is missing instead', () => {
+    expect(expense({ amount: '' }).text).toBe('Enter an amount to see who owes what.');
+    expect(expense({ currency: 'USD' }).text).toBe('Change the amount to pounds to see who owes what.');
+    expect(expense({ payerId: null }).text).toBe('Choose who paid to see who owes what.');
   });
 });

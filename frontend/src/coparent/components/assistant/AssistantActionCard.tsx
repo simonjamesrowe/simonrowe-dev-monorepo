@@ -12,16 +12,18 @@ import {
 } from '../../hooks/api/useAssistant';
 import { useUploadReceipt } from '../../hooks/api/useExpenses';
 import type { AssistantAction } from '../../types/assistant';
-import { describeExpense, formatMoney, parsePounds } from '../expenses/money';
 
-import { summarizeAction, type SummaryEvent } from './actionSummary';
+import { expenseShareNote, summarizeAction, type SummaryEvent } from './actionSummary';
+import { AssistantField } from './AssistantField';
+import {
+  editablePayload,
+  fieldControl,
+  normalizedPayload,
+  type AssistantEditorOptions,
+  type FieldControl,
+} from './fieldControls';
 
-export interface AssistantEditorOption {
-  value: string;
-  label: string;
-}
-
-export type AssistantEditorOptions = Partial<Record<string, AssistantEditorOption[]>>;
+export type { AssistantEditorOption, AssistantEditorOptions } from './fieldControls';
 
 const EMPTY_OPTIONS: AssistantEditorOptions = {};
 
@@ -47,7 +49,7 @@ const FIELD_LABELS: Record<string, string> = {
   amount: 'Amount (£)',
   currency: 'Currency',
   payerId: 'Who paid, or will pay',
-  sharePercent: 'Your share (%)',
+  sharePercent: 'Your share',
   childIds: 'For',
   childId: 'Child',
   expenseId: 'Expense',
@@ -75,18 +77,32 @@ const FIELD_LABELS: Record<string, string> = {
 const FIELD_ORDER = [
   'eventId', 'originalEventId', 'categoryId', 'requestId', 'conversationId', 'expenseId',
   'targetHint', 'title', 'name', 'subject', 'recipientId',
-  'type', 'childId', 'location',
+  'type', 'childId',
   'amount', 'currency', 'category', 'timing', 'date', 'payerId', 'sharePercent', 'paidOn',
   'originalStartDate', 'originalEndDate', 'newStartDate', 'newEndDate',
   'startDate', 'endDate', 'startTime', 'endTime',
-  'allDay', 'parentId', 'recurringFrequency', 'recurringDays',
+  'location', 'allDay', 'recurringFrequency', 'recurringDays', 'parentId',
   'icon', 'color', 'childIds', 'parentIds',
   'message', 'description', 'reason', 'notes', 'note',
 ];
 
 const LONG_TEXT = new Set(['message', 'notes', 'note', 'description', 'reason']);
 /** Fields that read better across the whole card than squeezed into one column. */
-const FULL_WIDTH = new Set(['title', 'name', 'subject', 'targetHint']);
+const FULL_WIDTH = new Set(['title', 'name', 'subject', 'type']);
+/**
+ * Kept in the payload but not shown: the words the note used for a target it could not match
+ * are shown once, under the field where the parent picks the target.
+ */
+const HIDDEN_FIELDS = new Set(['targetHint']);
+/** The fields that point at something that already exists, and what each one is. */
+const TARGET_FIELDS: Record<string, string> = {
+  eventId: 'event',
+  originalEventId: 'event',
+  categoryId: 'category',
+  requestId: 'request',
+  conversationId: 'conversation',
+  expenseId: 'expense',
+};
 
 function fieldLabel(key: string) {
   if (FIELD_LABELS[key]) return FIELD_LABELS[key];
@@ -121,32 +137,23 @@ export interface ExpenseCardContext {
   otherName: string;
 }
 
-function ExpenseSummaryLine({ payload, context }: {
+function ExpenseShareLine({ payload, context }: {
   payload: Record<string, unknown>;
   context: ExpenseCardContext;
 }) {
-  const amount = typeof payload.amount === 'string' ? parsePounds(payload.amount) : null;
-  const share = typeof payload.sharePercent === 'number' ? payload.sharePercent : 50;
-  const payerId = typeof payload.payerId === 'string' ? payload.payerId : null;
-  const summary = describeExpense({
-    amountPence: amount,
-    myPercent: share,
-    payer: payerId === null ? 'undecided' : payerId === context.meId ? 'me' : 'them',
-    timing: payload.timing === 'upcoming' ? 'upcoming' : 'paid',
-    otherName: context.otherName,
-  });
+  const note = expenseShareNote(payload, context.meId, context.otherName);
   return (
-    <div className={`expense-summary expense-summary--${summary.tone}`}>
-      <div>
-        <p className="expense-summary__lead">
-          {typeof payload.title === 'string' ? payload.title : 'Expense'}
-          {amount ? ` · ${formatMoney(amount)}` : ''}
-        </p>
-        <p className="expense-summary__lead">{summary.lead}</p>
-        {summary.outcome && <p className="expense-summary__outcome">{summary.outcome}</p>}
-      </div>
+    <div className={`expense-summary expense-summary--${note.tone}`}>
+      <p className="expense-summary__lead">{note.text}</p>
     </div>
   );
+}
+
+function fieldControls(action: AssistantAction, options: AssistantEditorOptions) {
+  const required = new Set(requiredFields[action.actionType] ?? []);
+  return Object.fromEntries(Object.entries(action.payload).map(([key, value]) => [
+    key, fieldControl(action, key, value, options, required),
+  ])) as Record<string, FieldControl>;
 }
 
 function editorSchema(action: AssistantAction) {
@@ -158,28 +165,6 @@ function editorSchema(action: AssistantAction) {
       }
     });
   });
-}
-
-function editablePayload(payload: Record<string, unknown>, options: AssistantEditorOptions) {
-  return Object.fromEntries(
-    Object.entries(payload).map(([key, value]) => [
-      key,
-      Array.isArray(value) && !options[key] ? value.join(', ') : value,
-    ]),
-  );
-}
-
-function normalizedPayload(payload: Record<string, unknown>) {
-  return Object.fromEntries(
-    Object.entries(payload).map(([key, value]) => {
-      if (key.endsWith('Ids') || key === 'recurringDays') {
-        return [key, typeof value === 'string'
-          ? value.split(',').map((item) => item.trim()).filter(Boolean)
-          : value];
-      }
-      return [key, value === '' ? null : value];
-    }),
-  );
 }
 
 export function AssistantActionCard({
@@ -220,14 +205,15 @@ export function AssistantActionCard({
   const isDelete = action.actionType.startsWith('DELETE_')
     || action.actionType === 'WITHDRAW_SCHEDULE_CHANGE';
   const showEditor = !terminal && (!isDelete || action.status === 'BLOCKED');
+  const controls = useMemo(() => fieldControls(action, options), [action, options]);
   const form = useForm<Record<string, unknown>>({
     resolver: zodResolver(schema),
-    defaultValues: editablePayload(action.payload, options),
+    defaultValues: editablePayload(action.payload, controls),
   });
 
   useEffect(() => {
-    form.reset(editablePayload(action.payload, options));
-  }, [action.payload, form, options]);
+    form.reset(editablePayload(action.payload, controls));
+  }, [action.payload, controls, form]);
 
   const save = form.handleSubmit(async (payload) => {
     await edit.mutateAsync({
@@ -272,6 +258,25 @@ export function AssistantActionCard({
     otherName: expenseContext?.otherName,
     events,
   });
+  // A target the note named but nobody could match is said once, under the field where the
+  // parent picks it, in place of that field's own "select a target" error.
+  const hint = action.targetSnapshot && !action.targetSnapshot.entityId
+    ? action.targetSnapshot.hint : null;
+  const editorFields = showEditor
+    ? orderedFields(action.payload).filter(([key]) => !HIDDEN_FIELDS.has(key))
+    : [];
+  const shownFields = new Set(editorFields.map(([key]) => key));
+  const hintField = hint
+    ? Object.keys(TARGET_FIELDS).find((key) => shownFields.has(key) && !action.payload[key])
+    : undefined;
+  const fieldMessage = (key: string) => {
+    if (key === hintField) {
+      return `The note mentioned “${hint}”. Choose which ${TARGET_FIELDS[key]} that is.`;
+    }
+    return action.fieldErrors.find((error) => error.field === key)?.message;
+  };
+  // Errors for a field the editor shows sit under that field; only the rest are listed here.
+  const cardErrors = action.fieldErrors.filter((error) => !shownFields.has(error.field));
   const busy = edit.isPending || approve.isPending || reject.isPending || action.status === 'APPLYING';
   const mutationError = edit.error || approve.error || reject.error;
 
@@ -298,21 +303,21 @@ export function AssistantActionCard({
 
       {expanded && (
         <div className="assistant-card__body">
-          {action.targetSnapshot?.hint && !action.targetSnapshot.entityId && (
+          {hint && !hintField && (
             <p className="assistant-card__notice">
-              <AlertTriangle size={16} /> Suggested target: {action.targetSnapshot.hint}
+              <AlertTriangle size={16} /> The note mentioned “{hint}”, but it did not match anything.
             </p>
           )}
-          {action.fieldErrors.length > 0 && (
+          {cardErrors.length > 0 && (
             <ul className="assistant-card__errors">
-              {action.fieldErrors.map((error) => (
+              {cardErrors.map((error) => (
                 <li key={`${error.field}-${error.message}`}>{error.message}</li>
               ))}
             </ul>
           )}
 
           {action.actionType === 'CREATE_EXPENSE' && expenseContext && (
-            <ExpenseSummaryLine payload={action.payload} context={expenseContext} />
+            <ExpenseShareLine payload={action.payload} context={expenseContext} />
           )}
           {offersReceipt && !terminal && (
             <label className="assistant-field assistant-field--inline">
@@ -330,37 +335,25 @@ export function AssistantActionCard({
 
           {showEditor && (
             <form className="assistant-card__form assistant-editor" onSubmit={save}>
-              {orderedFields(action.payload).map(([key, value]) => {
-                const multiple = key.endsWith('Ids') && !!options[key];
-                const wide = multiple || LONG_TEXT.has(key) || FULL_WIDTH.has(key);
+              {editorFields.map(([key]) => {
+                const control = controls[key];
+                const wide = (control.kind === 'checkboxes' && !control.short)
+                  || LONG_TEXT.has(key) || FULL_WIDTH.has(key);
+                const clientError = form.formState.errors[key]?.message;
                 return (
-                  <label
+                  <AssistantField
                     key={key}
-                    className={`assistant-field${wide ? ' assistant-field--wide' : ''}${typeof value === 'boolean' ? ' assistant-field--inline' : ''}`}
-                  >
-                    <span>{fieldLabel(key)}</span>
-                    {options[key] ? (
-                      <select multiple={multiple} {...form.register(key)}>
-                        {!multiple && <option value="">Select…</option>}
-                        {options[key]?.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    ) : typeof value === 'boolean' ? (
-                      <input type="checkbox" {...form.register(key)} />
-                    ) : LONG_TEXT.has(key) ? (
-                      <textarea rows={3} {...form.register(key)} />
-                    ) : (
-                      <input {...form.register(key)} />
-                    )}
-                    {form.formState.errors[key]?.message && (
-                      <small>{String(form.formState.errors[key]?.message)}</small>
-                    )}
-                  </label>
+                    name={key}
+                    label={fieldLabel(key)}
+                    control={control}
+                    wide={wide}
+                    error={clientError ? String(clientError) : fieldMessage(key)}
+                    form={form}
+                  />
                 );
               })}
               <div className="assistant-editor__actions">
-                <button className="assistant-button assistant-button--secondary" disabled={!online || busy} type="submit">
+                <button className="cp-button cp-button--secondary" disabled={!online || busy} type="submit">
                   Save changes
                 </button>
               </div>
@@ -376,7 +369,7 @@ export function AssistantActionCard({
             {!terminal && (
               <>
                 <button
-                  className="assistant-button assistant-button--approve"
+                  className="cp-button cp-button--primary"
                   type="button"
                   disabled={!online || busy || action.status === 'BLOCKED'}
                   onClick={() => decide('approve')}
@@ -384,7 +377,7 @@ export function AssistantActionCard({
                   <Check size={16} /> {action.status === 'FAILED' ? 'Retry' : 'Approve'}
                 </button>
                 <button
-                  className="assistant-button assistant-button--reject"
+                  className="cp-button cp-button--danger"
                   type="button"
                   disabled={!online || busy}
                   onClick={() => decide('reject')}

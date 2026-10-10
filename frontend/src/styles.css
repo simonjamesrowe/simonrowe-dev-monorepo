@@ -12633,6 +12633,9 @@ body[data-narration-bar] .app-layout__main {
   background: #f8fafc;
   box-shadow: -18px 0 60px rgba(15, 23, 42, 0.18);
   color: #0f172a;
+  /* The portal sits outside .coparent-app, under the main site's dark :root, so native
+     checkboxes and date pickers would draw dark on this light panel without this. */
+  color-scheme: light;
   outline: none;
 }
 
@@ -12678,16 +12681,7 @@ body[data-narration-bar] .app-layout__main {
   text-transform: uppercase;
 }
 
-.assistant-drawer__close {
-  display: grid;
-  width: 2.4rem;
-  height: 2.4rem;
-  place-items: center;
-  border-radius: 50%;
-  color: #475569;
-}
 
-.assistant-drawer__close:hover { background: #f1f5f9; }
 
 .assistant-steps {
   display: grid;
@@ -12778,7 +12772,7 @@ body[data-narration-bar] .app-layout__main {
 .assistant-capture__footer { max-width: 720px; margin-right: auto; margin-left: auto; }
 .assistant-field { display: grid; gap: 0.4rem; margin-bottom: 1rem; }
 .assistant-field > span { color: #334155; font-size: 0.75rem; font-weight: 750; }
-.assistant-field input:not([type='checkbox']),
+.assistant-field input:not([type='checkbox']):not([type='radio']),
 .assistant-field textarea,
 .assistant-field select {
   width: 100%;
@@ -12788,6 +12782,7 @@ body[data-narration-bar] .app-layout__main {
   background: #fff;
   color: #0f172a;
   caret-color: #0f766e;
+  font-family: inherit;
   font-size: 0.82rem;
   outline: none;
 }
@@ -12823,12 +12818,7 @@ body[data-narration-bar] .app-layout__main {
 .assistant-capture__disclosure { max-width: 390px; margin: 0; color: #64748b; font-size: 0.69rem; line-height: 1.5; }
 .assistant-error { display: flex; gap: 0.4rem; align-items: flex-start; color: #be123c; font-size: 0.75rem; }
 
-.assistant-button { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.6rem 0.8rem !important; border-radius: 0.65rem; font-size: 0.75rem !important; font-weight: 750 !important; }
-.assistant-button:disabled { cursor: not-allowed; opacity: 0.45; }
-.assistant-button--analyse { flex: 0 0 auto; min-width: 190px; background: #0f766e !important; color: #fff !important; }
-.assistant-button--secondary { border: 1px solid #cbd5e1 !important; color: #334155 !important; }
-.assistant-button--approve { background: #0f766e !important; color: #fff !important; }
-.assistant-button--reject { color: #be123c !important; }
+.assistant-analyse { flex: 0 0 auto; min-width: 190px; }
 .assistant-spinner { animation: assistant-spin 1s linear infinite; }
 @keyframes assistant-spin { to { transform: rotate(360deg); } }
 
@@ -12852,8 +12842,8 @@ body[data-narration-bar] .app-layout__main {
 .assistant-card__status { color: #64748b; font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; }
 .assistant-card__chevron--open { transform: rotate(180deg); }
 .assistant-card__body { padding: 0 0.9rem 0.9rem 1.45rem; border-top: 1px solid #eef2f7; }
-.assistant-card__notice { display: flex; gap: 0.4rem; align-items: flex-start; padding: 0.55rem; border-radius: 0.55rem; background: #fff7ed; color: #9a3412; font-size: 0.72rem; }
-.assistant-card__errors { margin: 0.65rem 0; color: #be123c; font-size: 0.72rem; }
+.assistant-card__notice { display: flex; gap: 0.4rem; align-items: flex-start; padding: 0.55rem; border-radius: 0.55rem; background: var(--expense-amber-soft); color: var(--expense-amber-text); font-size: 0.72rem; }
+.assistant-card__errors { margin: 0.65rem 0; color: var(--expense-rose-text); font-size: 0.72rem; }
 .assistant-card__form { padding-top: 0.75rem; }
 .assistant-card__actions { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.8rem; }
 .assistant-card__result { display: inline-flex; align-items: center; gap: 0.3rem; margin-left: auto; color: #0f766e; font-size: 0.72rem; font-weight: 750; }
@@ -12870,25 +12860,58 @@ body[data-narration-bar] .app-layout__main {
   .assistant-capture,
   .assistant-review { padding: 1.25rem 1rem 1.75rem; }
   .assistant-capture__footer { align-items: stretch; flex-direction: column; gap: 0.85rem; }
-  .assistant-button--analyse { width: 100%; }
+  .assistant-analyse { width: 100%; }
   .assistant-review__toolbar { align-items: flex-start; flex-direction: column-reverse; gap: 0.5rem; }
 }
 
 @media (prefers-color-scheme: dark) {
-  .assistant-drawer { background: #0f172a; color: #e2e8f0; }
+  /* Lets native date, time and select pickers draw themselves dark too. */
+  .assistant-drawer { background: #0f172a; color: var(--expense-text); color-scheme: dark; }
   .assistant-drawer__header,
   .assistant-capture,
   .assistant-card,
   .assistant-recents__item { background: #1e293b !important; }
+  .assistant-review { background: #0f172a; }
+  .assistant-drawer__header,
+  .assistant-steps,
+  .assistant-card,
+  .assistant-recents__item { border-color: var(--expense-border-strong) !important; }
+  .assistant-drawer__header p,
+  .assistant-stage__heading span,
+  .assistant-field small,
+  .assistant-capture__disclosure,
+  .assistant-review__toolbar p,
+  .assistant-recents__item time,
+  .assistant-review__empty,
+  .assistant-upload label small { color: var(--expense-muted); }
+  .assistant-drawer__eyebrow { color: var(--expense-teal) !important; }
   .assistant-field > span,
-  .assistant-card__type { color: #e2e8f0; }
-  .assistant-field input:not([type='checkbox']),
+  .assistant-card__type { color: var(--expense-text); }
+  .assistant-field input:not([type='checkbox']):not([type='radio']),
   .assistant-field textarea,
-  .assistant-field select { border-color: #475569 !important; background: #0f172a; color: #e2e8f0; caret-color: #5eead4; }
-  .assistant-steps { border-color: #334155; background: #1e293b; }
-  .assistant-step strong { color: #cbd5e1; }
-  .assistant-step__number { border-color: #475569 !important; background: #0f172a; }
-  .assistant-capture__footer { border-color: #334155; }
+  .assistant-field select { border-color: #475569 !important; background: #0f172a; color: var(--expense-text); caret-color: #5eead4; }
+  .assistant-field textarea::placeholder,
+  .assistant-field input::placeholder { color: #64748b; }
+  .assistant-steps { background: #1e293b; }
+  .assistant-step { color: var(--expense-muted) !important; }
+  .assistant-step:not(:disabled):hover { background: #334155 !important; }
+  .assistant-step strong { color: var(--expense-text-2); }
+  .assistant-step__number { border-color: #475569 !important; background: #0f172a; color: var(--expense-muted); }
+  .assistant-step--active { background: var(--expense-teal-soft) !important; }
+  .assistant-step--active strong { color: #5eead4; }
+  .assistant-step--active .assistant-step__number,
+  .assistant-step--complete .assistant-step__number { border-color: var(--expense-teal-strong) !important; background: var(--expense-teal-strong); color: #fff; }
+  .assistant-steps__line { background: #475569; }
+  .assistant-stage__heading > p { color: var(--expense-rose); }
+  .assistant-upload > label { border-color: #64748b !important; color: #5eead4; }
+  .assistant-upload__preview button { background: #1e293b !important; color: var(--expense-text) !important; }
+  .assistant-capture__footer { border-color: var(--expense-border-strong); }
+  .assistant-error,
+  .assistant-back { color: #5eead4 !important; }
+  .assistant-back:hover { background: var(--expense-teal-soft) !important; }
+  .assistant-recents__item--active { border-color: var(--expense-teal) !important; background: var(--expense-teal-soft) !important; }
+  .assistant-card__body { border-color: var(--expense-border-strong); }
+  .assistant-card__result { color: #5eead4; }
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -13320,7 +13343,7 @@ body[data-narration-bar] .app-layout__main {
 }
 
 :is(.coparent-app, .assistant-drawer) .assistant-field--inline { display: flex; align-items: center; gap: 0.5rem; }
-:is(.coparent-app, .assistant-drawer) .assistant-card .expense-summary { margin-bottom: 1rem; }
+:is(.coparent-app, .assistant-drawer) .assistant-card .expense-summary { margin: 0.75rem 0 1rem; padding: 0.6rem 0.8rem; border-radius: 0.65rem; font-size: 0.8rem; }
 
 /*
  * CoParent statement import (expenses → statements). Hand-written BEM on the expense tokens, so
@@ -13490,6 +13513,23 @@ body[data-narration-bar] .app-layout__main {
 .assistant-drawer .assistant-editor .assistant-field { min-width: 0; align-content: start; }
 .assistant-drawer .assistant-editor .assistant-field--inline { align-self: end; min-height: 2.6rem; }
 .assistant-drawer .assistant-editor__actions { display: flex; justify-content: flex-end; }
+
+/* Choice chips: a hidden radio or checkbox inside each label, so the keyboard and screen
+   readers treat them as the controls they are. */
+.assistant-drawer .assistant-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.assistant-drawer .assistant-chip { position: relative; display: inline-flex; align-items: center; min-height: 2.25rem; padding: 0.35rem 0.8rem; border: 1px solid var(--expense-border-strong); border-radius: 999px; background: var(--expense-surface); color: var(--expense-text-2); font-size: 0.78rem; font-weight: 600; cursor: pointer; user-select: none; }
+.assistant-drawer .assistant-chip:hover { border-color: var(--expense-teal); }
+.assistant-drawer .assistant-chip input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.assistant-drawer .assistant-chip:has(input:focus-visible) { outline: 2px solid var(--expense-teal); outline-offset: 2px; }
+.assistant-drawer .assistant-chip--on { border-color: var(--expense-teal); background: var(--expense-teal-soft); color: var(--expense-text); font-weight: 750; }
+.assistant-drawer .assistant-chip--short { min-width: 2.75rem; justify-content: center; padding: 0.35rem 0.5rem; }
+.assistant-drawer .assistant-field__other { margin-top: 0.5rem; }
+.assistant-drawer .assistant-field .assistant-field__error { color: var(--expense-rose-text); font-size: 0.72rem; font-weight: 600; line-height: 1.4; }
+
+/* A number with its unit inside the box: "50 %". */
+.assistant-drawer .assistant-field > .assistant-input-suffix { position: relative; display: block; color: inherit; font-size: inherit; font-weight: inherit; }
+.assistant-drawer .assistant-input-suffix input { padding-right: 2rem !important; }
+.assistant-drawer .assistant-input-suffix > span { position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%); color: var(--expense-muted); font-size: 0.82rem; font-weight: 600; pointer-events: none; }
 @media (min-width: 1024px) {
   .assistant-drawer .assistant-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .assistant-drawer .assistant-editor .assistant-field--wide,
