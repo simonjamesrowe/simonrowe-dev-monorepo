@@ -6,7 +6,7 @@ import { CalendarHeader } from './CalendarHeader';
 import { DayView } from './DayView';
 import { MonthView } from './MonthView';
 import { PendingRequestsBadge } from './PendingRequestsBadge';
-import { dateToYmd as toYmd, expandRecurringEvents } from './recurrence';
+import { addDays, dateToYmd as toYmd, expandRecurringEvents } from './recurrence';
 import { WeekView } from './WeekView';
 
 type ViewMode = 'month' | 'week' | 'day';
@@ -53,10 +53,10 @@ export function CalendarView({
           newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1);
           break;
         case 'week':
-          newDate = new Date(currentDate.getTime() + offset * 7 * 24 * 60 * 60 * 1000);
+          newDate = addDays(currentDate, offset * 7);
           break;
         case 'day':
-          newDate = new Date(currentDate.getTime() + offset * 24 * 60 * 60 * 1000);
+          newDate = addDays(currentDate, offset);
           break;
         default:
           newDate = currentDate;
@@ -67,9 +67,11 @@ export function CalendarView({
     onNavigateDate?.(dateToYmd(newDate));
   };
 
+  // A day picked from the month or week opens that day, which is also where an all-day event the
+  // week header had no room for can be read.
   const handleDayClick = (date: Date) => {
     setCurrentDate(date);
-    if (viewMode === 'month') {
+    if (viewMode !== 'day') {
       setViewMode('day');
       onChangeView?.('day');
     }

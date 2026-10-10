@@ -5,7 +5,11 @@ const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'f
 const toYmd = (value: string) => (value.includes('T') ? value.slice(0, 10) : value);
 const toLocalDay = (value: string) => new Date(`${toYmd(value)}T12:00:00`);
 
-const addDays = (date: Date, amount: number) => {
+/**
+ * Moves by calendar days, not by 24-hour steps. A day is 23 or 25 hours long when the clocks
+ * change, so adding milliseconds from midnight on 25 October lands on 25 October again.
+ */
+export const addDays = (date: Date, amount: number) => {
   const next = new Date(date);
   next.setDate(next.getDate() + amount);
   return next;
@@ -34,20 +38,14 @@ export const expandRecurringEvents = (events: Event[], rangeStart: string, range
     if (!event.recurring) return [event];
 
     const eventStart = toLocalDay(event.startDate);
-    // A series with no end date repeats indefinitely; treating the start as its end would
-    // show one occurrence and nothing after it.
+    // A series' end date is the day it stops repeating, not how long each occurrence lasts, so
+    // every occurrence is a single day. A series with no end date repeats indefinitely; treating
+    // the start as its end would show one occurrence and nothing after it.
     const eventEnd = event.endDate ? toLocalDay(event.endDate) : rangeEndDay;
     const effectiveStart = eventStart > rangeStartDay ? eventStart : rangeStartDay;
     const effectiveEnd = eventEnd < rangeEndDay ? eventEnd : rangeEndDay;
 
     if (effectiveStart > effectiveEnd) return [];
-
-    const durationDays = event.endDate
-      ? Math.max(
-          0,
-          Math.round((eventEnd.getTime() - eventStart.getTime()) / (1000 * 60 * 60 * 24)),
-        )
-      : 0;
 
     const frequency = event.recurring.frequency;
     const skipped = new Set(event.recurring.excludedDates ?? []);
@@ -57,13 +55,12 @@ export const expandRecurringEvents = (events: Event[], rangeStart: string, range
       for (let day = new Date(effectiveStart); day <= effectiveEnd; day = addDays(day, 1)) {
         const startYmd = dateToYmd(day);
         if (skipped.has(startYmd)) continue;
-        const endYmd = dateToYmd(addDays(day, durationDays));
         days.push({
           ...event,
           id: `${event.id}:${startYmd}`,
           sourceId: event.id,
           startDate: startYmd,
-          endDate: endYmd,
+          endDate: startYmd,
         });
       }
       return days;
@@ -84,13 +81,12 @@ export const expandRecurringEvents = (events: Event[], rangeStart: string, range
 
         const startYmd = dateToYmd(day);
         if (skipped.has(startYmd)) continue;
-        const endYmd = dateToYmd(addDays(day, durationDays));
         days.push({
           ...event,
           id: `${event.id}:${startYmd}`,
           sourceId: event.id,
           startDate: startYmd,
-          endDate: endYmd,
+          endDate: startYmd,
         });
       }
       return days;

@@ -179,4 +179,37 @@ describe('CalendarView', () => {
     expect(stat('Activities')).toBe('3 scheduled');
     expect(stat('Medical')).toBe('1 appointments');
   });
+
+  describe('across the October clock change in London', () => {
+    const originalTz = process.env.TZ;
+
+    afterEach(() => {
+      process.env.TZ = originalTz;
+    });
+
+    it('moves one day per press, even through the 25-hour day', async () => {
+      process.env.TZ = 'Europe/London';
+      vi.useFakeTimers({ toFake: ['Date'] });
+      // Midnight is what a day picked from the month view holds.
+      vi.setSystemTime(new Date(2026, 9, 24, 0, 0));
+      const user = userEvent.setup();
+
+      render(
+        <CalendarView
+          parents={parents}
+          children={children}
+          events={[]}
+          scheduleChangeRequests={[]}
+          currentParentId="parent-1"
+        />,
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Day' }));
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Sunday, October 25');
+      // Adding 24 hours to midnight on the 25th lands at 23:00 on the 25th.
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Monday, October 26');
+    });
+  });
 });

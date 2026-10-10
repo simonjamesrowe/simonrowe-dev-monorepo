@@ -5,7 +5,15 @@ import type { Event, Parent, Child } from '../../types/calendar';
 import { getEventOwnerLabel } from './eventOwners';
 import { getEventTypeColor } from './eventTypeColors';
 import { expandRecurringEvents, occurrenceTarget } from './recurrence';
-import { eventBox, gridHoursFor, isSameDay, nowOffset, useNow } from './timeGrid';
+import {
+  eventBox,
+  gridHoursFor,
+  isSameDay,
+  laneStyle,
+  nowOffset,
+  overlapLanes,
+  useNow,
+} from './timeGrid';
 
 interface DayViewProps {
   currentDate: Date;
@@ -17,6 +25,9 @@ interface DayViewProps {
 }
 
 const HOUR_PX = 80;
+const MIN_BOX_PX = 40;
+// A box shorter than this gets one line, title and time, instead of the full card.
+const FULL_CARD_PX = 60;
 const DEFAULT_HOURS = { startHour: 6, endHour: 22 }; // 6 AM to 9 PM rows
 
 export function DayView({
@@ -72,7 +83,17 @@ export function DayView({
   };
 
   const now = useNow();
-  const hours = useMemo(() => gridHoursFor(dayEvents, DEFAULT_HOURS), [dayEvents]);
+  // An all-day event is listed in the sidebar even if it also carries a time, never in the grid too.
+  const timedEvents = useMemo(
+    () => dayEvents.filter((e) => Boolean(e.startTime) && !e.allDay),
+    [dayEvents],
+  );
+  const allDayEvents = dayEvents.filter((e) => e.allDay || !e.startTime);
+  const lanes = useMemo(
+    () => overlapLanes(timedEvents, (MIN_BOX_PX / HOUR_PX) * 60),
+    [timedEvents],
+  );
+  const hours = useMemo(() => gridHoursFor(timedEvents, DEFAULT_HOURS), [timedEvents]);
   const hourRows = Array.from(
     { length: hours.endHour - hours.startHour },
     (_, i) => i + hours.startHour,
@@ -126,9 +147,6 @@ export function DayView({
 
     return colorMap[color as keyof typeof colorMap] ?? colorMap.slate;
   };
-
-  const timedEvents = dayEvents.filter((e) => e.startTime);
-  const allDayEvents = dayEvents.filter((e) => e.allDay || !e.startTime);
 
   const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const months = [
@@ -273,7 +291,8 @@ export function DayView({
       </div>
 
       {/* Main: Time grid */}
-      <div className="flex-1 overflow-x-auto">
+      {/* The top padding leaves room for the first hour's label, which sits across its line. */}
+      <div className="flex-1 overflow-x-auto pt-2">
         <div className="relative" style={{ minHeight: `${hourRows.length * HOUR_PX}px` }}>
           {/* Hour lines */}
           {hourRows.map((hour) => (
@@ -290,78 +309,99 @@ export function DayView({
           ))}
           {/* Timed events */}
           {timedEvents.map((event) => {
-            const position = eventBox(event, hours, HOUR_PX, 40);
+            const position = eventBox(event, hours, HOUR_PX, MIN_BOX_PX);
             if (!position) return null;
 
             const colors = getEventColors(event.type);
             const eventChildren = children.filter((c) => event.childIds.includes(c.id));
+            const ownerLabel = getEventOwnerLabel(event, parents);
+            const timeRange = event.endTime
+              ? `${event.startTime} – ${event.endTime}`
+              : (event.startTime ?? '');
+            const short = position.height < FULL_CARD_PX;
 
+            // A flex column keeps the content at the top: a plain button centres it vertically,
+            // so a long event's title floated in the middle of its box.
             return (
               <button
                 key={event.id}
                 onClick={() => onEventClick?.(...occurrenceTarget(event))}
-                className={`absolute left-20 right-4 rounded-xl border p-3 text-left transition-all duration-150 hover:scale-[1.02] hover:shadow-lg ${colors.bg} ${colors.border} `}
+                className={`absolute flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-150 hover:shadow-lg ${short ? 'px-3 py-1' : 'p-3'} ${colors.bg} ${colors.border} `}
                 style={{
                   top: `${position.top}px`,
-                  minHeight: `${position.height}px`,
+                  height: `${position.height}px`,
+                  ...laneStyle(lanes.get(event.id), 80, 16),
                 }}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className={`font-semibold ${colors.text}`}>{event.title}</div>
-                    {getEventOwnerLabel(event, parents) && (
-                      <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-                        {getEventOwnerLabel(event, parents)}
+                {short ? (
+                  <div className="flex items-center gap-2">
+                    <span className={`truncate text-sm font-semibold ${colors.text}`}>
+                      {event.title}
+                    </span>
+                    <span className="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                      {timeRange}
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className={`truncate font-semibold ${colors.text}`}>{event.title}</div>
+                        {ownerLabel && (
+                          <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                            {ownerLabel}
+                          </div>
+                        )}
+                        <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                          {timeRange}
+                        </div>
+                      </div>
+                      {eventChildren.length > 0 && (
+                        <div className="flex flex-shrink-0 -space-x-1">
+                          {eventChildren.map((child) => (
+                            <div
+                              key={child.id}
+                              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-[10px] font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-600 dark:text-slate-300"
+                              title={child.name}
+                            >
+                              {child.name[0]}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {event.location && position.height > 100 && (
+                      <div className="mt-2 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                        <svg
+                          className="h-3 w-3 flex-shrink-0"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                        <span className="truncate">{event.location}</span>
                       </div>
                     )}
-                    <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                      {event.startTime} – {event.endTime}
-                    </div>
-                  </div>
-                  {eventChildren.length > 0 && (
-                    <div className="flex -space-x-1">
-                      {eventChildren.map((child) => (
-                        <div
-                          key={child.id}
-                          className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-[10px] font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-600 dark:text-slate-300"
-                          title={child.name}
-                        >
-                          {child.name[0]}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
 
-                {event.location && position.height > 60 && (
-                  <div className="mt-2 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                    <svg
-                      className="h-3 w-3 flex-shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                    <span className="truncate">{event.location}</span>
-                  </div>
-                )}
-
-                {event.notes && position.height > 80 && (
-                  <div className="mt-2 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
-                    {event.notes}
-                  </div>
+                    {event.notes && position.height > 120 && (
+                      <div className="mt-2 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                        {event.notes}
+                      </div>
+                    )}
+                  </>
                 )}
               </button>
             );

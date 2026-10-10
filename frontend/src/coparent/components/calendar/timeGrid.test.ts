@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Event } from '../../types/calendar';
 
-import { eventBox, gridHoursFor, nowOffset } from './timeGrid';
+import { eventBox, gridHoursFor, laneStyle, nowOffset, overlapLanes } from './timeGrid';
 
 const timed = (startTime: string, endTime?: string): Event => ({
   id: startTime,
@@ -47,5 +47,51 @@ describe('timeGrid', () => {
   it('draws the current-time line only inside the grid hours', () => {
     expect(nowOffset(new Date(2026, 9, 6, 9, 30), hours, 64)).toBe(160);
     expect(nowOffset(new Date(2026, 9, 6, 22, 0), hours, 64)).toBeNull();
+  });
+
+  describe('overlapLanes', () => {
+    it('puts overlapping events side by side and leaves a lone event full width', () => {
+      const lanes = overlapLanes([
+        timed('15:30', '16:30'),
+        timed('16:00', '17:00'),
+        timed('16:15', '16:45'),
+        timed('18:00', '19:00'),
+      ]);
+
+      expect(lanes.get('15:30')).toEqual({ lane: 0, lanes: 3 });
+      expect(lanes.get('16:00')).toEqual({ lane: 1, lanes: 3 });
+      expect(lanes.get('16:15')).toEqual({ lane: 2, lanes: 3 });
+      expect(lanes.get('18:00')).toEqual({ lane: 0, lanes: 1 });
+    });
+
+    it('reuses a lane once the event in it has finished', () => {
+      const lanes = overlapLanes([
+        timed('09:00', '10:00'),
+        timed('09:30', '11:00'),
+        timed('10:00', '10:30'),
+      ]);
+
+      expect(lanes.get('09:00')).toEqual({ lane: 0, lanes: 2 });
+      expect(lanes.get('09:30')).toEqual({ lane: 1, lanes: 2 });
+      expect(lanes.get('10:00')).toEqual({ lane: 0, lanes: 2 });
+    });
+
+    it('treats back-to-back events as overlapping when their drawn boxes would touch', () => {
+      const short = [timed('18:00', '18:10'), timed('18:10', '18:40')];
+
+      expect(overlapLanes(short).get('18:10')).toEqual({ lane: 0, lanes: 1 });
+      expect(overlapLanes(short, 30).get('18:10')).toEqual({ lane: 1, lanes: 2 });
+    });
+  });
+
+  it('sizes a box to its lane inside the column insets', () => {
+    expect(laneStyle(undefined, 4, 4)).toEqual({
+      left: 'calc(4px + (100% - 8px) * 0)',
+      width: 'calc((100% - 8px) / 1 - 0px)',
+    });
+    expect(laneStyle({ lane: 1, lanes: 2 }, 80, 16)).toEqual({
+      left: 'calc(80px + (100% - 96px) * 0.5)',
+      width: 'calc((100% - 96px) / 2 - 2px)',
+    });
   });
 });
