@@ -51,6 +51,30 @@ describe('EventCreationForm', () => {
     expect(screen.getByText('Event type')).toBeInTheDocument();
   });
 
+  it.each([
+    ['2026-10-10', 'Sa'],
+    ['2026-10-11', 'Su'],
+    ['2026-10-12', 'M'],
+  ])('repeats a series started on %s on that weekday (%s)', async (initialDate, label) => {
+    const user = userEvent.setup();
+    render(
+      <EventCreationForm
+        parents={parents}
+        children={children}
+        currentParentId="parent-1"
+        initialDate={initialDate}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Every week' }));
+
+    const pressed = screen
+      .getAllByRole('button', { pressed: true })
+      .map((button) => button.textContent);
+    expect(pressed).toContain(label);
+    expect(pressed.filter((text) => ['M', 'Tu', 'W', 'Th', 'F', 'Sa', 'Su'].includes(text ?? ''))).toEqual([label]);
+  });
+
   it('validates required fields (title and date)', async () => {
     const user = userEvent.setup();
     const onValidationChange = vi.fn();

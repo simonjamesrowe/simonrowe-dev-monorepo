@@ -226,7 +226,9 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
       // Starting a series whose end is still the start date would repeat exactly once.
       if (!recurrence && !isCustody && endDate === startDate) setEndDate('');
       if (frequency === 'weekly') {
-        const dayIndex = new Date(`${startDate}T12:00:00`).getDay();
+        // getDay() counts from Sunday and WEEKDAYS starts on Monday, so shift by one: without
+        // it a series started on a Saturday defaulted to Sundays.
+        const dayIndex = (new Date(`${startDate}T12:00:00`).getDay() + 6) % 7;
         const defaultDay = WEEKDAYS[dayIndex]?.value || 'monday';
         setRecurrence({ frequency: 'weekly', days: [defaultDay] });
         return;
