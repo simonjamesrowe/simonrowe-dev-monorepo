@@ -91,6 +91,35 @@ class AssistantInferenceServiceTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  void tellsTheModelToWriteTwelveHourTimesAsTwentyFourHour() throws Exception {
+    // A note saying "6-7pm" was stored as 06:00, with the model's own note admitting the pm.
+    for (final String tool : List.of("propose_create_event", "propose_update_event")) {
+      final String schemaJson = service.toolCallbacks().stream()
+          .filter(callback -> callback.getToolDefinition().name().equals(tool))
+          .findFirst().orElseThrow().getToolDefinition().inputSchema();
+      final Map<String, Object> properties = (Map<String, Object>)
+          new tools.jackson.databind.ObjectMapper().readValue(schemaJson,
+              new tools.jackson.core.type.TypeReference<Map<String, Object>>() { })
+              .get("properties");
+      assertThat(((Map<String, Object>) properties.get("startTime")).get("description"))
+          .asString().contains("6pm is 18:00");
+      assertThat(((Map<String, Object>) properties.get("endTime")).get("description"))
+          .asString().contains("6pm is 18:00");
+    }
+
+    when(chatModel.call(any(Prompt.class))).thenReturn(response(
+        new AssistantMessage.ToolCall("one", "function", "propose_create_event",
+            "{\"title\":\"Football training\"}")));
+    service.propose(context(), new AssistantInputValidator.ValidatedInput("A note", null, null));
+    final ArgumentCaptor<Prompt> prompt = ArgumentCaptor.forClass(Prompt.class);
+    verify(chatModel).call(prompt.capture());
+    assertThat(prompt.getValue().getInstructions().getFirst().getText())
+        .contains("6pm is 18:00")
+        .contains("both ends take the pm");
+  }
+
+  @Test
   void returnsMultipleToolCallsWithPrivateStrictOptions() {
     when(chatModel.call(any(Prompt.class))).thenReturn(response(
         new AssistantMessage.ToolCall("one", "function", "propose_create_event",
