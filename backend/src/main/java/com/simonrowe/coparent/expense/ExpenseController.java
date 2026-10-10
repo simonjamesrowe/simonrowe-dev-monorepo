@@ -165,7 +165,8 @@ public class ExpenseController {
 
   // ---- requests ----------------------------------------------------------------------------
 
-  record ExpenseRequest(
+  /** The body of a create or full update, also accepted when a statement row becomes one. */
+  public record ExpenseRequest(
       @NotBlank @Size(max = ExpenseService.MAX_TITLE) String title,
       @NotBlank String category,
       @NotEmpty List<String> childIds,
@@ -179,7 +180,7 @@ public class ExpenseController {
       @Size(max = ExpenseService.MAX_NOTES) String notes,
       Long version
   ) {
-    ExpenseService.ExpenseValues values() {
+    public ExpenseService.ExpenseValues values() {
       if (currency != null && !Expense.GBP.equals(currency)) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
             "Expenses are in pounds sterling (GBP) only");
@@ -191,7 +192,7 @@ public class ExpenseController {
     }
   }
 
-  record ShareRequest(String parentId, Integer percent) {
+  public record ShareRequest(String parentId, Integer percent) {
     Expense.Share share() {
       if (percent == null) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -223,7 +224,7 @@ public class ExpenseController {
 
   // ---- responses ---------------------------------------------------------------------------
 
-  record ExpenseResponse(
+  public record ExpenseResponse(
       String id,
       String familyId,
       String title,
@@ -249,7 +250,7 @@ public class ExpenseController {
       Instant createdAt,
       Instant updatedAt
   ) {
-    static ExpenseResponse from(final Expense expense) {
+    public static ExpenseResponse from(final Expense expense) {
       final ObjectId debtor = ExpenseMath.debtor(expense);
       return new ExpenseResponse(expense.id().toHexString(), expense.familyId().toHexString(),
           expense.title(), expense.category(),
@@ -271,10 +272,10 @@ public class ExpenseController {
     }
   }
 
-  record ShareResponse(String parentId, int percent, long sharePence) {
+  public record ShareResponse(String parentId, int percent, long sharePence) {
   }
 
-  record AgreementResponse(
+  public record AgreementResponse(
       String status, String requestedBy, String respondedBy, Instant respondedAt, String note) {
     static AgreementResponse from(final Expense.Agreement agreement) {
       return new AgreementResponse(agreement.status(), hex(agreement.requestedBy()),
@@ -282,7 +283,7 @@ public class ExpenseController {
     }
   }
 
-  record ReimbursementResponse(
+  public record ReimbursementResponse(
       String status, String claimedBy, Instant claimedAt, String settledBy, Instant settledAt,
       String note) {
     static ReimbursementResponse from(final Expense.Reimbursement reimbursement) {
@@ -292,7 +293,7 @@ public class ExpenseController {
     }
   }
 
-  record ReceiptResponse(
+  public record ReceiptResponse(
       String id, String contentType, long sizeBytes, String displayName, String uploadedBy,
       Instant uploadedAt) {
     static ReceiptResponse from(final Expense.Receipt receipt) {
@@ -302,7 +303,7 @@ public class ExpenseController {
     }
   }
 
-  record HistoryResponse(Instant at, String by, String action, String note) {
+  public record HistoryResponse(Instant at, String by, String action, String note) {
     static HistoryResponse from(final Expense.HistoryEntry entry) {
       return new HistoryResponse(entry.at(), hex(entry.by()), entry.action(), entry.note());
     }

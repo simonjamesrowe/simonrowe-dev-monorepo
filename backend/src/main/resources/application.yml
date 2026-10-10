@@ -33,6 +33,12 @@ coparent:
   assistant:
     enabled: ${COPARENT_ASSISTANT_ENABLED:false}
     model: ${COPARENT_ASSISTANT_MODEL:gpt-5.4-nano}
+  statements:
+    # Reading an uploaded bank statement needs no model; suggesting which transactions might be
+    # shared costs does. Off unless switched on, like the assistant it follows by default, since
+    # both spend on the same OpenAI key.
+    ai-enabled: ${COPARENT_STATEMENTS_AI_ENABLED:${COPARENT_ASSISTANT_ENABLED:false}}
+    model: ${COPARENT_STATEMENTS_MODEL:${COPARENT_ASSISTANT_MODEL:gpt-5.4-nano}}
 
 mongock:
   enabled: ${MONGOCK_ENABLED:true}

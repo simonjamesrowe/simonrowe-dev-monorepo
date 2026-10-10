@@ -1,4 +1,4 @@
-import { AlertCircle, Calendar, Camera, Check, Info, Mail, Sparkles, Wallet } from 'lucide-react';
+import { AlertCircle, Calendar, Camera, Check, Info, Landmark, Mail, Sparkles, Wallet } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { prepareSchoolNoteImage } from '../../../pages/admin/schoolNoteImage';
@@ -39,7 +39,48 @@ interface FormState {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function initialState(expense: Expense | null, me: string, children: Child[]): FormState {
+/**
+ * A transaction from one of the parent's own statements being turned into an expense. It is
+ * always already paid, so the form asks only who paid: a joint account's payments can belong to
+ * either parent.
+ */
+export interface ExpenseFormSource {
+  /** Changes for each transaction, so the form resets when another one is opened. */
+  key: string;
+  /** The merchant and amount, as the statement has them. */
+  heading: string;
+  /** The account and date. */
+  detail: string;
+  draft: {
+    title: string;
+    amountPence: number;
+    date: string;
+    category: ExpenseCategory;
+    childIds: string[];
+  };
+  submit: (request: ExpenseRequest) => Promise<Expense>;
+}
+
+function initialState(
+  expense: Expense | null,
+  me: string,
+  children: Child[],
+  draft?: ExpenseFormSource['draft'],
+): FormState {
+  if (!expense && draft) {
+    return {
+      title: draft.title,
+      amount: penceToPounds(draft.amountPence),
+      category: draft.category,
+      childIds: draft.childIds.length > 0 ? [...draft.childIds] : children.length === 1 ? [children[0].id] : [],
+      timing: 'paid',
+      payer: 'me',
+      date: draft.date,
+      shareMode: 'equal',
+      myPercent: 50,
+      notes: '',
+    };
+  }
   if (!expense) {
     return {
       title: '',
@@ -102,6 +143,8 @@ export interface ExpenseFormDrawerProps {
   onClose: () => void;
   onSaved: (expense: Expense, receiptFailures: number) => void;
   onOpenQuickAdd?: () => void;
+  /** Set when the expense comes from a statement transaction: prefills it and saves through it. */
+  source?: ExpenseFormSource | null;
 }
 
 export function ExpenseFormDrawer({
@@ -114,8 +157,9 @@ export function ExpenseFormDrawer({
   onClose,
   onSaved,
   onOpenQuickAdd,
+  source = null,
 }: ExpenseFormDrawerProps) {
-  const [state, setState] = useState<FormState>(() => initialState(expense, me.id, children));
+  const [state, setState] = useState<FormState>(() => initialState(expense, me.id, children, source?.draft));
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
@@ -133,13 +177,13 @@ export function ExpenseFormDrawer({
   useEffect(() => {
     if (open) {
       releasePreviews();
-      setState(initialState(expense, me.id, children));
+      setState(initialState(expense, me.id, children, source?.draft));
       setFiles([]);
       setError(null);
     }
     // Reset only when the drawer opens or switches expense, never while typing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, expense?.id]);
+  }, [open, expense?.id, source?.key]);
 
   useEffect(() => releasePreviews, []);
 
@@ -211,7 +255,9 @@ export function ExpenseFormDrawer({
     try {
       const saved = expense
         ? await updateExpense.mutateAsync({ familyId, id: expense.id, ...request, version: expense.version })
-        : await createExpense.mutateAsync({ familyId, ...request });
+        : source
+          ? await source.submit(request)
+          : await createExpense.mutateAsync({ familyId, ...request });
       let failures = 0;
       let latest = saved;
       // One at a time, after the expense exists: a failed upload never loses the expense.
@@ -265,6 +311,7 @@ export function ExpenseFormDrawer({
     <ExpenseDrawer
       open={open}
       title={editing ? 'Edit expense' : 'Add expense'}
+      eyebrow={source ? 'From your statement' : undefined}
       description="Record a shared cost and how it is split between you."
       onClose={onClose}
       footer={
@@ -290,7 +337,18 @@ export function ExpenseFormDrawer({
         </>
       }
     >
-      {!editing && onOpenQuickAdd && (
+      {source && (
+        <div className="expense-source" data-testid="expense-source">
+          <Landmark size={18} aria-hidden="true" />
+          <span>
+            <strong>{source.heading}</strong>
+            <small>
+              {source.detail} · {otherName} sees the expense, never the statement
+            </small>
+          </span>
+        </div>
+      )}
+      {!editing && !source && onOpenQuickAdd && (
         <button type="button" className="expense-callout expense-callout--teal expense-callout--button" onClick={onOpenQuickAdd}>
           <Sparkles size={18} aria-hidden="true" />
           <span>
@@ -372,27 +430,29 @@ export function ExpenseFormDrawer({
         </div>
       </fieldset>
 
-      <fieldset className="expense-field">
-        <legend className="expense-field__label">Has it been paid?</legend>
-        <div className="expense-seg expense-seg--timing">
-          <button
-            type="button"
-            aria-pressed={state.timing === 'paid'}
-            className={`expense-seg__option${state.timing === 'paid' ? ' is-on' : ''}`}
-            onClick={() => chooseTiming('paid')}
-          >
-            <Check size={16} aria-hidden="true" /> Already paid
-          </button>
-          <button
-            type="button"
-            aria-pressed={state.timing === 'upcoming'}
-            className={`expense-seg__option${state.timing === 'upcoming' ? ' is-on' : ''}`}
-            onClick={() => chooseTiming('upcoming')}
-          >
-            <Calendar size={16} aria-hidden="true" /> Coming up
-          </button>
-        </div>
-      </fieldset>
+      {!source && (
+        <fieldset className="expense-field">
+          <legend className="expense-field__label">Has it been paid?</legend>
+          <div className="expense-seg expense-seg--timing">
+            <button
+              type="button"
+              aria-pressed={state.timing === 'paid'}
+              className={`expense-seg__option${state.timing === 'paid' ? ' is-on' : ''}`}
+              onClick={() => chooseTiming('paid')}
+            >
+              <Check size={16} aria-hidden="true" /> Already paid
+            </button>
+            <button
+              type="button"
+              aria-pressed={state.timing === 'upcoming'}
+              className={`expense-seg__option${state.timing === 'upcoming' ? ' is-on' : ''}`}
+              onClick={() => chooseTiming('upcoming')}
+            >
+              <Calendar size={16} aria-hidden="true" /> Coming up
+            </button>
+          </div>
+        </fieldset>
+      )}
 
       <div className="expense-grid2 expense-grid2--wide-first">
         <fieldset className="expense-field">

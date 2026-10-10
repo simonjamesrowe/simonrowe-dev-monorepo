@@ -29,6 +29,7 @@ vi.mock('../hooks/api', () => ({
   useMarkExpensePaid: vi.fn(),
   useSettleExpenses: vi.fn(),
   fetchReceiptBlob: vi.fn(),
+  useStatementOverview: vi.fn(),
 }));
 
 const mutation = (mutateAsync = vi.fn().mockResolvedValue({})) =>
@@ -76,6 +77,8 @@ const skiTrip = testExpense({
 
 type TestParent = { id: string; familyId: string; fullName: string; role: 'primary' | 'co-parent'; status: string; email?: string };
 
+let statementOverview = { aiEnabled: true, toReview: 0, dismissed: 0, logged: 0, uploads: [] };
+
 function setUp({
   parents = [alex, sam] as TestParent[],
   expenses = [skiTrip],
@@ -86,6 +89,9 @@ function setUp({
     isLoading: false,
   } as unknown as ReturnType<typeof apiHooks.useFamilies>);
   vi.mocked(apiHooks.useCurrentParentId).mockReturnValue('alex');
+  vi.mocked(apiHooks.useStatementOverview).mockReturnValue({ data: statementOverview } as unknown as ReturnType<
+    typeof apiHooks.useStatementOverview
+  >);
   vi.mocked(apiHooks.useParentsWithInvited).mockReturnValue({ data: parents } as unknown as ReturnType<
     typeof apiHooks.useParentsWithInvited
   >);
@@ -265,5 +271,21 @@ describe('ExpensesPage', () => {
 
     expect(screen.getByText('Invite your co-parent to start sharing costs.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add expense/ })).not.toBeInTheDocument();
+  });
+
+  it('points to statement suggestions only when some are waiting', () => {
+    setUp();
+    renderPage();
+    expect(screen.getByRole('button', { name: /Import statements/ })).toBeInTheDocument();
+    expect(screen.queryByTestId('statement-banner')).not.toBeInTheDocument();
+
+    statementOverview = { ...statementOverview, toReview: 3 };
+    setUp();
+    renderPage();
+    expect(screen.getByTestId('statement-banner')).toHaveTextContent(
+      '3 transactions from your statements look like shared costs',
+    );
+    expect(screen.getByRole('button', { name: 'Review 3' })).toBeInTheDocument();
+    statementOverview = { ...statementOverview, toReview: 0 };
   });
 });

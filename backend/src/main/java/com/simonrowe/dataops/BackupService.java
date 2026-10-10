@@ -77,7 +77,10 @@ public class BackupService {
   );
   private static final Set<String> COPARENT_BACKUP_COLLECTIONS = Set.of(
       "families", "parents", "children", "invitations", "onboardingstates", "events",
-      "eventcategories", "schedulechangerequests", "conversations", "audits", "expenses"
+      "eventcategories", "schedulechangerequests", "conversations", "audits", "expenses",
+      // Statement fingerprints are what stop a re-uploaded statement being suggested, or logged,
+      // a second time, so a restore without them would offer every old transaction again.
+      "statement_transactions", "statement_uploads"
   );
 
   /** Writes every file under {@code dir} into the archive below {@code prefix}. */

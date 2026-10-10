@@ -1,0 +1,44 @@
+From: 12/05/2026 to 09/10/2026
+							
+Account: XXXX XXXX XXXX 1234
+						
+Date: 09/10/2026
+Description: DIRECT DEBIT PAYMENT TO EXAMPLE MORTGAGES REF 1111111111, MANDATE NO 0039
+Amount: -1200.00 	
+Balance: 300.00 
+						
+Date: 08/10/2026
+Description: FASTER PAYMENTS RECEIPT REF.pocket money FROM A Friend
+Amount: 25.00 	
+Balance: 1500.00 
+						
+Date: 06/10/2026
+Description: CARD PAYMENT TO CHEMIST 0001   ON 05-10-2026
+Amount: -12.50 	
+Balance: 1475.00 
+						
+Date: 05/10/2026
+Description: CARD PAYMENT TO KIDS GYM CLUB   ON 04-10-2026
+Amount: -117.00 	
+Balance: 1487.50 
+						
+Date: 03/10/2026
+Description: BILL PAYMENT VIA FASTER PAYMENT TO EXAMPLE DANCE SCHOOL REFERENCE Robin Exam , MAN
+Amount: -48.00 	
+Balance: 1604.50 
+						
+Date: 02/10/2026
+Description: CARD PAYMENT TO MARKS&amp;SPENCER PLC   ON 01-10-2026
+Amount: -20.00 	
+Balance: 1652.50 
+						
+Date: 12/05/2026
+Description: CARD PAYMENT TO EXAMPLE CAFE &amp; BISTRO   ON 11-05-2026
+Amount: -4.40 GBP 	
+Balance: 1672.50 
+						
+Date: 11/05/2026
+Description: SPENT IN ANOTHER CURRENCY
+Amount: -10.00 EUR 	
+Balance: 1676.90 
+						
