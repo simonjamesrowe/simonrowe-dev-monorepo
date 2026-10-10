@@ -213,15 +213,11 @@ export function ScheduleChangeApproval({
       <div className="relative mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
-              Review & Decide
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-800 sm:text-3xl dark:text-slate-100">
-              Schedule Change Approvals
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-800 sm:text-3xl dark:text-slate-100">
+              Schedule change requests
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-              Compare original custody plans to proposed changes, then approve or decline with a
-              response note.
+              Compare what is booked with what is proposed, then approve or decline it.
             </p>
           </div>
 
@@ -342,7 +338,8 @@ export function ScheduleChangeApproval({
                     {selectedEvent && (
                       <button
                         onClick={() => onViewEvent?.(selectedEvent.id)}
-                        className="rounded-full border border-slate-200/70 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 dark:border-slate-700/70 dark:text-slate-300 dark:hover:border-slate-600"
+                        type="button"
+                        className="cp-button cp-button--secondary cp-button--sm"
                       >
                         View original event
                       </button>
@@ -490,7 +487,7 @@ export function ScheduleChangeApproval({
                           type="button"
                           disabled={busy}
                           onClick={() => act(() => onWithdrawRequest(selectedRequest.id))}
-                          className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="cp-button cp-button--secondary"
                         >
                           Withdraw request
                         </button>
@@ -514,7 +511,7 @@ export function ScheduleChangeApproval({
                             value={responseNote}
                             onChange={(event) => setResponseNote(event.target.value)}
                             rows={3}
-                            placeholder="Add context for your decision..."
+                            placeholder="Anything they should know about your decision"
                             className="w-full resize-none rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition-shadow placeholder:text-slate-400 focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-slate-700/70 dark:bg-slate-900 dark:text-slate-100"
                           />
                         </div>
@@ -529,7 +526,8 @@ export function ScheduleChangeApproval({
                                 ),
                               )
                             }
-                            className="rounded-xl border border-rose-200 px-5 py-2.5 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:hover:bg-rose-900/20"
+                            type="button"
+                            className="cp-button cp-button--danger"
                           >
                             Decline
                           </button>
@@ -543,7 +541,8 @@ export function ScheduleChangeApproval({
                                 ),
                               )
                             }
-                            className="rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition-all hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30"
+                            type="button"
+                            className="cp-button cp-button--primary"
                           >
                             Approve change
                           </button>

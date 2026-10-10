@@ -133,7 +133,7 @@ const MessagesPage = () => {
   if (familiesLoading || conversationsLoading || userLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
-        <p className="text-slate-500 dark:text-slate-400">Loading messages...</p>
+        <p className="text-slate-500 dark:text-slate-400">Loading messages…</p>
       </div>
     );
   }

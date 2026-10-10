@@ -127,7 +127,7 @@ const ExpensesPage = () => {
       await transition.mutateAsync({ familyId, expense, transition: name });
       showToast({
         variant: 'success',
-        title: name === 'agree' ? 'Agreed' : 'Settled',
+        title: name === 'agree' ? 'Agreed' : 'Marked as received',
         description:
           name === 'agree' && expense.timing === 'paid' && expense.owedPence > 0
             ? `${expense.title} now counts towards the balance.`
@@ -156,7 +156,7 @@ const ExpensesPage = () => {
         <div className="expense-empty">
           <UserPlus size={28} aria-hidden="true" />
           <p>Invite your co-parent to start sharing costs.</p>
-          <button type="button" className="expense-button expense-button--primary" onClick={() => navigate('/family-setup')}>
+          <button type="button" className="cp-button cp-button--primary" onClick={() => navigate('/family-setup')}>
             Invite your co-parent
           </button>
         </div>
@@ -186,37 +186,37 @@ const ExpensesPage = () => {
       switch (action) {
         case 'agree':
           return (
-            <button key={action} type="button" className="expense-button expense-button--primary expense-button--sm" onClick={() => quickStep(expense, 'agree')}>
+            <button key={action} type="button" className="cp-button cp-button--primary cp-button--sm" onClick={() => quickStep(expense, 'agree')}>
               <Check size={15} aria-hidden="true" /> Agree
             </button>
           );
         case 'dispute':
           return (
-            <button key={action} type="button" className="expense-button expense-button--danger expense-button--sm" onClick={() => openDetail(expense, 'dispute')}>
+            <button key={action} type="button" className="cp-button cp-button--danger cp-button--sm" onClick={() => openDetail(expense, 'dispute')}>
               Dispute
             </button>
           );
         case 'claim':
           return (
-            <button key={action} type="button" className="expense-button expense-button--teal expense-button--sm" onClick={() => openDetail(expense, 'claim')}>
+            <button key={action} type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={() => openDetail(expense, 'claim')}>
               Mark paid back
             </button>
           );
         case 'confirm':
           return (
-            <button key={action} type="button" className="expense-button expense-button--primary expense-button--sm" onClick={() => quickStep(expense, 'reimbursement/confirm')}>
+            <button key={action} type="button" className="cp-button cp-button--primary cp-button--sm" onClick={() => quickStep(expense, 'reimbursement/confirm')}>
               <Check size={15} aria-hidden="true" /> Confirm received
             </button>
           );
         case 'edit':
           return (
-            <button key={action} type="button" className="expense-button expense-button--ghost expense-button--sm" onClick={() => { setEditing(expense); setFormOpen(true); }}>
+            <button key={action} type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={() => { setEditing(expense); setFormOpen(true); }}>
               <Pencil size={14} aria-hidden="true" /> Edit
             </button>
           );
         case 'markPaid':
           return (
-            <button key={action} type="button" className="expense-button expense-button--teal expense-button--sm" onClick={() => openDetail(expense, 'markPaid')}>
+            <button key={action} type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={() => openDetail(expense, 'markPaid')}>
               Mark as paid
             </button>
           );
@@ -237,14 +237,14 @@ const ExpensesPage = () => {
         </div>
         <div className="expense-page__actions">
           {quickAdd.available && (
-            <button type="button" className="expense-button expense-button--ghost expense-page__quick" onClick={quickAdd.open}>
+            <button type="button" className="cp-button cp-button--secondary expense-page__quick" onClick={quickAdd.open}>
               <Sparkles size={16} aria-hidden="true" /> Paste a note or receipt
             </button>
           )}
-          <button type="button" className="expense-button expense-button--ghost" onClick={() => navigate('/expenses/statements')}>
+          <button type="button" className="cp-button cp-button--secondary" onClick={() => navigate('/expenses/statements')}>
             <Upload size={16} aria-hidden="true" /> Import statements
           </button>
-          <button type="button" className="expense-button expense-button--primary" onClick={() => { setEditing(null); setFormOpen(true); }}>
+          <button type="button" className="cp-button cp-button--primary" onClick={() => { setEditing(null); setFormOpen(true); }}>
             <Plus size={16} aria-hidden="true" /> Add expense
           </button>
         </div>
@@ -264,7 +264,7 @@ const ExpensesPage = () => {
           </p>
           <button
             type="button"
-            className="expense-button expense-button--primary expense-button--sm"
+            className="cp-button cp-button--primary cp-button--sm"
             onClick={() => navigate('/expenses/statements?tab=review')}
           >
             Review {statements.toReview}
@@ -284,7 +284,7 @@ const ExpensesPage = () => {
             <p className="expense-balance__amount">{formatMoney(balance?.netPence ?? 0)}</p>
           </div>
           {canSettle && (
-            <button type="button" className="expense-button expense-button--primary" onClick={() => setSettleOpen(true)}>
+            <button type="button" className="cp-button cp-button--primary" onClick={() => setSettleOpen(true)}>
               <Scale size={16} aria-hidden="true" /> Settle up
             </button>
           )}
@@ -309,7 +309,7 @@ const ExpensesPage = () => {
             {summary && summary.awaitingOther > 0 ? ` · ${summary.awaitingOther} waiting for ${otherName}` : ''}
           </p>
           {summary && summary.needsYourAgreement.count > 0 && (
-            <button type="button" className="expense-button expense-button--teal expense-button--sm expense-stat__action" onClick={() => setParam('view', 'needs')}>
+            <button type="button" className="cp-button cp-button--secondary cp-button--sm expense-stat__action" onClick={() => setParam('view', 'needs')}>
               Review
             </button>
           )}
@@ -369,7 +369,7 @@ const ExpensesPage = () => {
         {expenses.length === 0 ? (
           <div className="expense-empty">
             <p>No expenses yet.</p>
-            <button type="button" className="expense-button expense-button--primary" onClick={() => { setEditing(null); setFormOpen(true); }}>
+            <button type="button" className="cp-button cp-button--primary" onClick={() => { setEditing(null); setFormOpen(true); }}>
               <Plus size={16} aria-hidden="true" /> Add your first expense
             </button>
           </div>
@@ -445,7 +445,7 @@ const ExpensesPage = () => {
           setParam('new', null);
           showToast({
             variant: failures ? 'error' : 'success',
-            title: editing ? 'Saved' : 'Expense added',
+            title: editing ? 'Changes saved' : 'Expense added',
             description: failures
               ? `Expense saved. ${failures} receipt${failures === 1 ? '' : 's'} didn't upload. Retry from the expense.`
               : saved.agreement.status === 'pending'

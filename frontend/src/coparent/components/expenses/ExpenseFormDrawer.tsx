@@ -324,12 +324,12 @@ export function ExpenseFormDrawer({
             </p>
           )}
           <span className="expense-grow" />
-          <button type="button" className="expense-button expense-button--ghost" onClick={onClose}>
+          <button type="button" className="cp-button cp-button--secondary" onClick={onClose}>
             Cancel
           </button>
           <button
             type="button"
-            className="expense-button expense-button--primary"
+            className="cp-button cp-button--primary"
             onClick={save}
             disabled={!valid || saving}
           >
@@ -380,7 +380,7 @@ export function ExpenseFormDrawer({
             {errors.title && <small className="expense-field__error">{errors.title}</small>}
           </label>
 
-          <div className="expense-grid2">
+          <div className="expense-grid2 expense-grid2--keep">
             <label className="expense-field">
               <span className="expense-field__label">Amount</span>
               <span className="expense-money-input">

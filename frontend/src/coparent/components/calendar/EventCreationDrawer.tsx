@@ -1,9 +1,10 @@
-import { ArrowLeftRight, CalendarX, RotateCcw, Trash2, X } from 'lucide-react';
+import { ArrowLeftRight, CalendarX, RotateCcw, Trash2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Drawer } from 'vaul';
 
 import { apiErrorMessage } from '../../lib/api/errorMessage';
 import type { Event, Parent, Child } from '../../types/calendar';
+import { CloseButton } from '../ui/CloseButton';
 
 import type { EventCreationFormRef } from './EventCreationForm';
 import { EventCreationForm } from './EventCreationForm';
@@ -144,13 +145,7 @@ export function EventCreationDrawer({
                 <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
                   {mode === 'edit' ? 'Edit event' : 'Add event'}
                 </h2>
-                <button
-                  onClick={onClose}
-                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                  aria-label="Close"
-                >
-                  <X size={20} />
-                </button>
+                <CloseButton onClick={onClose} />
               </div>
 
               {/* Scrollable Body */}
@@ -174,7 +169,7 @@ export function EventCreationDrawer({
                           type="button"
                           onClick={() => changeOccurrence(occurrenceDate, true)}
                           disabled={Boolean(pendingDate)}
-                          className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-3 py-2 font-medium text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:text-slate-400 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-100 dark:hover:bg-slate-800"
+                          className="cp-button cp-button--secondary cp-button--sm"
                         >
                           <CalendarX size={16} aria-hidden="true" />
                           Skip {formatOccurrence(occurrenceDate)} only
@@ -242,7 +237,7 @@ export function EventCreationDrawer({
                       type="button"
                       onClick={onRequestChange}
                       disabled={isSubmitting}
-                      className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-teal-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 dark:text-teal-300 dark:hover:bg-slate-800"
+                      className="cp-button cp-button--secondary"
                     >
                       <ArrowLeftRight size={16} aria-hidden="true" />
                       Request a change
@@ -255,7 +250,7 @@ export function EventCreationDrawer({
                       onBlur={() => setConfirmingDelete(false)}
                       disabled={isSubmitting}
                       style={{ marginRight: 'auto' }}
-                      className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-red-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 dark:text-red-300 dark:hover:bg-slate-800"
+                      className={`cp-button ${confirmingDelete ? 'cp-button--danger-solid' : 'cp-button--danger'}`}
                     >
                       <Trash2 size={16} aria-hidden="true" />
                       {confirmingDelete
@@ -265,18 +260,16 @@ export function EventCreationDrawer({
                         : 'Delete'}
                     </button>
                   )}
-                  <button
-                    onClick={onClose}
-                    className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
+                  <button type="button" onClick={onClose} className="cp-button cp-button--secondary">
                     Cancel
                   </button>
                   <button
+                    type="button"
                     onClick={handleSubmit}
                     disabled={!isValid || isSubmitting}
-                    className="rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-medium text-white shadow-lg shadow-teal-500/20 transition-all duration-200 hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="cp-button cp-button--primary"
                   >
-                    {isSubmitting ? 'Saving…' : 'Save'}
+                    {isSubmitting ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Add event'}
                   </button>
                 </div>
               </div>

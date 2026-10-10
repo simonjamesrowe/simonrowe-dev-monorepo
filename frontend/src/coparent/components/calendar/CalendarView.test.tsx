@@ -49,8 +49,8 @@ describe('CalendarView', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'Family Calendar' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add Event' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Family calendar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add event' })).toBeInTheDocument();
   });
 
   it('renders events in the current calendar view', () => {
@@ -82,7 +82,21 @@ describe('CalendarView', () => {
     );
 
     expect(screen.getByText('Visible Event')).toBeInTheDocument();
-    expect(screen.getByText('This Month').parentElement).toHaveTextContent('1 events');
+    expect(screen.getByText('This month').parentElement).toHaveTextContent('1 events');
+  });
+
+  it('names the add button for screen readers, whose text is hidden on a phone', () => {
+    render(
+      <CalendarView
+        parents={parents}
+        children={children}
+        events={[]}
+        scheduleChangeRequests={[]}
+        currentParentId="parent-1"
+      />,
+    );
+
+    expect(screen.getAllByRole('button', { name: 'Add event' }).length).toBeGreaterThan(0);
   });
 
   it('supports view switching', async () => {
@@ -175,7 +189,7 @@ describe('CalendarView', () => {
     // Tuesdays in October 2026: 6, 13 (skipped), 20, 27, plus the dentist on the 7th.
     const stat = (label: string) =>
       screen.getByText(label).parentElement?.textContent?.replace(label, '').trim();
-    expect(stat('This Month')).toBe('4 events');
+    expect(stat('This month')).toBe('4 events');
     expect(stat('Activities')).toBe('3 scheduled');
     expect(stat('Medical')).toBe('1 appointments');
   });

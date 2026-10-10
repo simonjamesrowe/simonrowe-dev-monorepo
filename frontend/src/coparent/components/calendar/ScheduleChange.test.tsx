@@ -150,4 +150,27 @@ describe('ScheduleChangeRequestModal', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Choose which occurrence');
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it('counts a one-day event as 1 day', () => {
+    open(vi.fn().mockResolvedValue(undefined));
+
+    expect(screen.getAllByText(/^1 day$|^1\s*day/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/^0\s*days/)).not.toBeInTheDocument();
+  });
+
+  it('names an invited co-parent and says they will see it when they join', () => {
+    render(
+      <ScheduleChangeRequestModal
+        isOpen
+        originalEvent={{ ...swimming, startDate: '2026-10-26', endDate: '2026-10-26' }}
+        parents={{ alice: parents[0], bob: { ...parents[1], name: 'Rhian' } }}
+        invitedParentIds={['bob']}
+        currentParentId="alice"
+      />,
+    );
+
+    expect(screen.getByText(/To Rhian/)).toBeInTheDocument();
+    expect(screen.getByText(/Rhian hasn't joined yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/will be notified/)).not.toBeInTheDocument();
+  });
 });

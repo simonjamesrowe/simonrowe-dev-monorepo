@@ -6,6 +6,7 @@ import { apiErrorMessage } from '../../lib/api/errorMessage';
 import type { Conversation, Message, PermissionRequest } from '../../lib/api/client';
 
 import type { MessagingAndPermissionsProps } from './types';
+import { pluralise } from '../../lib/formatters/text';
 
 type FilterMode = 'all' | 'message' | 'permission';
 
@@ -144,15 +145,11 @@ export function MessagingAndPermissions({
       <div className="relative mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-              Messaging & Permissions
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold text-slate-900 sm:text-3xl dark:text-white">
-              Clear, documented co-parent decisions
+            <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl dark:text-white">
+              Messages
             </h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-              Track conversations alongside formal approvals, all in one transparent view designed
-              for accountability.
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Conversations and permission requests between you and your co-parent
             </p>
           </div>
 
@@ -169,16 +166,18 @@ export function MessagingAndPermissions({
               </p>
             )}
             <button
+              type="button"
               onClick={onCreatePermissionRequest}
               disabled={!canCompose}
-              className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 dark:border-rose-900/60 dark:bg-rose-900/30 dark:text-rose-200"
+              className="cp-button cp-button--secondary"
             >
-              New permission
+              New permission request
             </button>
             <button
+              type="button"
               onClick={onCreateMessage}
               disabled={!canCompose}
-              className="inline-flex items-center gap-2 rounded-full bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-teal-500/25 transition hover:-translate-y-0.5 hover:bg-teal-700 active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:bg-teal-500 dark:text-slate-950"
+              className="cp-button cp-button--primary"
             >
               New message
             </button>
@@ -208,9 +207,9 @@ export function MessagingAndPermissions({
           <div className="rounded-3xl border border-slate-200/80 bg-white/80 shadow-xl shadow-slate-900/5 backdrop-blur dark:border-slate-800/60 dark:bg-slate-950/60">
             <div className="flex items-center justify-between border-b border-slate-200/70 px-5 py-4 dark:border-slate-800/70">
               <div>
-                <h2 className="text-base font-semibold text-slate-900 dark:text-white">Threads</h2>
+                <h2 className="text-base font-semibold text-slate-900 dark:text-white">Conversations</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {filteredConversations.length} active conversations
+                  {pluralise(filteredConversations.length, 'active conversation')}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -307,7 +306,7 @@ export function MessagingAndPermissions({
                       </div>
                       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                         {activeConversation.type === 'permission'
-                          ? 'Formal request with documented outcome'
+                          ? `Permission request with ${getOtherParentName(activeConversation, currentUserId)}`
                           : `Conversation with ${getOtherParentName(activeConversation, currentUserId)}`}
                       </p>
                     </div>
@@ -315,16 +314,18 @@ export function MessagingAndPermissions({
                       {activeConversation.unreadCount > 0 ? (
                         <button
                           onClick={() => onMarkAsRead?.(activeConversation.id)}
-                          className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 hover:border-slate-300 hover:text-slate-800 dark:border-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                          type="button"
+                          className="cp-button cp-button--secondary cp-button--sm"
                         >
-                          Mark read
+                          Mark as read
                         </button>
                       ) : (
                         <button
                           onClick={() => onMarkAsUnread?.(activeConversation.id)}
-                          className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 hover:border-slate-300 hover:text-slate-800 dark:border-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                          type="button"
+                          className="cp-button cp-button--secondary cp-button--sm"
                         >
-                          Mark unread
+                          Mark as unread
                         </button>
                       )}
                     </div>
@@ -352,13 +353,14 @@ export function MessagingAndPermissions({
                         value={draftMessage}
                         onChange={(event) => setDraftMessage(event.target.value)}
                         rows={2}
-                        placeholder="Write a message or follow up on a decision..."
+                        placeholder="Write a message or follow up on a decision"
                         className="w-full resize-none bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200 dark:placeholder:text-slate-500"
                       />
                     </div>
                     <button
+                      type="button"
                       onClick={handleSendMessage}
-                      className="inline-flex items-center justify-center rounded-2xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:-translate-y-0.5 hover:bg-teal-700 active:translate-y-0 dark:bg-teal-500 dark:text-slate-950"
+                      className="cp-button cp-button--primary"
                     >
                       Send
                     </button>
@@ -372,7 +374,7 @@ export function MessagingAndPermissions({
                     No conversations found
                   </p>
                   <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                    Adjust your filters or create a new message thread to get started.
+                    Change the filter, or start a new message.
                   </p>
                 </div>
               </div>
@@ -516,7 +518,7 @@ function PermissionPanel({
             value={responseText}
             onChange={(event) => onResponseChange(event.target.value)}
             rows={3}
-            placeholder="Share any notes or conditions..."
+            placeholder="Any notes or conditions"
             className="mt-3 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-teal-400 focus:ring-2 focus:ring-teal-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-teal-500/60 dark:focus:ring-teal-900/40"
           />
           {error && (
@@ -526,14 +528,16 @@ function PermissionPanel({
           )}
           <div className="mt-4 flex flex-wrap gap-3">
             <button
+              type="button"
               onClick={() => onApprove(permission.id)}
-              className="inline-flex items-center justify-center rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition hover:-translate-y-0.5 hover:bg-teal-700 active:translate-y-0 dark:bg-teal-500 dark:text-slate-950"
+              className="cp-button cp-button--primary"
             >
               Approve request
             </button>
             <button
+              type="button"
               onClick={() => onDeny(permission.id)}
-              className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-900/30 dark:text-rose-200"
+              className="cp-button cp-button--danger"
             >
               Deny request
             </button>

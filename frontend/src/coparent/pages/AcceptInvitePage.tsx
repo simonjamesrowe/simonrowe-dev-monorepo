@@ -119,7 +119,7 @@ const AcceptInvitePage = () => {
             </svg>
           </div>
           <h2 className="mb-2 text-xl font-bold text-slate-900 dark:text-white">
-            Invitation Accepted!
+            Invitation accepted
           </h2>
           <p className="mb-6 text-slate-500 dark:text-slate-400">
             You have successfully joined{' '}
@@ -127,9 +127,9 @@ const AcceptInvitePage = () => {
           </p>
           <button
             onClick={handleGoToDashboard}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-6 py-3 font-semibold text-white shadow-lg shadow-teal-500/25 transition-all hover:bg-teal-700"
+            className="cp-button cp-button--primary"
           >
-            Go to Dashboard
+            Go to dashboard
           </button>
         </div>
       </div>
@@ -156,22 +156,22 @@ const AcceptInvitePage = () => {
           </svg>
         </div>
         <h2 className="mb-2 text-xl font-bold text-slate-900 dark:text-white">
-          Unable to Accept Invitation
+          The invitation could not be accepted
         </h2>
         <p className="mb-6 text-slate-500 dark:text-slate-400">{errorMessage}</p>
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <button
             onClick={handleGoToLogin}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            className="cp-button cp-button--secondary"
           >
-            Return to Login
+            Return to login
           </button>
           {isAuthenticated && (
             <button
               onClick={handleGoToDashboard}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-6 py-3 font-semibold text-white shadow-lg shadow-teal-500/25 transition-all hover:bg-teal-700"
+              className="cp-button cp-button--primary"
             >
-              Go to Dashboard
+              Go to dashboard
             </button>
           )}
         </div>

@@ -81,7 +81,7 @@ export function InstallPrompt() {
                 onClick={() => setDismissed(true)}
                 className="rounded-lg bg-white/20 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/30"
               >
-                Not Now
+                Not now
               </button>
             </div>
           </div>

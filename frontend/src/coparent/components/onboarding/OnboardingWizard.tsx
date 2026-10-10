@@ -75,7 +75,7 @@ const getInvitationStatusBadge = (status: Invitation['status']) => {
     canceled: {
       bg: 'bg-rose-100 dark:bg-rose-900/30',
       text: 'text-rose-700 dark:text-rose-300',
-      label: 'Canceled',
+      label: 'Cancelled',
     },
   };
   return badges[status];
@@ -84,8 +84,8 @@ const getInvitationStatusBadge = (status: Invitation['status']) => {
 const STEPS: { id: WizardStep; label: string; description: string }[] = [
   { id: 'family', label: 'Family', description: 'Name your family' },
   { id: 'child', label: 'Children', description: 'Add profiles' },
-  { id: 'invite', label: 'Invite', description: 'Bring your co-parent' },
-  { id: 'review', label: 'Review', description: 'Confirm setup' },
+  { id: 'invite', label: 'Invite', description: 'Invite your co-parent' },
+  { id: 'review', label: 'Review', description: 'Check and finish' },
 ];
 
 interface OnboardingWizardProps {
@@ -383,10 +383,10 @@ export function OnboardingWizard({
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                    Name Your Family
+                    Name your family
                   </h2>
                   <p className="text-slate-500 dark:text-slate-400">
-                    This helps identify your co-parenting unit
+                    So you both know which family this is
                   </p>
                 </div>
               </div>
@@ -394,7 +394,7 @@ export function OnboardingWizard({
               <div className="space-y-6">
                 <div>
                   <label htmlFor="onboarding-full-name" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Your Full Name
+                    Your full name
                   </label>
                   <input
                     id="onboarding-full-name"
@@ -410,14 +410,14 @@ export function OnboardingWizard({
                 </div>
                 <div>
                   <label htmlFor="onboarding-family-name" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Family Name
+                    Family name
                   </label>
                   <input
                     id="onboarding-family-name"
                     type="text"
                     value={familyName}
                     onChange={(e) => setFamilyName(e.target.value)}
-                    placeholder="e.g., The Kingston Family"
+                    placeholder="e.g. The Kingston family"
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-slate-900 transition placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                   <p className="mt-2 text-xs text-slate-400">
@@ -434,7 +434,7 @@ export function OnboardingWizard({
                     list="location-options"
                     value={location}
                     onChange={(e) => handleLocationChange(e.target.value)}
-                    placeholder="Start typing a city (e.g., London)"
+                    placeholder="Start typing a city, e.g. London"
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-slate-900 transition placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                   <datalist id="location-options">
@@ -446,8 +446,8 @@ export function OnboardingWizard({
                   </datalist>
                   <p className="mt-2 text-xs text-slate-400">
                     {selectedLocation
-                      ? `Time zone inferred: ${selectedLocation.timeZone}`
-                      : 'Select a location to infer your time zone.'}
+                      ? `Time zone: ${selectedLocation.timeZone}`
+                      : 'Choose a location to set your time zone.'}
                   </p>
                   {familyError ? <p className="mt-2 text-xs text-rose-600">{familyError}</p> : null}
                 </div>
@@ -472,8 +472,8 @@ export function OnboardingWizard({
                         Why a family name?
                       </p>
                       <p className="mt-1 text-sm text-teal-700 dark:text-teal-300">
-                        The family name appears in your dashboard and helps organize shared
-                        schedules, expenses, and documents.
+                        It appears on your dashboard and on the schedules, expenses and documents
+                        you share.
                       </p>
                     </div>
                   </div>
@@ -485,7 +485,7 @@ export function OnboardingWizard({
                   type="button"
                   onClick={handleCreateFamily}
                   disabled={!familyName.trim() || !fullName.trim()}
-                  className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-8 py-3.5 font-semibold text-white shadow-lg shadow-teal-500/25 transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30 active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                  className="cp-button cp-button--primary"
                 >
                   Continue
                   <svg
@@ -527,10 +527,10 @@ export function OnboardingWizard({
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                    Add Your Children
+                    Add your children
                   </h2>
                   <p className="text-slate-500 dark:text-slate-400">
-                    Create profiles for each child you're co-parenting
+                    Add each child you share
                   </p>
                 </div>
               </div>
@@ -568,7 +568,7 @@ export function OnboardingWizard({
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="onboarding-child-name" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Child's Full Name <span className="text-rose-500">*</span>
+                      Child's full name <span className="text-rose-500">*</span>
                     </label>
                     <input
                       id="onboarding-child-name"
@@ -581,7 +581,7 @@ export function OnboardingWizard({
                   </div>
                   <div>
                     <label htmlFor="onboarding-child-dob" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Date of Birth <span className="text-rose-500">*</span>
+                      Date of birth <span className="text-rose-500">*</span>
                     </label>
                     <input
                       id="onboarding-child-dob"
@@ -601,13 +601,13 @@ export function OnboardingWizard({
                     type="text"
                     value={childSchool}
                     onChange={(e) => setChildSchool(e.target.value)}
-                    placeholder="e.g., Willow Creek Elementary"
+                    placeholder="e.g. Kilmorie Primary School"
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 transition placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
                 <div>
                   <label htmlFor="onboarding-child-medical-notes" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Medical Notes <span className="font-normal text-slate-400">(optional)</span>
+                    Medical notes <span className="font-normal text-slate-400">(optional)</span>
                   </label>
                   <textarea
                     id="onboarding-child-medical-notes"
@@ -622,7 +622,7 @@ export function OnboardingWizard({
                   type="button"
                   onClick={handleAddChild}
                   disabled={!childName.trim() || !childDob}
-                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 dark:disabled:bg-slate-700 dark:disabled:text-slate-500"
+                  className="cp-button cp-button--secondary"
                 >
                   <svg
                     className="h-4 w-4"
@@ -633,7 +633,7 @@ export function OnboardingWizard({
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
-                  Add Child
+                  Add child
                 </button>
               </div>
 
@@ -641,7 +641,7 @@ export function OnboardingWizard({
                 <button
                   type="button"
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                  className="cp-button cp-button--secondary"
                 >
                   <svg
                     className="h-4 w-4"
@@ -667,7 +667,7 @@ export function OnboardingWizard({
                     goNext();
                   }}
                   disabled={mergedChildren.length === 0 && (!childName.trim() || !childDob)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-8 py-3.5 font-semibold text-white shadow-lg shadow-teal-500/25 transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30 active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                  className="cp-button cp-button--primary"
                 >
                   Continue
                   <svg
@@ -709,10 +709,10 @@ export function OnboardingWizard({
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                    Invite Your Co-Parent
+                    Invite your co-parent
                   </h2>
                   <p className="text-slate-500 dark:text-slate-400">
-                    Send an invitation to collaborate
+                    They'll get an email asking them to join
                   </p>
                 </div>
               </div>
@@ -746,7 +746,7 @@ export function OnboardingWizard({
                               <button
                                 type="button"
                                 onClick={() => onResendInvite?.(invite.id)}
-                                className="rounded-lg border border-violet-200 px-3 py-1 text-xs font-semibold text-violet-700 transition hover:bg-violet-100 dark:border-violet-700 dark:text-violet-200 dark:hover:bg-violet-800"
+                                className="cp-button cp-button--secondary cp-button--sm"
                               >
                                 Resend
                               </button>
@@ -762,7 +762,7 @@ export function OnboardingWizard({
               <div className="space-y-5">
                 <div>
                   <label htmlFor="onboarding-invite-name" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Co-Parent Name (optional)
+                    Their name (optional)
                   </label>
                   <input
                     id="onboarding-invite-name"
@@ -776,7 +776,7 @@ export function OnboardingWizard({
                 </div>
                 <div>
                   <label htmlFor="onboarding-invite-email" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Co-Parent Email
+                    Their email
                   </label>
                   <input
                     id="onboarding-invite-email"
@@ -797,7 +797,7 @@ export function OnboardingWizard({
                     onChange={(e) => setInviteRole(e.target.value as ParentRole)}
                     className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   >
-                    <option value="co-parent">Co-Parent</option>
+                    <option value="co-parent">Co-parent</option>
                     <option value="primary">Primary</option>
                   </select>
                 </div>
@@ -807,7 +807,7 @@ export function OnboardingWizard({
                 <button
                   type="button"
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                  className="cp-button cp-button--secondary"
                 >
                   <svg
                     className="h-4 w-4"
@@ -828,7 +828,7 @@ export function OnboardingWizard({
                   <button
                     type="button"
                     onClick={goNext}
-                    className="inline-flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                    className="cp-button cp-button--secondary"
                   >
                     Skip
                   </button>
@@ -836,9 +836,9 @@ export function OnboardingWizard({
                     type="button"
                     onClick={handleInvite}
                     disabled={!inviteEmail.trim()}
-                    className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-8 py-3.5 font-semibold text-white shadow-lg shadow-teal-500/25 transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30 active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="cp-button cp-button--primary"
                   >
-                    Send Invite
+                    Send invitation
                     <svg
                       className="h-4 w-4"
                       fill="none"
@@ -879,9 +879,9 @@ export function OnboardingWizard({
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                    Review & Complete
+                    Review and finish
                   </h2>
-                  <p className="text-slate-500 dark:text-slate-400">Confirm your setup details</p>
+                  <p className="text-slate-500 dark:text-slate-400">Check everything before you finish</p>
                 </div>
               </div>
 
@@ -895,7 +895,7 @@ export function OnboardingWizard({
                   </p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     {selectedLocation?.label ? `Location: ${selectedLocation.label} • ` : ''}
-                    Time Zone: {activeFamily?.timeZone || timeZone}
+                    Time zone: {activeFamily?.timeZone || timeZone}
                   </p>
                 </div>
 
@@ -934,7 +934,7 @@ export function OnboardingWizard({
                 <button
                   type="button"
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                  className="cp-button cp-button--secondary"
                 >
                   <svg
                     className="h-4 w-4"
@@ -954,9 +954,9 @@ export function OnboardingWizard({
                 <button
                   type="button"
                   onClick={handleComplete}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-8 py-3.5 font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all duration-200 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-500/30 active:translate-y-0"
+                  className="cp-button cp-button--primary"
                 >
-                  Complete Setup
+                  Finish setup
                   <svg
                     className="h-4 w-4"
                     fill="none"

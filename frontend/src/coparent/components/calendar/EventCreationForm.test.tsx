@@ -45,7 +45,7 @@ describe('EventCreationForm', () => {
       />,
     );
 
-    expect(screen.getByPlaceholderText('e.g. Emma Soccer Practice')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('e.g. Football training')).toBeInTheDocument();
     expect(screen.getByText('Start date')).toBeInTheDocument();
     expect(screen.getByText('End date')).toBeInTheDocument();
     expect(screen.getByText('Event type')).toBeInTheDocument();
@@ -91,7 +91,7 @@ describe('EventCreationForm', () => {
 
     expect(onValidationChange).toHaveBeenCalledWith(false);
 
-    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Science Fair');
+    await user.type(screen.getByPlaceholderText('e.g. Football training'), 'Science Fair');
     expect(onValidationChange).toHaveBeenLastCalledWith(true);
   });
 
@@ -111,7 +111,7 @@ describe('EventCreationForm', () => {
       />,
     );
 
-    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Parent Conference');
+    await user.type(screen.getByPlaceholderText('e.g. Football training'), 'Parent Conference');
 
     await act(async () => {
       ref.current?.submit();
@@ -144,7 +144,7 @@ describe('EventCreationForm', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /custody/i }));
-    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Custody block');
+    await user.type(screen.getByPlaceholderText('e.g. Football training'), 'Custody block');
 
     await act(async () => {
       ref.current?.submit();
@@ -173,7 +173,7 @@ describe('EventCreationForm', () => {
       />,
     );
 
-    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Weekly therapy');
+    await user.type(screen.getByPlaceholderText('e.g. Football training'), 'Weekly therapy');
     const customType = screen.getByPlaceholderText('e.g. Therapy, Travel, Birthday');
     await user.clear(customType);
     await user.type(customType, 'therapy');
@@ -204,7 +204,7 @@ describe('EventCreationForm', () => {
     await user.click(samButtons[0]);
     await user.type(screen.getByPlaceholderText('Add location or address'), 'Community Centre');
     await user.type(
-      screen.getByPlaceholderText('Add reminders, what to bring, or additional details'),
+      screen.getByPlaceholderText('Reminders, what to bring and anything else'),
       'Bring paperwork',
     );
 
@@ -327,7 +327,7 @@ describe('EventCreationForm', () => {
         onSubmit={onSubmit}
       />,
     );
-    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Cricket');
+    await user.type(screen.getByPlaceholderText('e.g. Football training'), 'Cricket');
     const endDate = () => container.querySelectorAll<HTMLInputElement>('input[type="date"]')[1];
 
     await user.click(screen.getByRole('button', { name: 'Every week' }));
@@ -362,7 +362,7 @@ describe('EventCreationForm', () => {
     // The family's children arrive after the drawer has mounted.
     const { rerender } = render(<EventCreationForm ref={ref} {...props} children={[]} />);
     rerender(<EventCreationForm ref={ref} {...props} children={children} />);
-    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Dentist');
+    await user.type(screen.getByPlaceholderText('e.g. Football training'), 'Dentist');
 
     expect(onValidationChange).toHaveBeenLastCalledWith(true);
     await user.click(screen.getByRole('button', { name: 'Theo' }));
@@ -385,7 +385,7 @@ describe('EventCreationForm', () => {
       />,
     );
 
-    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Football training');
+    await user.type(screen.getByPlaceholderText('e.g. Football training'), 'Football training');
     expect(screen.getByTestId('event-summary')).toHaveTextContent(
       'Theo — Football training · Tue 13 Oct, 16:00–17:30',
     );

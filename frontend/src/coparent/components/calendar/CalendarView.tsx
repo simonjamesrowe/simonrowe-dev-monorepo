@@ -119,7 +119,7 @@ export function CalendarView({
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-slate-800 sm:text-3xl dark:text-slate-100">
-                Family Calendar
+                Family calendar
               </h1>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 Shared schedule for {children.map((c) => c.name).join(' & ')}
@@ -132,7 +132,7 @@ export function CalendarView({
                 <button
                   type="button"
                   onClick={() => onViewRequest?.()}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  className="cp-button cp-button--secondary"
                 >
                   Change requests
                 </button>
@@ -148,10 +148,12 @@ export function CalendarView({
                 />
               )}
 
-              {/* Add Event Button */}
+              {/* Add event button: icon only on a phone, so it carries its name in aria-label */}
               <button
+                aria-label="Add event"
+                type="button"
                 onClick={handleCreateEventClick}
-                className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-teal-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30 active:translate-y-0"
+                className="cp-button cp-button--primary"
               >
                 <svg
                   className="h-4 w-4"
@@ -162,7 +164,7 @@ export function CalendarView({
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
-                <span className="hidden sm:inline">Add Event</span>
+                <span className="hidden sm:inline">Add event</span>
               </button>
             </div>
           </div>
@@ -228,7 +230,7 @@ export function CalendarView({
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             {
-              label: 'This Month',
+              label: 'This month',
               value: monthOccurrences.length,
               suffix: 'events',
             },

@@ -382,7 +382,7 @@ const StatementsPage = () => {
         {checking ? (
           <span className="statement-chip statement-chip--low">Checking</span>
         ) : suggested > 0 ? (
-          <button type="button" className="expense-button expense-button--teal expense-button--sm" onClick={() => setTab('review')}>
+          <button type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={() => setTab('review')}>
             Review
           </button>
         ) : (
@@ -432,12 +432,12 @@ const StatementsPage = () => {
           <div className="statement-row__buttons">
             <button
               type="button"
-              className={`expense-button expense-button--sm ${suggestion?.confidence === 'low' ? 'expense-button--ghost' : 'expense-button--primary'}`}
+              className={`cp-button cp-button--sm ${suggestion?.confidence === 'low' ? 'cp-button--secondary' : 'cp-button--primary'}`}
               onClick={() => openSuggestion(transaction)}
             >
               Turn into expense
             </button>
-            <button type="button" className="expense-button expense-button--text" onClick={() => notShared(transaction)}>
+            <button type="button" className="cp-button cp-button--quiet" onClick={() => notShared(transaction)}>
               Not shared
             </button>
           </div>
@@ -460,12 +460,12 @@ const StatementsPage = () => {
         </p>
       </div>
       {transaction.status === 'logged' && transaction.expenseTitle && transaction.expenseId ? (
-        <Link className="expense-button expense-button--ghost expense-button--sm" to={`/expenses?expense=${transaction.expenseId}`}>
+        <Link className="cp-button cp-button--secondary cp-button--sm" to={`/expenses?expense=${transaction.expenseId}`}>
           Open expense
         </Link>
       ) : transaction.status === 'dismissed' ? (
-        <button type="button" className="expense-button expense-button--text" onClick={() => forgetDecision(transaction)}>
-          Forget
+        <button type="button" className="cp-button cp-button--quiet" onClick={() => forgetDecision(transaction)}>
+          Forget decision
         </button>
       ) : null}
     </article>
@@ -491,7 +491,7 @@ const StatementsPage = () => {
           <>
             {row.state === 'suggested' && <span className="statement-chip statement-chip--medium">Suggested</span>}
             {row.state === 'dismissed' && <span className="statement-chip statement-chip--seen">Not shared</span>}
-            <button type="button" className="expense-button expense-button--ghost expense-button--sm" onClick={() => openRow(row, uploadId)}>
+            <button type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={() => openRow(row, uploadId)}>
               Turn into expense
             </button>
           </>
@@ -528,7 +528,7 @@ const StatementsPage = () => {
           </p>
         </div>
         {tab !== 'import' && (
-          <button type="button" className="expense-button expense-button--ghost" onClick={() => setTab('import')}>
+          <button type="button" className="cp-button cp-button--secondary" onClick={() => setTab('import')}>
             <Upload size={16} aria-hidden="true" /> Import more
           </button>
         )}
@@ -573,11 +573,11 @@ const StatementsPage = () => {
             </div>
             <button
               type="button"
-              className="expense-button expense-button--primary"
+              className="cp-button cp-button--primary"
               disabled={uploading}
               onClick={() => fileInput.current?.click()}
             >
-              {uploading ? 'Working…' : 'Choose files'}
+              {uploading ? 'Uploading…' : 'Choose files'}
             </button>
             <input
               ref={fileInput}
@@ -620,7 +620,7 @@ const StatementsPage = () => {
           ) : transactions.length === 0 ? (
             <div className="expense-empty">
               <p>Nothing waiting for you.</p>
-              <button type="button" className="expense-button expense-button--primary" onClick={() => setTab('import')}>
+              <button type="button" className="cp-button cp-button--primary" onClick={() => setTab('import')}>
                 <Upload size={16} aria-hidden="true" /> Import a statement
               </button>
             </div>

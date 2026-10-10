@@ -12986,22 +12986,6 @@ body[data-narration-bar] .app-layout__main {
 .coparent-app .expense-eyebrow { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--expense-muted); }
 .coparent-app .expense-eyebrow--teal { color: var(--expense-teal-strong); }
 
-/* buttons */
-.coparent-app .expense-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border: 1px solid transparent; border-radius: 12px; font-size: 14px; font-weight: 600; white-space: nowrap; transition: background-color 0.15s; }
-.coparent-app .expense-button:disabled { opacity: 0.55; cursor: not-allowed; }
-.coparent-app .expense-button--sm { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
-.coparent-app .expense-button--primary { background: var(--expense-teal-strong); color: #ffffff; box-shadow: 0 8px 18px -8px rgba(13, 148, 136, 0.6); }
-.coparent-app .expense-button--primary:hover:not(:disabled) { background: #115e59; }
-.coparent-app .expense-button--ghost { background: var(--expense-surface); border-color: var(--expense-border-strong); color: var(--expense-text-2); }
-.coparent-app .expense-button--ghost:hover:not(:disabled) { background: var(--expense-surface-3); }
-.coparent-app .expense-button--teal { background: var(--expense-surface); border-color: var(--expense-teal); color: var(--expense-teal-strong); }
-.coparent-app .expense-button--danger { background: var(--expense-surface); border-color: var(--expense-rose-line); color: var(--expense-rose-text); }
-.coparent-app .expense-button--danger:hover:not(:disabled) { background: var(--expense-rose-tint); }
-.coparent-app .expense-button--danger-solid { background: var(--expense-rose); color: #ffffff; }
-.coparent-app .expense-button--text { padding: 8px 6px; border: 0; background: none; color: var(--expense-muted); font-weight: 500; }
-.coparent-app .expense-button--text:hover:not(:disabled) { color: var(--expense-text); }
-.coparent-app .expense-button--danger-text { color: var(--expense-rose-text); }
-.coparent-app .expense-icon-button { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--expense-border); border-radius: 12px; background: var(--expense-surface); color: var(--expense-text-2); }
 
 /* cards */
 .coparent-app .expense-cards { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 16px; margin-bottom: 26px; }
@@ -13226,11 +13210,6 @@ body[data-narration-bar] .app-layout__main {
 .coparent-app .cp-brief__hint { color: var(--expense-muted); }
 
 .coparent-app .cp-brief__actions { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
-.coparent-app .cp-brief__btn { padding: 7px 14px; border: 1px solid var(--expense-border-strong); border-radius: 999px; background: var(--expense-surface); color: var(--expense-text); font-size: 14px; font-weight: 600; }
-.coparent-app .cp-brief__btn:hover:not(:disabled) { border-color: var(--expense-teal); }
-.coparent-app .cp-brief__btn--primary { border-color: var(--expense-teal-strong); background: var(--expense-teal-strong); color: #fff; }
-.coparent-app .cp-brief__btn--primary:hover:not(:disabled) { background: var(--expense-teal); }
-.coparent-app .cp-brief__btn:disabled { opacity: 0.6; }
 .coparent-app .cp-brief__link { padding: 0; color: var(--expense-teal-strong); font-size: 14px; font-weight: 600; }
 .coparent-app .cp-brief__link:hover { text-decoration: underline; }
 
@@ -13332,11 +13311,11 @@ body[data-narration-bar] .app-layout__main {
   .coparent-app .expense-row__share { display: none; }
   .coparent-app .expense-row__status { align-items: stretch; }
   .coparent-app .expense-row__status .expense-chip { align-self: flex-start; }
-  .coparent-app .expense-row__actions .expense-button { flex: 1; }
   .coparent-app .expense-drawer { max-width: none; border-left: 0; }
   .coparent-app .expense-drawer__body { padding: 18px; }
   .coparent-app .expense-drawer__foot { padding: 12px 18px; }
-  .coparent-app .expense-grid2, .coparent-app .expense-grid2--wide-first { grid-template-columns: 1fr; }
+  /* --keep pairs that fit a phone side by side, such as amount and category. */
+  .coparent-app .expense-grid2:not(.expense-grid2--keep), .coparent-app .expense-grid2--wide-first { grid-template-columns: 1fr; }
   .coparent-app .expense-facts { grid-template-columns: 118px 1fr; }
 }
 
@@ -13436,6 +13415,64 @@ body[data-narration-bar] .app-layout__main {
 .coparent-app .event-form { display: flex; flex-direction: column; gap: 18px; }
 .coparent-app .event-form__summary { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 16px; border: 1px solid var(--expense-teal-line); border-radius: 16px; background: var(--expense-teal-tint); color: var(--expense-text); font-size: 15px; font-weight: 500; line-height: 1.45; }
 .coparent-app .event-form__summary svg { flex: none; margin-top: 2px; color: var(--expense-teal-strong); }
+
+/*
+ * CoParent buttons: the one standard for forms, drawers, dialogs and page headers. Hand-written
+ * BEM like the expense block, drawn with its --expense-* tokens, so light and dark both follow.
+ *
+ *   .cp-button                 base: 40px tall, 12px radius, 14px semibold, teal focus ring
+ *   .cp-button--primary        the main action (solid teal); one per form, drawer or dialog
+ *   .cp-button--secondary      every other action, Cancel included (bordered)
+ *   .cp-button--danger         starts a destructive action (rose border), e.g. "Delete"
+ *   .cp-button--danger-solid   confirms one (solid rose), e.g. "Confirm delete"
+ *   .cp-button--quiet          a low-key extra beside the others (text only); add --danger for rose
+ *   .cp-button--sm             32px tall, for rows, cards and banners
+ *   .cp-icon-button            40px square, icon only, e.g. a drawer's close; needs an aria-label
+ *   .cp-icon-button--sm        32px square, for an icon action in a row
+ *
+ * components/ui/CloseButton renders the close button. Scoped to .coparent-app and to Quick add's
+ * .assistant-drawer (Vaul portals it outside .coparent-app), so Quick add can adopt these too.
+ * The compiled utility blob comes later in the file and wins a tie, so a button wearing these
+ * classes must not also carry utilities for colour, padding, border, radius or type.
+ */
+.coparent-app,
+.assistant-drawer {
+  --cp-primary-hover: #115e59;
+  --cp-danger-solid: #e11d48;
+  --cp-danger-solid-hover: #be123c;
+}
+
+@media (prefers-color-scheme: dark) {
+  .coparent-app,
+  .assistant-drawer {
+    --cp-primary-hover: #0f766e;
+  }
+}
+
+:is(.coparent-app, .assistant-drawer) .cp-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 16px; border: 1px solid transparent; border-radius: 12px; font-size: 14px; font-weight: 600; line-height: 20px; text-align: center; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background-color 0.15s, border-color 0.15s, color 0.15s; }
+:is(.coparent-app, .assistant-drawer) .cp-button:focus-visible,
+:is(.coparent-app, .assistant-drawer) .cp-icon-button:focus-visible { outline: 2px solid var(--expense-teal); outline-offset: 2px; }
+:is(.coparent-app, .assistant-drawer) .cp-button:disabled,
+:is(.coparent-app, .assistant-drawer) .cp-icon-button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+:is(.coparent-app, .assistant-drawer) .cp-button--sm { padding: 5px 12px; border-radius: 10px; font-size: 13px; }
+:is(.coparent-app, .assistant-drawer) .cp-button--primary { background: var(--expense-teal-strong); color: #ffffff; box-shadow: 0 8px 18px -8px rgba(13, 148, 136, 0.6); }
+:is(.coparent-app, .assistant-drawer) .cp-button--primary:hover:not(:disabled) { background: var(--cp-primary-hover); }
+:is(.coparent-app, .assistant-drawer) .cp-button--secondary { border-color: var(--expense-border-strong); background: var(--expense-surface); color: var(--expense-text-2); }
+:is(.coparent-app, .assistant-drawer) .cp-button--secondary:hover:not(:disabled) { background: var(--expense-surface-3); }
+:is(.coparent-app, .assistant-drawer) .cp-button--danger { border-color: var(--expense-rose-line); background: var(--expense-surface); color: var(--expense-rose-text); }
+:is(.coparent-app, .assistant-drawer) .cp-button--danger:hover:not(:disabled) { background: var(--expense-rose-tint); }
+:is(.coparent-app, .assistant-drawer) .cp-button--danger-solid { background: var(--cp-danger-solid); color: #ffffff; }
+:is(.coparent-app, .assistant-drawer) .cp-button--danger-solid:hover:not(:disabled) { background: var(--cp-danger-solid-hover); }
+:is(.coparent-app, .assistant-drawer) .cp-button--quiet { padding-right: 8px; padding-left: 8px; border-color: transparent; background: transparent; color: var(--expense-muted); font-weight: 500; }
+:is(.coparent-app, .assistant-drawer) .cp-button--quiet:hover:not(:disabled) { background: var(--expense-surface-3); color: var(--expense-text); }
+:is(.coparent-app, .assistant-drawer) .cp-button--quiet.cp-button--danger { border-color: transparent; background: transparent; color: var(--expense-rose-text); }
+:is(.coparent-app, .assistant-drawer) .cp-button--quiet.cp-button--danger:hover:not(:disabled) { background: var(--expense-rose-tint); }
+:is(.coparent-app, .assistant-drawer) .cp-icon-button { display: inline-grid; flex: none; place-items: center; width: 40px; height: 40px; padding: 0; border: 1px solid var(--expense-border); border-radius: 12px; background: var(--expense-surface); color: var(--expense-text-2); cursor: pointer; transition: background-color 0.15s, color 0.15s; }
+:is(.coparent-app, .assistant-drawer) .cp-icon-button:hover:not(:disabled) { background: var(--expense-surface-3); color: var(--expense-text); }
+:is(.coparent-app, .assistant-drawer) .cp-icon-button--sm { width: 32px; height: 32px; border-radius: 10px; }
+@media (max-width: 767px) {
+  .coparent-app .expense-row__actions .cp-button { flex: 1; }
+}
 
 /* Quick add cards: what the action does is readable while the card is closed. */
 .assistant-card__heading { display: flex; min-width: 0; flex-direction: column; gap: 0.2rem; }

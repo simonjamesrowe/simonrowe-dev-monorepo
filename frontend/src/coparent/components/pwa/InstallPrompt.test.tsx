@@ -12,11 +12,11 @@ describe('InstallPrompt', () => {
   beforeEach(() => window.localStorage.clear());
   afterEach(() => window.localStorage.clear());
 
-  it('stays dismissed after "Not Now" when the page is loaded again', async () => {
+  it('stays dismissed after "Not now" when the page is loaded again', async () => {
     const user = userEvent.setup();
     const { unmount } = render(<InstallPrompt />);
 
-    await user.click(screen.getByRole('button', { name: 'Not Now' }));
+    await user.click(screen.getByRole('button', { name: 'Not now' }));
     expect(screen.queryByText('Install CoParent')).not.toBeInTheDocument();
 
     unmount();

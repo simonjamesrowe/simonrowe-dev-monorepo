@@ -1,9 +1,9 @@
-import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Drawer } from 'vaul';
 
 import type { PermissionRequestType } from '../../lib/api/client';
 import { apiErrorMessage } from '../../lib/api/errorMessage';
+import { CloseButton } from '../ui/CloseButton';
 
 export type ComposeMode = 'message' | 'permission';
 
@@ -143,14 +143,7 @@ export function ComposeDrawer({
                     </p>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                  aria-label="Close"
-                >
-                  <X size={20} />
-                </button>
+                <CloseButton onClick={onClose} />
               </div>
 
               <div className="flex-1 overflow-y-auto p-6">
@@ -232,17 +225,13 @@ export function ComposeDrawer({
                   </p>
                 )}
                 <div className="flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
+                  <button type="button" onClick={onClose} className="cp-button cp-button--secondary">
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={!valid || submitting}
-                    className="rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-medium text-white shadow-lg shadow-teal-500/20 transition-all duration-200 hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="cp-button cp-button--primary"
                   >
                     {submitting ? 'Sending…' : isPermission ? 'Send request' : 'Send message'}
                   </button>

@@ -188,13 +188,13 @@ export function ExpenseDetailDrawer({
   const secondary: React.ReactNode[] = [];
   if (mode === 'dispute' || mode === 'reject') {
     primary.push(
-      <button key="cancel" type="button" className="expense-button expense-button--ghost" onClick={() => setMode(null)}>
+      <button key="cancel" type="button" className="cp-button cp-button--secondary" onClick={() => setMode(null)}>
         Cancel
       </button>,
       <button
         key="send"
         type="button"
-        className="expense-button expense-button--danger-solid"
+        className="cp-button cp-button--danger-solid"
         disabled={!note.trim() || busy}
         onClick={() =>
           mode === 'dispute'
@@ -207,13 +207,13 @@ export function ExpenseDetailDrawer({
     );
   } else if (mode === 'claim') {
     primary.push(
-      <button key="cancel" type="button" className="expense-button expense-button--ghost" onClick={() => setMode(null)}>
+      <button key="cancel" type="button" className="cp-button cp-button--secondary" onClick={() => setMode(null)}>
         Cancel
       </button>,
       <button
         key="claim"
         type="button"
-        className="expense-button expense-button--primary"
+        className="cp-button cp-button--primary"
         disabled={busy}
         onClick={() =>
           step('reimbursement/claim', 'Marked as paid back', `${otherName} will be asked to confirm it arrived.`, note.trim() || undefined)
@@ -225,13 +225,13 @@ export function ExpenseDetailDrawer({
   } else if (mode === 'markPaid') {
     const amount = parsePounds(paidAmount);
     primary.push(
-      <button key="cancel" type="button" className="expense-button expense-button--ghost" onClick={() => setMode(null)}>
+      <button key="cancel" type="button" className="cp-button cp-button--secondary" onClick={() => setMode(null)}>
         Cancel
       </button>,
       <button
         key="paid"
         type="button"
-        className="expense-button expense-button--primary"
+        className="cp-button cp-button--primary"
         disabled={!amount || !paidOn || busy}
         onClick={() =>
           amount &&
@@ -247,13 +247,13 @@ export function ExpenseDetailDrawer({
     );
   } else {
     secondary.push(
-      <button key="discuss" type="button" className="expense-button expense-button--ghost" onClick={() => onDiscuss(expense)}>
+      <button key="discuss" type="button" className="cp-button cp-button--secondary" onClick={() => onDiscuss(expense)}>
         <MessageSquare size={16} aria-hidden="true" /> Discuss
       </button>,
     );
     if (canEdit(expense) && !status.actions.includes('edit')) {
       secondary.push(
-        <button key="edit" type="button" className="expense-button expense-button--text" onClick={() => onEdit(expense)}>
+        <button key="edit" type="button" className="cp-button cp-button--quiet" onClick={() => onEdit(expense)}>
           <Pencil size={15} aria-hidden="true" /> Edit
         </button>,
       );
@@ -263,7 +263,7 @@ export function ExpenseDetailDrawer({
         <button
           key="delete"
           type="button"
-          className="expense-button expense-button--text expense-button--danger-text"
+          className="cp-button cp-button--quiet cp-button--danger"
           disabled={busy}
           onClick={() =>
             run(async () => {
@@ -279,7 +279,7 @@ export function ExpenseDetailDrawer({
     for (const action of status.actions) {
       if (action === 'dispute') {
         primary.push(
-          <button key="dispute" type="button" className="expense-button expense-button--danger" onClick={() => setMode('dispute')}>
+          <button key="dispute" type="button" className="cp-button cp-button--danger" onClick={() => setMode('dispute')}>
             Dispute
           </button>,
         );
@@ -289,7 +289,7 @@ export function ExpenseDetailDrawer({
           <button
             key="agree"
             type="button"
-            className="expense-button expense-button--primary"
+            className="cp-button cp-button--primary"
             disabled={busy}
             onClick={() => step('agree', 'Agreed', expense.timing === 'paid' && expense.owedPence > 0 ? 'It now counts towards the balance.' : undefined)}
           >
@@ -299,21 +299,21 @@ export function ExpenseDetailDrawer({
       }
       if (action === 'edit') {
         primary.push(
-          <button key="edit" type="button" className="expense-button expense-button--primary" onClick={() => onEdit(expense)}>
+          <button key="edit" type="button" className="cp-button cp-button--primary" onClick={() => onEdit(expense)}>
             <Pencil size={15} aria-hidden="true" /> Edit and resend
           </button>,
         );
       }
       if (action === 'markPaid') {
         primary.push(
-          <button key="markPaid" type="button" className="expense-button expense-button--primary" onClick={() => setMode('markPaid')}>
+          <button key="markPaid" type="button" className="cp-button cp-button--primary" onClick={() => setMode('markPaid')}>
             Mark as paid
           </button>,
         );
       }
       if (action === 'claim') {
         primary.push(
-          <button key="claim" type="button" className="expense-button expense-button--primary" onClick={() => setMode('claim')}>
+          <button key="claim" type="button" className="cp-button cp-button--primary" onClick={() => setMode('claim')}>
             Mark paid back
           </button>,
         );
@@ -323,9 +323,9 @@ export function ExpenseDetailDrawer({
           <button
             key="mark"
             type="button"
-            className="expense-button expense-button--teal"
+            className="cp-button cp-button--secondary"
             disabled={busy}
-            onClick={() => step('reimbursement/mark', 'Settled', `${expense.title} is settled.`)}
+            onClick={() => step('reimbursement/mark', 'Marked as reimbursed', `${expense.title} is settled.`)}
           >
             Mark as reimbursed
           </button>,
@@ -333,7 +333,7 @@ export function ExpenseDetailDrawer({
       }
       if (action === 'reject') {
         primary.push(
-          <button key="reject" type="button" className="expense-button expense-button--ghost" onClick={() => setMode('reject')}>
+          <button key="reject" type="button" className="cp-button cp-button--secondary" onClick={() => setMode('reject')}>
             Not received yet
           </button>,
         );
@@ -343,9 +343,9 @@ export function ExpenseDetailDrawer({
           <button
             key="confirm"
             type="button"
-            className="expense-button expense-button--primary"
+            className="cp-button cp-button--primary"
             disabled={busy}
-            onClick={() => step('reimbursement/confirm', 'Settled', `${expense.title} is settled.`)}
+            onClick={() => step('reimbursement/confirm', 'Marked as received', `${expense.title} is settled.`)}
           >
             <Check size={16} aria-hidden="true" /> Confirm received
           </button>,

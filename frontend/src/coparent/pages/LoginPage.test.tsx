@@ -45,8 +45,8 @@ describe('LoginPage', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('button', { name: 'Sign In' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create Account' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
   });
 
   it('calls loginWithRedirect on sign in click', async () => {
@@ -58,7 +58,7 @@ describe('LoginPage', () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Sign In' }));
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(loginWithRedirectMock).toHaveBeenCalledWith();
   });
 
@@ -71,7 +71,7 @@ describe('LoginPage', () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
     expect(loginWithRedirectMock).toHaveBeenCalledWith({
       authorizationParams: {
         screen_hint: 'signup',

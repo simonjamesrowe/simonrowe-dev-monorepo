@@ -9,6 +9,7 @@ import type {
   ParentRole,
 } from '../../lib/api/client';
 import { formatDate } from '../../lib/formatters/date';
+import { CloseButton } from '../ui/CloseButton';
 
 type ChildDraft = {
   fullName: string;
@@ -56,7 +57,7 @@ function getInvitationStatusBadge(status: InvitationStatus) {
     canceled: {
       bg: 'bg-rose-100 dark:bg-rose-900/30',
       text: 'text-rose-700 dark:text-rose-300',
-      label: 'Canceled',
+      label: 'Cancelled',
     },
   };
   return badges[status];
@@ -72,7 +73,7 @@ function getRoleBadge(role: ParentRole) {
     : {
         bg: 'bg-violet-100 dark:bg-violet-900/30',
         text: 'text-violet-700 dark:text-violet-300',
-        label: 'Co-Parent',
+        label: 'Co-parent',
       };
 }
 
@@ -232,13 +233,7 @@ export function FamilySetupHub({
                   {editingChild.fullName}
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={closeEditor}
-                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300"
-              >
-                Close
-              </button>
+              <CloseButton onClick={closeEditor} />
             </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -247,7 +242,7 @@ export function FamilySetupHub({
                   htmlFor="child-edit-full-name"
                   className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400"
                 >
-                  Full Name
+                  Full name
                 </label>
                 <input
                   id="child-edit-full-name"
@@ -262,7 +257,7 @@ export function FamilySetupHub({
                   htmlFor="child-edit-date-of-birth"
                   className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400"
                 >
-                  Date of Birth
+                  Date of birth
                 </label>
                 <input
                   id="child-edit-date-of-birth"
@@ -292,7 +287,7 @@ export function FamilySetupHub({
                   htmlFor="child-edit-medical-notes"
                   className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400"
                 >
-                  Medical Notes (optional)
+                  Medical notes (optional)
                 </label>
                 <textarea
                   id="child-edit-medical-notes"
@@ -305,18 +300,14 @@ export function FamilySetupHub({
             </div>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={closeEditor}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:text-slate-200"
-              >
+              <button type="button" onClick={closeEditor} className="cp-button cp-button--secondary">
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSaveChild}
                 disabled={!editChildName.trim() || !editChildDob}
-                className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-teal-500/20 transition hover:bg-teal-700 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                className="cp-button cp-button--primary"
               >
                 Save changes
               </button>
@@ -355,7 +346,7 @@ export function FamilySetupHub({
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Family Setup
+                Family setup
               </p>
               <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white">
                 {activeFamily.name}
@@ -363,8 +354,7 @@ export function FamilySetupHub({
             </div>
           </div>
           <p className="max-w-2xl text-slate-500 dark:text-slate-400">
-            Manage your family details, child profiles, co-parent invitations, and role assignments
-            all in one place.
+            Your family's details, children, parents and invitations.
           </p>
         </div>
 
@@ -388,7 +378,7 @@ export function FamilySetupHub({
           </div>
           <div className="rounded-xl border border-slate-200/60 bg-white/70 p-4 backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-800/50">
             <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
-              Pending Invites
+              Pending invitations
             </p>
             <p className="mt-2 text-2xl font-bold text-amber-600 dark:text-amber-400">
               {pendingInvites.length}
@@ -396,7 +386,7 @@ export function FamilySetupHub({
           </div>
           <div className="rounded-xl border border-slate-200/60 bg-white/70 p-4 backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-800/50">
             <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
-              Time Zone
+              Time zone
             </p>
             <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
               {activeFamily.timeZone.split('/')[1]?.replace('_', ' ') || activeFamily.timeZone}
@@ -427,13 +417,13 @@ export function FamilySetupHub({
                     </svg>
                   </div>
                   <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                    Family Details
+                    Family details
                   </h2>
                 </div>
                 <button
                   type="button"
                   onClick={() => onUpdateFamily?.(activeFamily.id, {})}
-                  className="text-sm font-medium text-teal-600 transition hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
+                  className="cp-button cp-button--secondary cp-button--sm"
                 >
                   Edit
                 </button>
@@ -441,13 +431,13 @@ export function FamilySetupHub({
             </div>
             <div className="space-y-4 p-6">
               <div>
-                <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">Family Name</p>
+                <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">Family name</p>
                 <p className="text-base font-semibold text-slate-900 dark:text-white">
                   {activeFamily.name}
                 </p>
               </div>
               <div>
-                <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">Time Zone</p>
+                <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">Time zone</p>
                 <p className="text-base font-medium text-slate-700 dark:text-slate-300">
                   {activeFamily.timeZone}
                 </p>
@@ -481,7 +471,7 @@ export function FamilySetupHub({
                   </svg>
                 </div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                  Parents & Roles
+                  Parents and roles
                 </h2>
               </div>
             </div>
@@ -530,7 +520,7 @@ export function FamilySetupHub({
                                   parent.role === 'primary' ? 'co-parent' : 'primary',
                                 )
                               }
-                              className="text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-300"
+                              className="cp-icon-button cp-icon-button--sm"
                             >
                               <svg
                                 className="h-4 w-4"
@@ -604,7 +594,7 @@ export function FamilySetupHub({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="sm:col-span-2">
                     <label htmlFor="new-child-name" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Child Name
+                      Full name
                     </label>
                     <input
                       id="new-child-name"
@@ -617,7 +607,7 @@ export function FamilySetupHub({
                   </div>
                   <div>
                     <label htmlFor="new-child-dob" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Date of Birth
+                      Date of birth
                     </label>
                     <input
                       id="new-child-dob"
@@ -642,7 +632,7 @@ export function FamilySetupHub({
                   </div>
                   <div className="sm:col-span-2">
                     <label htmlFor="new-child-medical-notes" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Medical Notes (optional)
+                      Medical notes (optional)
                     </label>
                     <textarea
                       id="new-child-medical-notes"
@@ -659,7 +649,7 @@ export function FamilySetupHub({
                     type="button"
                     onClick={handleAddChild}
                     disabled={!childName.trim() || !childDob}
-                    className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/20 transition-all hover:bg-amber-700 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="cp-button cp-button--primary"
                   >
                     <svg
                       className="h-4 w-4"
@@ -670,7 +660,7 @@ export function FamilySetupHub({
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                     </svg>
-                    Add Child
+                    Add child
                   </button>
                 </div>
               </div>
@@ -780,13 +770,13 @@ export function FamilySetupHub({
                     No children added yet
                   </p>
                   <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
-                    Add child profiles to start organizing your co-parenting schedule
+                    Add a child to start planning their schedule together
                   </p>
                   <button
                     type="button"
                     onClick={handleAddChild}
                     disabled={!childName.trim() || !childDob}
-                    className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-amber-500/20 transition-all hover:bg-amber-700 hover:shadow-lg hover:shadow-amber-500/30 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="cp-button cp-button--primary"
                   >
                     <svg
                       className="h-4 w-4"
@@ -797,7 +787,7 @@ export function FamilySetupHub({
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                     </svg>
-                    Add Your First Child
+                    Add child
                   </button>
                 </div>
               )}
@@ -825,14 +815,14 @@ export function FamilySetupHub({
                     </svg>
                   </div>
                   <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                    Co-Parent Invitations
+                    Co-parent invitations
                   </h2>
                 </div>
                 <button
                   type="button"
                   onClick={handleInvite}
                   disabled={!inviteEmail.trim()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white shadow-md shadow-rose-500/20 transition-all hover:bg-rose-700 hover:shadow-lg hover:shadow-rose-500/30 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                  className="cp-button cp-button--secondary cp-button--sm"
                 >
                   <svg
                     className="h-4 w-4"
@@ -887,7 +877,7 @@ export function FamilySetupHub({
                       onChange={(e) => setInviteRole(e.target.value as ParentRole)}
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/40 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     >
-                      <option value="co-parent">Co-Parent</option>
+                      <option value="co-parent">Co-parent</option>
                       <option value="primary">Primary</option>
                     </select>
                   </div>
@@ -897,9 +887,9 @@ export function FamilySetupHub({
                     type="button"
                     onClick={handleInvite}
                     disabled={!inviteEmail.trim()}
-                    className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-rose-500/20 transition-all hover:bg-rose-700 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="cp-button cp-button--primary"
                   >
-                    Send Invite
+                    Send invitation
                   </button>
                 </div>
               </div>
@@ -940,22 +930,22 @@ export function FamilySetupHub({
                             <button
                               type="button"
                               onClick={() => onResendInvite?.(invite.id)}
-                              className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                              className="cp-button cp-button--secondary cp-button--sm flex-1"
                             >
-                              Resend
+                              Resend invitation
                             </button>
                             <button
                               type="button"
                               onClick={() => onCancelInvite?.(invite.id)}
-                              className="flex-1 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-600 transition hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-700 dark:text-rose-400 dark:hover:bg-rose-900/20"
+                              className="cp-button cp-button--danger cp-button--sm flex-1"
                             >
-                              Cancel
+                              Cancel invitation
                             </button>
                           </div>
                         )}
                         {invite.status === 'accepted' && invite.acceptedAt && (
                           <p className="border-t border-slate-200/60 pt-2 text-xs text-emerald-600 dark:border-slate-700/60 dark:text-emerald-400">
-                            Accepted on {formatDate(invite.acceptedAt)}
+                            Accepted {formatDate(invite.acceptedAt)}
                           </p>
                         )}
                       </div>
@@ -983,13 +973,13 @@ export function FamilySetupHub({
                     No invitations sent
                   </p>
                   <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
-                    Invite your co-parent to collaborate on schedules and shared information
+                    Invite your co-parent to share the calendar, messages and expenses
                   </p>
                   <button
                     type="button"
                     onClick={handleInvite}
                     disabled={!inviteEmail.trim()}
-                    className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-rose-500/20 transition-all hover:bg-rose-700 hover:shadow-lg hover:shadow-rose-500/30 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="cp-button cp-button--primary"
                   >
                     <svg
                       className="h-4 w-4"
@@ -1000,7 +990,7 @@ export function FamilySetupHub({
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                     </svg>
-                    Send First Invitation
+                    Send invitation
                   </button>
                 </div>
               )}

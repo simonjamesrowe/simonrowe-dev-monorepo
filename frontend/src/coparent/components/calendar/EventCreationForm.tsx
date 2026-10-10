@@ -167,7 +167,7 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
       return {
         id: 'preview',
         type: resolvedType,
-        title: title.trim() || 'New Event',
+        title: title.trim() || 'New event',
         startDate: normalizedStartDate,
         endDate: normalizedEndDate,
         startTime: isCustody || allDay ? undefined : startTime,
@@ -332,7 +332,7 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
                 type="text"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="e.g. Emma Soccer Practice"
+                placeholder="e.g. Football training"
                 className={inputClass}
               />
             </div>
@@ -433,7 +433,7 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 rows={4}
-                placeholder="Add reminders, what to bring, or additional details"
+                placeholder="Reminders, what to bring and anything else"
                 className={inputClass}
               />
             </div>
@@ -580,14 +580,15 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
               </div>
 
               {recurrence?.frequency === 'weekly' && (
-                <div className="mt-3 flex flex-wrap gap-2">
+                // Seven 32px chips with 6px gaps fit a phone's form column on one row.
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {WEEKDAYS.map((day) => (
                     <button
                       key={day.value}
                       type="button"
                       aria-pressed={recurrence.days?.includes(day.value) ?? false}
                       onClick={() => handleToggleRecurrenceDay(day.value)}
-                      className={`h-9 w-9 rounded-full border text-xs font-semibold transition ${
+                      className={`h-8 w-8 rounded-full border text-xs font-semibold transition ${
                         recurrence.days?.includes(day.value)
                           ? 'border-teal-500 bg-teal-500 text-white'
                           : 'border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400'

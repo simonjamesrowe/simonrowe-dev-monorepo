@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import type { ParentProfileUpdate, ProfileDrawerProps } from '../../types/dashboard';
+import { CloseButton } from '../ui/CloseButton';
 
 const panelBase =
   'h-full w-full max-w-md border-l border-slate-200/70 bg-white shadow-2xl shadow-slate-900/20 dark:border-slate-800/70 dark:bg-slate-950';
@@ -51,12 +52,7 @@ export function ProfileDrawer({
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">{family.name}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-full border border-slate-200/70 px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300"
-          >
-            Close
-          </button>
+          <CloseButton onClick={onClose} />
         </div>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
@@ -95,10 +91,7 @@ export function ProfileDrawer({
         </div>
 
         <div className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800/70">
-          <button
-            onClick={handleSave}
-            className="w-full rounded-full bg-teal-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-500/30 transition hover:-translate-y-0.5 hover:bg-teal-700 dark:bg-teal-500 dark:text-slate-950"
-          >
+          <button type="button" onClick={handleSave} className="cp-button cp-button--primary w-full">
             Save changes
           </button>
         </div>

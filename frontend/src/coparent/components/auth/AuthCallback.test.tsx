@@ -81,7 +81,7 @@ describe('AuthCallback', () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole('button', { name: 'Return to Login' }));
+    await user.click(await screen.findByRole('button', { name: 'Return to login' }));
     expect(screen.getByText('Login page')).toBeInTheDocument();
   });
 });

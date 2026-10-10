@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { apiErrorMessage } from '../../lib/api/errorMessage';
 import type { Event, Parent, ProposedChange } from '../../types/calendar';
+import { CloseButton } from '../ui/CloseButton';
 
 import { Icon } from './Icon';
 
@@ -14,6 +15,8 @@ export interface ScheduleChangeRequestModalProps {
   parents: Record<string, Parent>;
   /** ID of the current logged-in parent (the requester) */
   currentParentId: string;
+  /** Parents in `parents` who have been invited and not joined yet, so cannot be notified. */
+  invitedParentIds?: string[];
   /** Called when the modal should close */
   onClose?: () => void;
   /** Called when the user submits the request */
@@ -29,10 +32,11 @@ function formatDate(dateStr: string): string {
   });
 }
 
+/** How many days a span covers, counting both ends: an event on one day is 1 day, not 0. */
 function getDaysBetween(start: string, end: string): number {
   const startDate = new Date(start + 'T12:00:00');
   const endDate = new Date(end + 'T12:00:00');
-  return Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 }
 
 export function ScheduleChangeRequestModal({
@@ -40,6 +44,7 @@ export function ScheduleChangeRequestModal({
   originalEvent,
   parents,
   currentParentId,
+  invitedParentIds = [],
   onClose,
   onSubmit,
 }: ScheduleChangeRequestModalProps) {
@@ -66,6 +71,7 @@ export function ScheduleChangeRequestModal({
   if (!isOpen || !originalEvent) return null;
 
   const otherParent = Object.values(parents).find((p) => p.id !== currentParentId);
+  const otherParentInvited = Boolean(otherParent && invitedParentIds.includes(otherParent.id));
   const eventOwner = originalEvent.parentId ? parents[originalEvent.parentId] : null;
 
   const originalDays = getDaysBetween(
@@ -132,22 +138,7 @@ export function ScheduleChangeRequestModal({
                   To {otherParent?.name || 'the other parent'}
                 </p>
               </div>
-              <button
-                type="button"
-                aria-label="Close schedule change request"
-                onClick={onClose}
-                className="-m-2 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-              >
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <CloseButton onClick={() => onClose?.()} label="Close schedule change request" />
             </div>
           </div>
 
@@ -393,8 +384,9 @@ export function ScheduleChangeRequestModal({
                     />
                   </svg>
                   <p className="text-xs text-amber-700 dark:text-amber-300">
-                    {otherParent?.name || 'The other parent'} will be notified and must approve this
-                    change before it takes effect.
+                    {otherParentInvited
+                      ? `${otherParent?.name} hasn't joined yet. They'll see this request, and can approve it, once they accept your invitation.`
+                      : `${otherParent?.name || 'The other parent'} will be notified and must approve this change before it takes effect.`}
                   </p>
                 </div>
               </div>
@@ -409,20 +401,14 @@ export function ScheduleChangeRequestModal({
               </p>
             )}
             <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={onClose}
-                className="px-4 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-              >
+              <button type="button" onClick={onClose} className="cp-button cp-button--secondary">
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleSubmit}
                 disabled={!isFormValid || isSubmitting}
-                className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-200 ${
-                  isFormValid && !isSubmitting
-                    ? 'bg-teal-600 text-white shadow-lg shadow-teal-500/20 hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30 active:translate-y-0'
-                    : 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-700 dark:text-slate-500'
-                }`}
+                className="cp-button cp-button--primary"
               >
                 {isSubmitting ? (
                   <>

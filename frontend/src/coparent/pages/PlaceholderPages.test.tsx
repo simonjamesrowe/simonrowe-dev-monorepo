@@ -7,8 +7,8 @@ import TimelinePage from './TimelinePage';
 
 describe('CoParent placeholder pages', () => {
   it.each([
-    ['Information Repository', DocumentsPage],
-    ['Timeline & Photos', TimelinePage],
+    ['Documents', DocumentsPage],
+    ['Timeline and photos', TimelinePage],
     ['Settings', SettingsPage],
   ])('renders the %s route while its full module is pending', (heading, Page) => {
     render(<Page />);

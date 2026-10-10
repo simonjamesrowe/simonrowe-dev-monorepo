@@ -139,7 +139,7 @@ describe('MessagingAndPermissions', () => {
       />,
     );
 
-    const textarea = screen.getByPlaceholderText('Write a message or follow up on a decision...');
+    const textarea = screen.getByPlaceholderText('Write a message or follow up on a decision');
     await user.type(textarea, 'Following up on the conference details.');
     await user.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -178,7 +178,7 @@ describe('MessagingAndPermissions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /Soccer Camp Registration/ }));
-    const responseBox = screen.getByPlaceholderText('Share any notes or conditions...');
+    const responseBox = screen.getByPlaceholderText('Any notes or conditions');
     await user.type(responseBox, 'Approved, thanks for coordinating.');
     await user.click(screen.getByRole('button', { name: 'Approve request' }));
 
@@ -211,7 +211,7 @@ describe('MessagingAndPermissions', () => {
       />,
     );
 
-    const responseBox = screen.getByPlaceholderText('Share any notes or conditions...');
+    const responseBox = screen.getByPlaceholderText('Any notes or conditions');
     await user.type(responseBox, 'Not this year');
     await user.click(screen.getByRole('button', { name: 'Deny request' }));
 
@@ -270,7 +270,7 @@ describe('MessagingAndPermissions', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Mark read' }));
+    await user.click(screen.getByRole('button', { name: 'Mark as read' }));
     expect(onMarkAsRead).toHaveBeenCalledWith('conv-004');
 
     rerender(
@@ -282,7 +282,7 @@ describe('MessagingAndPermissions', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Mark unread' }));
+    await user.click(screen.getByRole('button', { name: 'Mark as unread' }));
     expect(onMarkAsUnread).toHaveBeenCalledWith('conv-004');
   });
 
@@ -332,5 +332,11 @@ describe('MessagingAndPermissions', () => {
     expect(screen.getByLabelText('Message read')).toBeInTheDocument();
     expect(screen.queryByText('Unread')).not.toBeInTheDocument();
     expect(screen.getAllByText('Delivered')).toHaveLength(1);
+  });
+
+  it('says "1 active conversation", not "1 active conversations"', () => {
+    render(<Wrapper initialConversations={[baseMessageConversation]} onSendMessage={vi.fn()} />);
+
+    expect(screen.getByText('1 active conversation')).toBeInTheDocument();
   });
 });
