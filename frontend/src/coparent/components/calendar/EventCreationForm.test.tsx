@@ -51,6 +51,30 @@ describe('EventCreationForm', () => {
     expect(screen.getByText('Event type')).toBeInTheDocument();
   });
 
+  it.each([
+    ['2026-10-10', 'Sa'],
+    ['2026-10-11', 'Su'],
+    ['2026-10-12', 'M'],
+  ])('repeats a series started on %s on that weekday (%s)', async (initialDate, label) => {
+    const user = userEvent.setup();
+    render(
+      <EventCreationForm
+        parents={parents}
+        children={children}
+        currentParentId="parent-1"
+        initialDate={initialDate}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Every week' }));
+
+    const pressed = screen
+      .getAllByRole('button', { pressed: true })
+      .map((button) => button.textContent);
+    expect(pressed).toContain(label);
+    expect(pressed.filter((text) => ['M', 'Tu', 'W', 'Th', 'F', 'Sa', 'Su'].includes(text ?? ''))).toEqual([label]);
+  });
+
   it('validates required fields (title and date)', async () => {
     const user = userEvent.setup();
     const onValidationChange = vi.fn();
@@ -173,11 +197,11 @@ describe('EventCreationForm', () => {
     await user.clear(timeInputs[1]);
     await user.type(timeInputs[1], '10:30');
 
-    await user.click(screen.getByRole('button', { name: 'Every weekly' }));
+    await user.click(screen.getByRole('button', { name: 'Every week' }));
     await user.click(screen.getAllByRole('button', { name: 'M' })[0]);
 
     const samButtons = screen.getAllByRole('button', { name: /^Sam/ });
-    await user.click(samButtons[1]);
+    await user.click(samButtons[0]);
     await user.type(screen.getByPlaceholderText('Add location or address'), 'Community Centre');
     await user.type(
       screen.getByPlaceholderText('Add reminders, what to bring, or additional details'),
@@ -306,7 +330,7 @@ describe('EventCreationForm', () => {
     await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Cricket');
     const endDate = () => container.querySelectorAll<HTMLInputElement>('input[type="date"]')[1];
 
-    await user.click(screen.getByRole('button', { name: 'Every weekly' }));
+    await user.click(screen.getByRole('button', { name: 'Every week' }));
     expect(endDate().value).toBe('');
 
     await user.type(endDate(), '2026-12-18');
@@ -348,5 +372,41 @@ describe('EventCreationForm', () => {
       await ref.current?.submit();
     });
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('sums the event up in one line and asks about parents once', async () => {
+    const user = userEvent.setup();
+    render(
+      <EventCreationForm
+        parents={parents}
+        children={children}
+        currentParentId="parent-1"
+        initialDate="2026-10-13"
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText('e.g. Emma Soccer Practice'), 'Football training');
+    expect(screen.getByTestId('event-summary')).toHaveTextContent(
+      'Theo — Football training · Tue 13 Oct, 16:00–17:30',
+    );
+    expect(screen.getByText('Who is going?')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Alex/ })).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Every week' }));
+    ['M', 'Tu', 'W', 'Th', 'F', 'Sa', 'Su'].forEach((day) => {
+      const button = screen.getByRole('button', { name: day });
+      if (button.getAttribute('aria-pressed') === 'true') fireEvent.click(button);
+    });
+    await user.click(screen.getByRole('button', { name: 'Tu' }));
+    await user.click(screen.getByRole('button', { name: 'Th' }));
+    expect(screen.getByTestId('event-summary')).toHaveTextContent('every Tue and Thu');
+
+    await user.click(screen.getByRole('button', { name: /custody/i }));
+    expect(screen.getByText('Who has the children?')).toBeInTheDocument();
+    expect(screen.queryByText('Who is going?')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Alex/ })).toHaveLength(1);
+    expect(screen.getByTestId('event-summary')).toHaveTextContent(
+      'Theo — Football training with Alex · Tue 13 Oct, all day',
+    );
   });
 });

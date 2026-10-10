@@ -117,7 +117,7 @@ export function ScheduleChangeRequestModal({
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="animate-in zoom-in-95 slide-in-from-bottom-4 w-full max-w-lg rounded-2xl border border-slate-200/60 bg-white shadow-2xl duration-300 dark:border-slate-700/60 dark:bg-slate-800">
+        <div className="schedule-request animate-in zoom-in-95 slide-in-from-bottom-4 w-full rounded-2xl border border-slate-200/60 bg-white shadow-2xl duration-300 dark:border-slate-700/60 dark:bg-slate-800">
           {/* Header */}
           <div className="relative border-b border-slate-200 px-6 pb-4 pt-6 dark:border-slate-700">
             {/* Decorative gradient accent */}
@@ -126,10 +126,10 @@ export function ScheduleChangeRequestModal({
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">
-                  Request Schedule Change
+                  Request a schedule change
                 </h2>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Request approval from {otherParent?.name || 'the other parent'}
+                  To {otherParent?.name || 'the other parent'}
                 </p>
               </div>
               <button
@@ -152,128 +152,51 @@ export function ScheduleChangeRequestModal({
           </div>
 
           {/* Body */}
-          <div className="max-h-[60vh] space-y-5 overflow-y-auto px-6 py-5">
-            {/* Original Schedule Card */}
-            <div className="relative">
-              <div className="absolute -left-3 bottom-0 top-0 w-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-              <div className="rounded-xl border border-slate-200/60 bg-slate-50 p-4 dark:border-slate-600/60 dark:bg-slate-700/50">
-                <div className="mb-3 flex items-center gap-2">
-                  <div
-                    className={`h-2.5 w-2.5 rounded-full ${
-                      eventOwner?.color === 'violet' ? 'bg-violet-500' : 'bg-sky-500'
-                    }`}
-                  />
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Current Schedule
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-slate-800 dark:text-slate-100">
-                      {formatDate(originalEvent.startDate)}
-                    </p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                      to {formatDate(originalEvent.endDate || originalEvent.startDate)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-                      {originalDays}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {originalDays === 1 ? 'day' : 'days'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Arrow indicator */}
-            <div className="flex justify-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900/30">
-                <svg
-                  className="h-5 w-5 text-teal-600 dark:text-teal-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M19 14l-7 7m0 0l-7-7m7 7V3"
-                  />
-                </svg>
-              </div>
-            </div>
-
-            {/* Change Type Selection */}
-            <div>
-              <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Type of Change
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { value: 'swap', label: 'Swap Days', icon: 'users', desc: 'Trade days' },
-                  { value: 'extend', label: 'Adjust Time', icon: 'calendar-days', desc: 'Change dates' },
-                  { value: 'remove', label: 'Cancel date', icon: 'x', desc: 'Call it off' },
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setChangeType(option.value as ProposedChange['type'])}
-                    className={`relative rounded-xl border-2 p-3 text-left transition-all duration-200 ${
-                      changeType === option.value
-                        ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
-                        : 'border-slate-200 hover:border-slate-300 dark:border-slate-600 dark:hover:border-slate-500'
-                    }`}
-                  >
-                    <Icon
-                      name={option.icon}
-                      size={20}
-                      className={
-                        changeType === option.value
-                          ? 'text-teal-600 dark:text-teal-400'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }
-                    />
-                    <p
-                      className={`mt-1 text-sm font-medium ${
-                        changeType === option.value
-                          ? 'text-teal-700 dark:text-teal-300'
-                          : 'text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      {option.label}
-                    </p>
-                    {changeType === option.value && (
-                      <div className="absolute right-2 top-2">
-                        <svg
-                          className="h-4 w-4 text-teal-500"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
+          <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
+            {/* What is booked now and the kind of change on the left; the new dates and why
+                on the right. A phone stacks them in that order. */}
+            <div className="cp-form-cols">
+              <div className="cp-form-col">
+                {/* Original Schedule Card */}
+                <div className="relative">
+                  <div className="absolute -left-3 bottom-0 top-0 w-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+                  <div className="rounded-xl border border-slate-200/60 bg-slate-50 p-4 dark:border-slate-600/60 dark:bg-slate-700/50">
+                    <div className="mb-3 flex items-center gap-2">
+                      <div
+                        className={`h-2.5 w-2.5 rounded-full ${
+                          eventOwner?.color === 'violet' ? 'bg-violet-500' : 'bg-sky-500'
+                        }`}
+                      />
+                      <span className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Booked now
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-800 dark:text-slate-100">
+                          {formatDate(originalEvent.startDate)}
+                        </p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                          to {formatDate(originalEvent.endDate || originalEvent.startDate)}
+                        </p>
                       </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                          {originalDays}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {originalDays === 1 ? 'day' : 'days'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Proposed New Dates (a cancellation proposes none) */}
-            {!isRemoval && (
-              <div className="relative">
-                <div className="absolute -left-3 bottom-0 top-0 w-1 rounded-full bg-teal-500" />
-                <div className="rounded-xl border border-teal-200/60 bg-teal-50 p-4 dark:border-teal-700/60 dark:bg-teal-900/20">
-                  <div className="mb-3 flex items-center gap-2">
+                {/* Arrow indicator, for the stacked layout only */}
+                <div className="schedule-request__arrow flex justify-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900/30">
                     <svg
-                      className="h-4 w-4 text-teal-600 dark:text-teal-400"
+                      className="h-5 w-5 text-teal-600 dark:text-teal-400"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -282,115 +205,199 @@ export function ScheduleChangeRequestModal({
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        d="M19 14l-7 7m0 0l-7-7m7 7V3"
                       />
                     </svg>
-                    <span className="text-xs font-medium uppercase tracking-wide text-teal-700 dark:text-teal-300">
-                      Proposed Schedule
-                    </span>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label htmlFor="schedule-new-start-date" className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
-                        Start Date
-                      </label>
-                      <input
-                        id="schedule-new-start-date"
-                        type="date"
-                        value={newStartDate}
-                        onChange={(e) => setNewStartDate(e.target.value)}
-                        className="w-full rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-teal-700 dark:bg-slate-800 dark:text-slate-100"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="schedule-new-end-date" className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
-                        End Date
-                      </label>
-                      <input
-                        id="schedule-new-end-date"
-                        type="date"
-                        value={newEndDate}
-                        onChange={(e) => setNewEndDate(e.target.value)}
-                        className="w-full rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-teal-700 dark:bg-slate-800 dark:text-slate-100"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Days difference indicator */}
-                  {newDays > 0 && (
-                    <div className="mt-3 flex items-center justify-between text-sm">
-                      <span className="text-teal-600 dark:text-teal-400">
-                        {formatDate(newStartDate)} → {formatDate(newEndDate)}
-                      </span>
-                      <span
-                        className={`font-semibold ${
-                          daysDiff === 0
-                            ? 'text-teal-600 dark:text-teal-400'
-                            : daysDiff > 0
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-rose-600 dark:text-rose-400'
+                {/* Change Type Selection */}
+                <div>
+                  <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    What kind of change?
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 'swap', label: 'Swap days', icon: 'users', desc: 'Trade days' },
+                      { value: 'extend', label: 'Change dates', icon: 'calendar-days', desc: 'Change dates' },
+                      { value: 'remove', label: 'Cancel date', icon: 'x', desc: 'Call it off' },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setChangeType(option.value as ProposedChange['type'])}
+                        className={`relative rounded-xl border-2 p-3 text-left transition-all duration-200 ${
+                          changeType === option.value
+                            ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
+                            : 'border-slate-200 hover:border-slate-300 dark:border-slate-600 dark:hover:border-slate-500'
                         }`}
                       >
-                        {newDays} {newDays === 1 ? 'day' : 'days'}
-                        {daysDiff !== 0 && (
-                          <span className="ml-1 text-xs">
-                            ({daysDiff > 0 ? '+' : ''}
-                            {daysDiff})
-                          </span>
+                        <Icon
+                          name={option.icon}
+                          size={20}
+                          className={
+                            changeType === option.value
+                              ? 'text-teal-600 dark:text-teal-400'
+                              : 'text-slate-600 dark:text-slate-400'
+                          }
+                        />
+                        <p
+                          className={`mt-1 text-sm font-medium ${
+                            changeType === option.value
+                              ? 'text-teal-700 dark:text-teal-300'
+                              : 'text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {option.label}
+                        </p>
+                        {changeType === option.value && (
+                          <div className="absolute right-2 top-2">
+                            <svg
+                              className="h-4 w-4 text-teal-500"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </div>
                         )}
-                      </span>
-                    </div>
-                  )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            )}
+              <div className="cp-form-col">
+                {/* Proposed New Dates (a cancellation proposes none) */}
+                {!isRemoval && (
+                  <div className="relative">
+                    <div className="absolute -left-3 bottom-0 top-0 w-1 rounded-full bg-teal-500" />
+                    <div className="rounded-xl border border-teal-200/60 bg-teal-50 p-4 dark:border-teal-700/60 dark:bg-teal-900/20">
+                      <div className="mb-3 flex items-center gap-2">
+                        <svg
+                          className="h-4 w-4 text-teal-600 dark:text-teal-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                          />
+                        </svg>
+                        <span className="text-xs font-medium uppercase tracking-wide text-teal-700 dark:text-teal-300">
+                          Proposed dates
+                        </span>
+                      </div>
 
-            {/* Reason Field */}
-            <div>
-              <label htmlFor="schedule-change-reason" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Reason for Request
-              </label>
-              <textarea
-                id="schedule-change-reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Explain why you're requesting this change. Be specific so the other parent can make an informed decision..."
-                rows={4}
-                className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-shadow placeholder:text-slate-400 focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100 dark:placeholder:text-slate-500"
-              />
-              <p
-                className={`mt-1.5 text-xs ${
-                  reason.length < 10
-                    ? 'text-slate-400 dark:text-slate-500'
-                    : 'text-teal-600 dark:text-teal-400'
-                }`}
-              >
-                {reason.length < 10
-                  ? `${10 - reason.length} more characters needed`
-                  : '✓ Reason provided'}
-              </p>
-            </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label htmlFor="schedule-new-start-date" className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
+                            Start date
+                          </label>
+                          <input
+                            id="schedule-new-start-date"
+                            type="date"
+                            value={newStartDate}
+                            onChange={(e) => setNewStartDate(e.target.value)}
+                            className="w-full rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-teal-700 dark:bg-slate-800 dark:text-slate-100"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="schedule-new-end-date" className="mb-1.5 block text-xs text-teal-600 dark:text-teal-400">
+                            End date
+                          </label>
+                          <input
+                            id="schedule-new-end-date"
+                            type="date"
+                            value={newEndDate}
+                            onChange={(e) => setNewEndDate(e.target.value)}
+                            className="w-full rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-teal-700 dark:bg-slate-800 dark:text-slate-100"
+                          />
+                        </div>
+                      </div>
 
-            {/* Info callout */}
-            <div className="flex gap-3 rounded-xl border border-amber-200/60 bg-amber-50 p-3 dark:border-amber-700/40 dark:bg-amber-900/20">
-              <svg
-                className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <p className="text-xs text-amber-700 dark:text-amber-300">
-                {otherParent?.name || 'The other parent'} will be notified and must approve this
-                change before it takes effect.
-              </p>
+                      {/* Days difference indicator */}
+                      {newDays > 0 && (
+                        <div className="mt-3 flex items-center justify-between text-sm">
+                          <span className="text-teal-600 dark:text-teal-400">
+                            {formatDate(newStartDate)} → {formatDate(newEndDate)}
+                          </span>
+                          <span
+                            className={`font-semibold ${
+                              daysDiff === 0
+                                ? 'text-teal-600 dark:text-teal-400'
+                                : daysDiff > 0
+                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  : 'text-rose-600 dark:text-rose-400'
+                            }`}
+                          >
+                            {newDays} {newDays === 1 ? 'day' : 'days'}
+                            {daysDiff !== 0 && (
+                              <span className="ml-1 text-xs">
+                                ({daysDiff > 0 ? '+' : ''}
+                                {daysDiff})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Reason Field */}
+                <div>
+                  <label htmlFor="schedule-change-reason" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Reason for the change
+                  </label>
+                  <textarea
+                    id="schedule-change-reason"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Say why, so they have what they need to decide"
+                    rows={4}
+                    className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-shadow placeholder:text-slate-400 focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  />
+                  <p
+                    className={`mt-1.5 text-xs ${
+                      reason.length < 10
+                        ? 'text-slate-400 dark:text-slate-500'
+                        : 'text-teal-600 dark:text-teal-400'
+                    }`}
+                  >
+                    {reason.length < 10
+                      ? `${10 - reason.length} more characters needed`
+                      : '✓ Reason provided'}
+                  </p>
+                </div>
+
+                {/* Info callout */}
+                <div className="flex gap-3 rounded-xl border border-amber-200/60 bg-amber-50 p-3 dark:border-amber-700/40 dark:bg-amber-900/20">
+                  <svg
+                    className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    {otherParent?.name || 'The other parent'} will be notified and must approve this
+                    change before it takes effect.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -434,7 +441,7 @@ export function ScheduleChangeRequestModal({
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                       />
                     </svg>
-                    Sending...
+                    Sending…
                   </>
                 ) : (
                   <>
@@ -451,7 +458,7 @@ export function ScheduleChangeRequestModal({
                         d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
                       />
                     </svg>
-                    Send Request
+                    Send request
                   </>
                 )}
               </button>

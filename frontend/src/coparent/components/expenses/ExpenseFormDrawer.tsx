@@ -312,6 +312,7 @@ export function ExpenseFormDrawer({
       open={open}
       title={editing ? 'Edit expense' : 'Add expense'}
       eyebrow={source ? 'From your statement' : undefined}
+      wide
       description="Record a shared cost and how it is split between you."
       onClose={onClose}
       footer={
@@ -363,200 +364,207 @@ export function ExpenseFormDrawer({
         </p>
       )}
 
-      <label className="expense-field">
-        <span className="expense-field__label">What was it for?</span>
-        <input
-          className="expense-input"
-          value={state.title}
-          maxLength={120}
-          placeholder="e.g. School shoes"
-          onChange={(event) => set('title', event.target.value)}
-        />
-        {errors.title && <small className="expense-field__error">{errors.title}</small>}
-      </label>
-
-      <div className="expense-grid2">
-        <label className="expense-field">
-          <span className="expense-field__label">Amount</span>
-          <span className="expense-money-input">
-            <span aria-hidden="true">£</span>
+      {/* What it was on the left; who paid and how it is shared on the right. A phone gets one
+          column in the same order. */}
+      <div className="cp-form-cols">
+        <div className="cp-form-col">
+          <label className="expense-field">
+            <span className="expense-field__label">What was it for?</span>
             <input
               className="expense-input"
-              inputMode="decimal"
-              value={state.amount}
-              placeholder="0.00"
-              aria-label="Amount in pounds"
-              onChange={(event) => set('amount', event.target.value)}
+              value={state.title}
+              maxLength={120}
+              placeholder="e.g. School shoes"
+              onChange={(event) => set('title', event.target.value)}
             />
-          </span>
-          {errors.amountPence && <small className="expense-field__error">{errors.amountPence}</small>}
-        </label>
-        <label className="expense-field">
-          <span className="expense-field__label">Category</span>
-          <select
-            className="expense-input"
-            value={state.category}
-            onChange={(event) => set('category', event.target.value as ExpenseCategory)}
-          >
-            {Object.entries(EXPENSE_CATEGORIES).map(([key, info]) => (
-              <option key={key} value={key}>
-                {info.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+            {errors.title && <small className="expense-field__error">{errors.title}</small>}
+          </label>
 
-      <fieldset className="expense-field">
-        <legend className="expense-field__label">For</legend>
-        <div className="expense-pills">
-          {children.map((child) => {
-            const on = state.childIds.includes(child.id);
-            return (
-              <button
-                key={child.id}
-                type="button"
-                aria-pressed={on}
-                className={`expense-pill${on ? ' is-on' : ''}`}
-                onClick={() =>
-                  set('childIds', on ? state.childIds.filter((id) => id !== child.id) : [...state.childIds, child.id])
-                }
-              >
-                {on && <Check size={15} aria-hidden="true" />}
-                {child.fullName.split(/\s+/)[0]}
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
-
-      {!source && (
-        <fieldset className="expense-field">
-          <legend className="expense-field__label">Has it been paid?</legend>
-          <div className="expense-seg expense-seg--timing">
-            <button
-              type="button"
-              aria-pressed={state.timing === 'paid'}
-              className={`expense-seg__option${state.timing === 'paid' ? ' is-on' : ''}`}
-              onClick={() => chooseTiming('paid')}
-            >
-              <Check size={16} aria-hidden="true" /> Already paid
-            </button>
-            <button
-              type="button"
-              aria-pressed={state.timing === 'upcoming'}
-              className={`expense-seg__option${state.timing === 'upcoming' ? ' is-on' : ''}`}
-              onClick={() => chooseTiming('upcoming')}
-            >
-              <Calendar size={16} aria-hidden="true" /> Coming up
-            </button>
-          </div>
-        </fieldset>
-      )}
-
-      <div className="expense-grid2 expense-grid2--wide-first">
-        <fieldset className="expense-field">
-          <legend className="expense-field__label">{state.timing === 'paid' ? 'Who paid?' : 'Who will pay?'}</legend>
-          <div className="expense-seg">
-            {payerButton('me', `You (${firstName(me, 'You')})`, me)}
-            {payerButton('them', otherName, other)}
-            {state.timing === 'upcoming' && payerButton('undecided', 'Not decided')}
-          </div>
-        </fieldset>
-        <label className="expense-field">
-          <span className="expense-field__label">{state.timing === 'paid' ? 'Paid on' : 'Due by'}</span>
-          <input
-            className="expense-input"
-            type="date"
-            value={state.date}
-            max={state.timing === 'paid' ? today() : undefined}
-            onChange={(event) => set('date', event.target.value)}
-          />
-          {errors.date && <small className="expense-field__error">{errors.date}</small>}
-        </label>
-      </div>
-
-      <fieldset className="expense-field">
-        <legend className="expense-field__label">How should it be shared?</legend>
-        <div className="expense-pills">
-          {shareButton('equal', '50 / 50')}
-          {shareButton('me', 'You cover it')}
-          {shareButton('them', `${otherName} covers it`)}
-          {shareButton('custom', 'Custom')}
-        </div>
-        {state.shareMode === 'custom' && (
-          <div className="expense-custom">
-            <span>You</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={state.myPercent}
-              aria-label="Your percentage of the cost"
-              onChange={(event) => set('myPercent', Number(event.target.value))}
-            />
-            <span className="expense-custom__value">
-              You {state.myPercent}% · {otherName} {100 - state.myPercent}%
-            </span>
-          </div>
-        )}
-      </fieldset>
-
-      <div className={`expense-summary expense-summary--${summary.tone}`} aria-live="polite" data-testid="expense-summary">
-        <span className="expense-summary__icon">
-          <SummaryIcon size={18} aria-hidden="true" />
-        </span>
-        <div>
-          <p className="expense-summary__lead">{summary.lead}</p>
-          {summary.outcome && <p className="expense-summary__outcome">{summary.outcome}</p>}
-        </div>
-      </div>
-
-      <div className="expense-field">
-        <span className="expense-field__label">
-          Receipts <span className="expense-field__hint">· photos or PDFs, up to {MAX_RECEIPTS}</span>
-        </span>
-        <div className="expense-receipts">
-          {files.map((pending, index) => (
-            <PendingReceiptThumb
-              key={`${pending.file.name}-${index}`}
-              file={pending.file}
-              previewUrl={pending.previewUrl}
-              onRemove={() => removeFile(index)}
-            />
-          ))}
-          {existingReceipts + files.length < MAX_RECEIPTS && (
-            <label className="expense-add-receipt">
-              <Camera size={18} aria-hidden="true" />
-              Add photo or PDF
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,application/pdf"
-                multiple
-                className="sr-only"
-                onChange={(event) => {
-                  addFiles(event.target.files);
-                  event.target.value = '';
-                }}
-              />
+          <div className="expense-grid2">
+            <label className="expense-field">
+              <span className="expense-field__label">Amount</span>
+              <span className="expense-money-input">
+                <span aria-hidden="true">£</span>
+                <input
+                  className="expense-input"
+                  inputMode="decimal"
+                  value={state.amount}
+                  placeholder="0.00"
+                  aria-label="Amount in pounds"
+                  onChange={(event) => set('amount', event.target.value)}
+                />
+              </span>
+              {errors.amountPence && <small className="expense-field__error">{errors.amountPence}</small>}
             </label>
+            <label className="expense-field">
+              <span className="expense-field__label">Category</span>
+              <select
+                className="expense-input"
+                value={state.category}
+                onChange={(event) => set('category', event.target.value as ExpenseCategory)}
+              >
+                {Object.entries(EXPENSE_CATEGORIES).map(([key, info]) => (
+                  <option key={key} value={key}>
+                    {info.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <fieldset className="expense-field">
+            <legend className="expense-field__label">For</legend>
+            <div className="expense-pills">
+              {children.map((child) => {
+                const on = state.childIds.includes(child.id);
+                return (
+                  <button
+                    key={child.id}
+                    type="button"
+                    aria-pressed={on}
+                    className={`expense-pill${on ? ' is-on' : ''}`}
+                    onClick={() =>
+                      set('childIds', on ? state.childIds.filter((id) => id !== child.id) : [...state.childIds, child.id])
+                    }
+                  >
+                    {on && <Check size={15} aria-hidden="true" />}
+                    {child.fullName.split(/\s+/)[0]}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          {!source && (
+            <fieldset className="expense-field">
+              <legend className="expense-field__label">Has it been paid?</legend>
+              <div className="expense-seg expense-seg--timing">
+                <button
+                  type="button"
+                  aria-pressed={state.timing === 'paid'}
+                  className={`expense-seg__option${state.timing === 'paid' ? ' is-on' : ''}`}
+                  onClick={() => chooseTiming('paid')}
+                >
+                  <Check size={16} aria-hidden="true" /> Already paid
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={state.timing === 'upcoming'}
+                  className={`expense-seg__option${state.timing === 'upcoming' ? ' is-on' : ''}`}
+                  onClick={() => chooseTiming('upcoming')}
+                >
+                  <Calendar size={16} aria-hidden="true" /> Coming up
+                </button>
+              </div>
+            </fieldset>
           )}
         </div>
+        <div className="cp-form-col">
+          <fieldset className="expense-field">
+            <legend className="expense-field__label">{state.timing === 'paid' ? 'Who paid?' : 'Who will pay?'}</legend>
+            <div className="expense-seg">
+              {payerButton('me', `You (${firstName(me, 'You')})`, me)}
+              {payerButton('them', otherName, other)}
+              {state.timing === 'upcoming' && payerButton('undecided', 'Not decided')}
+            </div>
+          </fieldset>
+          <label className="expense-field">
+            <span className="expense-field__label">{state.timing === 'paid' ? 'Paid on' : 'Due by'}</span>
+            <input
+              className="expense-input"
+              type="date"
+              value={state.date}
+              max={state.timing === 'paid' ? today() : undefined}
+              onChange={(event) => set('date', event.target.value)}
+            />
+            {errors.date && <small className="expense-field__error">{errors.date}</small>}
+          </label>
+
+          <fieldset className="expense-field">
+            <legend className="expense-field__label">How should it be shared?</legend>
+            <div className="expense-pills">
+              {shareButton('equal', '50 / 50')}
+              {shareButton('me', 'You cover it')}
+              {shareButton('them', `${otherName} covers it`)}
+              {shareButton('custom', 'Custom')}
+            </div>
+            {state.shareMode === 'custom' && (
+              <div className="expense-custom">
+                <span>You</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={state.myPercent}
+                  aria-label="Your percentage of the cost"
+                  onChange={(event) => set('myPercent', Number(event.target.value))}
+                />
+                <span className="expense-custom__value">
+                  You {state.myPercent}% · {otherName} {100 - state.myPercent}%
+                </span>
+              </div>
+            )}
+          </fieldset>
+
+          <div className={`expense-summary expense-summary--${summary.tone}`} aria-live="polite" data-testid="expense-summary">
+            <span className="expense-summary__icon">
+              <SummaryIcon size={18} aria-hidden="true" />
+            </span>
+            <div>
+              <p className="expense-summary__lead">{summary.lead}</p>
+              {summary.outcome && <p className="expense-summary__outcome">{summary.outcome}</p>}
+            </div>
+          </div>
+        </div>
       </div>
 
-      <label className="expense-field">
-        <span className="expense-field__label">
-          Notes <span className="expense-field__hint">· optional</span>
-        </span>
-        <textarea
-          className="expense-input expense-textarea"
-          value={state.notes}
-          maxLength={1000}
-          placeholder={`Anything ${otherName} should know`}
-          onChange={(event) => set('notes', event.target.value)}
-        />
-      </label>
+      <div className="cp-form-cols">
+        <div className="expense-field">
+          <span className="expense-field__label">
+            Receipts <span className="expense-field__hint">· photos or PDFs, up to {MAX_RECEIPTS}</span>
+          </span>
+          <div className="expense-receipts">
+            {files.map((pending, index) => (
+              <PendingReceiptThumb
+                key={`${pending.file.name}-${index}`}
+                file={pending.file}
+                previewUrl={pending.previewUrl}
+                onRemove={() => removeFile(index)}
+              />
+            ))}
+            {existingReceipts + files.length < MAX_RECEIPTS && (
+              <label className="expense-add-receipt">
+                <Camera size={18} aria-hidden="true" />
+                Add photo or PDF
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  multiple
+                  className="sr-only"
+                  onChange={(event) => {
+                    addFiles(event.target.files);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+            )}
+          </div>
+        </div>
+
+        <label className="expense-field">
+          <span className="expense-field__label">
+            Notes <span className="expense-field__hint">· optional</span>
+          </span>
+          <textarea
+            className="expense-input expense-textarea"
+            value={state.notes}
+            maxLength={1000}
+            placeholder={`Anything ${otherName} should know`}
+            onChange={(event) => set('notes', event.target.value)}
+          />
+        </label>
+      </div>
 
       <p className="expense-notice">
         <Mail size={16} aria-hidden="true" />

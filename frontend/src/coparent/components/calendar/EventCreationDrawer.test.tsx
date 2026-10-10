@@ -92,8 +92,8 @@ describe('EventCreationDrawer', () => {
 
     const save = screen.getByRole('button', { name: 'Save' });
     await user.click(save);
-    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: 'Saving...' }));
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Saving…' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
 
     reject({ response: { data: { message: 'At least one valid family child is required' } } });

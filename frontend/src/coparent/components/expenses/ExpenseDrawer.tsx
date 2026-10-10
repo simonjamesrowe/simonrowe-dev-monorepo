@@ -11,6 +11,7 @@ export function ExpenseDrawer({
   title,
   description,
   eyebrow,
+  wide = false,
   onClose,
   footer,
   children,
@@ -19,6 +20,8 @@ export function ExpenseDrawer({
   title: string;
   description: string;
   eyebrow?: string;
+  /** Room for a two-column form on a wide screen; phones are full width either way. */
+  wide?: boolean;
   onClose: () => void;
   footer?: ReactNode;
   children: ReactNode;
@@ -28,7 +31,7 @@ export function ExpenseDrawer({
       <Drawer.Portal>
         <div className="coparent-app">
           <Drawer.Overlay className="expense-drawer__overlay" />
-          <Drawer.Content className="expense-drawer">
+          <Drawer.Content className={`expense-drawer${wide ? ' expense-drawer--wide' : ''}`}>
             <header className="expense-drawer__head">
               <div>
                 {eyebrow && <p className="expense-eyebrow expense-eyebrow--teal">{eyebrow}</p>}

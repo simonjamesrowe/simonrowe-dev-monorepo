@@ -14,6 +14,8 @@ import { useUploadReceipt } from '../../hooks/api/useExpenses';
 import type { AssistantAction } from '../../types/assistant';
 import { describeExpense, formatMoney, parsePounds } from '../expenses/money';
 
+import { summarizeAction, type SummaryEvent } from './actionSummary';
+
 export interface AssistantEditorOption {
   value: string;
   label: string;
@@ -22,23 +24,6 @@ export interface AssistantEditorOption {
 export type AssistantEditorOptions = Partial<Record<string, AssistantEditorOption[]>>;
 
 const EMPTY_OPTIONS: AssistantEditorOptions = {};
-
-const labels: Record<string, string> = {
-  CREATE_EVENT: 'Create event',
-  UPDATE_EVENT: 'Update event',
-  DELETE_EVENT: 'Delete event',
-  CREATE_CATEGORY: 'Create category',
-  UPDATE_CATEGORY: 'Update category',
-  DELETE_CATEGORY: 'Delete category',
-  CREATE_SCHEDULE_CHANGE: 'Request schedule change',
-  WITHDRAW_SCHEDULE_CHANGE: 'Withdraw schedule request',
-  START_MESSAGE_CONVERSATION: 'Start conversation',
-  SEND_MESSAGE: 'Send message',
-  CREATE_PERMISSION_REQUEST: 'Create permission request',
-  CREATE_EXPENSE: 'Add expense',
-  MARK_EXPENSE_PAID: 'Mark expense as paid',
-  CLAIM_EXPENSE_REIMBURSEMENT: 'Mark expense paid back',
-};
 
 const requiredFields: Record<string, string[]> = {
   CREATE_EVENT: ['title', 'startDate', 'childIds'],
@@ -57,19 +42,80 @@ const requiredFields: Record<string, string[]> = {
   CLAIM_EXPENSE_REIMBURSEMENT: ['expenseId'],
 };
 
-/** Plain names for the expense fields; anything else falls back to its spaced-out key. */
+/** Plain names for the payload keys; anything else falls back to its key in sentence case. */
 const FIELD_LABELS: Record<string, string> = {
   amount: 'Amount (£)',
   currency: 'Currency',
   payerId: 'Who paid, or will pay',
   sharePercent: 'Your share (%)',
   childIds: 'For',
+  childId: 'Child',
   expenseId: 'Expense',
   paidOn: 'Paid on',
   timing: 'Paid or coming up',
+  eventId: 'Event',
+  originalEventId: 'Event to change',
+  categoryId: 'Category',
+  requestId: 'Request',
+  conversationId: 'Conversation',
+  recipientId: 'To',
+  parentId: 'Children with',
+  parentIds: 'Parents going',
+  targetHint: 'What it refers to',
+  allDay: 'All day',
+  recurringFrequency: 'Repeats',
+  recurringDays: 'Repeats on',
 };
 
-/** Who the signed-in parent is, so an expense card can say who owes whom in plain words. */
+/**
+ * The order fields appear in the editor. On a wide screen it fills two columns row by row, so
+ * neighbours here sit side by side: start beside end, amount beside currency. Keys not listed
+ * keep their payload order after these.
+ */
+const FIELD_ORDER = [
+  'eventId', 'originalEventId', 'categoryId', 'requestId', 'conversationId', 'expenseId',
+  'targetHint', 'title', 'name', 'subject', 'recipientId',
+  'type', 'childId', 'location',
+  'amount', 'currency', 'category', 'timing', 'date', 'payerId', 'sharePercent', 'paidOn',
+  'originalStartDate', 'originalEndDate', 'newStartDate', 'newEndDate',
+  'startDate', 'endDate', 'startTime', 'endTime',
+  'allDay', 'parentId', 'recurringFrequency', 'recurringDays',
+  'icon', 'color', 'childIds', 'parentIds',
+  'message', 'description', 'reason', 'notes', 'note',
+];
+
+const LONG_TEXT = new Set(['message', 'notes', 'note', 'description', 'reason']);
+/** Fields that read better across the whole card than squeezed into one column. */
+const FULL_WIDTH = new Set(['title', 'name', 'subject', 'targetHint']);
+
+function fieldLabel(key: string) {
+  if (FIELD_LABELS[key]) return FIELD_LABELS[key];
+  const words = key.replace(/([A-Z])/g, ' $1').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function orderedFields(payload: Record<string, unknown>) {
+  const rank = (key: string) => {
+    const index = FIELD_ORDER.indexOf(key);
+    return index === -1 ? FIELD_ORDER.length : index;
+  };
+  return Object.entries(payload).sort(([a], [b]) => rank(a) - rank(b));
+}
+
+/** Plain words for each status, so a card says where it stands while closed. */
+const STATUS_LABELS: Record<string, string> = {
+  BLOCKED: 'Needs a choice',
+  PENDING: 'To review',
+  APPLYING: 'Applying',
+  APPLIED: 'Approved',
+  REJECTED: 'Rejected',
+  FAILED: 'Failed',
+};
+
+/**
+ * Who the signed-in parent is, so a card can say "you" and name the other parent: who owes whom
+ * on an expense, and who a message goes to.
+ */
 export interface ExpenseCardContext {
   meId: string;
   otherName: string;
@@ -143,6 +189,7 @@ export function AssistantActionCard({
   online,
   options = EMPTY_OPTIONS,
   expenseContext,
+  events,
   receiptImage,
 }: {
   familyId: string;
@@ -151,6 +198,8 @@ export function AssistantActionCard({
   online: boolean;
   options?: AssistantEditorOptions;
   expenseContext?: ExpenseCardContext;
+  /** The family's events by id, so a card that changes one can name it with its child and date. */
+  events?: Record<string, SummaryEvent>;
   /**
    * The photo this batch was read from, still only in the browser. It is attached to the expense
    * only if the parent leaves the box ticked and approves, so CoParent never keeps a photo the
@@ -217,16 +266,32 @@ export function AssistantActionCard({
     });
   };
 
+  const summary = summarizeAction(action, {
+    options,
+    meId: expenseContext?.meId,
+    otherName: expenseContext?.otherName,
+    events,
+  });
   const busy = edit.isPending || approve.isPending || reject.isPending || action.status === 'APPLYING';
   const mutationError = edit.error || approve.error || reject.error;
 
   return (
     <article className={`assistant-card assistant-card--${action.status.toLowerCase()}`}>
-      <button className="assistant-card__summary" type="button" onClick={() => setExpanded(!expanded)}>
+      <button
+        className="assistant-card__summary"
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
+      >
         <span className="assistant-card__rail" aria-hidden="true" />
-        <span>
-          <span className="assistant-card__type">{labels[action.actionType]}</span>
-          <span className="assistant-card__status">{action.status.toLowerCase()}</span>
+        <span className="assistant-card__heading">
+          <span className="assistant-card__title-row">
+            <span className="assistant-card__type">{summary.label}</span>
+            <span className={`assistant-card__status assistant-card__status--${action.status.toLowerCase()}`}>
+              {STATUS_LABELS[action.status] ?? action.status.toLowerCase()}
+            </span>
+          </span>
+          {summary.detail && <span className="assistant-card__detail">{summary.detail}</span>}
         </span>
         <ChevronDown className={expanded ? 'assistant-card__chevron--open' : ''} size={18} />
       </button>
@@ -264,32 +329,41 @@ export function AssistantActionCard({
           )}
 
           {showEditor && (
-            <form className="assistant-card__form" onSubmit={save}>
-              {Object.entries(action.payload).map(([key, value]) => (
-                <label key={key} className="assistant-field">
-                  <span>{FIELD_LABELS[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase())}</span>
-                  {options[key] ? (
-                    <select multiple={key.endsWith('Ids')} {...form.register(key)}>
-                      {!key.endsWith('Ids') && <option value="">Select…</option>}
-                      {options[key]?.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                  ) : typeof value === 'boolean' ? (
-                    <input type="checkbox" {...form.register(key)} />
-                  ) : key === 'message' || key === 'notes' || key === 'description' || key === 'reason' ? (
-                    <textarea rows={3} {...form.register(key)} />
-                  ) : (
-                    <input {...form.register(key)} />
-                  )}
-                  {form.formState.errors[key]?.message && (
-                    <small>{String(form.formState.errors[key]?.message)}</small>
-                  )}
-                </label>
-              ))}
-              <button className="assistant-button assistant-button--secondary" disabled={!online || busy} type="submit">
-                Save changes
-              </button>
+            <form className="assistant-card__form assistant-editor" onSubmit={save}>
+              {orderedFields(action.payload).map(([key, value]) => {
+                const multiple = key.endsWith('Ids') && !!options[key];
+                const wide = multiple || LONG_TEXT.has(key) || FULL_WIDTH.has(key);
+                return (
+                  <label
+                    key={key}
+                    className={`assistant-field${wide ? ' assistant-field--wide' : ''}${typeof value === 'boolean' ? ' assistant-field--inline' : ''}`}
+                  >
+                    <span>{fieldLabel(key)}</span>
+                    {options[key] ? (
+                      <select multiple={multiple} {...form.register(key)}>
+                        {!multiple && <option value="">Select…</option>}
+                        {options[key]?.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    ) : typeof value === 'boolean' ? (
+                      <input type="checkbox" {...form.register(key)} />
+                    ) : LONG_TEXT.has(key) ? (
+                      <textarea rows={3} {...form.register(key)} />
+                    ) : (
+                      <input {...form.register(key)} />
+                    )}
+                    {form.formState.errors[key]?.message && (
+                      <small>{String(form.formState.errors[key]?.message)}</small>
+                    )}
+                  </label>
+                );
+              })}
+              <div className="assistant-editor__actions">
+                <button className="assistant-button assistant-button--secondary" disabled={!online || busy} type="submit">
+                  Save changes
+                </button>
+              </div>
             </form>
           )}
 

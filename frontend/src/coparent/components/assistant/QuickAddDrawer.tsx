@@ -28,6 +28,7 @@ import {
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 
 import { AssistantActionCard, type AssistantEditorOptions } from './AssistantActionCard';
+import type { SummaryEvent } from './actionSummary';
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
@@ -102,6 +103,16 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
     currency: [{ value: 'GBP', label: 'GBP (£)' }],
   }), [categories.data, children.data, conversations.data, currentParentId, events.data,
     expenseParents.data, expenses.data, parents.data, requests.data]);
+
+  // Lets a collapsed card name the event it changes: "Ava — Swimming (Mon 12 Oct)".
+  const summaryEvents = useMemo<Record<string, SummaryEvent>>(
+    () => Object.fromEntries((events.data ?? []).map((event) => [event.id, {
+      title: event.title,
+      startDate: event.startDate,
+      childIds: event.childIds,
+    }])),
+    [events.data],
+  );
 
   const otherParentName = expenseParents.data?.find((parent) => parent.id !== currentParentId)
     ?.fullName.split(/\s+/)[0] ?? 'your co-parent';
@@ -345,6 +356,7 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
                   online={online}
                   options={editorOptions}
                   expenseContext={expenseContext}
+                  events={summaryEvents}
                   receiptImage={batchImages[batch.data.id] ?? null}
                 />
               ))}

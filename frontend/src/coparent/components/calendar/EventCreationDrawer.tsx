@@ -131,7 +131,7 @@ export function EventCreationDrawer({
           <Drawer.Overlay className="fixed inset-0 z-40 bg-black/40" />
           <Drawer.Content className="fixed bottom-0 right-0 top-0 z-50 w-full max-w-none bg-white shadow-xl outline-none sm:w-5/6 md:w-4/5 lg:w-3/4 dark:bg-slate-900">
             <Drawer.Title className="sr-only">
-              {mode === 'edit' ? 'Edit Event' : 'Create Event'}
+              {mode === 'edit' ? 'Edit event' : 'Add event'}
             </Drawer.Title>
             <Drawer.Description className="sr-only">
               {mode === 'edit'
@@ -142,7 +142,7 @@ export function EventCreationDrawer({
               {/* Fixed Header */}
               <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-700">
                 <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-                  {mode === 'edit' ? 'Edit Event' : 'Create Event'}
+                  {mode === 'edit' ? 'Edit event' : 'Add event'}
                 </h2>
                 <button
                   onClick={onClose}
@@ -276,7 +276,7 @@ export function EventCreationDrawer({
                     disabled={!isValid || isSubmitting}
                     className="rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-medium text-white shadow-lg shadow-teal-500/20 transition-all duration-200 hover:bg-teal-700 hover:shadow-xl hover:shadow-teal-500/30 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
                   >
-                    {isSubmitting ? 'Saving...' : 'Save'}
+                    {isSubmitting ? 'Saving…' : 'Save'}
                   </button>
                 </div>
               </div>

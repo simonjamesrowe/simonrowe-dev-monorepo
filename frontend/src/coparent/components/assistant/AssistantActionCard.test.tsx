@@ -61,6 +61,25 @@ describe('AssistantActionCard', () => {
     rejectMutation.mutate.mockClear();
   });
 
+  it('says exactly what it will do, and where it stands, before it is opened', () => {
+    render(
+      <AssistantActionCard
+        familyId="family-1"
+        batchId="batch-1"
+        action={{ ...expenseAction, status: 'APPLIED' }}
+        online
+        options={{ childIds: [{ value: 'child-1', label: 'Robin Rowe' }] }}
+        expenseContext={{ meId: 'parent-1', otherName: 'Sam' }}
+      />,
+    );
+
+    const summary = screen.getByRole('button', { name: /^Add expense/ });
+    expect(summary).toHaveAttribute('aria-expanded', 'false');
+    expect(summary).toHaveTextContent('Approved');
+    expect(screen.getByText('Kids padded coat · £39.00 · Sam paid, you owe Sam £19.50')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+  });
+
   it('explains blocked uncertainty and disables approval', () => {
     const action: AssistantAction = {
       id: 'action-1',
@@ -122,7 +141,7 @@ describe('AssistantActionCard', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /Create event pending/i }));
+    await user.click(screen.getByRole('button', { name: /^Create event To review/ }));
     const title = screen.getByRole('textbox', { name: 'Title' });
     await user.clear(title);
     await user.type(title, 'School concert');
@@ -161,7 +180,7 @@ describe('AssistantActionCard', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /Send message failed/i }));
+    await user.click(screen.getByRole('button', { name: /^Send message Failed/ }));
     expect(screen.getByText(action.failureMessage!)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Reject' })).toBeDisabled();
@@ -190,7 +209,7 @@ describe('AssistantActionCard', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /Delete event pending/i }));
+    await user.click(screen.getByRole('button', { name: /^Delete event To review/ }));
     await user.click(screen.getByRole('button', { name: 'Approve' }));
     await user.click(screen.getByRole('button', { name: 'Reject' }));
 
@@ -214,7 +233,7 @@ describe('AssistantActionCard', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /Add expense pending/i }));
+    await user.click(screen.getByRole('button', { name: /^Add expense To review/ }));
     expect(screen.getByText('Kids padded coat · £39.00')).toBeInTheDocument();
     expect(screen.getByText('Sam paid £39.00. Your share is £19.50.')).toBeInTheDocument();
     expect(screen.getByText("You'll owe Sam £19.50 once Sam agrees.")).toBeInTheDocument();
@@ -237,7 +256,7 @@ describe('AssistantActionCard', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /Add expense pending/i }));
+    await user.click(screen.getByRole('button', { name: /^Add expense To review/ }));
     expect(screen.getByRole('checkbox', { name: 'Attach this photo as the receipt' })).toBeChecked();
     expect(uploadMutation.mutateAsync).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Approve' }));
@@ -265,7 +284,7 @@ describe('AssistantActionCard', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /Add expense pending/i }));
+    await user.click(screen.getByRole('button', { name: /^Add expense To review/ }));
     await user.click(screen.getByRole('checkbox', { name: 'Attach this photo as the receipt' }));
     await user.click(screen.getByRole('button', { name: 'Approve' }));
 
