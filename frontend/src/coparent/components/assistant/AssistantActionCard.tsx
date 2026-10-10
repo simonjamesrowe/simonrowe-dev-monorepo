@@ -353,7 +353,7 @@ export function AssistantActionCard({
                 );
               })}
               <div className="assistant-editor__actions">
-                <button className="assistant-button assistant-button--secondary" disabled={!online || busy} type="submit">
+                <button className="cp-button cp-button--secondary" disabled={!online || busy} type="submit">
                   Save changes
                 </button>
               </div>
@@ -369,7 +369,7 @@ export function AssistantActionCard({
             {!terminal && (
               <>
                 <button
-                  className="assistant-button assistant-button--approve"
+                  className="cp-button cp-button--primary"
                   type="button"
                   disabled={!online || busy || action.status === 'BLOCKED'}
                   onClick={() => decide('approve')}
@@ -377,7 +377,7 @@ export function AssistantActionCard({
                   <Check size={16} /> {action.status === 'FAILED' ? 'Retry' : 'Approve'}
                 </button>
                 <button
-                  className="assistant-button assistant-button--reject"
+                  className="cp-button cp-button--danger"
                   type="button"
                   disabled={!online || busy}
                   onClick={() => decide('reject')}

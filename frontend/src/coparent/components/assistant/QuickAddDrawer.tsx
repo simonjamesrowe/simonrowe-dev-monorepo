@@ -5,7 +5,6 @@ import {
   ImagePlus,
   LoaderCircle,
   Trash2,
-  X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Drawer } from 'vaul';
@@ -26,6 +25,8 @@ import {
   useScheduleChangeRequests,
 } from '../../hooks/api';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
+
+import { CloseButton } from '../ui/CloseButton';
 
 import { AssistantActionCard } from './AssistantActionCard';
 import type { SummaryEvent } from './actionSummary';
@@ -204,9 +205,7 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
                 Turn a note or image into actions you review one by one.
               </Drawer.Description>
             </div>
-            <button type="button" className="assistant-drawer__close" onClick={dismiss} aria-label="Close Quick add">
-              <X size={20} />
-            </button>
+            <CloseButton onClick={dismiss} label="Close Quick add" />
           </header>
 
           <nav className="assistant-steps" aria-label="Quick add steps">
@@ -305,7 +304,7 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
                 </p>
                 <button
                   type="button"
-                  className="assistant-button assistant-button--analyse"
+                  className="cp-button cp-button--primary assistant-analyse"
                   disabled={!online || analyse.isPending || !familyId}
                   onClick={submit}
                 >
