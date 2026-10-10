@@ -1,77 +1,57 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { useQuickAdd } from '../components/assistant';
+import { dateToYmd } from '../components/calendar/recurrence';
+import { useNow } from '../components/calendar/timeGrid';
+import { ProfileDrawer } from '../components/dashboard';
 import {
-  ChildrenDrawer,
-  DashboardOverview,
-  InvitationsDrawer,
-  ProfileDrawer,
-} from '../components/dashboard';
-import { dateToYmd, expandRecurringEvents } from '../components/calendar/recurrence';
-import { DashboardExpensesPanel } from '../components/expenses/DashboardExpensesPanel';
+  DashboardBriefing,
+  type BriefingMoney,
+  type NeedsYouItem,
+} from '../components/dashboard/DashboardBriefing';
+import { briefingChildren, custodyParentOn, nextHandover } from '../components/dashboard/briefing';
 import { formatMoney } from '../components/expenses/money';
 import { firstName } from '../components/expenses/parentTone';
 import { useToast } from '../components/ui/ToastProvider';
 import {
-  useCancelInvitation,
   useChildren,
   useConversations,
+  useCurrentParentId,
+  useCurrentUser,
   useEvents,
+  useExpenseSummary,
+  useExpenseTransition,
+  useExpenses,
   useFamilies,
   useInvitations,
   useParents,
   useParentsWithInvited,
   useResendInvitation,
+  useScheduleChangeRequests,
   useUpdateCurrentUser,
-  useCurrentUser,
-  useCurrentParentId,
-  useExpenses,
-  useExpenseSummary,
-  useExpenseTransition,
 } from '../hooks/api';
 import type {
-  ApprovalsSummary,
-  Child as DashboardChild,
-  Event as DashboardEvent,
   Family as DashboardFamily,
   Parent as DashboardParent,
   ParentProfileUpdate,
-  PermissionRequest as DashboardPermissionRequest,
-  QuickAction,
-  SetupChecklist,
-  WidgetCard,
-  Invitation as DashboardInvitation,
-  Message as DashboardMessage,
 } from '../types/dashboard';
 
-const splitName = (fullName: string) => {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean);
-  const firstName = parts[0] ?? '';
-  const lastName = parts.slice(1).join(' ');
-  return { firstName, lastName };
+const SENT_ON = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+
+const sentOn = (iso: string) => {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : SENT_ON.format(date).replace(',', '');
 };
 
-const toDashboardRole = (role: string | undefined): DashboardParent['role'] => {
-  if (role === 'primary') return 'primary';
-  if (role === 'co-parent') return 'secondary';
-  return 'caregiver';
-};
-
-const toDashboardEventType = (type: string): DashboardEvent['type'] => {
-  if (type === 'custody' || type === 'school' || type === 'holiday') return type;
-  if (type === 'medical' || type === 'appointment') return 'appointment';
-  return 'activity';
-};
-
-const combineEventDateTime = (date: string, time: string | undefined, allDayEnd = false) => {
-  const datePart = date.split('T')[0];
-  const timePart = time || (allDayEnd ? '23:59:59' : '00:00:00');
-  return `${datePart}T${timePart.length === 5 ? `${timePart}:00` : timePart}`;
-};
+const preview = (text: string, length = 90) =>
+  text.length > length ? `${text.slice(0, length - 1).trimEnd()}…` : text;
 
 const DashboardPage = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const quickAdd = useQuickAdd();
+  const now = useNow();
 
   const { data: families = [], isLoading: familiesLoading } = useFamilies();
   const [activeFamilyId, setActiveFamilyId] = useState<string | undefined>();
@@ -79,22 +59,20 @@ const DashboardPage = () => {
   const { data: currentUser } = useCurrentUser();
   const currentParentId = useCurrentParentId(activeFamilyId);
   const { data: parents = [], isLoading: parentsLoading } = useParents(activeFamilyId);
+  // Expenses, messages and invitations can name a co-parent who has not joined yet.
+  const { data: allParents = [] } = useParentsWithInvited(activeFamilyId);
   const { data: children = [], isLoading: childrenLoading } = useChildren(activeFamilyId);
-  const { data: invitations = [], isLoading: invitationsLoading } = useInvitations(activeFamilyId);
-  const { data: conversations = [], isLoading: conversationsLoading } =
-    useConversations(activeFamilyId);
-  const { data: calendarEvents = [], isLoading: eventsLoading } = useEvents(activeFamilyId);
+  const { data: invitations = [] } = useInvitations(activeFamilyId);
+  const { data: conversations = [] } = useConversations(activeFamilyId);
+  const { data: events = [], isLoading: eventsLoading } = useEvents(activeFamilyId);
+  const { data: scheduleChangeRequests = [] } = useScheduleChangeRequests(activeFamilyId);
   const { data: expenses = [] } = useExpenses(activeFamilyId);
   const { data: expenseSummary } = useExpenseSummary(activeFamilyId);
   const expenseTransition = useExpenseTransition();
-
-  const updateCurrentUser = useUpdateCurrentUser();
   const resendInvitation = useResendInvitation();
-  const cancelInvitation = useCancelInvitation();
+  const updateCurrentUser = useUpdateCurrentUser();
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isChildrenOpen, setIsChildrenOpen] = useState(false);
-  const [isInvitesOpen, setIsInvitesOpen] = useState(false);
 
   useEffect(() => {
     const [firstFamily] = families;
@@ -103,517 +81,268 @@ const DashboardPage = () => {
     }
   }, [activeFamilyId, families]);
 
-  const family = useMemo(() => {
-    const apiFamily = families.find((entry) => entry.id === activeFamilyId) ?? families[0];
-    if (!apiFamily) return null;
+  const family = families.find((entry) => entry.id === activeFamilyId) ?? families[0];
+  const kids = useMemo(() => briefingChildren(children), [children]);
 
-    const primary = parents.find((p) => p.role === 'primary')?.id ?? parents[0]?.id ?? 'unknown';
-    const secondary = parents.find((p) => p.role !== 'primary')?.id ?? parents[1]?.id ?? primary;
-
-    const hasChild = children.length > 0;
-    const hasInvite = invitations.length > 0;
-    const progress = Math.min(1, (hasChild ? 0.5 : 0) + (hasInvite ? 0.5 : 0));
-
-    const dashboardFamily: DashboardFamily = {
-      id: apiFamily.id,
-      name: apiFamily.name,
-      timezone: apiFamily.timeZone,
-      primaryParentId: primary,
-      secondaryParentId: secondary,
-      childIds: children.map((c) => c.id),
-      createdAt: apiFamily.createdAt,
-      setupProgress: progress,
-    };
-
-    return dashboardFamily;
-  }, [activeFamilyId, children, families, invitations.length, parents]);
-
-  const dashboardParents = useMemo<DashboardParent[]>(() => {
-    return parents.map((parent) => ({
-      id: parent.id,
-      fullName: parent.fullName,
-      email: parent.email ?? currentUser?.email ?? '',
-      role: toDashboardRole(parent.role),
-      phone: '',
-      avatarUrl: parent.avatarUrl ?? null,
-      lastActiveAt: parent.lastSignedInAt ?? new Date().toISOString(),
-      notificationPreferences: { email: true, sms: false, push: true },
-    }));
-  }, [currentUser?.email, parents]);
-
-  const dashboardChildren = useMemo<DashboardChild[]>(() => {
-    return children.map((child) => {
-      const { firstName, lastName } = splitName(child.fullName);
-      return {
-        id: child.id,
-        firstName,
-        lastName,
-        birthdate: child.dateOfBirth,
-        grade: '',
-        school: child.school ?? '',
-        avatarUrl: null,
-        allergies: [],
-        medicalNotes: child.medicalNotes ?? '',
-      };
-    });
-  }, [children]);
-
-  const dashboardInvitations = useMemo<DashboardInvitation[]>(() => {
-    const inviterId = family?.primaryParentId ?? parents[0]?.id ?? 'unknown';
-    return invitations.map((invitation) => ({
-      id: invitation.id,
-      email: invitation.email,
-      role:
-        invitation.role === 'primary' || invitation.role === 'co-parent'
-          ? 'co-parent'
-          : 'caregiver',
-      status: invitation.status,
-      sentAt: invitation.sentAt,
-      expiresAt: invitation.expiresAt,
-      invitedByParentId: inviterId,
-    }));
-  }, [family?.primaryParentId, invitations, parents]);
-
-  const dashboardMessages = useMemo<DashboardMessage[]>(() => {
-    const fromParentId = family?.primaryParentId ?? parents[0]?.id ?? 'unknown';
-    const toParentId = family?.secondaryParentId ?? parents[1]?.id ?? fromParentId;
-
-    return conversations.map((conversation) => ({
-      id: conversation.id,
-      threadId: conversation.id,
-      fromParentId,
-      toParentId,
-      subject:
-        conversation.subject ||
-        (conversation.type === 'permission' ? 'Permission request' : 'Message'),
-      preview:
-        conversation.type === 'permission'
-          ? (conversation.permissionRequest?.description ?? 'Permission request')
-          : (conversation.messages?.[conversation.messages.length - 1]?.content ?? 'Conversation'),
-      sentAt: conversation.lastMessageAt,
-      unread: conversation.unreadCount > 0,
-    }));
-  }, [conversations, family?.primaryParentId, family?.secondaryParentId, parents]);
-
-  const dashboardUpcomingEvents = useMemo<DashboardEvent[]>(() => {
-    const now = Date.now();
-    const horizon = now + 14 * 24 * 60 * 60 * 1000;
-
-    // A repeating event is one stored row; what is upcoming is its occurrences in the window.
-    // Each occurrence keeps the `<eventId>:<date>` id the calendar gives it, so a click can
-    // open that date rather than the series' first one.
-    return expandRecurringEvents(
-      calendarEvents,
-      dateToYmd(new Date(now)),
-      dateToYmd(new Date(horizon)),
-    )
-      .map((event) => ({
-        id: event.id,
-        title: event.title,
-        type: toDashboardEventType(event.type),
-        startAt: combineEventDateTime(event.startDate, event.startTime),
-        endAt: combineEventDateTime(
-          event.endDate || event.startDate,
-          event.endTime,
-          event.allDay,
-        ),
-        location: event.location ?? '',
-        childId: event.childIds[0] ?? null,
-        status: 'confirmed' as const,
-        notes: event.notes ?? '',
-      }))
-      .filter((event) => {
-        const start = new Date(event.startAt).getTime();
-        const end = new Date(event.endAt).getTime();
-        return end >= now && start <= horizon;
-      })
-      .sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt));
-  }, [calendarEvents]);
-
-  const dashboardPermissionRequests = useMemo<DashboardPermissionRequest[]>(() => {
-    return conversations.flatMap((conversation) => {
-      const request = conversation.permissionRequest;
-      if (!request) return [];
-      const type: DashboardPermissionRequest['type'] =
-        request.type === 'schedule'
-          ? 'schedule-change'
-          : request.type === 'extracurricular'
-            ? 'activity'
-            : request.type;
-      return [
-        {
-          id: request.id,
-          title: conversation.subject,
-          type,
-          status: request.status,
-          requestedByParentId: request.requestedBy,
-          resolvedByParentId: null,
-          requestedAt: request.createdAt,
-          resolvedAt: request.resolvedAt,
-          summary: request.description,
-          relatedEntityType: 'document' as const,
-          relatedEntityId: request.childId,
-        },
-      ];
-    });
-  }, [conversations]);
-
-  const meParent = parents.find((parent) => parent.id === currentParentId);
-  // Expenses can name a co-parent who has been invited and not joined yet, so the expense
-  // widgets look them up too. Nothing else on the dashboard uses this parent.
-  const { data: expenseParents = [] } = useParentsWithInvited(activeFamilyId);
-  const otherParents = expenseParents.filter((parent) => parent.id !== currentParentId);
-  const otherParent = otherParents.find((parent) => parent.status === 'active')
-    ?? otherParents.find((parent) => parent.status === 'invited');
+  const otherParents = allParents.filter((parent) => parent.id !== currentParentId);
+  const otherParent =
+    otherParents.find((parent) => parent.status === 'active') ??
+    otherParents.find((parent) => parent.status === 'invited');
   const otherName = firstName(otherParent);
+  const nameOf = (parentId: string) =>
+    parentId === currentParentId
+      ? 'you'
+      : firstName(allParents.find((parent) => parent.id === parentId), 'your co-parent');
 
-  // Expenses the other parent sent, waiting on this parent's OK, shown beside permissions.
-  const expenseApprovals = useMemo<DashboardPermissionRequest[]>(
-    () =>
-      expenses
-        .filter(
-          (expense) =>
-            expense.agreement.status === 'pending' && expense.agreement.requestedBy !== currentParentId,
-        )
-        .map((expense) => ({
-          id: expense.id,
-          title: `${expense.title} · ${formatMoney(expense.amountPence)}`,
-          type: 'purchase',
-          status: 'pending',
-          requestedByParentId: expense.agreement.requestedBy,
-          resolvedByParentId: null,
-          requestedAt: expense.updatedAt,
-          resolvedAt: null,
-          summary: `${otherName} added it · your share ${formatMoney(
-            expense.shares.find((share) => share.parentId === currentParentId)?.sharePence ?? 0,
-          )}`,
-          relatedEntityType: 'expense' as const,
-          relatedEntityId: expense.id,
-        })),
-    [currentParentId, expenses, otherName],
+  const today = dateToYmd(now);
+  const custodyParentId = useMemo(() => custodyParentOn(events, today), [events, today]);
+  const handover = useMemo(() => nextHandover(events, today), [events, today]);
+
+  const agreeToExpense = async (expenseId: string) => {
+    const expense = expenses.find((entry) => entry.id === expenseId);
+    if (!activeFamilyId || !expense) return;
+    try {
+      await expenseTransition.mutateAsync({ familyId: activeFamilyId, expense, transition: 'agree' });
+      showToast({ variant: 'success', title: 'Agreed', description: `${expense.title} is agreed.` });
+    } catch {
+      showToast({ variant: 'error', title: 'That did not work', description: 'Reload and try again.' });
+    }
+  };
+
+  const resend = async (invitationId: string) => {
+    if (!activeFamilyId) return;
+    try {
+      await resendInvitation.mutateAsync({ id: invitationId, familyId: activeFamilyId });
+      showToast({ variant: 'success', title: 'Invitation resent', description: 'A new invitation email is on its way.' });
+    } catch {
+      showToast({ variant: 'error', title: 'Resend failed', description: 'Please try again.' });
+    }
+  };
+
+  // Everything waiting on this parent, most consequential first: money they are asked to agree,
+  // decisions the other parent asked for, then unread messages and anyone not yet joined.
+  const needs: NeedsYouItem[] = [];
+
+  const expenseApprovals = expenses.filter(
+    (expense) => expense.agreement.status === 'pending' && expense.agreement.requestedBy !== currentParentId,
   );
+  expenseApprovals.forEach((expense) => {
+    const myShare = expense.shares.find((share) => share.parentId === currentParentId)?.sharePence ?? 0;
+    needs.push({
+      id: `expense-${expense.id}`,
+      kind: 'expense',
+      title: `${expense.title} · ${formatMoney(expense.amountPence)}`,
+      detail: `${otherName} added it and asks you to agree. Your share is ${formatMoney(myShare)}.`,
+      actions: [
+        { label: 'Open', onClick: () => navigate(`/expenses?expense=${encodeURIComponent(expense.id)}`) },
+        {
+          label: 'Agree',
+          primary: true,
+          disabled: expenseTransition.isPending,
+          onClick: () => void agreeToExpense(expense.id),
+        },
+      ],
+    });
+  });
 
-  const approvalsSummary = useMemo<ApprovalsSummary>(() => {
-    const pendingPermissions = dashboardPermissionRequests.filter(
-      (request) => request.status === 'pending',
-    ).length;
-    const pendingExpenses = expenseApprovals.length;
-    return {
-      totalPending: pendingPermissions + pendingExpenses,
-      byType: { expenses: pendingExpenses, scheduleChanges: 0, permissions: pendingPermissions },
-    };
-  }, [dashboardPermissionRequests, expenseApprovals]);
-
-  const setupChecklist = useMemo<SetupChecklist>(() => {
-    const items = [
-      {
-        id: 'setup-profile',
-        label: 'Complete parent profiles',
-        completed: dashboardParents.length > 0,
-      },
-      { id: 'setup-children', label: 'Add children', completed: dashboardChildren.length > 0 },
-      { id: 'setup-invite', label: 'Invite co-parent', completed: dashboardInvitations.length > 0 },
-    ];
-    const completedCount = items.filter((item) => item.completed).length;
-    return { items, completedCount, totalCount: items.length };
-  }, [dashboardChildren.length, dashboardInvitations.length, dashboardParents.length]);
-
-  const widgetCards = useMemo<WidgetCard[]>(() => {
-    return [
-      {
-        id: 'wid-events',
-        title: 'Upcoming Events',
-        value: String(dashboardUpcomingEvents.length),
-        description: 'Next 14 days',
-        trend: 'flat',
-        delta: '0',
-        size: 'lg',
-        sectionId: 'calendar',
-      },
-      {
-        id: 'wid-approvals',
-        title: 'Pending Approvals',
-        value: String(approvalsSummary.totalPending),
-        description: 'Requires response',
-        trend: 'flat',
-        delta: '0',
-        size: 'md',
-        sectionId: 'permissions',
-      },
-      {
-        id: 'wid-balance',
-        title: 'Balance',
-        value: formatMoney(expenseSummary?.balance.netPence ?? 0),
-        description:
-          !expenseSummary || expenseSummary.balance.netPence === 0
-            ? 'All square'
-            : expenseSummary.balance.creditorParentId === currentParentId
-              ? `${otherName} owes you`
-              : `You owe ${otherName}`,
-        trend: 'flat',
-        delta: '0',
-        size: 'md',
-        sectionId: 'expenses-owed',
-      },
-      {
-        id: 'wid-unread',
-        title: 'Unread Messages',
-        value: String(dashboardMessages.filter((m) => m.unread).length),
-        description: 'Inbox',
-        trend: dashboardMessages.some((m) => m.unread) ? 'up' : 'flat',
-        delta: dashboardMessages.some((m) => m.unread) ? '+1' : '0',
-        size: 'sm',
-        sectionId: 'messaging',
-      },
-      {
-        id: 'wid-setup',
-        title: 'Family Setup',
-        value: family ? `${Math.round(family.setupProgress * 100)}%` : '0%',
-        description: `${Math.max(0, setupChecklist.totalCount - setupChecklist.completedCount)} steps remaining`,
-        trend: 'up',
-        delta: '+',
-        size: 'sm',
-        sectionId: 'family',
-      },
-      {
-        id: 'wid-activity',
-        title: 'Recent Activity',
-        value: '0',
-        description: 'This week',
-        trend: 'flat',
-        delta: '0',
-        size: 'lg',
-        sectionId: 'dashboard',
-      },
-    ];
-  }, [
-    approvalsSummary.totalPending,
-    currentParentId,
-    expenseSummary,
-    otherName,
-    dashboardMessages,
-    dashboardUpcomingEvents.length,
-    family,
-    setupChecklist.completedCount,
-    setupChecklist.totalCount,
-  ]);
-
-  const quickActions = useMemo<QuickAction[]>(
-    () => [
-      { id: 'add-expense', label: 'Add Expense', helper: 'Log a cost or snap a receipt', shortcut: 'E' },
-      {
-        id: 'create-event',
-        label: 'Create Event',
-        helper: 'Schedule custody or activity',
-        shortcut: 'C',
-      },
-      { id: 'send-message', label: 'Send Message', helper: 'Start a new thread', shortcut: 'M' },
-    ],
-    [],
-  );
-
-  const isLoading =
-    familiesLoading ||
-    parentsLoading ||
-    childrenLoading ||
-    invitationsLoading ||
-    conversationsLoading ||
-    eventsLoading;
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
-        <p className="text-slate-500 dark:text-slate-400">Loading dashboard...</p>
-      </div>
-    );
+  const otherExpenseActions = Math.max(0, (expenseSummary?.needsYourAction ?? 0) - expenseApprovals.length);
+  if (otherExpenseActions > 0) {
+    needs.push({
+      id: 'expenses-other',
+      kind: 'expense',
+      title:
+        otherExpenseActions === 1
+          ? 'An expense is waiting on you'
+          : `${otherExpenseActions} expenses are waiting on you`,
+      detail: 'A repayment to confirm, a dispute to settle or a payment to record.',
+      actions: [{ label: 'Open expenses', primary: true, onClick: () => navigate('/expenses') }],
+    });
   }
 
-  if (!family) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
-        <div className="max-w-md text-center">
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">No family yet</h1>
-          <p className="mt-2 text-slate-600 dark:text-slate-400">
-            Finish onboarding to create your first family.
-          </p>
-          <button
-            onClick={() => navigate('/onboarding')}
-            className="mt-6 rounded-full bg-teal-600 px-6 py-3 text-sm font-semibold text-white hover:bg-teal-700 dark:bg-teal-500 dark:text-slate-950"
-          >
-            Go to onboarding
-          </button>
-        </div>
-      </div>
-    );
-  }
+  scheduleChangeRequests
+    .filter((request) => request.status === 'pending' && request.requestedBy !== currentParentId)
+    .forEach((request) => {
+      needs.push({
+        id: `schedule-${request.id}`,
+        kind: 'schedule',
+        title: `${firstName(allParents.find((parent) => parent.id === request.requestedBy))} asked to change the schedule`,
+        detail: preview(request.reason || 'No reason given.'),
+        actions: [
+          {
+            label: 'Review',
+            primary: true,
+            onClick: () => navigate(`/calendar?request=${encodeURIComponent(request.id)}`),
+          },
+        ],
+      });
+    });
+
+  conversations.forEach((conversation) => {
+    const request = conversation.permissionRequest;
+    const openThread = () => navigate(`/messages?conversation=${encodeURIComponent(conversation.id)}`);
+    if (request?.status === 'pending' && request.requestedBy !== currentParentId) {
+      needs.push({
+        id: `permission-${request.id}`,
+        kind: 'permission',
+        title: conversation.subject || `Permission for ${request.childName}`,
+        detail: preview(request.description),
+        actions: [{ label: 'Respond', primary: true, onClick: openThread }],
+      });
+    } else if (conversation.unreadCount > 0) {
+      const last = conversation.messages?.[conversation.messages.length - 1];
+      needs.push({
+        id: `message-${conversation.id}`,
+        kind: 'message',
+        title: conversation.subject || `Message from ${otherName}`,
+        detail: preview(last?.content ?? 'New message.'),
+        actions: [{ label: 'Read', primary: true, onClick: openThread }],
+      });
+    }
+  });
+
+  invitations
+    .filter((invitation) => invitation.status === 'pending')
+    .forEach((invitation) => {
+      const invited = allParents.find(
+        (parent) => parent.status === 'invited' && parent.email?.toLowerCase() === invitation.email.toLowerCase(),
+      );
+      const name = invited ? firstName(invited) : invitation.email;
+      const sent = sentOn(invitation.sentAt);
+      needs.push({
+        id: `invite-${invitation.id}`,
+        kind: 'invite',
+        title: `${name} hasn't joined yet`,
+        detail: `${sent ? `Invitation sent ${sent}. ` : ''}They can't see the calendar or agree to expenses until they join.`,
+        actions: [
+          {
+            label: 'Resend',
+            primary: true,
+            disabled: resendInvitation.isPending,
+            onClick: () => void resend(invitation.id),
+          },
+        ],
+      });
+    });
+
+  const money: BriefingMoney | null = expenseSummary
+    ? (() => {
+        const { balance, upcoming } = expenseSummary;
+        const addExpense = { label: 'Add expense', onClick: () => navigate('/expenses?new=1') };
+        const upcomingLine =
+          upcoming.count > 0
+            ? `${upcoming.count === 1 ? 'One shared cost' : `${upcoming.count} shared costs`} coming up, your share ${formatMoney(upcoming.yourSharePence)}.`
+            : 'No shared costs coming up.';
+        if (balance.netPence === 0) {
+          return { headline: 'All square', detail: upcomingLine, actions: [addExpense] };
+        }
+        const owedToMe = balance.creditorParentId === currentParentId;
+        return {
+          headline: owedToMe
+            ? `${otherName} owes you ${formatMoney(balance.netPence)}`
+            : `You owe ${otherName} ${formatMoney(balance.netPence)}`,
+          detail: upcomingLine,
+          actions: [
+            addExpense,
+            { label: 'Settle up', primary: true, onClick: () => navigate('/expenses?settle=1') },
+          ],
+        };
+      })()
+    : null;
 
   // The profile drawer edits the signed-in person, never "the primary parent": PATCH /me
   // renames the caller, so showing somebody else's name there renamed you to them on Save.
-  const currentParent =
-    dashboardParents.find((p) => p.id === currentParentId) ?? dashboardParents[0];
+  const me = parents.find((parent) => parent.id === currentParentId);
+  const profileParent: DashboardParent | null = me
+    ? {
+        id: me.id,
+        fullName: me.fullName,
+        email: me.email ?? currentUser?.email ?? '',
+        role: me.role === 'primary' ? 'primary' : 'secondary',
+        phone: '',
+        avatarUrl: me.avatarUrl ?? null,
+        lastActiveAt: me.lastSignedInAt ?? new Date().toISOString(),
+        notificationPreferences: { email: true, sms: false, push: true },
+      }
+    : null;
+  const profileFamily: DashboardFamily | null = family
+    ? {
+        id: family.id,
+        name: family.name,
+        timezone: family.timeZone,
+        primaryParentId: parents.find((parent) => parent.role === 'primary')?.id ?? '',
+        secondaryParentId: parents.find((parent) => parent.role !== 'primary')?.id ?? '',
+        childIds: children.map((child) => child.id),
+        createdAt: family.createdAt,
+        setupProgress: 1,
+      }
+    : null;
 
   const handleSaveProfile = async (_parentId: string, update: ParentProfileUpdate) => {
     await updateCurrentUser.mutateAsync({ fullName: update.fullName });
     setIsProfileOpen(false);
   };
 
-  const handleResendInvitation = async (invitationId: string) => {
-    if (!activeFamilyId) return;
-    try {
-      await resendInvitation.mutateAsync({ id: invitationId, familyId: activeFamilyId });
-      showToast({
-        variant: 'success',
-        title: 'Invitation resent',
-        description: 'A new invitation email has been sent.',
-      });
-    } catch (error) {
-      console.error('Failed to resend invitation', error);
-      showToast({
-        variant: 'error',
-        title: 'Resend failed',
-        description: 'Please try again.',
-      });
-    }
-  };
+  if (familiesLoading || parentsLoading || childrenLoading || eventsLoading) {
+    return (
+      <div className="cp-brief cp-brief--loading">
+        <p className="cp-brief__empty">Loading your day…</p>
+      </div>
+    );
+  }
 
-  const handleCancelInvitation = async (invitationId: string) => {
-    if (!activeFamilyId) return;
-    try {
-      await cancelInvitation.mutateAsync({ id: invitationId, familyId: activeFamilyId });
-      showToast({
-        variant: 'success',
-        title: 'Invitation canceled',
-        description: 'The invite has been canceled.',
-      });
-    } catch (error) {
-      console.error('Failed to cancel invitation', error);
-      showToast({
-        variant: 'error',
-        title: 'Cancel failed',
-        description: 'Please try again.',
-      });
-    }
-  };
-
-  const handleNavigateSection = (sectionId: string) => {
-    if (sectionId === 'calendar') navigate('/calendar');
-    else if (sectionId === 'expenses') navigate('/expenses');
-    else if (sectionId === 'expenses-owed') navigate('/expenses?view=owed');
-    else if (sectionId === 'messaging') navigate('/messages');
-    else if (sectionId === 'family') navigate('/family-setup');
-    else if (sectionId === 'dashboard') navigate('/dashboard');
-    else navigate('/dashboard');
-  };
-
-  const handleAddChild = async () => {
-    setIsChildrenOpen(false);
-    navigate('/family-setup');
-  };
-
-  const handleEditChild = async (childId: string) => {
-    setIsChildrenOpen(false);
-    navigate(`/family-setup?childId=${encodeURIComponent(childId)}`);
-  };
+  if (!family) {
+    return (
+      <main className="cp-brief">
+        <h1 className="cp-brief__headline">No family yet.</h1>
+        <p className="cp-brief__sub">Finish onboarding to create your first family.</p>
+        <div className="cp-brief__actions">
+          <button
+            type="button"
+            className="cp-brief__btn cp-brief__btn--primary"
+            onClick={() => navigate('/onboarding')}
+          >
+            Go to onboarding
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <>
-      <DashboardOverview
-        family={family}
-        parents={dashboardParents}
-        children={dashboardChildren}
-        upcomingEvents={dashboardUpcomingEvents}
-        permissionRequests={[...expenseApprovals, ...dashboardPermissionRequests]}
-        messages={dashboardMessages}
-        invitations={dashboardInvitations}
-        activityFeed={[]}
-        expensesPanel={
-          <DashboardExpensesPanel
-            me={meParent}
-            other={otherParent}
-            expenses={expenses}
-            summary={expenseSummary}
-            onOpenExpenses={() => navigate('/expenses')}
-            onOpenExpense={(expense) => navigate(`/expenses?expense=${encodeURIComponent(expense.id)}`)}
-            onSettleUp={() => navigate('/expenses?settle=1')}
-            onAgree={async (expense) => {
-              if (!activeFamilyId) return;
-              try {
-                await expenseTransition.mutateAsync({ familyId: activeFamilyId, expense, transition: 'agree' });
-                showToast({ variant: 'success', title: 'Agreed', description: `${expense.title} is agreed.` });
-              } catch {
-                showToast({ variant: 'error', title: 'That did not work', description: 'Reload and try again.' });
-              }
-            }}
-          />
-        }
-        approvalsSummary={approvalsSummary}
-        setupChecklist={setupChecklist}
-        widgetCards={widgetCards}
-        quickActions={quickActions}
-        onOpenProfileDrawer={() => setIsProfileOpen(true)}
-        onOpenChildrenDrawer={() => setIsChildrenOpen(true)}
-        onOpenInvitationsDrawer={() => setIsInvitesOpen(true)}
-        onAddChild={handleAddChild}
-        onEditChild={handleEditChild}
-        onResendInvitation={handleResendInvitation}
-        onCancelInvitation={handleCancelInvitation}
-        onNavigateSection={handleNavigateSection}
-        onViewApproval={(permissionId) => {
-          if (expenseApprovals.some((approval) => approval.id === permissionId)) {
-            navigate(`/expenses?expense=${encodeURIComponent(permissionId)}`);
-            return;
-          }
-          const conversation = conversations.find(
-            (entry) => entry.permissionRequest?.id === permissionId,
-          );
-          navigate(
-            conversation
-              ? `/messages?conversation=${encodeURIComponent(conversation.id)}`
-              : '/messages',
-          );
-        }}
-        onViewEvent={(eventId) => {
-          const [sourceId, occurrence] = eventId.split(':');
+      <DashboardBriefing
+        now={now}
+        children={kids}
+        events={events}
+        custodyParentName={custodyParentId ? nameOf(custodyParentId) : null}
+        handover={handover ? { date: handover.date, parentName: nameOf(handover.parentId) } : null}
+        needs={needs}
+        money={money}
+        onQuickAdd={quickAdd.available ? quickAdd.open : undefined}
+        onAddEvent={() => navigate('/calendar?create=true')}
+        onOpenCalendar={() => navigate('/calendar')}
+        onOpenEvent={(eventId, occurrence) =>
           navigate(
             occurrence
-              ? `/calendar?edit=${encodeURIComponent(sourceId)}&occurrence=${occurrence}`
+              ? `/calendar?edit=${encodeURIComponent(eventId)}&occurrence=${occurrence}`
               : `/calendar?event=${encodeURIComponent(eventId)}`,
-          );
-        }}
-        onOpenMessageThread={(threadId) =>
-          navigate(`/messages?conversation=${encodeURIComponent(threadId)}`)
+          )
         }
-        onQuickAddExpense={() => navigate('/expenses?new=1')}
-        onQuickCreateEvent={() => navigate('/calendar')}
-        onQuickSendMessage={() => navigate('/messages')}
+        onEditProfile={() => setIsProfileOpen(true)}
+        onFamilySetup={() => navigate('/family-setup')}
       />
 
-      {currentParent && (
+      {/* Mounted only while open: parked off-screen, its shadow showed down the page's right
+          edge and its fields could still be reached with Tab. */}
+      {isProfileOpen && profileParent && profileFamily && (
         <ProfileDrawer
-          parent={currentParent}
-          family={family}
+          parent={profileParent}
+          family={profileFamily}
           isOpen={isProfileOpen}
           onClose={() => setIsProfileOpen(false)}
           onSaveProfile={handleSaveProfile}
         />
       )}
-
-      <ChildrenDrawer
-        children={dashboardChildren}
-        isOpen={isChildrenOpen}
-        onClose={() => setIsChildrenOpen(false)}
-        onAddChild={handleAddChild}
-        onEditChild={handleEditChild}
-      />
-
-      <InvitationsDrawer
-        invitations={dashboardInvitations}
-        parents={dashboardParents}
-        isOpen={isInvitesOpen}
-        onClose={() => setIsInvitesOpen(false)}
-        onResendInvitation={handleResendInvitation}
-        onCancelInvitation={handleCancelInvitation}
-      />
     </>
   );
 };

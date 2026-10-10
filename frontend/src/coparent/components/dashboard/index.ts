@@ -1,4 +1,2 @@
-export { DashboardOverview } from './DashboardOverview';
+export { DashboardBriefing } from './DashboardBriefing';
 export { ProfileDrawer } from './ProfileDrawer';
-export { ChildrenDrawer } from './ChildrenDrawer';
-export { InvitationsDrawer } from './InvitationsDrawer';
