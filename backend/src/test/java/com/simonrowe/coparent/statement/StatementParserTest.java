@@ -169,6 +169,19 @@ class StatementParserTest {
   }
 
   @Test
+  void recognisesOnlyWhatIsLeftOfMandateNumbers() {
+    assertThat(List.of("MANDATE NO 0143", "MANDATE NO00155", "MAN", "M", "MANDAT"))
+        .allMatch(StatementParser::isMandateSuffix);
+    assertThat(List.of("M1A", "Monday treat", "MANDATE NO 12A", "", "X MANDATE"))
+        .noneMatch(StatementParser::isMandateSuffix);
+    assertThat(StatementParser.santanderParts("BILL PAYMENT TO A SHOP REFERENCE order, M1A"))
+        .containsExactly("A SHOP", "Payment, ref order, M1A");
+    assertThat(StatementParser.santanderParts(
+        "BILL PAYMENT TO A CLUB REFERENCE fees ,  MANDATE NO 7"))
+        .containsExactly("A CLUB", "Payment, ref fees");
+  }
+
+  @Test
   void readsPenceExactlyAndRefusesFractionsOfPennies() {
     assertThat(StatementParser.pence("-2,502.73")).isEqualTo(-250273L);
     assertThat(StatementParser.pence("£4.5")).isEqualTo(450L);

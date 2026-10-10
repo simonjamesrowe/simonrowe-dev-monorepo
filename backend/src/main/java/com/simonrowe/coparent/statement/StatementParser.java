@@ -296,16 +296,32 @@ public final class StatementParser {
         return null;
       }
       String ref = raw.substring(reference + " REFERENCE ".length());
-      // The export cuts long lines short, so the mandate suffix can end mid-word ("MAN").
-      final int mandate = ref.lastIndexOf(", M");
-      if (mandate >= 0 && ref.substring(mandate + 2).chars()
-          .allMatch(c -> Character.isUpperCase(c) || Character.isDigit(c) || c == ' ')) {
-        ref = ref.substring(0, mandate);
+      // The export cuts long lines short, so the mandate suffix can end mid-word ("MAN"). A
+      // valid suffix holds no comma, so it can only follow the last one.
+      final int comma = ref.lastIndexOf(',');
+      if (comma >= 0 && isMandateSuffix(ref.substring(comma + 1).stripLeading())) {
+        ref = ref.substring(0, comma);
       }
       return new String[] {raw.substring(prefix.length(), reference).strip(),
           "%s, ref %s".formatted(kind, ref.strip())};
     }
     return null;
+  }
+
+  /** {@code M}, then capitals and spaces, then digits: what is left of "MANDATE NO 0143". */
+  static boolean isMandateSuffix(final String text) {
+    if (text.isEmpty() || text.charAt(0) != 'M') {
+      return false;
+    }
+    int index = 1;
+    while (index < text.length()
+        && (Character.isUpperCase(text.charAt(index)) || text.charAt(index) == ' ')) {
+      index++;
+    }
+    while (index < text.length() && Character.isDigit(text.charAt(index))) {
+      index++;
+    }
+    return index == text.length();
   }
 
   private ParsedStatement santanderCreditCard(final String text) {
