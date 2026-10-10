@@ -37,6 +37,31 @@ describe('expandRecurringEvents', () => {
     );
 
     expect(startDates(expanded)).toEqual(['2026-09-29', '2026-10-06', '2026-10-13']);
+    // The series' end is when it stops, not how long each occurrence lasts: a two-week series
+    // used to give every occurrence a two-week span.
+    expect(expanded.every((event) => event.endDate === event.startDate)).toBe(true);
+  });
+
+  it('keeps a repeating custody day to its own day, so it cannot cover the rest of the series', () => {
+    const expanded = expandRecurringEvents(
+      [
+        weekly({
+          type: 'custody',
+          endDate: '2026-12-18T00:00:00Z',
+          recurring: { frequency: 'weekly', days: ['friday'] },
+        }),
+      ],
+      '2026-10-01',
+      '2026-10-31',
+    );
+
+    expect(expanded.map((event) => [event.startDate, event.endDate])).toEqual([
+      ['2026-10-02', '2026-10-02'],
+      ['2026-10-09', '2026-10-09'],
+      ['2026-10-16', '2026-10-16'],
+      ['2026-10-23', '2026-10-23'],
+      ['2026-10-30', '2026-10-30'],
+    ]);
   });
 
   it.each([['TUE'], ['TU'], ['Tuesday'], ['tues']])(

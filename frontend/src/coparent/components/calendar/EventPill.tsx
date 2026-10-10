@@ -7,6 +7,8 @@ interface EventPillProps {
   onClick?: (e: React.MouseEvent) => void;
   compact?: boolean;
   showTime?: boolean;
+  /** One line, title and start time, for a box too short to hold the full layout. */
+  dense?: boolean;
   ownerLabel?: string;
 }
 
@@ -15,6 +17,7 @@ export function EventPill({
   onClick,
   compact = false,
   showTime = false,
+  dense = false,
   ownerLabel,
 }: EventPillProps) {
   const color = getEventTypeColor(event.type);
@@ -71,12 +74,32 @@ export function EventPill({
         className={`flex w-full items-center gap-1 rounded px-1.5 py-0.5 text-left transition-colors duration-150 ${colors.bg} `}
       >
         <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${colors.dot}`} />
-        <span className={`truncate text-[10px] font-medium sm:text-xs ${colors.text}`}>
+        {/* The title gets the room; the owner is the first thing to go when there is none. */}
+        <span className={`min-w-0 flex-1 truncate text-[10px] font-medium sm:text-xs ${colors.text}`}>
           {event.title}
         </span>
         {ownerLabel && (
-          <span className="ml-auto text-[9px] uppercase tracking-wide text-slate-400">
+          <span className="ml-auto hidden flex-shrink-0 text-[9px] uppercase tracking-wide text-slate-400 sm:inline">
             {ownerLabel}
+          </span>
+        )}
+      </button>
+    );
+  }
+
+  if (dense) {
+    return (
+      <button
+        onClick={onClick}
+        className={`flex h-full w-full items-center gap-1 overflow-hidden rounded-lg px-2 text-left transition-all duration-150 ${colors.bg}`}
+      >
+        <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${colors.dot}`} />
+        <span className={`min-w-0 flex-1 truncate text-[11px] font-medium ${colors.text}`}>
+          {event.title}
+        </span>
+        {event.startTime && (
+          <span className="flex-shrink-0 text-[10px] text-slate-500 dark:text-slate-400">
+            {event.startTime}
           </span>
         )}
       </button>
@@ -86,7 +109,7 @@ export function EventPill({
   return (
     <button
       onClick={onClick}
-      className={`flex h-full w-full flex-col rounded-lg p-2 text-left transition-all duration-150 ${colors.bg} hover:border-current/10 border border-transparent`}
+      className={`flex h-full w-full flex-col overflow-hidden rounded-lg p-2 text-left transition-all duration-150 ${colors.bg} hover:border-current/10 border border-transparent`}
     >
       <div className="flex items-center gap-1.5">
         <span className={`h-2 w-2 flex-shrink-0 rounded-full ${colors.dot}`} />
@@ -100,8 +123,8 @@ export function EventPill({
       )}
 
       {showTime && event.startTime && (
-        <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
-          {event.startTime} – {event.endTime}
+        <div className="mt-1 truncate text-[10px] text-slate-500 dark:text-slate-400">
+          {event.endTime ? `${event.startTime} – ${event.endTime}` : event.startTime}
         </div>
       )}
 

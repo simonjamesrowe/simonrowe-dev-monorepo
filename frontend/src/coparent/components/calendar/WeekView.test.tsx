@@ -76,4 +76,127 @@ describe('WeekView', () => {
 
     expect(screen.queryByTestId('week-now-line')).not.toBeInTheDocument();
   });
+
+  const oneOff = (id: string, overrides: Partial<Event>): Event => ({
+    ...football,
+    id,
+    title: id,
+    startDate: '2026-10-01',
+    recurring: null,
+    ...overrides,
+  });
+
+  it('puts overlapping events side by side instead of on top of each other', () => {
+    render(
+      <WeekView
+        currentDate={new Date(2026, 8, 30)}
+        events={[
+          oneOff('Dentist', { startTime: '15:30', endTime: '16:30' }),
+          oneOff('Parents evening', { startTime: '16:00', endTime: '17:00' }),
+        ]}
+        parents={{}}
+        onDayClick={vi.fn()}
+      />,
+    );
+
+    const dentist = screen.getByRole('button', { name: /Dentist/ }).parentElement as HTMLElement;
+    const evening = screen.getByRole('button', { name: /Parents evening/ })
+      .parentElement as HTMLElement;
+    expect(dentist.style.left).not.toBe(evening.style.left);
+    // Each takes half the column (jsdom normalises the calc, so match the half, not the text).
+    expect(dentist.style.width).toContain('0.5');
+  });
+
+  it('lists all-day events in the day header and links the rest to the day', async () => {
+    const onDayClick = vi.fn();
+    render(
+      <WeekView
+        currentDate={new Date(2026, 8, 30)}
+        events={[
+          oneOff('INSET day', { allDay: true, startTime: undefined, endTime: undefined }),
+          oneOff('Book fair', { allDay: true, startTime: undefined, endTime: undefined }),
+          oneOff('Non-uniform day', { allDay: true, startTime: undefined, endTime: undefined }),
+        ]}
+        parents={{}}
+        onDayClick={onDayClick}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'INSET day' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Non-uniform day' })).not.toBeInTheDocument();
+    screen.getByRole('button', { name: '+1 more' }).click();
+    expect(onDayClick).toHaveBeenCalledWith(new Date(2026, 9, 1));
+  });
+
+  it('draws a short event on one line, so its text stays inside its box', () => {
+    render(
+      <WeekView
+        currentDate={new Date(2026, 8, 30)}
+        events={[oneOff('Swimming', { startTime: '18:30', endTime: '19:00' })]}
+        parents={{}}
+        onDayClick={vi.fn()}
+      />,
+    );
+
+    const pill = screen.getByRole('button', { name: /Swimming/ });
+    expect(pill.className).toContain('overflow-hidden');
+    expect(pill).toHaveTextContent('Swimming18:30');
+    expect(pill).not.toHaveTextContent('19:00');
+  });
+
+  it('gives the header and the grid one column template, so days stay over their events', () => {
+    const { container } = render(
+      <WeekView
+        currentDate={new Date(2026, 8, 30)}
+        events={[]}
+        parents={{}}
+        onDayClick={vi.fn()}
+      />,
+    );
+
+    const templates = Array.from(container.querySelectorAll<HTMLElement>('.grid')).map(
+      (grid) => grid.style.gridTemplateColumns,
+    );
+    expect(templates).toEqual([
+      '60px repeat(7, minmax(0, 1fr))',
+      '60px repeat(7, minmax(0, 1fr))',
+    ]);
+  });
+
+  it('draws the time line across today only', () => {
+    render(
+      <WeekView
+        currentDate={new Date(2026, 8, 30)}
+        events={[]}
+        parents={{}}
+        onDayClick={vi.fn()}
+      />,
+    );
+
+    const line = screen.getByTestId('week-now-line');
+    // Today is the Wednesday, the fourth day column after the hour labels.
+    const column = line.parentElement as HTMLElement;
+    expect(Array.from(column.parentElement!.children).indexOf(column)).toBe(4);
+  });
+
+  it('names nobody on an event when only one parent is on the calendar', () => {
+    const simon = { id: 'simon', name: 'Simon', fullName: 'Simon Rowe', email: '', color: 'violet', avatarUrl: null };
+    const rhian = { id: 'rhian', name: 'Rhian', fullName: 'Rhian R', email: '', color: 'sky', avatarUrl: null };
+    const event = oneOff('Cricket', { startTime: '18:00', endTime: '19:30', parentId: 'simon' });
+
+    const { rerender } = render(
+      <WeekView currentDate={new Date(2026, 8, 30)} events={[event]} parents={{ simon }} onDayClick={vi.fn()} />,
+    );
+    expect(screen.getByRole('button', { name: /Cricket/ })).not.toHaveTextContent('Simon');
+
+    rerender(
+      <WeekView
+        currentDate={new Date(2026, 8, 30)}
+        events={[event]}
+        parents={{ simon, rhian }}
+        onDayClick={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Cricket/ })).toHaveTextContent('Simon');
+  });
 });
