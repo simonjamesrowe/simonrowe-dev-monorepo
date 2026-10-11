@@ -11,8 +11,12 @@ import static org.mockito.Mockito.verify;
 
 import com.simonrowe.coparent.config.CoparentProperties;
 import com.simonrowe.coparent.model.Expense;
+import com.simonrowe.coparent.model.ExpenseSettlement;
 import com.simonrowe.coparent.model.Parent;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
+import org.bson.types.ObjectId;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mail.MailSendException;
@@ -62,6 +66,34 @@ class ExpenseMailerTest {
     mailer(true).claimed(ALEX_PARENT, SAM_PARENT, expense);
 
     assertThat(sent().getText()).contains("Sam says they paid you back £32.45");
+  }
+
+  @Test
+  void settleUpIsOneEmailListingEachPaymentAndWhatItPaysBack() {
+    final Expense shoes = ExpenseFixtures.paid(6490, ALEX, 50, Expense.AGREED, Expense.CLAIMED);
+    final Expense trip = ExpenseFixtures.paid(3000, ALEX, 50, Expense.AGREED, Expense.CLAIMED);
+    final ExpenseSettlement settlement = new ExpenseSettlement(new ObjectId(),
+        ExpenseFixtures.FAMILY, SAM, ALEX, 4745, Expense.GBP, List.of(
+            new ExpenseSettlement.Payment(ExpenseSettlement.BANK_TRANSFER, 3000,
+                LocalDate.of(2026, 10, 6), "KIDS SEPT"),
+            new ExpenseSettlement.Payment(ExpenseSettlement.CASH, 1000,
+                LocalDate.of(2026, 10, 7), null),
+            new ExpenseSettlement.Payment(ExpenseSettlement.OTHER, 745,
+                LocalDate.of(2026, 10, 8), null)),
+        List.of(shoes.id(), trip.id()), SAM, Instant.parse("2026-10-08T09:00:00Z"));
+
+    mailer(true).settlementRecorded(ALEX_PARENT, SAM_PARENT, settlement, List.of(shoes, trip));
+
+    final SimpleMailMessage message = sent();
+    assertThat(message.getTo()).containsExactly("alex@example.com");
+    assertThat(message.getSubject()).isEqualTo("Sam says they paid you £47.45");
+    assertThat(message.getText()).contains(
+        "- Bank transfer, 6 Oct 2026: £30.00 (ref KIDS SEPT)",
+        "- Cash, 7 Oct 2026: £10.00",
+        "- Other payment, 8 Oct 2026: £7.45",
+        "- Item: £32.45",
+        "- Item: £15.00",
+        "https://coparents.example/expenses?view=transfers");
   }
 
   @Test

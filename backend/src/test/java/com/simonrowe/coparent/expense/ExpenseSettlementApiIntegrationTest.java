@@ -185,6 +185,65 @@ class ExpenseSettlementApiIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void refusesPaymentsItCannotRecord() throws Exception {
+    final Fixture f = family();
+    final String shoes = agreedPaidBy(f, "alice", f.aliceId(), 6490);
+    final String item = "{\"id\":\"%s\",\"version\":2}".formatted(shoes);
+    final String payment = """
+        {"method":"%s","amountPence":%d,"paidOn":"%s","reference":"%s"}""";
+
+    for (final String payments : List.of(
+        payment.formatted("cheque", 3245, yesterday(), "x"),
+        payment.formatted("cash", 0, yesterday(), "x"),
+        payment.formatted("cash", 3245, LocalDate.now().minusYears(3), "x"),
+        payment.formatted("cash", 3245, yesterday(), "r".repeat(101)),
+        """
+            {"method":"cash","amountPence":3245}""",
+        String.join(",", java.util.Collections.nCopies(11,
+            payment.formatted("cash", 295, yesterday(), "x"))))) {
+      record(f, "bob", """
+          {"items":[%s],"payments":[%s]}
+          """.formatted(item, payments))
+          .andExpect(status().isBadRequest());
+    }
+    record(f, "bob", """
+        {"items":[%s,%s],"payments":[%s]}
+        """.formatted(item, item, payment.formatted("cash", 3245, yesterday(), "x")))
+        .andExpect(status().isBadRequest());
+    record(f, "bob", """
+        {"items":[{"id":"%s"}],"payments":[]}
+        """.formatted(shoes))
+        .andExpect(status().isBadRequest());
+
+    assertNothingSettled(f, shoes);
+  }
+
+  @Test
+  void confirmingRepaymentsAlreadySentRecordsNoNewPayment() throws Exception {
+    final Fixture f = family();
+    final String shoes = agreedPaidBy(f, "alice", f.aliceId(), 6490);
+    mockMvc.perform(post(EXPENSES + "/{id}/reimbursement/claim", f.familyId(), shoes)
+            .with(user("bob")).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"version\":2,\"note\":\"Bank transfer\"}"))
+        .andExpect(status().isOk());
+
+    record(f, "alice", """
+        {"items":[{"id":"%s","version":3}],
+         "payments":[{"method":"cash","amountPence":3245,"paidOn":"%s"}]}
+        """.formatted(shoes, yesterday()))
+        .andExpect(status().isBadRequest());
+    record(f, "alice", """
+        {"items":[{"id":"%s","version":3}]}
+        """.formatted(shoes))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.settlement", nullValue()))
+        .andExpect(jsonPath("$.results[0].outcome", is("confirmed")));
+    // Nothing moved now, so nothing in it is waiting on anyone.
+    assertThat(mongoTemplate.getCollection(V055CreateCoparentSettlements.SETTLEMENTS)
+        .countDocuments()).isZero();
+  }
+
+  @Test
   void strangersCannotSeeOrRecordSettleUps() throws Exception {
     final Fixture f = family();
     mockMvc.perform(get(SETTLEMENTS, f.familyId()).with(user("mallory")))
