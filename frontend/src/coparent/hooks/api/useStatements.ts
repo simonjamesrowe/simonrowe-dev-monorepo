@@ -3,6 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api/client';
 import type { Expense, ExpenseRequest } from '../../types/expenses';
 import type {
+  StatementBatchItem,
+  StatementBatchResult,
+  StatementBatchTerms,
   StatementCheckResult,
   StatementOverview,
   StatementRowInput,
@@ -127,6 +130,32 @@ export function useConvertStatementTransaction() {
           expense,
         })
       ).data,
+    onSettled: (_data, _error, variables) => {
+      invalidate(variables.familyId);
+      queryClient.invalidateQueries({
+        queryKey: expenseKeys.list(variables.familyId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: expenseKeys.summary(variables.familyId),
+      });
+    },
+  });
+}
+
+/** Logs several transactions the same way at once, each as its own expense. */
+export function useConvertStatementTransactions() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateStatements();
+  return useMutation({
+    mutationFn: async ({
+      familyId,
+      items,
+      terms,
+    }: {
+      familyId: string;
+      items: StatementBatchItem[];
+      terms: StatementBatchTerms;
+    }) => (await apiClient.post<StatementBatchResult[]>(`${base(familyId)}/expenses/batch`, { items, terms })).data,
     onSettled: (_data, _error, variables) => {
       invalidate(variables.familyId);
       queryClient.invalidateQueries({

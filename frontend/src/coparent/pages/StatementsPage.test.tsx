@@ -22,6 +22,7 @@ vi.mock('../hooks/api', () => ({
   useDismissStatementTransaction: vi.fn(),
   useForgetStatementTransaction: vi.fn(),
   useConvertStatementTransaction: vi.fn(),
+  useConvertStatementTransactions: vi.fn(),
   useCreateExpense: vi.fn(),
   useUpdateExpense: vi.fn(),
   useUploadReceipt: vi.fn(),
@@ -61,6 +62,7 @@ const mutateAsync = {
   dismiss: vi.fn(),
   forget: vi.fn(),
   convert: vi.fn(),
+  convertAll: vi.fn(),
 };
 const mutation = (fn: ReturnType<typeof vi.fn>) => ({ mutateAsync: fn, isPending: false }) as never;
 
@@ -81,6 +83,7 @@ function setUp({ overview, listed = [] }: { overview: StatementOverview; listed?
   vi.mocked(apiHooks.useDismissStatementTransaction).mockReturnValue(mutation(mutateAsync.dismiss));
   vi.mocked(apiHooks.useForgetStatementTransaction).mockReturnValue(mutation(mutateAsync.forget));
   vi.mocked(apiHooks.useConvertStatementTransaction).mockReturnValue(mutation(mutateAsync.convert));
+  vi.mocked(apiHooks.useConvertStatementTransactions).mockReturnValue(mutation(mutateAsync.convertAll));
   for (const hook of [apiHooks.useCreateExpense, apiHooks.useUpdateExpense, apiHooks.useUploadReceipt]) {
     vi.mocked(hook).mockReturnValue(mutation(vi.fn()));
   }
@@ -188,6 +191,57 @@ describe('StatementsPage', () => {
       payerId: 'sam',
     });
     expect(await screen.findByText('Expense added')).toBeInTheDocument();
+  });
+
+  it('offers to log the other payments to the same merchant the same way, in one go', async () => {
+    const user = userEvent.setup();
+    setUp({ overview: overview(0) });
+    const statement = uploadResult(false);
+    const row = (letter: string, date: string, amountPence: number, state: 'checked' | 'dismissed' = 'checked') => ({
+      ...statement.rows[0],
+      fingerprint: letter.repeat(64),
+      date,
+      description: `BOOTS 07${letter === 'd' ? '75' : '12'}`,
+      amountPence,
+      state,
+    });
+    mutateAsync.upload.mockResolvedValue({
+      ...statement,
+      rows: [row('d', '2026-09-05', 2585), row('e', '2026-09-04', 1099), row('f', '2026-09-03', 450, 'dismissed'), ...statement.rows],
+    });
+    const logged = testExpense({ id: 'new', title: 'Calpol', category: 'medical', amountPence: 2585 });
+    mutateAsync.convert.mockResolvedValue(logged);
+    mutateAsync.convertAll.mockResolvedValue([
+      { fingerprint: 'e'.repeat(64), expense: testExpense({ id: 'new-2' }), message: null },
+    ]);
+    renderPage();
+
+    await user.upload(screen.getByLabelText('Statement files'), new File(['x'], 'activity.csv', { type: 'text/csv' }));
+    await screen.findByText('Nothing new in that file');
+    await user.click(screen.getByRole('button', { name: /Latest upload/ }));
+    await user.click(
+      within(screen.getByTestId(`statement-row-${'d'.repeat(64)}`)).getByRole('button', { name: 'Turn into expense' }),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Add expense' }));
+
+    expect(await screen.findByText('2 more from BOOTS 0775')).toBeInTheDocument();
+    // The one marked not shared is listed, but not ticked.
+    const boxes = screen.getAllByRole('checkbox');
+    expect(boxes.map((box) => (box as HTMLInputElement).checked)).toEqual([true, false]);
+    expect(screen.getByText(/you marked it not shared/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Log 1 expense' }));
+
+    await waitFor(() => expect(mutateAsync.convertAll).toHaveBeenCalledTimes(1));
+    const call = mutateAsync.convertAll.mock.calls[0][0];
+    expect(call.items).toEqual([
+      expect.objectContaining({ fingerprint: 'e'.repeat(64), uploadId: null, transaction: expect.objectContaining({ amountPence: 1099 }) }),
+    ]);
+    expect(call.terms).toMatchObject({ title: 'Calpol', category: 'medical', childIds: ['child-1'], payerId: 'alex' });
+    expect(call.terms.shares).toEqual([
+      { parentId: 'alex', percent: 50 },
+      { parentId: 'sam', percent: 50 },
+    ]);
+    expect(await screen.findByText('1 more expense added')).toBeInTheDocument();
   });
 
   it('marks a suggestion as not shared', async () => {

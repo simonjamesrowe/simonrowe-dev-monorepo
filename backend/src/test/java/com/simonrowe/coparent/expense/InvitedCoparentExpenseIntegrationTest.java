@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -114,6 +117,29 @@ class InvitedCoparentExpenseIntegrationTest extends AbstractIntegrationTest {
     agree(f, "rhian", rhianPaid).andExpect(status().isOk());
     summary(f, "alice").andExpect(jsonPath("$.balance.netPence", is(750)))
         .andExpect(jsonPath("$.balance.creditorParentId", is(f.aliceId())));
+  }
+
+  @Test
+  void whatTheInvitedParentPaidCanBeAgreedAndPaidBackBeforeTheyJoin() throws Exception {
+    final Fixture f = familyWithInvite("Rhian");
+    final String id = create(f, body(f, f.invitedId(), 3000));
+
+    // Alice owes it, so her logging it is enough: she agrees, and the debt counts at once.
+    agree(f, "alice", id).andExpect(status().isOk())
+        .andExpect(jsonPath("$.agreement.status", is("agreed")))
+        .andExpect(jsonPath("$.reimbursement.status", is("outstanding")))
+        .andExpect(jsonPath("$.debtorParentId", is(f.aliceId())));
+
+    // Rhian cannot confirm anything yet, so Alice's "paid back" settles it.
+    mockMvc.perform(post(EXPENSES + "/{id}/reimbursement/claim", f.familyId(), id)
+            .with(user("alice")).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"version\":2,\"note\":\"Bank transfer\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.reimbursement.status", is("reimbursed")))
+        .andExpect(jsonPath("$.reimbursement.claimedBy", is(f.aliceId())))
+        .andExpect(jsonPath("$.reimbursement.settledBy", is(f.aliceId())));
+    verify(mailer, never()).claimed(any(), any(), any());
+    summary(f, "alice").andExpect(jsonPath("$.balance.netPence", is(0)));
   }
 
   @Test

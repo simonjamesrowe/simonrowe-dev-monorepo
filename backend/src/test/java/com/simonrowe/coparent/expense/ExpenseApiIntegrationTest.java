@@ -116,6 +116,30 @@ class ExpenseApiIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void eitherParentCanAgreeToWhatOneLoggedForTheOther() throws Exception {
+    final Fixture f = family();
+    // Alice logs what Bob paid: she owes, so she may agree to it herself.
+    final String mine = create(f, "alice", body(f, "paid", yesterday(), f.bobId(), 4500, 50));
+    action(f, "alice", mine, "agree", 1).andExpect(status().isOk())
+        .andExpect(jsonPath("$.agreement.respondedBy", is(f.aliceId())))
+        .andExpect(jsonPath("$.debtorParentId", is(f.aliceId())));
+
+    // Bob may agree to one as well.
+    final String his = create(f, "alice", body(f, "paid", yesterday(), f.bobId(), 2000, 50));
+    action(f, "bob", his, "agree", 1).andExpect(status().isOk());
+
+    // Once Bob has acted on one, it is his to agree again: Alice cannot cut his share and
+    // agree to that herself.
+    final String disputed = create(f, "alice", body(f, "paid", yesterday(), f.bobId(), 6000, 50));
+    action(f, "bob", disputed, "dispute", 1, Map.of("note", "It was more")).andExpect(
+        status().isOk());
+    update(f, "alice", disputed, body(f, "paid", yesterday(), f.bobId(), 3000, 50), 2)
+        .andExpect(status().isOk());
+    action(f, "alice", disputed, "agree", 3).andExpect(status().isForbidden());
+    action(f, "bob", disputed, "agree", 3).andExpect(status().isOk());
+  }
+
+  @Test
   void agreeingToAnOutdatedVersionIsRefused() throws Exception {
     final Fixture f = family();
     final String id = create(f, "alice", body(f, "paid", yesterday(), f.aliceId(), 4500, 50));

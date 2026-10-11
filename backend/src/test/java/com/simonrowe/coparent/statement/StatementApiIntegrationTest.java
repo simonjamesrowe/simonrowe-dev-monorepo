@@ -6,7 +6,9 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -243,6 +245,63 @@ class StatementApiIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void otherPaymentsToTheSameMerchantAreLoggedTogetherWithOneEmail() throws Exception {
+    final Fixture f = family();
+    final MvcResult uploaded = upload(f, "alice", "starling.csv")
+        .andExpect(status().isCreated()).andReturn();
+    final List<Map<String, Object>> buses = rows(uploaded, "Example Bus");
+    final Map<String, Object> shop = rows(uploaded, "Example School Shop").getFirst();
+    assertThat(buses).hasSize(2);
+    convert(f, "alice", (String) buses.get(0).get("fingerprint"), buses.get(0), f.aliceId(), 175)
+        .andExpect(status().isCreated());
+    clearInvocations(mailer);
+
+    // The second bus fare and the uniform go together; the first fare is already an expense.
+    batch(f, "alice", List.of(buses.get(1), shop, buses.get(0)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$", hasSize(3)))
+        .andExpect(jsonPath("$[0].expense.title", is("School run")))
+        .andExpect(jsonPath("$[0].expense.amountPence", is(175)))
+        .andExpect(jsonPath("$[0].expense.timing", is("paid")))
+        .andExpect(jsonPath("$[0].expense.agreement.status", is("pending")))
+        .andExpect(jsonPath("$[1].expense.amountPence", is(4200)))
+        .andExpect(jsonPath("$[1].expense.date", is("2026-09-29")))
+        .andExpect(jsonPath("$[2].expense", nullValue()))
+        .andExpect(jsonPath("$[2].message", is("This transaction is already an expense")));
+
+    verify(mailer).needsAgreementToAll(any(), any(), argThat(added -> added.size() == 2));
+    verify(mailer, never()).needsAgreement(any(), any(), any());
+    upload(f, "alice", "starling.csv")
+        .andExpect(jsonPath("$.rows[?(@.state=='logged')]", hasSize(3)));
+  }
+
+  @Test
+  void waitingSuggestionInBatchUsesItsOwnAmountAndDate() throws Exception {
+    final Fixture f = family();
+    uploadAndCheck(f, "amex.csv");
+    final String fingerprint = read(mockMvc.perform(get(STATEMENTS + "/transactions",
+        f.familyId()).with(user("alice"))).andReturn(), "$[0].fingerprint");
+
+    mockMvc.perform(post(STATEMENTS + "/expenses/batch", f.familyId()).with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(batchBody(f, "[{\"fingerprint\":\"%s\"}]".formatted(fingerprint))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].expense.amountPence", is(3000)));
+    overview(f, "alice").andExpect(jsonPath("$.toReview", is(0)))
+        .andExpect(jsonPath("$.logged", is(1)));
+    // One expense on its own gets the ordinary email.
+    verify(mailer).needsAgreement(any(), any(), any());
+  }
+
+  @Test
+  void refusesAnEmptyBatch() throws Exception {
+    final Fixture f = family();
+    mockMvc.perform(post(STATEMENTS + "/expenses/batch", f.familyId()).with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON).content(batchBody(f, "[]")))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void refusesFilesThatAreNotStatements() throws Exception {
     final Fixture f = family();
     mockMvc.perform(multipart(STATEMENTS, f.familyId())
@@ -305,6 +364,33 @@ class StatementApiIntegrationTest extends AbstractIntegrationTest {
           "shares":[{"parentId":"%s","percent":50},{"parentId":"%s","percent":50}]}}
         """.formatted(fingerprint, transaction, f.childId(), pence,
         row == null ? "2026-09-02" : row.get("date"), payerId, f.aliceId(), f.bobId());
+  }
+
+  private static List<Map<String, Object>> rows(final MvcResult uploaded,
+      final String description) throws Exception {
+    return JsonPath.<JSONArray>read(body(uploaded),
+            "$.rows[?(@.description=='" + description + "')]").stream()
+        .map(entry -> (Map<String, Object>) entry).toList();
+  }
+
+  private ResultActions batch(final Fixture f, final String who,
+      final List<Map<String, Object>> rows) throws Exception {
+    final tools.jackson.databind.ObjectMapper json = new tools.jackson.databind.ObjectMapper();
+    final List<Map<String, Object>> items = rows.stream()
+        .map(row -> Map.<String, Object>of("fingerprint", row.get("fingerprint"),
+            "transaction", row)).toList();
+    return mockMvc.perform(post(STATEMENTS + "/expenses/batch", f.familyId()).with(user(who))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(batchBody(f, json.writeValueAsString(items))));
+  }
+
+  private static String batchBody(final Fixture f, final String items) {
+    return """
+        {"items":%s,
+         "terms":{"title":"School run","category":"travel","childIds":["%s"],
+          "payerId":"%s",
+          "shares":[{"parentId":"%s","percent":50},{"parentId":"%s","percent":50}]}}
+        """.formatted(items, f.childId(), f.aliceId(), f.aliceId(), f.bobId());
   }
 
   private static Map<String, Object> row(final String fingerprint) {

@@ -1,7 +1,7 @@
 // Bank statement uploads and the shared-cost suggestions made from them. Private to the parent
 // who uploaded them. Every amount is pence of pounds sterling.
 
-import type { ExpenseCategory } from './expenses';
+import type { Expense, ExpenseCategory } from './expenses';
 
 export type StatementState = 'checked' | 'suggested' | 'dismissed' | 'logged';
 export type StatementConfidence = 'high' | 'medium' | 'low';
@@ -102,3 +102,27 @@ export type StatementRowInput = Pick<
   StatementRow,
   'fingerprint' | 'date' | 'description' | 'details' | 'amountPence' | 'account'
 >;
+
+/** What a batch shares: an expense without its amount and date, which each transaction brings. */
+export interface StatementBatchTerms {
+  title: string;
+  category: ExpenseCategory;
+  childIds: string[];
+  payerId: string | null;
+  shares: { parentId: string; percent: number }[];
+  notes: string | null;
+}
+
+/** One transaction of a batch. A waiting suggestion needs no `transaction`: the server holds it. */
+export interface StatementBatchItem {
+  fingerprint: string;
+  uploadId: string | null;
+  transaction: StatementRowInput | null;
+}
+
+/** What logging one transaction of a batch did. `expense` is null, with a reason, when it wasn't. */
+export interface StatementBatchResult {
+  fingerprint: string;
+  expense: Expense | null;
+  message: string | null;
+}

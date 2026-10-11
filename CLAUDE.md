@@ -274,6 +274,22 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- coparent-statement-same-merchant: **Logging a statement transaction offers its merchant's other
+  payments, and the agreement rule has one exception.** Load-bearing bits:
+  - **The other payments are matched in the browser** (`sameMerchant.ts`), because a row that
+    wasn't suggested exists only on the page. Words with a digit are dropped, so `BOOTS 0775`
+    and `BOOTS 1234` match. `POST …/statements/expenses/batch` logs each ticked one as its own
+    expense, with the logged expense's terms and its own amount and date, claimed exactly as
+    `convert` claims one. A refused row is reported and the rest still go.
+    `ExpenseService.createWithoutNotice` plus `notifyAdded` make it one email
+    (`ExpenseMailer.needsAgreementToAll`), not one per expense.
+  - **Either parent may agree to an expense one logged for what the other paid**
+    (`ExpenseService.loggedForTheOther`, mirrored in `expenseStatus.ts`): the logger is the one
+    who owes. Only while every history entry is the logger's. Without that, a parent could edit
+    the other's expense to cut their own share and agree to it themselves.
+  - **While the co-parent hasn't joined, "paid back" settles in one step.** They cannot confirm
+    anything, so `claim` writes `reimbursed` straight away, with `claimedBy` = `settledBy`, and
+    sends no email. Once they are `active`, they confirm as before.
 - 052-statement-import: **CoParent finds shared costs in uploaded bank statements**
   (`/expenses/statements`, `com.simonrowe.coparent.statement`). Starling, Monzo and Amex CSVs and
   Santander current-account and credit-card TXT exports are parsed deterministically; a model only

@@ -119,6 +119,8 @@ export function ExpenseDetailDrawer({
   const otherName = firstName(other);
   const nameOf = (id: string | null) => (id === me.id ? 'You' : id === other.id ? otherName : 'Someone');
   const status = expenseStatus(expense, me.id, otherName);
+  // A co-parent who hasn't joined can't confirm a repayment, so the server settles it at once.
+  const otherJoined = other.status === 'active';
   const category = EXPENSE_CATEGORIES[expense.category];
   const childNames = expense.childIds
     .map((id) => children.find((child) => child.id === id)?.fullName.split(/\s+/)[0])
@@ -216,7 +218,12 @@ export function ExpenseDetailDrawer({
         className="cp-button cp-button--primary"
         disabled={busy}
         onClick={() =>
-          step('reimbursement/claim', 'Marked as paid back', `${otherName} will be asked to confirm it arrived.`, note.trim() || undefined)
+          step(
+            'reimbursement/claim',
+            'Marked as paid back',
+            otherJoined ? `${otherName} will be asked to confirm it arrived.` : `${expense.title} is settled.`,
+            note.trim() || undefined,
+          )
         }
       >
         <Check size={16} aria-hidden="true" /> Mark paid back
@@ -504,7 +511,11 @@ export function ExpenseDetailDrawer({
               placeholder="How? e.g. Bank transfer (optional)"
             />
           </label>
-          <p className="expense-muted">{otherName} will be asked to confirm they received it.</p>
+          <p className="expense-muted">
+            {otherJoined
+              ? `${otherName} will be asked to confirm they received it.`
+              : `${otherName} hasn't joined yet, so it's settled straight away. They'll see you marked it when they join.`}
+          </p>
         </div>
       )}
       {mode === 'markPaid' && (

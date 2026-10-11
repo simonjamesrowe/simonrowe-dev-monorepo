@@ -4,6 +4,12 @@ import com.simonrowe.coparent.config.CoparentProperties;
 import com.simonrowe.coparent.model.Expense;
 import com.simonrowe.coparent.model.Parent;
 import com.simonrowe.coparent.shared.CoparentAccessPolicy;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailException;
@@ -21,6 +27,7 @@ import org.springframework.stereotype.Component;
 public class ExpenseMailer {
 
   private static final Logger LOG = LoggerFactory.getLogger(ExpenseMailer.class);
+  private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK);
 
   private final JavaMailSender mailSender;
   private final CoparentProperties properties;
@@ -40,6 +47,34 @@ public class ExpenseMailer {
         Review it: %s
         """.formatted(firstName(from), expense.title(), ExpenseMoney.format(expense.amountPence()),
         ExpenseMoney.format(ExpenseMath.shareOf(expense, to.id())), link(expense)));
+  }
+
+  /**
+   * The recipient is asked to agree to several expenses added together, such as every payment
+   * to one merchant on a statement, in one email rather than one each.
+   */
+  public void needsAgreementToAll(final Parent to, final Parent from,
+      final List<Expense> expenses) {
+    final Set<String> titles = expenses.stream().map(Expense::title)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+    final String lines = expenses.stream().map(expense -> "- %s, %s: %s (your share %s)".formatted(
+            expense.title(), expense.date() == null ? "no date" : DAY.format(expense.date()),
+            ExpenseMoney.format(expense.amountPence()),
+            ExpenseMoney.format(ExpenseMath.shareOf(expense, to.id()))))
+        .collect(Collectors.joining("\n"));
+    final long share = expenses.stream()
+        .mapToLong(expense -> ExpenseMath.shareOf(expense, to.id())).sum();
+    send(to, "%s added %d expenses%s".formatted(firstName(from), expenses.size(),
+        titles.size() == 1 ? ": " + titles.iterator().next() : ""), """
+        %s added %d expenses:
+
+        %s
+
+        Your share of them is %s.
+
+        Review them: %s/expenses
+        """.formatted(firstName(from), expenses.size(), lines, ExpenseMoney.format(share),
+        properties.appUrl()));
   }
 
   /** The requester learns the other parent disputed the expense, and why. */

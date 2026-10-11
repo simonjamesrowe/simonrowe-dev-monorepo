@@ -23,6 +23,20 @@ export interface ExpenseStatus {
   actions: ExpenseActionKey[];
 }
 
+/**
+ * Logged by one parent for what the other paid, and only ever acted on by its logger. The logger
+ * owes it, so either parent may agree to it. Mirrors ExpenseService.loggedForTheOther.
+ */
+export function loggedForTheOther(expense: Expense): boolean {
+  const logger = expense.createdBy;
+  return (
+    expense.payerId !== null &&
+    expense.payerId !== logger &&
+    expense.agreement.requestedBy === logger &&
+    expense.history.every((entry) => entry.by === logger)
+  );
+}
+
 const shortDate = (iso: string) =>
   new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
@@ -39,9 +53,16 @@ export function expenseStatus(
   const { agreement, reimbursement } = expense;
   const requester = agreement.requestedBy === me;
   if (agreement.status === 'pending') {
-    return requester
-      ? { label: `Waiting for ${otherName}`, tone: 'slate', needsAction: false, actions: [] }
-      : { label: 'Needs your OK', tone: 'amber', needsAction: true, actions: ['dispute', 'agree'] };
+    if (requester) {
+      // Not counted as needing action: it is waiting for the other parent, who may agree too.
+      return {
+        label: `Waiting for ${otherName}`,
+        tone: 'slate',
+        needsAction: false,
+        actions: loggedForTheOther(expense) ? ['agree'] : [],
+      };
+    }
+    return { label: 'Needs your OK', tone: 'amber', needsAction: true, actions: ['dispute', 'agree'] };
   }
   if (agreement.status === 'disputed') {
     return requester

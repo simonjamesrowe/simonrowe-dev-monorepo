@@ -154,8 +154,10 @@ export function SettleUpDrawer({
       </div>
       <p className="expense-callout expense-callout--teal">
         <Info size={18} aria-hidden="true" />
-        Ticking marks {otherName}'s debts to you as reimbursed, and yours to {otherName} as paid back. {otherName} confirms
-        the ones you paid.
+        Ticking marks {otherName}'s debts to you as reimbursed, and yours to {otherName} as paid back.{' '}
+        {other.status === 'active'
+          ? `${otherName} confirms the ones you paid.`
+          : `${otherName} hasn't joined yet, so the ones you paid are settled straight away.`}
       </p>
     </ExpenseDrawer>
   );

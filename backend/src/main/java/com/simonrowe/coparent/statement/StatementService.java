@@ -64,6 +64,7 @@ public class StatementService {
   static final int MAX_LISTED = 500;
   static final int MAX_DECISIONS = 40;
   static final int MATCH_DAYS = 3;
+  static final int MAX_BATCH_LOG = 50;
   static final Duration CHECKING_GRACE = Duration.ofMinutes(2);
   private static final Pattern FINGERPRINT = Pattern.compile("[0-9a-f]{64}");
   private static final Logger log = LoggerFactory.getLogger(StatementService.class);
@@ -169,6 +170,27 @@ public class StatementService {
       long amountPence,
       String account
   ) {
+  }
+
+  /** One transaction of a batch being logged together, as {@link #convert} takes one. */
+  public record BatchItem(String fingerprint, ObjectId uploadId, RowInput row) {
+  }
+
+  /**
+   * What a batch shares. Each transaction brings its own amount and date, and is always paid.
+   */
+  public record Terms(
+      String title,
+      String category,
+      List<ObjectId> childIds,
+      ObjectId payerId,
+      List<Expense.Share> shares,
+      String notes
+  ) {
+  }
+
+  /** What logging one transaction of a batch did. {@code expense} is null when it was not. */
+  public record BatchResult(String fingerprint, Expense expense, String message) {
   }
 
   /** How far one upload's checking got, as the uploads list shows it. */
@@ -445,6 +467,92 @@ public class StatementService {
       audits.record(familyId, "statement", expenseId, "log", Map.of(
           "amountPence", expense.amountPence(), "category", expense.category()));
       return expense;
+    } catch (RuntimeException failed) {
+      release(owner, fingerprint, prior, expenseId);
+      throw failed;
+    }
+  }
+
+  /**
+   * Logs several transactions the same way at once, typically every other payment to the
+   * merchant the parent has just logged one of. Each becomes its own expense, with the shared
+   * terms and the transaction's own amount and date, claimed exactly as {@link #convert} claims
+   * one. A transaction that cannot be logged is reported and the rest still are. The other parent
+   * gets one email for the lot.
+   */
+  public List<BatchResult> convertAll(final ObjectId familyId, final List<BatchItem> items,
+      final Terms terms) {
+    final Parent owner = access.requireMember(familyId);
+    if (items == null || items.isEmpty() || items.size() > MAX_BATCH_LOG) {
+      throw badRequest("Log between 1 and " + MAX_BATCH_LOG + " transactions at once");
+    }
+    if (items.stream().map(BatchItem::fingerprint).distinct().count() != items.size()) {
+      throw badRequest("A transaction was sent twice");
+    }
+    final Set<ObjectId> live = liveExpenseIds(familyId);
+    final List<BatchResult> results = new ArrayList<>();
+    final List<Expense> added = new ArrayList<>();
+    try {
+      for (final BatchItem item : items) {
+        try {
+          final Expense expense = logOne(owner, familyId, item, terms, live);
+          added.add(expense);
+          results.add(new BatchResult(item.fingerprint(), expense, null));
+        } catch (ResponseStatusException refused) {
+          results.add(new BatchResult(item.fingerprint(), null, refused.getReason()));
+        }
+      }
+    } finally {
+      // Whatever was logged before anything went wrong still needs the other parent's agreement.
+      expenseService.notifyAdded(familyId, added);
+    }
+    audits.record(familyId, "statement", owner.id(), "log-batch", Map.of(
+        "logged", added.size(), "refused", items.size() - added.size(),
+        "category", terms.category() == null ? "" : terms.category()));
+    return results;
+  }
+
+  private Expense logOne(final Parent owner, final ObjectId familyId, final BatchItem item,
+      final Terms terms, final Set<ObjectId> live) {
+    final String fingerprint = item.fingerprint();
+    if (fingerprint == null || !FINGERPRINT.matcher(fingerprint).matches()) {
+      throw badRequest("Malformed transaction");
+    }
+    final StatementTransaction prior = mongoTemplate.findOne(ownerFingerprint(owner, fingerprint),
+        StatementTransaction.class);
+    if (prior != null && !familyId.equals(prior.familyId())) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found");
+    }
+    if (prior != null && StatementTransaction.LOGGED.equals(prior.status())
+        && prior.expenseId() != null && live.contains(prior.expenseId())) {
+      throw conflict("This transaction is already an expense");
+    }
+    // A waiting suggestion holds its own details; anything else is known only from the page.
+    final String merchant;
+    final long amountPence;
+    final LocalDate date;
+    if (prior != null && prior.pending() != null) {
+      merchant = prior.pending().description();
+      amountPence = prior.pending().amountPence();
+      date = prior.pending().date();
+    } else {
+      final RowInput row = item.row();
+      if (row == null || !fingerprint.equals(row.fingerprint())) {
+        throw badRequest("Send the transaction you are logging");
+      }
+      requireRow(row);
+      merchant = prior != null && prior.merchant() != null ? prior.merchant() : row.description();
+      amountPence = row.amountPence();
+      date = row.date();
+    }
+    final ExpenseService.ExpenseValues values = new ExpenseService.ExpenseValues(terms.title(),
+        terms.category(), terms.childIds(), amountPence, Expense.PAID, date, terms.payerId(),
+        terms.shares(), terms.notes());
+    final ObjectId expenseId = new ObjectId();
+    claim(owner, familyId, fingerprint, item.uploadId(), prior, merchant, terms.category(),
+        expenseId, clock.instant());
+    try {
+      return expenseService.createWithoutNotice(familyId, values, expenseId);
     } catch (RuntimeException failed) {
       release(owner, fingerprint, prior, expenseId);
       throw failed;
