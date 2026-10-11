@@ -1,10 +1,13 @@
 package com.simonrowe.coparent.statement;
 
 import com.simonrowe.coparent.expense.ExpenseController;
+import com.simonrowe.coparent.expense.ExpenseService;
 import com.simonrowe.coparent.model.StatementTransaction;
 import com.simonrowe.coparent.model.StatementUpload;
 import com.simonrowe.coparent.shared.CoparentIds;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
@@ -103,6 +106,16 @@ public class StatementController {
         request.expense().values()));
   }
 
+  /** Logs several transactions the same way at once, each as its own expense. */
+  @PostMapping("/expenses/batch")
+  List<BatchResponse> convertAll(
+      @PathVariable final String familyId,
+      @Valid @RequestBody final BatchRequest request) {
+    return service.convertAll(CoparentIds.parse(familyId),
+        request.items().stream().map(BatchItemRequest::item).toList(),
+        request.terms().terms()).stream().map(BatchResponse::from).toList();
+  }
+
   // ---- requests ----------------------------------------------------------------------------
 
   record RowRequest(
@@ -128,6 +141,37 @@ public class StatementController {
       String uploadId,
       RowRequest transaction,
       @NotNull @Valid ExpenseController.ExpenseRequest expense
+  ) {
+  }
+
+  record BatchItemRequest(String fingerprint, String uploadId, RowRequest transaction) {
+    StatementService.BatchItem item() {
+      return new StatementService.BatchItem(fingerprint,
+          uploadId == null || uploadId.isBlank() ? null : CoparentIds.parse(uploadId),
+          transaction == null ? null : transaction.input());
+    }
+  }
+
+  /** The terms every transaction in a batch shares: an expense without its amount and date. */
+  record TermsRequest(
+      @NotBlank @Size(max = ExpenseService.MAX_TITLE) String title,
+      @NotBlank String category,
+      @NotEmpty List<String> childIds,
+      String payerId,
+      @NotNull @Size(min = 2, max = 2) List<ExpenseController.ShareRequest> shares,
+      @Size(max = ExpenseService.MAX_NOTES) String notes
+  ) {
+    StatementService.Terms terms() {
+      return new StatementService.Terms(title, category,
+          childIds.stream().map(CoparentIds::parse).toList(),
+          payerId == null || payerId.isBlank() ? null : CoparentIds.parse(payerId),
+          shares.stream().map(ExpenseController.ShareRequest::share).toList(), notes);
+    }
+  }
+
+  record BatchRequest(
+      @NotNull @Size(min = 1, max = StatementService.MAX_BATCH_LOG) List<BatchItemRequest> items,
+      @NotNull @Valid TermsRequest terms
   ) {
   }
 
@@ -252,6 +296,14 @@ public class StatementController {
           transaction.merchant(), hex(transaction.expenseId()), listed.expenseTitle(),
           hex(transaction.uploadId()), MatchResponse.from(listed.match()),
           transaction.decidedAt());
+    }
+  }
+
+  record BatchResponse(String fingerprint, ExpenseController.ExpenseResponse expense,
+      String message) {
+    static BatchResponse from(final StatementService.BatchResult result) {
+      return new BatchResponse(result.fingerprint(), result.expense() == null ? null
+          : ExpenseController.ExpenseResponse.from(result.expense()), result.message());
     }
   }
 

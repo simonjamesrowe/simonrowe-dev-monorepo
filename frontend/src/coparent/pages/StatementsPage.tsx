@@ -6,6 +6,8 @@ import { CategoryTile } from '../components/expenses/CategoryTile';
 import { ExpenseFormDrawer, type ExpenseFormSource } from '../components/expenses/ExpenseFormDrawer';
 import { formatMoney } from '../components/expenses/money';
 import { firstName } from '../components/expenses/parentTone';
+import { SameMerchantDrawer } from '../components/expenses/SameMerchantDrawer';
+import { sameMerchant, type SameMerchantCandidate } from '../components/expenses/sameMerchant';
 import { useToast } from '../components/ui/ToastProvider';
 import {
   useCheckStatementRows,
@@ -21,7 +23,9 @@ import {
   useUploadStatement,
 } from '../hooks/api';
 import { apiErrorMessage } from '../lib/api/errorMessage';
+import type { Expense } from '../types/expenses';
 import type {
+  StatementBatchResult,
   StatementCheckResult,
   StatementConfidence,
   StatementRow,
@@ -70,6 +74,13 @@ function toInput(row: StatementRow): StatementRowInput {
   };
 }
 
+/** The other payments to a merchant just logged, offered to log the same way. */
+interface Following {
+  logged: Expense;
+  merchant: string;
+  candidates: SameMerchantCandidate[];
+}
+
 /** One upload read in this visit, with its rows as checking updates them. */
 interface Session {
   result: StatementUploadResult;
@@ -82,6 +93,8 @@ interface Session {
 /** What the convert drawer is turning into an expense. */
 interface Converting {
   fingerprint: string;
+  /** The merchant as the statement has it, to find its other payments once this one is logged. */
+  description: string;
   uploadId: string | null;
   transaction: StatementRowInput | null;
   heading: string;
@@ -103,6 +116,7 @@ const StatementsPage = () => {
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [converting, setConverting] = useState<Converting | null>(null);
+  const [following, setFollowing] = useState<Following | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const upload = useUploadStatement();
   const checkRows = useCheckStatementRows();
@@ -247,6 +261,7 @@ const StatementsPage = () => {
     const suggestion = transaction.suggestion;
     setConverting({
       fingerprint: transaction.fingerprint,
+      description: transaction.description,
       uploadId: transaction.uploadId,
       transaction: null,
       heading: `${transaction.description} · ${formatMoney(transaction.amountPence)}`,
@@ -264,12 +279,79 @@ const StatementsPage = () => {
   const openRow = (row: StatementRow, uploadId: string | null) =>
     setConverting({
       fingerprint: row.fingerprint,
+      description: row.description,
       uploadId,
       transaction: toInput(row),
       heading: `${row.description} · ${formatMoney(row.amountPence)}`,
       detail: `${row.account} · ${longDate(row.date)}`,
       draft: { title: row.description, amountPence: row.amountPence, date: row.date, category: 'other', childIds: [] },
     });
+
+  /** Every transaction on the page that could be logged: this visit's uploads, then suggestions. */
+  const onPage = (): SameMerchantCandidate[] => [
+    ...sessions.flatMap((session) =>
+      session.rows.map((row) => ({
+        fingerprint: row.fingerprint,
+        uploadId: session.result.upload?.id ?? null,
+        transaction: toInput(row),
+        description: row.description,
+        details: row.details,
+        date: row.date,
+        amountPence: row.amountPence,
+        account: row.account,
+        state: row.state,
+        match: row.match,
+      })),
+    ),
+    ...(status === 'suggested' ? (listed.data ?? []) : []).flatMap((transaction) =>
+      transaction.description && transaction.date && transaction.amountPence !== null
+        ? [
+            {
+              fingerprint: transaction.fingerprint,
+              uploadId: transaction.uploadId,
+              transaction: null,
+              description: transaction.description,
+              details: transaction.details,
+              date: transaction.date,
+              amountPence: transaction.amountPence,
+              account: transaction.account,
+              state: transaction.status,
+              match: transaction.match,
+            },
+          ]
+        : [],
+    ),
+  ];
+
+  const markLogged = (logged: Map<string, string>) =>
+    setSessions((current) =>
+      current.map((session) => ({
+        ...session,
+        rows: session.rows.map((row) =>
+          logged.has(row.fingerprint) ? { ...row, state: 'logged' as const, expenseId: logged.get(row.fingerprint)! } : row,
+        ),
+      })),
+    );
+
+  const loggedTogether = (results: StatementBatchResult[]) => {
+    setFollowing(null);
+    const logged = results.filter((result) => result.expense !== null);
+    const refused = results.filter((result) => result.expense === null);
+    markLogged(new Map(logged.map((result) => [result.fingerprint, result.expense!.id])));
+    showToast({
+      variant: refused.length > 0 ? 'error' : 'success',
+      title:
+        logged.length > 0
+          ? `${logged.length} more expense${logged.length === 1 ? '' : 's'} added`
+          : 'Nothing was added',
+      description:
+        refused.length > 0
+          ? `${refused.length} couldn't be logged: ${refused[0].message ?? 'try again'}`
+          : other?.status === 'invited'
+            ? `${otherName} can agree to them once they join.`
+            : `${otherName} has been asked to agree to them in one email.`,
+    });
+  };
 
   const notShared = async (transaction: StatementTransaction) => {
     if (!familyId) return;
@@ -670,15 +752,13 @@ const StatementsPage = () => {
         onClose={() => setConverting(null)}
         onSaved={(saved, failures) => {
           const fingerprint = converting?.fingerprint;
+          const description = converting?.description;
           setConverting(null);
-          setSessions((current) =>
-            current.map((session) => ({
-              ...session,
-              rows: session.rows.map((row) =>
-                row.fingerprint === fingerprint ? { ...row, state: 'logged' as const, expenseId: saved.id } : row,
-              ),
-            })),
-          );
+          if (fingerprint) markLogged(new Map([[fingerprint, saved.id]]));
+          const candidates = fingerprint && description ? sameMerchant({ fingerprint, description }, onPage()) : [];
+          if (candidates.length > 0 && description) {
+            setFollowing({ logged: saved, merchant: description, candidates });
+          }
           showToast({
             variant: failures ? 'error' : 'success',
             title: 'Expense added',
@@ -689,6 +769,17 @@ const StatementsPage = () => {
                 : `${otherName} has been asked to agree.`,
           });
         }}
+      />
+
+      <SameMerchantDrawer
+        familyId={familyId}
+        logged={following?.logged ?? null}
+        merchant={following?.merchant ?? ''}
+        candidates={following?.candidates ?? []}
+        otherName={otherName}
+        otherJoined={other.status === 'active'}
+        onClose={() => setFollowing(null)}
+        onLogged={loggedTogether}
       />
     </div>
   );

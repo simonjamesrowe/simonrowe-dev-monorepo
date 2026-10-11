@@ -13,6 +13,21 @@ describe('expenseStatus', () => {
     expect(asSam()).toMatchObject({ label: 'Needs your OK', tone: 'amber', needsAction: true, actions: ['dispute', 'agree'] });
   });
 
+  it('lets either parent agree to what one logged for the other, until the other has acted on it', () => {
+    const forSam = { payerId: 'sam', debtorParentId: 'alex', creditorParentId: 'sam' };
+    expect(asAlex(forSam)).toMatchObject({ label: 'Waiting for Sam', needsAction: false, actions: ['agree'] });
+    expect(asSam(forSam)).toMatchObject({ label: 'Needs your OK', actions: ['dispute', 'agree'] });
+    const touched = {
+      ...forSam,
+      history: [
+        { at: '2026-10-03T17:04:00Z', by: 'alex', action: 'create', note: null },
+        { at: '2026-10-04T09:00:00Z', by: 'sam', action: 'dispute', note: 'More' },
+        { at: '2026-10-04T10:00:00Z', by: 'alex', action: 'update', note: null },
+      ],
+    };
+    expect(asAlex(touched)).toMatchObject({ actions: [] });
+  });
+
   it('asks the sender of a disputed expense to fix it', () => {
     const disputed = {
       agreement: { status: 'disputed' as const, requestedBy: 'alex', respondedBy: 'sam', respondedAt: null, note: 'No' },

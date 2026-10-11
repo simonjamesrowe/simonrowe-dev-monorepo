@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import com.simonrowe.coparent.config.CoparentProperties;
 import com.simonrowe.coparent.model.Expense;
 import com.simonrowe.coparent.model.Parent;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mail.MailSendException;
@@ -37,6 +38,21 @@ class ExpenseMailerTest {
     assertThat(message.getText()).contains("£45.00", "Your share is £22.50",
         "https://coparents.example/expenses?expense=" + expense.id().toHexString());
     assertThat(message.getText()).doesNotContain("$");
+  }
+
+  @Test
+  void severalAddedTogetherGoInOneEmailWithEachLineAndTheTotalShare() {
+    mailer(true).needsAgreementToAll(SAM_PARENT, ALEX_PARENT, List.of(
+        ExpenseFixtures.paid(1250, ALEX, 50, Expense.PENDING, Expense.NONE),
+        ExpenseFixtures.paid(2500, ALEX, 50, Expense.PENDING, Expense.NONE)));
+
+    final SimpleMailMessage message = sent();
+    assertThat(message.getSubject()).isEqualTo("Alex added 2 expenses: Item");
+    assertThat(message.getText()).contains(
+        "- Item, 3 Oct 2026: £12.50 (your share £6.25)",
+        "- Item, 3 Oct 2026: £25.00 (your share £12.50)",
+        "Your share of them is £18.75.",
+        "https://coparents.example/expenses");
   }
 
   @Test

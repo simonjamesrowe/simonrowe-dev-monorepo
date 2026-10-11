@@ -193,7 +193,7 @@ public class ExpenseController {
   }
 
   public record ShareRequest(String parentId, Integer percent) {
-    Expense.Share share() {
+    public Expense.Share share() {
       if (percent == null) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
             "Each parent's share needs a percentage");

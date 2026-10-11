@@ -44,8 +44,8 @@ public class ExpenseService {
   public static final Set<String> CATEGORIES = Set.of(
       "education", "clothing", "medical", "activities", "childcare", "travel", "food", "other");
   public static final long MAX_AMOUNT_PENCE = 10_000_000;
-  static final int MAX_TITLE = 120;
-  static final int MAX_NOTES = 1000;
+  public static final int MAX_TITLE = 120;
+  public static final int MAX_NOTES = 1000;
   static final int MAX_NOTE = 500;
   static final int MAX_HISTORY = 50;
   static final int MAX_SETTLE_ITEMS = 50;
@@ -163,6 +163,41 @@ public class ExpenseService {
       final ObjectId expenseId,
       final ObjectId assistantActionId) {
     final Couple couple = couple(familyId);
+    final Expense saved = insert(familyId, values, expenseId, assistantActionId, couple);
+    mailer.needsAgreement(couple.other(), couple.actor(), saved);
+    return saved;
+  }
+
+  /**
+   * Logs one of several expenses being added together, without telling the other parent yet.
+   * The caller sends one email for them all with {@link #notifyAdded}, rather than one each.
+   */
+  public Expense createWithoutNotice(
+      final ObjectId familyId,
+      final ExpenseValues values,
+      final ObjectId expenseId) {
+    return insert(familyId, values, expenseId, null, couple(familyId));
+  }
+
+  /** Asks the other parent, in one email, to agree to expenses that were added together. */
+  public void notifyAdded(final ObjectId familyId, final List<Expense> added) {
+    if (added.isEmpty()) {
+      return;
+    }
+    final Couple couple = couple(familyId);
+    if (added.size() == 1) {
+      mailer.needsAgreement(couple.other(), couple.actor(), added.getFirst());
+    } else {
+      mailer.needsAgreementToAll(couple.other(), couple.actor(), added);
+    }
+  }
+
+  private Expense insert(
+      final ObjectId familyId,
+      final ExpenseValues values,
+      final ObjectId expenseId,
+      final ObjectId assistantActionId,
+      final Couple couple) {
     final ExpenseValues checked = validate(familyId, values, couple);
     final Instant now = clock.instant();
     final Expense saved = expenses.insert(new Expense(
@@ -173,7 +208,6 @@ public class ExpenseService {
         List.of(entry(now, couple.actor(), "create", null)), 1, couple.actor().id(),
         assistantActionId, null, now, now));
     audit(saved, "create");
-    mailer.needsAgreement(couple.other(), couple.actor(), saved);
     return saved;
   }
 
@@ -257,11 +291,14 @@ public class ExpenseService {
     return saved;
   }
 
-  /** The other parent accepts the current terms, and the expense starts to count. */
+  /**
+   * The other parent accepts the current terms, and the expense starts to count. An expense
+   * logged for what the other parent paid can be agreed by either parent.
+   */
   public Expense agree(final ObjectId familyId, final ObjectId expenseId, final long version) {
     final Couple couple = couple(familyId);
     final Expense current = current(familyId, expenseId, version);
-    requireResponder(current, couple.actor());
+    requireAgreer(current, couple.actor());
     final Instant now = clock.instant();
     final Expense agreed = transition(current, new Expense.Agreement(Expense.AGREED,
         current.agreement().requestedBy(), couple.actor().id(), now, null),
@@ -291,7 +328,10 @@ public class ExpenseService {
     return saved;
   }
 
-  /** The parent who owes says they have paid it back. The payer confirms. */
+  /**
+   * The parent who owes says they have paid it back. The payer confirms, or, while the payer
+   * has not yet joined, it is settled straight away.
+   */
   public Expense claim(
       final ObjectId familyId,
       final ObjectId expenseId,
@@ -305,11 +345,18 @@ public class ExpenseService {
       throw forbidden("Only the parent who owes can mark this as paid back");
     }
     final Instant now = clock.instant();
+    // A co-parent who has not joined cannot confirm anything, so until they do the parent who
+    // owes settles it in one step. They see it settled, with who said so, when they join.
+    final boolean settleNow = !ACTIVE.equals(couple.other().status());
     final Expense saved = replace(current, transition(current, current.agreement(),
-        new Expense.Reimbursement(Expense.CLAIMED, couple.actor().id(), now, null, null, method),
+        new Expense.Reimbursement(settleNow ? Expense.REIMBURSED : Expense.CLAIMED,
+            couple.actor().id(), now, settleNow ? couple.actor().id() : null,
+            settleNow ? now : null, method),
         entry(now, couple.actor(), "claim", method), now));
     audit(saved, "claim");
-    mailer.claimed(couple.other(), couple.actor(), saved);
+    if (!settleNow) {
+      mailer.claimed(couple.other(), couple.actor(), saved);
+    }
     return saved;
   }
 
@@ -389,8 +436,10 @@ public class ExpenseService {
           results.add(new SettleResult(item.id(), "reimbursed",
               markReimbursed(familyId, item.id(), item.version()), null));
         } else if (Expense.OUTSTANDING.equals(current.reimbursement().status())) {
-          results.add(new SettleResult(item.id(), "claimed",
-              claim(familyId, item.id(), item.version(), "Settle up"), null));
+          final Expense claimed = claim(familyId, item.id(), item.version(), "Settle up");
+          results.add(new SettleResult(item.id(),
+              Expense.REIMBURSED.equals(claimed.reimbursement().status()) ? "reimbursed"
+                  : "claimed", claimed, null));
         } else {
           results.add(new SettleResult(item.id(), "skipped", null,
               "Nothing to settle on this expense"));
@@ -532,6 +581,28 @@ public class ExpenseService {
     if (actor.id().equals(expense.agreement().requestedBy())) {
       throw forbidden("The other parent needs to agree to this, not you");
     }
+  }
+
+  /**
+   * Who may agree. Normally the parent who did not set the terms. But a parent who logs what the
+   * other parent paid is the one who owes it, so either parent may agree to that: the other
+   * parent often has no reason, or no account yet, to do it. Only while the other parent has
+   * never touched it, so nobody can cut their own share of the other's expense and agree to it.
+   */
+  private static void requireAgreer(final Expense expense, final Parent actor) {
+    if (!loggedForTheOther(expense)) {
+      requireResponder(expense, actor);
+    } else if (!Expense.PENDING.equals(expense.agreement().status())) {
+      throw conflict("This expense is no longer waiting for agreement");
+    }
+  }
+
+  /** Logged by one parent for what the other paid, and only ever acted on by its logger. */
+  static boolean loggedForTheOther(final Expense expense) {
+    final ObjectId logger = expense.createdBy();
+    return logger != null && expense.payerId() != null && !expense.payerId().equals(logger)
+        && logger.equals(expense.agreement().requestedBy())
+        && expense.history().stream().allMatch(entry -> logger.equals(entry.by()));
   }
 
   private static void requireOutstanding(final Expense expense) {
