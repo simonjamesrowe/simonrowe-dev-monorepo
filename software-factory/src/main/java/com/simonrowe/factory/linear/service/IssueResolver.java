@@ -16,6 +16,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -103,7 +105,8 @@ public class IssueResolver {
   }
 
   /**
-   * Closes every issue this producer has not reported for {@link AbsenceSweep#quietFor}.
+   * Closes every issue this producer has not reported for {@link AbsenceSweep#quietFor}, except
+   * those whose fingerprint the producer names in {@link AbsenceSweep#presentKeyParts}.
    *
    * @param sweep the request
    * @return what was done
@@ -118,6 +121,16 @@ public class IssueResolver {
     boolean preview = sweep.dryRun() || properties.dryRun();
     Instant cutoff = now.minus(sweep.quietFor());
 
+    // Problems the producer saw this run but could not file (its per-run cap was full), so
+    // nothing advanced their lastSeenAt. Fingerprinted here, by the sink, with the sweep's own
+    // producer — the same computation IssueFiler applies to an IssueFiling's key parts — so a
+    // producer can never hand over a fingerprint that disagrees with the one on the ticket. A
+    // record's id IS its fingerprint.
+    Set<String> present =
+        sweep.presentKeyParts().stream()
+            .map(keyParts -> Fingerprint.of(sweep.producer(), keyParts))
+            .collect(Collectors.toSet());
+
     // Ordered newest-first by the repository, so the candidates are the tail. Iterating the whole
     // producer's history rather than querying on lastSeenAt keeps the read on the existing
     // finder: this collection holds one document per distinct problem ever seen, which is tens,
@@ -125,6 +138,7 @@ public class IssueResolver {
     List<LinearIssueRecord> candidates =
         records.findByProducerOrderByLastSeenAtDesc(sweep.producer()).stream()
             .filter(record -> record.lastSeenAt() != null && record.lastSeenAt().isBefore(cutoff))
+            .filter(record -> !present.contains(record.id()))
             .toList();
 
     if (candidates.isEmpty()) {

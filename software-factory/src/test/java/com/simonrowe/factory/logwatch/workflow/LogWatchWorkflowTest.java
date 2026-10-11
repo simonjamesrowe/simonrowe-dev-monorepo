@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.simonrowe.factory.linear.domain.AbsenceSweep;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
+import com.simonrowe.factory.linear.domain.Fingerprint;
 import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.domain.SweepReport;
 import com.simonrowe.factory.linear.domain.SweptIssue;
@@ -148,7 +149,7 @@ class LogWatchWorkflowTest {
                     SourceHealth.Status.SILENT,
                     SourceHealth.Tier.ALLOY_COMPONENT,
                     "Alloy reports its loki.write component unhealthy: 429 limit: 0 bytes/sec"),
-                List.of(), 0, false, 0, 0, 0, List.of()));
+                List.of(), 0, false, 0, 0, 0, List.of(), List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -165,7 +166,7 @@ class LogWatchWorkflowTest {
             new ScanObservation(
                 new SourceHealth(
                     SourceHealth.Status.SILENT, SourceHealth.Tier.ALLOY_COMPONENT, "429"),
-                List.of(), 0, false, 0, 0, 0, List.of()));
+                List.of(), 0, false, 0, 0, 0, List.of(), List.of()));
 
     workflow.run(request(false));
 
@@ -181,7 +182,9 @@ class LogWatchWorkflowTest {
   @DisplayName("with the source alive and nothing found, the scan reports a genuine all-clear")
   void aliveSourceWithNoSignaturesIsNoFindings() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 120, false, 9, 0, 0, List.of()));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(), 120, false, 9, 0, 0, List.of(), List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -195,7 +198,7 @@ class LogWatchWorkflowTest {
     when(activities.observe(any(), any()))
         .thenReturn(
             new ScanObservation(
-                alive(), List.of(signature("boom")), 10, false, 5, 0, 0, List.of()));
+                alive(), List.of(signature("boom")), 10, false, 5, 0, 0, List.of(), List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -213,7 +216,7 @@ class LogWatchWorkflowTest {
     when(activities.observe(any(), any()))
         .thenReturn(
             new ScanObservation(
-                alive(), List.of(signature("boom")), 10, false, 5, 0, 0, List.of()));
+                alive(), List.of(signature("boom")), 10, false, 5, 0, 0, List.of(), List.of()));
 
     LogWatchResult result = workflow.run(request(true));
 
@@ -230,7 +233,7 @@ class LogWatchWorkflowTest {
             new ScanObservation(
                 new SourceHealth(
                     SourceHealth.Status.SILENT, SourceHealth.Tier.ALLOY_COMPONENT, "429"),
-                List.of(), 0, false, 0, 0, 0, List.of()));
+                List.of(), 0, false, 0, 0, 0, List.of(), List.of()));
 
     LogWatchResult result = workflow.run(request(true));
 
@@ -244,7 +247,7 @@ class LogWatchWorkflowTest {
     when(activities.observe(any(), any()))
         .thenReturn(
             new ScanObservation(
-                alive(), List.of(signature("boom")), 10, false, 5, 0, 0, List.of()));
+                alive(), List.of(signature("boom")), 10, false, 5, 0, 0, List.of(), List.of()));
 
     LogWatchResult result =
         workflow.run(
@@ -260,7 +263,7 @@ class LogWatchWorkflowTest {
     when(activities.observe(any(), any()))
         .thenReturn(
             new ScanObservation(
-                alive(), List.of(signature("boom")), 5000, true, 9, 12, 0, List.of()));
+                alive(), List.of(signature("boom")), 5000, true, 9, 12, 0, List.of(), List.of()));
 
     LogWatchResult result = workflow.run(request(true));
 
@@ -289,7 +292,7 @@ class LogWatchWorkflowTest {
                 9,
                 0,
                 3,
-                List.of("Temporal cancel churn", "Alloy tailing a removed container")));
+                List.of("Temporal cancel churn", "Alloy tailing a removed container"), List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -307,7 +310,7 @@ class LogWatchWorkflowTest {
     when(activities.observe(any(), any()))
         .thenReturn(
             new ScanObservation(alive(), List.of(signature("boom")), 400, false, 9, 0, 0,
-                List.of()));
+                List.of(), List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -320,7 +323,9 @@ class LogWatchWorkflowTest {
     environment.close();
     setUpWithWorkflowId("logwatch");
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 1, false, 5, 0, 0, List.of()));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(), 1, false, 5, 0, 0, List.of(), List.of()));
 
     workflow.run(request(false));
 
@@ -352,7 +357,7 @@ class LogWatchWorkflowTest {
                     SourceHealth.Status.SILENT,
                     SourceHealth.Tier.ALLOY_COMPONENT,
                     "429 ingestion rate limit exceeded"),
-                List.of(), 0, false, 0, 0, 0, List.of()));
+                List.of(), 0, false, 0, 0, 0, List.of(), List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -364,7 +369,9 @@ class LogWatchWorkflowTest {
   @DisplayName("a clean scan closes the tickets whose problems have stopped")
   void sweepsOnTheCleanScan() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0, 0, List.of()));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(), 400, false, 9, 0, 0, List.of(), List.of()));
     when(linear.sweepResolved(any()))
         .thenReturn(
             new SweepReport(
@@ -383,23 +390,191 @@ class LogWatchWorkflowTest {
   }
 
   /**
-   * The subtle one. The per-run cap limits how many signatures are FILED, not how many were SEEN
-   * — so with more live problems than the cap, the overflow never reaches the sink, its
-   * lastSeenAt never advances, and it looks exactly like a problem that has stopped. Without this
-   * gate a busy stack closes the tickets about its own busiest failures.
+   * The per-run cap limits how many signatures are FILED, not how many were SEEN — so with more
+   * live problems than the cap, the overflow never reaches the sink and its lastSeenAt never
+   * advances. The scan saw those signatures, though, so it names them and the sweep leaves exactly
+   * those tickets open instead of refusing to run. Before this, every capped night closed
+   * nothing, and in September 2026 that was every night.
    */
   @Test
-  @DisplayName("a run that hit the per-run cap closes nothing, and says why")
-  void neverSweepsWhenTheCapDroppedSignatures() {
+  @DisplayName("a run that hit the per-run cap still sweeps, naming what the cap dropped")
+  void sweepsPastTheCapNamingWhatItDropped() {
+    LogSignature dropped1 = signature("dropped-one");
+    LogSignature dropped2 = signature("dropped-two");
+    when(activities.observe(any(), any()))
+        .thenReturn(
+            capped(List.of(signature("boom")), 2, List.of(dropped1, dropped2)));
+    when(linear.sweepResolved(any()))
+        .thenReturn(
+            new SweepReport(
+                1,
+                List.of(
+                    new SweptIssue(
+                        "fp", List.of("backend", "ERROR", "logger:gone"), "SIM-31",
+                        "https://linear.app/SIM-31")),
+                0, 0, 0, false));
+
+    LogWatchResult result = workflow.run(request(false));
+
+    ArgumentCaptor<AbsenceSweep> sweep = ArgumentCaptor.forClass(AbsenceSweep.class);
+    verify(linear).sweepResolved(sweep.capture());
+    assertThat(sweep.getValue().presentKeyParts())
+        .containsExactly(keyParts(dropped1), keyParts(dropped2));
+    assertThat(result.resolvedIssueUrls()).containsExactly("https://linear.app/SIM-31");
+    assertThat(result.detail()).contains("2 more were dropped by the per-run cap");
+    assertThat(result.detail()).doesNotContain("no ticket was closed as resolved");
+  }
+
+  /**
+   * What each dropped signature is called must be exactly what filing it would have called it,
+   * or the name protects a fingerprint no ticket carries. The key parts are read back from a real
+   * filing of the same signature — not rebuilt here — so this cannot agree with itself by
+   * construction.
+   */
+  @Test
+  @DisplayName("a dropped signature is named by the fingerprint filing it would have used")
+  void droppedSignaturesAreNamedAsFilingNamesThem() {
+    LogSignature sometimesDropped = signature("sometimes-dropped");
     when(activities.observe(any(), any()))
         .thenReturn(
             new ScanObservation(
-                alive(), List.of(signature("boom")), 400, false, 9, 4, 0, List.of()));
+                alive(), List.of(sometimesDropped), 400, false, 9, 0, 0, List.of(), List.of()));
+    workflow.run(request(false));
+    ArgumentCaptor<IssueFiling> filing = ArgumentCaptor.forClass(IssueFiling.class);
+    verify(linear).fileIssue(filing.capture());
+    final String filedFingerprint =
+        Fingerprint.of(filing.getValue().producer(), filing.getValue().keyParts());
+
+    tearDown();
+    setUpWithWorkflowId("test-logwatch-capped");
+    when(activities.observe(any(), any()))
+        .thenReturn(capped(List.of(signature("boom")), 1, List.of(sometimesDropped)));
+    workflow.run(request(false));
+
+    ArgumentCaptor<AbsenceSweep> sweep = ArgumentCaptor.forClass(AbsenceSweep.class);
+    verify(linear).sweepResolved(sweep.capture());
+    assertThat(sweep.getValue().presentKeyParts())
+        .extracting(keyParts -> Fingerprint.of(sweep.getValue().producer(), keyParts))
+        .containsExactly(filedFingerprint);
+  }
+
+  /**
+   * A result recorded by the previous build has no dropped key parts at all, so it reads back
+   * empty while {@code signaturesDropped} is still non-zero. Those dropped signatures are live
+   * problems nobody can name, so the old all-or-nothing veto must still apply to them.
+   */
+  @Test
+  @DisplayName("a capped run that cannot name what it dropped closes nothing, and says why")
+  void neverSweepsWhenTheDroppedSignaturesAreUnnamed() {
+    when(activities.observe(any(), any()))
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(signature("boom")), 400, false, 9, 4, 0, List.of(), null));
+
+    LogWatchResult result = workflow.run(request(false));
+
+    verify(linear, never()).sweepResolved(any());
+    assertThat(result.detail())
+        .contains("dropped 4 signature(s) without naming them, so no ticket was closed");
+  }
+
+  @Test
+  @DisplayName("naming only some of what the cap dropped is treated as naming none of it")
+  void neverSweepsWhenOnlySomeDroppedSignaturesAreNamed() {
+    when(activities.observe(any(), any()))
+        .thenReturn(capped(List.of(signature("boom")), 3, List.of(signature("only-one"))));
 
     LogWatchResult result = workflow.run(request(false));
 
     verify(linear, never()).sweepResolved(any());
     assertThat(result.detail()).contains("no ticket was closed as resolved");
+  }
+
+  /**
+   * Muted is not dropped. A muted group is excluded on purpose every run, and the sweep closing
+   * its old ticket is how an adopted mute rule retires it — so it must never be named present.
+   */
+  @Test
+  @DisplayName("muted signatures never protect a ticket from the sweep")
+  void mutedSignaturesAreNotNamedAsPresent() {
+    LogSignature dropped = signature("dropped");
+    when(activities.observe(any(), any()))
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(signature("boom")), 400, false, 9, 1, 3,
+                List.of("Temporal cancel churn"), List.of(keyParts(dropped))));
+
+    workflow.run(request(false));
+
+    ArgumentCaptor<AbsenceSweep> sweep = ArgumentCaptor.forClass(AbsenceSweep.class);
+    verify(linear).sweepResolved(sweep.capture());
+    assertThat(sweep.getValue().presentKeyParts()).containsExactly(keyParts(dropped));
+  }
+
+  @Test
+  @DisplayName("an uncapped run names nothing as present")
+  void uncappedRunNamesNothing() {
+    when(activities.observe(any(), any()))
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(signature("boom")), 400, false, 9, 0, 2,
+                List.of("Temporal cancel churn"), List.of()));
+
+    workflow.run(request(false));
+
+    ArgumentCaptor<AbsenceSweep> sweep = ArgumentCaptor.forClass(AbsenceSweep.class);
+    verify(linear).sweepResolved(sweep.capture());
+    assertThat(sweep.getValue().presentKeyParts()).isEmpty();
+  }
+
+  /**
+   * Narrowing the cap veto must not loosen the other three. A truncated read has lines it never
+   * examined, so unlike the cap there is nothing to name, however well the dropped part is named.
+   */
+  @Test
+  @DisplayName("a truncated read still closes nothing when the cap's losses are all named")
+  void truncationStillVetoesCappedRuns() {
+    ScanObservation named = capped(List.of(signature("boom")), 1, List.of(signature("x")));
+    when(activities.observe(any(), any()))
+        .thenReturn(
+            new ScanObservation(
+                alive(), named.signatures(), 5000, true, 9, 1, 0, List.of(),
+                named.droppedKeyParts()));
+
+    LogWatchResult result = workflow.run(request(false));
+
+    verify(linear, never()).sweepResolved(any());
+    assertThat(result.detail()).contains("the read was truncated, so no ticket was closed");
+  }
+
+  @Test
+  @DisplayName("an unusable source still closes nothing when the cap's losses are all named")
+  void unusableSourceStillVetoesCappedRuns() {
+    ScanObservation named = capped(List.of(signature("boom")), 1, List.of(signature("x")));
+    when(activities.observe(any(), any()))
+        .thenReturn(
+            new ScanObservation(
+                new SourceHealth(
+                    SourceHealth.Status.SILENT, SourceHealth.Tier.ALLOY_COMPONENT, "429"),
+                named.signatures(), 400, false, 9, 1, 0, List.of(), named.droppedKeyParts()));
+
+    LogWatchResult result = workflow.run(request(false));
+
+    assertThat(result.status()).isEqualTo(LogWatchStatus.SOURCE_UNHEALTHY);
+    verify(linear, never()).sweepResolved(any());
+  }
+
+  @Test
+  @DisplayName("a short window still closes nothing when the cap's losses are all named")
+  void shortWindowStillVetoesCappedRuns() {
+    when(activities.observe(any(), any()))
+        .thenReturn(capped(List.of(signature("boom")), 1, List.of(signature("x"))));
+
+    workflow.run(
+        new LogWatchRequest(
+            TO.minusSeconds(300), TO, Trigger.SCHEDULE, false, true, true, QUIET_FOR));
+
+    verify(linear, never()).sweepResolved(any());
   }
 
   @Test
@@ -408,7 +583,7 @@ class LogWatchWorkflowTest {
     when(activities.observe(any(), any()))
         .thenReturn(
             new ScanObservation(
-                alive(), List.of(signature("boom")), 5000, true, 9, 0, 0, List.of()));
+                alive(), List.of(signature("boom")), 5000, true, 9, 0, 0, List.of(), List.of()));
 
     LogWatchResult result = workflow.run(request(false));
 
@@ -425,7 +600,9 @@ class LogWatchWorkflowTest {
   @DisplayName("a window too short to mean anything closes nothing, whatever the request asks")
   void neverSweepsOverShortWindows() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 3, false, 9, 0, 0, List.of()));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(), 3, false, 9, 0, 0, List.of(), List.of()));
 
     workflow.run(
         new LogWatchRequest(
@@ -438,7 +615,9 @@ class LogWatchWorkflowTest {
   @DisplayName("the sweep is switched off by its own flag")
   void respectsTheResolveFlag() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0, 0, List.of()));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(), 400, false, 9, 0, 0, List.of(), List.of()));
 
     workflow.run(request(false, false));
 
@@ -451,7 +630,7 @@ class LogWatchWorkflowTest {
     when(activities.observe(any(), any()))
         .thenReturn(
             new ScanObservation(
-                alive(), List.of(signature("boom")), 400, false, 9, 0, 0, List.of()));
+                alive(), List.of(signature("boom")), 400, false, 9, 0, 0, List.of(), List.of()));
     when(linear.sweepResolved(any())).thenReturn(SweepReport.none());
 
     workflow.run(request(false));
@@ -474,7 +653,9 @@ class LogWatchWorkflowTest {
   @DisplayName("a dry-run scan previews the sweep, and says so in the request")
   void dryRunStillPreviewsTheSweep() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0, 0, List.of()));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(), 400, false, 9, 0, 0, List.of(), List.of()));
     when(linear.sweepResolved(any())).thenReturn(SweepReport.none());
 
     workflow.run(request(true));
@@ -488,7 +669,9 @@ class LogWatchWorkflowTest {
   @DisplayName("the sweep is scoped to log watch, never to another producer")
   void sweepsOnlyItsOwnProducer() {
     when(activities.observe(any(), any()))
-        .thenReturn(new ScanObservation(alive(), List.of(), 400, false, 9, 0, 0, List.of()));
+        .thenReturn(
+            new ScanObservation(
+                alive(), List.of(), 400, false, 9, 0, 0, List.of(), List.of()));
     when(linear.sweepResolved(any())).thenReturn(SweepReport.none());
 
     workflow.run(request(false));
@@ -509,6 +692,25 @@ class LogWatchWorkflowTest {
     return new LogWatchRequest(
         FROM, TO, dryRun ? Trigger.DRY_RUN : Trigger.SCHEDULE, dryRun, true, resolveWhenClear,
         QUIET_FOR);
+  }
+
+  /**
+   * A healthy observation whose cap dropped {@code dropped} signatures, naming those given. The
+   * names are built by the same {@link SignatureKeyParts} that {@code observe} uses.
+   */
+  private static ScanObservation capped(
+      final List<LogSignature> filed, final int dropped, final List<LogSignature> named) {
+    return new ScanObservation(
+        alive(), filed, 400, false, 9, dropped, 0, List.of(),
+        named.stream().map(SignatureKeyParts::of).toList());
+  }
+
+  /**
+   * The helper both sides share. That filing really sends these is pinned separately, by
+   * {@code droppedSignaturesAreNamedAsFilingNamesThem}, against a captured filing.
+   */
+  private static List<String> keyParts(final LogSignature signature) {
+    return SignatureKeyParts.of(signature);
   }
 
   private static SourceHealth alive() {
