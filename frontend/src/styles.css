@@ -13034,7 +13034,8 @@ body[data-narration-bar] .app-layout__main {
 .coparent-app .expense-tab__count { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--expense-surface-3); font-size: 12px; font-weight: 700; }
 .coparent-app .expense-tab.is-on { border-color: var(--expense-teal-strong); background: var(--expense-teal-strong); color: #ffffff; }
 .coparent-app .expense-tab.is-on .expense-tab__count { background: rgba(255, 255, 255, 0.22); color: #ffffff; }
-.coparent-app .expense-filters { display: flex; gap: 8px; }
+.coparent-app .expense-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.coparent-app .expense-date-filter { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--expense-muted); }
 .coparent-app .expense-select { padding: 8px 12px; border: 1px solid var(--expense-border-strong); border-radius: 12px; background: var(--expense-surface); color: var(--expense-text-2); font-size: 14px; }
 
 /* list */
@@ -13189,6 +13190,36 @@ body[data-narration-bar] .app-layout__main {
 .coparent-app .expense-settle__amount.is-owe { color: var(--expense-rose-text); }
 .coparent-app .expense-settle__amount.is-muted { color: var(--expense-muted); font-weight: 500; }
 .coparent-app .expense-settle__net { display: flex; align-items: center; justify-content: space-between; padding: 16px; border: 1px solid var(--expense-border); border-radius: 16px; background: var(--expense-surface-2); font-size: 17px; font-weight: 600; }
+.coparent-app .expense-payments { display: flex; flex-direction: column; gap: 10px; }
+.coparent-app .expense-payments__title { margin: 0; font-size: 16px; font-weight: 700; }
+.coparent-app .expense-payments .expense-muted { margin: 0; font-size: 13.5px; }
+.coparent-app .expense-payments__list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.coparent-app .expense-payment { display: grid; grid-template-columns: 1.1fr 1fr 1.1fr auto; align-items: end; gap: 10px; padding: 14px; border: 1px solid var(--expense-border); border-radius: 16px; background: var(--expense-surface-2); }
+.coparent-app .expense-payment__reference { grid-column: 1 / 4; }
+.coparent-app .expense-payment__remove { align-self: end; }
+.coparent-app .expense-payments__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.coparent-app .expense-payments__total { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--expense-teal-strong); }
+.coparent-app .expense-payments__total.is-off { color: var(--expense-rose-text); }
+.coparent-app .expense-transfers { display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.coparent-app .expense-transfer { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px solid var(--expense-border); border-radius: 18px; background: var(--expense-surface-2); }
+.coparent-app .expense-transfer__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.coparent-app .expense-transfer__head .expense-muted { margin: 2px 0 0; font-size: 13.5px; }
+.coparent-app .expense-transfer__title { margin: 0; font-size: 17px; font-weight: 700; }
+.coparent-app .expense-transfer__payments { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.coparent-app .expense-transfer__payments li { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 10px; font-size: 14.5px; font-variant-numeric: tabular-nums; }
+.coparent-app .expense-transfer__payments svg { color: var(--expense-teal-strong); }
+.coparent-app .expense-transfer__covers { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--expense-muted); text-transform: uppercase; }
+.coparent-app .expense-transfer__expenses { overflow: hidden; margin: 0; padding: 0; border: 1px solid var(--expense-border); border-radius: 14px; list-style: none; }
+.coparent-app .expense-transfer__expenses li + li { border-top: 1px solid var(--expense-border); }
+.coparent-app .expense-transfer__expense { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14.5px; text-align: left; cursor: pointer; }
+.coparent-app .expense-transfer__expense:hover { background: var(--expense-surface-3); }
+.coparent-app .expense-transfer__expense span:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
+.coparent-app .expense-transfer__confirm { align-self: flex-start; }
+.coparent-app .expense-facts dd.expense-paid-back { flex-direction: column; align-items: flex-start; gap: 4px; }
+@media (max-width: 640px) {
+  .coparent-app .expense-payment { grid-template-columns: 1fr 1fr; }
+  .coparent-app .expense-payment__reference { grid-column: 1 / -1; }
+}
 
 /* dashboard */
 /* CoParent dashboard: the day's briefing. Hand-written BEM like the expenses block above, and
@@ -13326,6 +13357,7 @@ body[data-narration-bar] .app-layout__main {
   .coparent-app .expense-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
   .coparent-app .expense-tab { flex: none; }
   .coparent-app .expense-filters .expense-select { flex: 1; min-width: 0; }
+  .coparent-app .expense-date-filter { flex: 1 1 140px; }
   .coparent-app .expense-row { grid-template-columns: 1fr; gap: 10px; padding: 14px; }
   .coparent-app .expense-row--needs { padding-left: 11px; }
   .coparent-app .expense-row__open { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; }

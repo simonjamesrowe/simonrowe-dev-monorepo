@@ -2,6 +2,7 @@ package com.simonrowe.coparent.expense;
 
 import com.simonrowe.coparent.config.CoparentProperties;
 import com.simonrowe.coparent.model.Expense;
+import com.simonrowe.coparent.model.ExpenseSettlement;
 import com.simonrowe.coparent.model.Parent;
 import com.simonrowe.coparent.shared.CoparentAccessPolicy;
 import java.time.format.DateTimeFormatter;
@@ -20,8 +21,8 @@ import org.springframework.stereotype.Component;
 /**
  * Tells the other parent when an expense needs them. Best-effort: it runs after the expense is
  * saved, and a failed send is logged rather than thrown, so mail can never undo or block a
- * change. Only the three moments that need the other parent to act send anything: new terms to
- * agree, a dispute, and a claimed repayment to confirm.
+ * change. Only the moments that need the other parent to act send anything: new terms to agree,
+ * a dispute, and a claimed repayment or settle-up to confirm.
  */
 @Component
 public class ExpenseMailer {
@@ -97,6 +98,44 @@ public class ExpenseMailer {
         Confirm it when it arrives: %s
         """.formatted(firstName(from), ExpenseMoney.format(ExpenseMath.owedPence(expense)),
         expense.title(), link(expense)));
+  }
+
+  /**
+   * The parent who was paid is asked to confirm a settle-up's payments arrived, in one email for
+   * every expense it paid back rather than one each.
+   */
+  public void settlementRecorded(final Parent to, final Parent from,
+      final ExpenseSettlement settlement, final List<Expense> claimed) {
+    final String paymentLines = settlement.payments().stream()
+        .map(payment -> "- %s, %s: %s%s".formatted(methodLabel(payment.method()),
+            DAY.format(payment.paidOn()), ExpenseMoney.format(payment.amountPence()),
+            payment.reference() == null ? "" : " (ref " + payment.reference() + ")"))
+        .collect(Collectors.joining("\n"));
+    final String expenseLines = claimed.stream()
+        .map(expense -> "- %s: %s".formatted(expense.title(),
+            ExpenseMoney.format(ExpenseMath.owedPence(expense))))
+        .collect(Collectors.joining("\n"));
+    send(to, "%s says they paid you %s".formatted(firstName(from),
+        ExpenseMoney.format(settlement.amountPence())), """
+        %s says they paid you %s:
+
+        %s
+
+        It pays back:
+
+        %s
+
+        Confirm it arrived: %s/expenses?view=transfers
+        """.formatted(firstName(from), ExpenseMoney.format(settlement.amountPence()),
+        paymentLines, expenseLines, properties.appUrl()));
+  }
+
+  private static String methodLabel(final String method) {
+    return switch (method) {
+      case ExpenseSettlement.BANK_TRANSFER -> "Bank transfer";
+      case ExpenseSettlement.CASH -> "Cash";
+      default -> "Other payment";
+    };
   }
 
   private void send(final Parent to, final String subject, final String body) {

@@ -80,7 +80,9 @@ public class BackupService {
       "eventcategories", "schedulechangerequests", "conversations", "audits", "expenses",
       // Statement fingerprints are what stop a re-uploaded statement being suggested, or logged,
       // a second time, so a restore without them would offer every old transaction again.
-      "statement_transactions", "statement_uploads"
+      "statement_transactions", "statement_uploads",
+      // Settle-ups: the payments that paid expenses back, which the expenses point at.
+      "expense_settlements"
   );
 
   /** Writes every file under {@code dir} into the archive below {@code prefix}. */

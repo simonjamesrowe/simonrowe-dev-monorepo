@@ -1,4 +1,4 @@
-import { Mail, Pencil } from 'lucide-react';
+import { Check, Mail, Pencil } from 'lucide-react';
 import { useState } from 'react';
 
 import { useInvitations, useRenameInvitedParent, useResendInvitation } from '../../hooks/api';
@@ -10,18 +10,25 @@ import { firstName } from './parentTone';
 
 /**
  * Shown while the co-parent has not accepted their invitation. Expenses can be logged against
- * them already. What the parent here paid waits for the co-parent to agree once they join; what
- * the co-parent paid, the parent here can agree and pay back straight away. The primary
- * parent can resend the invitation, and rename them until they join and set their own name.
+ * them already, and until they join the parent here agrees to every one, whoever paid, and can
+ * agree to them all at once. The primary parent can resend the invitation, and rename them
+ * until they join and set their own name.
  */
 export function InvitedCoparentBanner({
   familyId,
   invited,
   canManage,
+  toAgree = 0,
+  agreeing = false,
+  onAgreeAll,
 }: {
   familyId: string;
   invited: Parent;
   canManage: boolean;
+  /** How many expenses are waiting for the parent here to agree. */
+  toAgree?: number;
+  agreeing?: boolean;
+  onAgreeAll?: () => void;
 }) {
   const { showToast } = useToast();
   const { data: invitations = [] } = useInvitations(familyId);
@@ -30,6 +37,7 @@ export function InvitedCoparentBanner({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(invited.fullName);
   const who = firstName(invited);
+  const canAgreeAll = toAgree > 0 && onAgreeAll !== undefined;
   const invitation = invitations.find(
     (candidate) =>
       candidate.email.toLowerCase() === invited.email?.toLowerCase() &&
@@ -61,9 +69,9 @@ export function InvitedCoparentBanner({
       <div className="expense-invited__body">
         <p className="expense-invited__title">{who} hasn&apos;t joined yet</p>
         <p className="expense-invited__text">
-          Add expenses now, whoever paid. What you paid waits for {who} to agree once they accept
-          the invitation sent to {invited.email}. What {who} paid, you can agree yourself and mark
-          as paid back now.
+          Until {who} accepts the invitation sent to {invited.email}, you agree to every expense
+          yourself, whoever paid, and settle up without waiting for them. Once they join, anything
+          new waits for them to agree.
         </p>
         {editing && (
           <div className="expense-invited__rename">
@@ -83,15 +91,24 @@ export function InvitedCoparentBanner({
           </div>
         )}
       </div>
-      {canManage && !editing && (
+      {(canAgreeAll || (canManage && !editing)) && (
         <div className="expense-invited__actions">
-          <button type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={() => setEditing(true)}>
-            <Pencil size={14} aria-hidden="true" /> Change name
-          </button>
-          {invitation && (
-            <button type="button" className="cp-button cp-button--secondary cp-button--sm" disabled={resend.isPending} onClick={resendInvite}>
-              Resend invitation
+          {canAgreeAll && (
+            <button type="button" className="cp-button cp-button--primary cp-button--sm" disabled={agreeing} onClick={onAgreeAll}>
+              <Check size={14} aria-hidden="true" /> {agreeing ? 'Agreeing…' : `Agree all ${toAgree}`}
             </button>
+          )}
+          {canManage && !editing && (
+            <>
+              <button type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={() => setEditing(true)}>
+                <Pencil size={14} aria-hidden="true" /> Change name
+              </button>
+              {invitation && (
+                <button type="button" className="cp-button cp-button--secondary cp-button--sm" disabled={resend.isPending} onClick={resendInvite}>
+                  Resend invitation
+                </button>
+              )}
+            </>
           )}
         </div>
       )}

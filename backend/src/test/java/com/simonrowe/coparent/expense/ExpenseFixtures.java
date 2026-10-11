@@ -31,7 +31,7 @@ final class ExpenseFixtures {
         Expense.GBP, timing, date, payer,
         List.of(new Expense.Share(ALEX, alexPercent), new Expense.Share(SAM, 100 - alexPercent)),
         new Expense.Agreement(agreement, requestedBy, null, null, null),
-        new Expense.Reimbursement(reimbursement, null, null, null, null, null), List.of(), null,
-        List.of(), 1, requestedBy, null, null, now, now);
+        new Expense.Reimbursement(reimbursement, null, null, null, null, null, null), List.of(),
+        null, List.of(), 1, requestedBy, null, null, now, now);
   }
 }

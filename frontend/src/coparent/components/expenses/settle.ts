@@ -1,4 +1,4 @@
-import type { Expense } from '../../types/expenses';
+import type { Expense, ExpenseSettlement, PaymentMethod } from '../../types/expenses';
 
 /**
  * What settling up can touch: every agreed debt still outstanding, in either direction, and
@@ -20,4 +20,29 @@ export function netOf(items: Expense[], me: string): number {
     if (expense.reimbursement.status === 'claimed') return sum;
     return sum + (expense.payerId === me ? expense.owedPence : -expense.owedPence);
   }, 0);
+}
+
+export const PAYMENT_METHODS: { key: PaymentMethod; label: string }[] = [
+  { key: 'bank_transfer', label: 'Bank transfer' },
+  { key: 'cash', label: 'Cash' },
+  { key: 'other', label: 'Other' },
+];
+
+export function methodLabel(method: PaymentMethod): string {
+  return PAYMENT_METHODS.find((entry) => entry.key === method)?.label ?? 'Other';
+}
+
+export type SettlementState = 'awaitingMe' | 'awaitingThem' | 'settled';
+
+/**
+ * Where a settle-up stands, read from its expenses: any still claimed wait on the parent who
+ * was paid to confirm the money arrived. Mirrors what ExpenseSettlementService.confirm settles.
+ */
+export function settlementState(settlement: ExpenseSettlement, expenses: Expense[], me: string): SettlementState {
+  const waiting = expenses.filter(
+    (expense) =>
+      expense.reimbursement.settlementId === settlement.id && expense.reimbursement.status === 'claimed',
+  );
+  if (waiting.length === 0) return 'settled';
+  return waiting.some((expense) => expense.payerId === me) ? 'awaitingMe' : 'awaitingThem';
 }

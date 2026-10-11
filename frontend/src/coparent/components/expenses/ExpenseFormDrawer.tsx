@@ -569,7 +569,7 @@ export function ExpenseFormDrawer({
       <p className="expense-notice">
         <Mail size={16} aria-hidden="true" />
         {other.status === 'invited'
-          ? `${otherName} hasn't joined yet, so nothing is sent now. They can agree to it once they accept your invitation.`
+          ? `${otherName} hasn't joined yet, so nothing is sent now. Until they accept your invitation, you can agree to it yourself.`
           : `${otherName} will be asked to agree, and emailed a link.`}
       </p>
     </ExpenseDrawer>

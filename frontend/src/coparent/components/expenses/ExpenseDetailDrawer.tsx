@@ -7,6 +7,7 @@ import {
   useDeleteReceipt,
   useExpenseTransition,
   useMarkExpensePaid,
+  useSettlements,
   useUploadReceipt,
   type ExpenseTransition,
 } from '../../hooks/api';
@@ -23,6 +24,7 @@ import { formatMoney, parsePounds, penceToPounds } from './money';
 import { ParentDot } from './ParentDot';
 import { firstName, parentTone } from './parentTone';
 import { ReceiptLightbox, StoredReceiptThumb } from './ReceiptThumb';
+import { methodLabel } from './settle';
 import { StatusChip } from './StatusChip';
 
 type Mode = null | 'dispute' | 'claim' | 'markPaid' | 'reject';
@@ -92,6 +94,7 @@ export function ExpenseDetailDrawer({
   const remove = useDeleteExpense();
   const uploadReceipt = useUploadReceipt();
   const deleteReceipt = useDeleteReceipt();
+  const { data: settlements = [] } = useSettlements(familyId);
   const busy =
     transition.isPending || markPaid.isPending || remove.isPending || uploadReceipt.isPending || deleteReceipt.isPending;
 
@@ -118,9 +121,13 @@ export function ExpenseDetailDrawer({
 
   const otherName = firstName(other);
   const nameOf = (id: string | null) => (id === me.id ? 'You' : id === other.id ? otherName : 'Someone');
-  const status = expenseStatus(expense, me.id, otherName);
-  // A co-parent who hasn't joined can't confirm a repayment, so the server settles it at once.
+  // A co-parent who hasn't joined can't confirm a repayment, so the server settles it at once,
+  // and can't agree to anything, so the parent here agrees for both of them.
   const otherJoined = other.status === 'active';
+  const status = expenseStatus(expense, me.id, otherName, { coparentJoined: other.status !== 'invited' });
+  const settlement = expense.reimbursement.settlementId
+    ? settlements.find((candidate) => candidate.id === expense.reimbursement.settlementId)
+    : undefined;
   const category = EXPENSE_CATEGORIES[expense.category];
   const childNames = expense.childIds
     .map((id) => children.find((child) => child.id === id)?.fullName.split(/\s+/)[0])
@@ -435,6 +442,28 @@ export function ExpenseDetailDrawer({
         <dd className={expense.debtorParentId === me.id && expense.owedPence > 0 ? 'expense-owed expense-owed--owe' : 'expense-owed'}>
           {owedLine}
         </dd>
+        {settlement && (
+          <>
+            <dt>Paid back</dt>
+            <dd className="expense-paid-back">
+              {settlement.payments.length === 0 ? (
+                <span>Settled against each other, with no money changing hands</span>
+              ) : (
+                settlement.payments.map((payment, index) => (
+                  <span key={index}>
+                    {methodLabel(payment.method)} · {longDate(payment.paidOn)} · <strong>{formatMoney(payment.amountPence)}</strong>
+                    {payment.reference ? ` · ref ${payment.reference}` : ''}
+                  </span>
+                ))
+              )}
+              {settlement.expenseIds.length > 1 && (
+                <span className="expense-muted">
+                  Part of a {formatMoney(settlement.amountPence)} settle-up covering {settlement.expenseIds.length} expenses
+                </span>
+              )}
+            </dd>
+          </>
+        )}
         <dt>Receipts</dt>
         <dd>
           <div className="expense-receipts">

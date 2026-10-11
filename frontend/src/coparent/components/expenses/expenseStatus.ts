@@ -40,6 +40,16 @@ export function loggedForTheOther(expense: Expense): boolean {
 const shortDate = (iso: string) =>
   new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
+export interface StatusOptions {
+  today?: string;
+  /**
+   * False while the co-parent has not accepted their invitation. Until they do, the signed-in
+   * parent agrees to everything, so nothing reads as waiting for them. Mirrors
+   * ExpenseService.requireAgreer.
+   */
+  coparentJoined?: boolean;
+}
+
 /**
  * What an expense looks like to one parent. The same expense reads "Waiting for Sam" to Alex and
  * "Needs your OK" to Sam; this is the single place that decides which.
@@ -48,11 +58,15 @@ export function expenseStatus(
   expense: Expense,
   me: string,
   otherName: string,
-  today: string = new Date().toISOString().slice(0, 10),
+  { today = new Date().toISOString().slice(0, 10), coparentJoined = true }: StatusOptions = {},
 ): ExpenseStatus {
   const { agreement, reimbursement } = expense;
   const requester = agreement.requestedBy === me;
   if (agreement.status === 'pending') {
+    if (!coparentJoined) {
+      // The co-parent cannot sign in to agree, so the parent here agrees for both of them.
+      return { label: 'Needs your OK', tone: 'amber', needsAction: true, actions: ['agree'] };
+    }
     if (requester) {
       // Not counted as needing action: it is waiting for the other parent, who may agree too.
       return {
@@ -106,7 +120,7 @@ export function expenseStatus(
       };
 }
 
-export type ExpenseView = 'needs' | 'upcoming' | 'owed' | 'settled' | 'all';
+export type ExpenseView = 'needs' | 'upcoming' | 'owed' | 'settled' | 'all' | 'transfers';
 
 export const EXPENSE_VIEWS: { key: ExpenseView; label: string; counted: boolean }[] = [
   { key: 'needs', label: 'Needs action', counted: true },
@@ -114,13 +128,22 @@ export const EXPENSE_VIEWS: { key: ExpenseView; label: string; counted: boolean 
   { key: 'owed', label: 'Owed', counted: true },
   { key: 'settled', label: 'Settled', counted: false },
   { key: 'all', label: 'All', counted: false },
+  // Not a list of expenses: the settle-ups and the payments in each. Counted by those waiting
+  // for the signed-in parent to confirm.
+  { key: 'transfers', label: 'Transfers', counted: true },
 ];
 
 /** Which tab an expense belongs on, from one parent's side. */
-export function inView(view: ExpenseView, expense: Expense, me: string, otherName: string): boolean {
+export function inView(
+  view: ExpenseView,
+  expense: Expense,
+  me: string,
+  otherName: string,
+  coparentJoined = true,
+): boolean {
   switch (view) {
     case 'needs':
-      return expenseStatus(expense, me, otherName).needsAction;
+      return expenseStatus(expense, me, otherName, { coparentJoined }).needsAction;
     case 'upcoming':
       return expense.timing === 'upcoming';
     case 'owed':
@@ -131,9 +154,21 @@ export function inView(view: ExpenseView, expense: Expense, me: string, otherNam
         expense.agreement.status === 'agreed' &&
         (expense.reimbursement.status === 'none' || expense.reimbursement.status === 'reimbursed')
       );
+    case 'transfers':
+      return false;
     default:
       return true;
   }
+}
+
+/**
+ * Whether an expense's date (paid on, or due on for an upcoming one) falls between two
+ * YYYY-MM-DD dates, both inclusive. Either bound may be empty, and bounds entered the wrong way
+ * round are read the right way round rather than matching nothing.
+ */
+export function inDateRange(date: string, from: string, to: string): boolean {
+  const [low, high] = from && to && from > to ? [to, from] : [from, to];
+  return (!low || date >= low) && (!high || date <= high);
 }
 
 /** An upcoming expense can go at any time; a paid one only while unagreed, by its requester. */

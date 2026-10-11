@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testExpense } from '../components/expenses/testExpense';
 import { ToastProvider } from '../components/ui/ToastProvider';
 import * as apiHooks from '../hooks/api';
-import type { ExpenseSummary } from '../types/expenses';
+import type { ExpenseSettlement, ExpenseSummary } from '../types/expenses';
 
 import ExpensesPage from './ExpensesPage';
 
@@ -27,7 +27,9 @@ vi.mock('../hooks/api', () => ({
   useDeleteExpense: vi.fn(),
   useDeleteReceipt: vi.fn(),
   useMarkExpensePaid: vi.fn(),
-  useSettleExpenses: vi.fn(),
+  useSettlements: vi.fn(),
+  useRecordSettlement: vi.fn(),
+  useConfirmSettlement: vi.fn(),
   fetchReceiptBlob: vi.fn(),
   useStatementOverview: vi.fn(),
 }));
@@ -36,6 +38,8 @@ const mutation = (mutateAsync = vi.fn().mockResolvedValue({})) =>
   ({ mutateAsync, isPending: false }) as unknown as ReturnType<typeof apiHooks.useCreateExpense>;
 
 const transitionMutate = vi.fn();
+const recordMutate = vi.fn();
+const confirmMutate = vi.fn();
 const createMutate = vi.fn();
 const resendMutate = vi.fn();
 const renameMutate = vi.fn();
@@ -83,6 +87,7 @@ function setUp({
   parents = [alex, sam] as TestParent[],
   expenses = [skiTrip],
   invitations = [] as unknown[],
+  settlements = [] as ExpenseSettlement[],
 } = {}) {
   vi.mocked(apiHooks.useFamilies).mockReturnValue({
     data: [{ id: 'fam-1', name: 'Family', timeZone: 'Europe/London' }],
@@ -109,6 +114,9 @@ function setUp({
   vi.mocked(apiHooks.useExpenseSummary).mockReturnValue({ data: summary } as unknown as ReturnType<
     typeof apiHooks.useExpenseSummary
   >);
+  vi.mocked(apiHooks.useSettlements).mockReturnValue({ data: settlements } as unknown as ReturnType<
+    typeof apiHooks.useSettlements
+  >);
   vi.mocked(apiHooks.useExpenseTransition).mockReturnValue(
     mutation(transitionMutate) as unknown as ReturnType<typeof apiHooks.useExpenseTransition>,
   );
@@ -119,10 +127,11 @@ function setUp({
     apiHooks.useDeleteExpense,
     apiHooks.useDeleteReceipt,
     apiHooks.useMarkExpensePaid,
-    apiHooks.useSettleExpenses,
   ]) {
     vi.mocked(hook).mockReturnValue(mutation() as never);
   }
+  vi.mocked(apiHooks.useRecordSettlement).mockReturnValue(mutation(recordMutate) as never);
+  vi.mocked(apiHooks.useConfirmSettlement).mockReturnValue(mutation(confirmMutate) as never);
 }
 
 function renderPage(path = '/expenses') {
@@ -139,6 +148,8 @@ describe('ExpensesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     transitionMutate.mockResolvedValue({});
+    recordMutate.mockResolvedValue({ settlement: null, results: [] });
+    confirmMutate.mockResolvedValue([]);
     createMutate.mockResolvedValue(testExpense({ id: 'new' }));
   });
 
@@ -287,5 +298,130 @@ describe('ExpensesPage', () => {
     );
     expect(screen.getByRole('button', { name: 'Review 3' })).toBeInTheDocument();
     statementOverview = { ...statementOverview, toReview: 0 };
+  });
+
+  it('lets the parent here agree to their own expenses until the co-parent joins', async () => {
+    const rhian = { id: 'rhian', familyId: 'fam-1', fullName: 'Rhian', email: 'rhian@example.com', role: 'co-parent' as const, status: 'invited' };
+    const mine = testExpense({ id: 'mine', shares: [
+      { parentId: 'alex', percent: 50, sharePence: 2250 },
+      { parentId: 'rhian', percent: 50, sharePence: 2250 },
+    ] });
+    const theirs = testExpense({ id: 'theirs', payerId: 'rhian', debtorParentId: 'alex', creditorParentId: 'rhian' });
+    setUp({ parents: [alex, rhian], expenses: [mine, theirs] });
+    const user = userEvent.setup();
+    renderPage();
+
+    const row = screen.getByTestId('expense-row-mine');
+    expect(within(row).getByText('Needs your OK')).toBeInTheDocument();
+    expect(within(row).queryByText('Waiting for Rhian')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Needs action/ })).toHaveTextContent('2');
+
+    const banner = screen.getByRole('region', { name: 'Co-parent not joined yet' });
+    expect(banner).toHaveTextContent('you agree to every expense yourself');
+    await user.click(within(banner).getByRole('button', { name: /Agree all 2/ }));
+    expect(transitionMutate).toHaveBeenCalledTimes(2);
+    expect(transitionMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ transition: 'agree', expense: expect.objectContaining({ id: 'mine', version: 1 }) }),
+    );
+    expect(transitionMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ transition: 'agree', expense: expect.objectContaining({ id: 'theirs' }) }),
+    );
+  });
+
+  it('settles up as two bank transfers that add up to what is owed', async () => {
+    const owedToSam = testExpense({
+      id: 'owed',
+      title: 'Swimming lessons',
+      payerId: 'sam',
+      debtorParentId: 'alex',
+      creditorParentId: 'sam',
+      agreement: { status: 'agreed', requestedBy: 'sam', respondedBy: 'alex', respondedAt: null, note: null },
+      reimbursement: { status: 'outstanding', claimedBy: null, claimedAt: null, settledBy: null, settledAt: null, note: null, settlementId: null },
+      countsTowardsBalance: true,
+      owedPence: 3000,
+      version: 2,
+    });
+    setUp({ expenses: [owedToSam] });
+    const user = userEvent.setup();
+    renderPage('/expenses?settle=1');
+
+    expect(screen.getByText('How you paid Sam')).toBeInTheDocument();
+    expect(screen.getByLabelText('Payment 1 amount in pounds')).toHaveValue('30.00');
+    const record = screen.getByRole('button', { name: /Record payment/ });
+    expect(record).toBeEnabled();
+
+    await user.clear(screen.getByLabelText('Payment 1 amount in pounds'));
+    await user.type(screen.getByLabelText('Payment 1 amount in pounds'), '20');
+    expect(screen.getByText('£10.00 still to account for.')).toBeInTheDocument();
+    expect(record).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: /Add another payment/ }));
+    expect(screen.getByLabelText('Payment 2 amount in pounds')).toHaveValue('10.00');
+    await user.type(screen.getByLabelText('Payment 2 reference'), 'SWIM');
+    expect(screen.getByTestId('settle-payments-total')).toHaveTextContent('£30.00 of £30.00');
+    await user.click(record);
+
+    expect(recordMutate).toHaveBeenCalledWith({
+      familyId: 'fam-1',
+      items: [expect.objectContaining({ id: 'owed', version: 2 })],
+      payments: [
+        expect.objectContaining({ method: 'bank_transfer', amountPence: 2000, reference: null }),
+        expect.objectContaining({ method: 'bank_transfer', amountPence: 1000, reference: 'SWIM' }),
+      ],
+    });
+  });
+
+  it('lists transfers with the expenses they paid back, and confirms one that arrived', async () => {
+    const claimed = testExpense({
+      id: 'claimed',
+      title: 'School trip',
+      agreement: { status: 'agreed', requestedBy: 'alex', respondedBy: 'sam', respondedAt: null, note: null },
+      reimbursement: { status: 'claimed', claimedBy: 'sam', claimedAt: null, settledBy: null, settledAt: null, note: 'Bank transfer', settlementId: 'set-1' },
+      countsTowardsBalance: true,
+      owedPence: 2250,
+    });
+    const settlement: ExpenseSettlement = {
+      id: 'set-1',
+      familyId: 'fam-1',
+      fromParentId: 'sam',
+      toParentId: 'alex',
+      amountPence: 2250,
+      currency: 'GBP',
+      payments: [{ method: 'bank_transfer', amountPence: 2250, paidOn: '2026-10-07', reference: 'TRIP' }],
+      expenseIds: ['claimed'],
+      recordedBy: 'sam',
+      createdAt: '2026-10-07T10:00:00Z',
+    };
+    setUp({ expenses: [claimed], settlements: [settlement] });
+    const user = userEvent.setup();
+    renderPage('/expenses?view=transfers');
+
+    expect(screen.getByRole('button', { name: /Transfers/ })).toHaveTextContent('1');
+    const card = screen.getByTestId('transfer-set-1');
+    expect(card).toHaveTextContent('Sam paid you £22.50');
+    expect(card).toHaveTextContent('Bank transfer · 7 Oct 2026 · ref TRIP');
+    expect(within(card).getByRole('button', { name: /School trip/ })).toBeInTheDocument();
+
+    await user.click(within(card).getByRole('button', { name: /Confirm received/ }));
+    expect(confirmMutate).toHaveBeenCalledWith({ familyId: 'fam-1', settlementId: 'set-1' });
+  });
+
+  it('filters the list to a from and to date, both inclusive', async () => {
+    const on = (id: string, date: string) => testExpense({ id, title: id, date });
+    setUp({ expenses: [on('before', '2026-09-30'), on('first', '2026-10-01'), on('last', '2026-10-31'), on('after', '2026-11-01')] });
+    const user = userEvent.setup();
+    renderPage('/expenses?view=all');
+
+    await user.type(screen.getByLabelText('From date'), '2026-10-01');
+    await user.type(screen.getByLabelText('To date'), '2026-10-31');
+
+    expect(screen.getByTestId('expense-row-first')).toBeInTheDocument();
+    expect(screen.getByTestId('expense-row-last')).toBeInTheDocument();
+    expect(screen.queryByTestId('expense-row-before')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('expense-row-after')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Clear dates/ }));
+    expect(screen.getByTestId('expense-row-before')).toBeInTheDocument();
+    expect(screen.getByTestId('expense-row-after')).toBeInTheDocument();
   });
 });

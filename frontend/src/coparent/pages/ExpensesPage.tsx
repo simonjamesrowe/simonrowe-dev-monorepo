@@ -1,4 +1,4 @@
-import { Check, Paperclip, Pencil, Plus, Scale, Sparkles, Upload, UserPlus, WandSparkles } from 'lucide-react';
+import { Check, Paperclip, Pencil, Plus, Scale, Sparkles, Upload, UserPlus, WandSparkles, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -11,6 +11,7 @@ import { InvitedCoparentBanner } from '../components/expenses/InvitedCoparentBan
 import {
   EXPENSE_VIEWS,
   expenseStatus,
+  inDateRange,
   inView,
   type ExpenseStatus,
   type ExpenseView,
@@ -18,9 +19,10 @@ import {
 import { formatMoney } from '../components/expenses/money';
 import { ParentDot } from '../components/expenses/ParentDot';
 import { firstName, parentTone } from '../components/expenses/parentTone';
-import { settleable } from '../components/expenses/settle';
+import { settleable, settlementState } from '../components/expenses/settle';
 import { SettleUpDrawer } from '../components/expenses/SettleUpDrawer';
 import { StatusChip } from '../components/expenses/StatusChip';
+import { TransfersList } from '../components/expenses/TransfersList';
 import { useToast } from '../components/ui/ToastProvider';
 import {
   useChildren,
@@ -30,6 +32,7 @@ import {
   useExpenseTransition,
   useFamilies,
   useParentsWithInvited,
+  useSettlements,
   useStatementOverview,
 } from '../hooks/api';
 import type { Child, Parent } from '../lib/api/client';
@@ -71,11 +74,15 @@ const ExpensesPage = () => {
   const { data: children = [] } = useChildren(familyId);
   const { data: expenses = [], isLoading } = useExpenses(familyId);
   const { data: summary } = useExpenseSummary(familyId);
+  const { data: settlements = [] } = useSettlements(familyId);
   // Private to the signed-in parent: their own statements' suggestions waiting for them.
   const { data: statements } = useStatementOverview(familyId);
   const transition = useExpenseTransition();
   const [childFilter, setChildFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState<'all' | ExpenseCategory>('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const datesFiltered = fromDate !== '' || toDate !== '';
   const [editing, setEditing] = useState<Expense | null>(null);
   const [formOpen, setFormOpen] = useState(params.get('new') === '1');
   const [settleOpen, setSettleOpen] = useState(params.get('settle') === '1');
@@ -86,15 +93,21 @@ const ExpensesPage = () => {
   const other = others.find((parent) => parent.status === 'active')
     ?? others.find((parent) => parent.status === 'invited');
   const otherInvited = other?.status === 'invited';
+  // Until the co-parent accepts, the parent here agrees to everything (ExpenseService.requireAgreer).
+  const coparentJoined = !otherInvited;
   const otherName = firstName(other);
   const detailId = params.get('expense');
   const detail = expenses.find((expense) => expense.id === detailId) ?? null;
 
   const statuses = useMemo(() => {
     const map = new Map<string, ExpenseStatus>();
-    if (me) expenses.forEach((expense) => map.set(expense.id, expenseStatus(expense, me.id, otherName)));
+    if (me) {
+      expenses.forEach((expense) =>
+        map.set(expense.id, expenseStatus(expense, me.id, otherName, { coparentJoined })),
+      );
+    }
     return map;
-  }, [expenses, me, otherName]);
+  }, [expenses, me, otherName, coparentJoined]);
 
   const needsCount = expenses.filter((expense) => statuses.get(expense.id)?.needsAction).length;
   const requestedView = params.get('view') as ExpenseView | null;
@@ -119,6 +132,31 @@ const ExpensesPage = () => {
   const openDetail = (expense: Expense, mode: DetailMode = null) => {
     setDetailMode(mode);
     setParam('expense', expense.id);
+  };
+
+  const [agreeingAll, setAgreeingAll] = useState(false);
+  const toAgree = expenses.filter((expense) => statuses.get(expense.id)?.actions.includes('agree'));
+
+  /** Before the co-parent joins: agree to every expense waiting, one by one at its own version. */
+  const agreeAll = async () => {
+    if (!familyId || agreeingAll) return;
+    setAgreeingAll(true);
+    let agreed = 0;
+    let failed = 0;
+    for (const expense of toAgree) {
+      try {
+        await transition.mutateAsync({ familyId, expense, transition: 'agree' });
+        agreed += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setAgreeingAll(false);
+    showToast({
+      variant: failed ? 'error' : 'success',
+      title: failed ? `${failed} could not be agreed` : `Agreed ${agreed} expense${agreed === 1 ? '' : 's'}`,
+      description: failed ? 'Something changed on those; reload and try again.' : 'They now count towards the balance.',
+    });
   };
 
   const quickStep = async (expense: Expense, name: 'agree' | 'reimbursement/confirm') => {
@@ -170,9 +208,10 @@ const ExpensesPage = () => {
       .filter(Boolean)
       .join(', ');
   const visible = expenses
-    .filter((expense) => inView(view, expense, me.id, otherName))
+    .filter((expense) => inView(view, expense, me.id, otherName, coparentJoined))
     .filter((expense) => childFilter === 'all' || expense.childIds.includes(childFilter))
     .filter((expense) => categoryFilter === 'all' || expense.category === categoryFilter)
+    .filter((expense) => inDateRange(expense.date, fromDate, toDate))
     .sort((left, right) =>
       view === 'upcoming' ? left.date.localeCompare(right.date) : right.date.localeCompare(left.date),
     );
@@ -273,7 +312,14 @@ const ExpensesPage = () => {
       )}
 
       {otherInvited && (
-        <InvitedCoparentBanner familyId={familyId} invited={other} canManage={me.role === 'primary'} />
+        <InvitedCoparentBanner
+          familyId={familyId}
+          invited={other}
+          canManage={me.role === 'primary'}
+          toAgree={toAgree.length}
+          agreeing={agreeingAll}
+          onAgreeAll={agreeAll}
+        />
       )}
 
       <section className="expense-cards" aria-label="Summary">
@@ -325,7 +371,10 @@ const ExpensesPage = () => {
       <div className="expense-toolbar">
         <nav className="expense-tabs" aria-label="Expense views">
           {EXPENSE_VIEWS.map((entry) => {
-            const count = expenses.filter((expense) => inView(entry.key, expense, me.id, otherName)).length;
+            const count =
+              entry.key === 'transfers'
+                ? settlements.filter((settlement) => settlementState(settlement, expenses, me.id) === 'awaitingMe').length
+                : expenses.filter((expense) => inView(entry.key, expense, me.id, otherName, coparentJoined)).length;
             return (
               <button
                 key={entry.key}
@@ -340,33 +389,78 @@ const ExpensesPage = () => {
             );
           })}
         </nav>
-        <div className="expense-filters">
-          <select className="expense-select" aria-label="Child" value={childFilter} onChange={(event) => setChildFilter(event.target.value)}>
-            <option value="all">All children</option>
-            {children.map((child) => (
-              <option key={child.id} value={child.id}>
-                {child.fullName.split(/\s+/)[0]}
-              </option>
-            ))}
-          </select>
-          <select
-            className="expense-select"
-            aria-label="Type"
-            value={categoryFilter}
-            onChange={(event) => setCategoryFilter(event.target.value as 'all' | ExpenseCategory)}
-          >
-            <option value="all">All types</option>
-            {Object.entries(EXPENSE_CATEGORIES).map(([key, info]) => (
-              <option key={key} value={key}>
-                {info.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {view !== 'transfers' && (
+          <div className="expense-filters">
+            <select className="expense-select" aria-label="Child" value={childFilter} onChange={(event) => setChildFilter(event.target.value)}>
+              <option value="all">All children</option>
+              {children.map((child) => (
+                <option key={child.id} value={child.id}>
+                  {child.fullName.split(/\s+/)[0]}
+                </option>
+              ))}
+            </select>
+            <select
+              className="expense-select"
+              aria-label="Type"
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value as 'all' | ExpenseCategory)}
+            >
+              <option value="all">All types</option>
+              {Object.entries(EXPENSE_CATEGORIES).map(([key, info]) => (
+                <option key={key} value={key}>
+                  {info.label}
+                </option>
+              ))}
+            </select>
+            <label className="expense-date-filter">
+              <span>From</span>
+              <input
+                type="date"
+                className="expense-select"
+                aria-label="From date"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(event) => setFromDate(event.target.value)}
+              />
+            </label>
+            <label className="expense-date-filter">
+              <span>To</span>
+              <input
+                type="date"
+                className="expense-select"
+                aria-label="To date"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={(event) => setToDate(event.target.value)}
+              />
+            </label>
+            {datesFiltered && (
+              <button
+                type="button"
+                className="cp-button cp-button--secondary cp-button--sm"
+                onClick={() => {
+                  setFromDate('');
+                  setToDate('');
+                }}
+              >
+                <X size={14} aria-hidden="true" /> Clear dates
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="expense-list">
-        {expenses.length === 0 ? (
+        {view === 'transfers' ? (
+          <TransfersList
+            familyId={familyId}
+            settlements={settlements}
+            expenses={expenses}
+            me={me}
+            other={other}
+            onOpenExpense={(expense) => openDetail(expense)}
+          />
+        ) : expenses.length === 0 ? (
           <div className="expense-empty">
             <p>No expenses yet.</p>
             <button type="button" className="cp-button cp-button--primary" onClick={() => { setEditing(null); setFormOpen(true); }}>
@@ -374,10 +468,16 @@ const ExpensesPage = () => {
             </button>
           </div>
         ) : visible.length === 0 ? (
-          <p className="expense-empty">{view === 'needs' ? 'Nothing needs you right now.' : 'No expenses here.'}</p>
+          <p className="expense-empty">
+            {datesFiltered
+              ? 'No expenses between those dates.'
+              : view === 'needs'
+                ? 'Nothing needs you right now.'
+                : 'No expenses here.'}
+          </p>
         ) : (
           visible.map((expense) => {
-            const status = statuses.get(expense.id) ?? expenseStatus(expense, me.id, otherName);
+            const status = statuses.get(expense.id) ?? expenseStatus(expense, me.id, otherName, { coparentJoined });
             const payer = expense.payerId === me.id ? me : expense.payerId === other.id ? other : undefined;
             const month = monthLabel(expense.date);
             const header = view !== 'upcoming' && month !== lastMonth;
@@ -450,7 +550,7 @@ const ExpensesPage = () => {
               ? `Expense saved. ${failures} receipt${failures === 1 ? '' : 's'} didn't upload. Retry from the expense.`
               : saved.agreement.status === 'pending'
                 ? otherInvited
-                  ? `${otherName} can agree to it once they join.`
+                  ? `${otherName} hasn't joined yet, so agree to it yourself when you're ready.`
                   : `${otherName} has been asked to agree.`
                 : 'Nothing about who owes what changed.',
           });
