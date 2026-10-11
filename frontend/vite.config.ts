@@ -3,7 +3,7 @@ import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-import { coparentWorkbox } from './coparent-pwa.config'
+import { coparentPrecacheScope, coparentWorkbox } from './coparent-pwa.config'
 
 export default defineConfig(({ mode }) => {
   // Conductor runs several workspaces at once and they all want the dev server port. Set
@@ -43,6 +43,7 @@ export default defineConfig(({ mode }) => {
         })
       },
     },
+    coparentPrecacheScope,
     VitePWA({
       injectRegister: null,
       manifest: false,
