@@ -10,7 +10,8 @@ import { firstName } from './parentTone';
 
 /**
  * Shown while the co-parent has not accepted their invitation. Expenses can be logged against
- * them already; they wait for that parent to agree, one by one, once they join. The primary
+ * them already. What the parent here paid waits for the co-parent to agree once they join; what
+ * the co-parent paid, the parent here can agree and pay back straight away. The primary
  * parent can resend the invitation, and rename them until they join and set their own name.
  */
 export function InvitedCoparentBanner({
@@ -60,8 +61,9 @@ export function InvitedCoparentBanner({
       <div className="expense-invited__body">
         <p className="expense-invited__title">{who} hasn&apos;t joined yet</p>
         <p className="expense-invited__text">
-          Add expenses now, whoever paid. Each one waits for {who} to agree once they accept the
-          invitation sent to {invited.email}. Nothing counts towards the balance until then.
+          Add expenses now, whoever paid. What you paid waits for {who} to agree once they accept
+          the invitation sent to {invited.email}. What {who} paid, you can agree yourself and mark
+          as paid back now.
         </p>
         {editing && (
           <div className="expense-invited__rename">

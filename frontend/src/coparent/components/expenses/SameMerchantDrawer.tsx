@@ -24,6 +24,7 @@ export function SameMerchantDrawer({
   merchant,
   candidates,
   otherName,
+  otherJoined,
   onClose,
   onLogged,
 }: {
@@ -33,6 +34,8 @@ export function SameMerchantDrawer({
   merchant: string;
   candidates: SameMerchantCandidate[];
   otherName: string;
+  /** False while the co-parent's invitation is open: they get no email until they join. */
+  otherJoined: boolean;
   onClose: () => void;
   onLogged: (results: StatementBatchResult[]) => void;
 }) {
@@ -135,7 +138,7 @@ export function SameMerchantDrawer({
                 <span className="expense-settle__title">{candidate.description}</span>
                 <span className="expense-settle__direction">
                   {shortDate(candidate.date)}
-                  {candidate.account ? ` · ${candidate.account}` : ''}
+                  {candidate.details ? ` · ${candidate.details}` : candidate.account ? ` · ${candidate.account}` : ''}
                   {candidate.state === 'dismissed' ? ' · you marked it not shared' : ''}
                   {candidate.match && candidate.match.id !== logged?.id
                     ? ` · “${candidate.match.title}” may already be this`
@@ -153,7 +156,9 @@ export function SameMerchantDrawer({
       </div>
       <p className="expense-callout expense-callout--teal">
         <Info size={18} aria-hidden="true" />
-        {otherName} is asked to agree to them all in one email.
+        {otherJoined
+          ? `${otherName} is asked to agree to them all in one email.`
+          : `${otherName} can agree to them once they join.`}
       </p>
     </ExpenseDrawer>
   );

@@ -777,6 +777,7 @@ const StatementsPage = () => {
         merchant={following?.merchant ?? ''}
         candidates={following?.candidates ?? []}
         otherName={otherName}
+        otherJoined={other.status === 'active'}
         onClose={() => setFollowing(null)}
         onLogged={loggedTogether}
       />
