@@ -565,9 +565,15 @@ invitation is accepted. Added 2026-10-08.
   is opt-in and is used only by the Expenses and Messages pages, the dashboard's expense
   widgets and Quick add's payer list. Calendar and access control still read `active` parents
   only.
-- **The rules are unchanged.** Everything logged waits for the invited parent to agree, one
-  expense at a time, once they join. Nothing counts towards the balance until then.
-  `ExpenseMailer` sends nothing to a parent who is not `active`.
+- **Until they join, the parent here agrees to everything** (changed 2026-10-11; this used to
+  read "the rules are unchanged"). Leaving every expense waiting for someone who could not sign
+  in made the balance meaningless and the statuses hard to read. `ExpenseService.requireAgreer`
+  lets either side of the couple agree while the other parent is not `active`, the summary
+  counts the parent's own pending expenses under `needsYourAgreement` and reports nothing as
+  `awaitingOther`, and the page shows them as "Needs your OK" with an "Agree all" button on the
+  banner. The moment the co-parent is `active` the normal rule applies again. What was agreed
+  before stays agreed, and `agreement.respondedBy` says who agreed it. `ExpenseMailer` sends
+  nothing to a parent who is not `active`.
 - **Cancelling** an invitation sets the row to `uninvited`. Its expenses stay, and new ones
   are refused. **Inviting the same email again** brings the same row back, keeping what was
   logged. An expired invitation keeps its row, so resending carries on.
@@ -592,3 +598,31 @@ co-parent is invited, addressed to the row the invitation reserved.
 - **Cancelling keeps the thread and its name** (the parent map reads `active`, `invited` and
   `uninvited` rows for names), and refuses new threads with "Invite your co-parent".
 - Quick add's `START_MESSAGE_CONVERSATION` validates its `recipientId` against the same rule.
+
+## 10. Settling up as bank transfers
+
+Added 2026-10-11. Settle up records the money that actually moved: one or more payments
+(`bank_transfer`, `cash` or `other`, with an amount, date and optional reference) and the
+expenses they paid back.
+
+- **`expense_settlements`** (`ExpenseSettlement`, `V055CreateCoparentSettlements`) holds
+  `fromParentId`, `toParentId`, `amountPence`, `payments` and `expenseIds`. Each settled expense
+  carries the id in `reimbursement.settlementId`. Never edited once recorded; an expense being
+  paid back can no longer change, so the two cannot drift.
+- **The payments must add up to exactly what the ticked expenses net to**, checked in the
+  browser and again by `ExpenseSettlementService`. A transfer recorded against expenses it did
+  not cover would mark them settled while money was still owed. Expenses that cancel out
+  record a settlement with no payments. A balance paid in instalments is recorded as several
+  payments in one settle-up, or as one settle-up per batch of expenses.
+- **Every expense is checked before anything is written** (`ExpenseService.planSettlement`):
+  one stale or unsettleable item refuses the lot, unlike the old `POST /settle`, because the
+  payments were sized to all of them. An item can still fail in the moment between the check
+  and the write; the settlement then lists only the expenses that settled.
+- `GET|POST /expenses/settlements`, `POST /expenses/settlements/{id}/confirm`. Confirming
+  settles every expense in it still `claimed` to the caller. One `settlementRecorded` email
+  replaces the per-expense `claimed` emails.
+- The page's **Transfers** tab lists them, counted by those waiting for the signed-in parent
+  to confirm, and the expense detail shows the payments that paid it back.
+- `POST /settle` is kept so a cached client still works; the page no longer calls it.
+- Backed up (`COPARENT_BACKUP_COLLECTIONS`, `COPARENT_IMPORT_ORDER`), and
+  `ensureCoparentIndexes()` re-creates its index; `CoparentBackupCoverageTest` pins both.

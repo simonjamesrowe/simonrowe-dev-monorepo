@@ -285,11 +285,11 @@ public class ExpenseController {
 
   public record ReimbursementResponse(
       String status, String claimedBy, Instant claimedAt, String settledBy, Instant settledAt,
-      String note) {
+      String note, String settlementId) {
     static ReimbursementResponse from(final Expense.Reimbursement reimbursement) {
       return new ReimbursementResponse(reimbursement.status(), hex(reimbursement.claimedBy()),
           reimbursement.claimedAt(), hex(reimbursement.settledBy()), reimbursement.settledAt(),
-          reimbursement.note());
+          reimbursement.note(), hex(reimbursement.settlementId()));
     }
   }
 

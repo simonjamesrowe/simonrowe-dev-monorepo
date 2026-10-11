@@ -158,7 +158,7 @@ export function SameMerchantDrawer({
         <Info size={18} aria-hidden="true" />
         {otherJoined
           ? `${otherName} is asked to agree to them all in one email.`
-          : `${otherName} can agree to them once they join.`}
+          : `${otherName} hasn't joined yet, so you can agree to them yourself.`}
       </p>
     </ExpenseDrawer>
   );

@@ -624,8 +624,8 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
         Expense.GBP, timing, date, payer,
         List.of(new Expense.Share(aliceId, 50), new Expense.Share(bobId, 50)),
         new Expense.Agreement(Expense.AGREED, bobId, aliceId, now, null),
-        new Expense.Reimbursement(reimbursement, null, null, null, null, null), List.of(), null,
-        List.of(), 2, bobId, null, null, now, now);
+        new Expense.Reimbursement(reimbursement, null, null, null, null, null, null), List.of(),
+        null, List.of(), 2, bobId, null, null, now, now);
   }
 
   private static CalendarEvent event(

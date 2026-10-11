@@ -106,7 +106,7 @@ class AssistantContextFactoryTest {
         6000, Expense.GBP, Expense.PAID, LocalDate.parse("2026-09-20"), payer,
         List.of(new Expense.Share(payer, 50), new Expense.Share(new ObjectId(), 50)),
         new Expense.Agreement(Expense.AGREED, payer, null, null, null),
-        new Expense.Reimbursement(reimbursement, null, null, null, null, null), List.of(),
+        new Expense.Reimbursement(reimbursement, null, null, null, null, null, null), List.of(),
         "private expense note", List.of(), 2, payer, null, null, now, now);
   }
 }

@@ -94,7 +94,10 @@ class InvitedCoparentExpenseIntegrationTest extends AbstractIntegrationTest {
 
     final String alicePaid = create(f, body(f, f.aliceId(), 4500));
     final String rhianPaid = create(f, body(f, f.invitedId(), 3000));
-    summary(f, "alice").andExpect(jsonPath("$.awaitingOther", is(2)))
+    // Nothing waits for Rhian before she joins: Alice could agree to both herself.
+    summary(f, "alice").andExpect(jsonPath("$.awaitingOther", is(0)))
+        .andExpect(jsonPath("$.needsYourAgreement.count", is(2)))
+        .andExpect(jsonPath("$.needsYourAction", is(2)))
         .andExpect(jsonPath("$.balance.netPence", is(0)));
 
     // Rhian signs in before accepting, so she has a profile of her own to merge.
@@ -143,13 +146,38 @@ class InvitedCoparentExpenseIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void theInvitedParentCannotAgreeToAnything() throws Exception {
+  void untilTheCoparentJoinsTheParentHereAgreesToWhatTheyPaidToo() throws Exception {
     final Fixture f = familyWithInvite(null);
     final String id = create(f, body(f, f.aliceId(), 4500));
 
-    // Alice set the terms, so she cannot agree; nobody else can sign in as the invited parent.
-    agree(f, "alice", id).andExpect(status().isForbidden());
+    // Nobody can sign in as the invited parent, so Alice agrees on both their behalves.
     agree(f, "rhian", id).andExpect(status().isNotFound());
+    agree(f, "alice", id).andExpect(status().isOk())
+        .andExpect(jsonPath("$.agreement.status", is("agreed")))
+        .andExpect(jsonPath("$.agreement.respondedBy", is(f.aliceId())))
+        .andExpect(jsonPath("$.reimbursement.status", is("outstanding")))
+        .andExpect(jsonPath("$.debtorParentId", is(f.invitedId())));
+    summary(f, "alice").andExpect(jsonPath("$.balance.netPence", is(2250)))
+        .andExpect(jsonPath("$.needsYourAction", is(0)));
+  }
+
+  @Test
+  void onceTheCoparentJoinsOnlyTheyAgreeToWhatTheParentHerePaid() throws Exception {
+    final Fixture f = familyWithInvite("Rhian");
+    final String agreedBefore = create(f, body(f, f.aliceId(), 4500));
+    agree(f, "alice", agreedBefore).andExpect(status().isOk());
+    final String waiting = create(f, body(f, f.aliceId(), 1000));
+
+    accept("rhian");
+
+    agree(f, "alice", waiting).andExpect(status().isForbidden());
+    summary(f, "alice").andExpect(jsonPath("$.awaitingOther", is(1)))
+        .andExpect(jsonPath("$.needsYourAgreement.count", is(0)));
+    // What Alice agreed before Rhian joined stays agreed, and says who agreed it.
+    mockMvc.perform(get(EXPENSES + "/{id}", f.familyId(), agreedBefore).with(user("rhian")))
+        .andExpect(jsonPath("$.agreement.status", is("agreed")))
+        .andExpect(jsonPath("$.agreement.respondedBy", is(f.aliceId())));
+    agree(f, "rhian", waiting).andExpect(status().isOk());
   }
 
   @Test

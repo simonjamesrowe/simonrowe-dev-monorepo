@@ -61,6 +61,8 @@ export interface Expense {
     settledBy: string | null;
     settledAt: string | null;
     note: string | null;
+    /** The settle-up whose payments paid it back, when it was settled up that way. */
+    settlementId: string | null;
   };
   owedPence: number;
   debtorParentId: string | null;
@@ -109,6 +111,38 @@ export interface ExpenseRequest {
   shares: { parentId: string; percent: number }[];
   notes: string | null;
   version?: number;
+}
+
+export type PaymentMethod = 'bank_transfer' | 'cash' | 'other';
+
+export interface SettlementPayment {
+  method: PaymentMethod;
+  amountPence: number;
+  paidOn: string;
+  reference: string | null;
+}
+
+/**
+ * One settling up: the payments that changed hands and the expenses they paid back. The
+ * payments add up to amountPence, which moved from fromParentId to toParentId (both null when
+ * the expenses cancelled each other out).
+ */
+export interface ExpenseSettlement {
+  id: string;
+  familyId: string;
+  fromParentId: string | null;
+  toParentId: string | null;
+  amountPence: number;
+  currency: 'GBP';
+  payments: SettlementPayment[];
+  expenseIds: string[];
+  recordedBy: string;
+  createdAt: string;
+}
+
+export interface RecordSettlementResult {
+  settlement: ExpenseSettlement | null;
+  results: SettleResult[];
 }
 
 export interface SettleResult {

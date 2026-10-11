@@ -76,17 +76,21 @@ public record Expense(
   ) {
   }
 
-  /** Whether the parent who owes has paid the parent who paid. */
+  /**
+   * Whether the parent who owes has paid the parent who paid. {@code settlementId} names the
+   * {@link ExpenseSettlement} whose payments paid it back, when it was settled up that way.
+   */
   public record Reimbursement(
       String status,
       ObjectId claimedBy,
       Instant claimedAt,
       ObjectId settledBy,
       Instant settledAt,
-      String note
+      String note,
+      ObjectId settlementId
   ) {
     public static Reimbursement none() {
-      return new Reimbursement(NONE, null, null, null, null, null);
+      return new Reimbursement(NONE, null, null, null, null, null, null);
     }
   }
 

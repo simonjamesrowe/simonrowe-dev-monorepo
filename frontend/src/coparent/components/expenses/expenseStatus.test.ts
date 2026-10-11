@@ -1,16 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
-import { canDelete, canEdit, expenseStatus, inView } from './expenseStatus';
+import { canDelete, canEdit, expenseStatus, inDateRange, inView } from './expenseStatus';
 import { testExpense } from './testExpense';
 
 const TODAY = '2026-10-08';
-const asAlex = (overrides = {}) => expenseStatus(testExpense(overrides), 'alex', 'Sam', TODAY);
-const asSam = (overrides = {}) => expenseStatus(testExpense(overrides), 'sam', 'Alex', TODAY);
+const asAlex = (overrides = {}) => expenseStatus(testExpense(overrides), 'alex', 'Sam', { today: TODAY });
+const asSam = (overrides = {}) => expenseStatus(testExpense(overrides), 'sam', 'Alex', { today: TODAY });
 
 describe('expenseStatus', () => {
   it('shows a pending expense as waiting to its sender and needing an OK to the other parent', () => {
     expect(asAlex()).toMatchObject({ label: 'Waiting for Sam', needsAction: false, actions: [] });
     expect(asSam()).toMatchObject({ label: 'Needs your OK', tone: 'amber', needsAction: true, actions: ['dispute', 'agree'] });
+  });
+
+  it('asks the parent here to agree to everything until the co-parent joins', () => {
+    const beforeJoining = (overrides = {}) =>
+      expenseStatus(testExpense(overrides), 'alex', 'Sam', { today: TODAY, coparentJoined: false });
+    expect(beforeJoining()).toMatchObject({ label: 'Needs your OK', needsAction: true, actions: ['agree'] });
+    expect(beforeJoining({ payerId: 'sam' })).toMatchObject({ needsAction: true, actions: ['agree'] });
+    expect(inView('needs', testExpense(), 'alex', 'Sam', false)).toBe(true);
+    expect(inView('needs', testExpense(), 'alex', 'Sam')).toBe(false);
   });
 
   it('lets either parent agree to what one logged for the other, until the other has acted on it', () => {
@@ -44,6 +53,7 @@ describe('expenseStatus', () => {
     settledBy: null,
     settledAt: null,
     note: null,
+    settlementId: null,
   });
 
   it('shows an outstanding debt from both sides', () => {
@@ -89,5 +99,22 @@ describe('expenseStatus', () => {
     expect(canDelete(testExpense({ agreement: agreed, timing: 'upcoming' }), 'sam')).toBe(true);
     expect(canEdit(testExpense({ reimbursement: reimbursement('claimed') }))).toBe(false);
     expect(canEdit(testExpense({ reimbursement: reimbursement('outstanding') }))).toBe(true);
+  });
+});
+
+describe('inDateRange', () => {
+  it('includes both end dates, and either bound can be left open', () => {
+    expect(inDateRange('2026-10-01', '2026-10-01', '2026-10-31')).toBe(true);
+    expect(inDateRange('2026-10-31', '2026-10-01', '2026-10-31')).toBe(true);
+    expect(inDateRange('2026-09-30', '2026-10-01', '2026-10-31')).toBe(false);
+    expect(inDateRange('2026-11-01', '2026-10-01', '2026-10-31')).toBe(false);
+    expect(inDateRange('2020-01-01', '', '2026-10-31')).toBe(true);
+    expect(inDateRange('2030-01-01', '2026-10-01', '')).toBe(true);
+    expect(inDateRange('2026-10-08', '', '')).toBe(true);
+  });
+
+  it('reads bounds entered the wrong way round the right way round', () => {
+    expect(inDateRange('2026-10-15', '2026-10-31', '2026-10-01')).toBe(true);
+    expect(inDateRange('2026-11-15', '2026-10-31', '2026-10-01')).toBe(false);
   });
 });

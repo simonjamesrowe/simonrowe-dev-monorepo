@@ -13,10 +13,12 @@ import org.bson.types.ObjectId;
  * The Expenses page's cards and the dashboard's balance, from one parent's point of view.
  *
  * @param balance net of every paid, agreed, unsettled expense, in either direction
- * @param needsYourAgreement expenses the other parent sent that wait on this parent's OK
+ * @param needsYourAgreement expenses that wait on this parent's OK: the ones the other parent
+ *     sent, and, until the co-parent joins, the ones this parent sent too
  * @param needsYourAction everything waiting on this parent: agreeing, fixing a dispute, paying
  *     back, or confirming money arrived (the Expenses nav badge)
- * @param awaitingOther expenses this parent sent that wait on the other parent
+ * @param awaitingOther expenses this parent sent that wait on the other parent (none until the
+ *     co-parent joins, since nothing waits for them before then)
  * @param upcoming coming-up costs due within the next 30 days, overdue ones included
  * @param thisMonth what was paid this calendar month, by category
  */
@@ -59,8 +61,17 @@ public record ExpenseSummary(
   public record CategoryTotal(String category, long totalPence) {
   }
 
-  /** Folds the family's live expenses into the summary for {@code me}. */
+  /** Folds the family's live expenses into the summary for {@code me}, co-parent joined. */
   static ExpenseSummary of(final List<Expense> expenses, final ObjectId me, final LocalDate today) {
+    return of(expenses, me, today, true);
+  }
+
+  /**
+   * Folds the family's live expenses into the summary for {@code me}. Until the co-parent has
+   * joined, {@code me} agrees to everything, so nothing is counted as waiting for them.
+   */
+  static ExpenseSummary of(final List<Expense> expenses, final ObjectId me, final LocalDate today,
+      final boolean coparentJoined) {
     long net = 0;
     int counted = 0;
     long awaitingMine = 0;
@@ -93,14 +104,14 @@ public record ExpenseSummary(
 
     final List<Expense> toAgree = expenses.stream()
         .filter(expense -> Expense.PENDING.equals(expense.agreement().status())
-            && !me.equals(expense.agreement().requestedBy()))
+            && (!coparentJoined || !me.equals(expense.agreement().requestedBy())))
         .toList();
-    final int awaitingOther = (int) expenses.stream()
+    final int awaitingOther = coparentJoined ? (int) expenses.stream()
         .filter(expense -> Expense.PENDING.equals(expense.agreement().status())
             && me.equals(expense.agreement().requestedBy()))
-        .count();
+        .count() : 0;
     final int needsAction = (int) expenses.stream()
-        .filter(expense -> needsAction(expense, me)).count();
+        .filter(expense -> needsAction(expense, me, coparentJoined)).count();
 
     final LocalDate horizon = today.plusDays(UPCOMING_DAYS);
     final List<Expense> upcoming = expenses.stream()
@@ -133,11 +144,12 @@ public record ExpenseSummary(
   }
 
   /** The same test the Expenses page's "Needs action" tab applies. */
-  static boolean needsAction(final Expense expense, final ObjectId me) {
+  static boolean needsAction(final Expense expense, final ObjectId me,
+      final boolean coparentJoined) {
     final String agreement = expense.agreement().status();
     final boolean requester = me.equals(expense.agreement().requestedBy());
     if (Expense.PENDING.equals(agreement)) {
-      return !requester;
+      return !requester || !coparentJoined;
     }
     if (Expense.DISPUTED.equals(agreement)) {
       return requester;

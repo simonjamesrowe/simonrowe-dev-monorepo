@@ -274,6 +274,24 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- coparent-settle-transfers: **Before the co-parent joins, the parent here agrees to every
+  expense; and settling up records the bank transfers that paid it.** Load-bearing bits:
+  - **`requireAgreer` lets either side agree while the other parent is not `active`.** The
+    summary takes `coparentJoined` (pending expenses you sent count as needing your OK, nothing
+    as `awaitingOther`) and so does `expenseStatus` (`{ coparentJoined }`), so the Needs action
+    tab, the nav badge and the server agree. It stops the moment they are `active`; earlier
+    agreements stay, with `respondedBy` saying who agreed.
+  - **`expense_settlements` (`V055`) holds the payments and the expenses they paid back**, and
+    each expense carries `reimbursement.settlementId`. **The payments must add up to exactly
+    the ticked expenses' net** (browser and `ExpenseSettlementService`), or a transfer would
+    mark settled more than it paid. Several payments per settle-up is how "paid in parts" works.
+  - **Every item is checked before anything is written** (`ExpenseService.planSettlement`), so
+    a stale one refuses the lot, unlike `POST /settle`, which is kept only for cached clients.
+  - One `settlementRecorded` email per settle-up, not one `claimed` per expense.
+    `POST …/settlements/{id}/confirm` reads each expense's version itself: a claimed expense
+    cannot change, so the claim is all it confirms.
+  - In the CoParent backup and `ensureCoparentIndexes()`; `CoparentBackupCoverageTest` pins it.
+  See `specs/051-coparent-expenses/spec.md` §9 and §10.
 - logwatch-sweep-past-cap: **The absence sweep now runs on a scan that hit the per-run cap.**
   Until now any dropped signature vetoed the whole sweep, because a dropped signature is seen but
   not filed, so its `lastSeenAt` never advances. By late September 2026 every nightly scan hit the
@@ -363,7 +381,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   - **Accepting deletes the invitee's own unassigned profile** after copying its name, colour
     and avatar onto the placeholder. Before this change, accept kept that profile and minted a
     new id, the reverse.
-  - Everything still waits for the invited parent to agree, one by one, after they join.
+  - Agreement no longer waits for the invited parent: since `coparent-settle-transfers` (top
+    of this list) the parent here agrees for both until they join.
     `ExpenseMailer` sends nothing to a parent who is not `active`. Cancelling makes the row
     `uninvited` (its expenses stay), and inviting the same email again reuses it.
   - `V053ReserveInvitedCoparents` creates the partial unique index

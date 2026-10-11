@@ -1,12 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../../lib/api/client';
-import type { Expense, ExpenseRequest, ExpenseSummary, SettleResult } from '../../types/expenses';
+import type {
+  Expense,
+  ExpenseRequest,
+  ExpenseSettlement,
+  ExpenseSummary,
+  RecordSettlementResult,
+  SettlementPayment,
+  SettleResult,
+} from '../../types/expenses';
 
 export const expenseKeys = {
   all: ['expenses'] as const,
   list: (familyId: string) => [...expenseKeys.all, 'list', familyId] as const,
   summary: (familyId: string) => [...expenseKeys.all, 'summary', familyId] as const,
+  settlements: (familyId: string) => [...expenseKeys.all, 'settlements', familyId] as const,
   receipt: (familyId: string, expenseId: string, receiptId: string) =>
     [...expenseKeys.all, 'receipt', familyId, expenseId, receiptId] as const,
 };
@@ -29,7 +38,16 @@ export function useExpenseSummary(familyId: string | undefined) {
   });
 }
 
-/** Every expense change moves the list and the summary, so both are refetched. */
+/** Every settle-up in the family, newest first. */
+export function useSettlements(familyId: string | undefined) {
+  return useQuery({
+    queryKey: expenseKeys.settlements(familyId!),
+    queryFn: async () => (await apiClient.get<ExpenseSettlement[]>(`${base(familyId!)}/settlements`)).data,
+    enabled: !!familyId,
+  });
+}
+
+/** Every expense change moves the list, the summary and possibly a settle-up, so all are refetched. */
 function useExpenseMutation<TVariables extends { familyId: string }, TResult>(
   mutationFn: (variables: TVariables) => Promise<TResult>,
 ) {
@@ -39,6 +57,7 @@ function useExpenseMutation<TVariables extends { familyId: string }, TResult>(
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: expenseKeys.list(variables.familyId) });
       queryClient.invalidateQueries({ queryKey: expenseKeys.summary(variables.familyId) });
+      queryClient.invalidateQueries({ queryKey: expenseKeys.settlements(variables.familyId) });
     },
   });
 }
@@ -121,10 +140,32 @@ export function useMarkExpensePaid() {
   );
 }
 
-export function useSettleExpenses() {
+/** Settles the chosen expenses and records the payments that settled them. */
+export function useRecordSettlement() {
   return useExpenseMutation(
-    async ({ familyId, items }: { familyId: string; items: Pick<Expense, 'id' | 'version'>[] }) =>
-      (await apiClient.post<SettleResult[]>(`${base(familyId)}/settle`, { items })).data,
+    async ({
+      familyId,
+      items,
+      payments,
+    }: {
+      familyId: string;
+      items: Pick<Expense, 'id' | 'version'>[];
+      payments: SettlementPayment[];
+    }) =>
+      (
+        await apiClient.post<RecordSettlementResult>(`${base(familyId)}/settlements`, {
+          items: items.map(({ id, version }) => ({ id, version })),
+          payments,
+        })
+      ).data,
+  );
+}
+
+/** The parent who was paid says a settle-up's payments arrived. */
+export function useConfirmSettlement() {
+  return useExpenseMutation(
+    async ({ familyId, settlementId }: { familyId: string; settlementId: string }) =>
+      (await apiClient.post<SettleResult[]>(`${base(familyId)}/settlements/${settlementId}/confirm`)).data,
   );
 }
 

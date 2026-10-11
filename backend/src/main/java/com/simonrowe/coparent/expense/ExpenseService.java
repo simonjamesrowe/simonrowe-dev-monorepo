@@ -135,10 +135,14 @@ public class ExpenseService {
   /** The balance and to-do counts from the signed-in parent's point of view. */
   public ExpenseSummary summary(final ObjectId familyId) {
     final Parent actor = access.requireMember(familyId);
-    final LocalDate today = LocalDate.now(clock.withZone(zone(familyId)));
     return ExpenseSummary.of(
         expenses.findByFamilyIdAndDeletedAtIsNullOrderByDateDescCreatedAtDesc(familyId),
-        actor.id(), today);
+        actor.id(), today(familyId), coparentJoined(familyId, actor));
+  }
+
+  /** Today in the family's time zone. */
+  LocalDate today(final ObjectId familyId) {
+    return LocalDate.now(clock.withZone(zone(familyId)));
   }
 
   /**
@@ -280,9 +284,7 @@ public class ExpenseService {
         Expense.Reimbursement.none(), current.receipts(), current.notes(),
         history(current, entry(now, couple.actor(), "mark_paid", null)), current.version() + 1,
         current.createdBy(), current.assistantActionId(), null, current.createdAt(), now);
-    final Expense next = reask ? paid : withReimbursement(paid,
-        new Expense.Reimbursement(ExpenseMath.reimbursementOnceAgreed(paid), null, null, null,
-            null, null));
+    final Expense next = reask ? paid : withReimbursement(paid, onceAgreed(paid));
     final Expense saved = replace(current, next);
     audit(saved, "mark_paid");
     if (reask) {
@@ -293,18 +295,18 @@ public class ExpenseService {
 
   /**
    * The other parent accepts the current terms, and the expense starts to count. An expense
-   * logged for what the other parent paid can be agreed by either parent.
+   * logged for what the other parent paid can be agreed by either parent, and until the
+   * co-parent joins, the parent here agrees to everything.
    */
   public Expense agree(final ObjectId familyId, final ObjectId expenseId, final long version) {
     final Couple couple = couple(familyId);
     final Expense current = current(familyId, expenseId, version);
-    requireAgreer(current, couple.actor());
+    requireAgreer(current, couple);
     final Instant now = clock.instant();
     final Expense agreed = transition(current, new Expense.Agreement(Expense.AGREED,
         current.agreement().requestedBy(), couple.actor().id(), now, null),
         current.reimbursement(), entry(now, couple.actor(), "agree", null), now);
-    final Expense saved = replace(current, withReimbursement(agreed, new Expense.Reimbursement(
-        ExpenseMath.reimbursementOnceAgreed(agreed), null, null, null, null, null)));
+    final Expense saved = replace(current, withReimbursement(agreed, onceAgreed(agreed)));
     audit(saved, "agree");
     return saved;
   }
@@ -337,9 +339,16 @@ public class ExpenseService {
       final ObjectId expenseId,
       final long version,
       final String note) {
-    final String method = optionalNote(note);
-    final Couple couple = couple(familyId);
-    final Expense current = current(familyId, expenseId, version);
+    return claim(couple(familyId), current(familyId, expenseId, version), optionalNote(note),
+        null, true);
+  }
+
+  private Expense claim(
+      final Couple couple,
+      final Expense current,
+      final String method,
+      final ObjectId settlementId,
+      final boolean notify) {
     requireOutstanding(current);
     if (!couple.actor().id().equals(ExpenseMath.debtor(current))) {
       throw forbidden("Only the parent who owes can mark this as paid back");
@@ -351,10 +360,10 @@ public class ExpenseService {
     final Expense saved = replace(current, transition(current, current.agreement(),
         new Expense.Reimbursement(settleNow ? Expense.REIMBURSED : Expense.CLAIMED,
             couple.actor().id(), now, settleNow ? couple.actor().id() : null,
-            settleNow ? now : null, method),
+            settleNow ? now : null, method, settlementId),
         entry(now, couple.actor(), "claim", method), now));
     audit(saved, "claim");
-    if (!settleNow) {
+    if (!settleNow && notify) {
       mailer.claimed(couple.other(), couple.actor(), saved);
     }
     return saved;
@@ -362,8 +371,10 @@ public class ExpenseService {
 
   /** The payer confirms the money arrived. The expense is settled. */
   public Expense confirm(final ObjectId familyId, final ObjectId expenseId, final long version) {
-    final Couple couple = couple(familyId);
-    final Expense current = current(familyId, expenseId, version);
+    return confirm(couple(familyId), current(familyId, expenseId, version));
+  }
+
+  private Expense confirm(final Couple couple, final Expense current) {
     requireClaimed(current);
     requirePayer(current, couple.actor(), "Only the parent who paid can confirm it was received");
     final Instant now = clock.instant();
@@ -386,7 +397,7 @@ public class ExpenseService {
     requirePayer(current, couple.actor(), "Only the parent who paid can say it has not arrived");
     final Instant now = clock.instant();
     final Expense saved = replace(current, transition(current, current.agreement(),
-        new Expense.Reimbursement(Expense.OUTSTANDING, null, null, null, null, reason),
+        new Expense.Reimbursement(Expense.OUTSTANDING, null, null, null, null, reason, null),
         entry(now, couple.actor(), "reject_claim", reason), now));
     audit(saved, "reject_claim");
     return saved;
@@ -397,14 +408,23 @@ public class ExpenseService {
       final ObjectId familyId,
       final ObjectId expenseId,
       final long version) {
-    final Couple couple = couple(familyId);
-    final Expense current = current(familyId, expenseId, version);
+    return markReimbursed(couple(familyId), current(familyId, expenseId, version), null, null);
+  }
+
+  private Expense markReimbursed(
+      final Couple couple,
+      final Expense current,
+      final String method,
+      final ObjectId settlementId) {
     requireOutstanding(current);
     requirePayer(current, couple.actor(), "Only the parent who paid can mark it as reimbursed");
     final Instant now = clock.instant();
+    final Expense.Reimbursement before = current.reimbursement();
     final Expense saved = replace(current, transition(current, current.agreement(),
-        settled(current, couple.actor(), now),
-        entry(now, couple.actor(), "mark_reimbursed", null), now));
+        new Expense.Reimbursement(Expense.REIMBURSED, before.claimedBy(), before.claimedAt(),
+            couple.actor().id(), now, method == null ? before.note() : method,
+            settlementId == null ? before.settlementId() : settlementId),
+        entry(now, couple.actor(), "mark_reimbursed", method), now));
     audit(saved, "mark_reimbursed");
     return saved;
   }
@@ -416,10 +436,8 @@ public class ExpenseService {
    * its own outcome and one stale item never stops the rest.
    */
   public List<SettleResult> settle(final ObjectId familyId, final List<SettleItem> items) {
-    if (items == null || items.isEmpty() || items.size() > MAX_SETTLE_ITEMS) {
-      throw badRequest("Choose between 1 and " + MAX_SETTLE_ITEMS + " expenses to settle");
-    }
-    final Parent actor = access.requireMember(familyId);
+    requireSettleItems(items);
+    final Couple couple = couple(familyId);
     final List<SettleResult> results = new ArrayList<>();
     for (final SettleItem item : items) {
       try {
@@ -428,27 +446,140 @@ public class ExpenseService {
           results.add(new SettleResult(item.id(), "failed", null, STALE));
           continue;
         }
-        final boolean payer = actor.id().equals(current.payerId());
-        if (Expense.CLAIMED.equals(current.reimbursement().status()) && payer) {
-          results.add(new SettleResult(item.id(), "confirmed",
-              confirm(familyId, item.id(), item.version()), null));
-        } else if (Expense.OUTSTANDING.equals(current.reimbursement().status()) && payer) {
-          results.add(new SettleResult(item.id(), "reimbursed",
-              markReimbursed(familyId, item.id(), item.version()), null));
-        } else if (Expense.OUTSTANDING.equals(current.reimbursement().status())) {
-          final Expense claimed = claim(familyId, item.id(), item.version(), "Settle up");
-          results.add(new SettleResult(item.id(),
-              Expense.REIMBURSED.equals(claimed.reimbursement().status()) ? "reimbursed"
-                  : "claimed", claimed, null));
-        } else {
+        final SettleStep step = stepFor(current, couple.actor().id());
+        if (step == null) {
           results.add(new SettleResult(item.id(), "skipped", null,
               "Nothing to settle on this expense"));
+        } else {
+          results.add(apply(couple, current, step, "Settle up", null, true));
         }
       } catch (ResponseStatusException exception) {
         results.add(new SettleResult(item.id(), "failed", null, exception.getReason()));
       }
     }
     return results;
+  }
+
+  /** What settling one expense does, from the side of the parent settling it. */
+  enum SettleStep {
+    /** The other parent already paid it back; the caller confirms it arrived. */
+    CONFIRM,
+    /** The other parent owes the caller, and the caller marks it as paid. */
+    MARK_REIMBURSED,
+    /** The caller owes the other parent, and marks it as paid back. */
+    CLAIM
+  }
+
+  /** One expense to settle, as it was when checked, and what settling it does. */
+  record PlannedSettle(Expense expense, SettleStep step) {
+    /** The money it moves to the settling parent: negative when they pay, zero to confirm. */
+    long netToActor() {
+      return switch (step) {
+        case CONFIRM -> 0;
+        case MARK_REIMBURSED -> ExpenseMath.owedPence(expense);
+        case CLAIM -> -ExpenseMath.owedPence(expense);
+      };
+    }
+  }
+
+  /** Every expense in a settle-up, checked, with who is settling and who with. */
+  record SettlePlan(Parent actor, Parent other, List<PlannedSettle> items) {
+  }
+
+  /**
+   * Checks every expense in a settle-up before anything is written: each must be at the version
+   * the parent was looking at and have something to settle. Unlike {@link #settle}, one that
+   * fails refuses the lot, because the payments recorded with it were sized to all of them.
+   */
+  SettlePlan planSettlement(final ObjectId familyId, final List<SettleItem> items) {
+    requireSettleItems(items);
+    final Couple couple = couple(familyId);
+    final List<PlannedSettle> planned = new ArrayList<>();
+    final Set<ObjectId> seen = new HashSet<>();
+    for (final SettleItem item : items) {
+      if (!seen.add(item.id())) {
+        throw badRequest("Each expense can only be settled once");
+      }
+      final Expense current = find(familyId, item.id());
+      if (current.version() != item.version()) {
+        throw conflict("\"%s\" has changed. Reload and try again.".formatted(current.title()));
+      }
+      final SettleStep step = stepFor(current, couple.actor().id());
+      if (step == null) {
+        throw conflict("\"%s\" has nothing left to settle".formatted(current.title()));
+      }
+      planned.add(new PlannedSettle(current, step));
+    }
+    return new SettlePlan(couple.actor(), couple.other(), planned);
+  }
+
+  /**
+   * Settles every expense in a checked plan, linking the ones money moved for to
+   * {@code settlementId}. No per-expense email: the caller sends one for the whole settle-up.
+   * Each still reports its own outcome, since one can change between the check and the write.
+   */
+  List<SettleResult> applySettlement(
+      final ObjectId familyId,
+      final SettlePlan plan,
+      final ObjectId settlementId,
+      final String method) {
+    final Couple couple = couple(familyId);
+    final List<SettleResult> results = new ArrayList<>();
+    for (final PlannedSettle planned : plan.items()) {
+      try {
+        results.add(apply(couple, planned.expense(), planned.step(), method, settlementId,
+            false));
+      } catch (ResponseStatusException exception) {
+        results.add(new SettleResult(planned.expense().id(), "failed", null,
+            exception.getReason()));
+      }
+    }
+    return results;
+  }
+
+  private SettleResult apply(
+      final Couple couple,
+      final Expense planned,
+      final SettleStep step,
+      final String method,
+      final ObjectId settlementId,
+      final boolean notify) {
+    // Re-read and re-check the version: a write is only ever made against what was checked.
+    final Expense current = current(planned.familyId(), planned.id(), planned.version());
+    return switch (step) {
+      case CONFIRM -> new SettleResult(current.id(), "confirmed",
+          confirm(couple, current), null);
+      case MARK_REIMBURSED -> new SettleResult(current.id(), "reimbursed",
+          markReimbursed(couple, current, method, settlementId), null);
+      case CLAIM -> {
+        final Expense claimed = claim(couple, current, method, settlementId, notify);
+        yield new SettleResult(current.id(),
+            Expense.REIMBURSED.equals(claimed.reimbursement().status()) ? "reimbursed"
+                : "claimed", claimed, null);
+      }
+    };
+  }
+
+  private static SettleStep stepFor(final Expense expense, final ObjectId actorId) {
+    final String status = expense.reimbursement().status();
+    final boolean payer = actorId.equals(expense.payerId());
+    if (Expense.CLAIMED.equals(status)) {
+      return payer ? SettleStep.CONFIRM : null;
+    }
+    if (!Expense.OUTSTANDING.equals(status) || !ExpenseMath.countsTowardsBalance(expense)
+        || ExpenseMath.owedPence(expense) == 0) {
+      return null;
+    }
+    if (payer) {
+      return SettleStep.MARK_REIMBURSED;
+    }
+    return actorId.equals(ExpenseMath.debtor(expense)) ? SettleStep.CLAIM : null;
+  }
+
+  private static void requireSettleItems(final List<SettleItem> items) {
+    if (items == null || items.isEmpty() || items.size() > MAX_SETTLE_ITEMS) {
+      throw badRequest("Choose between 1 and " + MAX_SETTLE_ITEMS + " expenses to settle");
+    }
   }
 
   /**
@@ -584,14 +715,22 @@ public class ExpenseService {
   }
 
   /**
-   * Who may agree. Normally the parent who did not set the terms. But a parent who logs what the
-   * other parent paid is the one who owes it, so either parent may agree to that: the other
-   * parent often has no reason, or no account yet, to do it. Only while the other parent has
-   * never touched it, so nobody can cut their own share of the other's expense and agree to it.
+   * Who may agree. Normally the parent who did not set the terms. Two exceptions:
+   *
+   * <ul>
+   *   <li>Until the co-parent accepts their invitation, the parent here agrees to everything.
+   *       The co-parent cannot sign in to agree, and leaving every expense waiting for someone
+   *       who may not join for months makes the balance meaningless. Once they are active, this
+   *       stops at once; what was agreed before then stays agreed, and its timeline says who
+   *       agreed it.</li>
+   *   <li>A parent who logs what the other parent paid is the one who owes it, so either parent
+   *       may agree to that. Only while the other parent has never touched it, so nobody can cut
+   *       their own share of the other's expense and agree to it.</li>
+   * </ul>
    */
-  private static void requireAgreer(final Expense expense, final Parent actor) {
-    if (!loggedForTheOther(expense)) {
-      requireResponder(expense, actor);
+  private static void requireAgreer(final Expense expense, final Couple couple) {
+    if (ACTIVE.equals(couple.other().status()) && !loggedForTheOther(expense)) {
+      requireResponder(expense, couple.actor());
     } else if (!Expense.PENDING.equals(expense.agreement().status())) {
       throw conflict("This expense is no longer waiting for agreement");
     }
@@ -670,6 +809,15 @@ public class ExpenseService {
     return new Couple(actor, others.getFirst());
   }
 
+  /**
+   * Whether the co-parent has accepted their invitation. True with no co-parent at all, so a
+   * family that has not invited anyone yet counts nothing as the parent's own to agree.
+   */
+  private boolean coparentJoined(final ObjectId familyId, final Parent actor) {
+    return !othersWithStatus(familyId, actor, ACTIVE).isEmpty()
+        || othersWithStatus(familyId, actor, CoparentAccessPolicy.INVITED).isEmpty();
+  }
+
   private List<Parent> othersWithStatus(
       final ObjectId familyId,
       final Parent actor,
@@ -738,7 +886,13 @@ public class ExpenseService {
       final Instant now) {
     final Expense.Reimbursement before = current.reimbursement();
     return new Expense.Reimbursement(Expense.REIMBURSED, before.claimedBy(), before.claimedAt(),
-        actor.id(), now, before.note());
+        actor.id(), now, before.note(), before.settlementId());
+  }
+
+  /** Nothing to pay back, or outstanding, once the terms are agreed. */
+  private static Expense.Reimbursement onceAgreed(final Expense agreed) {
+    return new Expense.Reimbursement(ExpenseMath.reimbursementOnceAgreed(agreed), null, null,
+        null, null, null, null);
   }
 
   private static Expense.HistoryEntry entry(final Instant at, final Parent by,

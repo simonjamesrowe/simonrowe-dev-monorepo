@@ -75,6 +75,25 @@ class ExpenseSummaryTest {
   }
 
   @Test
+  void untilTheCoparentJoinsTheParentsOwnPendingExpensesNeedTheirOk() {
+    final List<Expense> expenses = List.of(
+        ExpenseFixtures.expense(100, Expense.PAID, TODAY, ALEX, 50, Expense.PENDING,
+            Expense.NONE, ALEX, "food"),
+        ExpenseFixtures.expense(250, Expense.PAID, TODAY, SAM, 50, Expense.PENDING,
+            Expense.NONE, ALEX, "food"));
+
+    final ExpenseSummary waiting = ExpenseSummary.of(expenses, ALEX, TODAY, false);
+    assertThat(waiting.needsYourAgreement().count()).isEqualTo(2);
+    assertThat(waiting.needsYourAgreement().totalPence()).isEqualTo(350);
+    assertThat(waiting.needsYourAction()).isEqualTo(2);
+    assertThat(waiting.awaitingOther()).isZero();
+
+    final ExpenseSummary joined = ExpenseSummary.of(expenses, ALEX, TODAY, true);
+    assertThat(joined.needsYourAgreement().count()).isZero();
+    assertThat(joined.awaitingOther()).isEqualTo(2);
+  }
+
+  @Test
   void upcomingIncludesOverdueAndTheNextThirtyDaysButNotDisputesOrLater() {
     final List<Expense> expenses = List.of(
         upcoming(24000, LocalDate.of(2026, 10, 20), Expense.PENDING),
