@@ -47,6 +47,17 @@ export interface NarrationTrack {
   /** Known immediately for a ready track; filled in when a generation chain completes. */
   audioUrl?: string
   durationSeconds?: number
+  /** Artwork for the full player and the phone's lock screen. */
+  imageUrl?: string
+  /** The publisher, or "Simon Rowe" for a post. Shown under the title. */
+  sourceName?: string
+  /** Where to start, in seconds. A playlist item resumes where it was left. */
+  resumeAt?: number
+  /**
+   * Played from the playlist. Its progress and "heard" mark are saved, for a signed-in
+   * listener, so the next device picks up where this one stopped.
+   */
+  fromPlaylist?: boolean
 }
 
 /**
@@ -92,4 +103,10 @@ export interface NarrationAudioState {
   error: NarrationAudioError | null
   /** True once polling gave up and the reader should re-check manually. */
   delayed: boolean
+  /** What plays after the current track, in order. Empty outside the playlist. */
+  upNext: NarrationTrack[]
+  /** When playback pauses for the end of a journey, in epoch milliseconds, or null. */
+  journeyEndsAt: number | null
+  /** A passing message that is not an error, such as "your journey's up". */
+  notice: string | null
 }

@@ -18,6 +18,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
   private static final String NEWS_PREFIX = "/api/news/";
   private static final String SUMMARY_SUFFIX = "/summary";
   private static final String SUMMARY_NARRATION_SUFFIX = "/summary/narration";
+  private static final String PLAYLIST_AUDIO_PATH = "/api/playlist/narrations";
 
   private final RateLimitConfig config;
   private final ConcurrentHashMap<String, Bucket> chatBuckets = new ConcurrentHashMap<>();
@@ -38,12 +39,16 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     ConcurrentHashMap<String, Bucket> bucketMap;
     int requestsPerMinute;
 
-    if (isSummaryPath(path)) {
+    if (isSummaryPath(path) || PLAYLIST_AUDIO_PATH.equals(path)) {
       // Only the writes are limited. The summary status endpoint is long-polled — one
       // drawer session is an initial read plus up to four polls — so metering reads out of
       // the same small allowance would 429 a reader in the middle of the generation they
       // just paid for. Reads are public, cheap and idempotent; the POSTs are what spend on
       // the model and the text-to-speech budget.
+      //
+      // The playlist's "make audio" is one POST for up to 20 items, so it shares this
+      // bucket and costs one token however many it names. Metering per item would 429 the
+      // fifth item of a list someone ticked in one go.
       if (!HttpMethod.POST.matches(request.getMethod())) {
         return true;
       }

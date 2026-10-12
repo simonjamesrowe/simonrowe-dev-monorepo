@@ -3,7 +3,9 @@ package com.simonrowe.narration;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -199,6 +201,40 @@ public class NarrationService {
         .stream()
         .filter(ready -> ready.contentId() != null && ready.audioUrl() != null)
         .toList();
+  }
+
+  /**
+   * The state of the newest narration for each of several content ids, for a list that
+   * shows "preparing", "failed" or nothing yet beside items that have no audio.
+   *
+   * <p>Reads the newest document per content id rather than rebuilding each item's script
+   * and looking up its exact fingerprint, which {@link #getStatus} does. That costs two reads
+   * per item, and a list can hold hundreds. The difference only shows when the newest row is
+   * for text that has since changed, and then the row is {@code STALE} and reads as
+   * {@code NOT_REQUESTED} either way.
+   *
+   * <p>A {@code READY} row is reported as {@code READY} without checking the file. Callers
+   * take playable audio from {@link #readyNarrations}; this is for everything else.
+   *
+   * @param contentType which kind of content
+   * @param contentIds the content ids to look up
+   * @return public state by content id; ids with no narration are absent
+   */
+  public Map<String, NarrationResponse.PublicState> latestStates(
+      final NarrationContentType contentType,
+      final Collection<String> contentIds
+  ) {
+    if (contentIds.isEmpty()) {
+      return Map.of();
+    }
+    Query query = Query.query(Criteria.where("contentType").is(contentType)
+            .and("contentId").in(contentIds))
+        .with(Sort.by(Sort.Direction.DESC, "updatedAt"));
+    Map<String, NarrationResponse.PublicState> states = new HashMap<>();
+    for (Narration narration : mongoTemplate.find(query, Narration.class)) {
+      states.putIfAbsent(narration.contentId(), NarrationResponse.from(narration).state());
+    }
+    return states;
   }
 
   /**

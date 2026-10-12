@@ -3,6 +3,9 @@ package com.simonrowe.summary;
 import com.simonrowe.narration.NarrationContentType;
 import com.simonrowe.narration.NarrationResponse;
 import com.simonrowe.narration.NarrationService;
+import com.simonrowe.playlist.PlaylistContentType;
+import com.simonrowe.playlist.PlaylistRecorder;
+import com.simonrowe.playlist.PlaylistSource;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
@@ -32,9 +35,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class SummaryNarrationController {
 
   private final NarrationService narrationService;
+  private final PlaylistRecorder playlistRecorder;
 
-  public SummaryNarrationController(final NarrationService narrationService) {
+  public SummaryNarrationController(
+      final NarrationService narrationService,
+      final PlaylistRecorder playlistRecorder
+  ) {
     this.narrationService = narrationService;
+    this.playlistRecorder = playlistRecorder;
   }
 
   /**
@@ -66,6 +74,8 @@ public class SummaryNarrationController {
   public ResponseEntity<NarrationResponse> request(
       @PathVariable final String articleId
   ) {
+    playlistRecorder.record(
+        PlaylistContentType.ARTICLE_SUMMARY, articleId, PlaylistSource.LISTENED);
     NarrationService.RequestResult result = narrationService.request(
         NarrationContentType.ARTICLE_SUMMARY, articleId);
     if (result.response().state() == NarrationResponse.PublicState.UNAVAILABLE) {

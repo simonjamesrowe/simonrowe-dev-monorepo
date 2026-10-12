@@ -8,13 +8,16 @@ import com.simonrowe.aggregation.ArticleSourceTextProvider;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -90,6 +93,7 @@ public class ArticleSummaryService {
   private final Ai ai;
   private final MongoTemplate mongoTemplate;
   private final MeterRegistry meterRegistry;
+  private final ApplicationEventPublisher eventPublisher;
   private final String model;
   private final Duration generationTimeout;
 
@@ -100,6 +104,7 @@ public class ArticleSummaryService {
       final Ai ai,
       final MongoTemplate mongoTemplate,
       final MeterRegistry meterRegistry,
+      final ApplicationEventPublisher eventPublisher,
       @Value("${aggregation.summary.model}") final String model,
       @Value("${aggregation.summary.generation-timeout}") final Duration generationTimeout
   ) {
@@ -109,6 +114,7 @@ public class ArticleSummaryService {
     this.ai = ai;
     this.mongoTemplate = mongoTemplate;
     this.meterRegistry = meterRegistry;
+    this.eventPublisher = eventPublisher;
     this.model = model;
     this.generationTimeout = generationTimeout;
   }
@@ -201,6 +207,21 @@ public class ArticleSummaryService {
     return summaryRepository.findByStatus(SummaryStatus.READY).stream()
         .map(ArticleSummary::articleId)
         .collect(Collectors.toSet());
+  }
+
+  /**
+   * The stored summaries for several articles at once, whatever their state.
+   *
+   * @param articleIds the aggregated article ids
+   * @return summaries keyed by article id; articles with no summary are absent
+   */
+  public Map<String, ArticleSummary> findForAll(final Collection<String> articleIds) {
+    List<String> ids = articleIds.stream()
+        .map(articleId -> ArticleSummary.idFor(SUMMARY_FORMAT_VERSION, articleId))
+        .toList();
+    return summaryRepository.findAllById(ids).stream()
+        .collect(Collectors.toMap(ArticleSummary::articleId, summary -> summary,
+            (first, second) -> first));
   }
 
   /**
@@ -322,6 +343,7 @@ public class ArticleSummaryService {
         .record(Duration.between(started, now));
     LOG.info("Article summary ready: articleId={}, sourceCharacters={}, bodyCharacters={}",
         summary.articleId(), sourceText.length(), body.length());
+    eventPublisher.publishEvent(new ArticleSummaryReadyEvent(summary.articleId()));
     return ArticleSummaryResponse.from(summary);
   }
 

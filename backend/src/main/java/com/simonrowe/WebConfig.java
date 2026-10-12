@@ -91,7 +91,7 @@ public class WebConfig implements WebMvcConfigurer {
   public void addInterceptors(final InterceptorRegistry registry) {
     registry.addInterceptor(rateLimitInterceptor)
         .addPathPatterns("/mcp/**", "/api/blogs/*/narration",
-            "/api/news/*/summary", "/api/news/*/summary/narration",
+            "/api/news/*/summary", "/api/news/*/summary/narration", "/api/playlist/narrations",
             // Term Time's chat turn is unauthenticated and costs a model call, so it is the
             // one endpoint here that anyone on the internet can spend money on without so
             // much as a login. Rate limiting bounds one caller; SchoolBudget bounds the day.

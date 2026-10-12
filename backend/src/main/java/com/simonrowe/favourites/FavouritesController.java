@@ -1,5 +1,8 @@
 package com.simonrowe.favourites;
 
+import com.simonrowe.playlist.PlaylistContentType;
+import com.simonrowe.playlist.PlaylistRecorder;
+import com.simonrowe.playlist.PlaylistSource;
 import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,18 +27,31 @@ import org.springframework.web.server.ResponseStatusException;
 public class FavouritesController {
 
   private final FavouritesService favouritesService;
+  private final PlaylistRecorder playlistRecorder;
 
-  public FavouritesController(final FavouritesService favouritesService) {
+  public FavouritesController(
+      final FavouritesService favouritesService,
+      final PlaylistRecorder playlistRecorder
+  ) {
     this.favouritesService = favouritesService;
+    this.playlistRecorder = playlistRecorder;
   }
 
+  /**
+   * Hearts an article or event. A hearted article also joins the playlist: hearting already
+   * asks for its summary, and the summary is what the playlist reads aloud.
+   */
   @PutMapping("/{type}/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void addFavourite(
       @PathVariable final String type,
       @PathVariable final String id
   ) {
-    favouritesService.add(resolveType(type), id);
+    FavouriteType favouriteType = resolveType(type);
+    favouritesService.add(favouriteType, id);
+    if (favouriteType == FavouriteType.NEWS) {
+      playlistRecorder.record(PlaylistContentType.ARTICLE_SUMMARY, id, PlaylistSource.FAVOURITED);
+    }
   }
 
   @DeleteMapping("/{type}/{id}")

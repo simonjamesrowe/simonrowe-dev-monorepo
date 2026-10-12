@@ -1,10 +1,17 @@
-import { Loader2, Pause, Play, X } from 'lucide-react'
-import { useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import {
+  ChevronUp, Headphones, Heart, Loader2, Pause, Play, SkipBack, SkipForward, X,
+} from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 
 import { PLAYBACK_SPEEDS } from './playbackSpeeds'
 import { useNarrationAudio } from './useNarrationAudio'
+import { useAuth } from '../../auth/useAuth'
+import { itemKey, usePlaylistSnapshot } from '../../hooks/playlistStore'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
+import { usePlaylistActions } from '../../hooks/usePlaylistActions'
+import { NowPlayingSheet } from '../playlist/NowPlayingSheet'
+import { formatClock } from '../playlist/playlistFormat'
 import type { ChainStage } from '../../types/narrationAudio'
 
 const STAGE_LABELS: Record<ChainStage, string> = {
@@ -12,13 +19,6 @@ const STAGE_LABELS: Record<ChainStage, string> = {
   summarising: 'Summarising…',
   narrating: 'Preparing audio…',
   ready: '',
-}
-
-function formatClock(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
-  const whole = Math.floor(seconds)
-  const minutes = Math.floor(whole / 60)
-  return `${minutes}:${String(whole % 60).padStart(2, '0')}`
 }
 
 /**
@@ -39,30 +39,46 @@ function formatClock(seconds: number): string {
  *   never the card, which returns to its resting state.
  *
  * On narrow viewports the playback-speed control is dropped; the title, play/pause and progress
- * are what the bar is for.
+ * are what the bar is for, and an expand button opens the full player as a sheet.
+ *
+ * Playing from the playlist adds previous and next, a heart for an article, and a way back to
+ * the list. On the playlist page itself a wide screen hides the bar: the page shows the full
+ * player beside the list.
  */
 export function NarrationPlayerBar() {
   const {
-    track, stage, playing, position, duration, rate, error, delayed,
-    togglePlay, seek, setRate, dismiss, retry, recheck,
+    track, stage, playing, position, duration, rate, error, delayed, upNext, notice,
+    togglePlay, seek, setRate, dismiss, retry, recheck, next, previous, dismissNotice,
   } = useNarrationAudio()
   const compact = useMediaQuery('(max-width: 640px)')
+  const location = useLocation()
+  const { isAuthenticated } = useAuth()
+  const { data } = usePlaylistSnapshot()
+  const { toggleFavourite } = usePlaylistActions()
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const expandRef = useRef<HTMLButtonElement>(null)
+  const closeSheet = useCallback(() => {
+    setSheetOpen(false)
+    expandRef.current?.focus()
+  }, [])
 
   // The bar is fixed to the bottom of the viewport, so it would sit on top of the last of the
   // page — the footer, or the final row of cards. A body attribute rather than a wrapper class
   // because the bar renders inside PublicLayout but has to reserve space in a scroll container
   // it does not own. Only while it is actually on screen: reserving the gutter permanently
   // would leave a dead strip under every page.
-  const visible = Boolean(track) || Boolean(error)
+  const visible = Boolean(track) || Boolean(error) || Boolean(notice)
+  // A playlist track's bar is taller on a phone (two rows), so it reserves more room.
+  const queued = Boolean(track?.fromPlaylist)
   useEffect(() => {
     if (!visible) return
-    document.body.dataset.narrationBar = 'true'
+    document.body.dataset.narrationBar = queued ? 'queue' : 'true'
     return () => { delete document.body.dataset.narrationBar }
-  }, [visible])
+  }, [queued, visible])
 
   // An error can outlive its track — audio that 404s at playback time clears the track but must
   // still say so, and the bar is the only place errors are ever shown.
-  if (!track && !error) return null
+  if (!track && !error && !notice) return null
 
   const generating = stage === 'summarising' || stage === 'narrating'
   // Only offer the transport when the *current* track actually has audio. A track mid-chain
@@ -70,6 +86,10 @@ export function NarrationPlayerBar() {
   // would either do nothing or, worse, drive whatever was playing before.
   const playable = Boolean(track?.audioUrl)
   const total = duration || track?.durationSeconds || 0
+  const onPlaylistPage = location.pathname === '/playlist'
+  const entry = track ? data?.items.find((item) => itemKey(item) === itemKey(track)) : undefined
+  const showHeart = entry?.favourite !== undefined && (isAuthenticated || entry.favourite)
+  const upNextCount = upNext.length
 
   // A news track links out to the original article, a blog track links internally. Written as
   // a function rather than a nested ternary in the JSX so both branches stay legible.
@@ -91,7 +111,15 @@ export function NarrationPlayerBar() {
   }
 
   return (
-    <section aria-label="Narration player" className="narration-bar" role="region">
+    <section
+      aria-label="Narration player"
+      className={[
+        'narration-bar',
+        queued ? 'narration-bar--queue' : '',
+        onPlaylistPage ? 'narration-bar--on-playlist' : '',
+      ].filter(Boolean).join(' ')}
+      role="region"
+    >
       <div className="narration-bar__inner">
         <div className="narration-bar__meta">
           {renderTitle()}
@@ -100,12 +128,20 @@ export function NarrationPlayerBar() {
           <p aria-atomic="true" aria-live="polite" className="narration-bar__status" role="status">
             {generating ? STAGE_LABELS[stage] : ''}
           </p>
+          {!generating && playable && upNextCount > 0 && (
+            <p className="narration-bar__next">Next: {upNext[0].title}</p>
+          )}
         </div>
 
         {generating ? (
           <Loader2 aria-hidden="true" className="narration-bar__spinner" size={18} />
         ) : !playable ? null : (
           <div className="narration-bar__transport">
+            {track?.fromPlaylist && !compact && (
+              <button aria-label="Previous" className="narration-bar__step" onClick={previous} type="button">
+                <SkipBack aria-hidden="true" fill="currentColor" size={16} />
+              </button>
+            )}
             <button
               aria-label={playing ? 'Pause' : 'Play'}
               className="narration-bar__play"
@@ -116,6 +152,11 @@ export function NarrationPlayerBar() {
                 ? <Pause aria-hidden="true" size={18} />
                 : <Play aria-hidden="true" size={18} />}
             </button>
+            {upNextCount > 0 && (
+              <button aria-label="Next" className="narration-bar__step" onClick={next} type="button">
+                <SkipForward aria-hidden="true" fill="currentColor" size={16} />
+              </button>
+            )}
             <input
               aria-label="Seek"
               className="narration-bar__seek"
@@ -144,6 +185,34 @@ export function NarrationPlayerBar() {
                 </select>
               </label>
             )}
+            {showHeart && entry && (
+              <button
+                aria-label={entry.favourite ? 'Remove from favourites' : 'Add to favourites'}
+                aria-pressed={entry.favourite}
+                className={`narration-bar__step narration-bar__heart${entry.favourite ? ' narration-bar__heart--on' : ''}`}
+                disabled={!isAuthenticated}
+                onClick={() => { void toggleFavourite(entry) }}
+                type="button"
+              >
+                <Heart aria-hidden="true" fill={entry.favourite ? 'currentColor' : 'none'} size={16} />
+              </button>
+            )}
+            {track?.fromPlaylist && !compact && !onPlaylistPage && (
+              <Link className="narration-bar__playlist" to="/playlist">
+                <Headphones aria-hidden="true" size={15} /> Playlist{upNextCount > 0 ? ` · ${upNextCount}` : ''}
+              </Link>
+            )}
+            {compact && (
+              <button
+                aria-label="Open the player"
+                className="narration-bar__step"
+                onClick={() => setSheetOpen(true)}
+                ref={expandRef}
+                type="button"
+              >
+                <ChevronUp aria-hidden="true" size={18} />
+              </button>
+            )}
           </div>
         )}
 
@@ -171,6 +240,21 @@ export function NarrationPlayerBar() {
           )}
         </div>
       )}
+
+      {notice && !error && (
+        <div className="narration-bar__feedback">
+          <p aria-live="polite" className="narration-bar__message" role="status">{notice}</p>
+          <button
+            className="button button--secondary narration-bar__action"
+            onClick={dismissNotice}
+            type="button"
+          >
+            OK
+          </button>
+        </div>
+      )}
+
+      {sheetOpen && playable && <NowPlayingSheet onClose={closeSheet} />}
 
       {delayed && !error && (
         <div className="narration-bar__feedback">
