@@ -141,7 +141,7 @@ public class ExpenseController {
     final List<ExpenseService.SettleItem> items = request.items() == null ? List.of()
         : request.items().stream().map(item -> new ExpenseService.SettleItem(
             CoparentIds.parse(item.id()), requireVersion(item.version()))).toList();
-    return service.settle(CoparentIds.parse(familyId), items).stream()
+    return service.settle(CoparentIds.parse(familyId), items, request.note()).stream()
         .map(SettleResponse::from).toList();
   }
 
@@ -216,7 +216,7 @@ public class ExpenseController {
   record NoteRequest(String note, Long version) {
   }
 
-  record SettleRequest(List<SettleItemRequest> items) {
+  record SettleRequest(List<SettleItemRequest> items, String note) {
   }
 
   record SettleItemRequest(String id, Long version) {

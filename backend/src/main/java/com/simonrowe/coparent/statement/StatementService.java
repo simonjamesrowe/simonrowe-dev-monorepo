@@ -63,6 +63,7 @@ public class StatementService {
   static final int MAX_UPLOADS_LISTED = 20;
   static final int MAX_LISTED = 500;
   static final int MAX_DECISIONS = 40;
+  static final int MAX_FAMILY_SHARES = 40;
   static final int MATCH_DAYS = 3;
   static final int MAX_BATCH_LOG = 50;
   static final Duration CHECKING_GRACE = Duration.ofMinutes(2);
@@ -626,7 +627,28 @@ public class StatementService {
             .stream().filter(parent -> !parent.id().equals(owner.id())).findFirst())
         .map(parent -> firstName(parent.fullName())).orElse(null);
     return new StatementClassifier.Context(today, firstName(owner.fullName()), other, kids,
-        decisions.values().stream().limit(MAX_DECISIONS).toList());
+        decisions.values().stream().limit(MAX_DECISIONS).toList(), familyShares(familyId));
+  }
+
+  /**
+   * What the family already splits, newest first and one entry per title. Without it the model
+   * only knows the default rules, which call a mortgage or an energy bill the parent's own, and a
+   * family that shares the home's bills never sees one suggested. Disputed expenses are left
+   * out: one parent logging a cost is not the family agreeing to share it.
+   */
+  private List<StatementClassifier.SharedCost> familyShares(final ObjectId familyId) {
+    final Map<String, StatementClassifier.SharedCost> shares = new LinkedHashMap<>();
+    for (final Expense expense : liveExpenses(familyId)) {
+      if (Expense.DISPUTED.equals(expense.agreement().status()) || expense.title() == null) {
+        continue;
+      }
+      shares.putIfAbsent(expense.title().strip().toLowerCase(java.util.Locale.UK),
+          new StatementClassifier.SharedCost(expense.title().strip(), expense.category()));
+      if (shares.size() >= MAX_FAMILY_SHARES) {
+        break;
+      }
+    }
+    return List.copyOf(shares.values());
   }
 
   private static String firstName(final Child child) {

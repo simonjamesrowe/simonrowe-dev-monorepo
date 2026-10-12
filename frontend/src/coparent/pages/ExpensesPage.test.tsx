@@ -30,6 +30,7 @@ vi.mock('../hooks/api', () => ({
   useSettlements: vi.fn(),
   useRecordSettlement: vi.fn(),
   useConfirmSettlement: vi.fn(),
+  useMarkPaidBack: vi.fn(),
   fetchReceiptBlob: vi.fn(),
   useStatementOverview: vi.fn(),
 }));
@@ -40,6 +41,7 @@ const mutation = (mutateAsync = vi.fn().mockResolvedValue({})) =>
 const transitionMutate = vi.fn();
 const recordMutate = vi.fn();
 const confirmMutate = vi.fn();
+const markPaidBackMutate = vi.fn();
 const createMutate = vi.fn();
 const resendMutate = vi.fn();
 const renameMutate = vi.fn();
@@ -132,6 +134,7 @@ function setUp({
   }
   vi.mocked(apiHooks.useRecordSettlement).mockReturnValue(mutation(recordMutate) as never);
   vi.mocked(apiHooks.useConfirmSettlement).mockReturnValue(mutation(confirmMutate) as never);
+  vi.mocked(apiHooks.useMarkPaidBack).mockReturnValue(mutation(markPaidBackMutate) as never);
 }
 
 function renderPage(path = '/expenses') {
@@ -150,6 +153,7 @@ describe('ExpensesPage', () => {
     transitionMutate.mockResolvedValue({});
     recordMutate.mockResolvedValue({ settlement: null, results: [] });
     confirmMutate.mockResolvedValue([]);
+    markPaidBackMutate.mockResolvedValue([]);
     createMutate.mockResolvedValue(testExpense({ id: 'new' }));
   });
 
@@ -423,5 +427,61 @@ describe('ExpensesPage', () => {
     await user.click(screen.getByRole('button', { name: /Clear dates/ }));
     expect(screen.getByTestId('expense-row-before')).toBeInTheDocument();
     expect(screen.getByTestId('expense-row-after')).toBeInTheDocument();
+  });
+
+  it('marks everything up to a date as paid back in one go', async () => {
+    const owed = (id: string, date: string, owedPence: number) =>
+      testExpense({
+        id,
+        title: id,
+        date,
+        payerId: 'sam',
+        debtorParentId: 'alex',
+        creditorParentId: 'sam',
+        agreement: { status: 'agreed', requestedBy: 'alex', respondedBy: 'alex', respondedAt: null, note: null },
+        reimbursement: { status: 'outstanding', claimedBy: null, claimedAt: null, settledBy: null, settledAt: null, note: null, settlementId: null },
+        countsTowardsBalance: true,
+        owedPence,
+        version: 2,
+      });
+    setUp({ expenses: [owed('august', '2026-08-20', 5000), owed('early-sept', '2026-09-08', 2500), owed('october', '2026-10-02', 9900)] });
+    const user = userEvent.setup();
+    renderPage('/expenses?view=owed');
+
+    await user.type(screen.getByLabelText('To date'), '2026-09-08');
+    const bulk = screen.getByRole('region', { name: 'Bulk actions' });
+    await user.click(within(bulk).getByLabelText('Select all shown'));
+    expect(bulk).toHaveTextContent('2 selected');
+    await user.click(within(bulk).getByRole('button', { name: /Mark 2 paid back/ }));
+
+    expect(screen.getByTestId('mark-paid-back-totals')).toHaveTextContent('£75.00 you owe');
+    await user.clear(screen.getByLabelText('Note on each expense'));
+    await user.type(screen.getByLabelText('Note on each expense'), 'Paid before 9 Sept');
+    await user.click(screen.getByRole('button', { name: 'Mark 2 as paid back' }));
+
+    expect(markPaidBackMutate).toHaveBeenCalledWith({
+      familyId: 'fam-1',
+      items: [expect.objectContaining({ id: 'early-sept', version: 2 }), expect.objectContaining({ id: 'august', version: 2 })],
+      note: 'Paid before 9 Sept',
+    });
+  });
+
+  it('agrees to only the ticked expenses it can', async () => {
+    const pending = (id: string, requestedBy: string) =>
+      testExpense({ id, title: id, agreement: { status: 'pending', requestedBy, respondedBy: null, respondedAt: null, note: null } });
+    setUp({ expenses: [pending('theirs', 'sam'), pending('mine', 'alex'), pending('other', 'sam')] });
+    const user = userEvent.setup();
+    renderPage('/expenses?view=all');
+
+    await user.click(screen.getByLabelText('Select theirs'));
+    await user.click(screen.getByLabelText('Select mine'));
+    const bulk = screen.getByRole('region', { name: 'Bulk actions' });
+    expect(within(bulk).getByRole('button', { name: /Mark 0 paid back/ })).toBeDisabled();
+    await user.click(within(bulk).getByRole('button', { name: /Agree 1/ }));
+
+    expect(transitionMutate).toHaveBeenCalledTimes(1);
+    expect(transitionMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ transition: 'agree', expense: expect.objectContaining({ id: 'theirs' }) }),
+    );
   });
 });

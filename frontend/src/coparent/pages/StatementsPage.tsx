@@ -765,7 +765,7 @@ const StatementsPage = () => {
             description: failures
               ? `Expense saved. ${failures} receipt${failures === 1 ? '' : 's'} didn't upload. Retry from the expense.`
               : other.status === 'invited'
-                ? `${otherName} can agree to it once they join.`
+                ? `${otherName} hasn't joined yet, so agree to it yourself when you're ready.`
                 : `${otherName} has been asked to agree.`,
           });
         }}

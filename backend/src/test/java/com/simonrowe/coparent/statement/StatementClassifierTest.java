@@ -84,7 +84,9 @@ class StatementClassifierTest {
         .contains("\"amount\":\"1.05\"").contains("\"index\":1");
     assertThat(prompt.getValue().getInstructions().getFirst().getText())
         .contains("\"OTHER_PARENT\":\"Sam\"").contains("\"name\":\"Robin\"")
-        .contains("Kids Gym");
+        .contains("Kids Gym")
+        .contains("\"FAMILY_SHARES\":[{\"title\":\"BARCLAYS UK MTGES\",\"category\":\"other\"}]")
+        .contains("FAMILY_SHARES are costs this family already splits");
 
     final Map<String, Object> schema = new ObjectMapper().readValue(options.getResponseFormat()
         .getJsonSchema(), new TypeReference<>() { });
@@ -125,7 +127,8 @@ class StatementClassifierTest {
   private static StatementClassifier.Context context() {
     return new StatementClassifier.Context(LocalDate.of(2026, 10, 10), "Alex", "Sam",
         List.of(new StatementClassifier.Child(ROBIN, "Robin", 8, null)),
-        List.of(new StatementClassifier.Decision("Kids Gym", true, "activities")));
+        List.of(new StatementClassifier.Decision("Kids Gym", true, "activities")),
+        List.of(new StatementClassifier.SharedCost("BARCLAYS UK MTGES", "other")));
   }
 
   private static List<StatementClassifier.Item> items(final int count) {

@@ -313,6 +313,37 @@ class StatementApiIntegrationTest extends AbstractIntegrationTest {
             org.hamcrest.Matchers.containsString("Starling, Monzo")));
   }
 
+  @Test
+  void theModelIsToldWhatTheFamilyAlreadySharesButNotWhatWasDisputed() throws Exception {
+    final Fixture f = family();
+    final String expenses = "/api/coparent/families/{familyId}/expenses";
+    final String expense = """
+        {"title":"%s","category":"other","childIds":["%s"],"amountPence":22800,
+         "timing":"paid","date":"%s","payerId":"%s",
+         "shares":[{"parentId":"%s","percent":50},{"parentId":"%s","percent":50}]}""";
+    mockMvc.perform(post(expenses, f.familyId()).with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(expense.formatted("LB LEWISHAM", f.childId(), yesterday(), f.bobId(),
+                f.aliceId(), f.bobId())))
+        .andExpect(status().isCreated());
+    final MvcResult gym = mockMvc.perform(post(expenses, f.familyId()).with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(expense.formatted("Alice's gym", f.childId(), yesterday(), f.aliceId(),
+                f.aliceId(), f.bobId())))
+        .andExpect(status().isCreated()).andReturn();
+    mockMvc.perform(post(expenses + "/{id}/dispute", f.familyId(), read(gym, "$.id"))
+            .with(user("bob")).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"version\":1,\"note\":\"Not a shared cost\"}"))
+        .andExpect(status().isOk());
+
+    final MvcResult uploaded = upload(f, "alice", "amex.csv").andReturn();
+    check(f, "alice", read(uploaded, "$.upload.id"), JsonPath.read(body(uploaded), "$.rows"))
+        .andExpect(status().isOk());
+
+    verify(classifier).classify(argThat(context -> context.familyShares().equals(List.of(
+        new StatementClassifier.SharedCost("LB LEWISHAM", "other")))), anyList());
+  }
+
   // ---- helpers -----------------------------------------------------------------------------
 
   private String uploadAndCheck(final Fixture f, final String file) throws Exception {
@@ -396,6 +427,10 @@ class StatementApiIntegrationTest extends AbstractIntegrationTest {
   private static Map<String, Object> row(final String fingerprint) {
     return Map.of("fingerprint", fingerprint, "date", "2026-09-02", "description", "SHOP",
         "details", "", "amountPence", 100, "account", "American Express");
+  }
+
+  private static String yesterday() {
+    return java.time.LocalDate.now().minusDays(1).toString();
   }
 
   private ResultActions overview(final Fixture f, final String who) throws Exception {

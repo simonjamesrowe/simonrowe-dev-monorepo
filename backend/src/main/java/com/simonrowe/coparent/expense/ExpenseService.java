@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -436,7 +437,19 @@ public class ExpenseService {
    * its own outcome and one stale item never stops the rest.
    */
   public List<SettleResult> settle(final ObjectId familyId, final List<SettleItem> items) {
+    return settle(familyId, items, null);
+  }
+
+  /**
+   * As {@link #settle(ObjectId, List)}, with the note each expense carries, such as "Paid back
+   * before 9 Sept". This is the Expenses page's bulk "mark paid back": exactly what pressing
+   * Mark paid back on each row does, with no payment recorded. Recording the transfers that paid
+   * expenses back is {@code ExpenseSettlementService}.
+   */
+  public List<SettleResult> settle(final ObjectId familyId, final List<SettleItem> items,
+      final String note) {
     requireSettleItems(items);
+    final String method = Objects.requireNonNullElse(optionalNote(note), "Settle up");
     final Couple couple = couple(familyId);
     final List<SettleResult> results = new ArrayList<>();
     for (final SettleItem item : items) {
@@ -451,7 +464,7 @@ public class ExpenseService {
           results.add(new SettleResult(item.id(), "skipped", null,
               "Nothing to settle on this expense"));
         } else {
-          results.add(apply(couple, current, step, "Settle up", null, true));
+          results.add(apply(couple, current, step, method, null, true));
         }
       } catch (ResponseStatusException exception) {
         results.add(new SettleResult(item.id(), "failed", null, exception.getReason()));
