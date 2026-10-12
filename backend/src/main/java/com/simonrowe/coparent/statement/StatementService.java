@@ -21,6 +21,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +64,7 @@ public class StatementService {
   static final int MAX_UPLOADS_LISTED = 20;
   static final int MAX_LISTED = 500;
   static final int MAX_DECISIONS = 40;
+  static final int MAX_FAMILY_SHARES = 40;
   static final int MATCH_DAYS = 3;
   static final int MAX_BATCH_LOG = 50;
   static final Duration CHECKING_GRACE = Duration.ofMinutes(2);
@@ -626,7 +628,25 @@ public class StatementService {
             .stream().filter(parent -> !parent.id().equals(owner.id())).findFirst())
         .map(parent -> firstName(parent.fullName())).orElse(null);
     return new StatementClassifier.Context(today, firstName(owner.fullName()), other, kids,
-        decisions.values().stream().limit(MAX_DECISIONS).toList());
+        decisions.values().stream().limit(MAX_DECISIONS).toList(), familyShares(familyId));
+  }
+
+  /**
+   * What the family already splits, newest first and one entry per title. Without it the model
+   * only knows the default rules, which call a mortgage or an energy bill the parent's own, and a
+   * family that shares the home's bills never sees one suggested. Disputed expenses are left
+   * out: one parent logging a cost is not the family agreeing to share it.
+   */
+  private List<StatementClassifier.SharedCost> familyShares(final ObjectId familyId) {
+    // Titles are required on every expense, so there is no blank one to skip.
+    final Set<String> seen = new HashSet<>();
+    return liveExpenses(familyId).stream()
+        .filter(expense -> !Expense.DISPUTED.equals(expense.agreement().status()))
+        .map(expense -> new StatementClassifier.SharedCost(expense.title().strip(),
+            expense.category()))
+        .filter(share -> seen.add(share.title().toLowerCase(java.util.Locale.UK)))
+        .limit(MAX_FAMILY_SHARES)
+        .toList();
   }
 
   private static String firstName(final Child child) {

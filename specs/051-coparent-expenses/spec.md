@@ -623,6 +623,8 @@ expenses they paid back.
   replaces the per-expense `claimed` emails.
 - The page's **Transfers** tab lists them, counted by those waiting for the signed-in parent
   to confirm, and the expense detail shows the payments that paid it back.
-- `POST /settle` is kept so a cached client still works; the page no longer calls it.
+- `POST /settle` (now with an optional `note`) is the Expenses page's bulk "Mark paid back" on
+  ticked rows: each expense is claimed or reimbursed exactly as its own Mark paid back would, and
+  no payment is recorded. Settle up is where transfers are recorded.
 - Backed up (`COPARENT_BACKUP_COLLECTIONS`, `COPARENT_IMPORT_ORDER`), and
   `ensureCoparentIndexes()` re-creates its index; `CoparentBackupCoverageTest` pins both.

@@ -1,4 +1,4 @@
-import { Check, Paperclip, Pencil, Plus, Scale, Sparkles, Upload, UserPlus, WandSparkles, X } from 'lucide-react';
+import { Check, Paperclip, Pencil, Plus, Scale, Sparkles, Upload, UserPlus, Wallet, WandSparkles, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -19,7 +19,8 @@ import {
 import { formatMoney } from '../components/expenses/money';
 import { ParentDot } from '../components/expenses/ParentDot';
 import { firstName, parentTone } from '../components/expenses/parentTone';
-import { settleable, settlementState } from '../components/expenses/settle';
+import { MarkPaidBackDrawer } from '../components/expenses/MarkPaidBackDrawer';
+import { markable, settleable, settlementState } from '../components/expenses/settle';
 import { SettleUpDrawer } from '../components/expenses/SettleUpDrawer';
 import { StatusChip } from '../components/expenses/StatusChip';
 import { TransfersList } from '../components/expenses/TransfersList';
@@ -135,27 +136,41 @@ const ExpensesPage = () => {
   };
 
   const [agreeingAll, setAgreeingAll] = useState(false);
-  const toAgree = expenses.filter((expense) => statuses.get(expense.id)?.actions.includes('agree'));
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [markingPaidBack, setMarkingPaidBack] = useState(false);
+  const canAgree = (expense: Expense) => statuses.get(expense.id)?.actions.includes('agree') ?? false;
+  const toAgree = expenses.filter(canAgree);
 
-  /** Before the co-parent joins: agree to every expense waiting, one by one at its own version. */
-  const agreeAll = async () => {
-    if (!familyId || agreeingAll) return;
+  /**
+   * Agrees to, or confirms receipt of, each expense in turn, at the version it was shown at. One
+   * failure never stops the rest.
+   */
+  const runMany = async (list: Expense[], step: 'agree' | 'reimbursement/confirm') => {
+    if (!familyId || agreeingAll || list.length === 0) return;
     setAgreeingAll(true);
-    let agreed = 0;
+    let done = 0;
     let failed = 0;
-    for (const expense of toAgree) {
+    for (const expense of list) {
       try {
-        await transition.mutateAsync({ familyId, expense, transition: 'agree' });
-        agreed += 1;
+        await transition.mutateAsync({ familyId, expense, transition: step });
+        done += 1;
       } catch {
         failed += 1;
       }
     }
     setAgreeingAll(false);
+    setSelected(new Set());
+    const verb = step === 'agree' ? 'agreed' : 'confirmed';
     showToast({
       variant: failed ? 'error' : 'success',
-      title: failed ? `${failed} could not be agreed` : `Agreed ${agreed} expense${agreed === 1 ? '' : 's'}`,
-      description: failed ? 'Something changed on those; reload and try again.' : 'They now count towards the balance.',
+      title: failed
+        ? `${failed} could not be ${verb}`
+        : `${verb === 'agreed' ? 'Agreed' : 'Confirmed'} ${done} expense${done === 1 ? '' : 's'}`,
+      description: failed
+        ? 'Something changed on those; reload and try again.'
+        : step === 'agree'
+          ? 'They now count towards the balance.'
+          : 'They are settled.',
     });
   };
 
@@ -215,6 +230,20 @@ const ExpensesPage = () => {
     .sort((left, right) =>
       view === 'upcoming' ? left.date.localeCompare(right.date) : right.date.localeCompare(left.date),
     );
+  // Only what is on screen can be acted on, so a filter change never acts on a hidden expense.
+  const chosen = visible.filter((expense) => selected.has(expense.id));
+  const chosenToAgree = chosen.filter(canAgree);
+  const chosenToPayBack = chosen.filter(markable);
+  const chosenToConfirm = chosen.filter((expense) => statuses.get(expense.id)?.actions.includes('confirm'));
+  const allChosen = visible.length > 0 && chosen.length === visible.length;
+  const toggleSelected = (id: string) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAll = () => setSelected(allChosen ? new Set() : new Set(visible.map((expense) => expense.id)));
   const balance = summary?.balance;
   const owedToMe = balance ? balance.creditorParentId === me.id : false;
   const square = !balance || balance.netPence === 0;
@@ -318,7 +347,7 @@ const ExpensesPage = () => {
           canManage={me.role === 'primary'}
           toAgree={toAgree.length}
           agreeing={agreeingAll}
-          onAgreeAll={agreeAll}
+          onAgreeAll={() => runMany(toAgree, 'agree')}
         />
       )}
 
@@ -450,6 +479,56 @@ const ExpensesPage = () => {
         )}
       </div>
 
+      {view !== 'transfers' && visible.length > 0 && (
+        <div className="expense-bulk" role="region" aria-label="Bulk actions">
+          <label className="expense-bulk__all">
+            <input
+              type="checkbox"
+              aria-label="Select all shown"
+              checked={allChosen}
+              ref={(input) => {
+                if (input) input.indeterminate = chosen.length > 0 && !allChosen;
+              }}
+              onChange={toggleAll}
+            />
+            <span>{chosen.length > 0 ? `${chosen.length} selected` : `Select all ${visible.length} shown`}</span>
+          </label>
+          {chosen.length > 0 && (
+            <div className="expense-bulk__actions">
+              <button
+                type="button"
+                className="cp-button cp-button--secondary cp-button--sm"
+                disabled={chosenToAgree.length === 0 || agreeingAll}
+                onClick={() => runMany(chosenToAgree, 'agree')}
+              >
+                <Check size={14} aria-hidden="true" /> Agree {chosenToAgree.length}
+              </button>
+              {chosenToConfirm.length > 0 && (
+                <button
+                  type="button"
+                  className="cp-button cp-button--secondary cp-button--sm"
+                  disabled={agreeingAll}
+                  onClick={() => runMany(chosenToConfirm, 'reimbursement/confirm')}
+                >
+                  <Check size={14} aria-hidden="true" /> Confirm {chosenToConfirm.length} received
+                </button>
+              )}
+              <button
+                type="button"
+                className="cp-button cp-button--primary cp-button--sm"
+                disabled={chosenToPayBack.length === 0}
+                onClick={() => setMarkingPaidBack(true)}
+              >
+                <Wallet size={14} aria-hidden="true" /> Mark {chosenToPayBack.length} paid back
+              </button>
+              <button type="button" className="cp-button cp-button--quiet cp-button--sm" onClick={() => setSelected(new Set())}>
+                Clear
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="expense-list">
         {view === 'transfers' ? (
           <TransfersList
@@ -486,9 +565,17 @@ const ExpensesPage = () => {
               <div key={expense.id}>
                 {header && <p className="expense-month">{month.toUpperCase()}</p>}
                 <article
-                  className={`expense-row${status.needsAction ? ' expense-row--needs' : ''}`}
+                  className={`expense-row${status.needsAction ? ' expense-row--needs' : ''}${selected.has(expense.id) ? ' is-selected' : ''}`}
                   data-testid={`expense-row-${expense.id}`}
                 >
+                  <label className="expense-row__select">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${expense.title}`}
+                      checked={selected.has(expense.id)}
+                      onChange={() => toggleSelected(expense.id)}
+                    />
+                  </label>
                   <button type="button" className="expense-row__open" onClick={() => openDetail(expense)} aria-label={`Open ${expense.title}`}>
                     <CategoryTile category={expense.category} />
                     <span className="expense-row__main">
@@ -576,6 +663,18 @@ const ExpensesPage = () => {
         onDiscuss={(expense) =>
           navigate(`/messages?compose=message&subject=${encodeURIComponent(`About: ${expense.title} (${formatMoney(expense.amountPence)})`)}`)
         }
+      />
+      <MarkPaidBackDrawer
+        open={markingPaidBack}
+        familyId={familyId}
+        me={me}
+        other={other}
+        expenses={chosenToPayBack}
+        onClose={() => setMarkingPaidBack(false)}
+        onDone={() => {
+          setMarkingPaidBack(false);
+          setSelected(new Set());
+        }}
       />
       <SettleUpDrawer
         open={settleOpen}

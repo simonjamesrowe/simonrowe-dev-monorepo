@@ -250,6 +250,29 @@ class ExpenseApiIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void markingSeveralPaidBackAtOnceRecordsTheNoteAndNoPayment() throws Exception {
+    final Fixture f = family();
+    final String owedToAlice = create(f, "alice",
+        body(f, "paid", yesterday(), f.aliceId(), 6490, 50));
+    final String owedToBob = create(f, "bob", body(f, "paid", yesterday(), f.bobId(), 6000, 50));
+    action(f, "bob", owedToAlice, "agree", 1).andExpect(status().isOk());
+    action(f, "alice", owedToBob, "agree", 1).andExpect(status().isOk());
+
+    mockMvc.perform(post(EXPENSES + "/settle", f.familyId()).with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"items":[{"id":"%s","version":2},{"id":"%s","version":2}],
+                 "note":"Paid back before 9 Sept"}
+                """.formatted(owedToAlice, owedToBob)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].outcome", is("reimbursed")))
+        .andExpect(jsonPath("$[0].expense.reimbursement.note", is("Paid back before 9 Sept")))
+        .andExpect(jsonPath("$[0].expense.reimbursement.settlementId", nullValue()))
+        .andExpect(jsonPath("$[1].outcome", is("claimed")))
+        .andExpect(jsonPath("$[1].expense.reimbursement.note", is("Paid back before 9 Sept")));
+  }
+
+  @Test
   void onlyTheThreeMomentsThatNeedTheOtherParentSendEmail() throws Exception {
     final Fixture f = family();
     final String id = create(f, "alice", body(f, "paid", yesterday(), f.aliceId(), 4500, 50));

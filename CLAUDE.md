@@ -274,6 +274,23 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- coparent-expense-bulk-actions: **The Expenses list has checkboxes and bulk actions, and statement
+  suggestions know what the family already shares.** Load-bearing bits:
+  - **Bulk actions only touch what is on screen.** `chosen` is the selection intersected with the
+    filtered list (tab, child, type, from/to date), so changing a filter never acts on a hidden
+    expense. "Select all shown" plus the inclusive date filter is how a parent clears everything
+    before a date.
+  - **Agree and Confirm received loop the per-expense transitions** at each row's version.
+    **Mark paid back calls `POST /settle`** with a `note`, which is exactly what each row's own
+    Mark paid back does: claim what you owe, reimburse what you're owed, no payment recorded. It
+    deliberately does not go through `expense_settlements`, whose payments must add up exactly;
+    debts settled long ago or outside the app have no transfer to record.
+  - **`StatementClassifier` gets `FAMILY_SHARES`**: up to 40 titles and categories of the
+    family's live, non-disputed expenses, either parent's. The prompt's default calls a mortgage,
+    council tax or energy bill the parent's own, so a family sharing the home's bills (mortgage
+    and council tax logged, EDF never suggested) saw none suggested. It overrides the defaults only
+    for the same kind of cost, and `PREVIOUS_DECISIONS` still wins. **It does not re-check rows
+    already recorded**: a statement row stored as `checked` stays so; log it from Latest upload.
 - coparent-settle-transfers: **Before the co-parent joins, the parent here agrees to every
   expense; and settling up records the bank transfers that paid it.** Load-bearing bits:
   - **`requireAgreer` lets either side agree while the other parent is not `active`.** The
@@ -286,7 +303,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     the ticked expenses' net** (browser and `ExpenseSettlementService`), or a transfer would
     mark settled more than it paid. Several payments per settle-up is how "paid in parts" works.
   - **Every item is checked before anything is written** (`ExpenseService.planSettlement`), so
-    a stale one refuses the lot, unlike `POST /settle`, which is kept only for cached clients.
+    a stale one refuses the lot, unlike `POST /settle`, which is now the Expenses page's bulk
+    "Mark paid back" (see `coparent-expense-bulk-actions`).
   - One `settlementRecorded` email per settle-up, not one `claimed` per expense.
     `POST …/settlements/{id}/confirm` reads each expense's version itself: a claimed expense
     cannot change, so the claim is all it confirms.

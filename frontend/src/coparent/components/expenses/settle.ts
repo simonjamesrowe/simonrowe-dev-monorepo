@@ -13,6 +13,11 @@ export function settleable(expenses: Expense[], me: string): Expense[] {
   );
 }
 
+/** What "Mark paid back" can act on: an agreed debt, in either direction, nobody has paid back yet. */
+export function markable(expense: Expense): boolean {
+  return expense.countsTowardsBalance && expense.owedPence > 0 && expense.reimbursement.status === 'outstanding';
+}
+
 /** The money that changes hands if the ticked items are settled: positive is paid to me. */
 export function netOf(items: Expense[], me: string): number {
   return items.reduce((sum, expense) => {

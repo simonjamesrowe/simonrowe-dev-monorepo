@@ -140,6 +140,23 @@ export function useMarkExpensePaid() {
   );
 }
 
+/**
+ * Marks several expenses paid back at once, each exactly as its own "Mark paid back" would: what
+ * the parent owes is paid back, what they are owed is reimbursed. No payment is recorded; that is
+ * useRecordSettlement.
+ */
+export function useMarkPaidBack() {
+  return useExpenseMutation(
+    async ({ familyId, items, note }: { familyId: string; items: Pick<Expense, 'id' | 'version'>[]; note: string }) =>
+      (
+        await apiClient.post<SettleResult[]>(`${base(familyId)}/settle`, {
+          items: items.map(({ id, version }) => ({ id, version })),
+          note,
+        })
+      ).data,
+  );
+}
+
 /** Settles the chosen expenses and records the payments that settled them. */
 export function useRecordSettlement() {
   return useExpenseMutation(

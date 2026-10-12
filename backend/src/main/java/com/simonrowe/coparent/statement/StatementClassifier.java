@@ -75,9 +75,18 @@ public class StatementClassifier {
       off name stands for: if it is unclear, it is not shared. Most transactions are not shared:
       do not suggest something just because a child could conceivably have been involved.
 
-      PREVIOUS_DECISIONS are this parent's own rulings on earlier transactions. Follow them for
-      the same merchant: one they logged as shared is likely shared again, one they marked not
-      shared is not.
+      FAMILY_SHARES are costs this family already splits between the two parents, whoever paid
+      them, as titles a parent wrote or a bank printed. They override the defaults above for the
+      same kind of cost. A transaction from the same merchant as one of them is likely shared.
+      If they include the family home's mortgage, rent, council tax, or an energy or water bill,
+      then that home's other mortgage, rent, council tax, gas, electricity and water bills are
+      likely shared too: suggest them with medium confidence, category other, and an empty
+      childIds list. It works only for the same kind of cost: a shared mortgage does not make
+      insurance, a phone, subscriptions, the car, eating out or groceries shared.
+
+      PREVIOUS_DECISIONS are this parent's own rulings on earlier transactions, and they win over
+      FAMILY_SHARES. Follow them for the same merchant: one they logged as shared is likely
+      shared again, one they marked not shared is not.
 
       Return exactly one result for every transaction, with its index. For a shared one, set
       confidence (high, medium or low), a short plain title as a parent would write it (such as
@@ -104,14 +113,23 @@ public class StatementClassifier {
   public record Decision(String merchant, boolean shared, String category) {
   }
 
+  /** A cost the family already shares, as its expense title and category. */
+  public record SharedCost(String title, String category) {
+  }
+
   /** Everything the model is told about the family. */
   public record Context(
       LocalDate today,
       String parent,
       String otherParent,
       List<Child> children,
-      List<Decision> decisions
+      List<Decision> decisions,
+      List<SharedCost> familyShares
   ) {
+    public Context {
+      decisions = decisions == null ? List.of() : List.copyOf(decisions);
+      familyShares = familyShares == null ? List.of() : List.copyOf(familyShares);
+    }
   }
 
   /** One transaction to classify. */
@@ -264,6 +282,7 @@ public class StatementClassifier {
     data.put("PARENT", context.parent());
     data.put("OTHER_PARENT", context.otherParent());
     data.put("CHILDREN", context.children());
+    data.put("FAMILY_SHARES", context.familyShares());
     data.put("PREVIOUS_DECISIONS", context.decisions());
     data.put("categories", ExpenseService.CATEGORIES.stream().sorted().toList());
     return data;

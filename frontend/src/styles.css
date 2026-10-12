@@ -13042,9 +13042,15 @@ body[data-narration-bar] .app-layout__main {
 .coparent-app .expense-list { display: flex; flex-direction: column; gap: 10px; }
 .coparent-app .expense-month { display: flex; align-items: center; gap: 14px; margin: 22px 0 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: var(--expense-muted); }
 .coparent-app .expense-month::after { content: ''; flex: 1; height: 1px; background: var(--expense-border); }
-.coparent-app .expense-row { display: grid; grid-template-columns: minmax(0, 1fr) 240px; align-items: center; gap: 18px; padding: 16px 18px; border: 1px solid var(--expense-border); border-radius: 18px; background: var(--expense-surface); box-shadow: var(--expense-shadow); transition: border-color 0.15s; }
+.coparent-app .expense-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) 240px; align-items: center; gap: 18px; padding: 16px 18px; border: 1px solid var(--expense-border); border-radius: 18px; background: var(--expense-surface); box-shadow: var(--expense-shadow); transition: border-color 0.15s; }
 .coparent-app .expense-row:hover { border-color: var(--expense-teal-line); }
 .coparent-app .expense-row--needs { border-left: 4px solid var(--expense-amber); padding-left: 15px; }
+.coparent-app .expense-row.is-selected { border-color: var(--expense-teal-strong); background: var(--expense-teal-tint); }
+.coparent-app .expense-row__select { display: grid; place-items: center; align-self: stretch; cursor: pointer; }
+.coparent-app .expense-row__select input, .coparent-app .expense-bulk__all input { width: 18px; height: 18px; accent-color: var(--expense-teal); cursor: pointer; }
+.coparent-app .expense-bulk { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: -6px 0 14px; padding: 10px 18px; border: 1px dashed var(--expense-border-strong); border-radius: 14px; }
+.coparent-app .expense-bulk__all { display: inline-flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; color: var(--expense-text-2); cursor: pointer; }
+.coparent-app .expense-bulk__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .coparent-app .expense-row__open { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 18px; text-align: left; }
 .coparent-app .expense-row__main { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
 .coparent-app .expense-row__title { overflow: hidden; font-size: 16px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
@@ -13183,6 +13189,7 @@ body[data-narration-bar] .app-layout__main {
 .coparent-app .expense-settle { overflow: hidden; margin: 0; padding: 0; border: 1px solid var(--expense-border); border-radius: 16px; list-style: none; }
 .coparent-app .expense-settle li + li { border-top: 1px solid var(--expense-border); }
 .coparent-app .expense-settle__item { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; }
+.coparent-app .expense-settle__item--static { grid-template-columns: 1fr auto; cursor: default; }
 .coparent-app .expense-settle__item input { width: 18px; height: 18px; accent-color: var(--expense-teal); }
 .coparent-app .expense-settle__title { display: block; font-weight: 600; }
 .coparent-app .expense-settle__direction { display: block; margin-top: 2px; font-size: 13px; color: var(--expense-muted); }
@@ -13358,7 +13365,8 @@ body[data-narration-bar] .app-layout__main {
   .coparent-app .expense-tab { flex: none; }
   .coparent-app .expense-filters .expense-select { flex: 1; min-width: 0; }
   .coparent-app .expense-date-filter { flex: 1 1 140px; }
-  .coparent-app .expense-row { grid-template-columns: 1fr; gap: 10px; padding: 14px; }
+  .coparent-app .expense-row { grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 14px; }
+  .coparent-app .expense-row__status { grid-column: 2; }
   .coparent-app .expense-row--needs { padding-left: 11px; }
   .coparent-app .expense-row__open { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; }
   .coparent-app .expense-tile { width: 44px; height: 44px; border-radius: 13px; }
