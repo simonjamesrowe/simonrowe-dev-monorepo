@@ -10,6 +10,7 @@ import { useTour } from '../../hooks/useTour'
 import { SiteSearch } from '../search/SiteSearch'
 import { HeaderMenu } from './HeaderMenu'
 import { MobileNavSheet } from './MobileNavSheet'
+import { PlaylistIconLink, PlaylistNavItem } from './PlaylistNavLink'
 import { groupIsActive, navGroupsWithPortfolio, visibleGroups, type NavGroup } from './navModel'
 
 /** True when a key press belongs to whatever the user is typing into, not to the page. */
@@ -125,6 +126,7 @@ export function SiteHeader({ groups }: SiteHeaderProps) {
                 open={openGroup === group.key}
               />
             ))}
+            <PlaylistNavItem />
           </ul>
 
           <div className="site-header__actions">
@@ -145,6 +147,7 @@ export function SiteHeader({ groups }: SiteHeaderProps) {
                 <UserCircle size={22} />
               </NavLink>
             ) : null}
+            <PlaylistIconLink />
             <button
               aria-label="Ask Simon anything"
               className="site-header__ask top-nav__ask-ai"

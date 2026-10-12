@@ -32,7 +32,7 @@ class SummaryNarrationControllerTest {
   void setUp() {
     service = mock(NarrationService.class);
     mockMvc = MockMvcBuilders
-        .standaloneSetup(new SummaryNarrationController(service))
+        .standaloneSetup(new SummaryNarrationController(service, (type, id, source) -> { }))
         .build();
   }
 

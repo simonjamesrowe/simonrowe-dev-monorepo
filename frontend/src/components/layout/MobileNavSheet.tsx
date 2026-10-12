@@ -1,4 +1,4 @@
-import { ChevronDown, Moon, Sparkles, Sun, UserCircle, X } from 'lucide-react'
+import { ChevronDown, Headphones, Moon, Sparkles, Sun, UserCircle, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 
@@ -144,6 +144,9 @@ function OpenSheet({ onClose, groups, isAdmin, focusSearch }: MobileNavSheetProp
 
       <div className="nav-sheet__bottom">
         <div className="nav-sheet__rows">
+          <Link className="nav-sheet__row" onClick={onClose} to="/playlist">
+            <Headphones aria-hidden="true" size={18} /> Playlist
+          </Link>
           <button className="nav-sheet__row" onClick={toggleTheme} type="button">
             {theme === 'dark' ? <Sun aria-hidden="true" size={18} /> : <Moon aria-hidden="true" size={18} />}
             {theme === 'dark' ? 'Light mode' : 'Dark mode'}

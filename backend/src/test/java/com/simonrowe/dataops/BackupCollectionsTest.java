@@ -77,4 +77,13 @@ class BackupCollectionsTest {
     assertThat(readList(RestoreService.class, "IMPORT_ORDER_INDEPENDENT"))
         .contains("newsletter_candidates");
   }
+
+  @Test
+  void thePlaylistIsBackedUpAndRestored() throws ReflectiveOperationException {
+    // Its order, where each item was left and what has been heard: nothing re-derives them.
+    assertThat(readList(BackupService.class, "BACKUP_COLLECTIONS"))
+        .contains("playlist_items", "playlist_settings");
+    assertThat(readList(RestoreService.class, "IMPORT_ORDER_INDEPENDENT"))
+        .contains("playlist_items", "playlist_settings");
+  }
 }

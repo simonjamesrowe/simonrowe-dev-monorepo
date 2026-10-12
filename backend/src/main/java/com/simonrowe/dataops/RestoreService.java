@@ -18,6 +18,8 @@ import com.simonrowe.homepage.HomePage;
 import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
 import com.simonrowe.migration.changeunits.V022CreatePlatformReleaseIndexes;
 import com.simonrowe.migration.changeunits.V029CreateShortLinksAndBackfill;
+import com.simonrowe.migration.changeunits.V056CreatePlaylist;
+import com.simonrowe.playlist.PlaylistSettings;
 import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
 import com.simonrowe.migration.changeunits.V045CreateCoparentAssistantSchema;
@@ -73,6 +75,10 @@ public class RestoreService {
       // so order is free here too. They must be restored: the slugs are in URLs already
       // pasted elsewhere, and nothing recreates a lost one with the same value.
       SHORT_LINKS,
+      // The playlist points at articles and blogs by plain id and holds no @DBRef, so order
+      // is free. Its order, progress and "listened" marks are what someone chose and heard.
+      V056CreatePlaylist.COLLECTION,
+      PlaylistSettings.COLLECTION,
       // Term Time content references nothing by @DBRef. school_events points at
       // school_documents by plain id for citation, and sync state points at nothing at all,
       // so all three are order-free.
@@ -250,6 +256,7 @@ public class RestoreService {
         Map.entry(ARTICLE_SUMMARIES, this::ensureArticleSummaryIndexes),
         Map.entry(PLATFORM_RELEASES, this::ensurePlatformReleaseIndexes),
         Map.entry(SHORT_LINKS, this::ensureShortLinkIndexes),
+        Map.entry(V056CreatePlaylist.COLLECTION, this::ensurePlaylistIndexes),
         Map.entry(SCHOOL_DOCUMENTS, this::ensureSchoolIndexes),
         Map.entry(V048CreatePortfolioProjects.COLLECTION, this::ensurePortfolioIndexes),
         Map.entry(NewsletterCandidate.COLLECTION, this::ensureNewsletterCandidateIndexes),
@@ -394,6 +401,15 @@ public class RestoreService {
   void ensureShortLinkIndexes() {
     V029CreateShortLinksAndBackfill.createIndexes(mongoTemplate);
     LOG.info("Recreated short link indexes after restore");
+  }
+
+  /**
+   * Recreates the playlist's TTL index after a restore. Without it, items heard months ago
+   * would never be removed. Package-private so the backup test can exercise it directly.
+   */
+  void ensurePlaylistIndexes() {
+    V056CreatePlaylist.createIndexes(mongoTemplate);
+    LOG.info("Recreated playlist indexes after restore");
   }
 
   /**

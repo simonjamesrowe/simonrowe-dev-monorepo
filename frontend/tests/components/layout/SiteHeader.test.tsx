@@ -5,10 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SiteHeader } from '../../../src/components/layout/SiteHeader'
 import { groupIsActive, NAV_GROUPS, visibleGroups } from '../../../src/components/layout/navModel'
+import { resetPlaylistStore } from '../../../src/hooks/playlistStore'
+import { fetchPlaylist } from '../../../src/services/playlistApi'
 
 const openChat = vi.fn()
 const startTour = vi.fn()
 const portfolioState = vi.fn()
+
+// The header shows the playlist's count. The test environment's API base URL is production,
+// so an unmocked read would reach the live site.
+vi.mock('../../../src/services/playlistApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/services/playlistApi')>()),
+  fetchPlaylist: vi.fn().mockResolvedValue({ items: [], autoVoice: false }),
+}))
 
 vi.mock('../../../src/hooks/usePortfolio', () => ({ usePortfolio: () => portfolioState() }))
 
@@ -48,6 +57,25 @@ describe('SiteHeader', () => {
     openChat.mockReset()
     startTour.mockReset()
     portfolioState.mockReturnValue({ projects: [], loading: false, error: null })
+  })
+
+  it('links to the playlist with how much is waiting', async () => {
+    const ready = (id: string, status: 'QUEUED' | 'LISTENED' = 'QUEUED') => ({
+      contentType: 'ARTICLE_SUMMARY', contentId: id, status, audio: { state: 'READY' },
+    })
+    vi.mocked(fetchPlaylist).mockResolvedValueOnce({
+      items: [ready('a'), ready('b'), ready('c', 'LISTENED')] as never,
+      autoVoice: false,
+    })
+    resetPlaylistStore()
+
+    renderAt('/')
+
+    // The capsule's link on a wide screen and the icon on a phone; CSS shows one of them.
+    const links = await screen.findAllByRole('link', { name: /^Playlist ?, 2 items up next$/ })
+    expect(links).toHaveLength(2)
+    links.forEach((link) => expect(link).toHaveAttribute('href', '/playlist'))
+    resetPlaylistStore()
   })
 
   it('renders the three populated menus and no empty Portfolio menu', () => {

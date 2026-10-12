@@ -34,6 +34,7 @@ const BlogDetailPage = named(() => import('./pages/BlogDetailPage'), 'BlogDetail
 const NewsEventsPage = named(() => import('./pages/NewsEventsPage'), 'NewsEventsPage')
 const McpPage = named(() => import('./pages/McpPage'), 'McpPage')
 const StatusPage = named(() => import('./pages/StatusPage'), 'StatusPage')
+const PlaylistPage = named(() => import('./pages/PlaylistPage'), 'PlaylistPage')
 const PortfolioPage = named(() => import('./pages/PortfolioPage'), 'PortfolioPage')
 const PortfolioProjectPage = named(() => import('./pages/PortfolioProjectPage'), 'PortfolioProjectPage')
 const NotFoundPage = named(() => import('./pages/NotFoundPage'), 'NotFoundPage')
@@ -210,6 +211,7 @@ function App() {
         <Route element={<PublicLayout><NewsEventsPage /></PublicLayout>} path="/news-events" />
         <Route element={<PublicLayout><McpPage /></PublicLayout>} path="/mcp" />
         <Route element={<PublicLayout><StatusPage /></PublicLayout>} path="/status" />
+        <Route element={<PublicLayout><PlaylistPage /></PublicLayout>} path="/playlist" />
         <Route element={<PublicLayout><PortfolioPage /></PublicLayout>} path="/portfolio" />
         {/* One route with an optional segment, so moving between a project's pages keeps the
             project already loaded instead of remounting the page and fetching it again. */}

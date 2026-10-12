@@ -55,6 +55,9 @@ public class BackupService {
       // posts. A restore that dropped them would break URLs that exist in the wild, and
       // re-minting would produce different values — nothing recreates a lost slug.
       "short_links",
+      // The shared playlist: its order, where each item was left, and what has been heard.
+      // Nothing re-derives any of it.
+      "playlist_items", "playlist_settings",
       // Term Time. school_documents retains the original text of restricted items so the
       // classifier can be changed without re-reading the mailbox — and Gmail guarantees no
       // retention window for its incremental cursor, so that re-read may simply not be

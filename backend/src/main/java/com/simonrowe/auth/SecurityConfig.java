@@ -47,6 +47,11 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST, "/api/news/*/summary/narration")
             .authenticated()
             .requestMatchers(HttpMethod.POST, "/api/blogs/*/narration").authenticated()
+            // The playlist is shared like favourites: anyone can see it and play it, and
+            // only a session can change it. Its "make audio" also spends the TTS budget.
+            .requestMatchers(HttpMethod.PUT, "/api/playlist/**").authenticated()
+            .requestMatchers(HttpMethod.POST, "/api/playlist/**").authenticated()
+            .requestMatchers(HttpMethod.DELETE, "/api/playlist/**").authenticated()
             .requestMatchers("/api/coparent/**").authenticated()
             .anyRequest().permitAll()
         )

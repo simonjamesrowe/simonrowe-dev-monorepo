@@ -28,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -52,6 +53,7 @@ class ArticleSummaryServiceTest {
   @Mock private ArticleSourceTextProvider sourceTextProvider;
   @Mock private Ai ai;
   @Mock private MongoTemplate mongoTemplate;
+  @Mock private ApplicationEventPublisher eventPublisher;
 
   private PromptRunner promptRunner;
   private AssistantMessage assistantMessage;
@@ -71,7 +73,7 @@ class ArticleSummaryServiceTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
     service = new ArticleSummaryService(
         articleRepository, summaryRepository, sourceTextProvider, ai, mongoTemplate,
-        new SimpleMeterRegistry(), MODEL, TIMEOUT);
+        new SimpleMeterRegistry(), eventPublisher, MODEL, TIMEOUT);
   }
 
   // ---------------------------------------------------------------- generation
@@ -94,6 +96,17 @@ class ArticleSummaryServiceTest {
     assertThat(stored.status()).isEqualTo(SummaryStatus.READY);
     assertThat(stored.sourceCharacterCount()).isEqualTo(USABLE_SOURCE.length());
     assertThat(stored.completedAt()).isNotNull();
+    verify(eventPublisher).publishEvent(new ArticleSummaryReadyEvent(ARTICLE_ID));
+  }
+
+  @Test
+  void failedGenerationAnnouncesNothing() {
+    visibleArticle();
+    when(sourceTextProvider.sourceTextFor(any())).thenReturn("too short");
+
+    service.request(ARTICLE_ID);
+
+    verify(eventPublisher, never()).publishEvent(any(Object.class));
   }
 
   @Test
@@ -251,6 +264,8 @@ class ArticleSummaryServiceTest {
     assertThat(result.response().body()).isEqualTo("Existing prose.");
     verify(promptRunner, never()).respond(anyList());
     verify(summaryRepository, never()).insert(any(ArticleSummary.class));
+    // Announced once, by the generation that wrote it, not again on every reuse.
+    verify(eventPublisher, never()).publishEvent(any(Object.class));
   }
 
   @Test

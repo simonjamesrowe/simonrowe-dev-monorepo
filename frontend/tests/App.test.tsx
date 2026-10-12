@@ -4,6 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../src/App'
 
 // No network: the header's Portfolio menu and the home carousel both read this.
+// The header shows the playlist's count. The test environment's API base URL is production,
+// so an unmocked read would reach the live site.
+vi.mock('../src/services/playlistApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/services/playlistApi')>()),
+  fetchPlaylist: vi.fn().mockResolvedValue({ items: [], autoVoice: false }),
+}))
+
 vi.mock('../src/services/portfolioApi', () => ({
   fetchPortfolio: vi.fn().mockResolvedValue([]),
   fetchPortfolioProject: vi.fn().mockResolvedValue(null),

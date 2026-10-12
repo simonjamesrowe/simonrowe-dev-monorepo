@@ -21,7 +21,9 @@ class BlogNarrationControllerTest {
   @BeforeEach
   void setUp() {
     service = org.mockito.Mockito.mock(NarrationService.class);
-    mockMvc = MockMvcBuilders.standaloneSetup(new BlogNarrationController(service)).build();
+    mockMvc = MockMvcBuilders
+        .standaloneSetup(new BlogNarrationController(service, (type, id, source) -> { }))
+        .build();
   }
 
   @Test

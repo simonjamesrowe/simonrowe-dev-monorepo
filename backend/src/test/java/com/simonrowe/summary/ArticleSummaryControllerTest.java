@@ -30,7 +30,7 @@ class ArticleSummaryControllerTest {
   void setUp() {
     service = mock(ArticleSummaryService.class);
     mockMvc = MockMvcBuilders
-        .standaloneSetup(new ArticleSummaryController(service))
+        .standaloneSetup(new ArticleSummaryController(service, (type, id, source) -> { }))
         .build();
   }
 

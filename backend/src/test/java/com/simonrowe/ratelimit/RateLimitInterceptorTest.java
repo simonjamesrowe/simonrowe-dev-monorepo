@@ -330,6 +330,28 @@ class RateLimitInterceptorTest {
     assertThat(limitedResponse.getStatus()).isEqualTo(429);
   }
 
+  /**
+   * The playlist's "make audio" names up to 20 items in one POST. It shares the summary
+   * bucket, so it cannot be used to get round that allowance, and costs one token however
+   * many items it names.
+   */
+  @Test
+  void playlistAudioSharesTheSummaryBucket() throws Exception {
+    final String clientIp = "10.3.0.9";
+
+    interceptor.preHandle(
+        summaryRequest(clientIp), new MockHttpServletResponse(), new Object());
+    interceptor.preHandle(
+        playlistAudioRequest(clientIp), new MockHttpServletResponse(), new Object());
+
+    final MockHttpServletResponse limitedResponse = new MockHttpServletResponse();
+    final boolean result = interceptor.preHandle(
+        playlistAudioRequest(clientIp), limitedResponse, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(limitedResponse.getStatus()).isEqualTo(429);
+  }
+
   @Test
   void summaryRequestsUseIndependentBucketFromChatMcpAndNarration() throws Exception {
     final String clientIp = "10.3.0.3";
@@ -440,5 +462,9 @@ class RateLimitInterceptorTest {
     request.setRequestURI(uri);
     request.setRemoteAddr(remoteAddr);
     return request;
+  }
+
+  private static MockHttpServletRequest playlistAudioRequest(final String remoteAddr) {
+    return newsRequest(remoteAddr, "POST", "/api/playlist/narrations");
   }
 }

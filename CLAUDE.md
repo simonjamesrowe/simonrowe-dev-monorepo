@@ -274,6 +274,38 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- tts-playlist: **`/playlist` is a shared listening queue of summaries (and posts) read aloud
+  one after another**, `com.simonrowe.playlist`, collections `playlist_items` and
+  `playlist_settings` (`V056CreatePlaylist`). Load-bearing bits:
+  - **One playlist for everybody, like favourites.** `GET /api/playlist` is public and a
+    signed-out visitor can play anything on it; every write needs a JWT (`SecurityConfig`). So
+    progress and "listened" are shared too, and the player only saves them for a signed-in
+    listener, which is what stops a visitor moving the owner's place.
+  - **Things join it as a side effect.** Summarising, hearting an article, and pressing Listen
+    call `PlaylistRecorder.record`, insert-if-absent keyed on `_id` `<TYPE>:<contentId>`, and it
+    never throws. An item already heard is not re-queued by those; "Queue again" (`PUT`) is.
+  - **It plays newest first by the content's own date** (`PlaylistQueryService.PLAY_ORDER`), not
+    in the order things joined, which jumbled dates. There is no dragging: "Play next" sets
+    `pinnedAt`, pinned items come first (latest pin first), and hearing an item unpins it. The
+    page feeds the player current, then pinned, then what follows by date; newer items above the
+    current one wait until the list is played from the top again.
+  - **Making audio is one request for up to 20 items** (`POST /api/playlist/narrations`) sharing
+    the summary rate-limit bucket, because per-item narration POSTs share a 5/min bucket and the
+    fifth item would 429. An article with no summary yet gets one requested and is marked
+    `voiceRequested`; `ArticleSummaryReadyEvent` (published only by a generation that finished)
+    makes its audio then, and so does `autoVoice` for everything. Nothing moves when audio is
+    made: the item takes its place by date.
+  - **Heard items expire through a TTL index on `listenedAt`** (30 days). Queued items have no
+    `listenedAt`, so the TTL monitor skips them. V056 also queues the last 14 days of `READY`
+    summaries via `$setOnInsert`.
+  - **The player gained a queue** (`NarrationAudioProvider`): `playQueue`, `upNext`,
+    next/previous, resume from `progressSeconds`, Media Session lock-screen controls, the next
+    track prefetched as a blob, and a wall-clock journey timer that pauses playback. `hooks/playlistStore.ts`
+    is module state shared by the header count, the page and the bar. **Tests that render the
+    header must mock `services/playlistApi`**, for the same reason as `portfolioApi`.
+  - On a wide screen the playlist page shows the full player beside the list and hides the
+    docked bar and the floating Ask pill; on a phone the bar wraps to two rows and opens the
+    same panel as a full-screen sheet.
 - coparent-expense-bulk-actions: **The Expenses list has checkboxes and bulk actions, and statement
   suggestions know what the family already shares.** Load-bearing bits:
   - **Bulk actions only touch what is on screen.** `chosen` is the selection intersected with the

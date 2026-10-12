@@ -6,6 +6,7 @@ import type {
   NarrationAudioContentType,
   NarrationAudioState,
   CompletedChain,
+  NarrationTrack,
   ReadyNarration,
 } from '../../types/narrationAudio'
 
@@ -48,6 +49,19 @@ export interface NarrationAudioApi extends NarrationAudioState {
   retry: () => void
   /** Re-check a generation that outran the polling window. */
   recheck: () => void
+  /** Play a list from one of its tracks and carry on through the rest. Tracks need audio. */
+  playQueue: (tracks: NarrationTrack[], startIndex: number) => void
+  /** Replace what follows the current track, after the list is reordered or changed. */
+  setUpNext: (tracks: NarrationTrack[]) => void
+  /** Skip to the next track. */
+  next: () => void
+  /** Back to the start of this track, or to the previous one when already near the start. */
+  previous: () => void
+  /** Jump forward or back by some seconds. */
+  skipBy: (seconds: number) => void
+  /** Pause after this many minutes of wall-clock time, or never with null. */
+  setJourney: (minutes: number | null) => void
+  dismissNotice: () => void
 }
 
 export const NarrationAudioContext = createContext<NarrationAudioApi | null>(null)

@@ -1,5 +1,8 @@
 package com.simonrowe.narration;
 
+import com.simonrowe.playlist.PlaylistContentType;
+import com.simonrowe.playlist.PlaylistRecorder;
+import com.simonrowe.playlist.PlaylistSource;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
@@ -33,9 +36,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class BlogNarrationController {
 
   private final NarrationService narrationService;
+  private final PlaylistRecorder playlistRecorder;
 
-  public BlogNarrationController(final NarrationService narrationService) {
+  public BlogNarrationController(
+      final NarrationService narrationService,
+      final PlaylistRecorder playlistRecorder
+  ) {
     this.narrationService = narrationService;
+    this.playlistRecorder = playlistRecorder;
   }
 
   @GetMapping
@@ -52,6 +60,7 @@ public class BlogNarrationController {
   public ResponseEntity<NarrationResponse> request(
       @PathVariable final String blogId
   ) {
+    playlistRecorder.record(PlaylistContentType.BLOG, blogId, PlaylistSource.LISTENED);
     NarrationService.RequestResult result = narrationService.request(
         NarrationContentType.BLOG, blogId);
     if (result.response().state() == NarrationResponse.PublicState.UNAVAILABLE) {

@@ -1,5 +1,8 @@
 package com.simonrowe.summary;
 
+import com.simonrowe.playlist.PlaylistContentType;
+import com.simonrowe.playlist.PlaylistRecorder;
+import com.simonrowe.playlist.PlaylistSource;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
@@ -23,9 +26,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class ArticleSummaryController {
 
   private final ArticleSummaryService summaryService;
+  private final PlaylistRecorder playlistRecorder;
 
-  public ArticleSummaryController(final ArticleSummaryService summaryService) {
+  public ArticleSummaryController(
+      final ArticleSummaryService summaryService,
+      final PlaylistRecorder playlistRecorder
+  ) {
     this.summaryService = summaryService;
+    this.playlistRecorder = playlistRecorder;
   }
 
   /**
@@ -60,6 +68,9 @@ public class ArticleSummaryController {
    * {@code 200} carrying {@code FAILED}: the request itself succeeded, and the client needs
    * the {@code retryable} flag to decide whether offering a retry is honest.
    *
+   * <p>The article joins the playlist first, so that if automatic audio is on, the audio
+   * is made the moment this summary is written.
+   *
    * @param articleId the aggregated article id
    * @return the summary, or the in-progress state
    */
@@ -67,6 +78,8 @@ public class ArticleSummaryController {
   public ResponseEntity<ArticleSummaryResponse> request(
       @PathVariable final String articleId
   ) {
+    playlistRecorder.record(
+        PlaylistContentType.ARTICLE_SUMMARY, articleId, PlaylistSource.SUMMARISED);
     ArticleSummaryService.RequestResult result = summaryService.request(articleId);
     return ResponseEntity
         .status(result.accepted() ? HttpStatus.ACCEPTED : HttpStatus.OK)

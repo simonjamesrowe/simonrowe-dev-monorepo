@@ -8,6 +8,27 @@ import { NarrationAudioStub } from '../../testUtils/NarrationAudioStub'
 import { narrationAudioStub } from '../../testUtils/narrationAudioValue'
 import type { NarrationAudioApi } from '../../../src/components/narration/narrationAudioContext'
 import type { NarrationTrack } from '../../../src/types/narrationAudio'
+import { loadPlaylist, resetPlaylistStore } from '../../../src/hooks/playlistStore'
+import { fetchPlaylist } from '../../../src/services/playlistApi'
+import { addFavourite } from '../../../src/services/favouritesApi'
+
+vi.mock('../../../src/services/playlistApi', () => ({
+  fetchPlaylist: vi.fn().mockResolvedValue({ items: [], autoVoice: false }),
+}))
+vi.mock('../../../src/services/favouritesApi', () => ({
+  addFavourite: vi.fn().mockResolvedValue(undefined),
+  removeFavourite: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock('../../../src/services/articleSummaryApi', () => ({
+  fetchArticleSummary: vi.fn().mockResolvedValue({ state: 'NOT_REQUESTED' }),
+}))
+vi.mock('../../../src/auth/useAuth', () => ({
+  useAuth: () => ({
+    isAuthenticated: true,
+    getAccessToken: () => Promise.resolve('token'),
+    loginWithPopup: vi.fn(),
+  }),
+}))
 
 const blogTrack: NarrationTrack = {
   contentType: 'BLOG',
@@ -263,5 +284,66 @@ describe('NarrationPlayerBar', () => {
     expect(screen.getByRole('button', { name: 'Play' })).toHaveFocus()
     await userEvent.keyboard('{Enter}')
     expect(value.togglePlay).toHaveBeenCalledOnce()
+  })
+
+  describe('playing from the playlist', () => {
+    const first: NarrationTrack = {
+      contentType: 'ARTICLE_SUMMARY',
+      contentId: 'a-1',
+      title: 'Grieving the Loss of Details',
+      href: 'https://example.com/a-1',
+      external: true,
+      audioUrl: '/uploads/narrations/a-1/narration.mp3',
+      durationSeconds: 255,
+      fromPlaylist: true,
+    }
+    const second: NarrationTrack = { ...first, contentId: 'a-2', title: "Software's Centaur Age" }
+
+    beforeEach(async () => {
+      resetPlaylistStore()
+      vi.mocked(fetchPlaylist).mockResolvedValue({
+        items: [{
+          contentType: 'ARTICLE_SUMMARY', contentId: 'a-1', status: 'QUEUED', favourite: false,
+          audio: { state: 'READY' },
+        }] as never,
+        autoVoice: false,
+      })
+      await loadPlaylist(true)
+    })
+
+    it('says what is next and skips to it', async () => {
+      const value = narrationAudioStub({ track: first, stage: 'ready', upNext: [second] })
+      renderBar(value)
+
+      expect(screen.getByText("Next: Software's Centaur Age")).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+      expect(value.next).toHaveBeenCalledOnce()
+      expect(screen.getByRole('link', { name: /Playlist · 1/ })).toHaveAttribute('href', '/playlist')
+    })
+
+    it('hearts the article it is playing', async () => {
+      renderBar(narrationAudioStub({ track: first, stage: 'ready' }))
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add to favourites' }))
+
+      expect(addFavourite).toHaveBeenCalledWith(expect.any(Function), 'news', 'a-1')
+    })
+
+    it('opens the full player on a phone', async () => {
+      vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+      renderBar(narrationAudioStub({ track: first, stage: 'ready', upNext: [second] }))
+
+      await userEvent.click(screen.getByRole('button', { name: 'Open the player' }))
+
+      const sheet = screen.getByRole('dialog', { name: 'Now playing' })
+      expect(sheet).toHaveTextContent('Playing from Playlist')
+      expect(sheet).toHaveTextContent("Software's Centaur Age")
+      await userEvent.click(screen.getByRole('button', { name: 'Close the player' }))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
   })
 })

@@ -23,6 +23,9 @@ export interface NarrationAudioStubOptions {
   delayed?: boolean
   /** Stage reported for a specific item, e.g. to render a card's in-flight state. */
   stages?: Record<string, ChainStage>
+  upNext?: NarrationTrack[]
+  journeyEndsAt?: number | null
+  notice?: string | null
 }
 
 /**
@@ -64,5 +67,15 @@ export function narrationAudioStub(
     dismiss: vi.fn(),
     retry: vi.fn(),
     recheck: vi.fn(),
+    upNext: options.upNext ?? [],
+    journeyEndsAt: options.journeyEndsAt ?? null,
+    notice: options.notice ?? null,
+    playQueue: vi.fn(),
+    setUpNext: vi.fn(),
+    next: vi.fn(),
+    previous: vi.fn(),
+    skipBy: vi.fn(),
+    setJourney: vi.fn(),
+    dismissNotice: vi.fn(),
   }
 }
