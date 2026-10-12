@@ -1,15 +1,16 @@
-import { Check, Info, Plus, Trash2 } from 'lucide-react';
+import { Check, Copy, Info, Plus, RotateCcw, Share2, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useRecordSettlement } from '../../hooks/api';
 import type { Parent } from '../../lib/api/client';
 import { apiErrorMessage } from '../../lib/api/errorMessage';
+import { formatShortDate } from '../../lib/formatters/date';
 import type { Expense, ExpenseSummary, PaymentMethod, SettlementPayment } from '../../types/expenses';
 import { useToast } from '../ui/ToastProvider';
 
 import { ExpenseDrawer } from './ExpenseDrawer';
 import { formatMoney, parsePounds, penceToPounds } from './money';
-import { netOf, PAYMENT_METHODS, settleable } from './settle';
+import { byDate, netOf, PAYMENT_METHODS, settleable, settleMessage, shareLine } from './settle';
 import { firstName } from './parentTone';
 
 interface PaymentDraft {
@@ -64,7 +65,10 @@ export function SettleUpDrawer({
   // Until the parent touches a payment, the single default one follows the ticked total.
   const [paymentsEdited, setPaymentsEdited] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const items = useMemo(() => settleable(expenses, me.id), [expenses, me.id]);
+  const [message, setMessage] = useState('');
+  // Until the parent edits the message, it follows what is ticked.
+  const [messageEdited, setMessageEdited] = useState(false);
+  const items = useMemo(() => byDate(settleable(expenses, me.id)), [expenses, me.id]);
   const ticked = items.filter((expense) => !unticked.has(expense.id));
   const net = netOf(ticked, me.id);
   const owed = Math.abs(net);
@@ -75,6 +79,7 @@ export function SettleUpDrawer({
     if (open) {
       setUnticked(new Set());
       setPaymentsEdited(false);
+      setMessageEdited(false);
       setError(null);
     }
   }, [open]);
@@ -82,6 +87,30 @@ export function SettleUpDrawer({
   useEffect(() => {
     if (!paymentsEdited) setPayments(owed > 0 ? [draft(owed)] : []);
   }, [owed, paymentsEdited]);
+
+  const builtMessage = settleMessage(ticked, me.id, otherName);
+  useEffect(() => {
+    if (!messageEdited) setMessage(builtMessage);
+  }, [builtMessage, messageEdited]);
+
+  const copyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(message);
+      showToast({ variant: 'success', title: 'Message copied', description: `Paste it into your chat with ${otherName}.` });
+    } catch {
+      showToast({ variant: 'error', title: 'Could not copy', description: 'Select the text and copy it instead.' });
+    }
+  };
+  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  const shareMessage = async () => {
+    try {
+      await navigator.share({ text: message });
+    } catch (caught) {
+      // Closing the share sheet is not a failure.
+      if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      showToast({ variant: 'error', title: 'Could not share', description: 'Copy the message instead.' });
+    }
+  };
 
   const balance = summary?.balance;
   const overall = !balance || balance.netPence === 0
@@ -208,6 +237,9 @@ export function SettleUpDrawer({
                   />
                   <span>
                     <span className="expense-settle__title">{expense.title}</span>
+                    <span className="expense-settle__meta">
+                      {formatShortDate(expense.date)} · {shareLine(expense, me.id, otherName)}
+                    </span>
                     <span className="expense-settle__direction">
                       {mine ? (claimed ? `${otherName} already sent it · you confirm it arrived` : `${otherName} owes you`) : `You owe ${otherName}`}
                     </span>
@@ -311,6 +343,46 @@ export function SettleUpDrawer({
           {paymentProblem && <p className="expense-field__error">{paymentProblem}</p>}
         </section>
       )}
+
+      {message !== '' || messageEdited ? (
+        <section className="expense-settle-message" aria-label={`Message for ${otherName}`}>
+          <h3 className="expense-payments__title">Message for {otherName}</h3>
+          <p className="expense-muted">Edit it if you like, then copy it into WhatsApp.</p>
+          <textarea
+            className="expense-input expense-textarea expense-settle-message__text"
+            aria-label={`Message for ${otherName}`}
+            rows={Math.min(Math.max(message.split('\n').length + 1, 6), 18)}
+            value={message}
+            onChange={(event) => {
+              setMessageEdited(true);
+              setMessage(event.target.value);
+            }}
+          />
+          <div className="expense-payments__foot">
+            <span>
+              {messageEdited && (
+                <button
+                  type="button"
+                  className="cp-button cp-button--secondary cp-button--sm"
+                  onClick={() => setMessageEdited(false)}
+                >
+                  <RotateCcw size={14} aria-hidden="true" /> Rewrite from the ticked expenses
+                </button>
+              )}
+            </span>
+            <span className="expense-settle-message__actions">
+              {canShare && (
+                <button type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={shareMessage} disabled={!message.trim()}>
+                  <Share2 size={14} aria-hidden="true" /> Share
+                </button>
+              )}
+              <button type="button" className="cp-button cp-button--primary cp-button--sm" onClick={copyMessage} disabled={!message.trim()}>
+                <Copy size={14} aria-hidden="true" /> Copy message
+              </button>
+            </span>
+          </div>
+        </section>
+      ) : null}
 
       <p className="expense-callout expense-callout--teal">
         <Info size={18} aria-hidden="true" />

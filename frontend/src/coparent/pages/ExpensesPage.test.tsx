@@ -375,6 +375,45 @@ describe('ExpensesPage', () => {
     });
   });
 
+  it('shows each expense\'s date and whole bill, and writes an editable message to copy', async () => {
+    const owedToSam = testExpense({
+      id: 'owed',
+      title: 'Swimming lessons',
+      date: '2026-10-03',
+      amountPence: 6000,
+      payerId: 'sam',
+      debtorParentId: 'alex',
+      creditorParentId: 'sam',
+      agreement: { status: 'agreed', requestedBy: 'sam', respondedBy: 'alex', respondedAt: null, note: null },
+      reimbursement: { status: 'outstanding', claimedBy: null, claimedAt: null, settledBy: null, settledAt: null, note: null, settlementId: null },
+      countsTowardsBalance: true,
+      owedPence: 3000,
+      shares: [
+        { parentId: 'alex', percent: 50, sharePence: 3000 },
+        { parentId: 'sam', percent: 50, sharePence: 3000 },
+      ],
+    });
+    setUp({ expenses: [owedToSam] });
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    renderPage('/expenses?settle=1');
+
+    expect(screen.getByText(/£60\.00 total · you 50%, Sam 50%/)).toBeInTheDocument();
+    const message = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Message for Sam' });
+    expect(message.value).toContain('my 50% is £30.00');
+    expect(message.value).toContain('In total, I owe you £30.00.');
+
+    await user.type(message, ' Sending now.');
+    await user.click(screen.getByRole('button', { name: /Copy message/ }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/I owe you £30\.00\. Sending now\.$/));
+
+    // Edits stick when the ticks change, until the parent asks for a fresh one.
+    await user.click(screen.getByRole('checkbox'));
+    expect(message.value).toContain('Sending now.');
+    await user.click(screen.getByRole('button', { name: /Rewrite from the ticked expenses/ }));
+    expect(screen.queryByRole('textbox', { name: 'Message for Sam' })).not.toBeInTheDocument();
+  });
+
   it('lists transfers with the expenses they paid back, and confirms one that arrived', async () => {
     const claimed = testExpense({
       id: 'claimed',

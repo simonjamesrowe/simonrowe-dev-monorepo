@@ -13192,6 +13192,7 @@ body[data-narration-bar] .app-layout__main {
 .coparent-app .expense-settle__item--static { grid-template-columns: 1fr auto; cursor: default; }
 .coparent-app .expense-settle__item input { width: 18px; height: 18px; accent-color: var(--expense-teal); }
 .coparent-app .expense-settle__title { display: block; font-weight: 600; }
+.coparent-app .expense-settle__meta { display: block; margin-top: 2px; font-size: 13px; color: var(--expense-muted); font-variant-numeric: tabular-nums; }
 .coparent-app .expense-settle__direction { display: block; margin-top: 2px; font-size: 13px; color: var(--expense-muted); }
 .coparent-app .expense-settle__amount { font-weight: 700; font-variant-numeric: tabular-nums; }
 .coparent-app .expense-settle__amount.is-owe { color: var(--expense-rose-text); }
@@ -13207,6 +13208,10 @@ body[data-narration-bar] .app-layout__main {
 .coparent-app .expense-payments__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .coparent-app .expense-payments__total { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--expense-teal-strong); }
 .coparent-app .expense-payments__total.is-off { color: var(--expense-rose-text); }
+.coparent-app .expense-settle-message { display: flex; flex-direction: column; gap: 10px; }
+.coparent-app .expense-settle-message .expense-muted { margin: 0; font-size: 13.5px; }
+.coparent-app .expense-settle-message__text { min-height: 140px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+.coparent-app .expense-settle-message__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .coparent-app .expense-transfers { display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0; list-style: none; }
 .coparent-app .expense-transfer { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px solid var(--expense-border); border-radius: 18px; background: var(--expense-surface-2); }
 .coparent-app .expense-transfer__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
