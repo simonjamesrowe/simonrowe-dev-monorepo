@@ -21,6 +21,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -637,18 +638,15 @@ public class StatementService {
    * out: one parent logging a cost is not the family agreeing to share it.
    */
   private List<StatementClassifier.SharedCost> familyShares(final ObjectId familyId) {
-    final Map<String, StatementClassifier.SharedCost> shares = new LinkedHashMap<>();
-    for (final Expense expense : liveExpenses(familyId)) {
-      if (Expense.DISPUTED.equals(expense.agreement().status()) || expense.title() == null) {
-        continue;
-      }
-      shares.putIfAbsent(expense.title().strip().toLowerCase(java.util.Locale.UK),
-          new StatementClassifier.SharedCost(expense.title().strip(), expense.category()));
-      if (shares.size() >= MAX_FAMILY_SHARES) {
-        break;
-      }
-    }
-    return List.copyOf(shares.values());
+    // Titles are required on every expense, so there is no blank one to skip.
+    final Set<String> seen = new HashSet<>();
+    return liveExpenses(familyId).stream()
+        .filter(expense -> !Expense.DISPUTED.equals(expense.agreement().status()))
+        .map(expense -> new StatementClassifier.SharedCost(expense.title().strip(),
+            expense.category()))
+        .filter(share -> seen.add(share.title().toLowerCase(java.util.Locale.UK)))
+        .limit(MAX_FAMILY_SHARES)
+        .toList();
   }
 
   private static String firstName(final Child child) {

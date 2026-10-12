@@ -435,16 +435,10 @@ public class ExpenseService {
    * owes is marked as paid back, one owed to the caller is marked reimbursed, and a repayment
    * already claimed to the caller is confirmed. There are no transactions, so each item reports
    * its own outcome and one stale item never stops the rest.
-   */
-  public List<SettleResult> settle(final ObjectId familyId, final List<SettleItem> items) {
-    return settle(familyId, items, null);
-  }
-
-  /**
-   * As {@link #settle(ObjectId, List)}, with the note each expense carries, such as "Paid back
-   * before 9 Sept". This is the Expenses page's bulk "mark paid back": exactly what pressing
-   * Mark paid back on each row does, with no payment recorded. Recording the transfers that paid
-   * expenses back is {@code ExpenseSettlementService}.
+   *
+   * <p>This is the Expenses page's bulk "mark paid back": exactly what pressing Mark paid back on
+   * each row does, with {@code note} on each (default "Settle up") and no payment recorded.
+   * Recording the transfers that paid expenses back is {@code ExpenseSettlementService}.
    */
   public List<SettleResult> settle(final ObjectId familyId, final List<SettleItem> items,
       final String note) {
