@@ -456,6 +456,7 @@ describe('ExpensesPage', () => {
 
     expect(screen.getByTestId('mark-paid-back-totals')).toHaveTextContent('£75.00 you owe');
     await user.clear(screen.getByLabelText('Note on each expense'));
+    expect(screen.getByRole('button', { name: 'Mark 2 as paid back' })).toBeDisabled();
     await user.type(screen.getByLabelText('Note on each expense'), 'Paid before 9 Sept');
     await user.click(screen.getByRole('button', { name: 'Mark 2 as paid back' }));
 

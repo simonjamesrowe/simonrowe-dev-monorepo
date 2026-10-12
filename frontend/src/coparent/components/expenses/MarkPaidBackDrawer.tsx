@@ -93,7 +93,8 @@ export function MarkPaidBackDrawer({
             type="button"
             className="cp-button cp-button--primary"
             onClick={submit}
-            disabled={expenses.length === 0 || markPaidBack.isPending}
+            // A blank note would be recorded as the server's default, not as the empty field shown.
+            disabled={expenses.length === 0 || note.trim() === '' || markPaidBack.isPending}
           >
             <Check size={16} aria-hidden="true" /> Mark {expenses.length} as paid back
           </button>
@@ -136,6 +137,7 @@ export function MarkPaidBackDrawer({
         <span className="expense-field__label">Note on each expense</span>
         <input className="expense-input" maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
       </label>
+      {note.trim() === '' && <small className="expense-field__error">Say how they were paid back</small>}
       <p className="expense-callout expense-callout--teal">
         <Info size={18} aria-hidden="true" />
         No payment is recorded. To record the bank transfers that paid them, use Settle up.{' '}
