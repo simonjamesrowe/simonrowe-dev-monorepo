@@ -1004,6 +1004,41 @@ conversation rather than reusing one with history behind it.
 rather than a conversation, so it is a much smaller leak than the one closed here, but it is the
 same shape and the same endpoint.
 
+## The calendar pane beside the chat
+
+The page shows **Coming up** to the right of the chat (`UpcomingPanel`). It covers today, a
+heads-up strip and a list whose reach is chosen as Today, This week or 3 weeks. On a narrow screen
+the chat and the calendar take turns behind two toggle buttons, and the page opens on the
+calendar, unless a `?q=` question was handed over. The data comes from
+`GET /api/school/calendar?yearGroups=…` (`SchoolCalendarController`, `SchoolQueryService.upcoming`).
+It is one indexed read of `school_events`, with no model call behind it.
+
+- **Always the anonymous audience.** The endpoint reads no token, so a restricted event cannot
+  reach the pane, whoever is signed in. Restricted events stay reachable only through the chat,
+  for the admin role.
+- **The server decides the dates, in `Europe/London`.** It returns `today`, `weekEnd` and
+  `until`, so the browser never works out which day it is. Production runs in UTC, so between
+  midnight and 1am in summer the clock's own zone still says yesterday. At the weekend
+  "this week" means the week ahead. The window ends two Sundays after this week's.
+- **INSET days, half terms and term dates go into the heads-up strip for the whole window**,
+  whatever range is chosen. A day with no school ten days away is what a long list hides, and
+  what needs childcare arranging now. A term boundary is labelled "Term dates", not
+  "No school", because the last day of term is a school day.
+- **A day's events are ordered by start time** (`EventTimes`), all-day items first and
+  unreadable times last. The source's own wording is what is displayed, never the parsed value.
+  A start written without am/pm takes it from the end of its range (`3:30 - 4:30pm`), and a bare
+  number is never a time, so "Year 3 only" cannot sort as 3am.
+- **Clicking an event asks the chat about it** with the visitor's year groups, and on a phone it
+  switches to Ask.
+- A tab left open reloads the calendar when it becomes visible again after 30 minutes, so
+  yesterday's events are not pinned as today's.
+- Not rate limited, like `/api/school/config`. **Tests that render the Term Time page must mock
+  `school/schoolCalendarApi`**, for the same reason as `portfolioApi`: the test environment's
+  API base URL is production.
+- **Not done yet: action tags** ("Bring a tin", "£6 by Wednesday"). Nothing extracts what a
+  letter asks a parent to do, so the pane has no such data. It needs a new extracted field on
+  `SchoolEvent`, checked against the source text the way `verbatimUrl` checks links.
+
 ## Evals
 
 `evals/termtime.yaml`, driven by `evals/termTimeProvider.js` — the same custom-provider mechanism

@@ -274,6 +274,19 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- termtime-calendar-pane: **Term Time shows what is coming up beside the chat.** A right-hand
+  pane (`UpcomingPanel`) pins today's events, pulls INSET days, half terms and term dates into one
+  heads-up strip for the whole three-week window, and lists the rest by day for Today, This week
+  or 3 weeks. Clicking an event asks the chat about it. On a phone the two panes take turns behind
+  toggle buttons. Load-bearing bits:
+  - **`GET /api/school/calendar` always reads as the anonymous audience** and takes no token, so
+    no restricted event can reach the pane. It returns `today`/`weekEnd`/`until` worked out in
+    **`Europe/London`**, not the container's UTC clock.
+  - **`EventTimes` orders a day's events from the free-text `time`**, for sorting only. The
+    display is always the source's own wording.
+  - **Tests that render the Term Time page must mock `school/schoolCalendarApi`.**
+  - Action tags ("Bring a tin") are not built: nothing extracts what a letter asks a parent to do.
+  See `docs/runbooks/term-time.md` ("The calendar pane beside the chat").
 - tts-playlist: **`/playlist` is a shared listening queue of summaries (and posts) read aloud
   one after another**, `com.simonrowe.playlist`, collections `playlist_items` and
   `playlist_settings` (`V056CreatePlaylist`). Load-bearing bits:
