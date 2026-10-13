@@ -110,6 +110,20 @@ public record SchoolEvent(
   }
 
   /**
+   * Returns a copy of a different kind, for a reader correcting what a model classified.
+   *
+   * @param type the kind to report
+   * @return the copy, or this event when it is already of that kind
+   */
+  public SchoolEvent withEventType(final EventType type) {
+    if (type == eventType) {
+      return this;
+    }
+    return new SchoolEvent(id, title, startDate, endDate, allDay, type, yearGroups, academicYear,
+        sourceType, sourceDocumentId, visibility, description, location, time, sourceUrl);
+  }
+
+  /**
    * Whether this event applies to a given year group.
    *
    * @param yearGroup the year group to test, e.g. {@code Year 3}

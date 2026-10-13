@@ -37,7 +37,7 @@ class EventDuplicatesTest {
   }
 
   @Test
-  @DisplayName("the calendar pane of 2026-10-13: 29 rows were 21 events")
+  @DisplayName("the calendar pane of 2026-10-13: 29 rows were 19 events")
   void productionCalendar() {
     final List<SchoolEvent> stored = List.of(
         event("Autumn term 1", "2026-09-03", "2026-10-23", EventType.TERM_BOUNDARY, FEED),
@@ -45,9 +45,9 @@ class EventDuplicatesTest {
             EventType.TERM_BOUNDARY, PAGE),
         event("Kilmorie Primary School Autumn Term Enrichment Clubs start and end",
             "2026-09-21", "2026-11-30", EventType.TERM_BOUNDARY, PAGE),
-        event("Autumn Term 2026", "2026-09-21", "2026-12-04", EventType.TERM_BOUNDARY, PDF),
+        event("Autumn Term 2026", "2026-09-21", "2026-12-04", EventType.TERM_BOUNDARY, PAGE),
         event("Kilmorie Enrichment Autumn Term 2026", "2026-09-21", "2026-12-04",
-            EventType.TERM_BOUNDARY, PDF),
+            EventType.TERM_BOUNDARY, PAGE),
         event("Kilmorie Primary School Parents Evening October 2026", "2026-10-12",
             "2026-10-16", EventType.OTHER, PAGE),
         event("Parent's evening week", "2026-10-13", "2026-10-17", EventType.OTHER, EMAIL),
@@ -99,8 +99,6 @@ class EventDuplicatesTest {
     assertThat(titles(shown)).containsExactly(
         "Autumn term 1",
         "Autumn Term Enrichment Clubs",
-        "Autumn Term 2026",
-        "Kilmorie Primary School Parents Evening October 2026",
         "Parent's evening week",
         "New parent tour",
         "Eleni's Class Trip",
@@ -118,6 +116,47 @@ class EventDuplicatesTest {
         "Half Term",
         "Secondary School Application Deadline",
         "Closing date for secondary transfer applications");
+    assertThat(shown.get(0).eventType()).isEqualTo(EventType.TERM_BOUNDARY);
+    assertThat(shown.get(1).eventType()).isEqualTo(EventType.CLUB);
+  }
+
+  @Test
+  @DisplayName("multi-day events whose sources disagree within a week are one event")
+  void multiDaySlack() {
+    final List<SchoolEvent> shown = EventDuplicates.collapse(List.of(
+        event("Kilmorie Primary School Parents Evening October 2026", "2026-10-12",
+            "2026-10-16", EventType.OTHER, PAGE),
+        event("Parent's evening week", "2026-10-13", "2026-10-17", EventType.OTHER, EMAIL),
+        event("Parents' evenings", "2026-10-19", "2026-10-23", EventType.OTHER, EMAIL)));
+
+    assertThat(titles(shown)).containsExactly("Parent's evening week", "Parents' evenings");
+  }
+
+  @Test
+  @DisplayName("a club programme typed as a term boundary is shown as one club")
+  void clubTypedAsTermBoundary() {
+    final List<SchoolEvent> shown = EventDuplicates.collapse(List.of(
+        event("Autumn Term 2026", "2026-09-21", "2026-12-04", EventType.TERM_BOUNDARY, PDF),
+        event("Kilmorie Enrichment Autumn Term 2026", "2026-09-21", "2026-12-04",
+            EventType.TERM_BOUNDARY, PDF),
+        event("Autumn Term Enrichment Clubs", "2026-09-21", "2026-11-30",
+            EventType.TERM_BOUNDARY, PDF)));
+
+    assertThat(shown).singleElement().satisfies(event -> {
+      assertThat(event.title()).isEqualTo("Autumn Term Enrichment Clubs");
+      assertThat(event.eventType()).isEqualTo(EventType.CLUB);
+    });
+  }
+
+  @Test
+  @DisplayName("the calendar feed's term dates are never folded into a club")
+  void feedTermIsNeverFolded() {
+    final List<SchoolEvent> shown = EventDuplicates.collapse(List.of(
+        event("Autumn term", "2026-09-07", "2026-12-18", EventType.TERM_BOUNDARY, FEED),
+        event("Autumn term clubs", "2026-09-07", "2026-12-18", EventType.CLUB, PAGE)));
+
+    assertThat(shown).extracting(SchoolEvent::eventType)
+        .containsExactly(EventType.TERM_BOUNDARY, EventType.CLUB);
   }
 
   @Test
@@ -195,6 +234,10 @@ class EventDuplicatesTest {
         .containsExactlyInAnyOrder("autumn", "term", "1");
     assertThat(EventDuplicates.significantWords("Kilmorie Primary School Autumn Half-Term 2026"))
         .containsExactlyInAnyOrder("autumn", "half", "term");
+    assertThat(EventDuplicates.significantWords("Parents' Evenings in October"))
+        .containsExactlyInAnyOrder("parent", "evening");
+    assertThat(EventDuplicates.significantWords("Class bus"))
+        .containsExactlyInAnyOrder("class", "bus");
     assertThat(EventDuplicates.significantWords(null)).isEmpty();
   }
 }

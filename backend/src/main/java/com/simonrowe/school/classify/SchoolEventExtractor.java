@@ -52,6 +52,8 @@ public class SchoolEventExtractor {
       - Use ISO format, yyyy-MM-dd, for startDate and endDate. For a single-day event set both \
       to the same date.
       - eventType must be exactly one of: TERM_BOUNDARY, HALF_TERM, INSET, CLUB, TRIP, OTHER.
+      - TERM_BOUNDARY is only the school's own term starting or ending. Clubs or an enrichment \
+      programme running for a term are CLUB, even when the title says "term".
       - yearGroups uses the form "Year 3" or "Reception". Leave it empty for whole-school events.
       - description: one short sentence on what the event involves and
       anything a parent must do (book, bring something, arrive early).
