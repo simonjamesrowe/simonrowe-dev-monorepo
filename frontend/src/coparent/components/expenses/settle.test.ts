@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ExpenseSettlement } from '../../types/expenses';
 
-import { byDate, methodLabel, netOf, settleable, settleMessage, settlementState, shareLine } from './settle';
+import { byDate, differenceText, methodLabel, netOf, settleable, settleMessage, settlementState, shareLine } from './settle';
 import { testExpense } from './testExpense';
 
 const agreed = { status: 'agreed' as const, requestedBy: 'alex', respondedBy: 'sam', respondedAt: null, note: null };
@@ -58,11 +58,14 @@ describe('settle up', () => {
       fromParentId: 'sam',
       toParentId: 'alex',
       amountPence: 4000,
+      paidPence: 4000,
       currency: 'GBP',
       payments: [{ method: 'bank_transfer', amountPence: 4000, paidOn: '2026-10-07', reference: null }],
       expenseIds: ['c'],
       recordedBy: 'sam',
       createdAt: '2026-10-07T10:00:00Z',
+      updatedBy: null,
+      updatedAt: null,
     };
     const linked = { ...alreadySent, reimbursement: { ...status('claimed'), settlementId: 'set-1' } };
     expect(settlementState(settlement, [linked], 'alex')).toBe('awaitingMe');
@@ -147,5 +150,15 @@ describe('settle up', () => {
       );
       expect(settleMessage([], 'alex', 'Sam', now)).toBe('');
     });
+  });
+
+  it('says who owes the difference when a payment did not match its expenses', () => {
+    expect(differenceText(150000, 147868, true, 'Rhian')).toBe(
+      "£21.32 more than the expenses came to, so Rhian owes you £21.32 back. It's carried into the balance.",
+    );
+    expect(differenceText(150000, 147868, false, 'Rhian')).toContain('so you owe Rhian £21.32 back');
+    expect(differenceText(7868, 10000, true, 'Rhian')).toContain('£21.32 less than the expenses came to, so you still owe Rhian £21.32');
+    expect(differenceText(7868, 10000, false, 'Rhian')).toContain('so Rhian still owes you £21.32');
+    expect(differenceText(10000, 10000, true, 'Rhian')).toBeNull();
   });
 });

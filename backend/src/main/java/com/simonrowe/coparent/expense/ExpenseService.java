@@ -1,6 +1,7 @@
 package com.simonrowe.coparent.expense;
 
 import com.simonrowe.coparent.model.Expense;
+import com.simonrowe.coparent.model.ExpenseSettlement;
 import com.simonrowe.coparent.model.Family;
 import com.simonrowe.coparent.model.Parent;
 import com.simonrowe.coparent.persistence.ChildRepository;
@@ -138,6 +139,8 @@ public class ExpenseService {
     final Parent actor = access.requireMember(familyId);
     return ExpenseSummary.of(
         expenses.findByFamilyIdAndDeletedAtIsNullOrderByDateDescCreatedAtDesc(familyId),
+        mongoTemplate.find(Query.query(Criteria.where("familyId").is(familyId)),
+            ExpenseSettlement.class),
         actor.id(), today(familyId), coparentJoined(familyId, actor));
   }
 
@@ -814,6 +817,11 @@ public class ExpenseService {
       throw conflict("Shared expenses need exactly two parents in the family");
     }
     return new Couple(actor, others.getFirst());
+  }
+
+  /** The family's other parent from the caller's side, invited or active. */
+  Parent otherParent(final ObjectId familyId) {
+    return couple(familyId).other();
   }
 
   /**

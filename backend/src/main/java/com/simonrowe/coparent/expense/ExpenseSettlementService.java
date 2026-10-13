@@ -24,10 +24,11 @@ import org.springframework.web.server.ResponseStatusException;
  * Settling up as the money actually moved: one or more payments, such as bank transfers, and the
  * expenses they paid back.
  *
- * <p>The payments must add up to exactly what the chosen expenses net to. That is what keeps the
- * balance honest: a transfer recorded against expenses it did not cover would mark them settled
- * while money was still owed. A large balance paid in instalments is recorded as several
- * payments in one settle-up once the last has gone, or as one settle-up per batch of expenses.
+ * <p>The payments are recorded as sent, even when they do not add up to what the chosen expenses
+ * net to: people send round numbers. The expenses are settled either way, and the difference is
+ * carried into the balance ({@link ExpenseSummary}), so an overpayment is owed back and a
+ * shortfall is still owed. That is what keeps the balance honest without making a parent
+ * pretend they sent the exact figure.
  */
 @Service
 public class ExpenseSettlementService {
@@ -110,7 +111,7 @@ public class ExpenseSettlementService {
       }
       return new Recorded(null, expenseService.applySettlement(familyId, plan, null, null));
     }
-    final List<ExpenseSettlement.Payment> checked = payments(familyId, payments, Math.abs(net));
+    final List<ExpenseSettlement.Payment> checked = payments(familyId, payments, net != 0);
 
     final ObjectId settlementId = new ObjectId();
     final List<ExpenseService.SettleResult> results = expenseService.applySettlement(familyId,
@@ -131,10 +132,11 @@ public class ExpenseSettlementService {
     final ExpenseSettlement saved = settlements.insert(new ExpenseSettlement(settlementId,
         familyId, net < 0 ? actor.id() : net > 0 ? other.id() : null,
         net < 0 ? other.id() : net > 0 ? actor.id() : null, Math.abs(net), Expense.GBP, checked,
-        linked, actor.id(), clock.instant()));
+        linked, actor.id(), clock.instant(), null, null));
     // Amounts only: references can name people or accounts.
     audits.record(familyId, "expense_settlement", settlementId, "record", Map.of(
         "amountPence", saved.amountPence(),
+        "paidPence", saved.paidPence(),
         "currency", saved.currency(),
         "payments", saved.payments().size(),
         "expenses", saved.expenseIds().size()));
@@ -149,6 +151,40 @@ public class ExpenseSettlementService {
   }
 
   /**
+   * Corrects the payments of a settle-up: how much was sent, when, how and with what reference.
+   * The expenses it paid back stay as they are, and any new difference between the two is
+   * carried into the balance. Only the parent who recorded it may change it, and the other
+   * parent is told.
+   */
+  public ExpenseSettlement update(final ObjectId familyId, final ObjectId settlementId,
+      final List<PaymentValues> payments) {
+    final Parent actor = access.requireMember(familyId);
+    final ExpenseSettlement settlement = find(familyId, settlementId);
+    if (!actor.id().equals(settlement.recordedBy())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+          "Only the parent who recorded this settle-up can change it");
+    }
+    if (settlement.amountPence() == 0) {
+      throw badRequest("Nothing changed hands in this settle-up, so there is no payment to change");
+    }
+    final List<ExpenseSettlement.Payment> checked = payments(familyId, payments, true);
+    final Parent other = expenseService.otherParent(familyId);
+    final ExpenseSettlement saved = settlements.save(
+        settlement.withPayments(checked, actor.id(), clock.instant()));
+    audits.record(familyId, "expense_settlement", settlementId, "update", Map.of(
+        "amountPence", saved.amountPence(),
+        "paidPence", saved.paidPence(),
+        "previousPaidPence", settlement.paidPence(),
+        "currency", saved.currency(),
+        "payments", saved.payments().size()));
+    if (saved.paidPence() != settlement.paidPence()
+        || !paidOnDates(saved).equals(paidOnDates(settlement))) {
+      mailer.settlementChanged(other, actor, settlement, saved);
+    }
+    return saved;
+  }
+
+  /**
    * The parent who was paid confirms a settle-up's payments arrived, settling every expense in
    * it that still waits on them. The expenses' versions are read here rather than sent: one
    * being paid back can no longer change, so the claim is the only thing confirmed.
@@ -156,9 +192,7 @@ public class ExpenseSettlementService {
   public List<ExpenseService.SettleResult> confirm(final ObjectId familyId,
       final ObjectId settlementId) {
     final Parent actor = access.requireMember(familyId);
-    final ExpenseSettlement settlement = settlements.findByIdAndFamilyId(settlementId, familyId)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-            "Settle-up not found"));
+    final ExpenseSettlement settlement = find(familyId, settlementId);
     final List<ExpenseService.SettleResult> results = new ArrayList<>();
     for (final ObjectId expenseId : settlement.expenseIds()) {
       final Expense expense = expenses.findByIdAndFamilyIdAndDeletedAtIsNull(expenseId, familyId)
@@ -183,12 +217,26 @@ public class ExpenseSettlementService {
     return results;
   }
 
+  private ExpenseSettlement find(final ObjectId familyId, final ObjectId settlementId) {
+    return settlements.findByIdAndFamilyId(settlementId, familyId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+            "Settle-up not found"));
+  }
+
+  private static List<LocalDate> paidOnDates(final ExpenseSettlement settlement) {
+    return settlement.payments().stream().map(ExpenseSettlement.Payment::paidOn).toList();
+  }
+
+  /**
+   * Checks each payment as entered. Their total is not checked against the expenses: whatever
+   * was really sent is recorded, and the difference is carried into the balance.
+   */
   private List<ExpenseSettlement.Payment> payments(
       final ObjectId familyId,
       final List<PaymentValues> payments,
-      final long owed) {
+      final boolean moneyMoves) {
     final List<PaymentValues> given = payments == null ? List.of() : payments;
-    if (owed == 0) {
+    if (!moneyMoves) {
       if (!given.isEmpty()) {
         throw badRequest("These cancel each other out, so there is no payment to record");
       }
@@ -199,7 +247,6 @@ public class ExpenseSettlementService {
     }
     final LocalDate today = expenseService.today(familyId);
     final List<ExpenseSettlement.Payment> checked = new ArrayList<>();
-    long total = 0;
     for (final PaymentValues payment : given) {
       if (payment.method() == null || !METHODS.contains(payment.method())) {
         throw badRequest("Say how each payment was made");
@@ -222,13 +269,8 @@ public class ExpenseSettlementService {
       if (reference != null && reference.length() > MAX_REFERENCE) {
         throw badRequest("A reference can be up to " + MAX_REFERENCE + " characters");
       }
-      total += payment.amountPence();
       checked.add(new ExpenseSettlement.Payment(payment.method(), payment.amountPence(),
           payment.paidOn(), reference));
-    }
-    if (total != owed) {
-      throw badRequest("The payments add up to %s, but these expenses come to %s"
-          .formatted(ExpenseMoney.format(total), ExpenseMoney.format(owed)));
     }
     return checked;
   }

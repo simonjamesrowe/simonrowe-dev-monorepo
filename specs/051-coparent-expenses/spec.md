@@ -607,13 +607,20 @@ expenses they paid back.
 
 - **`expense_settlements`** (`ExpenseSettlement`, `V055CreateCoparentSettlements`) holds
   `fromParentId`, `toParentId`, `amountPence`, `payments` and `expenseIds`. Each settled expense
-  carries the id in `reimbursement.settlementId`. Never edited once recorded; an expense being
-  paid back can no longer change, so the two cannot drift.
-- **The payments must add up to exactly what the ticked expenses net to**, checked in the
-  browser and again by `ExpenseSettlementService`. A transfer recorded against expenses it did
-  not cover would mark them settled while money was still owed. Expenses that cancel out
-  record a settlement with no payments. A balance paid in instalments is recorded as several
-  payments in one settle-up, or as one settle-up per batch of expenses.
+  carries the id in `reimbursement.settlementId`. An expense being paid back can no longer
+  change, so the two cannot drift.
+- **The payments are recorded as sent, and need not match what the ticked expenses net to**
+  (changed 2026-10-13; it was an exact-match rule). People send round numbers: £1,500 against
+  £1,478.68 of expenses. The expenses are settled either way, and `paidPence − amountPence` is
+  carried into the balance (`ExpenseSummary`, reported as `balance.carriedPence`), so an
+  overpayment is owed back and a shortfall is still owed. A settle-up whose expenses are still
+  `claimed` carries nothing until they are confirmed, because those expenses still count in
+  full. Expenses that cancel out record a settlement with no payments.
+- **The parent who recorded a settle-up can edit its payments** (`PUT
+  /expenses/settlements/{id}`): amount, date, method, reference. The expenses it covers are
+  untouched; `updatedBy`/`updatedAt` say it was edited, and the other parent gets a
+  `settlementChanged` email when the amount or a date changed. The expenses' `reimbursement.note`
+  ("Bank transfer") is not rewritten if the method changes.
 - **Every expense is checked before anything is written** (`ExpenseService.planSettlement`):
   one stale or unsettleable item refuses the lot, unlike the old `POST /settle`, because the
   payments were sized to all of them. An item can still fail in the moment between the check

@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,14 +40,21 @@ public class ExpenseSettlementController {
     final List<ExpenseService.SettleItem> items = request.items() == null ? List.of()
         : request.items().stream().map(item -> new ExpenseService.SettleItem(
             CoparentIds.parse(item.id()), requireVersion(item.version()))).toList();
-    final List<ExpenseSettlementService.PaymentValues> payments = request.payments() == null
-        ? List.of()
-        : request.payments().stream().map(PaymentRequest::values).toList();
     final ExpenseSettlementService.Recorded recorded =
-        service.record(CoparentIds.parse(familyId), items, payments);
+        service.record(CoparentIds.parse(familyId), items, values(request.payments()));
     return new RecordedResponse(
         recorded.settlement() == null ? null : SettlementResponse.from(recorded.settlement()),
         recorded.results().stream().map(ExpenseController.SettleResponse::from).toList());
+  }
+
+  /** Corrects what was paid, and when and how. The expenses it paid back are unchanged. */
+  @PutMapping("/{settlementId}")
+  SettlementResponse update(
+      @PathVariable final String familyId,
+      @PathVariable final String settlementId,
+      @RequestBody final UpdateRequest request) {
+    return SettlementResponse.from(service.update(CoparentIds.parse(familyId),
+        CoparentIds.parse(settlementId), values(request.payments())));
   }
 
   @PostMapping("/{settlementId}/confirm")
@@ -55,6 +63,11 @@ public class ExpenseSettlementController {
       @PathVariable final String settlementId) {
     return service.confirm(CoparentIds.parse(familyId), CoparentIds.parse(settlementId)).stream()
         .map(ExpenseController.SettleResponse::from).toList();
+  }
+
+  private static List<ExpenseSettlementService.PaymentValues> values(
+      final List<PaymentRequest> payments) {
+    return payments == null ? List.of() : payments.stream().map(PaymentRequest::values).toList();
   }
 
   private static long requireVersion(final Long version) {
@@ -69,6 +82,9 @@ public class ExpenseSettlementController {
   }
 
   record ItemRequest(String id, Long version) {
+  }
+
+  record UpdateRequest(List<PaymentRequest> payments) {
   }
 
   record PaymentRequest(String method, Long amountPence, LocalDate paidOn, String reference) {
@@ -91,20 +107,25 @@ public class ExpenseSettlementController {
       String fromParentId,
       String toParentId,
       long amountPence,
+      long paidPence,
       String currency,
       List<PaymentResponse> payments,
       List<String> expenseIds,
       String recordedBy,
-      Instant createdAt
+      Instant createdAt,
+      String updatedBy,
+      Instant updatedAt
   ) {
     static SettlementResponse from(final ExpenseSettlement settlement) {
       return new SettlementResponse(settlement.id().toHexString(),
           settlement.familyId().toHexString(), hex(settlement.fromParentId()),
-          hex(settlement.toParentId()), settlement.amountPence(), settlement.currency(),
+          hex(settlement.toParentId()), settlement.amountPence(), settlement.paidPence(),
+          settlement.currency(),
           settlement.payments().stream().map(payment -> new PaymentResponse(payment.method(),
               payment.amountPence(), payment.paidOn(), payment.reference())).toList(),
           settlement.expenseIds().stream().map(ObjectId::toHexString).toList(),
-          hex(settlement.recordedBy()), settlement.createdAt());
+          hex(settlement.recordedBy()), settlement.createdAt(), hex(settlement.updatedBy()),
+          settlement.updatedAt());
     }
   }
 

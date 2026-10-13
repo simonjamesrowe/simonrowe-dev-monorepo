@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuickAdd } from '../components/assistant';
 import { EXPENSE_CATEGORIES } from '../components/expenses/categories';
 import { CategoryTile } from '../components/expenses/CategoryTile';
+import { EditTransferDrawer } from '../components/expenses/EditTransferDrawer';
 import { ExpenseDetailDrawer } from '../components/expenses/ExpenseDetailDrawer';
 import { ExpenseFormDrawer } from '../components/expenses/ExpenseFormDrawer';
 import { InvitedCoparentBanner } from '../components/expenses/InvitedCoparentBanner';
@@ -38,7 +39,7 @@ import {
 } from '../hooks/api';
 import type { Child, Parent } from '../lib/api/client';
 import { apiErrorMessage } from '../lib/api/errorMessage';
-import type { Expense, ExpenseCategory } from '../types/expenses';
+import type { Expense, ExpenseCategory, ExpenseSettlement } from '../types/expenses';
 
 type DetailMode = null | 'dispute' | 'claim' | 'markPaid';
 
@@ -88,6 +89,8 @@ const ExpensesPage = () => {
   const [formOpen, setFormOpen] = useState(params.get('new') === '1');
   const [settleOpen, setSettleOpen] = useState(params.get('settle') === '1');
   const [detailMode, setDetailMode] = useState<DetailMode>(null);
+  // A snapshot, so a refetch while the drawer is open does not reset what is being typed.
+  const [editingTransfer, setEditingTransfer] = useState<ExpenseSettlement | null>(null);
 
   const me = parents.find((parent) => parent.id === meId);
   const others = parents.filter((parent) => parent.id !== meId);
@@ -371,7 +374,10 @@ const ExpensesPage = () => {
             {balance && balance.awaitingTheirConfirmationPence > 0 && (
               <span>{formatMoney(balance.awaitingTheirConfirmationPence)} paid back, awaiting {otherName}</span>
             )}
-            {(!balance || balance.expenseCount === 0) && <span>Nothing outstanding</span>}
+            {balance && balance.carriedPence !== 0 && (
+              <span>includes {formatMoney(Math.abs(balance.carriedPence))} carried over from a transfer that didn't match its expenses</span>
+            )}
+            {(!balance || (balance.expenseCount === 0 && balance.carriedPence === 0)) && <span>Nothing outstanding</span>}
           </p>
         </article>
         <article className="expense-card expense-stat">
@@ -538,6 +544,7 @@ const ExpensesPage = () => {
             me={me}
             other={other}
             onOpenExpense={(expense) => openDetail(expense)}
+            onEdit={setEditingTransfer}
           />
         ) : expenses.length === 0 ? (
           <div className="expense-empty">
@@ -675,6 +682,13 @@ const ExpensesPage = () => {
           setMarkingPaidBack(false);
           setSelected(new Set());
         }}
+      />
+      <EditTransferDrawer
+        familyId={familyId}
+        settlement={editingTransfer}
+        me={me}
+        other={other}
+        onClose={() => setEditingTransfer(null)}
       />
       <SettleUpDrawer
         open={settleOpen}

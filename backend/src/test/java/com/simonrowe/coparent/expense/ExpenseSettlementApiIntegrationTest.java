@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -25,6 +26,7 @@ import com.simonrowe.migration.changeunits.V055CreateCoparentSettlements;
 import java.time.LocalDate;
 import java.util.List;
 import org.bson.Document;
+import org.bson.types.ObjectId;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -121,17 +123,84 @@ class ExpenseSettlementApiIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void paymentsThatDoNotAddUpToTheExpensesRecordNothing() throws Exception {
+  void roundNumberSentSettlesTheExpensesAndTheOverpaymentIsOwedBack() throws Exception {
     final Fixture f = family();
     final String shoes = agreedPaidBy(f, "alice", f.aliceId(), 6490);
 
-    record(f, "bob", """
+    final MvcResult recorded = record(f, "bob", """
         {"items":[{"id":"%s","version":2}],
-         "payments":[{"method":"bank_transfer","amountPence":3000,"paidOn":"%s"}]}
+         "payments":[{"method":"bank_transfer","amountPence":3500,"paidOn":"%s"}]}
         """.formatted(shoes, yesterday()))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.message", containsString("add up to £30.00")))
-        .andExpect(jsonPath("$.message", containsString("£32.45")));
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.settlement.amountPence", is(3245)))
+        .andExpect(jsonPath("$.settlement.paidPence", is(3500)))
+        .andExpect(jsonPath("$.results[0].outcome", is("claimed")))
+        .andReturn();
+    final String settlementId = JsonPath.read(recorded.getResponse().getContentAsString(),
+        "$.settlement.id");
+    // Until Alice confirms, the expense still counts in full and the extra waits with it.
+    summary(f, "alice").andExpect(jsonPath("$.balance.netPence", is(3245)))
+        .andExpect(jsonPath("$.balance.carriedPence", is(0)));
+
+    confirm(f, "alice", settlementId).andExpect(status().isOk());
+    summary(f, "alice")
+        .andExpect(jsonPath("$.balance.netPence", is(255)))
+        .andExpect(jsonPath("$.balance.debtorParentId", is(f.aliceId())))
+        .andExpect(jsonPath("$.balance.creditorParentId", is(f.bobId())))
+        .andExpect(jsonPath("$.balance.carriedPence", is(-255)));
+    summary(f, "bob").andExpect(jsonPath("$.balance.carriedPence", is(255)));
+  }
+
+  @Test
+  void theRecorderCorrectsWhatWasSentAndWhenAndTheBalanceFollows() throws Exception {
+    final Fixture f = family();
+    final String shoes = agreedPaidBy(f, "alice", f.aliceId(), 6490);
+    final MvcResult recorded = record(f, "bob", """
+        {"items":[{"id":"%s","version":2}],
+         "payments":[{"method":"bank_transfer","amountPence":3245,"paidOn":"%s"}]}
+        """.formatted(shoes, yesterday())).andExpect(status().isOk()).andReturn();
+    final String settlementId = JsonPath.read(recorded.getResponse().getContentAsString(),
+        "$.settlement.id");
+    confirm(f, "alice", settlementId).andExpect(status().isOk());
+    summary(f, "alice").andExpect(jsonPath("$.balance.netPence", is(0)));
+    clearInvocations(mailer);
+
+    final String earlier = LocalDate.now().minusDays(5).toString();
+    final String corrected = """
+        {"payments":[{"method":"cash","amountPence":3000,"paidOn":"%s","reference":"PART"}]}
+        """.formatted(earlier);
+    // Only the parent who recorded it can change it.
+    update(f, "alice", settlementId, corrected).andExpect(status().isForbidden());
+    update(f, "bob", settlementId, corrected)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.paidPence", is(3000)))
+        .andExpect(jsonPath("$.amountPence", is(3245)))
+        .andExpect(jsonPath("$.payments[0].method", is("cash")))
+        .andExpect(jsonPath("$.payments[0].paidOn", is(earlier)))
+        .andExpect(jsonPath("$.payments[0].reference", is("PART")))
+        .andExpect(jsonPath("$.updatedBy", is(f.bobId())))
+        .andExpect(jsonPath("$.expenseIds", hasSize(1)));
+    verify(mailer).settlementChanged(any(), any(), any(), any());
+    // Sent less than the expenses came to: Bob still owes the rest.
+    summary(f, "alice")
+        .andExpect(jsonPath("$.balance.netPence", is(245)))
+        .andExpect(jsonPath("$.balance.creditorParentId", is(f.aliceId())));
+    mockMvc.perform(get(EXPENSES + "/{id}", f.familyId(), shoes).with(user("alice")))
+        .andExpect(jsonPath("$.reimbursement.status", is("reimbursed")));
+
+    update(f, "bob", settlementId, """
+        {"payments":[{"method":"cash","amountPence":3000,"paidOn":"%s"}]}
+        """.formatted(LocalDate.now().plusDays(2))).andExpect(status().isBadRequest());
+    update(f, "bob", settlementId, "{\"payments\":[]}").andExpect(status().isBadRequest());
+    update(f, "bob", new ObjectId().toHexString(), corrected)
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void settleUpThatMovesMoneyNeedsPaymentNotDatedInTheFuture() throws Exception {
+    final Fixture f = family();
+    final String shoes = agreedPaidBy(f, "alice", f.aliceId(), 6490);
+
     record(f, "bob", """
         {"items":[{"id":"%s","version":2}],"payments":[]}
         """.formatted(shoes))
@@ -285,6 +354,12 @@ class ExpenseSettlementApiIntegrationTest extends AbstractIntegrationTest {
       throws Exception {
     return mockMvc.perform(post(SETTLEMENTS, f.familyId()).with(user(who))
         .contentType(MediaType.APPLICATION_JSON).content(body));
+  }
+
+  private ResultActions update(final Fixture f, final String who, final String settlementId,
+      final String body) throws Exception {
+    return mockMvc.perform(put(SETTLEMENTS + "/{id}", f.familyId(), settlementId)
+        .with(user(who)).contentType(MediaType.APPLICATION_JSON).content(body));
   }
 
   private ResultActions confirm(final Fixture f, final String who, final String settlementId)

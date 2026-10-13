@@ -1,4 +1,4 @@
-import { Banknote, Check, Landmark, Wallet } from 'lucide-react';
+import { Banknote, Check, Landmark, Pencil, Wallet } from 'lucide-react';
 
 import { useConfirmSettlement } from '../../hooks/api';
 import type { Parent } from '../../lib/api/client';
@@ -7,7 +7,7 @@ import type { Expense, ExpenseSettlement, SettlementPayment } from '../../types/
 import { useToast } from '../ui/ToastProvider';
 
 import { formatMoney } from './money';
-import { methodLabel, settlementState } from './settle';
+import { byDate, differenceText, methodLabel, settlementState } from './settle';
 import { firstName } from './parentTone';
 import { StatusChip } from './StatusChip';
 
@@ -20,7 +20,10 @@ function PaymentIcon({ method }: { method: SettlementPayment['method'] }) {
   return <Wallet size={16} aria-hidden="true" />;
 }
 
-/** The family's settle-ups: each one's payments, the expenses they paid back, and where it stands. */
+/**
+ * The family's settle-ups: each one's payments, the expenses they paid back, and where it stands.
+ * The parent who recorded one can edit its payments.
+ */
 export function TransfersList({
   familyId,
   settlements,
@@ -28,6 +31,7 @@ export function TransfersList({
   me,
   other,
   onOpenExpense,
+  onEdit,
 }: {
   familyId: string;
   settlements: ExpenseSettlement[];
@@ -35,6 +39,7 @@ export function TransfersList({
   me: Parent;
   other: Parent;
   onOpenExpense: (expense: Expense) => void;
+  onEdit: (settlement: ExpenseSettlement) => void;
 }) {
   const { showToast } = useToast();
   const confirm = useConfirmSettlement();
@@ -55,7 +60,7 @@ export function TransfersList({
       showToast({
         variant: failed ? 'error' : 'success',
         title: failed ? `${failed} could not be confirmed` : 'Marked as received',
-        description: failed ? 'Something changed on those; reload and try again' : `${formatMoney(settlement.amountPence)} is settled.`,
+        description: failed ? 'Something changed on those; reload and try again' : `${formatMoney(settlement.paidPence)} is settled.`,
       });
     } catch (error) {
       showToast({ variant: 'error', title: 'That did not work', description: apiErrorMessage(error, 'Try again.') });
@@ -66,16 +71,22 @@ export function TransfersList({
     <ul className="expense-transfers">
       {settlements.map((settlement) => {
         const state = settlementState(settlement, expenses, me.id);
-        const covered = settlement.expenseIds
-          .map((id) => expenses.find((expense) => expense.id === id))
-          .filter((expense): expense is Expense => Boolean(expense));
+        const covered = byDate(
+          settlement.expenseIds
+            .map((id) => expenses.find((expense) => expense.id === id))
+            .filter((expense): expense is Expense => Boolean(expense)),
+        );
+        const iPaid = settlement.fromParentId === me.id;
         const heading =
           settlement.amountPence === 0
             ? 'Settled against each other'
-            : settlement.fromParentId === me.id
-              ? `You paid ${otherName} ${formatMoney(settlement.amountPence)}`
-              : `${otherName} paid you ${formatMoney(settlement.amountPence)}`;
+            : iPaid
+              ? `You paid ${otherName} ${formatMoney(settlement.paidPence)}`
+              : `${otherName} paid you ${formatMoney(settlement.paidPence)}`;
         const recordedBy = settlement.recordedBy === me.id ? 'you' : otherName;
+        const editedBy = settlement.updatedBy === me.id ? 'you' : otherName;
+        const difference = differenceText(settlement.paidPence, settlement.amountPence, iPaid, otherName);
+        const canEdit = settlement.recordedBy === me.id && settlement.amountPence > 0;
         return (
           <li key={settlement.id} className="expense-transfer" data-testid={`transfer-${settlement.id}`}>
             <div className="expense-transfer__head">
@@ -83,6 +94,7 @@ export function TransfersList({
                 <p className="expense-transfer__title">{heading}</p>
                 <p className="expense-muted">
                   Recorded by {recordedBy} on {shortDate(settlement.createdAt.slice(0, 10))}
+                  {settlement.updatedAt && ` · edited by ${editedBy} on ${shortDate(settlement.updatedAt.slice(0, 10))}`}
                 </p>
               </div>
               <StatusChip
@@ -109,28 +121,46 @@ export function TransfersList({
                 ))}
               </ul>
             )}
+            {difference && (
+              <p className="expense-callout expense-callout--amber" data-testid="transfer-difference">
+                {difference}
+              </p>
+            )}
             <p className="expense-transfer__covers">
               Pays back {settlement.expenseIds.length} expense{settlement.expenseIds.length === 1 ? '' : 's'}
+              {settlement.amountPence > 0 && ` · ${formatMoney(settlement.amountPence)}`}
             </p>
             <ul className="expense-transfer__expenses">
               {covered.map((expense) => (
                 <li key={expense.id}>
                   <button type="button" className="expense-transfer__expense" onClick={() => onOpenExpense(expense)}>
-                    <span>{expense.title}</span>
+                    <span className="expense-transfer__expense-name">
+                      <span>{expense.title}</span>
+                      <span className="expense-transfer__expense-date">{shortDate(expense.date)}</span>
+                    </span>
                     <span>{formatMoney(expense.owedPence)}</span>
                   </button>
                 </li>
               ))}
             </ul>
-            {state === 'awaitingMe' && (
-              <button
-                type="button"
-                className="cp-button cp-button--primary cp-button--sm expense-transfer__confirm"
-                disabled={confirm.isPending}
-                onClick={() => confirmReceived(settlement)}
-              >
-                <Check size={15} aria-hidden="true" /> Confirm received
-              </button>
+            {(state === 'awaitingMe' || canEdit) && (
+              <div className="expense-transfer__actions">
+                {state === 'awaitingMe' && (
+                  <button
+                    type="button"
+                    className="cp-button cp-button--primary cp-button--sm"
+                    disabled={confirm.isPending}
+                    onClick={() => confirmReceived(settlement)}
+                  >
+                    <Check size={15} aria-hidden="true" /> Confirm received
+                  </button>
+                )}
+                {canEdit && (
+                  <button type="button" className="cp-button cp-button--secondary cp-button--sm" onClick={() => onEdit(settlement)}>
+                    <Pencil size={15} aria-hidden="true" /> Edit transfer
+                  </button>
+                )}
+              </div>
             )}
           </li>
         );

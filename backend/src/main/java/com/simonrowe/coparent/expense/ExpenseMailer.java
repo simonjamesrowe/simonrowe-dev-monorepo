@@ -106,17 +106,12 @@ public class ExpenseMailer {
    */
   public void settlementRecorded(final Parent to, final Parent from,
       final ExpenseSettlement settlement, final List<Expense> claimed) {
-    final String paymentLines = settlement.payments().stream()
-        .map(payment -> "- %s, %s: %s%s".formatted(methodLabel(payment.method()),
-            DAY.format(payment.paidOn()), ExpenseMoney.format(payment.amountPence()),
-            payment.reference() == null ? "" : " (ref " + payment.reference() + ")"))
-        .collect(Collectors.joining("\n"));
     final String expenseLines = claimed.stream()
         .map(expense -> "- %s: %s".formatted(expense.title(),
             ExpenseMoney.format(ExpenseMath.owedPence(expense))))
         .collect(Collectors.joining("\n"));
     send(to, "%s says they paid you %s".formatted(firstName(from),
-        ExpenseMoney.format(settlement.amountPence())), """
+        ExpenseMoney.format(settlement.paidPence())), """
         %s says they paid you %s:
 
         %s
@@ -124,10 +119,59 @@ public class ExpenseMailer {
         It pays back:
 
         %s
-
+        %s
         Confirm it arrived: %s/expenses?view=transfers
-        """.formatted(firstName(from), ExpenseMoney.format(settlement.amountPence()),
-        paymentLines, expenseLines, properties.appUrl()));
+        """.formatted(firstName(from), ExpenseMoney.format(settlement.paidPence()),
+        paymentLines(settlement), expenseLines, differenceLine(settlement, to, from),
+        properties.appUrl()));
+  }
+
+  /**
+   * The other parent is told when a settle-up's payments are corrected, since a new amount moves
+   * the balance they see.
+   */
+  public void settlementChanged(final Parent to, final Parent by,
+      final ExpenseSettlement before, final ExpenseSettlement after) {
+    final Parent payer = by.id().equals(after.fromParentId()) ? by : to;
+    final Parent payee = payer == by ? to : by;
+    send(to, "%s changed a settle-up to %s".formatted(firstName(by),
+        ExpenseMoney.format(after.paidPence())), """
+        %s changed the payments on a settle-up. It now records %s paid by %s to %s \
+        (it was %s):
+
+        %s
+        %s
+        See it: %s/expenses?view=transfers
+        """.formatted(firstName(by), ExpenseMoney.format(after.paidPence()),
+        firstName(payer), firstName(payee), ExpenseMoney.format(before.paidPence()),
+        paymentLines(after), differenceLine(after, payee, payer), properties.appUrl()));
+  }
+
+  private static String paymentLines(final ExpenseSettlement settlement) {
+    return settlement.payments().stream()
+        .map(payment -> "- %s, %s: %s%s".formatted(methodLabel(payment.method()),
+            DAY.format(payment.paidOn()), ExpenseMoney.format(payment.amountPence()),
+            payment.reference() == null ? "" : " (ref " + payment.reference() + ")"))
+        .collect(Collectors.joining("\n"));
+  }
+
+  /**
+   * What happens to a payment that did not match its expenses, addressed to the parent who was
+   * paid, or an empty string when it matched. Ends with a blank line when present.
+   */
+  private static String differenceLine(final ExpenseSettlement settlement, final Parent payee,
+      final Parent payer) {
+    final long difference = settlement.differencePence();
+    if (difference == 0) {
+      return "";
+    }
+    final String amount = ExpenseMoney.format(Math.abs(difference));
+    final String expenses = ExpenseMoney.format(settlement.amountPence());
+    return difference > 0
+        ? "\nThat is %s more than the expenses came to (%s), so %s owes %s back.\n".formatted(
+            amount, expenses, firstName(payee), amount)
+        : "\nThat is %s less than the expenses came to (%s), so %s still owes %s.\n".formatted(
+            amount, expenses, firstName(payer), amount);
   }
 
   private static String methodLabel(final String method) {

@@ -30,6 +30,7 @@ vi.mock('../hooks/api', () => ({
   useSettlements: vi.fn(),
   useRecordSettlement: vi.fn(),
   useConfirmSettlement: vi.fn(),
+  useUpdateSettlement: vi.fn(),
   useMarkPaidBack: vi.fn(),
   fetchReceiptBlob: vi.fn(),
   useStatementOverview: vi.fn(),
@@ -41,6 +42,7 @@ const mutation = (mutateAsync = vi.fn().mockResolvedValue({})) =>
 const transitionMutate = vi.fn();
 const recordMutate = vi.fn();
 const confirmMutate = vi.fn();
+const updateSettlementMutate = vi.fn();
 const markPaidBackMutate = vi.fn();
 const createMutate = vi.fn();
 const resendMutate = vi.fn();
@@ -58,6 +60,7 @@ const summary: ExpenseSummary = {
     expenseCount: 3,
     awaitingYourConfirmationPence: 4000,
     awaitingTheirConfirmationPence: 0,
+    carriedPence: 0,
   },
   needsYourAgreement: { count: 1, totalPence: 24000 },
   needsYourAction: 1,
@@ -134,6 +137,7 @@ function setUp({
   }
   vi.mocked(apiHooks.useRecordSettlement).mockReturnValue(mutation(recordMutate) as never);
   vi.mocked(apiHooks.useConfirmSettlement).mockReturnValue(mutation(confirmMutate) as never);
+  vi.mocked(apiHooks.useUpdateSettlement).mockReturnValue(mutation(updateSettlementMutate) as never);
   vi.mocked(apiHooks.useMarkPaidBack).mockReturnValue(mutation(markPaidBackMutate) as never);
 }
 
@@ -153,6 +157,7 @@ describe('ExpensesPage', () => {
     transitionMutate.mockResolvedValue({});
     recordMutate.mockResolvedValue({ settlement: null, results: [] });
     confirmMutate.mockResolvedValue([]);
+    updateSettlementMutate.mockResolvedValue({ paidPence: 150000 });
     markPaidBackMutate.mockResolvedValue([]);
     createMutate.mockResolvedValue(testExpense({ id: 'new' }));
   });
@@ -332,7 +337,7 @@ describe('ExpensesPage', () => {
     );
   });
 
-  it('settles up as two bank transfers that add up to what is owed', async () => {
+  it('settles up as two bank transfers, saying what is still owed until they add up', async () => {
     const owedToSam = testExpense({
       id: 'owed',
       title: 'Swimming lessons',
@@ -356,13 +361,20 @@ describe('ExpensesPage', () => {
 
     await user.clear(screen.getByLabelText('Payment 1 amount in pounds'));
     await user.type(screen.getByLabelText('Payment 1 amount in pounds'), '20');
-    expect(screen.getByText('£10.00 still to account for.')).toBeInTheDocument();
-    expect(record).toBeDisabled();
+    expect(screen.getByTestId('settle-payments-difference')).toHaveTextContent(
+      '£10.00 less than the expenses came to, so you still owe Sam £10.00.',
+    );
+    expect(record).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: /Add another payment/ }));
     expect(screen.getByLabelText('Payment 2 amount in pounds')).toHaveValue('10.00');
     await user.type(screen.getByLabelText('Payment 2 reference'), 'SWIM');
-    expect(screen.getByTestId('settle-payments-total')).toHaveTextContent('£30.00 of £30.00');
+    expect(screen.getByTestId('settle-payments-total')).toHaveTextContent('£30.00 sent · expenses £30.00');
+    expect(screen.queryByTestId('settle-payments-difference')).not.toBeInTheDocument();
+    await user.clear(screen.getByLabelText('Payment 2 amount in pounds'));
+    expect(screen.getByText('Enter an amount for each payment.')).toBeInTheDocument();
+    expect(record).toBeDisabled();
+    await user.type(screen.getByLabelText('Payment 2 amount in pounds'), '10');
     await user.click(record);
 
     expect(recordMutate).toHaveBeenCalledWith({
@@ -373,6 +385,128 @@ describe('ExpensesPage', () => {
         expect.objectContaining({ method: 'bank_transfer', amountPence: 1000, reference: 'SWIM' }),
       ],
     });
+  });
+
+  it('records a round amount sent, saying the overpayment is owed back', async () => {
+    const owedToSam = testExpense({
+      id: 'owed',
+      title: 'Swimming lessons',
+      payerId: 'sam',
+      debtorParentId: 'alex',
+      creditorParentId: 'sam',
+      agreement: { status: 'agreed', requestedBy: 'sam', respondedBy: 'alex', respondedAt: null, note: null },
+      reimbursement: { status: 'outstanding', claimedBy: null, claimedAt: null, settledBy: null, settledAt: null, note: null, settlementId: null },
+      countsTowardsBalance: true,
+      owedPence: 147868,
+      version: 2,
+    });
+    setUp({ expenses: [owedToSam] });
+    const user = userEvent.setup();
+    renderPage('/expenses?settle=1');
+
+    await user.clear(screen.getByLabelText('Payment 1 amount in pounds'));
+    await user.type(screen.getByLabelText('Payment 1 amount in pounds'), '1500');
+    await user.clear(screen.getByLabelText('Payment 1 date'));
+    await user.type(screen.getByLabelText('Payment 1 date'), '2026-10-08');
+    expect(screen.getByTestId('settle-payments-difference')).toHaveTextContent(
+      '£21.32 more than the expenses came to, so Sam owes you £21.32 back.',
+    );
+    await user.click(screen.getByRole('button', { name: /Record payment/ }));
+
+    expect(recordMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payments: [expect.objectContaining({ amountPence: 150000, paidOn: '2026-10-08' })],
+      }),
+    );
+  });
+
+  it('lets the parent who recorded a transfer correct its amount and date', async () => {
+    const paidBack = (id: string, title: string, date: string, owedPence: number) =>
+      testExpense({
+        id,
+        title,
+        date,
+        payerId: 'sam',
+        debtorParentId: 'alex',
+        creditorParentId: 'sam',
+        agreement: { status: 'agreed', requestedBy: 'sam', respondedBy: 'alex', respondedAt: null, note: null },
+        reimbursement: { status: 'reimbursed', claimedBy: 'alex', claimedAt: null, settledBy: 'alex', settledAt: null, note: 'Bank transfer', settlementId: 'set-1' },
+        countsTowardsBalance: false,
+        owedPence,
+      });
+    const settlement: ExpenseSettlement = {
+      id: 'set-1',
+      familyId: 'fam-1',
+      fromParentId: 'alex',
+      toParentId: 'sam',
+      amountPence: 147868,
+      paidPence: 147868,
+      currency: 'GBP',
+      payments: [{ method: 'bank_transfer', amountPence: 147868, paidOn: '2026-10-13', reference: null }],
+      expenseIds: ['roof', 'party'],
+      recordedBy: 'alex',
+      createdAt: '2026-10-13T10:00:00Z',
+      updatedBy: null,
+      updatedAt: null,
+    };
+    setUp({
+      expenses: [paidBack('roof', 'Roof Repairs', '2026-09-20', 4000), paidBack('party', "Ava's Party", '2026-09-02', 143868)],
+      settlements: [settlement],
+    });
+    const user = userEvent.setup();
+    renderPage('/expenses?view=transfers');
+
+    const card = screen.getByTestId('transfer-set-1');
+    expect(card).toHaveTextContent('You paid Sam £1,478.68');
+    // Each expense carries its date, oldest first.
+    const rows = within(card).getAllByRole('button', { name: /Party|Roof/ });
+    expect(rows[0]).toHaveTextContent("Ava's Party2 Sept 2026");
+    expect(rows[1]).toHaveTextContent('Roof Repairs20 Sept 2026');
+
+    await user.click(within(card).getByRole('button', { name: /Edit transfer/ }));
+    const amount = await screen.findByLabelText('Payment 1 amount in pounds');
+    expect(amount).toHaveValue('1478.68');
+    await user.clear(amount);
+    await user.type(amount, '1500');
+    await user.clear(screen.getByLabelText('Payment 1 date'));
+    await user.type(screen.getByLabelText('Payment 1 date'), '2026-10-08');
+    expect(screen.getByTestId('settle-payments-difference')).toHaveTextContent('so Sam owes you £21.32 back');
+    await user.click(screen.getByRole('button', { name: /Save transfer/ }));
+
+    expect(updateSettlementMutate).toHaveBeenCalledWith({
+      familyId: 'fam-1',
+      settlementId: 'set-1',
+      payments: [{ method: 'bank_transfer', amountPence: 150000, paidOn: '2026-10-08', reference: null }],
+    });
+  });
+
+  it('shows what a transfer carried into the balance', () => {
+    const settlement: ExpenseSettlement = {
+      id: 'set-1',
+      familyId: 'fam-1',
+      fromParentId: 'alex',
+      toParentId: 'sam',
+      amountPence: 147868,
+      paidPence: 150000,
+      currency: 'GBP',
+      payments: [{ method: 'bank_transfer', amountPence: 150000, paidOn: '2026-10-08', reference: null }],
+      expenseIds: [],
+      recordedBy: 'sam',
+      createdAt: '2026-10-13T10:00:00Z',
+      updatedBy: 'sam',
+      updatedAt: '2026-10-14T10:00:00Z',
+    };
+    setUp({ expenses: [], settlements: [settlement] });
+    renderPage('/expenses?view=transfers');
+
+    const card = screen.getByTestId('transfer-set-1');
+    expect(card).toHaveTextContent('You paid Sam £1,500.00');
+    expect(card).toHaveTextContent('edited by Sam on 14 Oct 2026');
+    expect(within(card).getByTestId('transfer-difference')).toHaveTextContent(
+      '£21.32 more than the expenses came to, so Sam owes you £21.32 back.',
+    );
+    // Only the parent who recorded it can edit it.
+    expect(within(card).queryByRole('button', { name: /Edit transfer/ })).not.toBeInTheDocument();
   });
 
   it('shows each expense\'s date and whole bill, and writes an editable message to copy', async () => {
@@ -429,11 +563,14 @@ describe('ExpensesPage', () => {
       fromParentId: 'sam',
       toParentId: 'alex',
       amountPence: 2250,
+      paidPence: 2250,
       currency: 'GBP',
       payments: [{ method: 'bank_transfer', amountPence: 2250, paidOn: '2026-10-07', reference: 'TRIP' }],
       expenseIds: ['claimed'],
       recordedBy: 'sam',
       createdAt: '2026-10-07T10:00:00Z',
+      updatedBy: null,
+      updatedAt: null,
     };
     setUp({ expenses: [claimed], settlements: [settlement] });
     const user = userEvent.setup();

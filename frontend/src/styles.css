@@ -13614,8 +13614,10 @@ body[data-narration-bar] .app-layout__main {
 .coparent-app .expense-transfer__expenses li + li { border-top: 1px solid var(--expense-border); }
 .coparent-app .expense-transfer__expense { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14.5px; text-align: left; cursor: pointer; }
 .coparent-app .expense-transfer__expense:hover { background: var(--expense-surface-3); }
-.coparent-app .expense-transfer__expense span:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
-.coparent-app .expense-transfer__confirm { align-self: flex-start; }
+.coparent-app .expense-transfer__expense > span:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
+.coparent-app .expense-transfer__expense-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.coparent-app .expense-transfer__expense-date { font-size: 12.5px; font-weight: 400; color: var(--expense-muted); font-variant-numeric: tabular-nums; }
+.coparent-app .expense-transfer__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .coparent-app .expense-facts dd.expense-paid-back { flex-direction: column; align-items: flex-start; gap: 4px; }
 @media (max-width: 640px) {
   .coparent-app .expense-payment { grid-template-columns: 1fr 1fr; }
