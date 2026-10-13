@@ -138,6 +138,9 @@ public class SchoolQueryService {
    * publishes year attribution structurally, so it can be trusted. Whole-school events have no
    * year groups and always match, which is what stops a Year 3 filter hiding the term dates.
    *
+   * <p>One event reported by several sources under different titles is returned once
+   * ({@link EventDuplicates}), after the year filter.
+   *
    * @param from range start, inclusive
    * @param to range end, inclusive
    * @param yearGroups the year groups to narrow to, empty for everything
@@ -150,10 +153,10 @@ public class SchoolQueryService {
     final List<String> selected = YearGroups.sanitise(yearGroups);
     final List<SchoolEvent> found =
         events.findOverlapping(from, to, audience.visibilities());
-    return found.stream()
+    return EventDuplicates.collapse(found.stream()
         .filter(e -> e.appliesToAny(selected))
         .sorted(Comparator.comparing(SchoolEvent::startDate))
-        .toList();
+        .toList());
   }
 
   /**
@@ -214,7 +217,7 @@ public class SchoolQueryService {
    * @param eventType which kind
    * @param academicYear the year label, or null for the current one
    * @param audience which tiers may be read
-   * @return matching events, earliest first
+   * @return matching events, earliest first, each reported once whatever its sources called it
    */
   public List<SchoolEvent> ofType(
       final SchoolEvent.EventType eventType, final String academicYear,
@@ -222,8 +225,9 @@ public class SchoolQueryService {
     final String year = academicYear == null || academicYear.isBlank()
         ? AcademicYear.current(LocalDate.now(clock))
         : academicYear;
-    return events.findByAcademicYearAndEventTypeAndVisibilityInOrderByStartDateAsc(
-        year, eventType, audience.visibilities());
+    return EventDuplicates.collapse(
+        events.findByAcademicYearAndEventTypeAndVisibilityInOrderByStartDateAsc(
+            year, eventType, audience.visibilities()));
   }
 
   /**
