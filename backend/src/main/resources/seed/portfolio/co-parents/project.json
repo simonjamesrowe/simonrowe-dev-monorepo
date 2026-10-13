@@ -1,0 +1,117 @@
+{
+  "status": "IN_DEVELOPMENT",
+  "name": "CoParent",
+  "tagline": "Shared family admin for parents across two homes.",
+  "image": {
+    "url": "{{media:hero.webp}}"
+  },
+  "headline": "Two homes, one calendar,\nand money nobody argues about.",
+  "summary": "CoParent gives separated parents one place for the calendar, the messages and the money. Both parents see the same plan and the same balance, every change is agreed by the other parent, and the AI turns a pasted message or a bank statement into suggestions that change nothing until a parent says yes.",
+  "statement": {
+    "label": "Why I built it",
+    "text": "Raising children across two homes runs on small agreements: who has them this weekend, who pays for the school trip, whether the swap is still on. Spread across texts, emails and banking apps, any one of them can become an argument.",
+    "points": [
+      {
+        "title": "The calendar",
+        "text": "Handovers, swaps, clubs and half terms, with both homes working from the same week."
+      },
+      {
+        "title": "The messages",
+        "text": "Plans and permission requests kept in one place, not buried in a group chat."
+      },
+      {
+        "title": "The money",
+        "text": "School shoes, trips and lessons, each agreed by both parents before it counts."
+      },
+      {
+        "title": "The typing",
+        "text": "Turning \"can I swap Saturday, and I paid for the trip\" into the right entries is admin nobody wants."
+      }
+    ]
+  },
+  "exampleQuestions": [],
+  "highlights": [
+    {
+      "title": "Quick add: the AI proposes, a parent decides",
+      "text": "Paste a message or a photo and get typed cards for the calendar, messages and expenses. Nothing changes until each card is approved.",
+      "imageUrl": "{{media:highlight-quick-add.webp}}",
+      "imageAlt": "Quick add showing proposed cards for a weekend swap, a shared expense and a message, each waiting to be approved."
+    },
+    {
+      "title": "One balance, agreed by both",
+      "text": "Whoever last changed an expense has agreed to it, and the other parent agrees or disputes. Only agreed costs count, and settling up records the transfers.",
+      "imageUrl": "{{media:highlight-expenses.webp}}",
+      "imageAlt": "The Expenses page with the balance between the two parents and the expenses waiting for agreement."
+    },
+    {
+      "title": "Bank statements, read and not kept",
+      "text": "Upload a Monzo, Starling, Amex or Santander export. Shared costs are suggested, and the file itself is never stored.",
+      "imageUrl": "{{media:highlight-statements.webp}}",
+      "imageAlt": "Suggested shared costs from an uploaded bank statement: school shoes, swimming lessons and a school trip."
+    }
+  ],
+  "demo": {
+    "title": "A two-and-a-half-minute walkthrough",
+    "summary": "A synthetic family's week: who has the children today, a weekend swap, an expense agreed by both parents, and a messy message turned into approved actions by Quick add.",
+    "videoUrl": "{{media:demo.mp4}}",
+    "captionsUrl": "{{media:demo.vtt}}",
+    "posterUrl": "{{media:demo-poster.webp}}",
+    "chapters": [
+      {
+        "startSeconds": 0,
+        "label": "Who has the children today"
+      },
+      {
+        "startSeconds": 15,
+        "label": "A weekend swap, asked and approved"
+      },
+      {
+        "startSeconds": 28,
+        "label": "An expense both parents agree to"
+      },
+      {
+        "startSeconds": 49,
+        "label": "Quick add: a messy note"
+      },
+      {
+        "startSeconds": 55,
+        "label": "Four cards, nothing written yet"
+      },
+      {
+        "startSeconds": 74,
+        "label": "Approving each card"
+      },
+      {
+        "startSeconds": 90,
+        "label": "A bank statement, read and not kept"
+      },
+      {
+        "startSeconds": 107,
+        "label": "Under the hood"
+      }
+    ]
+  },
+  "pages": [
+    {
+      "slug": "how-it-works",
+      "title": "How it works",
+      "navHint": "calendar, money, Quick add",
+      "summary": "The calendar, the messages and the money, the one rule behind every agreement, and what the AI is and is not allowed to do.",
+      "body": "how-it-works.md"
+    },
+    {
+      "slug": "architecture",
+      "title": "Architecture",
+      "navHint": "Spring Boot",
+      "summary": "A product with its own database and switch inside this site's Spring Boot backend, and a model that can only propose.",
+      "body": "architecture.md"
+    },
+    {
+      "slug": "walkthrough",
+      "title": "Walkthrough",
+      "navHint": "three short films",
+      "summary": "Setting up a family, sharing the costs, and Quick add with bank statements, each filmed on the real app.",
+      "body": "walkthrough.md"
+    }
+  ]
+}

@@ -274,6 +274,21 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- co-parents-project-page: **CoParent gets its page**, In development with no live link, seeded by
+  `V057SeedCoParentsProjectPage` from `backend/src/main/resources/seed/portfolio/co-parents/`
+  through `PortfolioPageSeed`, exactly as V050 did. It also renames V048's "Co-Parents" card to the
+  product's own name, "CoParent" (the slug stays `co-parents`), and its rollback puts the old name
+  back. Three sub-pages: How it works, Architecture, and a Walkthrough holding three more films as
+  raw `<video>` in markdown (the blog `MarkdownRenderer` allows HTML). Load-bearing bits:
+  - **Every frame is a synthetic family on a local stack** (Alex Morgan and Sam Taylor, Mia and
+    Leo), seeded through the real API. The demo sources, seed script and synthetic Monzo export are
+    in `~/workspace/simonjamesrowe/demos/co-parents*`, not in this repo.
+  - **Filmed without Auth0**, which allows no self-signup and grants no Management API: a local
+    HS256 `JwtDecoder` added with `-Dloader.path` (and `AUTH0_JWT_ENABLED=false`,
+    `COPARENT_AUTH0_EMAIL_CLAIM=email`), plus the frontend's `VITE_E2E_TEST_MODE` patched by an
+    untracked Vite config. Nothing of it is committed.
+  - **Quick add was filmed on `gpt-5.6-luna`.** On `gpt-5.4-nano` a four-item note came back with
+    every card ready only about one run in five, so #236 made luna the default.
 - coparent-transfer-amount-edit: **A settle-up records what was really sent, and its recorder can
   edit it.** £1,500 sent against £1,478.68 of expenses used to be refused. Load-bearing bits:
   - **The difference is carried into the balance, not refused.** `ExpenseSummary` adds each

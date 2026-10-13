@@ -1,0 +1,97 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:05.419
+Two homes run on small agreements: who has the children this weekend, who paid for the trip.
+
+00:00:05.419 --> 00:00:07.363
+CoParent keeps them in one place.
+
+00:00:07.363 --> 00:00:09.484
+This is Alex, in a synthetic family.
+
+00:00:09.484 --> 00:00:15.080
+The children are with Alex today, the handover is Friday, and below is what is waiting on Alex.
+
+00:00:15.682 --> 00:00:18.327
+Sam has asked to swap a weekend for a sister's wedding.
+
+00:00:18.327 --> 00:00:23.762
+The request shows what is booked beside what is proposed, and nothing on the calendar changes until I approve it.
+
+00:00:24.363 --> 00:00:27.323
+I approve it, and we both see the same weekend.
+
+00:00:28.096 --> 00:00:29.569
+Money works the same way.
+
+00:00:29.569 --> 00:00:34.871
+Whoever last changed an expense has agreed to it, and the other parent agrees or disputes.
+
+00:00:34.871 --> 00:00:40.056
+Sam logged the football boots, so they wait for me, and they do not count until I agree.
+
+00:00:40.659 --> 00:00:42.758
+I agree, and my share joins the balance.
+
+00:00:42.758 --> 00:00:48.739
+Every change carries the version I was looking at, so I can never agree to an amount that changed while I read it.
+
+00:00:49.343 --> 00:00:51.316
+The typing is the part nobody wants.
+
+00:00:51.316 --> 00:00:55.263
+Quick add takes a message the way I'd write it, four things in one note.
+
+00:00:55.867 --> 00:01:08.783
+The model reads it with only the family details it needs, and comes back with four cards: an expense Sam owes half of, piano every Thursday until the end of term, the flu jab, and a message to Sam in a thread we already have.
+
+00:01:08.783 --> 00:01:10.677
+It cannot change anything itself.
+
+00:01:10.677 --> 00:01:13.547
+Its tools do nothing, and every card waits for me.
+
+00:01:14.153 --> 00:01:16.657
+I check each one and approve it on its own.
+
+00:01:16.657 --> 00:01:18.054
+There is no approve all.
+
+00:01:18.054 --> 00:01:23.352
+Each card is written exactly as if I had typed it in, and only once, even if I press twice.
+
+00:01:23.352 --> 00:01:29.873
+The swimming kit goes to Sam to agree, piano and the jab join the calendar, and the message lands in our thread.
+
+00:01:30.477 --> 00:01:34.565
+Shared costs also hide in bank statements, so I upload last month's export.
+
+00:01:34.565 --> 00:01:39.961
+A parser reads it, not a model, and the file is never kept, only a one-way fingerprint of each row.
+
+00:01:39.961 --> 00:01:46.557
+Out of twenty-four payments, four look like the children's, and they stay private to me until I turn one into an expense.
+
+00:01:47.160 --> 00:01:52.400
+Under the hood, CoParent is a product of its own inside this site's Spring Boot backend.
+
+00:01:53.019 --> 00:01:57.459
+It has its own installable front end, its own sign-in client and its own hostname.
+
+00:01:58.065 --> 00:02:04.705
+Every request takes the parent from the token, never from the request, and a family you are not in simply does not exist.
+
+00:02:05.309 --> 00:02:11.749
+Its data lives in a separate MongoDB database, and receipts sit on a private volume, never with the public uploads.
+
+00:02:12.354 --> 00:02:13.997
+And the AI only ever proposes.
+
+00:02:13.997 --> 00:02:16.954
+Nothing it returns is written until a parent says yes.
+
+00:02:18.266 --> 00:02:24.904
+That was CoParent: the calendar, the messages and the money for two homes, in one place both parents trust.
+
+00:02:24.904 --> 00:02:28.626
+The AI does the typing, and the parents make every decision.
