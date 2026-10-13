@@ -14,6 +14,7 @@ import type { ChatMessageModel } from '../components/chat/chatTypes'
 import type { ChatResponse } from '../services/chatService'
 import { probeSiteStatus, reloadPage } from '../services/siteStatus'
 import { HowItWorks } from './components/HowItWorks'
+import { UpcomingPanel } from './components/UpcomingPanel'
 import { YearSelector } from './components/YearSelector'
 import * as schoolChat from './schoolChatService'
 import type { SchoolConnectionState } from './schoolChatService'
@@ -29,6 +30,8 @@ const SCHOOL_URL = 'https://www.kilmorieschool.co.uk'
  * for the whole life of the page.
  */
 const SITE_STATUS_POLL_MS = 10_000
+
+type MobileTab = 'upcoming' | 'ask'
 
 /** The input box's limit, applied to a question handed over in the address too. */
 const MAX_QUESTION_LENGTH = 500
@@ -150,6 +153,10 @@ export default function App() {
   // address is sent with the visitor's year groups and not with an empty selection.
   const [yearGroups, setYearGroups] = useState<string[]>(readStoredYearGroups)
   const [initialQuestion] = useState<string | null>(takeQuestionFromAddress)
+  // Which pane a narrow screen shows; on a wide one both are visible and this is ignored. Opens
+  // on the calendar, because "what's on today" then needs no typing, unless the address handed
+  // over a question, whose answer is what the visitor came for.
+  const [mobileTab, setMobileTab] = useState<MobileTab>(initialQuestion ? 'ask' : 'upcoming')
   const initialQuestionSentRef = useRef(false)
   const sessionIdRef = useRef<string>(newSessionId())
   const endRef = useRef<HTMLDivElement>(null)
@@ -303,6 +310,14 @@ export default function App() {
     [awaiting, yearGroups],
   )
 
+  const askAboutEvent = useCallback(
+    (question: string) => {
+      setMobileTab('ask')
+      void send(question.slice(0, MAX_QUESTION_LENGTH))
+    },
+    [send],
+  )
+
   // Sent without waiting for the socket: the transport holds one message until the connection
   // it is already opening is up. Deferred a tick and cancelled on cleanup because a development
   // build mounts twice, and the first unmount's disconnect() throws away a held message.
@@ -365,78 +380,108 @@ export default function App() {
 
       <HowItWorks />
 
-      <div className="school-page__chat">
-        <div className="chat-panel__messages">
-          {messages.length === 0 && (
-            <div className="chat-panel__welcome">
-              <GraduationCap size={32} className="chat-panel__welcome-icon" />
-              <p className="chat-panel__welcome-title">Ask about school</p>
-              <p className="chat-panel__welcome-text">
-                Term dates, INSET days, what&rsquo;s on this week, clubs and arrangements.
-              </p>
-              <div className="chat-panel__welcome-prompts">
-                {SUGGESTIONS.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    className="chat-panel__welcome-chip"
-                    onClick={() => void send(suggestion)}
-                  >
-                    {suggestion}
-                  </button>
-                ))}
+      {/*
+        Shown only on a narrow screen, where the two panes take turns. Toggle buttons rather than
+        ARIA tabs: on a wide screen these are hidden and both panes are visible, and tab panels
+        with no tabs would be announced as something they are not.
+      */}
+      <div className="school-page__tabs" role="group" aria-label="Show">
+        <button
+          type="button"
+          aria-pressed={mobileTab === 'upcoming'}
+          className={`school-page__tab${mobileTab === 'upcoming' ? ' school-page__tab--on' : ''}`}
+          onClick={() => setMobileTab('upcoming')}
+        >
+          Coming up
+        </button>
+        <button
+          type="button"
+          aria-pressed={mobileTab === 'ask'}
+          className={`school-page__tab${mobileTab === 'ask' ? ' school-page__tab--on' : ''}`}
+          onClick={() => setMobileTab('ask')}
+        >
+          Ask
+        </button>
+      </div>
+
+      <div className="school-page__body" data-tab={mobileTab}>
+        <div className="school-page__chat">
+          <div className="chat-panel__messages">
+            {messages.length === 0 && (
+              <div className="chat-panel__welcome">
+                <GraduationCap size={32} className="chat-panel__welcome-icon" />
+                <p className="chat-panel__welcome-title">Ask about school</p>
+                <p className="chat-panel__welcome-text">
+                  Term dates, INSET days, what&rsquo;s on this week, clubs and arrangements.
+                </p>
+                <div className="chat-panel__welcome-prompts">
+                  {SUGGESTIONS.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      className="chat-panel__welcome-chip"
+                      onClick={() => void send(suggestion)}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {messages.map((message, index) => (
-            <ChatMessage
-              key={`${message.timestamp}-${index}`}
-              role={message.role}
-              content={message.content}
-              blocks={message.blocks}
-              timestamp={message.timestamp}
-              // Term Time emits no widgets, so without this its own refusal advice — "check
-              // the school's website" — would render as unclickable plain text.
-              extraAllowedUrls={[SCHOOL_URL, `${SCHOOL_URL}/`]}
-              // Deep links the model got from a tool result — a calendar event, a PDF — are
-              // never seen by the browser, so exact-URL matching would strip every one. The
-              // prefix is our own constant, not model output.
-              allowedLinkPrefixes={[SCHOOL_URL]}
-            />
-          ))}
+            {messages.map((message, index) => (
+              <ChatMessage
+                key={`${message.timestamp}-${index}`}
+                role={message.role}
+                content={message.content}
+                blocks={message.blocks}
+                timestamp={message.timestamp}
+                // Term Time emits no widgets, so without this its own refusal advice — "check
+                // the school's website" — would render as unclickable plain text.
+                extraAllowedUrls={[SCHOOL_URL, `${SCHOOL_URL}/`]}
+                // Deep links the model got from a tool result — a calendar event, a PDF — are
+                // never seen by the browser, so exact-URL matching would strip every one. The
+                // prefix is our own constant, not model output.
+                allowedLinkPrefixes={[SCHOOL_URL]}
+              />
+            ))}
 
-          {awaiting && messages[messages.length - 1]?.blocks?.length === 0 && (
-            <div className="chat-message chat-message--assistant">
-              <ChatTypingIndicator />
-            </div>
-          )}
+            {awaiting && messages[messages.length - 1]?.blocks?.length === 0 && (
+              <div className="chat-message chat-message--assistant">
+                <ChatTypingIndicator />
+              </div>
+            )}
 
-          {/*
-            Nothing to press, and nothing to see for the first several seconds.
+            {/*
+              Nothing to press, and nothing to see for the first several seconds.
 
-            'connecting' is where every visit starts, so a notice there would fire on every
-            single page load. 'reconnecting' is a socket that dropped and is already coming
-            back — typically inside a second — and saying so would be noise about something
-            the reader cannot act on and will not outlast. Only 'offline', which the transport
-            reaches after the retries have genuinely not worked, says anything, and what it
-            says is that it is still trying. The retry is automatic, and a question typed in
-            the meantime is held and sent the moment the socket returns.
+              'connecting' is where every visit starts, so a notice there would fire on every
+              single page load. 'reconnecting' is a socket that dropped and is already coming
+              back — typically inside a second — and saying so would be noise about something
+              the reader cannot act on and will not outlast. Only 'offline', which the transport
+              reaches after the retries have genuinely not worked, says anything, and what it
+              says is that it is still trying. The retry is automatic, and a question typed in
+              the meantime is held and sent the moment the socket returns.
 
-            role="status" rather than role="alert": this is polite, and a screen reader
-            interrupting an answer being read out to announce a reconnection is worse than the
-            reconnection.
-          */}
-          {connection === 'offline' && (
-            <p className="school-page__notice" role="status">
-              Reconnecting to Term Time…
-            </p>
-          )}
+              role="status" rather than role="alert": this is polite, and a screen reader
+              interrupting an answer being read out to announce a reconnection is worse than the
+              reconnection.
+            */}
+            {connection === 'offline' && (
+              <p className="school-page__notice" role="status">
+                Reconnecting to Term Time…
+              </p>
+            )}
 
-          {error && <p className="school-page__error">{error}</p>}
-          <div ref={endRef} />
+            {error && <p className="school-page__error">{error}</p>}
+            <div ref={endRef} />
+          </div>
+
+          <ChatInput onSend={(text) => void send(text)} disabled={awaiting} maxLength={MAX_QUESTION_LENGTH} />
         </div>
 
-        <ChatInput onSend={(text) => void send(text)} disabled={awaiting} maxLength={MAX_QUESTION_LENGTH} />
+        <div className="school-page__upcoming">
+          <UpcomingPanel yearGroups={yearGroups} onAsk={askAboutEvent} />
+        </div>
       </div>
 
       <footer className="school-page__footer">

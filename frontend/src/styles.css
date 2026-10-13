@@ -11761,7 +11761,9 @@ body[data-narration-bar] .app-layout__main {
    --------------------------------------------------------------------------- */
 
 .school-page {
-  max-width: 52rem;
+  /* Wide enough for the chat and the calendar side by side. The intro text keeps its own
+     narrower measure below, so widening the page does not stretch the paragraphs. */
+  max-width: 76rem;
   margin: 0 auto;
   padding: 2rem 1.25rem 3rem;
   min-height: 100vh;
@@ -11840,6 +11842,7 @@ body[data-narration-bar] .app-layout__main {
 }
 
 .school-page__beta-note {
+  max-width: 52rem;
   margin: 0 0 1.4rem;
   font-size: 0.82rem;
   line-height: 1.5;
@@ -12034,6 +12037,365 @@ body[data-narration-bar] .app-layout__main {
   border-color: var(--color-primary);
   color: var(--color-bg);
   font-weight: 600;
+}
+
+/*
+ * Term Time's two panes: the chat, and the calendar beside it. On a narrow screen they take
+ * turns behind the two toggle buttons, and the body's data-tab says which one is showing.
+ */
+.school-page__tabs {
+  display: none;
+}
+
+.school-page__body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 23rem;
+  gap: 1.25rem;
+}
+
+.school-page__upcoming {
+  min-width: 0;
+}
+
+.school-upcoming {
+  --upcoming-amber: var(--secondary);
+  --upcoming-green: #8fe3b0;
+  --upcoming-violet: var(--ai-accent);
+
+  /* Stays in view while a long conversation scrolls the page. */
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-subtle);
+  overflow: hidden;
+}
+
+/* Darker in light mode: the dark theme's amber and green are too pale to read on white. */
+[data-theme="light"] .school-upcoming {
+  --upcoming-amber: #c2410c;
+  --upcoming-green: #15803d;
+}
+
+.school-upcoming__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.school-upcoming__title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.school-upcoming__title svg {
+  color: var(--color-primary);
+}
+
+.school-upcoming__ranges,
+.school-page__tabs {
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
+  background: var(--surface-container-high);
+}
+
+.school-upcoming__ranges {
+  display: flex;
+}
+
+.school-upcoming__range,
+.school-page__tab {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.65rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.school-upcoming__range:hover,
+.school-page__tab:hover {
+  color: var(--color-text);
+}
+
+.school-upcoming__range--on,
+.school-upcoming__range--on:hover,
+.school-page__tab--on,
+.school-page__tab--on:hover {
+  background: var(--color-primary);
+  color: var(--on-primary);
+  font-weight: 600;
+}
+
+.school-upcoming__range:focus-visible,
+.school-page__tab:focus-visible,
+.school-upcoming__event:focus-visible,
+.school-upcoming__heads-up-item:focus-visible,
+.school-upcoming__retry:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.school-upcoming__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  overflow-y: auto;
+}
+
+.school-upcoming__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.school-upcoming__today {
+  padding: 0.75rem 0.6rem 0.55rem;
+  border: 1px solid rgba(var(--primary-rgb), 0.45);
+  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(var(--primary-rgb), 0.14),
+    rgba(var(--primary-rgb), 0.03)
+  );
+  box-shadow: 0 0 18px rgba(var(--primary-rgb), 0.1);
+}
+
+.school-upcoming__today-date {
+  margin: 0 0 0.3rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.school-upcoming__today-empty {
+  margin: 0.15rem 0.5rem 0.2rem;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+}
+
+.school-upcoming__heads-up {
+  padding: 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--upcoming-amber) 55%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--upcoming-amber) 12%, transparent);
+}
+
+.school-upcoming__heads-up-item {
+  display: block;
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.school-upcoming__heads-up-item:hover {
+  background: color-mix(in srgb, var(--upcoming-amber) 14%, transparent);
+}
+
+.school-upcoming__heads-up-item strong {
+  color: var(--upcoming-amber);
+}
+
+.school-upcoming__day-name {
+  margin: 0 0 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.school-upcoming__event {
+  display: grid;
+  grid-template-columns: 4.2rem 0.5rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 0.55rem;
+  width: 100%;
+  padding: 0.38rem 0.5rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.school-upcoming__event:hover,
+.school-upcoming__event:focus-visible {
+  background: var(--surface-container-high);
+}
+
+.school-upcoming__time {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.school-upcoming__dot {
+  /* Level with the first line of the title, not the middle of a title that wraps. */
+  align-self: start;
+  margin-top: 0.45em;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.school-upcoming__event--club .school-upcoming__dot {
+  background: var(--upcoming-violet);
+}
+
+.school-upcoming__event--trip .school-upcoming__dot {
+  background: var(--upcoming-green);
+}
+
+.school-upcoming__event--inset .school-upcoming__dot,
+.school-upcoming__event--half-term .school-upcoming__dot,
+.school-upcoming__event--term-boundary .school-upcoming__dot {
+  background: var(--upcoming-amber);
+}
+
+.school-upcoming__badge {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0 0.35rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--upcoming-amber);
+  background: color-mix(in srgb, var(--upcoming-amber) 14%, transparent);
+}
+
+.school-upcoming__meta {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* The "ask about this" hint appears on hover or focus; a touch screen has neither, so there it
+   is always faintly visible to say that a tap does something. */
+.school-upcoming__ask {
+  display: inline-flex;
+  color: var(--upcoming-violet);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.school-upcoming__event:hover .school-upcoming__ask,
+.school-upcoming__event:focus-visible .school-upcoming__ask {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .school-upcoming__ask {
+    opacity: 0.7;
+  }
+}
+
+.school-upcoming__status {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--color-text-muted);
+}
+
+.school-upcoming__status p {
+  margin: 0 0 0.5rem;
+}
+
+.school-upcoming__retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.school-upcoming__retry:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.school-upcoming__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  margin: 0;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.school-upcoming__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 60rem) {
+  .school-page__tabs {
+    display: flex;
+    margin: 0 0 0.9rem;
+  }
+
+  .school-page__tab {
+    flex: 1;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.88rem;
+  }
+
+  .school-page__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .school-page__body[data-tab='upcoming'] .school-page__chat,
+  .school-page__body[data-tab='ask'] .school-page__upcoming {
+    display: none;
+  }
+
+  .school-upcoming {
+    position: static;
+    max-height: none;
+  }
 }
 
 @media (max-width: 34rem) {

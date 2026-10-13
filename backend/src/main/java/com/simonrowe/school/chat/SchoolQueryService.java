@@ -1,6 +1,7 @@
 package com.simonrowe.school.chat;
 
 import com.simonrowe.school.model.AcademicYear;
+import com.simonrowe.school.model.EventTimes;
 import com.simonrowe.school.model.SchoolDocument;
 import com.simonrowe.school.model.SchoolDocumentRepository;
 import com.simonrowe.school.model.SchoolEvent;
@@ -13,6 +14,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.time.DayOfWeek;
+import java.util.Comparator;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -65,6 +67,18 @@ public class SchoolQueryService {
    * what one tool call can pull out of the corpus.
    */
   private static final int MAX_WINDOW_DAYS = 62;
+
+  /**
+   * Where the school is, and so which date "today" is for the calendar pane.
+   *
+   * <p>Explicit rather than the injected clock's zone, because production containers run in UTC:
+   * between midnight and 1am during British Summer Time, the clock's own zone still says
+   * yesterday, and the pane would pin yesterday's events as today's.
+   */
+  static final ZoneId SCHOOL_ZONE = ZoneId.of("Europe/London");
+
+  /** How many weeks after the current one the calendar pane covers. */
+  static final int WEEKS_AFTER_THIS_ONE = 2;
 
   private final SchoolEventRepository events;
   private final SchoolDocumentRepository documents;
@@ -138,8 +152,46 @@ public class SchoolQueryService {
         events.findOverlapping(from, to, audience.visibilities());
     return found.stream()
         .filter(e -> e.appliesToAny(selected))
-        .sorted(java.util.Comparator.comparing(SchoolEvent::startDate))
+        .sorted(Comparator.comparing(SchoolEvent::startDate))
         .toList();
+  }
+
+  /**
+   * What the calendar pane shows: from today to the end of the week after next.
+   *
+   * <p>The boundaries are worked out here rather than in the browser, so the pane, the chat and
+   * the tests all agree on what "this week" means. On a Saturday or Sunday "this week" is the
+   * week ahead: the two days left of the current week hold nothing at school, and the coming
+   * Monday is what a parent looking at the page then is planning for.
+   *
+   * <p>Each day's events are ordered by start time, all-day items first, so the pane can list
+   * them as they come without sorting anything itself.
+   *
+   * @param yearGroups the year groups to narrow to, empty for everything
+   * @param audience which tiers may be read
+   * @return the window and its events
+   */
+  public UpcomingEvents upcoming(final List<String> yearGroups, final SchoolAudience audience) {
+    final LocalDate today = LocalDate.now(clock.withZone(SCHOOL_ZONE));
+    final LocalDate weekEnd = endOfWeek(today);
+    final LocalDate until = weekEnd.plusWeeks(WEEKS_AFTER_THIS_ONE);
+    final List<SchoolEvent> found = eventsBetween(today, until, yearGroups, audience).stream()
+        .sorted(Comparator.comparing(SchoolEvent::startDate)
+            .thenComparingInt(e -> EventTimes.minutesOf(e.time(), e.allDay())))
+        .toList();
+    return new UpcomingEvents(today, weekEnd, until, found);
+  }
+
+  /**
+   * The last day of "this week" as the calendar pane means it.
+   *
+   * @param today today's date
+   * @return this Sunday, or next Sunday when today is already the weekend
+   */
+  static LocalDate endOfWeek(final LocalDate today) {
+    final LocalDate sunday = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+    final DayOfWeek day = today.getDayOfWeek();
+    return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY ? sunday.plusWeeks(1) : sunday;
   }
 
   /**

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The public chat surface, end to end against a real Mongo.
@@ -39,6 +40,9 @@ class SchoolChatIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private SchoolProperties properties;
+
+  @Autowired
+  private JsonMapper jsonMapper;
 
   @BeforeEach
   void clear() {
@@ -65,6 +69,31 @@ class SchoolChatIntegrationTest extends AbstractIntegrationTest {
             .content("{\"question\":\"When is half term?\"}"))
         .andExpect(status().isServiceUnavailable())
         .andExpect(jsonPath("$.outcome").value("UNAVAILABLE"));
+  }
+
+  @Test
+  @DisplayName("the calendar is reachable without authentication, and says when it is off")
+  void calendarIsPublic() throws Exception {
+    // 503 rather than 401: the request got past security, which is the property worth pinning.
+    // A future tightening that puts /api/school/** behind auth would blank the pane for everyone.
+    mockMvc.perform(get("/api/school/calendar").param("yearGroups", "Year 3"))
+        .andExpect(status().isServiceUnavailable());
+  }
+
+  @Test
+  @DisplayName("the calendar's dates reach the browser as ISO strings, which the page parses")
+  void calendarDatesAreIsoStrings() throws Exception {
+    final LocalDate day = LocalDate.of(2026, 10, 13);
+    final String json = jsonMapper.writeValueAsString(
+        new SchoolCalendarController.SchoolCalendarResponse(day, day.plusDays(5),
+            day.plusDays(19), List.of(new SchoolCalendarController.CalendarEvent("id",
+                "Harvest Festival", day, day, false, "2:30pm", SchoolEvent.EventType.OTHER,
+                List.of(), null))));
+
+    assertThat(json)
+        .contains("\"today\":\"2026-10-13\"")
+        .contains("\"startDate\":\"2026-10-13\"")
+        .contains("\"type\":\"OTHER\"");
   }
 
   @Test
