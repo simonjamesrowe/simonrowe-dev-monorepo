@@ -1,18 +1,22 @@
 package com.simonrowe.coparent.expense;
 
 import com.simonrowe.coparent.model.Expense;
+import com.simonrowe.coparent.model.ExpenseSettlement;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.bson.types.ObjectId;
 
 /**
  * The Expenses page's cards and the dashboard's balance, from one parent's point of view.
  *
- * @param balance net of every paid, agreed, unsettled expense, in either direction
+ * @param balance net of every paid, agreed, unsettled expense, in either direction, plus what
+ *     settle-ups paid more or less than their expenses came to
  * @param needsYourAgreement expenses that wait on this parent's OK: the ones the other parent
  *     sent, and, until the co-parent joins, the ones this parent sent too
  * @param needsYourAction everything waiting on this parent: agreeing, fixing a dispute, paying
@@ -34,14 +38,20 @@ public record ExpenseSummary(
   static final int UPCOMING_DAYS = 30;
   static final int UPCOMING_SHOWN = 3;
 
-  /** Who owes whom overall. Both ids are null when the parents are square. */
+  /**
+   * Who owes whom overall. Both ids are null when the parents are square.
+   *
+   * @param carriedPence what settle-ups paid more (or less) than their expenses came to, from
+   *     this parent's side: positive is owed to them. Already included in {@code netPence}.
+   */
   public record Balance(
       long netPence,
       ObjectId debtorParentId,
       ObjectId creditorParentId,
       int expenseCount,
       long awaitingYourConfirmationPence,
-      long awaitingTheirConfirmationPence
+      long awaitingTheirConfirmationPence,
+      long carriedPence
   ) {
   }
 
@@ -63,15 +73,16 @@ public record ExpenseSummary(
 
   /** Folds the family's live expenses into the summary for {@code me}, co-parent joined. */
   static ExpenseSummary of(final List<Expense> expenses, final ObjectId me, final LocalDate today) {
-    return of(expenses, me, today, true);
+    return of(expenses, List.of(), me, today, true);
   }
 
   /**
-   * Folds the family's live expenses into the summary for {@code me}. Until the co-parent has
-   * joined, {@code me} agrees to everything, so nothing is counted as waiting for them.
+   * Folds the family's live expenses and settle-ups into the summary for {@code me}. Until the
+   * co-parent has joined, {@code me} agrees to everything, so nothing is counted as waiting for
+   * them.
    */
-  static ExpenseSummary of(final List<Expense> expenses, final ObjectId me, final LocalDate today,
-      final boolean coparentJoined) {
+  static ExpenseSummary of(final List<Expense> expenses, final List<ExpenseSettlement> settlements,
+      final ObjectId me, final LocalDate today, final boolean coparentJoined) {
     long net = 0;
     int counted = 0;
     long awaitingMine = 0;
@@ -97,10 +108,34 @@ public record ExpenseSummary(
         awaitingTheirs += claimed ? owed : 0;
       }
     }
+    // A settle-up still waiting to be confirmed has its expenses in the balance at their full
+    // amount, so its difference joins only once the money is confirmed and they leave it.
+    final Set<ObjectId> unconfirmed = expenses.stream()
+        .filter(expense -> Expense.CLAIMED.equals(expense.reimbursement().status())
+            && expense.reimbursement().settlementId() != null)
+        .map(expense -> expense.reimbursement().settlementId())
+        .collect(Collectors.toSet());
+    long carried = 0;
+    for (final ExpenseSettlement settlement : settlements) {
+      final long difference = settlement.differencePence();
+      if (difference == 0 || settlement.fromParentId() == null
+          || unconfirmed.contains(settlement.id())) {
+        continue;
+      }
+      // Overpaid: the payee owes the difference back to the payer. Underpaid: the reverse.
+      if (me.equals(settlement.fromParentId())) {
+        carried += difference;
+        other = settlement.toParentId();
+      } else {
+        carried -= difference;
+        other = settlement.fromParentId();
+      }
+    }
+    net += carried;
     final Balance balance = new Balance(Math.abs(net),
         net < 0 ? me : net > 0 ? other : null,
         net > 0 ? me : net < 0 ? other : null,
-        counted, awaitingMine, awaitingTheirs);
+        counted, awaitingMine, awaitingTheirs, carried);
 
     final List<Expense> toAgree = expenses.stream()
         .filter(expense -> Expense.PENDING.equals(expense.agreement().status())

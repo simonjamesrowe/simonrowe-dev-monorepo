@@ -5,8 +5,11 @@ import static com.simonrowe.coparent.expense.ExpenseFixtures.SAM;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.simonrowe.coparent.model.Expense;
+import com.simonrowe.coparent.model.ExpenseSettlement;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import org.bson.types.ObjectId;
 import org.junit.jupiter.api.Test;
 
 class ExpenseSummaryTest {
@@ -37,6 +40,52 @@ class ExpenseSummaryTest {
     assertThat(sam.balance().netPence()).isEqualTo(4245);
     assertThat(sam.balance().debtorParentId()).isEqualTo(SAM);
     assertThat(sam.balance().awaitingTheirConfirmationPence()).isEqualTo(4000);
+  }
+
+  @Test
+  void settleUpThatPaidMoreThanItsExpensesIsOwedBackOnceConfirmed() {
+    final ObjectId transfer = new ObjectId();
+    // Alex paid Sam a round 1,500.00 against 1,478.68 of expenses Sam had paid.
+    final List<ExpenseSettlement> settlements = List.of(
+        settlement(transfer, ALEX, SAM, 147868, 150000));
+    final List<Expense> settled = List.of(
+        ExpenseFixtures.paidBackIn(295736, SAM, Expense.REIMBURSED, transfer));
+
+    final ExpenseSummary alex = ExpenseSummary.of(settled, settlements, ALEX, TODAY, true);
+    assertThat(alex.balance().netPence()).isEqualTo(2132);
+    assertThat(alex.balance().creditorParentId()).isEqualTo(ALEX);
+    assertThat(alex.balance().debtorParentId()).isEqualTo(SAM);
+    assertThat(alex.balance().carriedPence()).isEqualTo(2132);
+    assertThat(alex.balance().expenseCount()).isZero();
+
+    final ExpenseSummary sam = ExpenseSummary.of(settled, settlements, SAM, TODAY, true);
+    assertThat(sam.balance().netPence()).isEqualTo(2132);
+    assertThat(sam.balance().debtorParentId()).isEqualTo(SAM);
+    assertThat(sam.balance().carriedPence()).isEqualTo(-2132);
+
+    // While Sam has yet to confirm, the expenses still count in full and the extra waits.
+    final List<Expense> claimed = List.of(
+        ExpenseFixtures.paidBackIn(295736, SAM, Expense.CLAIMED, transfer));
+    final ExpenseSummary waiting = ExpenseSummary.of(claimed, settlements, ALEX, TODAY, true);
+    assertThat(waiting.balance().netPence()).isEqualTo(147868);
+    assertThat(waiting.balance().debtorParentId()).isEqualTo(ALEX);
+    assertThat(waiting.balance().carriedPence()).isZero();
+  }
+
+  @Test
+  void shortfallIsStillOwedAndOffsetsAnEarlierOverpayment() {
+    final ExpenseSettlement over = settlement(new ObjectId(), ALEX, SAM, 147868, 150000);
+    final ExpenseSettlement under = settlement(new ObjectId(), ALEX, SAM, 10000, 7868);
+
+    final ExpenseSummary square = ExpenseSummary.of(List.of(), List.of(over, under), ALEX,
+        TODAY, true);
+    assertThat(square.balance().netPence()).isZero();
+    assertThat(square.balance().debtorParentId()).isNull();
+
+    final ExpenseSummary owing = ExpenseSummary.of(List.of(), List.of(under), SAM, TODAY, true);
+    assertThat(owing.balance().netPence()).isEqualTo(2132);
+    assertThat(owing.balance().creditorParentId()).isEqualTo(SAM);
+    assertThat(owing.balance().debtorParentId()).isEqualTo(ALEX);
   }
 
   @Test
@@ -82,13 +131,13 @@ class ExpenseSummaryTest {
         ExpenseFixtures.expense(250, Expense.PAID, TODAY, SAM, 50, Expense.PENDING,
             Expense.NONE, ALEX, "food"));
 
-    final ExpenseSummary waiting = ExpenseSummary.of(expenses, ALEX, TODAY, false);
+    final ExpenseSummary waiting = ExpenseSummary.of(expenses, List.of(), ALEX, TODAY, false);
     assertThat(waiting.needsYourAgreement().count()).isEqualTo(2);
     assertThat(waiting.needsYourAgreement().totalPence()).isEqualTo(350);
     assertThat(waiting.needsYourAction()).isEqualTo(2);
     assertThat(waiting.awaitingOther()).isZero();
 
-    final ExpenseSummary joined = ExpenseSummary.of(expenses, ALEX, TODAY, true);
+    final ExpenseSummary joined = ExpenseSummary.of(expenses, List.of(), ALEX, TODAY, true);
     assertThat(joined.needsYourAgreement().count()).isZero();
     assertThat(joined.awaitingOther()).isEqualTo(2);
   }
@@ -132,5 +181,13 @@ class ExpenseSummaryTest {
   private static Expense upcoming(final long pence, final LocalDate due, final String agreement) {
     return ExpenseFixtures.expense(pence, Expense.UPCOMING, due, SAM, 50, agreement,
         Expense.NONE, SAM, "activities");
+  }
+
+  private static ExpenseSettlement settlement(final ObjectId id, final ObjectId from,
+      final ObjectId to, final long expensesPence, final long paidPence) {
+    return new ExpenseSettlement(id, ExpenseFixtures.FAMILY, from, to, expensesPence,
+        Expense.GBP, List.of(new ExpenseSettlement.Payment(ExpenseSettlement.BANK_TRANSFER,
+            paidPence, LocalDate.of(2026, 10, 8), null)),
+        List.of(), from, Instant.parse("2026-10-13T09:00:00Z"), null, null);
   }
 }

@@ -274,6 +274,20 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- coparent-transfer-amount-edit: **A settle-up records what was really sent, and its recorder can
+  edit it.** £1,500 sent against £1,478.68 of expenses used to be refused. Load-bearing bits:
+  - **The difference is carried into the balance, not refused.** `ExpenseSummary` adds each
+    settle-up's `paidPence − amountPence` (signed by who paid) to `netPence` and reports it as
+    `balance.carriedPence`. Overpaid is owed back; underpaid is still owed; the next settle-up's
+    shortfall offsets an earlier overpayment.
+  - **Nothing is carried while the settle-up's expenses are still `claimed`.** They count in full
+    until confirmed, so carrying the difference then would double-count.
+  - **`PUT …/expenses/settlements/{id}` replaces the payments only**, recorder-only (403
+    otherwise), never for a settle-up where nothing changed hands. The expenses stay settled.
+    `settlementChanged` emails the other parent when the amount or a date changed.
+  - `paidPence` is derived from the payments, never stored. `ExpenseService.summary` reads
+    settlements through the coparent `MongoTemplate`, so its constructor is unchanged.
+  See `specs/051-coparent-expenses/spec.md` §10.
 - termtime-calendar-pane: **Term Time shows what is coming up beside the chat.** A right-hand
   pane (`UpcomingPanel`) pins today's events, pulls INSET days, half terms and term dates into one
   heads-up strip for the whole three-week window, and lists the rest by day for Today, This week
@@ -328,7 +342,7 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   - **Agree and Confirm received loop the per-expense transitions** at each row's version.
     **Mark paid back calls `POST /settle`** with a `note`, which is exactly what each row's own
     Mark paid back does: claim what you owe, reimburse what you're owed, no payment recorded. It
-    deliberately does not go through `expense_settlements`, whose payments must add up exactly;
+    deliberately does not go through `expense_settlements`, which records a payment;
     debts settled long ago or outside the app have no transfer to record.
   - **`StatementClassifier` gets `FAMILY_SHARES`**: up to 40 titles and categories of the
     family's live, non-disputed expenses, either parent's. The prompt's default calls a mortgage,
@@ -344,9 +358,9 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     tab, the nav badge and the server agree. It stops the moment they are `active`; earlier
     agreements stay, with `respondedBy` saying who agreed.
   - **`expense_settlements` (`V055`) holds the payments and the expenses they paid back**, and
-    each expense carries `reimbursement.settlementId`. **The payments must add up to exactly
-    the ticked expenses' net** (browser and `ExpenseSettlementService`), or a transfer would
-    mark settled more than it paid. Several payments per settle-up is how "paid in parts" works.
+    each expense carries `reimbursement.settlementId`. Several payments per settle-up is how
+    "paid in parts" works. (The exact-match rule on payments is gone: see
+    `coparent-transfer-amount-edit`.)
   - **Every item is checked before anything is written** (`ExpenseService.planSettlement`), so
     a stale one refuses the lot, unlike `POST /settle`, which is now the Expenses page's bulk
     "Mark paid back" (see `coparent-expense-bulk-actions`).

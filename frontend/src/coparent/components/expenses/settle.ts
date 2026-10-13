@@ -130,3 +130,24 @@ export function settlementState(settlement: ExpenseSettlement, expenses: Expense
   if (waiting.length === 0) return 'settled';
   return waiting.some((expense) => expense.payerId === me) ? 'awaitingMe' : 'awaitingThem';
 }
+
+/**
+ * What it means that a payment did not match what its expenses came to, in the signed-in
+ * parent's voice, or null when it matched. The expenses are settled either way; the difference
+ * is carried into the balance (ExpenseSummary on the server), so an overpayment is owed back
+ * and a shortfall is still owed.
+ */
+export function differenceText(
+  paidPence: number,
+  expensesPence: number,
+  iPaid: boolean,
+  otherName: string,
+): string | null {
+  const difference = paidPence - expensesPence;
+  if (difference === 0 || expensesPence === 0) return null;
+  const amount = formatMoney(Math.abs(difference));
+  if (difference > 0) {
+    return `${amount} more than the expenses came to, so ${iPaid ? `${otherName} owes you ${amount} back` : `you owe ${otherName} ${amount} back`}. It's carried into the balance.`;
+  }
+  return `${amount} less than the expenses came to, so ${iPaid ? `you still owe ${otherName} ${amount}` : `${otherName} still owes you ${amount}`}. It's carried into the balance.`;
+}

@@ -86,6 +86,11 @@ export interface ExpenseSummary {
     expenseCount: number;
     awaitingYourConfirmationPence: number;
     awaitingTheirConfirmationPence: number;
+    /**
+     * What settle-ups paid more (positive, owed to the signed-in parent) or less than their
+     * expenses came to. Already included in netPence.
+     */
+    carriedPence: number;
   };
   needsYourAgreement: { count: number; totalPence: number };
   needsYourAction: number;
@@ -123,9 +128,10 @@ export interface SettlementPayment {
 }
 
 /**
- * One settling up: the payments that changed hands and the expenses they paid back. The
- * payments add up to amountPence, which moved from fromParentId to toParentId (both null when
- * the expenses cancelled each other out).
+ * One settling up: the payments that changed hands and the expenses they paid back. amountPence
+ * is what the expenses net to, owed by fromParentId to toParentId (both null when the expenses
+ * cancelled each other out); paidPence is what the payments add up to. The two can differ, and
+ * the difference is carried into the balance.
  */
 export interface ExpenseSettlement {
   id: string;
@@ -133,11 +139,14 @@ export interface ExpenseSettlement {
   fromParentId: string | null;
   toParentId: string | null;
   amountPence: number;
+  paidPence: number;
   currency: 'GBP';
   payments: SettlementPayment[];
   expenseIds: string[];
   recordedBy: string;
   createdAt: string;
+  updatedBy: string | null;
+  updatedAt: string | null;
 }
 
 export interface RecordSettlementResult {

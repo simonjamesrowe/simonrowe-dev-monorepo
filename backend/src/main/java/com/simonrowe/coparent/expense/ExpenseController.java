@@ -331,7 +331,8 @@ public class ExpenseController {
       return new SummaryResponse(summary.currency(),
           new BalanceResponse(balance.netPence(), hex(balance.debtorParentId()),
               hex(balance.creditorParentId()), balance.expenseCount(),
-              balance.awaitingYourConfirmationPence(), balance.awaitingTheirConfirmationPence()),
+              balance.awaitingYourConfirmationPence(), balance.awaitingTheirConfirmationPence(),
+              balance.carriedPence()),
           summary.needsYourAgreement(), summary.needsYourAction(), summary.awaitingOther(),
           new UpcomingResponse(summary.upcoming().count(), summary.upcoming().totalPence(),
               summary.upcoming().yourSharePence(),
@@ -346,7 +347,8 @@ public class ExpenseController {
       String creditorParentId,
       int expenseCount,
       long awaitingYourConfirmationPence,
-      long awaitingTheirConfirmationPence
+      long awaitingTheirConfirmationPence,
+      long carriedPence
   ) {
   }
 

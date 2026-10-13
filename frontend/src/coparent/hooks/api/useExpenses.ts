@@ -178,6 +178,14 @@ export function useRecordSettlement() {
   );
 }
 
+/** Corrects a settle-up's payments: how much, when, how and with what reference. */
+export function useUpdateSettlement() {
+  return useExpenseMutation(
+    async ({ familyId, settlementId, payments }: { familyId: string; settlementId: string; payments: SettlementPayment[] }) =>
+      (await apiClient.put<ExpenseSettlement>(`${base(familyId)}/settlements/${settlementId}`, { payments })).data,
+  );
+}
+
 /** The parent who was paid says a settle-up's payments arrived. */
 export function useConfirmSettlement() {
   return useExpenseMutation(

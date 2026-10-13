@@ -80,7 +80,7 @@ class ExpenseMailerTest {
                 LocalDate.of(2026, 10, 7), null),
             new ExpenseSettlement.Payment(ExpenseSettlement.OTHER, 745,
                 LocalDate.of(2026, 10, 8), null)),
-        List.of(shoes.id(), trip.id()), SAM, Instant.parse("2026-10-08T09:00:00Z"));
+        List.of(shoes.id(), trip.id()), SAM, Instant.parse("2026-10-08T09:00:00Z"), null, null);
 
     mailer(true).settlementRecorded(ALEX_PARENT, SAM_PARENT, settlement, List.of(shoes, trip));
 
@@ -94,6 +94,45 @@ class ExpenseMailerTest {
         "- Item: £32.45",
         "- Item: £15.00",
         "https://coparents.example/expenses?view=transfers");
+  }
+
+  @Test
+  void settleUpThatPaidMoreSaysTheDifferenceIsOwedBack() {
+    final Expense shoes = ExpenseFixtures.paid(6490, ALEX, 50, Expense.AGREED, Expense.CLAIMED);
+    final ExpenseSettlement settlement = settlement(3245, 3500, LocalDate.of(2026, 10, 6));
+
+    mailer(true).settlementRecorded(ALEX_PARENT, SAM_PARENT, settlement, List.of(shoes));
+
+    final SimpleMailMessage message = sent();
+    assertThat(message.getSubject()).isEqualTo("Sam says they paid you £35.00");
+    assertThat(message.getText()).contains(
+        "That is £2.55 more than the expenses came to (£32.45), so Alex owes £2.55 back.");
+  }
+
+  @Test
+  void correctingSettleUpTellsTheOtherParentWhatItNowRecords() {
+    final ExpenseSettlement before = settlement(3245, 3245, LocalDate.of(2026, 10, 6));
+    final ExpenseSettlement after = before.withPayments(List.of(
+        new ExpenseSettlement.Payment(ExpenseSettlement.BANK_TRANSFER, 3000,
+            LocalDate.of(2026, 10, 2), null)), SAM, Instant.parse("2026-10-09T09:00:00Z"));
+
+    mailer(true).settlementChanged(ALEX_PARENT, SAM_PARENT, before, after);
+
+    final SimpleMailMessage message = sent();
+    assertThat(message.getTo()).containsExactly("alex@example.com");
+    assertThat(message.getSubject()).isEqualTo("Sam changed a settle-up to £30.00");
+    assertThat(message.getText()).contains(
+        "It now records £30.00 paid by Sam to Alex (it was £32.45)",
+        "- Bank transfer, 2 Oct 2026: £30.00",
+        "That is £2.45 less than the expenses came to (£32.45), so Sam still owes £2.45.");
+  }
+
+  private static ExpenseSettlement settlement(final long expensesPence, final long paidPence,
+      final LocalDate paidOn) {
+    return new ExpenseSettlement(new ObjectId(), ExpenseFixtures.FAMILY, SAM, ALEX,
+        expensesPence, Expense.GBP, List.of(new ExpenseSettlement.Payment(
+            ExpenseSettlement.BANK_TRANSFER, paidPence, paidOn, null)),
+        List.of(), SAM, Instant.parse("2026-10-08T09:00:00Z"), null, null);
   }
 
   @Test
