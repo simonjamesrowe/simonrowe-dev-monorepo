@@ -1028,6 +1028,23 @@ It is one indexed read of `school_events`, with no model call behind it.
   unreadable times last. The source's own wording is what is displayed, never the parsed value.
   A start written without am/pm takes it from the end of its range (`3:30 - 4:30pm`), and a bare
   number is never a time, so "Year 3 only" cannot sort as 3am.
+- **One event reported by several sources is listed once** (`EventDuplicates`, applied in
+  `SchoolQueryService.eventsBetween` and `ofType`, so the chat's date tools get it too).
+  `SchoolIds.eventId` merges only identical titles, and the extractor words the same event
+  differently in almost every source: on 2026-10-13 the pane showed the autumn half term six
+  times. Rows are merged when they have the same type, cover the same school days (a weekend at
+  either end is trimmed, since the feed runs half term to the Saturday), name no conflicting year
+  groups, and either are a half term or INSET day, have one title's words inside the other's
+  (ignoring "Kilmorie Primary School", "year", calendar years and connecting words), or are
+  multi-day trips sharing a word. An event must match **every** row in a group, so a generic
+  "Class Assembly" cannot chain two classes' assemblies together. The row shown is the most
+  authoritative source's, then the most detailed, then the shortest title. It runs when events
+  are read, not when they are written, so nothing stored changes. A write-time merge would let
+  one source's row stand in for another's, and editing or re-extracting a document deletes the
+  rows it produced. Kept apart on purpose: differently worded single-day events, and events
+  whose sources disagree about the dates (the October parents' evening is Mon–Fri in one source
+  and Tue–Sat in another). A duplicate left showing costs a second glance. A wrong merge hides
+  an event.
 - **Clicking an event asks the chat about it** with the visitor's year groups, and on a phone it
   switches to Ask.
 - A tab left open reloads the calendar when it becomes visible again after 30 minutes, so

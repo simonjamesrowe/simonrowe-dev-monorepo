@@ -113,4 +113,26 @@ class SchoolUpcomingQueryTest {
     assertThat(upcoming.events()).extracting(SchoolEvent::id)
         .containsExactly("whole school", "year 3 trip");
   }
+
+  @Test
+  @DisplayName("one event from two sources is listed once, and the year filter runs first")
+  void duplicatesCollapsedAfterTheYearFilter() {
+    final LocalDate day = LocalDate.of(2026, 10, 15);
+    // The feed copy is more authoritative but names Year 6 only; collapsing before filtering
+    // would keep it and then drop it, leaving a Year 3 parent with no harvest festival at all.
+    when(events.findOverlapping(any(), any(), anyList())).thenReturn(List.of(
+        new SchoolEvent("feed", "Harvest Festival", day, day, true, SchoolEvent.EventType.OTHER,
+            List.of("Year 6"), "2026/27", SchoolSourceType.CALENDAR_FEED, "doc",
+            Visibility.PUBLIC, null, null, null, null),
+        new SchoolEvent("email", "Kilmorie Harvest Festival", day, day, true,
+            SchoolEvent.EventType.OTHER, List.of(), "2026/27", SchoolSourceType.EMAIL, "doc",
+            Visibility.PUBLIC, null, null, null, null)));
+
+    assertThat(at("2026-10-13T08:00:00Z").upcoming(List.of("Year 3"),
+        SchoolAudience.anonymous()).events()).extracting(SchoolEvent::id)
+        .containsExactly("email");
+    assertThat(at("2026-10-13T08:00:00Z").upcoming(List.of(),
+        SchoolAudience.anonymous()).events()).extracting(SchoolEvent::id)
+        .containsExactly("feed");
+  }
 }
