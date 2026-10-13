@@ -1032,19 +1032,33 @@ It is one indexed read of `school_events`, with no model call behind it.
   `SchoolQueryService.eventsBetween` and `ofType`, so the chat's date tools get it too).
   `SchoolIds.eventId` merges only identical titles, and the extractor words the same event
   differently in almost every source: on 2026-10-13 the pane showed the autumn half term six
-  times. Rows are merged when they have the same type, cover the same school days (a weekend at
-  either end is trimmed, since the feed runs half term to the Saturday), name no conflicting year
-  groups, and either are a half term or INSET day, have one title's words inside the other's
-  (ignoring "Kilmorie Primary School", "year", calendar years and connecting words), or are
-  multi-day trips sharing a word. An event must match **every** row in a group, so a generic
-  "Class Assembly" cannot chain two classes' assemblies together. The row shown is the most
-  authoritative source's, then the most detailed, then the shortest title. It runs when events
-  are read, not when they are written, so nothing stored changes. A write-time merge would let
-  one source's row stand in for another's, and editing or re-extracting a document deletes the
-  rows it produced. Kept apart on purpose: differently worded single-day events, and events
-  whose sources disagree about the dates (the October parents' evening is Mon–Fri in one source
-  and Tue–Sat in another). A duplicate left showing costs a second glance. A wrong merge hides
-  an event.
+  times. Rows are merged when they have the same type, name no conflicting year groups, cover
+  the same days, and either are a half term or INSET day, have one title's words inside the
+  other's, or are multi-day trips sharing a word. The title comparison ignores "Kilmorie Primary
+  School", "year", month names, calendar years, connecting words and a plural "s".
+  - "The same days" means the same school days for a single-day event. For an event over several
+    days it means starting in the same week and ending in the same week, because sources disagree
+    at the edges: the October parents' evenings were Mon–Fri in one source and Tue–Sat in
+    another, and the enrichment clubs ended on 30 Nov in one and 4 Dec in another. Single-day
+    events get no slack, because "New parent tour" really does run on three days in a fortnight.
+  - **A club programme the extractor typed `TERM_BOUNDARY` is shown as a club.** The model read
+    "Autumn Term Enrichment Clubs" as a term date, so the pane badged it "Term dates" three times
+    beside the real term. A non-feed term boundary whose title `EventTypeClassifier` calls a club
+    counts as a club, and a term boundary whose words all appear in a club's title ("Autumn Term
+    2026" beside "Kilmorie Enrichment Autumn Term 2026") joins it. Calendar-feed rows are exempt
+    from both, so the feed's real term dates can never be hidden inside a club. The extractor
+    prompt now says so too, for new extractions.
+  - An event must match **every** row in a group, so a generic "Class Assembly" cannot chain two
+    classes' assemblies together.
+  - The row shown is the most authoritative source's, then the most detailed. After that comes
+    the most informative title (significant words, minus one per word of the school's name),
+    then the shortest.
+  - It runs when events are read, not when they are written, so nothing stored changes. A
+    write-time merge would let one source's row stand in for another's, and editing or
+    re-extracting a document deletes the rows it produced.
+  - Precision over recall: a duplicate left showing costs a second glance, a wrong merge hides
+    an event. Still shown twice on purpose: the 31 Oct secondary application deadline, tagged
+    Year 6 in one source and Year 7 in another, with unrelated wording.
 - **Clicking an event asks the chat about it** with the visitor's year groups, and on a phone it
   switches to Ask.
 - A tab left open reloads the calendar when it becomes visible again after 30 minutes, so
