@@ -1,0 +1,70 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:04.931
+A letter home from school is the classic piece of admin: a date, a cost, a deadline.
+
+00:00:04.931 --> 00:00:07.924
+I open Quick add and give it a photo of the letter.
+
+00:00:07.924 --> 00:00:09.920
+The photo is read, and never kept.
+
+00:00:10.523 --> 00:00:11.550
+It finds two things.
+
+00:00:11.550 --> 00:00:20.843
+The trip goes on the calendar for Leo, from quarter past nine to three, and the twelve pounds becomes a cost coming up, due on the sixth of November, with nobody down to pay it yet.
+
+00:00:23.376 --> 00:00:27.064
+I approve each one on its own, because there is no approve all.
+
+00:00:27.064 --> 00:00:30.576
+The trip joins the calendar, and the cost waits for a payer.
+
+00:00:31.180 --> 00:00:34.946
+Next, a note that says Sam paid forty dollars for ballet shoes.
+
+00:00:34.946 --> 00:00:38.472
+Expenses are in pounds, so nothing is converted or guessed.
+
+00:00:38.472 --> 00:00:41.700
+The card is blocked until I say what it was in pounds.
+
+00:00:42.303 --> 00:00:48.463
+It came to thirty-two pounds on the card statement, so I change the amount, choose pounds, and approve it.
+
+00:00:49.848 --> 00:00:52.987
+Bank statements are the other place shared costs hide.
+
+00:00:52.987 --> 00:00:55.021
+I upload last month's Monzo export.
+
+00:00:55.021 --> 00:01:01.648
+A parser written for that bank reads it, money in is dropped, and every row is kept only as a one-way fingerprint.
+
+00:01:02.250 --> 00:01:07.401
+The model sees only the merchant, the amount and the date, plus what this family already shares.
+
+00:01:07.401 --> 00:01:11.050
+Out of twenty-four payments it suggests four, and says why for each.
+
+00:01:11.653 --> 00:01:14.073
+I turn the Clarks shoes into an expense.
+
+00:01:14.073 --> 00:01:21.453
+It is already filled in as Mia's school shoes, paid by me and split evenly, and Sam sees the expense, never the statement.
+
+00:01:22.056 --> 00:01:26.736
+Uploading the same statement again adds nothing, because every row it holds has been seen before.
+
+00:01:29.091 --> 00:01:32.620
+On Sam's side, everything I approved is waiting to be agreed.
+
+00:01:32.620 --> 00:01:36.091
+None of the statement was shared, only the one cost I chose.
+
+00:01:37.397 --> 00:01:44.438
+That was Quick add and statement import in CoParent: a photo, a note and a bank export turned into suggestions.
+
+00:01:44.438 --> 00:01:49.957
+The AI does the reading and the typing, and nothing changes until a parent approves it.
