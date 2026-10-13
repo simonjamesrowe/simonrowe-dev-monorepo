@@ -32,13 +32,17 @@ coparent:
   receipt-path: ${COPARENT_RECEIPT_PATH:coparent-receipts/}
   assistant:
     enabled: ${COPARENT_ASSISTANT_ENABLED:false}
-    model: ${COPARENT_ASSISTANT_MODEL:gpt-5.4-nano}
+    # Luna, not nano. On a four-item note (an expense, a weekly lesson, a jab and a message),
+    # gpt-5.4-nano returned every card ready to approve in about one run in five; the rest left a
+    # child or a conversation unlinked, so the parent had to fix cards by hand. gpt-5.6-luna did it
+    # five times out of five, in 4-6 seconds.
+    model: ${COPARENT_ASSISTANT_MODEL:gpt-5.6-luna}
   statements:
     # Reading an uploaded bank statement needs no model; suggesting which transactions might be
     # shared costs does. Off unless switched on, like the assistant it follows by default, since
     # both spend on the same OpenAI key.
     ai-enabled: ${COPARENT_STATEMENTS_AI_ENABLED:${COPARENT_ASSISTANT_ENABLED:false}}
-    model: ${COPARENT_STATEMENTS_MODEL:${COPARENT_ASSISTANT_MODEL:gpt-5.4-nano}}
+    model: ${COPARENT_STATEMENTS_MODEL:${COPARENT_ASSISTANT_MODEL:gpt-5.6-luna}}
 
 mongock:
   enabled: ${MONGOCK_ENABLED:true}
