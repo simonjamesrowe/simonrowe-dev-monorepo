@@ -4,6 +4,7 @@ import type { Event, Parent } from '../../types/calendar';
 
 import { EventPill } from './EventPill';
 import { getEventOwnerLabel } from './eventOwners';
+import { eventsOnDay } from './multiDay';
 import { dateToYmd as toYmd, expandRecurringEvents, occurrenceTarget } from './recurrence';
 import {
   eventBox,
@@ -34,6 +35,15 @@ const WEEK_COLUMNS = '60px repeat(7, minmax(0, 1fr))';
 const WEEK_MIN_WIDTH = '40rem';
 const ALL_DAY_SHOWN = 2;
 
+const isCustodyType = (value: string) => value.trim().toLowerCase() === 'custody';
+
+// A multi-day event is shown on every day it covers, not only the day it starts.
+const getEventsForDay = (date: Date, list: Event[]) =>
+  eventsOnDay(
+    list.filter((e) => !isCustodyType(e.type)),
+    toYmd(date),
+  );
+
 export function WeekView({
   currentDate,
   events,
@@ -41,7 +51,6 @@ export function WeekView({
   onDayClick,
   onEventClick,
 }: WeekViewProps) {
-  const isCustodyType = (value: string) => value.trim().toLowerCase() === 'custody';
   const toLocalDay = (value: string) => {
     const ymd = value.includes('T') ? value.slice(0, 10) : value;
     return new Date(`${ymd}T12:00:00`);
@@ -74,10 +83,6 @@ export function WeekView({
     return `${hour} AM`;
   };
 
-  const getEventsForDay = (date: Date, list: Event[]) => {
-    const dateStr = dateToYmd(date);
-    return list.filter((e) => e.startDate === dateStr && !isCustodyType(e.type));
-  };
   const isTimed = (event: Event) => Boolean(event.startTime) && !event.allDay;
 
   const getCustodyForDay = (date: Date, list: Event[]) => {
@@ -98,16 +103,13 @@ export function WeekView({
     return expandRecurringEvents(events, dateToYmd(rangeStart), dateToYmd(rangeEnd));
   }, [events, weekDays]);
 
-  const weekYmds = useMemo(() => new Set(weekDays.map(toYmd)), [weekDays]);
   const hours = useMemo(
     () =>
       gridHoursFor(
-        expandedEvents.filter(
-          (e) => weekYmds.has(e.startDate) && !isCustodyType(e.type) && isTimed(e),
-        ),
+        weekDays.flatMap((date) => getEventsForDay(date, expandedEvents).filter(isTimed)),
         DEFAULT_HOURS,
       ),
-    [expandedEvents, weekYmds],
+    [expandedEvents, weekDays],
   );
   const hourRows = Array.from(
     { length: hours.endHour - hours.startHour },

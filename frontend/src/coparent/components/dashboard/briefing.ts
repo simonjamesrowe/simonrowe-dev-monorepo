@@ -1,3 +1,4 @@
+import { type DayEvent, eventOnDay } from '../calendar/multiDay';
 import { dateToYmd, expandRecurringEvents } from '../calendar/recurrence';
 import type { Event } from '../../types/calendar';
 
@@ -18,6 +19,8 @@ export interface BriefingItem {
   startTime?: string;
   endTime?: string;
   allDay: boolean;
+  /** What to print in place of a time on one day of a multi-day event, such as "Until Fri". */
+  spanLabel?: string;
   location?: string;
   children: BriefingChild[];
 }
@@ -55,7 +58,25 @@ export const stripChildPrefix = (title: string, children: BriefingChild[]): stri
   return rest.length > 0 && rest.length < title.length - name.length ? rest : title;
 };
 
-/** Every non-custody occurrence from `from` to `to` inclusive, grouped by day in order. */
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * A label for one day of a timed multi-day event, short enough for the time column:
+ * "From 09:30" on the first day, "Until Fri" between, "Until 15:30" on the last.
+ */
+const spanLabelOf = (event: DayEvent): string | undefined => {
+  const span = event.span;
+  if (!span?.startTime || event.allDay) return undefined;
+  if (span.part === 'first') return `From ${span.startTime}`;
+  if (span.part === 'last') return span.endTime ? `Until ${span.endTime}` : undefined;
+  return `Until ${WEEKDAYS[addDaysTo(span.endDate, 0).getDay()] ?? ''}`;
+};
+
+/**
+ * Every non-custody occurrence from `from` to `to` inclusive, grouped by day in order. A
+ * multi-day event is listed on each day it covers, as an all-day item with a `spanLabel`, so it
+ * stays off the timed strip and is never greyed out as finished part-way through.
+ */
 export const itemsByDay = (
   events: Event[],
   children: BriefingChild[],
@@ -72,26 +93,29 @@ export const itemsByDay = (
     to,
   )
     .filter((event) => !isCustody(event))
-    .forEach((event) => {
-      const date = toYmd(event.startDate);
-      const list = days.get(date);
-      if (!list) return;
-      const eventChildren = event.childIds.flatMap((id) => {
-        const child = byId.get(id);
-        return child ? [child] : [];
-      });
-      list.push({
-        eventId: event.sourceId ?? event.id,
-        occurrence: event.sourceId ? date : undefined,
-        date,
-        title: stripChildPrefix(event.title, eventChildren),
-        startTime: event.allDay ? undefined : event.startTime,
-        endTime: event.allDay ? undefined : event.endTime,
-        allDay: event.allDay || !event.startTime,
-        location: event.location ?? undefined,
-        children: eventChildren,
-      });
-    });
+    .forEach((stored) =>
+      days.forEach((list, date) => {
+        const event = eventOnDay(stored, date);
+        if (!event) return;
+        const spanLabel = spanLabelOf(event);
+        const eventChildren = event.childIds.flatMap((id) => {
+          const child = byId.get(id);
+          return child ? [child] : [];
+        });
+        list.push({
+          eventId: event.sourceId ?? event.id,
+          occurrence: event.sourceId ? date : undefined,
+          date,
+          title: stripChildPrefix(event.title, eventChildren),
+          startTime: event.allDay || spanLabel ? undefined : event.startTime,
+          endTime: event.allDay || spanLabel ? undefined : event.endTime,
+          allDay: event.allDay || !event.startTime || Boolean(spanLabel),
+          spanLabel,
+          location: event.location ?? undefined,
+          children: eventChildren,
+        });
+      }),
+    );
 
   days.forEach((list) =>
     list.sort((left, right) => {

@@ -4,6 +4,7 @@ import type { Event, Parent } from '../../types/calendar';
 
 import { EventPill } from './EventPill';
 import { getEventOwnerLabel } from './eventOwners';
+import { eventsOnDay } from './multiDay';
 import { expandRecurringEvents, occurrenceTarget } from './recurrence';
 import { useNow } from './timeGrid';
 
@@ -81,11 +82,11 @@ export function MonthView({
         return currentDay >= start && currentDay <= end;
       });
 
-      // Find non-custody events for this day
-      const dayEvents = expandedEvents.filter((e) => {
-        if (isCustodyType(e.type)) return false;
-        return e.startDate === dateStr;
-      });
+      // Non-custody events on this day, including every day of a multi-day one
+      const dayEvents = eventsOnDay(
+        expandedEvents.filter((e) => !isCustodyType(e.type)),
+        dateStr,
+      );
 
       days.push({
         date: new Date(current),

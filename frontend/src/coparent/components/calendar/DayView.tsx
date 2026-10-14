@@ -4,6 +4,7 @@ import type { Event, Parent, Child } from '../../types/calendar';
 
 import { getEventOwnerLabel } from './eventOwners';
 import { getEventTypeColor } from './eventTypeColors';
+import { eventsOnDay, timeLabel } from './multiDay';
 import { expandRecurringEvents, occurrenceTarget } from './recurrence';
 import {
   eventBox,
@@ -55,12 +56,11 @@ export function DayView({
     return expandRecurringEvents(events, dateToYmd(currentDate), dateToYmd(currentDate));
   }, [events, currentDate]);
 
-  const dayEvents = useMemo(() => {
-    return expandedEvents.filter((e) => {
-      if (isCustodyType(e.type)) return false;
-      return e.startDate === dateStr;
-    });
-  }, [expandedEvents, dateStr]);
+  // A multi-day event is shown on every day it covers, not only the day it starts.
+  const dayEvents = useMemo(
+    () => eventsOnDay(expandedEvents.filter((e) => !isCustodyType(e.type)), dateStr),
+    [expandedEvents, dateStr],
+  );
 
   const custodyEvent = useMemo(() => {
     return expandedEvents.find((e) => {
@@ -315,9 +315,7 @@ export function DayView({
             const colors = getEventColors(event.type);
             const eventChildren = children.filter((c) => event.childIds.includes(c.id));
             const ownerLabel = getEventOwnerLabel(event, parents);
-            const timeRange = event.endTime
-              ? `${event.startTime} – ${event.endTime}`
-              : (event.startTime ?? '');
+            const timeRange = timeLabel(event);
             const short = position.height < FULL_CARD_PX;
 
             // A flex column keeps the content at the top: a plain button centres it vertically,
