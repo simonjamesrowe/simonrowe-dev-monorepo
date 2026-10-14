@@ -96,8 +96,8 @@ export function EventPill({
         <span className={`min-w-0 flex-1 truncate text-[11px] font-medium ${colors.text}`}>
           {event.title}
         </span>
-        {/* A multi-day piece's start here is midnight, not when the event begins. */}
-        {event.startTime && !event.span && (
+        {/* After a multi-day event's first day its start here is midnight, not when it begins. */}
+        {event.startTime && (!event.span || event.span.part === 'first') && (
           <span className="flex-shrink-0 text-[10px] text-slate-500 dark:text-slate-400">
             {event.startTime}
           </span>
