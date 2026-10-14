@@ -1,9 +1,8 @@
-import type { Event } from '../../types/calendar';
-
 import { getEventTypeColor } from './eventTypeColors';
+import { type DayEvent, timeLabel } from './multiDay';
 
 interface EventPillProps {
-  event: Event;
+  event: DayEvent;
   onClick?: (e: React.MouseEvent) => void;
   compact?: boolean;
   showTime?: boolean;
@@ -97,7 +96,8 @@ export function EventPill({
         <span className={`min-w-0 flex-1 truncate text-[11px] font-medium ${colors.text}`}>
           {event.title}
         </span>
-        {event.startTime && (
+        {/* A multi-day piece's start here is midnight, not when the event begins. */}
+        {event.startTime && !event.span && (
           <span className="flex-shrink-0 text-[10px] text-slate-500 dark:text-slate-400">
             {event.startTime}
           </span>
@@ -124,7 +124,7 @@ export function EventPill({
 
       {showTime && event.startTime && (
         <div className="mt-1 truncate text-[10px] text-slate-500 dark:text-slate-400">
-          {event.endTime ? `${event.startTime} – ${event.endTime}` : event.startTime}
+          {timeLabel(event)}
         </div>
       )}
 

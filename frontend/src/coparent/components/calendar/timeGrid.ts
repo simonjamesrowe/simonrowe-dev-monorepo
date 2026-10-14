@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 
 import type { Event } from '../../types/calendar';
 
+import type { DayEvent } from './multiDay';
+
 /** The hours a day or week grid shows, end exclusive (`endHour` 21 means the last row is 8 PM). */
 export interface GridHours {
   startHour: number;
@@ -23,14 +25,23 @@ const endMinutesOf = (event: Event) => {
 /**
  * Widens the default range until every timed event on screen fits. A fixed 7 AM–8 PM grid put a
  * 6:30 AM swim or a 9 PM call outside the drawn area, where it was rendered and never seen.
+ * A day's piece of a multi-day event widens it only at the event's real start and end: its
+ * midnight edges would otherwise stretch every such week to all 24 hours.
  */
-export const gridHoursFor = (events: Event[], defaults: GridHours): GridHours =>
+export const gridHoursFor = (events: DayEvent[], defaults: GridHours): GridHours =>
   events.reduce<GridHours>(
     (range, event) => {
       if (!event.startTime) return range;
+      const part = event.span?.part;
+      const opensHere = part === undefined || part === 'first';
+      const closesHere = part === undefined || part === 'last';
       return {
-        startHour: Math.min(range.startHour, Math.floor(minutesOf(event.startTime) / 60)),
-        endHour: Math.max(range.endHour, Math.min(24, Math.ceil(endMinutesOf(event) / 60))),
+        startHour: opensHere
+          ? Math.min(range.startHour, Math.floor(minutesOf(event.startTime) / 60))
+          : range.startHour,
+        endHour: closesHere
+          ? Math.max(range.endHour, Math.min(24, Math.ceil(endMinutesOf(event) / 60)))
+          : range.endHour,
       };
     },
     { ...defaults },

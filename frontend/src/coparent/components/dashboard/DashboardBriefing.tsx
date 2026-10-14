@@ -64,6 +64,7 @@ const minutesOf = (time: string) => {
 };
 
 const timeRange = (item: BriefingItem) => {
+  if (item.spanLabel) return item.spanLabel;
   if (item.allDay || !item.startTime) return 'All day';
   return item.endTime ? `${item.startTime}–${item.endTime}` : item.startTime;
 };
@@ -376,7 +377,9 @@ export function DashboardBriefing({
                       className="cp-brief__day-item"
                       onClick={() => onOpenEvent(item.eventId, item.occurrence)}
                     >
-                      <span className="cp-brief__time">{item.allDay ? 'All day' : item.startTime}</span>
+                      <span className="cp-brief__time">
+                        {item.spanLabel ?? (item.allDay ? 'All day' : item.startTime)}
+                      </span>
                       <span>
                         <Kids children={item.children} /> {item.title}
                       </span>

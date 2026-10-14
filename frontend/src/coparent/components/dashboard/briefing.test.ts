@@ -35,6 +35,37 @@ const event = (overrides: Partial<Event>): Event => ({
 });
 
 describe('briefing', () => {
+  it('lists a trip on every day it covers, labelled for the day rather than timed', () => {
+    const days = itemsByDay(
+      [
+        event({
+          id: 'pgl',
+          title: 'Ethan - PGL',
+          startDate: '2026-10-19',
+          endDate: '2026-10-23',
+          startTime: '09:30',
+          endTime: '15:30',
+        }),
+      ],
+      [ethan, ava],
+      '2026-10-18',
+      '2026-10-24',
+    );
+
+    const labels = Array.from(days.values()).map((items) => items.map((item) => item.spanLabel));
+    expect(labels).toEqual([
+      [],
+      ['From 09:30'],
+      ['Until Fri'],
+      ['Until Fri'],
+      ['Until Fri'],
+      ['Until 15:30'],
+      [],
+    ]);
+    // On the timed strip a multi-day piece would be drawn from midnight; it is listed instead.
+    expect(days.get('2026-10-21')?.[0]).toMatchObject({ title: 'PGL', allDay: true, eventId: 'pgl' });
+  });
+
   it('gives each child their own colour, in family order', () => {
     expect([ethan.firstName, ethan.tone, ava.firstName, ava.tone]).toEqual(['Ethan', 0, 'Ava', 1]);
   });

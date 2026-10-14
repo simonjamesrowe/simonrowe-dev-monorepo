@@ -199,4 +199,40 @@ describe('WeekView', () => {
     );
     expect(screen.getByRole('button', { name: /Cricket/ })).toHaveTextContent('Simon');
   });
+
+  it('blocks out every day of a trip from Monday 09:30 to Friday 15:30, not just the Monday', () => {
+    const trip = oneOff('PGL trip', {
+      startDate: '2026-10-19',
+      endDate: '2026-10-23',
+      startTime: '09:30',
+      endTime: '15:30',
+    });
+    render(
+      <WeekView
+        currentDate={new Date(2026, 9, 19)}
+        events={[trip]}
+        parents={{}}
+        onDayClick={vi.fn()}
+      />,
+    );
+
+    const boxes = screen
+      .getAllByRole('button', { name: /PGL trip/ })
+      .map((pill) => pill.parentElement as HTMLElement);
+    // Monday to Friday, in their own columns (the hour labels are column 0, Sunday column 1).
+    const columnOf = (box: HTMLElement) => {
+      const column = box.parentElement as HTMLElement;
+      return Array.from(column.parentElement!.children).indexOf(column);
+    };
+    expect(boxes.map(columnOf)).toEqual([2, 3, 4, 5, 6]);
+    // Rows are 64px from a 7 AM start, and the grid stays 7 AM to 9 PM (14 rows).
+    expect(boxes.map((box) => [box.style.top, box.style.height])).toEqual([
+      ['160px', '736px'],
+      ['0px', '896px'],
+      ['0px', '896px'],
+      ['0px', '896px'],
+      ['0px', '544px'],
+    ]);
+    expect(boxes[2]).toHaveTextContent('Mon 09:30 – Fri 15:30');
+  });
 });
