@@ -29,10 +29,13 @@ The app signs in by itself: with no session it goes straight to Auth0 (once per 
 failed sign-in shows a button instead of looping), and comes back to the page it started on.
 
 It remembers the device with **rotating refresh tokens** kept in local storage (scope
-`offline_access`, `useRefreshTokens`). That needs two Auth0 settings:
+`offline_access`, `useRefreshTokens`). That needs two Auth0 settings, both on as of 2026-10-17:
 
-- the main site's SPA application: **Refresh Token Rotation** on;
-- the `https://api.simonrowe.dev` API: **Allow Offline Access** on.
+- the main site's SPA application: **Refresh Token Rotation** on (it already was). Its
+  refresh tokens last at most 30 days and expire after 15 idle days, so a device used at least
+  once a fortnight stays signed in for a month;
+- the `https://api.simonrowe.dev` API: **Allow Offline Access** on (turned on 2026-10-17;
+  checked by signing in afresh and finding a refresh token in local storage).
 
 If either is turned off, Auth0 issues no refresh token and the SDK falls back to the hidden
 iframe (`useRefreshTokensFallback`), which Safari's tracking prevention blocks: the app still
@@ -72,9 +75,10 @@ delivered, an edit). Ingredients come in two tiers, set in the catalogue:
   tracked line 2, a staple 1, and counts an unrecorded staple as 0.75 of a staple.
 - **Assumed ingredients (salt, pepper, water) are ignored** everywhere: coverage, shopping,
   deductions.
-- **Suggestions** score coverage, then using up what reaches its use-by within three days (most for today or tomorrow), then ratings
-  (yours, and of similar-protein dishes), and push back "not again" and anything cooked in the
-  last ten days. Each carries its reasons, which the Cook screen and the MCP show.
+- **Suggestions** score coverage, then using up what reaches its use-by within three days (most for
+  today or tomorrow), then ratings (yours, and of similar-protein dishes), and push back "not again"
+  and anything cooked in the last ten days. Each carries its reasons, which the Cook screen and the
+  MCP show.
 - **Cooked it** proposes deductions (what the recipe needs at the portions cooked, capped at what
   is in) and applies only what the owner ticks.
 
@@ -91,9 +95,9 @@ There is no week planner. **Up next** (`meal_up_next`) is a shortlist of recipes
 Dave's weeks add their recipes to it. The **shopping list** is Up next's needs minus the kitchen,
 grouped by aisle, plus extras the owner typed, with unrecorded staples in a "Check the cupboard"
 group. `meal_shopping` keeps per-line marks: in the basket, and at which shop (Ocado, Amazon,
-Deliveroo). Each line carries a search term to paste into the shop. **Delivered** adds what was
-in the basket to the kitchen (the list's quantity, or "have" for a staple) and clears it; pasting the shop's order confirmation through quick
-add does the same with the real quantities.
+Deliveroo). Each line carries a search term to paste into the shop. **Delivered** adds what was in
+the basket to the kitchen (the list's quantity, or "have" for a staple) and clears it; pasting the
+shop's order confirmation through quick add does the same with the real quantities.
 
 ## Adding and editing recipes
 
