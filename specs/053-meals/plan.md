@@ -1,8 +1,8 @@
 # 053 · Meals: build plan
 
-Builds `spec.md` as five stacked pull requests, each useful without the next and each green
-before the next is opened on top of it. The prototype the plan was validated against lives in
-`.context/meals-prototype/` (gitignored, local only).
+Planned as five stacked pull requests. **Shipped as two**, at Simon's request: #244 (part 1,
+the library) and `feat/meals-kitchen` (parts 2 to 5 together). The prototype the plan was
+validated against lives in `.context/meals-prototype/` (gitignored, local only).
 
 ## Changes from the spec, decided while planning
 
@@ -31,6 +31,8 @@ before the next is opened on top of it. The prototype the plan was validated aga
 
 ## Pull requests
 
+Parts 2 to 5 shipped together on `feat/meals-kitchen`; the branch names below are as planned.
+
 | # | Branch | Scope |
 | --- | --- | --- |
 | 1 | `feat/meals-library` | Package, model, indexes, security, image store and volume, bundle import, recipes, ratings, templates API; backup and restore; the `meals` frontend entry with Cook (ratings-based), Recipes, recipe page, cook mode and Cooked it; nginx, CORS, compose |
@@ -53,3 +55,14 @@ before the next is opened on top of it. The prototype the plan was validated aga
    ingredients, 90 weeks, 154 photos, nothing skipped.
 5. ~~Monitoring~~: `meals.simonrowe.dev` added to `monitor-prod.sh` and `prod-heartbeat.sh` in
    the follow-up to #244, once the hostname was confirmed live.
+
+## Decided while building parts 2 to 5
+
+- **Automatic sign-in, remembered per device.** The app goes to Auth0 by itself (once per page
+  load) and keeps a rotating refresh token in local storage. Needs Refresh Token Rotation on the
+  SPA application and Allow Offline Access on the API (see the runbook).
+- **The MCP server is not Spring AI's.** The public `/mcp` publishes every `ToolCallbackProvider`
+  bean, so the meals tools run on their own stateless MCP SDK server under `/api/meals/mcp`,
+  behind a separate security chain that takes only personal `meals_` tokens.
+- **Recipe reading gets 90 seconds**, not quick add's 45: a whole recipe measured about 45
+  seconds, so the meals proxy location raises nginx's read timeout to 120s.

@@ -1,6 +1,6 @@
-import type { Category, IngredientLine, Rating, Recipe, Unit } from './types'
+import type { Category, IngredientLine, InventoryChange, MealSlot, Rating, Unit } from './types'
 
-const DAY = 86_400_000
+export type { MealSlot }
 
 export const BOOKS: Record<string, string> = {
   mmmb1: 'Macro Meals, Micro Budget',
@@ -34,8 +34,6 @@ export function averageScore(recipeId: string, ratings: Rating[]): number | null
   return mine.reduce((sum, r) => sum + r.score, 0) / mine.length
 }
 
-export type MealSlot = 'breakfast' | 'main' | 'snack'
-
 export const MEAL_SLOTS: { key: MealSlot; label: string; categories: Category[] }[] = [
   { key: 'breakfast', label: 'Breakfast', categories: ['breakfast'] },
   { key: 'main', label: 'Lunch & dinner', categories: ['main'] },
@@ -46,59 +44,30 @@ export function defaultSlot(now: Date): MealSlot {
   return now.getHours() < 11 ? 'breakfast' : 'main'
 }
 
-// A stable per-day shuffle, so "try something new" changes daily but not on every render.
-function dailyOrder(id: string, now: Date): number {
-  const seed = `${now.toISOString().slice(0, 10)}:${id}`
-  let hash = 0
-  for (let i = 0; i < seed.length; i++) hash = (Math.imul(hash, 31) + seed.charCodeAt(i)) >>> 0
-  return hash
+const DAY_MS = 86_400_000
+
+export function daysUntil(date: string | null | undefined, today = new Date()): number | null {
+  if (!date) return null
+  const start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  return Math.round((Date.parse(date) - start) / DAY_MS)
 }
 
-export interface HomeSections {
-  favourites: Recipe[]
-  untried: Recipe[]
-  recent: Recipe[]
+export function describeUseBy(date: string | null | undefined, today = new Date()): { text: string; tone: 'past' | 'now' | 'soon' | '' } | null {
+  const d = daysUntil(date, today)
+  if (d == null) return null
+  if (d < 0) return { text: `${-d}d past`, tone: 'past' }
+  if (d === 0) return { text: 'today', tone: 'now' }
+  if (d === 1) return { text: 'tomorrow', tone: 'now' }
+  return { text: `${d} days`, tone: d <= 3 ? 'soon' : '' }
 }
 
-/**
- * Suggestions before the kitchen exists: the ones you rated highly and haven't had lately,
- * a daily selection you've never tried (leaning on the protein of the ones you liked), and
- * what you've cooked recently. Never suggests a recipe you said not to make again.
- */
-export function homeSections(recipes: Recipe[], ratings: Rating[], slot: MealSlot, now: Date): HomeSections {
-  const categories = MEAL_SLOTS.find((s) => s.key === slot)!.categories
-  const inSlot = recipes.filter((r) => categories.includes(r.category))
-  const latest = new Map<string, Rating>()
-  for (const r of [...ratings].sort((a, b) => b.at.localeCompare(a.at))) {
-    if (!latest.has(r.recipeId)) latest.set(r.recipeId, r)
+export function describeChange(c: InventoryChange): string {
+  const q = c.unit === 'each' && c.quantity != null ? String(+c.quantity.toFixed(1)) : formatQty(c.quantity, c.unit)
+  switch (c.action) {
+    case 'add': return `+ ${q ? `${q} ` : ''}${c.name}`
+    case 'use': return `− ${q ? `${q} ` : ''}${c.name}`
+    case 'set': return `${c.name} → ${q || '0'}`
+    case 'remove': return `removed ${c.name}`
+    default: return `${c.name}: ${c.status ?? 'have'}`
   }
-  const daysSince = (id: string) => {
-    const last = latest.get(id)
-    return last ? (now.getTime() - Date.parse(last.at)) / DAY : Infinity
-  }
-  const likedProteins = new Set(ratings.filter((r) => r.score >= 4)
-    .map((r) => recipes.find((x) => x.id === r.recipeId)?.mainProtein).filter(Boolean))
-
-  const favourites = inSlot
-    .filter((r) => latest.get(r.id)?.again !== false)
-    .map((r) => ({ r, avg: averageScore(r.id, ratings) }))
-    .filter((x) => x.avg != null && x.avg >= 4 && daysSince(x.r.id) >= 5)
-    .sort((a, b) => b.avg! - a.avg! || daysSince(b.r.id) - daysSince(a.r.id))
-    .map((x) => x.r)
-    .slice(0, 8)
-
-  const untried = inSlot
-    .filter((r) => !latest.has(r.id))
-    .sort((a, b) => {
-      const liked = Number(likedProteins.has(b.mainProtein)) - Number(likedProteins.has(a.mainProtein))
-      return liked || dailyOrder(a.id, now) - dailyOrder(b.id, now)
-    })
-    .slice(0, 8)
-
-  const recent = recipes
-    .filter((r) => daysSince(r.id) < 14)
-    .sort((a, b) => daysSince(a.id) - daysSince(b.id))
-    .slice(0, 8)
-
-  return { favourites, untried, recent }
 }

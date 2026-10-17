@@ -16,14 +16,20 @@ import java.util.zip.ZipInputStream;
 import com.simonrowe.aggregation.newsletter.NewsletterCandidate;
 import com.simonrowe.homepage.HomePage;
 import com.simonrowe.meals.MealIngredient;
+import com.simonrowe.meals.MealInventoryEvent;
+import com.simonrowe.meals.MealInventoryItem;
+import com.simonrowe.meals.MealMcpToken;
 import com.simonrowe.meals.MealRating;
 import com.simonrowe.meals.MealRecipe;
+import com.simonrowe.meals.MealShoppingMark;
 import com.simonrowe.meals.MealTemplate;
+import com.simonrowe.meals.MealUpNextItem;
 import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
 import com.simonrowe.migration.changeunits.V022CreatePlatformReleaseIndexes;
 import com.simonrowe.migration.changeunits.V029CreateShortLinksAndBackfill;
 import com.simonrowe.migration.changeunits.V056CreatePlaylist;
 import com.simonrowe.migration.changeunits.V058CreateMeals;
+import com.simonrowe.migration.changeunits.V059CreateMealsKitchen;
 import com.simonrowe.playlist.PlaylistSettings;
 import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
@@ -107,7 +113,12 @@ public class RestoreService {
       MealRecipe.COLLECTION,
       MealIngredient.COLLECTION,
       MealTemplate.COLLECTION,
-      MealRating.COLLECTION
+      MealRating.COLLECTION,
+      MealInventoryItem.COLLECTION,
+      MealInventoryEvent.COLLECTION,
+      MealUpNextItem.COLLECTION,
+      MealShoppingMark.COLLECTION,
+      MealMcpToken.COLLECTION
   );
 
   private static final List<String> COPARENT_IMPORT_ORDER = List.of(
@@ -277,7 +288,8 @@ public class RestoreService {
         Map.entry(V048CreatePortfolioProjects.COLLECTION, this::ensurePortfolioIndexes),
         Map.entry(NewsletterCandidate.COLLECTION, this::ensureNewsletterCandidateIndexes),
         Map.entry(V049SeedTermTimeProjectPage.MEDIA_COLLECTION, this::ensureMediaIndexes),
-        Map.entry(MealRating.COLLECTION, this::ensureMealIndexes));
+        Map.entry(MealRating.COLLECTION, this::ensureMealIndexes),
+        Map.entry(MealMcpToken.COLLECTION, this::ensureMealIndexes));
   }
 
   void restoreCollections(final Path zipFile) throws IOException {
@@ -426,6 +438,7 @@ public class RestoreService {
    */
   void ensureMealIndexes() {
     V058CreateMeals.createIndexes(mongoTemplate);
+    V059CreateMealsKitchen.createIndexes(mongoTemplate);
     LOG.info("Recreated meals indexes after restore");
   }
 

@@ -1,4 +1,8 @@
-import type { ImportReport, Ingredient, NewRating, Rating, Recipe, Template } from './types'
+import type {
+  CookedRequest, Coverage, Deduction, ImportReport, Ingredient, InventoryChange, InventoryEvent,
+  InventoryItem, McpToken, MealSlot, NewRating, Proposal, Rating, Recipe, RecipeInput, Shop,
+  ShoppingList, Suggestion, Template, UpNextItem,
+} from './types'
 
 export type TokenGetter = () => Promise<string>
 
@@ -56,6 +60,75 @@ export function createMealsApi(getToken: TokenGetter) {
       const form = new FormData()
       form.append('file', file)
       return json<ImportReport>('/admin/bundles', { method: 'POST', body: form })
+    },
+
+    kitchen: () => json<InventoryItem[]>('/kitchen'),
+    history: () => json<InventoryEvent[]>('/kitchen/history'),
+    applyChanges: (changes: InventoryChange[], kind = 'manual') =>
+      send<InventoryItem[]>('/kitchen/changes', 'POST', { changes, kind }),
+    removeItem: async (name: string) => {
+      await request(`/kitchen/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    },
+    readKitchen: (text: string, mode: 'note' | 'order', image?: Blob | null) => {
+      const form = new FormData()
+      form.append('text', text)
+      form.append('mode', mode)
+      if (image) form.append('image', image, 'photo.jpg')
+      return json<Proposal>('/kitchen/read', { method: 'POST', body: form })
+    },
+    suggestions: (slot: MealSlot) => json<Suggestion[]>(`/suggestions?slot=${slot}&limit=40`),
+    coverage: () => json<Record<string, Coverage>>('/coverage'),
+    recipeCoverage: (id: string, portions: number) =>
+      json<Coverage>(`/recipes/${encodeURIComponent(id)}/coverage?portions=${portions}`),
+    deductions: (id: string, portions: number) =>
+      json<Deduction[]>(`/recipes/${encodeURIComponent(id)}/deductions?portions=${portions}`),
+    cooked: (body: CookedRequest) => send<Rating>('/cooked', 'POST', body),
+
+    upNext: () => json<UpNextItem[]>('/up-next'),
+    queue: (recipeId: string, portions?: number) =>
+      send<UpNextItem>(`/up-next/${encodeURIComponent(recipeId)}`, 'PUT', portions ? { portions } : {}),
+    unqueue: async (recipeId: string) => {
+      await request(`/up-next/${encodeURIComponent(recipeId)}`, { method: 'DELETE' })
+    },
+    queueTemplate: (templateId: string) =>
+      json<UpNextItem[]>(`/up-next/templates/${encodeURIComponent(templateId)}`, { method: 'POST' }),
+
+    shopping: () => json<ShoppingList>('/shopping'),
+    basket: async (name: string, shop: Shop | null) => {
+      await request(`/shopping/basket/${encodeURIComponent(name)}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shop }),
+      })
+    },
+    addExtra: async (name: string) => {
+      await request('/shopping/extras', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+      })
+    },
+    removeExtra: async (name: string) => {
+      await request(`/shopping/extras/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    },
+    delivered: () => json<InventoryItem[]>('/shopping/delivered', { method: 'POST' }),
+    clearBasket: async () => { await request('/shopping/basket', { method: 'DELETE' }) },
+
+    readRecipeLink: (url: string) => send<RecipeInput>('/recipes/read/link', 'POST', { url }),
+    readRecipePhoto: (image: Blob) => {
+      const form = new FormData()
+      form.append('image', image, 'recipe.jpg')
+      return json<RecipeInput>('/recipes/read/photo', { method: 'POST', body: form })
+    },
+    uploadPhoto: (image: Blob) => {
+      const form = new FormData()
+      form.append('image', image, 'photo.jpg')
+      return json<{ name: string }>('/images', { method: 'POST', body: form })
+    },
+    createRecipe: (input: RecipeInput) => send<Recipe>('/recipes', 'POST', input),
+    updateRecipe: (id: string, input: RecipeInput) =>
+      send<Recipe>(`/recipes/${encodeURIComponent(id)}`, 'PUT', input),
+
+    tokens: () => json<McpToken[]>('/tokens'),
+    mintToken: (label: string) => send<{ token: McpToken; value: string }>('/tokens', 'POST', { label }),
+    revokeToken: async (id: string) => {
+      await request(`/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' })
     },
   }
 }

@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { MealsApi } from './api'
-import type { Ingredient, NewRating, Recipe, Template } from './types'
+import type { Ingredient, MealSlot, NewRating, Recipe, Template } from './types'
 
 export const MealsApiContext = createContext<MealsApi | null>(null)
 
@@ -41,25 +41,67 @@ export function useLibrary() {
   }
 }
 
+/**
+ * Everything personal sits under one key, so any change to the kitchen, Up next or ratings
+ * refreshes coverage, suggestions and the shopping list together, without re-fetching the
+ * library itself.
+ */
+export const MINE = ['meals', 'me'] as const
+
 export function useRatings() {
   const api = useMealsApi()
-  return useQuery({ queryKey: ['meals', 'ratings'], queryFn: api.ratings })
+  return useQuery({ queryKey: [...MINE, 'ratings'], queryFn: api.ratings })
+}
+
+export function useKitchen() {
+  const api = useMealsApi()
+  return useQuery({ queryKey: [...MINE, 'kitchen'], queryFn: api.kitchen })
+}
+
+export function useHistory() {
+  const api = useMealsApi()
+  return useQuery({ queryKey: [...MINE, 'history'], queryFn: api.history })
+}
+
+export function useCoverage() {
+  const api = useMealsApi()
+  return useQuery({ queryKey: [...MINE, 'coverage'], queryFn: api.coverage })
+}
+
+export function useSuggestions(slot: MealSlot) {
+  const api = useMealsApi()
+  return useQuery({ queryKey: [...MINE, 'suggestions', slot], queryFn: () => api.suggestions(slot) })
+}
+
+export function useUpNext() {
+  const api = useMealsApi()
+  return useQuery({ queryKey: [...MINE, 'up-next'], queryFn: api.upNext })
+}
+
+export function useShopping() {
+  const api = useMealsApi()
+  return useQuery({ queryKey: [...MINE, 'shopping'], queryFn: api.shopping })
+}
+
+export function useTokens() {
+  const api = useMealsApi()
+  return useQuery({ queryKey: [...MINE, 'tokens'], queryFn: api.tokens })
+}
+
+/** A mutation that refreshes everything personal once it succeeds. */
+export function useMine<A, R>(fn: (api: MealsApi, arg: A) => Promise<R>) {
+  const api = useMealsApi()
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (arg: A) => fn(api, arg),
+    onSuccess: () => client.invalidateQueries({ queryKey: MINE }),
+  })
 }
 
 export function useRate() {
-  const api = useMealsApi()
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (rating: NewRating) => api.rate(rating),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['meals', 'ratings'] }),
-  })
+  return useMine((api, rating: NewRating) => api.rate(rating))
 }
 
 export function useDeleteRating() {
-  const api = useMealsApi()
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => api.deleteRating(id),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['meals', 'ratings'] }),
-  })
+  return useMine((api, id: string) => api.deleteRating(id))
 }

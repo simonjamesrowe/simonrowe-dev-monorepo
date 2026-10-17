@@ -118,6 +118,56 @@ public class UrlFetcher {
    * @return extracted content, or {@code null} if the URL is unsafe or the fetch fails
    */
   public WebPageContent fetch(final String url) {
+    final Terminal terminal = follow(url);
+    if (terminal == null) {
+      return null;
+    }
+    try {
+      return readResponse(terminal.response(), terminal.finalUrl(), maxChars);
+    } catch (Exception e) {
+      LOG.warn("Failed to fetch URL: {}", url, e);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch a public web page and return it parsed, under the same guards as {@link #fetch}, for
+   * callers that need more than its text (the meals recipe importer reads its JSON-LD).
+   *
+   * @param url the page URL
+   * @return the parsed page and its effective URL, or {@code null} if it is unsafe, fails, or
+   *     is not a readable HTML page
+   */
+  public FetchedPage fetchPage(final String url) {
+    final Terminal terminal = follow(url);
+    if (terminal == null || terminal.response().statusCode() != HTTP_OK) {
+      return null;
+    }
+    try {
+      final String contentType = terminal.response().contentType();
+      if (contentType != null && !contentType.toLowerCase(Locale.ROOT).contains("html")) {
+        return null;
+      }
+      return new FetchedPage(terminal.finalUrl(), terminal.response().parse());
+    } catch (Exception e) {
+      LOG.warn("Failed to parse URL: {}", url, e);
+      return null;
+    }
+  }
+
+  /**
+   * A parsed page and the URL it was finally read from.
+   *
+   * @param finalUrl the effective (post-redirect) URL
+   * @param document the parsed page
+   */
+  public record FetchedPage(String finalUrl, Document document) {
+  }
+
+  private record Terminal(Connection.Response response, String finalUrl) {
+  }
+
+  private Terminal follow(final String url) {
     if (!isFetchableUrl(url)) {
       LOG.warn("Refusing to fetch non-public or invalid URL");
       return null;
@@ -141,7 +191,7 @@ public class UrlFetcher {
         response = execute(next);
         hops++;
       }
-      return readResponse(response, current.toString(), maxChars);
+      return new Terminal(response, current.toString());
     } catch (Exception e) {
       LOG.warn("Failed to fetch URL: {}", url, e);
       return null;

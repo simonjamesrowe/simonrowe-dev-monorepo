@@ -35,6 +35,8 @@ check "the GitHub heartbeat probes the meals hostname" \
   "grep -qF 'meals|https://meals.simonrowe.dev/|200' '$HEARTBEAT'"
 check "bundle uploads fit through the proxy" \
   "awk '/server_name meals.simonrowe.dev;/,/^}/' '$PROXY' | grep -qF 'client_max_body_size 12m;'"
+check "a recipe read (bounded at 90s by the backend) outlasts nginx's read timeout" \
+  "awk '/server_name meals.simonrowe.dev;/,/^}/' '$PROXY' | grep -qF 'proxy_read_timeout 120s;'"
 check "the meals hostname reaches no other backend path" \
   "! awk '/server_name meals.simonrowe.dev;/,/^}/' '$PROXY' | grep -E 'location /api/[^m]'"
 

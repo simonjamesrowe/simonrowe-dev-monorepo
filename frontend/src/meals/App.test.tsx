@@ -51,14 +51,29 @@ describe('meals app gate', () => {
     vi.mocked(useRatings).mockReturnValue({ data: [], error: null } as unknown as ReturnType<typeof useRatings>)
   })
 
-  it('asks a signed-out visitor to sign in, and remembers where they were going', async () => {
+  it('sends a signed-out visitor straight to sign-in, once, remembering where they were going', () => {
     const loginWithRedirect = vi.fn()
     auth({ isAuthenticated: false, user: undefined, loginWithRedirect })
-    renderAt('/recipes')
+    const { rerender } = renderAt('/recipes')
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={['/recipes']}><App /></MemoryRouter>
+      </QueryClientProvider>,
+    )
 
-    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-
+    expect(loginWithRedirect).toHaveBeenCalledTimes(1)
     expect(loginWithRedirect).toHaveBeenCalledWith({ appState: { returnTo: '/recipes' } })
+  })
+
+  it('offers a button instead of looping when sign-in failed', async () => {
+    const loginWithRedirect = vi.fn()
+    auth({ isAuthenticated: false, user: undefined, error: new Error('access_denied'), loginWithRedirect })
+    renderAt('/')
+
+    expect(screen.getByText('Sign-in failed: access_denied')).toBeInTheDocument()
+    expect(loginWithRedirect).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(loginWithRedirect).toHaveBeenCalledTimes(1)
   })
 
   it('tells a signed-in visitor without the role that the app is private', () => {

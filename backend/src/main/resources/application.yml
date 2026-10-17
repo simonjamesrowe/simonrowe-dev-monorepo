@@ -21,6 +21,9 @@ site:
 # Production points this at the meal-images volume.
 meals:
   image-path: ${MEALS_IMAGE_PATH:meal-images/}
+  # Reads kitchen notes, pasted orders and photos, and recipes from links or photos. Set per
+  # call (structured output, reasoning effort none), never under spring.ai.openai.chat.
+  model: ${MEALS_MODEL:gpt-5.6-luna}
 
 # CoParent is deployed in the shared backend but remains inert until its own
 # domain, Auth0 client and data have passed the cutover checks.

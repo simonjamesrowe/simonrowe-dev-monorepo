@@ -3,7 +3,7 @@ import { Leaf, Snowflake, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { usePhoto } from './photos'
-import type { Recipe } from './types'
+import type { Coverage, Recipe } from './types'
 
 export function Photo({ recipe, className = '' }: { recipe: Recipe; className?: string }) {
   const { ref, url } = usePhoto(recipe.photo)
@@ -111,4 +111,18 @@ export function Empty({ icon, title, children }: { icon: ReactNode; title: strin
 
 export function Loading() {
   return <div className="meals-loading" role="status">Loading…</div>
+}
+
+/** How much of a recipe the kitchen covers, as a bar and a short label. */
+export function CoverageBar({ coverage }: { coverage: Coverage | undefined }) {
+  if (!coverage) return null
+  const toGet = coverage.missing.length + coverage.shortOf.length
+  const label = toGet ? `${toGet} to get` : coverage.unknown.length ? `check ${coverage.unknown.length}` : 'Have it all'
+  const tone = toGet ? '' : coverage.unknown.length ? 'meals-cover__label--check' : 'meals-cover__label--ok'
+  return (
+    <span className="meals-cover" title={`${Math.round(coverage.ratio * 100)}% of the ingredients are in`}>
+      <span className="meals-cover__track"><span className="meals-cover__fill" style={{ width: `${Math.round(coverage.ratio * 100)}%` }} /></span>
+      <span className={`meals-cover__label ${tone}`}>{label}</span>
+    </span>
+  )
 }
