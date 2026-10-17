@@ -49,6 +49,31 @@ class ClaudeCliRunnerTest {
   }
 
   @Test
+  void keepsTheAllowedToolsFlagForCallersThatGrantTools() {
+    List<String> command = ClaudeCliRunner.command(invocation());
+
+    assertThat(command)
+        .containsSequence("--allowedTools", "Read(./**)", "Glob", "Grep", "--disallowedTools");
+  }
+
+  /**
+   * A tool-less run (the content writer) passes {@code --tools ""}, the CLI's spelling for "no
+   * built-in tools", and must not emit a bare {@code --allowedTools}: the flag is variadic, so
+   * with no value after it the next token is {@code --disallowedTools} and the parse is ambiguous.
+   */
+  @Test
+  void omitsTheAllowedToolsFlagWhenNoToolIsGranted() {
+    List<String> command =
+        ClaudeCliRunner.command(
+            new ClaudeCliRunner.Invocation(
+                "claude", "haiku", "low", 3, Duration.ofMinutes(5), List.of(), List.of(),
+                "{\"type\":\"object\"}", "prompt", Path.of("/tmp")));
+
+    assertThat(command).containsSequence("--tools", "", "--disallowedTools", "mcp__*");
+    assertThat(command).doesNotContain("--allowedTools");
+  }
+
+  @Test
   void reportsWhyTheAgentStoppedWhenStderrIsEmpty() {
     String output =
         """
