@@ -274,6 +274,23 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- embedding-skip-unchanged: **The 4-hourly `fullVectorSync` no longer re-embeds content that has
+  not changed.** It re-embedded every blog, job, skill, code example, article and event each run:
+  about 6,800 `text-embedding-3-small` calls and 12M tokens a day in October 2026, the largest
+  OpenAI line by far (Langfuse: $5.65 of ~$7 in 30 days), and growing with every article.
+  Load-bearing bits:
+  - **The index is the record, not a ledger.** Each chunk carries `metadata.contentHash`
+    (SHA-256 of `FORMAT_VERSION`, the text and every metadata entry). An item is skipped only
+    when it has chunks and all of them carry the current hash, checked with two `_count`
+    queries on `metadata.*.keyword` (no embedding call). Wiped, restored or half-written vectors
+    are re-embedded on the next sync instead of trusted. Any check failure answers "changed".
+  - **Bump `EmbeddingService.FORMAT_VERSION`** when the splitter, the embedding model or the
+    assembled text changes in a way the hash cannot see, or nothing is re-embedded.
+  - The Data Ops **Re-embed** button (`embedAll*()`, public) still forces everything; the
+    scheduled sync and the per-item Kafka path skip unchanged items. Old chunks are deleted only
+    once an item is known to need re-embedding, so an unchanged item never drops out of search.
+  - `EmbeddingServiceUnchangedContentIntegrationTest` runs the real store on ES 9.4.5 with a
+    call-counting model. Mutation-checked: a wrong field name in the count query fails it.
 - 053-meals (PR 1 of 5, API): **`com.simonrowe.meals`, a private recipe library for the site
   owner**, under `/api/meals/**` (admin role only, images included). Load-bearing bits:
   - **The recipes come from copyrighted ebooks and the repo is public.** Nothing from them is
