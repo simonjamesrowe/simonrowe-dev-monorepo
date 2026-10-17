@@ -208,6 +208,11 @@ check "coparents returns 503 for a deep link while the flag is set" "[[ '$code' 
 check "coparents serves the shared themed maintenance page" \
   "grep -q 'Update in progress' <<<\"\$(body)\""
 
+code="$(req meals.simonrowe.dev /recipes)"
+check "meals returns 503 for a deep link while the flag is set" "[[ '$code' == '503' ]]"
+code="$(req meals.simonrowe.dev /api/meals/recipes)"
+check "meals' API is behind the flag too" "[[ '$code' == '503' ]]"
+
 # /ws/ was split out of api's `location /` to give the STOMP socket a longer
 # proxy_read_timeout than nginx's 60s default. The flag check had to be copied across with
 # it; without this assertion, losing it during that split would be invisible.

@@ -41,7 +41,16 @@ before the next is opened on top of it. The prototype the plan was validated aga
 
 ## Operator steps (Simon), before PR 1 is useful in production
 
-1. Cloudflare: a DNS record for `meals.simonrowe.dev`, the same as `coparents`.
-2. Auth0: add `https://meals.simonrowe.dev` (and the local dev origin) to the SPA application's
-   allowed callback URLs, logout URLs and web origins.
-3. After deploy: upload the three bundles from `.context/meals-bundles/` on the admin screen.
+1. ~~Cloudflare DNS~~: nothing to do, the `*.simonrowe.dev` wildcard already reaches the edge
+   nginx (checked: `https://meals.simonrowe.dev/healthz` answered 200 on 2026-10-17).
+2. ~~Auth0~~: done 2026-10-17. The main site's SPA application lists
+   `https://meals.simonrowe.dev/` and `http://meals.localhost:5173/` as callback, logout and
+   web origins. Meals signs in with that application, so no new application or secret.
+3. **After the frontend PR deploys, recreate nginx.** The deploy only `restart`s it, and the
+   proxy config is a single-file bind mount, so a restart keeps serving the old file and the
+   meals server block is not live until
+   `docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps nginx`.
+4. Then upload the three bundles from `.context/meals-bundles/` on the Import page.
+5. Only then add `meals.simonrowe.dev` to `monitor-prod.sh` and `prod-heartbeat.sh` (held back
+   from the frontend PR: before step 3 the watchdog would read the missing block as a broken
+   frontend and restart it).
