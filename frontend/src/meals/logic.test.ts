@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { rating, recipe } from './fixtures'
-import { averageScore, defaultSlot, formatQty, homeSections, scaledLine } from './logic'
+import { averageScore, daysUntil, defaultSlot, describeChange, formatQty, scaledLine, describeUseBy } from './logic'
 
-const NOW = new Date('2026-10-17T19:00:00Z')
 
 describe('scaling', () => {
   it('keeps the printed line at the book portions and rewrites it otherwise', () => {
@@ -21,40 +20,25 @@ describe('scaling', () => {
   })
 })
 
-describe('home suggestions', () => {
-  const chilli = recipe()
-  const curry = recipe({ id: 'test-curry', name: 'Test Curry', mainProtein: 'chicken' })
-  const pasta = recipe({ id: 'test-pasta', name: 'Test Pasta', mainProtein: 'beef' })
-  const oats = recipe({ id: 'test-oats', name: 'Test Oats', category: 'breakfast', mainProtein: null })
+describe('kitchen wording', () => {
+  const friday = new Date(2026, 9, 16, 12)
 
-  it('offers favourites not eaten in the last five days, best first', () => {
-    const ratings = [
-      rating({ recipeId: 'test-chilli', score: 5, at: '2026-10-01T18:00:00Z' }),
-      rating({ id: 'r2', recipeId: 'test-curry', score: 4, at: '2026-10-15T18:00:00Z' }),
-    ]
-    const sections = homeSections([chilli, curry, pasta, oats], ratings, 'main', NOW)
-    expect(sections.favourites.map((r) => r.id)).toEqual(['test-chilli'])
+  it('says how long until a use-by date, and how urgent it is', () => {
+    expect(describeUseBy('2026-10-15', friday)).toEqual({ text: '1d past', tone: 'past' })
+    expect(describeUseBy('2026-10-16', friday)).toEqual({ text: 'today', tone: 'now' })
+    expect(describeUseBy('2026-10-17', friday)).toEqual({ text: 'tomorrow', tone: 'now' })
+    expect(describeUseBy('2026-10-19', friday)).toEqual({ text: '3 days', tone: 'soon' })
+    expect(describeUseBy('2026-10-30', friday)?.tone).toBe('')
+    expect(describeUseBy(null, friday)).toBeNull()
+    expect(daysUntil('2026-10-18', friday)).toBe(2)
   })
 
-  it('never suggests something marked not to make again', () => {
-    const ratings = [rating({ score: 5, again: false })]
-    expect(homeSections([chilli], ratings, 'main', NOW).favourites).toEqual([])
-  })
-
-  it('leads the untried with the protein you liked, and stays within the meal', () => {
-    const ratings = [rating({ recipeId: 'test-chilli', score: 5 })]
-    const { untried } = homeSections([chilli, curry, pasta, oats], ratings, 'main', NOW)
-    expect(untried.map((r) => r.id)).toEqual(['test-pasta', 'test-curry'])
-  })
-
-  it('lists the last fortnight of cooking, newest first', () => {
-    const ratings = [
-      rating({ recipeId: 'test-chilli', at: '2026-10-10T18:00:00Z' }),
-      rating({ id: 'r2', recipeId: 'test-oats', at: '2026-10-16T08:00:00Z' }),
-      rating({ id: 'r3', recipeId: 'test-pasta', at: '2026-09-01T18:00:00Z' }),
-    ]
-    expect(homeSections([chilli, pasta, oats], ratings, 'main', NOW).recent.map((r) => r.id))
-      .toEqual(['test-oats', 'test-chilli'])
+  it('describes each kind of change in a line', () => {
+    expect(describeChange({ name: 'egg', action: 'add', quantity: 12, unit: 'each' })).toBe('+ 12 egg')
+    expect(describeChange({ name: 'beef mince', action: 'use', quantity: 250, unit: 'g' })).toBe('− 250g beef mince')
+    expect(describeChange({ name: 'milk', action: 'set', quantity: 1500, unit: 'ml' })).toBe('milk → 1.5L')
+    expect(describeChange({ name: 'oats', action: 'status', status: 'low' })).toBe('oats: low')
+    expect(describeChange({ name: 'oats', action: 'remove' })).toBe('removed oats')
   })
 
   it('averages every rating of a recipe and starts breakfast before 11', () => {

@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Check, ChefHat, ChevronLeft, ChevronRight, Minus, Plus, Trash2, X } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import {
+  ArrowLeft, Check, ChefHat, ChevronLeft, ChevronRight, ListPlus, ListX, Minus, Pencil, Plus, Trash2, X,
+} from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { CookedSheet } from './CookedSheet'
-import { useDeleteRating } from './data'
+import { MINE, useDeleteRating, useMealsApi, useMine, useUpNext } from './data'
 import { averageScore, BOOKS, ratingsFor, scaledLine } from './logic'
 import { Flags, Macros, Photo, Stars } from './ui'
 import type { Ingredient, Rating, Recipe } from './types'
@@ -16,7 +19,16 @@ interface Props {
 
 export function RecipePage({ recipe, ratings, ingredients }: Props) {
   const navigate = useNavigate()
-  const [portions, setPortions] = useState(recipe.servings)
+  const api = useMealsApi()
+  const upNext = useUpNext()
+  const queued = upNext.data?.find((u) => u.recipeId === recipe.id)
+  const [portions, setPortions] = useState(queued?.portions ?? recipe.servings)
+  const coverage = useQuery({
+    queryKey: [...MINE, 'recipe-coverage', recipe.id, portions],
+    queryFn: () => api.recipeCoverage(recipe.id, portions),
+  }).data
+  const queue = useMine((a, p: number) => a.queue(recipe.id, p))
+  const unqueue = useMine((a) => a.unqueue(recipe.id))
   const [cooking, setCooking] = useState(false)
   const [cooked, setCooked] = useState(false)
   const deleteRating = useDeleteRating()
@@ -27,6 +39,15 @@ export function RecipePage({ recipe, ratings, ingredients }: Props) {
   const page = recipe.source.pages[0]
 
   useEffect(() => { window.scrollTo(0, 0) }, [recipe.id])
+  useEffect(() => { if (queued) setPortions(queued.portions) }, [queued])
+
+  function changePortions(next: number) {
+    const value = Math.max(1, Math.min(50, next))
+    setPortions(value)
+    if (queued) queue.mutate(value)
+  }
+
+  const toGet = coverage ? [...coverage.missing, ...coverage.shortOf] : []
 
   return (
     <article className="meals-recipe">
@@ -50,25 +71,41 @@ export function RecipePage({ recipe, ratings, ingredients }: Props) {
         </p>
 
         <div className="meals-row">
+          <button type="button" className={`meals-button ${queued ? '' : 'meals-button--primary'}`}
+            onClick={() => (queued ? unqueue.mutate(undefined) : queue.mutate(portions))}>
+            {queued ? <><ListX size={16} /> Remove from Up next</> : <><ListPlus size={16} /> Add to Up next</>}
+          </button>
           <button type="button" className="meals-button" onClick={() => setCooking(true)}><ChefHat size={16} /> Cook mode</button>
           <button type="button" className="meals-button meals-button--good" onClick={() => setCooked(true)}><Check size={16} /> Cooked it</button>
+          <Link className="meals-button" to={`/recipes/${recipe.id}/edit`}><Pencil size={16} /> Edit</Link>
         </div>
 
         <section className="meals-recipe__section">
           <div className="meals-recipe__section-head">
             <h2>Ingredients</h2>
             <div className="meals-stepper" role="group" aria-label="Portions">
-              <button type="button" className="meals-icon-button" onClick={() => setPortions(Math.max(1, portions - 1))} aria-label="Fewer portions"><Minus size={16} /></button>
+              <button type="button" className="meals-icon-button" onClick={() => changePortions(portions - 1)} aria-label="Fewer portions"><Minus size={16} /></button>
               <span><strong>{portions}</strong> {portions === 1 ? 'portion' : 'portions'}</span>
-              <button type="button" className="meals-icon-button" onClick={() => setPortions(portions + 1)} aria-label="More portions"><Plus size={16} /></button>
+              <button type="button" className="meals-icon-button" onClick={() => changePortions(portions + 1)} aria-label="More portions"><Plus size={16} /></button>
             </div>
           </div>
+          {coverage && (
+            <p className="meals-muted meals-small">
+              {toGet.length === 0 ? 'You have everything for this.' : `To get: ${toGet.join(', ')}.`}
+              {coverage.unknown.length > 0 && ` Check the cupboard for ${coverage.unknown.join(', ')}.`}
+            </p>
+          )}
           <ul className="meals-ingredients">
-            {recipe.ingredients.map((line, i) => (
-              <li key={i} className={`meals-ingredient ${ingredients.get(line.name)?.assumed ? 'meals-ingredient--assumed' : ''}`}>
-                {scaledLine(line, scale)}
-              </li>
-            ))}
+            {recipe.ingredients.map((line, i) => {
+              const state = ingredients.get(line.name)?.assumed ? 'assumed' : coverage?.lines[line.name]?.toLowerCase() ?? 'unknown'
+              return (
+                <li key={i} className={`meals-ingredient meals-ingredient--${state}`}>
+                  {scaledLine(line, scale)}
+                  {state === 'short' && <span className="meals-tag">not enough</span>}
+                  {state === 'unknown' && coverage && <span className="meals-tag">check</span>}
+                </li>
+              )
+            })}
           </ul>
         </section>
 
@@ -107,7 +144,7 @@ export function RecipePage({ recipe, ratings, ingredients }: Props) {
 
       {cooking && <CookMode recipe={recipe} scale={scale} onClose={() => setCooking(false)}
         onDone={() => { setCooking(false); setCooked(true) }} />}
-      {cooked && <CookedSheet recipe={recipe} onClose={() => setCooked(false)} onSaved={() => setCooked(false)} />}
+      {cooked && <CookedSheet recipe={recipe} portions={portions} onClose={() => setCooked(false)} onSaved={() => setCooked(false)} />}
     </article>
   )
 }

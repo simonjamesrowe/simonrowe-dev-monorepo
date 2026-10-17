@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
+import { useCoverage } from './data'
 import { averageScore, BOOKS } from './logic'
-import { RecipeCard } from './ui'
+import { CoverageBar, RecipeCard } from './ui'
 import type { Category, Rating, Recipe } from './types'
 
 const CATEGORIES: { key: Category | 'all'; label: string }[] = [
@@ -14,7 +16,7 @@ const CATEGORIES: { key: Category | 'all'; label: string }[] = [
   { key: 'drink', label: 'Drinks' },
 ]
 
-type Sort = 'rating' | 'protein' | 'kcal' | 'az'
+type Sort = 'cookable' | 'rating' | 'protein' | 'kcal' | 'az'
 
 export function Library({ recipes, ratings }: { recipes: Recipe[]; ratings: Rating[] }) {
   const [query, setQuery] = useState('')
@@ -23,7 +25,8 @@ export function Library({ recipes, ratings }: { recipes: Recipe[]; ratings: Rati
   const [veg, setVeg] = useState(false)
   const [freezes, setFreezes] = useState(false)
   const [prep, setPrep] = useState(false)
-  const [sort, setSort] = useState<Sort>('az')
+  const [sort, setSort] = useState<Sort>('cookable')
+  const coverage = useCoverage().data
   const books = useMemo(() => [...new Set(recipes.map((r) => r.source.book).filter(Boolean))] as string[], [recipes])
 
   const rows = useMemo(() => {
@@ -41,15 +44,19 @@ export function Library({ recipes, ratings }: { recipes: Recipe[]; ratings: Rati
           case 'protein': return b.r.perServing.protein - a.r.perServing.protein
           case 'kcal': return a.r.perServing.kcal - b.r.perServing.kcal
           case 'rating': return (b.rating ?? 0) - (a.rating ?? 0) || a.r.name.localeCompare(b.r.name)
+          case 'cookable': return (coverage?.[b.r.id]?.ratio ?? 0) - (coverage?.[a.r.id]?.ratio ?? 0) || a.r.name.localeCompare(b.r.name)
           default: return a.r.name.localeCompare(b.r.name)
         }
       })
-  }, [recipes, ratings, query, category, book, veg, freezes, prep, sort])
+  }, [recipes, ratings, query, category, book, veg, freezes, prep, sort, coverage])
 
   return (
     <div className="meals-page">
       <header className="meals-page__header">
-        <h1>Recipes</h1>
+        <div className="meals-section__head">
+          <h1>Recipes</h1>
+          <Link className="meals-button meals-button--small" to="/recipes/new"><Plus size={14} /> Add a recipe</Link>
+        </div>
         <p className="meals-muted">{recipes.length} recipes. Search a name or an ingredient.</p>
       </header>
 
@@ -74,6 +81,7 @@ export function Library({ recipes, ratings }: { recipes: Recipe[]; ratings: Rati
           {books.map((b) => <option key={b} value={b}>{BOOKS[b] ?? b}</option>)}
         </select>
         <select className="meals-chip meals-chip--select" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort">
+          <option value="cookable">Most cookable now</option>
           <option value="az">A–Z</option>
           <option value="rating">Your rating</option>
           <option value="protein">Most protein</option>
@@ -85,7 +93,10 @@ export function Library({ recipes, ratings }: { recipes: Recipe[]; ratings: Rati
       <div className="meals-grid">
         {rows.map(({ r, rating }) => (
           <RecipeCard key={r.id} recipe={r}>
-            {rating != null && <span className="meals-rating-pill">★ {rating.toFixed(1)}</span>}
+            <span className="meals-card__foot">
+              <CoverageBar coverage={coverage?.[r.id]} />
+              {rating != null && <span className="meals-rating-pill">★ {rating.toFixed(1)}</span>}
+            </span>
           </RecipeCard>
         ))}
       </div>

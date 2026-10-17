@@ -38,11 +38,9 @@ export function ImportPage() {
   }
 
   return (
-    <div className="meals-page">
-      <header className="meals-page__header">
-        <h1>Import</h1>
-        <p className="meals-muted">Upload recipe bundles (zip). Anything already in the library is left as it is.</p>
-      </header>
+    <section className="meals-panel">
+      <h2 className="meals-panel__title">Import recipe bundles</h2>
+      <p className="meals-muted meals-small">Upload recipe bundles (zip). Anything already in the library is left as it is.</p>
       <label className={`meals-dropzone ${busy ? 'meals-dropzone--busy' : ''}`}>
         <Upload size={24} aria-hidden="true" />
         <span>{busy ? 'Importing…' : 'Choose bundles'}</span>
@@ -73,6 +71,6 @@ export function ImportPage() {
           ))}
         </ul>
       )}
-    </div>
+    </section>
   )
 }

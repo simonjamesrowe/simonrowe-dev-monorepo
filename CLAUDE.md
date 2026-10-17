@@ -274,6 +274,27 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 053-meals (parts 2 to 5, one PR): **the kitchen, Up next, shopping, recipe import and a
+  private MCP server for Claude Code**, plus automatic sign-in. Load-bearing bits:
+  - **An unrecorded cupboard staple is "check", never missing**, and assumed ingredients (salt,
+    pepper, water) are ignored. Without the first, almost nothing counted as cookable.
+    `KitchenMath` holds every rule, with no I/O.
+  - **The model only proposes.** Quick add (note, pasted order, photo) and recipe reading (link,
+    photo) return drafts. Nothing is written until the owner applies them, and unknown
+    ingredient names come back as `newIngredients` to accept, never silently created.
+  - **The meals MCP tools must never be a `ToolCallbackProvider` bean**, or the public `/mcp`
+    publishes the owner's kitchen. They run on a separate stateless MCP SDK server at
+    `/api/meals/mcp`, with its own `@Order(1)` security chain accepting only hashed `meals_`
+    personal tokens. `MealsMcpServerTest` pins both.
+  - **Recipe reading is bounded at 90s** (quick add 45s), and the meals proxy location sets
+    `proxy_read_timeout 120s`. A whole recipe measured about 45s, so nginx's default 60s would
+    504 it.
+  - Five new collections (`V059CreateMealsKitchen`), all in the backup, and their indexes are
+    re-created on restore. Restoring brings revoked MCP tokens back as they were.
+  - Auto sign-in keeps a rotating refresh token in local storage (`offline_access`). It needs
+    Refresh Token Rotation on the SPA app and Allow Offline Access on the API, or it falls back
+    to the iframe Safari blocks.
+  See `docs/runbooks/meals.md`.
 - claude-code-release-summaries: **The `/status` release notes are now written by Claude Code on
   Simon's subscription, with OpenAI as the fallback.** This is the first job on software-factory's
   generic `content-writing` queue (`com.simonrowe.factory.writing`, prompt in, text out), and the

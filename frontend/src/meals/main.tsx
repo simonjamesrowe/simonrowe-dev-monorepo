@@ -14,8 +14,13 @@ import '../styles.css'
  * It signs in with the MAIN site's Auth0 application, deliberately: that application's access
  * token already carries the owner's DEV_PORTAL_ADMIN role, which is all /api/meals checks, so
  * no second application, secret or Action change is needed. Its Allowed Callback URLs must list
- * this origin. The token is kept in local storage, as CoParent does, so the installed app does
- * not ask for a sign-in on every launch.
+ * this origin.
+ *
+ * It remembers the device: tokens are kept in local storage and renewed with a rotating refresh
+ * token (`offline_access`), so the installed app stays signed in across launches without the
+ * third-party-cookie iframe Safari blocks. That needs Refresh Token Rotation on the Auth0
+ * application and Allow Offline Access on the API; until both are on, Auth0 issues no refresh
+ * token and the iframe fallback below keeps today's behaviour.
  */
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } })
 
@@ -32,8 +37,14 @@ createRoot(document.getElementById('root')!).render(
     <Auth0Provider
       domain={AUTH0_DOMAIN}
       clientId={AUTH0_CLIENT_ID}
-      authorizationParams={{ redirect_uri: `${window.location.origin}/`, audience: AUTH0_AUDIENCE }}
+      authorizationParams={{
+        redirect_uri: `${window.location.origin}/`,
+        audience: AUTH0_AUDIENCE,
+        scope: 'openid profile email offline_access',
+      }}
       cacheLocation="localstorage"
+      useRefreshTokens
+      useRefreshTokensFallback
       onRedirectCallback={returnTo}
     >
       <QueryClientProvider client={queryClient}>
