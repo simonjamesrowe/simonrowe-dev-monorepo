@@ -17,6 +17,11 @@ public class SecurityConfig {
 
   static final String ADMIN_ROLE = "DEV_PORTAL_ADMIN";
 
+  // java:S4502: CSRF protection guards credentials the browser attaches by itself (a session
+  // cookie, HTTP basic). This chain authenticates only a bearer JWT read from the
+  // Authorization header and creates no session, so a cross-site request carries nothing
+  // to forge with.
+  @SuppressWarnings("java:S4502")
   @Bean
   public SecurityFilterChain filterChain(
       final HttpSecurity http,

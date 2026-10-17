@@ -398,6 +398,9 @@ public class SchoolLinkFetcher {
     return anchorIsJustTheUrl ? link.url() : anchor;
   }
 
+  // java:S2583: a null check on a third-party return value, kept on purpose. The library
+  // says it cannot be null today; a future version may disagree, and the check is cheaper.
+  @SuppressWarnings("java:S2583")
   private Extracted extractText(final byte[] body, final String contentType) {
     if (isPdf(body)) {
       return new Extracted(pdfExtractor.extractTextFromBytes(body), null);

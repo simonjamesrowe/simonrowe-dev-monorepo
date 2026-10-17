@@ -23,6 +23,7 @@ import {
   type SchoolLinkSummary,
 } from '../../services/adminApi'
 import { SCHOOL_YEAR_GROUPS } from './schoolYearGroups'
+import { focusOnMount } from '../../utils/focusOnMount'
 
 const PAGE_SIZE = 25
 
@@ -439,7 +440,7 @@ export function SchoolDocumentsAdmin({
                       }
                     }}
                     aria-label="Text"
-                    autoFocus
+                    ref={focusOnMount}
                   />
                   {row.editsOverwrittenByCrawl && (
                     <p className="school-admin__source-note">

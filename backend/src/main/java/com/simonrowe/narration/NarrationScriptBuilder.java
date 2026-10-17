@@ -39,8 +39,8 @@ public class NarrationScriptBuilder {
   private static final Pattern RAW_HTML = Pattern.compile("<[^>]+>");
   private static final Pattern URL = Pattern.compile("https?://\\S+");
   private static final Pattern WHITESPACE = Pattern.compile("\\s+");
-  private static final Pattern TABLE_SEPARATOR = Pattern.compile(
-      "^\\s*\\|?(?:\\s*:?-{3,}:?\\s*\\|)+\\s*$");
+  static final Pattern TABLE_SEPARATOR = Pattern.compile(
+      "^\\s*+\\|?(?:\\s*+:?-{3,}+:?\\s*+\\|)++\\s*+$");
 
   private final Parser parser = Parser.builder().build();
   private final TextContentRenderer renderer = TextContentRenderer.builder().build();

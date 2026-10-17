@@ -253,4 +253,23 @@ class SchoolWebsiteCrawlerPagesTest {
     assertThat(crawler.fetchPage(BASE + "/page/?title=Home+Learning&pid=158").canonicalUrl())
         .isEqualTo(BASE + "/year-six-home-learning");
   }
+
+  @Test
+  @DisplayName("a sitemap entry wrapped in whitespace and newlines is read and trimmed")
+  void sitemapLocIsTrimmed() {
+    final StubCrawler crawler = new StubCrawler(propertiesWith(BASE, null),
+        "<urlset><loc>\n   %s/curriculum  \n</loc></urlset>".formatted(BASE));
+
+    assertThat(crawler.listPages()).contains(BASE + "/curriculum");
+  }
+
+  @Test
+  @DisplayName("an unterminated <loc> run of 100k characters is read in linear time")
+  void sitemapLocDoesNotBacktrack() {
+    final String hostile = "<loc>" + " ".repeat(100_000) + "x" + " ".repeat(100_000);
+    final StubCrawler crawler = new StubCrawler(propertiesWith(BASE, null), hostile);
+
+    org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(
+        java.time.Duration.ofSeconds(2), crawler::listPages);
+  }
 }

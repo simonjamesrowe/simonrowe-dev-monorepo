@@ -96,7 +96,7 @@ export function BlogEditor() {
         // non-fatal: options just won't appear
       }
     }
-    loadOptions()
+    void loadOptions()
   }, [getAccessToken])
 
   const loadBlog = useCallback(async () => {
@@ -183,8 +183,9 @@ export function BlogEditor() {
         <div className="blog-editor__top-row">
           <div className="blog-editor__top-left">
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Title</label>
+              <label className="blog-editor__section-label" htmlFor="blog-editor-title">Title</label>
               <input
+                id="blog-editor-title"
                 type="text"
                 className="admin-form__input"
                 value={form.title}
@@ -194,8 +195,9 @@ export function BlogEditor() {
             </div>
 
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Short Description</label>
+              <label className="blog-editor__section-label" htmlFor="blog-editor-short-description">Short Description</label>
               <textarea
+                id="blog-editor-short-description"
                 className="admin-form__input admin-form__textarea"
                 value={form.shortDescription}
                 onChange={(e) => { setForm({ ...form, shortDescription: e.target.value }); setDirty(true) }}
@@ -225,8 +227,9 @@ export function BlogEditor() {
 
           <div className="blog-editor__top-right">
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Featured Image</label>
+              <span className="blog-editor__section-label">Featured Image</span>
               <ImagePicker
+                label="Featured Image"
                 value={form.featuredImageUrl || null}
                 onChange={(url) => { setForm({ ...form, featuredImageUrl: url }); setDirty(true) }}
               />
@@ -236,8 +239,9 @@ export function BlogEditor() {
 
         <div className="blog-editor__section blog-editor__two-col">
           <div>
-            <label className="blog-editor__section-label">Tags</label>
+            <label className="blog-editor__section-label" htmlFor="blog-editor-tags">Tags</label>
             <TagInput
+              id="blog-editor-tags"
               options={tags.map((t) => ({ id: t.id, name: t.name }))}
               selected={form.tags}
               onChange={(selected) => { setForm({ ...form, tags: selected }); setDirty(true) }}
@@ -245,8 +249,9 @@ export function BlogEditor() {
             />
           </div>
           <div>
-            <label className="blog-editor__section-label">Skills</label>
+            <label className="blog-editor__section-label" htmlFor="blog-editor-skills">Skills</label>
             <TagInput
+              id="blog-editor-skills"
               options={skills.map((s) => ({ id: s.id, name: s.name }))}
               selected={form.skills}
               onChange={(selected) => { setForm({ ...form, skills: selected }); setDirty(true) }}
@@ -256,7 +261,7 @@ export function BlogEditor() {
         </div>
 
         <div className="blog-editor__section blog-editor__content">
-          <label className="blog-editor__section-label">Content</label>
+          <span className="blog-editor__section-label">Content</span>
           <MDXEditor
             key={editorKey}
             ref={editorRef}

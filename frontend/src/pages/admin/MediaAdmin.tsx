@@ -126,7 +126,6 @@ export function MediaAdmin() {
                 <div
                   key={asset.id}
                   className={`admin-media-card${selectedAsset?.id === asset.id ? ' admin-media-card--selected' : ''}`}
-                  onClick={() => handleSelectAsset(asset)}
                 >
                   <div className="admin-media-card__preview">
                     <MediaPreview
@@ -138,7 +137,15 @@ export function MediaAdmin() {
                   </div>
                   <div className="admin-media-card__info">
                     <p className="admin-media-card__name" title={asset.fileName}>
-                      {asset.fileName}
+                      {/* Stretched over the whole card, so the card is still one click target. */}
+                      <button
+                        aria-pressed={selectedAsset?.id === asset.id}
+                        className="admin-media-card__select"
+                        onClick={() => handleSelectAsset(asset)}
+                        type="button"
+                      >
+                        {asset.fileName}
+                      </button>
                     </p>
                     <p className="admin-media-card__meta">
                       {asset.mimeType} &middot; {formatBytes(asset.fileSize)}
@@ -147,10 +154,7 @@ export function MediaAdmin() {
                   <button
                     aria-label={`Delete ${asset.fileName}`}
                     className="admin-btn admin-btn--sm admin-btn--danger admin-media-card__delete"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setDeleteTarget({ id: asset.id, name: asset.fileName })
-                    }}
+                    onClick={() => setDeleteTarget({ id: asset.id, name: asset.fileName })}
                     type="button"
                   >
                     Delete

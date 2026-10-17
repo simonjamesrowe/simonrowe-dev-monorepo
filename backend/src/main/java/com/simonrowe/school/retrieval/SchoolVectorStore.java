@@ -128,6 +128,9 @@ public class SchoolVectorStore {
    * @param request the search, including its tier filter
    * @return matching chunks, or an empty list
    */
+  // java:S2583: a null check on a third-party return value, kept on purpose. The library
+  // says it cannot be null today; a future version may disagree, and the check is cheaper.
+  @SuppressWarnings("java:S2583")
   public List<Document> search(final SearchRequest request) {
     if (delegate == null) {
       return List.of();

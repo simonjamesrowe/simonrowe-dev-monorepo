@@ -11,6 +11,7 @@ import {
   finalizeAssistantMessage,
 } from './chatStreamReducer'
 import type { ChatMessageModel } from './chatTypes'
+import { closeOnBackdropClick } from '../../utils/backdropClick'
 
 const MAX_USER_MESSAGES = 10
 const STREAM_TIMEOUT_MS = 30000
@@ -249,8 +250,8 @@ export function ChatPanel({
   if (!visible) return null
 
   return (
-    <div className="chat-drawer-backdrop" onClick={onClose}>
-      <div className="chat-panel" onClick={(e) => e.stopPropagation()} data-testid="chat-panel">
+    <div className="chat-drawer-backdrop" onClick={closeOnBackdropClick(onClose)} role="presentation">
+      <div className="chat-panel" data-testid="chat-panel">
         <div className="chat-panel__header">
           <h3>Ask me anything</h3>
           <div className="chat-panel__header-actions">

@@ -123,7 +123,7 @@ public class AdminProfileController {
     }
 
     if (primaryEmail != null && !primaryEmail.isBlank()
-        && !primaryEmail.matches("^[^@]+@[^@]+\\.[^@]+$")) {
+        && !looksLikeEmail(primaryEmail)) {
       errors.add(new ValidationErrorResponse.FieldError(
           "primaryEmail", "Invalid email format"));
     }
@@ -146,5 +146,19 @@ public class AdminProfileController {
         .reduce((a, b) -> a + "; " + b)
         .orElse("Validation failed");
     return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+  }
+
+  /**
+   * The old {@code ^[^@]+@[^@]+\.[^@]+$}, without a regex: exactly one '@' with something
+   * before it, and a '.' in the domain with something either side. The regex backtracked
+   * quadratically, since its dot is also one of the characters {@code [^@]} accepts.
+   */
+  static boolean looksLikeEmail(final String value) {
+    final int at = value.indexOf('@');
+    if (at < 1 || value.indexOf('@', at + 1) >= 0) {
+      return false;
+    }
+    final String domain = value.substring(at + 1);
+    return domain.length() >= 3 && domain.substring(1, domain.length() - 1).indexOf('.') >= 0;
   }
 }

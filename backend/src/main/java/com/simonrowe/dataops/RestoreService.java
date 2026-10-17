@@ -190,7 +190,7 @@ public class RestoreService {
       localBackup = backupService.createLocalBackup();
 
       operationsService.updateProgress("Downloading backup from Google Drive...", 15);
-      tempZip = Files.createTempFile("restore-", ".zip");
+      tempZip = PrivateTempFiles.create("restore-", ".zip");
       try (var os = new BufferedOutputStream(Files.newOutputStream(tempZip))) {
         googleDriveService.downloadFile(backupFileId, os);
       }
@@ -552,7 +552,7 @@ public class RestoreService {
           Backup manifest references media source '%s' but that file is not present \
           in Drive backups folder""".formatted(mediaSource));
     }
-    Path sourceZip = Files.createTempFile("restore-media-", ".zip");
+    Path sourceZip = PrivateTempFiles.create("restore-media-", ".zip");
     try (var os = new BufferedOutputStream(Files.newOutputStream(sourceZip))) {
       googleDriveService.downloadFile(sourceFileId, os);
     }

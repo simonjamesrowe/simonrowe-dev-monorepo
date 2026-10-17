@@ -2,6 +2,7 @@ package com.simonrowe.school.model;
 
 import java.time.Instant;
 import java.util.Locale;
+import java.util.regex.Pattern;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -35,6 +36,10 @@ public record SchoolLink(
     String failureReason
 ) {
 
+  /** An image file extension ending the path, before any query string. */
+  private static final Pattern IMAGE_EXTENSION =
+      Pattern.compile("\\.(?:jpg|jpeg|png|gif|webp)(?:\\?|$)");
+
   /** What has been decided about a discovered link. */
   public enum Status {
     /** Seen, not yet decided. Nothing has been requested from the far end. */
@@ -66,7 +71,7 @@ public record SchoolLink(
     if (lower.contains(".pdf") || lower.contains("download.asp")) {
       return "PDF document";
     }
-    if (lower.matches(".*\\.(jpg|jpeg|png|gif|webp)(\\?.*)?$")) {
+    if (IMAGE_EXTENSION.matcher(lower).find()) {
       return "Image";
     }
     if (lower.contains("docs.google.com/forms") || lower.contains("forms.gle")) {

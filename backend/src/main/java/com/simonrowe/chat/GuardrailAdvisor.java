@@ -122,6 +122,9 @@ public class GuardrailAdvisor implements CallAdvisor, StreamAdvisor {
     }
   }
 
+  // java:S2583: a null check on a third-party return value, kept on purpose. The library
+  // says it cannot be null today; a future version may disagree, and the check is cheaper.
+  @SuppressWarnings("java:S2583")
   private static String conversationId(final ChatClientRequest request) {
     if (request.context() == null) {
       return null;
@@ -135,6 +138,9 @@ public class GuardrailAdvisor implements CallAdvisor, StreamAdvisor {
         && (classification.contains("OFF_TOPIC") || classification.contains("HARMFUL"));
   }
 
+  // java:S2583: a null check on a third-party return value, kept on purpose. The library
+  // says it cannot be null today; a future version may disagree, and the check is cheaper.
+  @SuppressWarnings("java:S2583")
   private static ChatClientResponse pivotResponse(final ChatClientRequest request) {
     ChatResponse response =
         new ChatResponse(List.of(new Generation(new AssistantMessage(PIVOT_MESSAGE))));

@@ -48,7 +48,9 @@ export function ContactDrawer({
 
   return (
     <>
+      {/* Decorative: the drawer's close button and Escape are the accessible ways out. */}
       <div
+        aria-hidden="true"
         className={`contact-drawer-overlay${open ? ' contact-drawer-overlay--open' : ''}`}
         onClick={onClose}
       />

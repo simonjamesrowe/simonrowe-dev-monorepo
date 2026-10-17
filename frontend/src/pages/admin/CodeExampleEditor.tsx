@@ -87,7 +87,7 @@ export function CodeExampleEditor() {
         // non-fatal
       }
     }
-    loadSkills()
+    void loadSkills()
   }, [getAccessToken])
 
   const loadCodeExample = useCallback(async () => {
@@ -198,8 +198,9 @@ export function CodeExampleEditor() {
       <form onSubmit={handleSubmit}>
         <div className="blog-editor__two-col">
           <div className="blog-editor__section">
-            <label className="blog-editor__section-label">Title</label>
+            <label className="blog-editor__section-label" htmlFor="code-example-editor-title">Title</label>
             <input
+              id="code-example-editor-title"
               type="text"
               className="admin-form__input"
               value={form.title}
@@ -209,8 +210,9 @@ export function CodeExampleEditor() {
             />
           </div>
           <div className="blog-editor__section">
-            <label className="blog-editor__section-label">Language</label>
+            <label className="blog-editor__section-label" htmlFor="code-example-editor-language">Language</label>
             <select
+              id="code-example-editor-language"
               className="admin-form__input"
               value={form.language}
               onChange={(e) => { setForm({ ...form, language: e.target.value }); setDirty(true) }}
@@ -225,8 +227,9 @@ export function CodeExampleEditor() {
         </div>
 
         <div className="blog-editor__section">
-          <label className="blog-editor__section-label">Skills</label>
+          <label className="blog-editor__section-label" htmlFor="code-example-editor-skills">Skills</label>
           <TagInput
+            id="code-example-editor-skills"
             options={skills.map((s) => ({ id: s.id, name: s.name }))}
             selected={form.skills}
             onChange={(ids) => { setForm({ ...form, skills: ids }); setDirty(true) }}
@@ -235,7 +238,7 @@ export function CodeExampleEditor() {
         </div>
 
         <div className="blog-editor__section blog-editor__content">
-          <label className="blog-editor__section-label">Description</label>
+          <span className="blog-editor__section-label">Description</span>
           <MDXEditor
             key={`desc-${editorKey}`}
             ref={descriptionRef}
@@ -246,7 +249,7 @@ export function CodeExampleEditor() {
         </div>
 
         <div className="blog-editor__section blog-editor__content">
-          <label className="blog-editor__section-label">Code</label>
+          <span className="blog-editor__section-label">Code</span>
           <MDXEditor
             key={`code-${editorKey}`}
             ref={codeRef}

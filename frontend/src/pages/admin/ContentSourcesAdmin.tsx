@@ -108,6 +108,7 @@ export function ContentSourcesAdmin() {
                         type="checkbox"
                       />
                       <span className="admin-toggle__track" />
+                      <span className="admin-toggle__text">{`${source.name} active`}</span>
                     </label>
                   </td>
                   <td className="admin-table__td admin-table__td--secondary">

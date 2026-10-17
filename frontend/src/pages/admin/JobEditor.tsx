@@ -94,7 +94,7 @@ export function JobEditor() {
         // non-fatal
       }
     }
-    loadSkills()
+    void loadSkills()
   }, [getAccessToken])
 
   const resolveSkillNamesToIds = (skillValues: string[], availableSkills: AdminSkill[]): string[] => {
@@ -209,8 +209,9 @@ export function JobEditor() {
         <div className="blog-editor__top-row">
           <div className="blog-editor__top-left">
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Title</label>
+              <label className="blog-editor__section-label" htmlFor="job-editor-title">Title</label>
               <input
+                id="job-editor-title"
                 type="text"
                 className="admin-form__input"
                 value={form.title}
@@ -219,8 +220,9 @@ export function JobEditor() {
               />
             </div>
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Company</label>
+              <label className="blog-editor__section-label" htmlFor="job-editor-company">Company</label>
               <input
+                id="job-editor-company"
                 type="text"
                 className="admin-form__input"
                 value={form.company}
@@ -229,8 +231,9 @@ export function JobEditor() {
               />
             </div>
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Company URL</label>
+              <label className="blog-editor__section-label" htmlFor="job-editor-company-url">Company URL</label>
               <input
+                id="job-editor-company-url"
                 type="text"
                 className="admin-form__input"
                 value={form.companyUrl}
@@ -240,8 +243,9 @@ export function JobEditor() {
           </div>
           <div className="blog-editor__top-right">
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Company Image</label>
+              <span className="blog-editor__section-label">Company Image</span>
               <ImagePicker
+                label="Company Image"
                 value={form.companyImage?.url ?? null}
                 onChange={(url) => {
                   setForm({ ...form, companyImage: url ? { url } : null })
@@ -254,8 +258,9 @@ export function JobEditor() {
 
         <div className="blog-editor__two-col">
           <div className="blog-editor__section">
-            <label className="blog-editor__section-label">Start Date</label>
+            <label className="blog-editor__section-label" htmlFor="job-editor-start-date">Start Date</label>
             <input
+              id="job-editor-start-date"
               type="date"
               className="admin-form__input"
               value={form.startDate}
@@ -264,8 +269,9 @@ export function JobEditor() {
             />
           </div>
           <div className="blog-editor__section">
-            <label className="blog-editor__section-label">End Date</label>
+            <label className="blog-editor__section-label" htmlFor="job-editor-end-date">End Date</label>
             <input
+              id="job-editor-end-date"
               type="date"
               className="admin-form__input"
               value={form.endDate}
@@ -276,8 +282,9 @@ export function JobEditor() {
 
         <div className="blog-editor__two-col">
           <div className="blog-editor__section">
-            <label className="blog-editor__section-label">Location</label>
+            <label className="blog-editor__section-label" htmlFor="job-editor-location">Location</label>
             <input
+              id="job-editor-location"
               type="text"
               className="admin-form__input"
               value={form.location}
@@ -285,8 +292,9 @@ export function JobEditor() {
             />
           </div>
           <div className="blog-editor__section">
-            <label className="blog-editor__section-label">Skills</label>
+            <label className="blog-editor__section-label" htmlFor="job-editor-skills">Skills</label>
             <TagInput
+              id="job-editor-skills"
               options={skills.map((s) => ({ id: s.id, name: s.name }))}
               selected={form.skills}
               onChange={(ids) => { setForm({ ...form, skills: ids }); setDirty(true) }}
@@ -296,8 +304,9 @@ export function JobEditor() {
         </div>
 
         <div className="blog-editor__section">
-          <label className="blog-editor__section-label">Short Description</label>
+          <label className="blog-editor__section-label" htmlFor="job-editor-short-description">Short Description</label>
           <textarea
+            id="job-editor-short-description"
             className="admin-form__input admin-form__textarea"
             value={form.shortDescription}
             onChange={(e) => { setForm({ ...form, shortDescription: e.target.value }); setDirty(true) }}
@@ -306,7 +315,7 @@ export function JobEditor() {
         </div>
 
         <div className="blog-editor__section blog-editor__content">
-          <label className="blog-editor__section-label">Long Description</label>
+          <span className="blog-editor__section-label">Long Description</span>
           <MDXEditor
             key={editorKey}
             ref={editorRef}

@@ -54,14 +54,14 @@ export function ImageUploader({ onUploadComplete, currentImage }: ImageUploaderP
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (file) uploadFile(file)
+    if (file) void uploadFile(file)
   }
 
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault()
     setDragging(false)
     const file = e.dataTransfer.files[0]
-    if (file) uploadFile(file)
+    if (file) void uploadFile(file)
   }
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {

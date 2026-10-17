@@ -11,6 +11,22 @@ const INTERNAL_URL = /\/(?:about|experience|blogs|news-events|profile)(?:[/?#][^
 // Matches a bare absolute http(s) URL.
 const EXTERNAL_URL = /https?:\/\/[^\s)<>\]]+/g
 
+const TRAILING_PUNCTUATION = new Set(['.', ',', ';', ':'])
+
+/**
+ * Drops trailing sentence punctuation the URL char class may have allowed. A scan from
+ * the end rather than `replace(/[.,;:]+$/, '')`: that regex retries from every position
+ * in a long punctuation run that is not at the end, which is quadratic on model output
+ * the visitor can shape.
+ */
+export function trimTrailingPunctuation(url: string): string {
+  let end = url.length
+  while (end > 0 && TRAILING_PUNCTUATION.has(url[end - 1])) {
+    end--
+  }
+  return url.slice(0, end)
+}
+
 /**
  * remark plugin (safety net): turn BARE URLs that appear as plain text into proper link
  * nodes, so answers stay clickable even when the model forgets markdown link syntax.
@@ -36,8 +52,7 @@ export function remarkLinkify() {
         regex.lastIndex = 0
         let match: RegExpExecArray | null
         while ((match = regex.exec(value)) !== null) {
-          // Trim a trailing sentence punctuation the URL char class may have allowed.
-          const trimmed = match[0].replace(/[.,;:]+$/, '')
+          const trimmed = trimTrailingPunctuation(match[0])
           matches.push({ start: match.index, end: match.index + trimmed.length, url: trimmed })
         }
       }

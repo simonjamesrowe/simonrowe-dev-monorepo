@@ -21,7 +21,10 @@ public class RolesJwtAuthenticationConverter
   private final JwtGrantedAuthoritiesConverter scopesConverter =
       new JwtGrantedAuthoritiesConverter();
 
+  // java:S2583: a null check on a third-party return value, kept on purpose. The library
+  // says it cannot be null today; a future version may disagree, and the check is cheaper.
   @Override
+  @SuppressWarnings("java:S2583")
   public AbstractAuthenticationToken convert(final Jwt jwt) {
     final Collection<GrantedAuthority> scopeAuthorities =
         scopesConverter.convert(jwt);

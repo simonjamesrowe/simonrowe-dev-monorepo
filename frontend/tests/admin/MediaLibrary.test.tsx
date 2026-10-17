@@ -214,3 +214,22 @@ describe('MediaLibrary', () => {
     expect(document.querySelectorAll('img')).toHaveLength(0)
   })
 })
+
+describe('MediaLibrary backdrop', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUseAuth.mockReturnValue({ getAccessToken: mockGetAccessToken } as unknown as ReturnType<typeof useAuth>)
+    mockFetchAdminMedia.mockImplementation(() => new Promise(() => {}))
+  })
+
+  it('closes on a click on the backdrop but not on one inside the panel', () => {
+    const onClose = vi.fn()
+    const { container } = render(<MediaLibrary onSelect={vi.fn()} onClose={onClose} />)
+
+    fireEvent.click(container.querySelector('.drawer')!)
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.click(container.querySelector('.drawer-overlay')!)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})

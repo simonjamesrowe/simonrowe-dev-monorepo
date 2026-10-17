@@ -42,18 +42,25 @@ public class SitemapHtmlScraper {
       "(\\d{1,2})\\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*",
       Pattern.CASE_INSENSITIVE);
 
+  // Each starts at the '|' and takes its whitespace possessively, so a failed match cannot
+  // backtrack through a run of spaces. stripTitleSuffix removes the spaces before the '|'.
+  static final Pattern CLAUDE_BY_ANTHROPIC_SUFFIX =
+      Pattern.compile("(?i)\\|\\s*+Claude\\s*+by\\s*+Anthropic$");
+  static final Pattern CLAUDE_SUFFIX = Pattern.compile("(?i)\\|\\s*+Claude$");
+
   private static final DateTimeFormatter DAY_MONTH_FORMATTER =
       DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
 
+  // Each month once, full or abbreviated: listing the two forms separately named May twice.
+  private static final String MONTH_NAME = """
+      Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?\
+      |Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?""";
+
   // Fix 5: regex for visible-text date extraction
-  private static final Pattern TEXT_DATE_PATTERN = Pattern.compile(
+  static final Pattern TEXT_DATE_PATTERN = Pattern.compile(
       """
-      (?:(\\d{1,2})\\s+(January|February|March|April|May|June|July|August|September\
-      |October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\
-      \\s+(\\d{4}))\
-      |(?:(January|February|March|April|May|June|July|August|September\
-      |October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\
-      \\s+(\\d{1,2}),?\\s+(\\d{4}))""",
+      (?:(\\d{1,2})\\s+(%1$s)\\s+(\\d{4}))\
+      |(?:(%1$s)\\s+(\\d{1,2}),?\\s+(\\d{4}))""".formatted(MONTH_NAME),
       Pattern.CASE_INSENSITIVE);
 
   public List<ScrapedContent> scrape(String sitemapUrl) {
@@ -196,7 +203,7 @@ public class SitemapHtmlScraper {
       // links that share the listing page but live elsewhere in the site
       // hierarchy — otherwise those (which appear first in the DOM) would
       // exhaust the article cap before any real posts are reached.
-      String sectionPath = listingPath.replaceAll("/+$", "");
+      String sectionPath = stripTrailingSlashes(listingPath);
       if (!sectionPath.isEmpty() && !path.startsWith(sectionPath + "/")) {
         return false;
       }
@@ -257,12 +264,32 @@ public class SitemapHtmlScraper {
       String normalized = new URI(
           uri.getScheme(),
           uri.getHost().toLowerCase(),
-          uri.getPath().replaceAll("/+$", ""),
+          stripTrailingSlashes(uri.getPath()),
           null, null).toString();
       return normalized;
     } catch (Exception e) {
-      return url.replaceAll("[?#].*$", "").replaceAll("/+$", "");
+      return stripTrailingSlashes(stripQueryAndFragment(url));
     }
+  }
+
+  // Plain scans rather than replaceAll("/+$") and replaceAll("[?#].*$"): those retry from
+  // every slash or '?' in the string, which is quadratic on a long run of them.
+  static String stripTrailingSlashes(String value) {
+    int end = value.length();
+    while (end > 0 && value.charAt(end - 1) == '/') {
+      end--;
+    }
+    return value.substring(0, end);
+  }
+
+  static String stripQueryAndFragment(String url) {
+    for (int i = 0; i < url.length(); i++) {
+      char c = url.charAt(i);
+      if (c == '?' || c == '#') {
+        return url.substring(0, i);
+      }
+    }
+    return url;
   }
 
   public List<ScrapedContent> scrapeEventsPage(String pageUrl) {
@@ -458,8 +485,8 @@ public class SitemapHtmlScraper {
     }
     
     if (title != null) {
-      title = title.replaceAll("(?i)\\s*\\|\\s*Claude\\s*by\\s*Anthropic$", "");
-      title = title.replaceAll("(?i)\\s*\\|\\s*Claude$", "");
+      title = stripTitleSuffix(title, CLAUDE_BY_ANTHROPIC_SUFFIX);
+      title = stripTitleSuffix(title, CLAUDE_SUFFIX);
     }
 
     String content = extractArticleContent(doc);
@@ -704,6 +731,21 @@ public class SitemapHtmlScraper {
     }
   }
 
+  static String stripTitleSuffix(String title, Pattern suffix) {
+    Matcher matcher = suffix.matcher(title);
+    if (!matcher.find()) {
+      return title;
+    }
+    int end = matcher.start();
+    while (end > 0 && Character.isWhitespace(title.charAt(end - 1))) {
+      end--;
+    }
+    return title.substring(0, end);
+  }
+
+  // java:S2583: a null check on a third-party return value, kept on purpose. The library
+  // says it cannot be null today; a future version may disagree, and the check is cheaper.
+  @SuppressWarnings("java:S2583")
   private String extractArticleContent(Document doc) {
     Element article = doc.selectFirst("article");
     if (article != null) {

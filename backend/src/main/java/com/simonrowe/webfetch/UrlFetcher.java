@@ -249,6 +249,9 @@ public class UrlFetcher {
    * @param maxChars maximum number of characters of body text to keep
    * @return the extracted, truncated content
    */
+  // java:S2583: a null check on a third-party return value, kept on purpose. The library
+  // says it cannot be null today; a future version may disagree, and the check is cheaper.
+  @SuppressWarnings("java:S2583")
   static WebPageContent extract(final Document doc, final String finalUrl, final int maxChars) {
     final String title = doc.title();
     String text = doc.body() != null ? doc.body().text() : doc.text();

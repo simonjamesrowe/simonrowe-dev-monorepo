@@ -88,8 +88,9 @@ export function CodeExamplesAdmin() {
 
       <div className="code-examples-filters">
         <div className="code-examples-filters__group">
-          <label>Search</label>
+          <label htmlFor="code-examples-filter-search">Search</label>
           <input
+            id="code-examples-filter-search"
             type="text"
             className="admin-form__input"
             placeholder="Search..."
@@ -98,8 +99,9 @@ export function CodeExamplesAdmin() {
           />
         </div>
         <div className="code-examples-filters__group">
-          <label>Skill</label>
+          <label htmlFor="code-examples-filter-skill">Skill</label>
           <select
+            id="code-examples-filter-skill"
             className="admin-form__input"
             value={skillFilter}
             onChange={handleFilterChange(setSkillFilter)}
@@ -113,8 +115,9 @@ export function CodeExamplesAdmin() {
           </select>
         </div>
         <div className="code-examples-filters__group">
-          <label>Language</label>
+          <label htmlFor="code-examples-filter-language">Language</label>
           <select
+            id="code-examples-filter-language"
             className="admin-form__input"
             value={languageFilter}
             onChange={handleFilterChange(setLanguageFilter)}

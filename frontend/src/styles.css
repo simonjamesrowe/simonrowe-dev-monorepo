@@ -5839,6 +5839,40 @@ a:hover {
   margin: 0.15rem 0 0;
 }
 
+/* The card's select control: the file name, reset to look like the text it replaced, with
+   its hit area stretched over the card. The delete button comes later in the DOM, so it
+   paints above the stretched area and stays clickable. */
+.admin-media-card__select {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-media-card__select::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.admin-media-card__select:focus-visible {
+  outline: none;
+}
+
+.admin-media-card__select:focus-visible::after {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  border-radius: 0.75rem;
+}
+
 .admin-media-card__delete {
   position: absolute;
   top: 0.5rem;
@@ -6102,6 +6136,20 @@ a:hover {
   .admin-form__row {
     grid-template-columns: 1fr;
   }
+}
+
+/* The content-source table's active toggle has no visible text, so its name is carried
+   by visually-hidden text inside the label (display:none would drop it from the name). */
+.admin-toggle__text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ================================================
