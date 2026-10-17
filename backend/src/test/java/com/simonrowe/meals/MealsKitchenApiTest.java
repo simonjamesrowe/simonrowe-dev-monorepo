@@ -126,6 +126,29 @@ class MealsKitchenApiTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void cookWithOutOfRangeAmountChangesNothing() throws Exception {
+    changes("simon", """
+        {"changes":[{"name":"beef mince","action":"add","quantity":800,"unit":"g"},
+                    {"name":"onion","action":"add","quantity":3,"unit":"each"}]}""");
+
+    mockMvc.perform(post("/api/meals/cooked").with(owner("simon"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"recipeId":"test-chilli","portions":4,"score":4,
+                 "deductions":[{"name":"onion","tier":"tracked","amount":1,"unit":"each",
+                                "ranOut":false},
+                               {"name":"beef mince","tier":"tracked","amount":2000000,
+                                "unit":"g","ranOut":false}]}"""))
+        .andExpect(status().isBadRequest());
+
+    mockMvc.perform(get("/api/meals/kitchen").with(owner("simon")))
+        .andExpect(jsonPath("$[?(@.name=='beef mince')].quantity", contains(800.0)))
+        .andExpect(jsonPath("$[?(@.name=='onion')].quantity", contains(3.0)));
+    mockMvc.perform(get("/api/meals/ratings").with(owner("simon")))
+        .andExpect(jsonPath("$", hasSize(0)));
+  }
+
+  @Test
   void weekQueuesItsRecipesAndTheListIsUpNextMinusTheKitchen() throws Exception {
     mockMvc.perform(post("/api/meals/up-next/templates/tp-1500-w1").with(owner("simon")))
         .andExpect(jsonPath("$[*].recipeId", contains("test-chilli", "test-oats")));

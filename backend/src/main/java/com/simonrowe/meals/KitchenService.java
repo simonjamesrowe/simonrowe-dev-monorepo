@@ -202,14 +202,17 @@ public class KitchenService {
             null));
       }
     }
+    // The amounts come from the request, so they get the same bounds as any other change, and
+    // all of them are checked before anything is written.
+    List<InventoryChange> clean = changes.stream().map(KitchenService::validated).toList();
     Map<String, MealIngredient> catalogue = catalogue();
-    for (InventoryChange change : changes) {
+    for (InventoryChange change : clean) {
       String id = MealInventoryItem.idFor(ownerId, change.name());
       MealInventoryItem next = KitchenMath.apply(ownerId, inventory.findById(id).orElse(null),
           change, catalogue.get(change.name()), now);
       inventory.save(next);
     }
-    record(ownerId, "cooked", "cooked " + recipe.name(), changes);
+    record(ownerId, "cooked", "cooked " + recipe.name(), clean);
     upNext.deleteById(MealUpNextItem.idFor(ownerId, recipe.id()));
     return ratings.save(new MealRating(UUID.randomUUID().toString(), ownerId, recipe.id(), now,
         request.score(), request.again() == null || request.again(),
