@@ -240,6 +240,7 @@
         var name = 'simonrowe.dev';
         if (host.indexOf('term-time.') === 0) name = 'Term Time';
         else if (host.indexOf('api.') === 0) name = 'The simonrowe.dev API';
+        else if (host.indexOf('meals.') === 0) name = 'Meals';
         var slot = document.getElementById('site-name');
         if (slot) slot.textContent = name;
         document.title = 'Update in progress — ' + name;

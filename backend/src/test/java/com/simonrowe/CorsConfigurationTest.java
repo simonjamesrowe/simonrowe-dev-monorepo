@@ -25,6 +25,8 @@ class CorsConfigurationTest {
 
     assertThat(configured.toString())
         .as("proxied CoParent POST requests retain this Origin and Spring rejects them otherwise")
-        .contains("http://coparents.localhost:5173");
+        .contains("http://coparents.localhost:5173")
+        .as("the meals app's uploads are POSTs from its own dev hostname")
+        .contains("http://meals.localhost:5173");
   }
 }

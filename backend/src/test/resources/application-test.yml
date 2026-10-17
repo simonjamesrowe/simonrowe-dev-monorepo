@@ -46,6 +46,8 @@ management:
         enabled: false
 uploads:
   path: target/test-uploads
+meals:
+  image-path: target/test-meal-images
 narration:
   # Automated tests must never discover developer ADC and call a chargeable API.
   enabled: false

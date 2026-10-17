@@ -1,0 +1,16 @@
+{
+  "name": "Meals",
+  "short_name": "Meals",
+  "description": "What to eat, what's in, and what to buy.",
+  "theme_color": "#0f131c",
+  "background_color": "#0f131c",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    { "src": "/meals-pwa-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/meals-pwa-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["food", "lifestyle"]
+}

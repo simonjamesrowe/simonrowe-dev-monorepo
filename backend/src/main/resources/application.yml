@@ -2,7 +2,7 @@ server:
   port: 8080
 
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://coparents.localhost:5173}
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://coparents.localhost:5173,http://meals.localhost:5173}
 
 uploads:
   path: ${UPLOADS_PATH:backend/uploads/}
@@ -16,6 +16,11 @@ uploads:
 # sharing, so even a locally generated one should point at production.
 site:
   base-url: ${SITE_BASE_URL:https://simonrowe.dev}
+
+# Meals (spec 053): recipe photos live outside uploads/, which is served without authorisation.
+# Production points this at the meal-images volume.
+meals:
+  image-path: ${MEALS_IMAGE_PATH:meal-images/}
 
 # CoParent is deployed in the shared backend but remains inert until its own
 # domain, Auth0 client and data have passed the cutover checks.

@@ -76,7 +76,10 @@ public class BackupService {
       "portfolio_projects",
       // The newsletter review queue's decisions. Without them every story already dismissed
       // or promoted inside the mailbox look-back window would be offered again.
-      "newsletter_candidates"
+      "newsletter_candidates",
+      // Meals (spec 053). Ratings exist nowhere else. The recipes could be re-imported, but the
+      // books' bundles are not kept and every correction since would be lost.
+      "meal_recipes", "meal_ingredients", "meal_plan_templates", "meal_ratings"
   );
   private static final Set<String> COPARENT_BACKUP_COLLECTIONS = Set.of(
       "families", "parents", "children", "invitations", "onboardingstates", "events",
@@ -123,6 +126,7 @@ public class BackupService {
   private final String uploadsPath;
   private final String schoolAttachmentPath;
   private final String coparentReceiptPath;
+  private final String mealImagePath;
 
   public BackupService(
       final MongoClient mongoClient,
@@ -133,7 +137,8 @@ public class BackupService {
       final com.simonrowe.embedding.ElasticsearchBackupService esBackupService,
       @Value("${uploads.path:backend/uploads/}") final String uploadsPath,
       @Value("${school.attachment-path:school-attachments/}") final String schoolAttachmentPath,
-      @Value("${coparent.receipt-path:coparent-receipts/}") final String coparentReceiptPath
+      @Value("${coparent.receipt-path:coparent-receipts/}") final String coparentReceiptPath,
+      @Value("${meals.image-path:meal-images/}") final String mealImagePath
   ) {
     this.mongoClient = mongoClient;
     this.databaseName = mongoTemplate.getDb().getName();
@@ -144,6 +149,7 @@ public class BackupService {
     this.uploadsPath = uploadsPath;
     this.schoolAttachmentPath = schoolAttachmentPath;
     this.coparentReceiptPath = coparentReceiptPath;
+    this.mealImagePath = mealImagePath;
   }
 
   /**
@@ -241,6 +247,8 @@ public class BackupService {
 
         // CoParent expense receipts. Not re-derivable from anything: the bytes exist only here.
         exportDirectory(zos, Path.of(coparentReceiptPath), "coparent-receipts/");
+        // Recipe photos. The bundles they came from are not kept anywhere.
+        exportDirectory(zos, Path.of(mealImagePath), "meal-images/");
 
         operationsService.updateProgress("Exporting vector embeddings...", 70);
         // Two indexes, each its own entry. The entry name has always carried the index name,

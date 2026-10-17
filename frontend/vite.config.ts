@@ -5,6 +5,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 import { coparentPrecacheScope, coparentWorkbox } from './coparent-pwa.config'
 
+const DEV_HOST_INDEX: Record<string, string> = {
+  'coparents.localhost': '/coparent/index.html',
+  'meals.localhost': '/meals/index.html',
+}
+
 export default defineConfig(({ mode }) => {
   // Conductor runs several workspaces at once and they all want the dev server port. Set
   // VITE_DEV_PORT in frontend/.env to move this workspace out of the way. Read through Vite's
@@ -27,17 +32,19 @@ export default defineConfig(({ mode }) => {
   plugins: [
     react(),
     {
-      name: 'coparent-dev-host',
+      // Each private micro-app has its own hostname in production (frontend/nginx.conf maps it
+      // to its index.html); <app>.localhost does the same in dev.
+      name: 'micro-app-dev-hosts',
       configureServer(server) {
         server.middlewares.use((request, _response, next) => {
           const host = request.headers.host?.split(':')[0]
           const pathname = request.url?.split('?')[0] ?? ''
           const isNavigationPath = pathname === '/' || !pathname.split('/').pop()?.includes('.')
           const acceptsHtml = request.headers.accept?.includes('text/html') ?? false
-          if (host === 'coparents.localhost' && request.method === 'GET' && acceptsHtml
-              && isNavigationPath
+          const index = host ? DEV_HOST_INDEX[host] : undefined
+          if (index && request.method === 'GET' && acceptsHtml && isNavigationPath
               && !pathname.startsWith('/api/')) {
-            request.url = '/coparent/index.html'
+            request.url = index
           }
           next()
         })
@@ -71,6 +78,7 @@ export default defineConfig(({ mode }) => {
         main: 'index.html',
         school: 'school/index.html',
         coparent: 'coparent/index.html',
+        meals: 'meals/index.html',
       },
     },
   },

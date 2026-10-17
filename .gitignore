@@ -43,6 +43,10 @@ docker-data/
 
 # Uploaded media files (restored from backup)
 backend/uploads/
+# Meals recipe photos (spec 053) come from copyrighted books: a local run stores them here
+# (MEALS_IMAGE_PATH defaults to meal-images/ under the backend's working directory). Never commit.
+backend/meal-images/
+meal-images/
 # Accidental nested uploads tree (created when backend ran from the wrong CWD)
 backend/backend/
 

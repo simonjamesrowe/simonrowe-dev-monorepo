@@ -61,6 +61,6 @@ class CoparentReceiptBackupTest {
         mock(BackupService.class), mock(IndexService.class),
         mock(ElasticsearchBackupService.class), mock(NarrationRestoreValidator.class),
         temp.resolve("uploads").toString(), temp.resolve("school").toString(),
-        receipts.toString());
+        receipts.toString(), temp.resolve("meal-images").toString());
   }
 }
