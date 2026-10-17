@@ -6,6 +6,7 @@ import com.simonrowe.factory.deploy.workflow.DeployWorkflowImpl;
 import com.simonrowe.factory.feedback.workflow.ReviewFeedbackWorkflowImpl;
 import com.simonrowe.factory.logwatch.workflow.LogWatchWorkflowImpl;
 import com.simonrowe.factory.platformbackup.workflow.PlatformBackupWorkflowImpl;
+import com.simonrowe.factory.writing.workflow.ContentWritingWorkflowImpl;
 import io.temporal.spring.boot.autoconfigure.template.WorkersTemplate;
 import io.temporal.spring.boot.autoconfigure.template.WorkersTemplate.RegisteredInfo;
 import java.util.List;
@@ -21,6 +22,7 @@ final class RegisteredWorkflows {
           ReviewFeedbackWorkflowImpl.class,
           CveFixWorkflowImpl.class,
           LogWatchWorkflowImpl.class,
+          ContentWritingWorkflowImpl.class,
           DeployWorkflowImpl.class,
           PlatformBackupWorkflowImpl.class);
 

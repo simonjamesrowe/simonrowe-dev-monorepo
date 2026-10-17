@@ -633,6 +633,15 @@ platform:
       batch-size: 3
       max-attempts: 3
       model: ${PLATFORM_RELEASE_SUMMARY_MODEL:gpt-6-luna}
+      # `openai` (the model above, alone) or `claude-code`: software-factory's content-writing
+      # queue writes the note on Simon's Claude subscription, and the model above writes it
+      # instead whenever that fails, is unreachable or is still writing after
+      # claude-code-max-wait. Owner-scheduled background work only - never put a visitor-triggered
+      # path on the subscription (its terms; see docs/runbooks/software-factory.md, "Content
+      # writing queue"). Production sets claude-code in docker-compose.prod.yml.
+      writer: ${PLATFORM_RELEASE_SUMMARY_WRITER:openai}
+      # Matches the factory job's own 30-minute execution timeout, so the two give up together.
+      claude-code-max-wait: ${PLATFORM_RELEASE_SUMMARY_CLAUDE_CODE_MAX_WAIT:30m}
     # The changelog's commits, read from GitHub's REST API (GitHubCommitHistory). Anonymous: the
     # repository is public, and the limit is 60 requests an hour per address. Polling an
     # unchanged branch is free (ETag, 304), and file lookups cost one request per new commit.
@@ -664,6 +673,10 @@ factory-admin:
   # seconds on the production Pi. Two seconds made the admin graph intermittently render every
   # healthy node as unavailable; allow slow external providers while keeping the call bounded.
   timeout: ${FACTORY_ADMIN_TIMEOUT:30s}
+  # ContentWritingClient's own bound. Both writing endpoints answer from Temporal alone, and the
+  # release sweep falls back to OpenAI on a timeout, so a down factory must cost seconds per
+  # release, not the thirty the flow snapshot above needs.
+  writing-timeout: ${FACTORY_WRITING_CLIENT_TIMEOUT:5s}
   owner: simonjamesrowe
   repository: simonrowe-dev-monorepo
 

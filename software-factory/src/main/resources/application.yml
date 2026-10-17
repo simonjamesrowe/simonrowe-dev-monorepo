@@ -57,6 +57,10 @@ spring:
         # The activity gate is LogWatchActivitiesImpl's @ConditionalOnProperty on
         # factory.logwatch.enabled, which keeps the Grafana read credential out of the deployer.
         - com.simonrowe.factory.logwatch.workflow
+        # The activity gate is ContentWritingActivitiesImpl's @ConditionalOnProperty on
+        # factory.writing.enabled, true on software-factory only: it runs Claude Code on Simon's
+        # subscription and has no business in the container holding the Docker socket.
+        - com.simonrowe.factory.writing.workflow
         # NOTE: the issue sink adds no entry here. This list drives @WorkflowImpl classpath
         # scanning only, and the `linear` queue has no @WorkflowImpl — its worker comes from
         # LinearActivitiesImpl's @ActivityImpl(taskQueues = ...) alone. `linear` is this
@@ -163,6 +167,24 @@ factory:
       effort: ${FACTORY_FEEDBACK_DISTILL_EFFORT:medium}
       max-turns: ${FACTORY_FEEDBACK_DISTILL_MAX_TURNS:24}
       timeout: ${FACTORY_FEEDBACK_DISTILL_TIMEOUT:15m}
+  # The content-writing queue: prompt in, text out, on Simon's Claude subscription. ONLY for the
+  # owner's own scheduled batch jobs (release notes today), never for anything a site visitor
+  # triggers - the subscription's terms cover ordinary individual use only, and its 5-hour and
+  # weekly limits are shared with interactive use and the code reviewer, so every caller keeps
+  # an OpenAI fallback. Off here; production sets it on software-factory only. The deployer must
+  # never carry it (WritingComposeTest). See "Content writing queue" in
+  # docs/runbooks/software-factory.md.
+  writing:
+    enabled: ${FACTORY_WRITING_ENABLED:false}
+    command: ${CLAUDE_COMMAND:claude}
+    model: ${FACTORY_WRITING_MODEL:haiku}
+    effort: ${FACTORY_WRITING_EFFORT:low}
+    # A tool-less structured run takes two turns (the answer, then the structured result).
+    max-turns: ${FACTORY_WRITING_MAX_TURNS:3}
+    # ContentWritingWorkflowImpl's 10-minute start-to-close must stay comfortably above this.
+    timeout: ${FACTORY_WRITING_TIMEOUT:5m}
+    workspace-root: ${FACTORY_WORKSPACE_ROOT:${java.io.tmpdir}/software-factory}
+    max-prompt-chars: ${FACTORY_WRITING_MAX_PROMPT_CHARS:40000}
   cvefix:
     enabled: ${FACTORY_CVEFIX_ENABLED:false}
     owner: simonjamesrowe
