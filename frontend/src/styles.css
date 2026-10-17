@@ -16578,7 +16578,7 @@ textarea.meals-input { resize: vertical; line-height: 1.45; }
 
 /* Sheets */
 .meals-sheet { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center; }
-.meals-sheet__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.6); }
+.meals-sheet__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.6); border: 0; padding: 0; cursor: default; }
 .meals-sheet__panel {
   position: relative; width: 100%; max-width: 620px; max-height: 92vh; display: flex; flex-direction: column;
   background: var(--surface-container); border-radius: 20px 20px 0 0; border: 1px solid var(--border-faint);

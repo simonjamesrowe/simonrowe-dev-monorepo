@@ -50,7 +50,7 @@ export function defaultSlot(now: Date): MealSlot {
 function dailyOrder(id: string, now: Date): number {
   const seed = `${now.toISOString().slice(0, 10)}:${id}`
   let hash = 0
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0
+  for (let i = 0; i < seed.length; i++) hash = (Math.imul(hash, 31) + seed.charCodeAt(i)) >>> 0
   return hash
 }
 

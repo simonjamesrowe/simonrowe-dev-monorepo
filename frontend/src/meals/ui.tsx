@@ -67,7 +67,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
   }, [onClose])
   return (
     <div className="meals-sheet" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="meals-sheet__backdrop" onClick={onClose} />
+      <button type="button" className="meals-sheet__backdrop" aria-label="Close" tabIndex={-1} onClick={onClose} />
       <div className="meals-sheet__panel">
         <header className="meals-sheet__header">
           <h2>{title}</h2>

@@ -41,6 +41,7 @@ function renderAt(path: string) {
 
 describe('meals app gate', () => {
   beforeEach(() => {
+    vi.stubGlobal('scrollTo', vi.fn())
     const chilli = recipe()
     vi.mocked(useLibrary).mockReturnValue({
       library: { recipes: [chilli], byId: new Map([[chilli.id, chilli]]), ingredients: new Map(), templates: [] },
