@@ -87,7 +87,7 @@ class ContentAggregationAgentTest {
     promptRunner = mock(PromptRunner.class);
     creating = mock(Creating.class);
 
-    lenient().when(ai.withLlm("gpt-4o-mini"))
+    lenient().when(ai.withLlm("gpt-6-luna"))
         .thenReturn(promptRunner);
     lenient().when(promptRunner.creating(
         ContentClassification.class)).thenReturn(creating);

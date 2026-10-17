@@ -324,6 +324,14 @@ services:
       FACTORY_FEEDBACK_ENABLED: ${FACTORY_FEEDBACK_ENABLED:-true}
       FACTORY_FEEDBACK_HARVEST_MODEL: ${FACTORY_FEEDBACK_HARVEST_MODEL:-haiku}
       FACTORY_FEEDBACK_DISTILL_MODEL: ${FACTORY_FEEDBACK_DISTILL_MODEL:-sonnet}
+      # The content-writing queue: the backend's own scheduled text jobs (release notes on
+      # /status) written by Claude Code on the subscription in CLAUDE_CODE_OAUTH_TOKEN above,
+      # instead of OpenAI. ONLY for the owner's background jobs, never anything a visitor
+      # triggers (the subscription's terms), and it shares the subscription's rate limits with
+      # the reviewer, so the backend always falls back to OpenAI. Deliberately NOT on
+      # `deployer`: WritingComposeTest fails the build if any FACTORY_WRITING_* appears there.
+      FACTORY_WRITING_ENABLED: ${FACTORY_WRITING_ENABLED:-true}
+      FACTORY_WRITING_MODEL: ${FACTORY_WRITING_MODEL:-haiku}
       # Issue-only scanning is on by default. It files one consolidated repository report in
       # Linear and never edits dependencies, pushes a branch, opens a PR or polls CI.
       FACTORY_CVEFIX_ENABLED: ${FACTORY_CVEFIX_ENABLED:-true}
@@ -782,6 +790,11 @@ services:
       # The host credential file is mounted read-only below. The in-container path is
       # fixed so Application Default Credentials never depends on a host path.
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-cloud-tts.json
+      # Who writes the /status release notes: `claude-code` submits each one to
+      # software-factory's content-writing queue (authenticated with FACTORY_TRIGGER_TOKEN, which
+      # this service gets from env_file) and falls back to OpenAI per release when that fails,
+      # is unreachable or runs past its bound; `openai` is the old path alone.
+      PLATFORM_RELEASE_SUMMARY_WRITER: ${PLATFORM_RELEASE_SUMMARY_WRITER:-claude-code}
       NARRATION_ENABLED: ${NARRATION_ENABLED:-false}
       NARRATION_MAX_BLOG_CHARACTERS: ${NARRATION_MAX_BLOG_CHARACTERS:-50000}
       NARRATION_MONTHLY_CHARACTER_LIMIT: ${NARRATION_MONTHLY_CHARACTER_LIMIT:-1000000}
@@ -851,7 +864,7 @@ services:
       SCHOOL_EXTRA_PAGE_URLS: ${SCHOOL_EXTRA_PAGE_URLS:-}
       SCHOOL_CHAT_MODEL: ${SCHOOL_CHAT_MODEL:-}
       SCHOOL_GUARDRAIL_MODEL: ${SCHOOL_GUARDRAIL_MODEL:-}
-      SCHOOL_VISION_MODEL: ${SCHOOL_VISION_MODEL:-gpt-5.6-luna}
+      SCHOOL_VISION_MODEL: ${SCHOOL_VISION_MODEL:-gpt-6-luna}
       # Zero means "answer nothing anonymously", deliberately not "unlimited". An unset budget
       # on an endpoint anyone on the internet can reach must not default to spending.
       SCHOOL_DAILY_TOKEN_BUDGET: ${SCHOOL_DAILY_TOKEN_BUDGET:-0}

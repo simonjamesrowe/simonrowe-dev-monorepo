@@ -690,7 +690,7 @@ its `workflow-packages`:
 
 | Queue | Polled by | Configured in |
 |---|---|---|
-| `code-review`, `review-feedback`, `cve-fix`, `logwatch` | `software-factory` | `application.yml` |
+| `code-review`, `review-feedback`, `cve-fix`, `logwatch`, `content-writing` | `software-factory` | `application.yml` |
 | `deploy`, `platform-backup` | `deployer` | `application-deployer.yml` (replaces the list) |
 | `linear` (activities only) | `software-factory` | `LinearActivitiesImpl`'s flag, not a package |
 
@@ -698,7 +698,7 @@ What to know when working on it:
 
 - **The role must match the profile name.** A role that stops being exactly
   `deployer` silently gives the `deployer` the `software-factory` list: it polls the
-  four wrong queues, and nothing polls `deploy`, so no deploy ever starts.
+  wrong queues, and nothing polls `deploy`, so no deploy ever starts.
   `FactoryWorkflowWorkersTest` pins the compose values and fails on any
   `SPRING_PROFILES_ACTIVE` on either service, since that would replace the role.
 - **Adding a workflow means adding its package to exactly one list.** A package in
@@ -718,7 +718,7 @@ To verify, the expected shape is one workflow poller per queue, whose identity
 matches the owning container's hostname:
 
 ```bash
-for q in code-review review-feedback cve-fix logwatch deploy platform-backup; do
+for q in code-review review-feedback cve-fix logwatch content-writing deploy platform-backup; do
   docker run --rm --network simonrowe-dev-monorepo_default \
     temporalio/admin-tools:1.31.2 temporal task-queue describe \
     --address temporal:7233 --namespace default --task-queue "$q"
@@ -726,6 +726,119 @@ done
 docker inspect -f '{{.Config.Hostname}}' simonrowe-dev-monorepo-software-factory-1
 docker inspect -f '{{.Config.Hostname}}' simonrowe-dev-monorepo-deployer-1
 ```
+
+## Content writing queue
+
+`com.simonrowe.factory.writing` takes a prompt and returns text, written by Claude
+Code on the subscription in `CLAUDE_CODE_OAUTH_TOKEN` rather than by OpenAI. Its
+first user is the release-notes sweep behind `/status`
+(`backend/.../platform/ReleaseSummarySweep.java`). The factory side knows nothing
+about release notes, so the weekly digest can use it later with no factory change.
+
+### Terms of use: owner-scheduled background jobs only
+
+Anthropic's Claude Code terms say subscription (OAuth) use is for ordinary use,
+its limits "assume ordinary, individual usage", and routing requests through
+Free/Pro/Max credentials "on behalf of their users" is not allowed. So this
+queue is **only** for Simon's own scheduled, batch content jobs. Never connect
+it to anything a site visitor triggers, whether synchronously or by queueing work
+on a visitor's request. If a job ever has to serve visitors, it belongs on
+OpenAI or a metered `ANTHROPIC_API_KEY`, not on this queue. The same warning is
+in `ContentWritingActivitiesImpl`, `ContentWritingController` and the backend's
+`ContentWritingClient`.
+
+It also **shares the subscription's 5-hour and weekly limits** with Simon's
+interactive Claude Code and with the code reviewer. A burst of release notes
+spends quota a review might need, and an exhausted limit fails every writing
+job. That is why every caller must keep a fallback writer, and the release sweep
+falls back to OpenAI.
+
+### Flow
+
+1. Each sweep tick (every 2 minutes, 3 releases at a time), the backend calls
+   `GET /api/writing/jobs/release-<sha>-platform-release-v1`.
+2. `NOT_FOUND` means it calls `POST /api/writing/jobs` with `{jobId, prompt}`,
+   which starts workflow `writing-<jobId>` on the `content-writing` queue.
+3. The workflow runs one activity: `claude -p` with `--tools ""` (no built-in
+   tools at all), no `--allowedTools`, MCP denied, schema `{"text": string}`,
+   model `haiku`, effort `low`, at most 3 turns and 5 minutes, in a fresh empty
+   temp directory that is deleted afterwards. The prompt contains untrusted
+   commit text, which is acceptable only because the agent has no tool to act on
+   it.
+4. Later ticks read the job again. `COMPLETED` text goes through the same
+   truncation and `READY` path as OpenAI output. `RUNNING` leaves the release
+   `PENDING` with no attempt counted.
+5. **The backend falls back to OpenAI for that release, in the same tick,** in
+   these cases: the job `FAILED` (including `TIMED_OUT` and `TERMINATED`), it
+   completed with blank text, the factory is unreachable or answers 401 or 503,
+   or the job is still `RUNNING` 30 minutes after this backend JVM first saw it
+   running. That clock lives in memory, so a restart only adds one more wait.
+   Each `Summarised release ...` log line names the writer that produced it.
+
+Bounds, in `ContentWritingWorkflowImpl` and `ContentWritingService`:
+
+- Each activity attempt has a 10-minute start-to-close and a 2-minute heartbeat.
+- The activity gets 2 attempts, 30 seconds apart.
+- The workflow has a 30-minute execution timeout, which matches the backend's
+  wait bound, so both give up together.
+
+Idempotency comes entirely from the workflow id and
+`ALLOW_DUPLICATE_FAILED_ONLY`. If a job is running or completed, `POST` answers
+`200` with its current state. If it failed, `POST` starts it again and answers
+`202`. That is why the backend reads before it submits. Submitting first would
+restart a rate-limited job on every tick and never see the failure it should
+fall back on.
+
+`GET` reports `RUNNING`, `COMPLETED` (with `text`), `FAILED` or `NOT_FOUND`. A
+Temporal error is a `503`, never `NOT_FOUND`. Temporal's namespace retention
+eventually deletes old jobs, and after that they read as `NOT_FOUND`. That does
+no harm, because a release whose note is stored is never asked about again.
+
+### Flags
+
+| Variable | Service | Default in compose | Meaning |
+|---|---|---|---|
+| `FACTORY_WRITING_ENABLED` | `software-factory` only | `true` | Registers the activity and accepts jobs. Off means `503`. |
+| `FACTORY_WRITING_MODEL` | `software-factory` only | `haiku` | The `--model` alias. |
+| `PLATFORM_RELEASE_SUMMARY_WRITER` | `backend` | `claude-code` | `openai` returns to the old path alone. |
+| `PLATFORM_RELEASE_SUMMARY_CLAUDE_CODE_MAX_WAIT` | `backend` (yml default) | `30m` | The RUNNING bound before OpenAI writes it. |
+| `FACTORY_WRITING_CLIENT_TIMEOUT` | `backend` (yml default) | `5s` | Per-call HTTP bound, so a down factory costs seconds. |
+
+`application.yml` defaults both module flags to off and the backend writer to
+`openai`, so tests and local runs never touch a subscription. The backend
+authenticates with `FACTORY_TRIGGER_TOKEN`, which it gets from `env_file: .env`.
+**Never set any `FACTORY_WRITING_*` on `deployer`.** It holds the Docker socket,
+and it is updated by hand, so it would split jobs across two builds.
+`WritingComposeTest` fails the build if one appears there.
+
+This is **not a console module**. It has no entry in `ModulePrerequisites.KEYS`,
+`FactoryAdminService.ORDER` or `FactoryFlowTopology`, because nothing an
+operator does starts it and it adds no step to the loop. Nothing requires every
+workflow package to be a module. The only test that does is
+`FactoryWorkflowWorkersTest`, which requires the package to be polled by
+exactly one role. A writing job's `progress` query still follows the shared
+`{phase, detail, characters}` shape, so
+`GET /api/factory/runs/writing-<jobId>` works like any other run.
+
+### Verify
+
+```bash
+# One poller, on software-factory only (hostname matches software-factory-1).
+docker run --rm --network simonrowe-dev-monorepo_default \
+  temporalio/admin-tools:1.31.2 temporal task-queue describe \
+  --address temporal:7233 --namespace default --task-queue content-writing
+
+# Which writer produced recent release notes:
+#   Loki: {container="simonrowe-dev-monorepo-backend-1"} |= "Summarised release"
+# Fallbacks, and why:
+#   {container="simonrowe-dev-monorepo-backend-1"} |~ "falling back to OpenAI"
+```
+
+`... with claude-code` on new merges means the path works. A run of
+`falling back to OpenAI` lines means one of three things: the factory is
+disabled or unreachable, the token differs between the two services, or the
+subscription is rate-limited. In the last case Temporal shows `writing-*` runs
+failing with the CLI's `api_error_status`.
 
 ## Review feedback loop
 

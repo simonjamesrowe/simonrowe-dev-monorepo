@@ -134,7 +134,7 @@ public class SchoolChatService {
           // Spring AI 2.0 takes the BUILDER here, not a built options object.
           .options(OpenAiChatOptions.builder()
               .model(properties.chatModel())
-              // REQUIRED, not a tuning knob. gpt-5.6-luna is a reasoning model, and OpenAI
+              // REQUIRED, not a tuning knob. The luna models reason by default, and OpenAI
               // rejects function tools alongside a reasoning effort on /v1/chat/completions:
               // "Function tools with reasoning_effort are not supported ... set reasoning_effort
               // to 'none'". Every turn 400s without this, because this assistant is entirely

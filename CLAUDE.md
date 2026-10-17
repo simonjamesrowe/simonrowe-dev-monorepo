@@ -274,6 +274,52 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- claude-code-release-summaries: **The `/status` release notes are now written by Claude Code on
+  Simon's subscription, with OpenAI as the fallback.** This is the first job on software-factory's
+  generic `content-writing` queue (`com.simonrowe.factory.writing`, prompt in, text out), and the
+  weekly digest can follow it with no factory change. Load-bearing bits:
+  - **Owner-scheduled background jobs only.** The subscription's terms cover ordinary individual
+    use and forbid serving other users through it. Never route anything a visitor triggers onto
+    this queue. It also shares the 5-hour and weekly limits with interactive use and the code
+    reviewer, so **every caller keeps a fallback**.
+  - **The backend reads before it submits.** `POST /api/writing/jobs` is idempotent on
+    `writing-<jobId>` under `ALLOW_DUPLICATE_FAILED_ONLY`: a running or completed job answers
+    `200` with its state, and a failed one is *restarted*. If the sweep submitted first, it would
+    restart a rate-limited job every tick and never see the failure. `ClaudeCodeReleaseWriter`
+    falls back to OpenAI in the same tick on `FAILED`, blank text, an unreachable, 401 or 503
+    factory, or `RUNNING` past 30 minutes (an in-memory clock, which matches the workflow's own
+    execution timeout). Waiting counts no attempt. Job ids carry `SUMMARY_FORMAT_VERSION`.
+  - **No tools at all.** The prompt holds untrusted commit text. `--tools ""` is the CLI's spelling
+    for no built-in tools, and structured output still works with it (checked against CLI
+    2.1.282). `ClaudeCliRunner.command()` now **omits `--allowedTools` when the list is empty**:
+    the flag is variadic, so emitted bare it was followed directly by `--disallowedTools`.
+  - **`FACTORY_WRITING_*` is set on `software-factory` only**, pinned by `WritingComposeTest`.
+    The activity gate is a class-level `@ConditionalOnProperty`, registered by component scan,
+    and the package is in the software-factory role's `workflow-packages` only.
+  - **Not a console module**: no `ModulePrerequisites.KEYS`, `ORDER` or flow node. It still
+    answers the shared `progress` query.
+  - Switch back with `PLATFORM_RELEASE_SUMMARY_WRITER=openai`. The compose default is
+    `claude-code`; the yml default is `openai`, so tests never touch a subscription.
+  See `docs/runbooks/software-factory.md` ("Content writing queue").
+- gpt-6-models: **Every luna, nano and 4o-mini caller moved to `gpt-6-luna`, and images to
+  `gpt-image-2`.** gpt-6-luna is $0.10/$0.50 per 1M against gpt-5.6-luna's $0.20/$1.20 and
+  gpt-5.4-nano's $0.20/$1.25, at the same latency on a real article summary; gpt-image-2 made a
+  medium 1536x1024 image for about $0.041 against gpt-image-1's $0.063. Inventory and the
+  measurements are in `docs/model-usage.md`. Load-bearing bits:
+  - **gpt-6-luna reasons by default, and OpenAI rejects function tools with any effort but
+    `none`.** The portfolio chat was the only caller sending tools with no effort at all (it
+    ran on gpt-5.4-nano, which did not need one), so `ChatConfig.chatOptions()` now sets
+    `reasoningEffort("none")` on that client alone. Never under `spring.ai.openai.chat`: those
+    defaults merge into `GuardrailAdvisor`'s gpt-4o-mini call, which rejects the argument and
+    fails open. `ChatRequestOptionsWireTest` reads both request bodies off a stub server
+    through a real `OpenAiChatModel`, and fails if the effort is dropped.
+  - **The chat guardrail stays on gpt-4o-mini, deliberately.** It pins `temperature(0.0)`,
+    which every luna rejects, and a 400 there leaves the topic gate open. Term Time's
+    `gpt-5-nano` stays too: it is cheaper on input and a pure classifier.
+  - **Embabel 1.5.1 has no GPT-6 model**, so `AgentConfig.gpt6LunaLlm` registers it (pinned
+    by `Gpt56LunaRegistrationTest`), as `gpt56LunaLlm` once did for 5.6.
+  - **The environment wins.** The shared env file sets `ARTICLE_SUMMARY_MODEL=gpt-5.6-luna`,
+    so summaries stay on 5.6 wherever a `.env` carries that line, until it is removed.
 - embedding-skip-unchanged: **The 4-hourly `fullVectorSync` no longer re-embeds content that has
   not changed.** It re-embedded every blog, job, skill, code example, article and event each run:
   about 6,800 `text-embedding-3-small` calls and 12M tokens a day in October 2026, the largest

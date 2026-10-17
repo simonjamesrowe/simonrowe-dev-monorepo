@@ -112,9 +112,9 @@ public record SchoolProperties(
     // in the logs but one WARN. Check this URL if the public tier looks unexpectedly thin.
     staffListUrl = defaulted(staffListUrl, websiteBaseUrl + "/our-school/our-staff");
     crawlDelaySeconds = crawlDelaySeconds <= 0 ? DEFAULT_CRAWL_DELAY_SECONDS : crawlDelaySeconds;
-    chatModel = defaulted(chatModel, "gpt-5.6-luna");
+    chatModel = defaulted(chatModel, "gpt-6-luna");
     guardrailModel = defaulted(guardrailModel, "gpt-5-nano");
-    visionModel = defaulted(visionModel, "gpt-5.6-luna");
+    visionModel = defaulted(visionModel, "gpt-6-luna");
     publicBaseUrl = stripTrailingSlash(
         defaulted(publicBaseUrl, "https://term-time.simonrowe.dev"));
     extraPageUrls = resolveExtraPages(extraPageUrls, websiteBaseUrl);

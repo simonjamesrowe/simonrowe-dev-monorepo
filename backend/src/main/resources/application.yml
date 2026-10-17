@@ -41,13 +41,13 @@ coparent:
     # gpt-5.4-nano returned every card ready to approve in about one run in five; the rest left a
     # child or a conversation unlinked, so the parent had to fix cards by hand. gpt-5.6-luna did it
     # five times out of five, in 4-6 seconds.
-    model: ${COPARENT_ASSISTANT_MODEL:gpt-5.6-luna}
+    model: ${COPARENT_ASSISTANT_MODEL:gpt-6-luna}
   statements:
     # Reading an uploaded bank statement needs no model; suggesting which transactions might be
     # shared costs does. Off unless switched on, like the assistant it follows by default, since
     # both spend on the same OpenAI key.
     ai-enabled: ${COPARENT_STATEMENTS_AI_ENABLED:${COPARENT_ASSISTANT_ENABLED:false}}
-    model: ${COPARENT_STATEMENTS_MODEL:${COPARENT_ASSISTANT_MODEL:gpt-5.6-luna}}
+    model: ${COPARENT_STATEMENTS_MODEL:${COPARENT_ASSISTANT_MODEL:gpt-6-luna}}
 
 mongock:
   enabled: ${MONGOCK_ENABLED:true}
@@ -270,18 +270,19 @@ spring:
       embedding:
         model: text-embedding-3-small
       image:
-        model: gpt-image-1
+        # Documentation only: BlogImageGenerationService.IMAGE_MODEL is what the call uses.
+        model: gpt-image-2
       chat:
-        # gpt-5.4-nano: newer generation than gpt-5-mini, cheaper per token
-        # ($0.20/$1.25 vs $0.25/$2.00 per 1M) and faster.
+        # gpt-6-luna: the portfolio chat's model since October 2026, half gpt-5.4-nano's
+        # price ($0.10/$0.50 vs $0.20/$1.25 per 1M). It is the only caller that takes this
+        # default without naming a model.
         #
         # Do NOT set reasoning-effort here. These defaults are merged into EVERY
-        # per-call OpenAiChatOptions, and reasoning_effort 400s twice over:
-        # OpenAI rejects function tools + reasoning_effort for gpt-5.4-nano on
-        # /v1/chat/completions (breaking the tool-enabled portfolio chat), and
-        # gpt-4o-mini (GuardrailAdvisor's classifier) rejects the argument
-        # outright, silently disabling the topic gate.
-        model: ${OPENAI_CHAT_MODEL:gpt-5.4-nano}
+        # per-call OpenAiChatOptions, and gpt-4o-mini (GuardrailAdvisor's classifier)
+        # rejects the argument outright, silently disabling the topic gate. The chat needs
+        # reasoning_effort "none" (gpt-6-luna reasons by default, and OpenAI rejects tools
+        # with any other effort), so it is set on that client alone: ChatConfig.chatOptions.
+        model: ${OPENAI_CHAT_MODEL:gpt-6-luna}
     vectorstore:
       elasticsearch:
         index-name: content-embeddings
@@ -584,11 +585,11 @@ aggregation:
     lookback-days: 3
   digest:
     cron: "0 0 8 * * MON"
-    model: ${DIGEST_MODEL:gpt-5.6-luna}
+    model: ${DIGEST_MODEL:gpt-6-luna}
     window-days: 7
     duplicate-window-hours: 24
   summary:
-    model: ${ARTICLE_SUMMARY_MODEL:gpt-5.6-luna}
+    model: ${ARTICLE_SUMMARY_MODEL:gpt-6-luna}
     # Favouriting a news article requests an in-depth summary in the background. Audio is
     # deliberately not generated automatically — that is the expensive half and stays on
     # demand from the drawer.
@@ -631,7 +632,16 @@ platform:
       # holding a scheduler thread for long or spiking the OpenAI bill in one burst.
       batch-size: 3
       max-attempts: 3
-      model: ${PLATFORM_RELEASE_SUMMARY_MODEL:gpt-5.6-luna}
+      model: ${PLATFORM_RELEASE_SUMMARY_MODEL:gpt-6-luna}
+      # `openai` (the model above, alone) or `claude-code`: software-factory's content-writing
+      # queue writes the note on Simon's Claude subscription, and the model above writes it
+      # instead whenever that fails, is unreachable or is still writing after
+      # claude-code-max-wait. Owner-scheduled background work only - never put a visitor-triggered
+      # path on the subscription (its terms; see docs/runbooks/software-factory.md, "Content
+      # writing queue"). Production sets claude-code in docker-compose.prod.yml.
+      writer: ${PLATFORM_RELEASE_SUMMARY_WRITER:openai}
+      # Matches the factory job's own 30-minute execution timeout, so the two give up together.
+      claude-code-max-wait: ${PLATFORM_RELEASE_SUMMARY_CLAUDE_CODE_MAX_WAIT:30m}
     # The changelog's commits, read from GitHub's REST API (GitHubCommitHistory). Anonymous: the
     # repository is public, and the limit is 60 requests an hour per address. Polling an
     # unchanged branch is free (ETag, 304), and file lookups cost one request per new commit.
@@ -663,6 +673,10 @@ factory-admin:
   # seconds on the production Pi. Two seconds made the admin graph intermittently render every
   # healthy node as unavailable; allow slow external providers while keeping the call bounded.
   timeout: ${FACTORY_ADMIN_TIMEOUT:30s}
+  # ContentWritingClient's own bound. Both writing endpoints answer from Temporal alone, and the
+  # release sweep falls back to OpenAI on a timeout, so a down factory must cost seconds per
+  # release, not the thirty the flow snapshot above needs.
+  writing-timeout: ${FACTORY_WRITING_CLIENT_TIMEOUT:5s}
   owner: simonjamesrowe
   repository: simonrowe-dev-monorepo
 
@@ -704,9 +718,9 @@ school:
   # Set on the school ChatClient's own options, never under spring.ai.openai.chat - anything
   # there is merged into EVERY per-call OpenAiChatOptions in this application, which is why
   # reasoning-effort is banned from that block.
-  chat-model: ${SCHOOL_CHAT_MODEL:gpt-5.6-luna}
+  chat-model: ${SCHOOL_CHAT_MODEL:gpt-6-luna}
   guardrail-model: ${SCHOOL_GUARDRAIL_MODEL:gpt-5-nano}
-  vision-model: ${SCHOOL_VISION_MODEL:gpt-5.6-luna}
+  vision-model: ${SCHOOL_VISION_MODEL:gpt-6-luna}
   # Zero means "answer nothing anonymously", deliberately not "unlimited".
   daily-token-budget: ${SCHOOL_DAILY_TOKEN_BUDGET:0}
   embedding-index-name: ${SCHOOL_EMBEDDING_INDEX_NAME:school-embeddings}

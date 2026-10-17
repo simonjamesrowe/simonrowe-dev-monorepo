@@ -25,4 +25,13 @@ class Gpt56LunaRegistrationTest extends AbstractIntegrationTest {
     assertThat(llmServices.values())
         .anySatisfy(llm -> assertThat(llm.getName()).isEqualTo("gpt-5.6-luna"));
   }
+
+  @Test
+  void gpt6LunaIsRegistered() {
+    // The default for every Embabel call. Embabel 1.5.1's registry has no GPT-6 model, so a
+    // registration that stopped working would fail the digest, every summary and the
+    // aggregation classifier at once.
+    assertThat(llmServices.values())
+        .anySatisfy(llm -> assertThat(llm.getName()).isEqualTo("gpt-6-luna"));
+  }
 }

@@ -109,10 +109,18 @@ public class ClaudeCliRunner {
     command.add("-p");
     command.add("--safe-mode");
     command.add("--strict-mcp-config");
+    // An empty tool list joins to "", which is the CLI's own spelling for "no built-in tools at
+    // all" (claude --help: 'Use "" to disable all tools'). Structured output still works with it:
+    // --json-schema is answered through the CLI's own result channel, not a built-in tool.
     command.add("--tools");
     command.add(String.join(",", invocation.tools()));
-    command.add("--allowedTools");
-    command.addAll(invocation.allowedTools());
+    // --allowedTools is variadic, so with nothing to allow the flag must be left out entirely.
+    // Emitted bare, the next token is --disallowedTools, and the parse of the two flags becomes
+    // ambiguous - a tool-less writer must not depend on how the CLI happens to resolve that.
+    if (!invocation.allowedTools().isEmpty()) {
+      command.add("--allowedTools");
+      command.addAll(invocation.allowedTools());
+    }
     command.add("--disallowedTools");
     command.add("mcp__*");
     // Every invocation grants Read/Edit/Write against "./**", which technically includes

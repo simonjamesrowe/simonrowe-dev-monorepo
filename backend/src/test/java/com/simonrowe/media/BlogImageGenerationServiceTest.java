@@ -132,10 +132,10 @@ class BlogImageGenerationServiceTest {
     ArgumentCaptor<ImagePrompt> captor = ArgumentCaptor.forClass(ImagePrompt.class);
     verify(imageModel).call(captor.capture());
     OpenAiImageOptions options = (OpenAiImageOptions) captor.getValue().getOptions();
-    assertThat(options.getModel()).isEqualTo("gpt-image-1");
-    // gpt-image-1 rejects dall-e-3's "standard" quality value
+    assertThat(options.getModel()).isEqualTo("gpt-image-2");
+    // gpt-image-1 and -2 reject dall-e-3's "standard" quality value
     assertThat(options.getQuality()).isNotEqualTo("standard");
-    // gpt-image-1 supports 1536x1024 landscape; 1792x1024 is dall-e-3 only
+    // gpt-image-1 and -2 support 1536x1024 landscape; 1792x1024 is dall-e-3 only
     assertThat(options.getWidth()).isEqualTo(1536);
     assertThat(options.getHeight()).isEqualTo(1024);
   }
