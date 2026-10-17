@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { App, ADMIN_ROLE, ROLES_CLAIM } from './App'
+import { App, ADMIN_ROLE, MEALS_ROLE, ROLES_CLAIM } from './App'
 import { useLibrary, useRatings } from './data'
 import { recipe } from './fixtures'
 
@@ -90,6 +90,22 @@ describe('meals app gate', () => {
 
     expect(screen.getByRole('heading', { name: 'Recipes' })).toBeInTheDocument()
     expect(screen.getByText('Test Chilli')).toBeInTheDocument()
+  })
+
+  it('opens the app for the meals role, without the bundle import', async () => {
+    auth({ user: { [ROLES_CLAIM]: [MEALS_ROLE] } })
+    renderAt('/more')
+
+    expect(screen.getByRole('navigation')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'More' })).toBeInTheDocument()
+    expect(screen.queryByText('Import recipe bundles')).not.toBeInTheDocument()
+  })
+
+  it('shows the owner the bundle import', () => {
+    auth({})
+    renderAt('/more')
+
+    expect(screen.getByText('Import recipe bundles')).toBeInTheDocument()
   })
 
   it('opens a recipe and scales it', async () => {

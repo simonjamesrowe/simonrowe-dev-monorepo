@@ -67,6 +67,12 @@ claim `https://simonrowe.dev/roles`.
 > **Lockout warning:** assign the role to your own user **before** deploying
 > the backend role check, otherwise you will lose access to the admin panel.
 
+### 5b-ii. `MEALS_USER`: meals without the admin panel
+
+A second role, `MEALS_USER` (description `Access to meals.simonrowe.dev only`),
+opens `meals.simonrowe.dev` and nothing else. Assign it, not `DEV_PORTAL_ADMIN`,
+to anyone who should only use meals. See `docs/runbooks/meals.md`.
+
 ### 5c. Add a Post-Login Action that injects required claims
 
 Auth0 does not include role names in tokens by default. Add an Action:
