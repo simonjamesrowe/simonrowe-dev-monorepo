@@ -2,6 +2,7 @@ package com.simonrowe.meals;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.simonrowe.webfetch.UrlFetcher;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -125,5 +127,21 @@ class MealsReadersTest {
         .hasMessageContaining("public");
     assertThatThrownBy(() -> reader.fromUrl("file:///etc/passwd"))
         .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
+  void slugsAreTidyAndStayLinearOnHostileNames() {
+    assertThat(RecipeService.slug("  Crème Brûlée (v2)!  ")).isEqualTo("creme-brulee-v2");
+    assertThat(RecipeService.slug("---")).isEqualTo("recipe");
+    assertThat(RecipeService.slug("a".repeat(99) + " bc")).isEqualTo("a".repeat(99));
+
+    // Only the first 500 characters of a name count, so a name that is all punctuation up to
+    // there is a "recipe", however long; one with a word early on keeps it.
+    String dashes = "-".repeat(50_000) + "x" + " !".repeat(50_000);
+    String early = "x" + " !".repeat(50_000) + "é".repeat(10_000);
+    assertThat(assertTimeoutPreemptively(Duration.ofSeconds(2),
+        () -> RecipeService.slug(dashes))).isEqualTo("recipe");
+    assertThat(assertTimeoutPreemptively(Duration.ofSeconds(2),
+        () -> RecipeService.slug(early))).isEqualTo("x");
   }
 }

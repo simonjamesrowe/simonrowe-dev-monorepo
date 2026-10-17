@@ -45,6 +45,9 @@ public class MealsMcpSecurity {
         .exceptionHandling(e -> e.authenticationEntryPoint(
             new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
         .headers(headers -> headers.cacheControl(cache -> cache.disable()))
+        // CSRF needs a credential the browser attaches by itself. This chain reads only the
+        // Authorization header and creates no session or cookie, so a cross-site request
+        // carries nothing to forge with: the same reasoning as SecurityConfig's API chain.
         .csrf(csrf -> csrf.disable())
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
     return http.build();

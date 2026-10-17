@@ -181,14 +181,32 @@ public class RecipeService {
     }
   }
 
+  /**
+   * A URL-safe id from a recipe name. The name comes from the owner or a read page, so the
+   * regexes use possessive quantifiers and the dashes are trimmed by hand rather than by an
+   * anchored pattern, keeping the work linear in the name's length.
+   */
   static String slug(final String name) {
-    String ascii = Normalizer.normalize(name, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
-    String slug = ascii.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-")
-        .replaceAll("(^-+|-+$)", "");
+    String bounded = name.length() > 500 ? name.substring(0, 500) : name;
+    String ascii = Normalizer.normalize(bounded, Normalizer.Form.NFD).replaceAll("\\p{M}++", "");
+    String dashed = ascii.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]++", "-");
+    String slug = trimDashes(dashed);
     if (slug.isEmpty()) {
-      slug = "recipe";
+      return "recipe";
     }
-    return slug.length() > 100 ? slug.substring(0, 100).replaceAll("-+$", "") : slug;
+    return slug.length() > 100 ? trimDashes(slug.substring(0, 100)) : slug;
+  }
+
+  private static String trimDashes(final String value) {
+    int start = 0;
+    int end = value.length();
+    while (start < end && value.charAt(start) == '-') {
+      start++;
+    }
+    while (end > start && value.charAt(end - 1) == '-') {
+      end--;
+    }
+    return value.substring(start, end);
   }
 
   private static String clip(final String value, final int max) {

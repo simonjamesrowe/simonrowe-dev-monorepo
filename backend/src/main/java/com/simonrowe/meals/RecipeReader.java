@@ -118,6 +118,7 @@ public class RecipeReader {
     String source = jsonLdRecipe(page.document());
     if (source == null) {
       Document doc = page.document();
+      // Jsoup's body() is annotated non-null today; kept in case a version returns null.
       String text = doc.body() == null ? doc.text() : doc.body().text();
       String clipped = text.length() > MAX_PAGE_TEXT ? text.substring(0, MAX_PAGE_TEXT) : text;
       source = "Page title: %s%n%n%s".formatted(doc.title(), clipped);
