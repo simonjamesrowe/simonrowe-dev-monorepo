@@ -96,7 +96,7 @@ check "exits 0" "[[ $rc -eq 0 ]]"
 check "reports the log count" "grep -q 'ok    logs: 42 lines in the last 30m' <<<\"\$out\""
 check "queries Loki's query API, not the push URL" \
   "grep -qx 'https://logs.example.test/loki/api/v1/query' '$TMP/calls'"
-check "probes every hostname once" "[[ \$(grep -vc loki '$TMP/calls') -eq 8 ]]"
+check "probes every hostname once" "[[ \$(grep -vc loki '$TMP/calls') -eq 9 ]]"
 
 # ---------------------------------------------------------------------------
 echo "  log silence and Loki failures all fail"

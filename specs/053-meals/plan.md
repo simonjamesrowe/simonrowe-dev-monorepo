@@ -46,11 +46,10 @@ before the next is opened on top of it. The prototype the plan was validated aga
 2. ~~Auth0~~: done 2026-10-17. The main site's SPA application lists
    `https://meals.simonrowe.dev/` and `http://meals.localhost:5173/` as callback, logout and
    web origins. Meals signs in with that application, so no new application or secret.
-3. **After the frontend PR deploys, recreate nginx.** The deploy only `restart`s it, and the
-   proxy config is a single-file bind mount, so a restart keeps serving the old file and the
-   meals server block is not live until
-   `docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps nginx`.
-4. Then upload the three bundles from `.context/meals-bundles/` on the Import page.
-5. Only then add `meals.simonrowe.dev` to `monitor-prod.sh` and `prod-heartbeat.sh` (held back
-   from the frontend PR: before step 3 the watchdog would read the missing block as a broken
-   frontend and restart it).
+3. ~~Recreate nginx after deploy~~: not needed in the end. #244 deployed on 2026-10-17 and the
+   meals server block was live straight away (`/api/meals/` answered 401 through the meals
+   hostname), so no manual recreate was run. Keep the step in mind for later proxy changes.
+4. ~~Upload the bundles~~: done 2026-10-17 through the Import page: 154 recipes, 200
+   ingredients, 90 weeks, 154 photos, nothing skipped.
+5. ~~Monitoring~~: `meals.simonrowe.dev` added to `monitor-prod.sh` and `prod-heartbeat.sh` in
+   the follow-up to #244, once the hostname was confirmed live.
