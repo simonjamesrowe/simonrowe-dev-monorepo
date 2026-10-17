@@ -58,6 +58,7 @@ ENDPOINTS=(
   "temporal|https://temporal.simonrowe.dev/|200"
   "console|https://console.simonrowe.dev/|200"
   "coparents|https://coparents.simonrowe.dev/|200"
+  "meals|https://meals.simonrowe.dev/|200"
 )
 
 TMP="$(mktemp -d)"

@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROXY="$PROJECT_DIR/config/nginx/nginx-proxy.conf"
 FRONTEND="$PROJECT_DIR/frontend/nginx.conf"
+MONITOR="$PROJECT_DIR/scripts/monitor-prod.sh"
+HEARTBEAT="$PROJECT_DIR/scripts/prod-heartbeat.sh"
 
 failures=0
 checks=0
@@ -27,6 +29,10 @@ check "same-origin meals API calls route to the backend" \
   "grep -qF 'location /api/meals/' '$PROXY'"
 check "the frontend maps the hostname to the meals entry" \
   "grep -qF 'meals.simonrowe.dev /meals/index.html;' '$FRONTEND'"
+check "the watchdog probes the meals hostname" \
+  "grep -qF 'frontend|https://meals.simonrowe.dev/|200' '$MONITOR'"
+check "the GitHub heartbeat probes the meals hostname" \
+  "grep -qF 'meals|https://meals.simonrowe.dev/|200' '$HEARTBEAT'"
 check "bundle uploads fit through the proxy" \
   "awk '/server_name meals.simonrowe.dev;/,/^}/' '$PROXY' | grep -qF 'client_max_body_size 12m;'"
 check "the meals hostname reaches no other backend path" \

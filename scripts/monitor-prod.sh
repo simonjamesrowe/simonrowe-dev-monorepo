@@ -103,6 +103,7 @@ is_oneshot() {
 ENDPOINTS=(
   "frontend|https://www.simonrowe.dev/|200"
   "frontend|https://coparents.simonrowe.dev/|200"
+  "frontend|https://meals.simonrowe.dev/|200"
   "backend|https://api.simonrowe.dev/api/profile|200"
   "langfuse|https://langfuse.simonrowe.dev/|200"
   "dependencytrack-apiserver|https://dependency-track.simonrowe.dev/api/version|200"
