@@ -45,7 +45,8 @@
     "zod": "^4.3.6"
   },
   "overrides": {
-    "js-yaml": "^4.3.1"
+    "js-yaml": "^4.3.1",
+    "katex": "^0.18.2"
   },
   "devDependencies": {
     "@cyclonedx/cyclonedx-npm": "^6.0.0",

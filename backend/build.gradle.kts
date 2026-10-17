@@ -234,8 +234,9 @@ dependencies {
     // is enough here — dependency-management only forces what the BOM declares.
     // ---------------------------------------------------------------------------
     constraints {
-        // GHSA-xx22-p4ch-683r — pulled in by kafka-clients via spring-kafka.
-        implementation("at.yawk.lz4:lz4-java:1.11.1")
+        // GHSA-xx22-p4ch-683r, GHSA-mcr4-qmvw-px4g, GHSA-4v53-57pg-c464, GHSA-6cx8-rjf8-pr8g,
+        // GHSA-gm45-99xc-r7wv, GHSA-343h-94h5-c4wr — pulled in by kafka-clients via spring-kafka.
+        implementation("at.yawk.lz4:lz4-java:1.11.4")
         // GHSA-6fmv-xxpf-w3cw — maven-artifact 3.6.1 requests the vulnerable 3.2.0,
         // and reaches runtimeClasspath through mongock-runner-core.
         implementation("org.codehaus.plexus:plexus-utils:3.6.1")
@@ -286,8 +287,8 @@ dependencies {
     implementation(libs.google.http.client.apache.v5)
     implementation(libs.embabel.agent.starter)
     implementation(libs.embabel.agent.starter.openai)
-    // 1.23.1 clears GHSA-pmhh-3w7g-xqp8.
-    implementation("org.jsoup:jsoup:1.23.1")
+    // 1.23.1 cleared GHSA-pmhh-3w7g-xqp8; 1.23.2 clears GHSA-65r4-943x-97jj.
+    implementation("org.jsoup:jsoup:1.23.2")
     implementation("com.rometools:rome:2.1.0")
 
     developmentOnly(libs.spring.boot.devtools)
