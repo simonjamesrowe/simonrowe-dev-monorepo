@@ -50,7 +50,7 @@ cd frontend && npm test                 # Run frontend tests (vitest)
 - Java multi-line strings are text blocks (`"""`), with `.formatted(...)` for values, never `+` concatenation across lines. Checkstyle's `NoLiteralConcatenationAcrossLines` rule fails the build on the old form.
 - TypeScript: Standard conventions, ESLint
 - CSS: BEM naming, plain CSS with custom properties
-- Keep null checks on third-party library return values even when static analysis flags them unreachable — library behavior varies across versions and the check is cheaper than an NPE from a dependency upgrade.
+- Keep null checks on third-party library return values even when static analysis flags them unreachable, or the value is currently annotated non-null — library behavior and annotations vary across versions, and the check is cheaper than an NPE from a dependency upgrade. Comment why the check exists so a future reader doesn't "simplify" it away.
 
 ## Key Design Decisions
 
