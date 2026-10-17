@@ -65,6 +65,13 @@ public class ContentAggregationAgent {
       LoggerFactory.getLogger(ContentAggregationAgent.class);
 
   // Fix 4: include URL in prompt; truncation limit raised to 5000
+  /**
+   * Classifies every scraped item: article or event, summary, dates and venue. Was
+   * {@code gpt-4o-mini}; gpt-6-luna is cheaper per token ($0.10/$0.50 against $0.15/$0.60) and
+   * a generation newer. Needs the explicit registration in {@link AgentConfig}.
+   */
+  private static final String CLASSIFIER_MODEL = "gpt-6-luna";
+
   private static final String CLASSIFY_PROMPT = """
       Analyze the following content and respond with JSON matching \
       the schema below.
@@ -465,7 +472,7 @@ public class ContentAggregationAgent {
       // Fix 4: include URL as first format argument
       String prompt = String.format(
           CLASSIFY_PROMPT, content.url(), content.title(), truncated);
-      return ai.withLlm("gpt-4o-mini")
+      return ai.withLlm(CLASSIFIER_MODEL)
           .creating(ContentClassification.class)
           .fromPrompt(prompt);
     } catch (Exception e) {

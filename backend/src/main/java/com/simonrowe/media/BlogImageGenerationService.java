@@ -21,8 +21,13 @@ public class BlogImageGenerationService {
    * returns HTTP 400 "model does not exist"; {@code gpt-image-1} is its
    * successor. Unlike DALL-E it returns the image inline as base64 rather than a
    * URL, and only accepts specific sizes/qualities (see options below).
+   *
+   * <p>{@code gpt-image-2} since October 2026: the same request shape as gpt-image-1, and a
+   * medium 1536x1024 image measured 1,372 output tokens at $30/1M (about $0.041) against
+   * gpt-image-1's 1,568 at $40/1M (about $0.063). This constant is what the call uses;
+   * {@code spring.ai.openai.image.model} only documents it.
    */
-  private static final String IMAGE_MODEL = "gpt-image-1";
+  private static final String IMAGE_MODEL = "gpt-image-2";
   private static final int IMAGE_WIDTH = 1536;
   private static final int IMAGE_HEIGHT = 1024;
   private static final String IMAGE_QUALITY = "medium";

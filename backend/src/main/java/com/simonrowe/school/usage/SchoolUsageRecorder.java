@@ -46,6 +46,7 @@ public class SchoolUsageRecorder {
     this.repository = repository;
     this.clientSalt = clientSalt;
     this.prices = Map.of(
+        "gpt-6-luna", new double[] {0.10, 0.01, 0.50},
         "gpt-5.6-luna", new double[] {0.20, 0.02, 1.20},
         "gpt-5.4-nano", new double[] {0.20, 0.02, 1.25},
         "gpt-5-nano", new double[] {0.05, 0.005, 0.40},

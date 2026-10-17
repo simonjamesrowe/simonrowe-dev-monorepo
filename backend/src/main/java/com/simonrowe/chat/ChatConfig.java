@@ -10,6 +10,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
 import org.springframework.ai.tool.observation.ToolCallingObservationConvention;
 import org.springframework.ai.tool.resolution.ToolCallbackResolver;
@@ -90,6 +91,7 @@ public class ChatConfig {
       final VectorStore vectorStore, final ChatModel chatModel,
       final GuardrailVerdictRegistry verdictRegistry) {
     return builder
+        .defaultOptions(chatOptions())
         .defaultSystem(systemPrompt + "\n\n" + widgetPromptGuidance())
         .defaultAdvisors(
             new GuardrailAdvisor(chatModel, verdictRegistry),
@@ -103,6 +105,26 @@ public class ChatConfig {
         )
         .defaultTools(profileMcpTools, webSearchTools, fetchUrlTools)
         .build();
+  }
+
+  /**
+   * The portfolio chat's own options, scoped to this client rather than set under
+   * {@code spring.ai.openai.chat}.
+   *
+   * <p>{@code reasoningEffort("none")} is required, not tuning. The chat model is
+   * {@code gpt-6-luna} since October 2026, which reasons by default, and OpenAI rejects function
+   * tools alongside any other effort on {@code /v1/chat/completions} ("To use function tools,
+   * use /v1/responses or set reasoning_effort to 'none'"). This chat always offers tools, so
+   * every turn would 400. It cannot go in {@code application.yml}: those defaults merge into
+   * every per-call {@code OpenAiChatOptions} in the application, including
+   * {@link GuardrailAdvisor}'s {@code gpt-4o-mini} classifier, which rejects the argument
+   * outright and would leave the topic gate silently open. The model itself still comes from
+   * {@code spring.ai.openai.chat.model}.
+   *
+   * @return the options builder the chat client starts every request from
+   */
+  static OpenAiChatOptions.Builder chatOptions() {
+    return OpenAiChatOptions.builder().reasoningEffort("none");
   }
 
   static String widgetPromptGuidance() {

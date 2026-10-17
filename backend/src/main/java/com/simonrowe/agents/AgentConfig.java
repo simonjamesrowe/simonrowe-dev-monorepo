@@ -42,4 +42,24 @@ public class AgentConfig {
         LocalDate.of(2026, 7, 30),
         Gpt5ChatOptionsConverter.INSTANCE);
   }
+
+  /**
+   * Registers {@code gpt-6-luna}, the default for every Embabel call since October 2026: half
+   * gpt-5.6-luna's price ($0.10/$0.50 against $0.20/$1.20 per 1M tokens) at the same latency on
+   * an article summary. Embabel 1.5.1's bundled registry now lists the GPT-5.6 family but no
+   * GPT-6 model, so this one is invisible to {@code ai.withLlm(...)} without an explicit bean.
+   * Like gpt-5.6-luna it accepts only the default temperature, hence the same converter.
+   *
+   * @param factory Embabel's OpenAI-compatible model factory
+   * @return the registered model
+   */
+  @Bean
+  public LlmService<?> gpt6LunaLlm(final OpenAiCompatibleModelFactory factory) {
+    return factory.openAiCompatibleLlm(
+        "gpt-6-luna",
+        PricingModel.usdPer1MTokens(0.10, 0.50),
+        "OpenAI",
+        LocalDate.of(2026, 9, 14),
+        Gpt5ChatOptionsConverter.INSTANCE);
+  }
 }
