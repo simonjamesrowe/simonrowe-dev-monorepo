@@ -274,6 +274,19 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 053-meals (PR 1 of 5, API): **`com.simonrowe.meals`, a private recipe library for the site
+  owner**, under `/api/meals/**` (admin role only, images included). Load-bearing bits:
+  - **The recipes come from copyrighted ebooks and the repo is public.** Nothing from them is
+    committed: they arrive only as bundles uploaded to `POST /api/meals/admin/bundles`, built
+    outside the repo; tests use invented recipes (`MealBundles`). Do not add a Mongock seed.
+  - **Importing is insert-if-absent by id**, so a re-upload adds nothing and never overwrites
+    an edit. A bad recipe is skipped and named; a bad zip or manifest is a 400.
+  - **Photos are on the `meal-images` volume** (`MEALS_IMAGE_PATH`), named by the SHA-256 of
+    their bytes with the type sniffed from the bytes, and served only through the API.
+  - **Backup:** four `meal_*` collections plus `meal-images/`; `MealsBackupCoverageTest`
+    discovers the `@Document` classes so a new collection cannot go unbacked.
+  - The library is shared content with no owner; ratings carry the Auth0 subject.
+  See `specs/053-meals/` (`plan.md` lists the five PRs) and `docs/runbooks/meals.md`.
 - co-parents-project-page: **CoParent gets its page**, In development with no live link, seeded by
   `V057SeedCoParentsProjectPage` from `backend/src/main/resources/seed/portfolio/co-parents/`
   through `PortfolioPageSeed`, exactly as V050 did. It also renames V048's "Co-Parents" card to the

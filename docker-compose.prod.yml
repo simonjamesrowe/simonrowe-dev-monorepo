@@ -767,7 +767,7 @@ services:
       # same-origin: WebSocketConfig passes this list to setAllowedOrigins, and Spring rejects
       # the STOMP handshake on the Origin header regardless of who is proxying. The symptom
       # would be a page that loads perfectly and never answers.
-      CORS_ALLOWED_ORIGINS: https://simonrowe.dev,https://www.simonrowe.dev,https://term-time.simonrowe.dev,https://coparents.simonrowe.dev
+      CORS_ALLOWED_ORIGINS: https://simonrowe.dev,https://www.simonrowe.dev,https://term-time.simonrowe.dev,https://coparents.simonrowe.dev,https://meals.simonrowe.dev
       MANAGEMENT_SERVER_PORT: "8081"
       SPRING_THREADS_VIRTUAL_ENABLED: "true"
       OTEL_SERVICE_NAME: simonrowe-backend
@@ -871,11 +871,14 @@ services:
       # SCHOOL_ATTACHMENT_PATH: a relative path lands in the writable layer and every deploy
       # deletes the receipts.
       COPARENT_RECEIPT_PATH: /workspace/coparent-receipts/
+      # Meals recipe photos (spec 053): from copyrighted books, so never under uploads/.
+      MEALS_IMAGE_PATH: /workspace/meal-images/
     volumes:
       - backend-uploads:/workspace/uploads
       # CoParent expense receipts, served only by ExpenseReceiptController after a family
       # membership check. Kept out of backend-uploads for the reason given below.
       - coparent-receipts:/workspace/coparent-receipts
+      - meal-images:/workspace/meal-images
       # The original bytes of PDFs that arrived as school email attachments, served by
       # SchoolAttachmentController. Deliberately NOT inside backend-uploads: /workspace/uploads
       # is published by a ResourceHandlerRegistry mapping with no authorisation of any kind,
@@ -1611,6 +1614,8 @@ volumes:
   # CoParent expense receipts. Separate from backend-uploads because that path is served
   # unauthenticated; see the mount on `backend`.
   coparent-receipts:
+  # Meals recipe photos, served only to the signed-in owner. Backed up as meal-images/.
+  meal-images:
   portainer-data:
   langfuse-db-data:
   langfuse-clickhouse-data:

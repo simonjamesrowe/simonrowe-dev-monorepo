@@ -27,6 +27,9 @@ public class SecurityConfig {
         .cors(Customizer.withDefaults())
         .authorizeHttpRequests(auth -> auth
             .requestMatchers("/api/admin/**").hasRole(ADMIN_ROLE)
+            // Meals holds recipes from copyrighted ebooks and one person's kitchen: every
+            // route, images included, is for the site owner alone (spec 053).
+            .requestMatchers("/api/meals/**").hasRole(ADMIN_ROLE)
             // Favourites are globally shared: reads are public, only writes need a session.
             .requestMatchers(HttpMethod.PUT, "/api/favourites/**").authenticated()
             .requestMatchers(HttpMethod.DELETE, "/api/favourites/**").authenticated()

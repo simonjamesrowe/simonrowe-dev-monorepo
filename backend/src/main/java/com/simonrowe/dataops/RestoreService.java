@@ -15,10 +15,15 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import com.simonrowe.aggregation.newsletter.NewsletterCandidate;
 import com.simonrowe.homepage.HomePage;
+import com.simonrowe.meals.MealIngredient;
+import com.simonrowe.meals.MealRating;
+import com.simonrowe.meals.MealRecipe;
+import com.simonrowe.meals.MealTemplate;
 import com.simonrowe.migration.changeunits.V020CreateArticleSummaryIndexes;
 import com.simonrowe.migration.changeunits.V022CreatePlatformReleaseIndexes;
 import com.simonrowe.migration.changeunits.V029CreateShortLinksAndBackfill;
 import com.simonrowe.migration.changeunits.V056CreatePlaylist;
+import com.simonrowe.migration.changeunits.V058CreateMeals;
 import com.simonrowe.playlist.PlaylistSettings;
 import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
@@ -95,7 +100,14 @@ public class RestoreService {
       V048CreatePortfolioProjects.COLLECTION,
       // Points at aggregated_articles by plain id only. Its unique url index, which is what
       // stops a story being read twice, is put back by the post-import hook below.
-      NewsletterCandidate.COLLECTION
+      NewsletterCandidate.COLLECTION,
+      // Meals (spec 053): recipes, standard ingredients and weeks reference each other by plain
+      // id only, and the ratings indexes are put back by the post-import hook below. Recipe
+      // photos travel separately, as meal-images/.
+      MealRecipe.COLLECTION,
+      MealIngredient.COLLECTION,
+      MealTemplate.COLLECTION,
+      MealRating.COLLECTION
   );
 
   private static final List<String> COPARENT_IMPORT_ORDER = List.of(
@@ -129,6 +141,7 @@ public class RestoreService {
   private final String uploadsPath;
   private final String schoolAttachmentPath;
   private final String coparentReceiptPath;
+  private final String mealImagePath;
 
   public RestoreService(
       final MongoTemplate mongoTemplate,
@@ -141,7 +154,8 @@ public class RestoreService {
       final NarrationRestoreValidator narrationRestoreValidator,
       @Value("${uploads.path:backend/uploads/}") final String uploadsPath,
       @Value("${school.attachment-path:school-attachments/}") final String schoolAttachmentPath,
-      @Value("${coparent.receipt-path:coparent-receipts/}") final String coparentReceiptPath
+      @Value("${coparent.receipt-path:coparent-receipts/}") final String coparentReceiptPath,
+      @Value("${meals.image-path:meal-images/}") final String mealImagePath
   ) {
     this.mongoTemplate = mongoTemplate;
     this.coparentMongoTemplate = coparentMongoTemplate;
@@ -154,6 +168,7 @@ public class RestoreService {
     this.uploadsPath = uploadsPath;
     this.schoolAttachmentPath = schoolAttachmentPath;
     this.coparentReceiptPath = coparentReceiptPath;
+    this.mealImagePath = mealImagePath;
   }
 
   public void performRestore(final String backupFileId) {
@@ -181,6 +196,7 @@ public class RestoreService {
         restoreMediaFiles(mediaZip);
         restoreSchoolAttachments(tempZip);
         restoreCoparentReceipts(tempZip);
+        restoreMealImages(tempZip);
       } finally {
         if (mediaZip != null && !mediaZip.equals(tempZip)) {
           deleteTempFile(mediaZip);
@@ -260,7 +276,8 @@ public class RestoreService {
         Map.entry(SCHOOL_DOCUMENTS, this::ensureSchoolIndexes),
         Map.entry(V048CreatePortfolioProjects.COLLECTION, this::ensurePortfolioIndexes),
         Map.entry(NewsletterCandidate.COLLECTION, this::ensureNewsletterCandidateIndexes),
-        Map.entry(V049SeedTermTimeProjectPage.MEDIA_COLLECTION, this::ensureMediaIndexes));
+        Map.entry(V049SeedTermTimeProjectPage.MEDIA_COLLECTION, this::ensureMediaIndexes),
+        Map.entry(MealRating.COLLECTION, this::ensureMealIndexes));
   }
 
   void restoreCollections(final Path zipFile) throws IOException {
@@ -401,6 +418,15 @@ public class RestoreService {
   void ensureShortLinkIndexes() {
     V029CreateShortLinksAndBackfill.createIndexes(mongoTemplate);
     LOG.info("Recreated short link indexes after restore");
+  }
+
+  /**
+   * Recreates the meals ratings indexes after a restore. Package-private so the backup test
+   * can exercise it directly.
+   */
+  void ensureMealIndexes() {
+    V058CreateMeals.createIndexes(mongoTemplate);
+    LOG.info("Recreated meals indexes after restore");
   }
 
   /**
@@ -576,6 +602,17 @@ public class RestoreService {
   void restoreCoparentReceipts(final Path zipFile) throws IOException {
     restoreDirectoryEntries(zipFile, "coparent-receipts/", Path.of(coparentReceiptPath),
         "CoParent receipt");
+  }
+
+  /**
+   * Restores recipe photos. Additive, like receipts: a photo is named by the hash of its bytes,
+   * so one already on disk is the same photo, and one no restored recipe points at is harmless.
+   *
+   * @param zipFile the backup archive
+   * @throws IOException if the archive cannot be read
+   */
+  void restoreMealImages(final Path zipFile) throws IOException {
+    restoreDirectoryEntries(zipFile, "meal-images/", Path.of(mealImagePath), "meal image");
   }
 
   /** Copies every archive entry under {@code prefix} into {@code dir}, refusing escapes. */

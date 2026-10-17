@@ -17,6 +17,11 @@ uploads:
 site:
   base-url: ${SITE_BASE_URL:https://simonrowe.dev}
 
+# Meals (spec 053): recipe photos live outside uploads/, which is served without authorisation.
+# Production points this at the meal-images volume.
+meals:
+  image-path: ${MEALS_IMAGE_PATH:meal-images/}
+
 # CoParent is deployed in the shared backend but remains inert until its own
 # domain, Auth0 client and data have passed the cutover checks.
 coparent:
