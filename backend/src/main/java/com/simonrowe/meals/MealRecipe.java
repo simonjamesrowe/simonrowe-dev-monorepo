@@ -59,7 +59,7 @@ public record MealRecipe(
   /**
    * Where a recipe came from.
    *
-   * @param type BOOK, LINK or PHOTO
+   * @param type BOOK, LINK, PHOTO or TEXT (pasted or typed in)
    * @param book book code for a book recipe
    * @param pages page numbers within that book
    * @param url the page a linked recipe was read from

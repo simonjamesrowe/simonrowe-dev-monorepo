@@ -153,8 +153,32 @@ reads them as the token's owner.
 
 ## Adding and editing recipes
 
-`/recipes/new` reads a draft from a **link** or a **photo**, or starts blank; `/recipes/:id/edit`
-fixes any recipe, including a book one (which keeps its book and pages as its source).
+`/recipes/new` has **one box** for whatever was copied. A bare link (with or without `https://`)
+is read as a page; anything else (an Instagram caption, a message, a page copied by hand) is read
+as the recipe itself (`POST /api/meals/recipes/read/text`, source type `TEXT`). A photo can be
+chosen, or pasted straight into the box. "Type it in yourself" starts blank, also as `TEXT`.
+`/recipes/:id/edit` fixes any recipe, including a book one (which keeps its book and pages as its
+source).
+
+- **The model does the matching; the review screen only shows it.** Each line appears as written
+  with its match beside it ("cottage cheese · 150g", tagged *new* when the kitchen has no such
+  name) and opens for editing only when the match is wrong. New ingredients collapse to one
+  summary using the model's tier and aisle. Controls are chips, segmented buttons and a stepper,
+  like the rest of the app, never native selects or datalists. A line added by hand is guessed
+  in the browser (`parseLine`), so it needs only the line itself.
+- **The reader lower-cases every line's name before matching new ingredients.** The model
+  sometimes writes "Greek yogurt" on the line and "greek yogurt" in `newIngredients`; compared raw,
+  the new ingredient was dropped and saved as tracked/Other.
+- **Pasted text is refused, not clipped, past 15,000 characters**: the end of a recipe is its
+  method, and a draft without it looks complete.
+- **A draft with no photo gets one made while it is checked** (`POST /api/meals/images/generate`,
+  `MealPhotoGenerator`: gpt-image-2, 1536x1024, medium, about $0.04, re-encoded from the model's
+  ~2.5 MB PNG to a ~250 KB JPEG). Save waits for it. Editing a recipe without a photo offers
+  "Make a photo" but never spends on its own. The photo is stored when made, so a draft that is
+  cancelled leaves one unreferenced file on the volume, named by its hash like any upload.
+  Generated rather than stock: Unsplash's licence is not public domain (it asks for attribution
+  and hotlinking, which a token-fetched private app cannot do). A link's own page photo is not
+  taken yet; that needs an SSRF-guarded binary fetch `UrlFetcher` does not have.
 
 - A link is fetched through `UrlFetcher.fetchPage`, the site's SSRF-guarded fetcher (private
   addresses refused, each redirect hop revalidated). A page with a schema.org `Recipe` in

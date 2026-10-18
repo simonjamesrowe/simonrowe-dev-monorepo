@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { rating, recipe } from './fixtures'
-import { averageScore, COOKBOOK_AUTHOR, daysUntil, defaultSlot, describeChange, formatQty, scaledLine, describeUseBy, recipeMatches, searchTerms, sourceOf } from './logic'
+import { averageScore, COOKBOOK_AUTHOR, daysUntil, defaultSlot, describeChange, formatQty, nearNames, parseLine, recipeLink, scaledLine, describeUseBy, recipeMatches, searchTerms, sourceOf } from './logic'
 
 
 describe('scaling', () => {
@@ -103,5 +103,49 @@ describe('recipe search', () => {
 
   it('matches everything on an empty search', () => {
     expect(find('   ')).toBe(true)
+  })
+})
+
+describe('recipeLink', () => {
+  it('reads a bare link as a link and anything with words in it as text', () => {
+    expect(recipeLink('  https://www.bbcgoodfood.com/recipes/x \n')).toBe('https://www.bbcgoodfood.com/recipes/x')
+    expect(recipeLink('bbcgoodfood.com/recipes/x')).toBe('https://bbcgoodfood.com/recipes/x')
+    expect(recipeLink('LEMON PANCAKES\n-40g oats')).toBeNull()
+    expect(recipeLink('recipe at https://example.com/x')).toBeNull()
+    expect(recipeLink('javascript:alert(1)')).toBeNull()
+    expect(recipeLink('ftp://example.com/x')).toBeNull()
+    expect(recipeLink('')).toBeNull()
+    expect(recipeLink('pancakes')).toBeNull()
+  })
+})
+
+describe('parseLine', () => {
+  it.each([
+    ['-40g rolled oats', 'rolled oats', 40, 'g'],
+    ['-150g 1% cottage cheese', 'cottage cheese', 150, 'g'],
+    ['1 whole egg', 'whole egg', 1, 'each'],
+    ['-1½ tsp baking powder', 'baking powder', 7.5, 'ml'],
+    ['1 1/2 tbsp olive oil', 'olive oil', 22.5, 'ml'],
+    ['1/2 lemon, juiced', 'lemon', 0.5, 'each'],
+    ['½ onion', 'onion', 0.5, 'each'],
+    ['1.5kg chicken thighs (skin on)', 'chicken thighs', 1500, 'g'],
+    ['2 l of stock', 'stock', 2000, 'ml'],
+    ['Pinch of salt (virgins, omit)', 'salt', null, null],
+    ['Splash vanilla', 'vanilla', null, null],
+    ['Sweetener to taste', 'sweetener to taste', null, null],
+  ])('reads %s', (text, name, quantity, unit) => {
+    expect(parseLine(text)).toEqual({ name, quantity, unit })
+  })
+})
+
+describe('nearNames', () => {
+  const known = ['greek yogurt', 'natural yogurt', 'oats', 'egg', 'egg whites', 'cottage cheese']
+
+  it('offers close known names for an unknown one, and none for a known one', () => {
+    expect(nearNames('0% greek yogurt', known)).toEqual(['greek yogurt', 'natural yogurt'])
+    expect(nearNames('yogurt', known)).toEqual(['greek yogurt', 'natural yogurt'])
+    expect(nearNames('rolled oats', known)).toEqual(['oats'])
+    expect(nearNames('egg', known)).toEqual([])
+    expect(nearNames('xy', known)).toEqual([])
   })
 })

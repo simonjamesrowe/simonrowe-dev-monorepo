@@ -24,7 +24,7 @@ public class RecipeService {
 
   static final Set<String> AISLES = Set.of("Fruit & veg", "Meat & fish", "Dairy & eggs",
       "Bakery", "Frozen", "Cupboard", "Other");
-  static final Set<String> SOURCES = Set.of("BOOK", "LINK", "PHOTO");
+  static final Set<String> SOURCES = Set.of("BOOK", "LINK", "PHOTO", "TEXT");
 
   private final MongoTemplate mongoTemplate;
   private final MealRecipeRepository recipes;
@@ -58,7 +58,7 @@ public class RecipeService {
    * @param method steps
    * @param tips tips
    * @param swaps swaps
-   * @param sourceType BOOK, LINK or PHOTO
+   * @param sourceType BOOK, LINK, PHOTO or TEXT
    * @param sourceUrl the page it came from, for LINK
    * @param photo an image name from {@code POST /api/meals/images}, or null
    * @param newIngredients ingredients to add to the catalogue, as reviewed
