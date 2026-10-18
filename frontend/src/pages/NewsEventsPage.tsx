@@ -12,15 +12,20 @@ import { NewsFilterBar } from '../components/news/NewsFilterBar'
 import { NewsSummaryDrawer } from '../components/news/NewsSummaryDrawer'
 import { SummaryNarration } from '../components/news/SummaryNarration'
 import { SummaryButton } from '../components/news/SummaryButton'
+import { SnippetCountBadge } from '../components/news/snippets/SnippetCountBadge'
+import { SummarySnippets } from '../components/news/snippets/SummarySnippets'
+import { useAdminRole } from '../auth/useAdminRole'
 import { useArticleSummaries } from '../hooks/useArticleSummaries'
 import { useFavourites } from '../hooks/useFavourites'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useScrollToHash } from '../hooks/useScrollToHash'
+import { useSnippetCounts } from '../hooks/useSnippetCounts'
 import { trackPageView } from '../services/analytics'
 import { fetchNews, fetchNewsById, fetchNewsSources } from '../services/newsApi'
 import { fetchEvents, fetchEventsById } from '../services/eventsApi'
 import { getFavourites } from '../services/favouritesApi'
 import { API_BASE_URL } from '../config/api'
+import type { ArticleSummaryResponse } from '../types/articleSummary'
 import type { ArticleResponse, SourceSummary } from '../types/news'
 import type { EventResponse } from '../types/events'
 
@@ -55,6 +60,11 @@ function matchesQuery(query: string, fields: Array<string | null | undefined>): 
   if (terms.length === 0) return true
   const haystack = fields.filter(Boolean).join(' ').toLowerCase()
   return terms.every(term => haystack.includes(term))
+}
+
+/** The summary's text when it is finished, which is the only time a passage can be kept. */
+function readySummaryBody(summary: ArticleSummaryResponse | null): string | null {
+  return summary?.state === 'READY' ? summary.body : null
 }
 
 export function NewsEventsPage() {
@@ -105,6 +115,12 @@ export function NewsEventsPage() {
   const [summaryArticleId, setSummaryArticleId] = useState<string | null>(null)
 
   const { lastCompleted } = useNarrationAudio()
+
+  // Snippets (spec 054) are the admin's private notes on summaries. Everyone else gets the
+  // page exactly as before, and the snippets API is never called for them.
+  const isAdmin = useAdminRole()
+  const snippetCounts = useSnippetCounts(isAdmin)
+  const summaryProseRef = useRef<HTMLDivElement>(null)
 
   // The docked player's Listen chain can generate a summary as an intermediate step, and it
   // sits above this page in the tree so it cannot write to `useArticleSummaries` itself. It
@@ -525,6 +541,7 @@ export function NewsEventsPage() {
                   </div>
                   <div className="feed__hero-overlay">
                     <span className="feed__source-badge">{article.sourceName}</span>
+                    {isAdmin && <SnippetCountBadge count={snippetCounts.countFor(article.id)} />}
                     <h2 className="feed__hero-title">{article.title}</h2>
                     <div className="feed__hero-meta">
                       {article.author && <span>{article.author}</span>}
@@ -593,6 +610,7 @@ export function NewsEventsPage() {
                   </div>
                   <div className="feed__card-body">
                     <span className="feed__source-badge">{article.sourceName}</span>
+                    {isAdmin && <SnippetCountBadge count={snippetCounts.countFor(article.id)} />}
                     <h3 className="feed__card-title">{article.title}</h3>
                     {article.summary && (
                       <p className="feed__card-summary">{article.summary}</p>
@@ -741,6 +759,21 @@ export function NewsEventsPage() {
           onClose={handleSummaryClose}
           onRetry={() => void summaries.requestSummary(summaryArticle.id)}
           onToggleFavourite={() => void newsFavourites.toggleFavourite(summaryArticle.id)}
+          proseRef={summaryProseRef}
+          snippetLayer={isAdmin ? (
+            <SummarySnippets
+              article={summaryArticle}
+              isFavourite={newsFavourites.isFavourite(summaryArticle.id)}
+              onCountChange={snippetCounts.setCount}
+              onFavourite={() => {
+                if (!newsFavourites.isFavourite(summaryArticle.id)) {
+                  void newsFavourites.toggleFavourite(summaryArticle.id)
+                }
+              }}
+              proseRef={summaryProseRef}
+              summaryBody={readySummaryBody(summaries.summaryFor(summaryArticle.id))}
+            />
+          ) : undefined}
           summary={summaries.summaryFor(summaryArticle.id)}
         />
       )}

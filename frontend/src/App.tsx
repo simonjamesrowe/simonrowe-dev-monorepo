@@ -52,6 +52,7 @@ const DataOperationsAdmin = named(() => import('./pages/admin/DataOperationsAdmi
 const SoftwareFactoryAdmin = named(() => import('./pages/admin/SoftwareFactoryAdmin'), 'SoftwareFactoryAdmin')
 const MediaAdmin = named(() => import('./pages/admin/MediaAdmin'), 'MediaAdmin')
 const ShortLinksAdmin = named(() => import('./pages/admin/ShortLinksAdmin'), 'ShortLinksAdmin')
+const SnippetsAdmin = named(() => import('./pages/admin/SnippetsAdmin'), 'SnippetsAdmin')
 const SchoolOverviewAdmin = named(() => import('./pages/admin/SchoolOverviewAdmin'), 'SchoolOverviewAdmin')
 const SchoolApprovalsPage = named(() => import('./pages/admin/SchoolApprovalsPage'), 'SchoolApprovalsPage')
 const SchoolAllDocumentsPage = named(() => import('./pages/admin/SchoolAllDocumentsPage'), 'SchoolAllDocumentsPage')
@@ -248,6 +249,7 @@ function App() {
           <Route path="content-sources" element={<ContentSourcesAdmin />} />
           <Route path="newsletter-review" element={<NewsletterReviewAdmin />} />
           <Route path="short-links" element={<ShortLinksAdmin />} />
+          <Route path="snippets" element={<SnippetsAdmin />} />
           <Route path="school" element={<SchoolOverviewAdmin />} />
           <Route path="school/approvals" element={<SchoolApprovalsPage />} />
           <Route path="school/documents" element={<SchoolAllDocumentsPage />} />

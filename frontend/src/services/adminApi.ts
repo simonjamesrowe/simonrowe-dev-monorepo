@@ -242,7 +242,7 @@ export interface AdminContentSource {
 
 export type GetAccessToken = () => Promise<string>
 
-async function authFetch(url: string, token: string, options?: RequestInit): Promise<Response> {
+export async function authFetch(url: string, token: string, options?: RequestInit): Promise<Response> {
   return fetch(url, {
     ...options,
     headers: {
@@ -263,7 +263,7 @@ export class AdminValidationError extends Error {
   }
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
+export async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let message = 'Request failed.'
     let fieldErrors: { field: string; message: string }[] | null = null
@@ -293,7 +293,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
  * For endpoints that answer 204 with no body, which `handleResponse` would try to parse as
  * JSON and reject on. Errors still go through `handleResponse` for their message.
  */
-async function handleNoContent(response: Response): Promise<void> {
+export async function handleNoContent(response: Response): Promise<void> {
   if (response.ok) return
   await handleResponse<never>(response)
 }

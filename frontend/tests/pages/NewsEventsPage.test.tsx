@@ -55,6 +55,24 @@ vi.mock('../../src/auth/useAuth', () => ({
   }),
 }))
 
+// Snippets are the admin's alone: the role is switched per test, and the API is always
+// mocked so an unmocked fetch can never reach the production API the test env points at.
+let isAdmin = false
+
+vi.mock('../../src/auth/useAdminRole', () => ({
+  useAdminRole: () => isAdmin,
+}))
+
+vi.mock('../../src/services/snippetsApi', () => ({
+  fetchSnippetCounts: vi.fn(),
+  fetchSnippetsFor: vi.fn().mockResolvedValue([]),
+  fetchSnippetTags: vi.fn().mockResolvedValue([]),
+  createSnippet: vi.fn(),
+  updateSnippet: vi.fn(),
+  deleteSnippet: vi.fn(),
+}))
+
+import { fetchSnippetCounts } from '../../src/services/snippetsApi'
 import { fetchNews, fetchNewsSources } from '../../src/services/newsApi'
 import { fetchEvents } from '../../src/services/eventsApi'
 import { getFavourites } from '../../src/services/favouritesApi'
@@ -130,6 +148,8 @@ function renderPage() {
 describe('NewsEventsPage', () => {
   beforeEach(() => {
     narration = narrationAudioStub()
+    isAdmin = false
+    vi.mocked(fetchSnippetCounts).mockReset().mockResolvedValue({ 'a-1': 2 })
     favouriteIds.clear()
     summarisedIds.clear()
     vi.mocked(fetchNews).mockReset()
@@ -819,5 +839,21 @@ describe('NewsEventsPage', () => {
       expect(screen.queryByText('Listen')).not.toBeInTheDocument()
       expect(document.querySelector('.listen-button')).not.toBeInTheDocument()
     })
+  })
+
+  it('never asks a visitor for snippets, and shows them no snippet badge', async () => {
+    renderPage()
+
+    await screen.findByText('First article')
+    expect(fetchSnippetCounts).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText(/snippets? kept/)).not.toBeInTheDocument()
+  })
+
+  it('shows the admin how many passages they kept from each article', async () => {
+    isAdmin = true
+    renderPage()
+
+    expect(await screen.findByLabelText('2 snippets kept')).toBeInTheDocument()
+    expect(fetchSnippetCounts).toHaveBeenCalledTimes(1)
   })
 })
