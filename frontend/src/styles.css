@@ -17779,6 +17779,8 @@ label.meals-button { position: relative; }
   /* Nothing chosen: the hint is for a wide screen, where the panel sits beside the list. */
   .snippets-admin__detail--empty {
     display: none;
+  }
+}
 
 /* Read along: the text being heard, with the spoken word and its sentence highlighted. */
 .read-along {
