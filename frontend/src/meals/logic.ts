@@ -52,6 +52,33 @@ export function sourceOf(recipe: Recipe): RecipeSourceLabel | null {
 export const TAGS = ['filling', 'spicy', 'quick', 'faff', 'great for prep', 'too sweet', 'bland', 'kids liked it']
 
 
+/**
+ * Splits a search into words, each with the forms worth looking for: as typed, and without a
+ * plural ending, so "tomatoes" finds "tomato" and "onions" finds "onion".
+ */
+export function searchTerms(query: string): string[][] {
+  return query.toLowerCase().split(/\s+/).filter(Boolean).map((word) => {
+    const forms = [word]
+    if (word.length > 3 && word.endsWith('es')) forms.push(word.slice(0, -2))
+    if (word.length > 3 && word.endsWith('s')) forms.push(word.slice(0, -1))
+    return forms
+  })
+}
+
+/**
+ * Whether a recipe matches every word of a search, looking at its name, section and main protein,
+ * and at each ingredient both as the catalogue names it and as the recipe prints it ("broccoli
+ * florets" is found by "broccoli" even when the catalogue calls it something else).
+ */
+export function recipeMatches(recipe: Recipe, terms: string[][]): boolean {
+  if (terms.length === 0) return true
+  const haystack = [
+    recipe.name, recipe.section ?? '', recipe.mainProtein ?? '',
+    ...recipe.ingredients.flatMap((l) => [l.name, l.text]),
+  ].join('\n').toLowerCase()
+  return terms.every((forms) => forms.some((form) => haystack.includes(form)))
+}
+
 export function formatQty(quantity: number | null | undefined, unit: Unit | null | undefined): string {
   if (quantity == null || unit == null) return ''
   if (unit === 'each') return String(+quantity.toFixed(1))

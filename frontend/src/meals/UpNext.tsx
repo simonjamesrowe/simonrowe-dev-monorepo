@@ -3,6 +3,7 @@ import { Check, Heart, ListTodo, Minus, Plus, Search, ShoppingBasket, Trash2, X 
 import { Link } from 'react-router-dom'
 
 import { useCoverage, useFavourites, useKitchenHasFood, useMine, useShopping, useUpNext } from './data'
+import { recipeMatches, searchTerms } from './logic'
 import { CoverageBar, Empty, Loading, Photo } from './ui'
 import type { Recipe } from './types'
 
@@ -25,10 +26,8 @@ export function UpNext({ recipes, byId }: { recipes: Recipe[]; byId: Map<string,
 
   const items = (upNext.data ?? []).filter((u) => byId.has(u.recipeId))
   const planned = new Set(items.map((u) => u.recipeId))
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
-  const results = terms.length === 0 ? [] : recipes
-    .filter((r) => terms.every((t) => r.name.toLowerCase().includes(t) || r.ingredients.some((l) => l.name.includes(t))))
-    .slice(0, RESULTS)
+  const terms = searchTerms(query)
+  const results = terms.length === 0 ? [] : recipes.filter((r) => recipeMatches(r, terms)).slice(0, RESULTS)
   const favouriteRecipes = (favourites.data ?? [])
     .map((f) => byId.get(f.recipeId))
     .filter((r): r is Recipe => !!r && !planned.has(r.id))

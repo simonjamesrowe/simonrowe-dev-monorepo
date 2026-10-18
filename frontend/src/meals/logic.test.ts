@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { rating, recipe } from './fixtures'
-import { averageScore, COOKBOOK_AUTHOR, daysUntil, defaultSlot, describeChange, formatQty, scaledLine, describeUseBy, sourceOf } from './logic'
+import { averageScore, COOKBOOK_AUTHOR, daysUntil, defaultSlot, describeChange, formatQty, scaledLine, describeUseBy, recipeMatches, searchTerms, sourceOf } from './logic'
 
 
 describe('scaling', () => {
@@ -71,5 +71,37 @@ describe('sourceOf', () => {
     expect(sourceOf(at('javascript:alert(1)'))).toBeNull()
     expect(sourceOf(at('not a url'))).toBeNull()
     expect(sourceOf(at(null, 'PHOTO'))?.label).toBe('Your photo')
+  })
+})
+
+describe('recipe search', () => {
+  const stirFry = recipe({
+    name: 'Chicken Stir Fry', mainProtein: 'chicken',
+    ingredients: [
+      { text: '200g tenderstem broccoli', name: 'tenderstem broccoli', quantity: 200, unit: 'g' },
+      { text: '1 bag broccoli florets', name: 'frozen veg', quantity: 1, unit: 'each' },
+      { text: '3 tomatoes', name: 'tomato', quantity: 3, unit: 'each' },
+    ],
+  })
+  const find = (q: string) => recipeMatches(stirFry, searchTerms(q))
+
+  it('finds an ingredient by its catalogue name or as the recipe prints it', () => {
+    expect(find('broccoli')).toBe(true)
+    expect(find('florets')).toBe(true)
+    expect(find('BROCCOLI')).toBe(true)
+  })
+
+  it('finds a plural search in a singular ingredient', () => {
+    expect(find('tomatoes')).toBe(true)
+    expect(find('chickens')).toBe(true)
+  })
+
+  it('needs every word to match', () => {
+    expect(find('chicken broccoli')).toBe(true)
+    expect(find('beef broccoli')).toBe(false)
+  })
+
+  it('matches everything on an empty search', () => {
+    expect(find('   ')).toBe(true)
   })
 })

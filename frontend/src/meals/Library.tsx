@@ -3,7 +3,7 @@ import { Heart, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import { Link, useLocation, useNavigationType, useSearchParams } from 'react-router-dom'
 
 import { useCoverage, useFavourites, useKitchenHasFood } from './data'
-import { averageScore } from './logic'
+import { averageScore, recipeMatches, searchTerms } from './logic'
 import { CoverageBar, Empty, RecipeCard, Sheet } from './ui'
 import type { Category, Rating, Recipe } from './types'
 
@@ -101,7 +101,7 @@ function capitalise(s: string): string {
   return s.slice(0, 1).toUpperCase() + s.slice(1)
 }
 
-function matches(r: Recipe, f: Filters, terms: string[], favourites: Set<string>): boolean {
+function matches(r: Recipe, f: Filters, terms: string[][], favourites: Set<string>): boolean {
   if (f.cat !== 'all' && r.category !== f.cat) return false
   if (f.fav && !favourites.has(r.id)) return false
   if (f.diet === 'veg' && !r.vegetarian) return false
@@ -111,10 +111,7 @@ function matches(r: Recipe, f: Filters, terms: string[], favourites: Set<string>
   if (f.minProtein && r.perServing.protein < f.minProtein) return false
   if (f.freezes && !r.freezable) return false
   if (f.batch && r.servings < 3) return false
-  return terms.every((t) => r.name.toLowerCase().includes(t)
-    || (r.mainProtein ?? '').toLowerCase().includes(t)
-    || (r.section ?? '').toLowerCase().includes(t)
-    || r.ingredients.some((l) => l.name.includes(t)))
+  return recipeMatches(r, terms)
 }
 
 const SCROLL_KEY = 'meals-recipes-scroll'
@@ -185,7 +182,7 @@ export function Library({ recipes, ratings }: { recipes: Recipe[]; ratings: Rati
 
   const sort = filters.sort === 'cookable' && !hasFood ? 'az' : filters.sort
   const rows = useMemo(() => {
-    const terms = filters.q.toLowerCase().split(/\s+/).filter(Boolean)
+    const terms = searchTerms(filters.q)
     return recipes
       .filter((r) => matches(r, filters, terms, favourites.ids))
       .map((r) => ({ r, rating: averageScore(r.id, ratings) }))
