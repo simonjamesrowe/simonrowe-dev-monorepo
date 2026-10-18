@@ -21,8 +21,9 @@ public class MealsMcpTools {
   static final String INSTRUCTIONS = """
       Simon's private meals app: a library of about 150 recipes (mostly from Dave Fell's \
       budget high-protein books), his kitchen inventory, an Up next shortlist of what he means to \
-      cook, and a shopping list built from Up next minus the kitchen. Use what_can_i_cook_now and \
-      suggest_meals to answer "what should I eat"; plan_meal to put something in Up next; \
+      cook, his hearted favourites, and a shopping list built from Up next minus the kitchen. Use \
+      what_can_i_cook_now, suggest_meals and get_favourites to answer "what should I eat"; \
+      plan_meal to put something in Up next; \
       update_inventory when he says what he bought or used; get_shopping_list for what to buy. \
       Quantities are in each ingredient's unit (g, ml or each); cupboard staples are \
       have/low/out.""";
@@ -41,16 +42,18 @@ public class MealsMcpTools {
   private final MealRatingRepository ratings;
   private final RecipeReader reader;
   private final RecipeService recipeService;
+  private final MealFavouriteService favourites;
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   public MealsMcpTools(final KitchenService kitchen, final MealRecipeRepository recipes,
       final MealRatingRepository ratings, final RecipeReader reader,
-      final RecipeService recipeService) {
+      final RecipeService recipeService, final MealFavouriteService favourites) {
     this.kitchen = kitchen;
     this.recipes = recipes;
     this.ratings = ratings;
     this.reader = reader;
     this.recipeService = recipeService;
+    this.favourites = favourites;
   }
 
   List<ToolDef> tools() {
@@ -90,6 +93,9 @@ public class MealsMcpTools {
               "unit":{"type":"string","enum":["g","ml","each"]},
               "status":{"type":"string","enum":["have","low","out"]},
               "useBy":{"type":"string"}}}}}}""", this::updateInventory),
+        new ToolDef("get_favourites",
+            "The recipes the token's owner has hearted, most recently hearted first.",
+            "{\"type\":\"object\",\"properties\":{}}", this::getFavourites),
         new ToolDef("get_up_next", "The recipes queued to cook soon, with portions.",
             "{\"type\":\"object\",\"properties\":{}}", this::upNext),
         new ToolDef("plan_meal", "Add a recipe to Up next, or change its portions.", """
@@ -214,6 +220,15 @@ public class MealsMcpTools {
         "recipeId", u.recipeId(),
         "name", byId.containsKey(u.recipeId()) ? byId.get(u.recipeId()).name() : u.recipeId(),
         "portions", u.portions())).toList());
+  }
+
+  private String getFavourites(final String owner, final Map<String, Object> args) {
+    Map<String, MealRecipe> byId = kitchen.recipeMap();
+    // A favourite whose recipe is no longer in the library (an older restore) is skipped.
+    return write(favourites.list(owner).stream()
+        .filter(f -> byId.containsKey(f.recipeId()))
+        .map(f -> summary(byId.get(f.recipeId()), null))
+        .toList());
   }
 
   private String removeFromUpNext(final String owner, final Map<String, Object> args) {

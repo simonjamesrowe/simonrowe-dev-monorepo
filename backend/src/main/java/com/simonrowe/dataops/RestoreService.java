@@ -15,6 +15,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import com.simonrowe.aggregation.newsletter.NewsletterCandidate;
 import com.simonrowe.homepage.HomePage;
+import com.simonrowe.meals.MealFavourite;
 import com.simonrowe.meals.MealIngredient;
 import com.simonrowe.meals.MealInventoryEvent;
 import com.simonrowe.meals.MealInventoryItem;
@@ -30,6 +31,7 @@ import com.simonrowe.migration.changeunits.V029CreateShortLinksAndBackfill;
 import com.simonrowe.migration.changeunits.V056CreatePlaylist;
 import com.simonrowe.migration.changeunits.V058CreateMeals;
 import com.simonrowe.migration.changeunits.V059CreateMealsKitchen;
+import com.simonrowe.migration.changeunits.V060CreateMealFavourites;
 import com.simonrowe.playlist.PlaylistSettings;
 import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
@@ -118,6 +120,8 @@ public class RestoreService {
       MealInventoryEvent.COLLECTION,
       MealUpNextItem.COLLECTION,
       MealShoppingMark.COLLECTION,
+      // Each person's hearted recipes; its index is put back by the post-import hook below.
+      MealFavourite.COLLECTION,
       MealMcpToken.COLLECTION
   );
 
@@ -289,6 +293,7 @@ public class RestoreService {
         Map.entry(NewsletterCandidate.COLLECTION, this::ensureNewsletterCandidateIndexes),
         Map.entry(V049SeedTermTimeProjectPage.MEDIA_COLLECTION, this::ensureMediaIndexes),
         Map.entry(MealRating.COLLECTION, this::ensureMealIndexes),
+        Map.entry(MealFavourite.COLLECTION, this::ensureMealIndexes),
         Map.entry(MealMcpToken.COLLECTION, this::ensureMealIndexes));
   }
 
@@ -433,12 +438,13 @@ public class RestoreService {
   }
 
   /**
-   * Recreates the meals ratings indexes after a restore. Package-private so the backup test
-   * can exercise it directly.
+   * Recreates the meals indexes (V058 to V060) after a restore. Package-private so the backup
+   * test can exercise it directly.
    */
   void ensureMealIndexes() {
     V058CreateMeals.createIndexes(mongoTemplate);
     V059CreateMealsKitchen.createIndexes(mongoTemplate);
+    V060CreateMealFavourites.createIndexes(mongoTemplate);
     LOG.info("Recreated meals indexes after restore");
   }
 

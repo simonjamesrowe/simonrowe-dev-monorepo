@@ -36,13 +36,11 @@ export interface Ingredient {
   assumed: boolean
 }
 
-export interface Template {
+/** A recipe one person has hearted. Never shared: each person has their own. */
+export interface Favourite {
   id: string
-  label: string
-  source: string
-  kcal: number
-  week: number
-  recipeIds: string[]
+  recipeId: string
+  addedAt: string
 }
 
 export interface Rating {

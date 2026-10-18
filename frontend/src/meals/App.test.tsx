@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ThemeProvider } from '../contexts/ThemeContext'
 import { App, ADMIN_ROLE, MEALS_ROLE, ROLES_CLAIM } from './App'
 import { useLibrary, useRatings } from './data'
 import { recipe } from './fixtures'
@@ -33,9 +34,11 @@ function auth(overrides: Record<string, unknown>) {
 
 function renderAt(path: string) {
   return render(
-    <QueryClientProvider client={new QueryClient()}>
-      <MemoryRouter initialEntries={[path]}><App /></MemoryRouter>
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={[path]}><App /></MemoryRouter>
+      </QueryClientProvider>
+    </ThemeProvider>,
   )
 }
 
@@ -44,7 +47,7 @@ describe('meals app gate', () => {
     vi.stubGlobal('scrollTo', vi.fn())
     const chilli = recipe()
     vi.mocked(useLibrary).mockReturnValue({
-      library: { recipes: [chilli], byId: new Map([[chilli.id, chilli]]), ingredients: new Map(), templates: [] },
+      library: { recipes: [chilli], byId: new Map([[chilli.id, chilli]]), ingredients: new Map() },
       isLoading: false,
       error: null,
     })
@@ -56,9 +59,11 @@ describe('meals app gate', () => {
     auth({ isAuthenticated: false, user: undefined, loginWithRedirect })
     const { rerender } = renderAt('/recipes')
     rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <MemoryRouter initialEntries={['/recipes']}><App /></MemoryRouter>
-      </QueryClientProvider>,
+      <ThemeProvider>
+        <QueryClientProvider client={new QueryClient()}>
+          <MemoryRouter initialEntries={['/recipes']}><App /></MemoryRouter>
+        </QueryClientProvider>
+      </ThemeProvider>,
     )
 
     expect(loginWithRedirect).toHaveBeenCalledTimes(1)
@@ -98,14 +103,14 @@ describe('meals app gate', () => {
 
     expect(screen.getByRole('navigation')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'More' })).toBeInTheDocument()
-    expect(screen.queryByText('Import recipe bundles')).not.toBeInTheDocument()
+    expect(screen.queryByText('Load recipe bundles')).not.toBeInTheDocument()
   })
 
   it('shows the owner the bundle import', () => {
     auth({})
     renderAt('/more')
 
-    expect(screen.getByText('Import recipe bundles')).toBeInTheDocument()
+    expect(screen.getByText('Load recipe bundles')).toBeInTheDocument()
   })
 
   it('opens a recipe and scales it', async () => {
@@ -117,6 +122,21 @@ describe('meals app gate', () => {
     await userEvent.click(screen.getByRole('button', { name: 'More portions' }))
     await userEvent.click(screen.getByRole('button', { name: 'More portions' }))
     expect(screen.getByText('750g beef mince')).toBeInTheDocument()
+  })
+
+  it('shows the brand and switches between dark and light', async () => {
+    localStorage.removeItem('theme-preference')
+    document.documentElement.removeAttribute('data-theme')
+    auth({})
+    renderAt('/recipes')
+
+    expect(screen.getAllByText('Meals').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/simonrowe\.dev/)).not.toBeInTheDocument()
+    const before = document.documentElement.getAttribute('data-theme')
+    await userEvent.click(screen.getAllByRole('button', { name: /Switch to (light|dark) mode/ })[0])
+    expect(document.documentElement.getAttribute('data-theme')).not.toBe(before)
+    localStorage.removeItem('theme-preference')
+    document.documentElement.removeAttribute('data-theme')
   })
 
   it('says so when a recipe does not exist', () => {

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 
+import { ThemeProvider } from '../contexts/ThemeContext'
 import type { MealsApi } from './api'
 import { MealsApiContext } from './data'
 
@@ -32,10 +33,12 @@ export function fakeApi(overrides: Partial<MealsApi> = {}): MealsApi {
 export function withApi(api: MealsApi, children: ReactNode, path = '/') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return (
-    <QueryClientProvider client={client}>
-      <MealsApiContext.Provider value={api}>
-        <MemoryRouter initialEntries={[path]}>{children}</MemoryRouter>
-      </MealsApiContext.Provider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <MealsApiContext.Provider value={api}>
+          <MemoryRouter initialEntries={[path]}>{children}</MemoryRouter>
+        </MealsApiContext.Provider>
+      </QueryClientProvider>
+    </ThemeProvider>
   )
 }

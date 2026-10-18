@@ -12,7 +12,7 @@ import { More } from './More'
 import { RecipeEditor } from './RecipeEditor'
 import { RecipePage } from './RecipePage'
 import { Shop } from './Shop'
-import { Empty, Loading } from './ui'
+import { Brand, Empty, Loading, ThemeToggle } from './ui'
 import { UpNext } from './UpNext'
 import type { Rating } from './types'
 
@@ -51,7 +51,7 @@ export function App() {
   if (!isAdmin && !(Array.isArray(roles) && roles.includes(MEALS_ROLE))) {
     return (
       <div className="meals-gate">
-        <h1>Meals</h1>
+        <Brand />
         <p className="meals-muted">This is a private app.</p>
         <button type="button" className="meals-button" onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}>Sign out</button>
       </div>
@@ -68,7 +68,7 @@ export function App() {
 function SignIn({ onSignIn, message }: { onSignIn: () => void; message?: string }) {
   return (
     <div className="meals-gate">
-      <h1>Meals</h1>
+      <Brand />
       {message && <p className="meals-muted" role="status">{message}</p>}
       <button type="button" className="meals-button meals-button--primary" onClick={onSignIn}>Sign in</button>
     </div>
@@ -105,7 +105,7 @@ function Shell({ canImport, onSignOut }: { canImport: boolean; onSignOut: () => 
         <Route path="/recipes/new" element={<RecipeEditor knownIngredients={known} />} />
         <Route path="/recipes/:id" element={<RecipeRoute library={library} ratings={ratings.data} />} />
         <Route path="/recipes/:id/edit" element={<EditRoute library={library} />} />
-        <Route path="/up-next" element={<UpNext byId={library.byId} templates={library.templates} />} />
+        <Route path="/up-next" element={<UpNext recipes={library.recipes} byId={library.byId} />} />
         <Route path="/shop" element={<Shop />} />
         <Route path="/kitchen" element={<Kitchen ingredients={library.ingredients} />} />
         <Route path="/more" element={<More canImport={canImport} onSignOut={onSignOut} />} />
@@ -116,8 +116,12 @@ function Shell({ canImport, onSignOut }: { canImport: boolean; onSignOut: () => 
 
   return (
     <div className="meals-shell">
+      <header className="meals-topbar">
+        <Brand />
+        <ThemeToggle />
+      </header>
       <nav className="meals-nav" aria-label="Main">
-        <span className="meals-nav__brand">meals<span>.simonrowe.dev</span></span>
+        <span className="meals-nav__brand"><Brand /></span>
         {nav.map(({ to, label, icon: Icon, end, badge }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => `meals-nav__item ${isActive ? 'meals-nav__item--on' : ''}`}>
             <Icon size={20} aria-hidden="true" />
@@ -125,6 +129,7 @@ function Shell({ canImport, onSignOut }: { canImport: boolean; onSignOut: () => 
             {badge > 0 && <span className="meals-nav__badge" aria-label={`${badge} items`}>{badge}</span>}
           </NavLink>
         ))}
+        <span className="meals-nav__theme"><ThemeToggle withLabel /></span>
       </nav>
       <main className="meals-main">{page}</main>
     </div>

@@ -13,7 +13,7 @@ const cache = new Map<string, Promise<string>>()
  */
 export function usePhoto(name: string | null) {
   const api = useMealsApi()
-  const ref = useRef<HTMLDivElement | null>(null)
+  const ref = useRef<HTMLElement | null>(null)
   const [url, setUrl] = useState<string | null>(null)
   const [visible, setVisible] = useState(false)
 

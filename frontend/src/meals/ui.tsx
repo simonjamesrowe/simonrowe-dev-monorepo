@@ -1,16 +1,19 @@
 import { useEffect, type ReactNode } from 'react'
-import { Leaf, Snowflake, X } from 'lucide-react'
+import { Heart, Leaf, Moon, Snowflake, Sun, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import { useTheme } from '../contexts/ThemeContext'
+import { useFavourites, useToggleFavourite } from './data'
 import { usePhoto } from './photos'
 import type { Coverage, Recipe } from './types'
 
 export function Photo({ recipe, className = '' }: { recipe: Recipe; className?: string }) {
   const { ref, url } = usePhoto(recipe.photo)
   return (
-    <div ref={ref} className={`meals-photo ${className}`}>
+    // A span, so a photo can sit inside a button.
+    <span ref={ref} className={`meals-photo ${className}`}>
       {url ? <img src={url} alt="" /> : <span className="meals-photo__initial" aria-hidden="true">{recipe.name.slice(0, 1)}</span>}
-    </div>
+    </span>
   )
 }
 
@@ -39,19 +42,74 @@ export function Flags({ recipe }: { recipe: Recipe }) {
   )
 }
 
+/**
+ * A recipe tile. The heart sits beside the link rather than inside it: a button inside an <a> is
+ * invalid, and a tap on it would also open the recipe.
+ */
 export function RecipeCard({ recipe, children }: { recipe: Recipe; children?: ReactNode }) {
   return (
-    <Link className="meals-card" to={`/recipes/${recipe.id}`}>
-      <Photo recipe={recipe} className="meals-card__photo" />
-      <span className="meals-card__body">
-        <span className="meals-card__name">{recipe.name}</span>
-        <span className="meals-card__meta">
-          <span className="meals-card__macros">{Math.round(recipe.perServing.kcal)} kcal · {Math.round(recipe.perServing.protein)}g protein</span>
-          <Flags recipe={recipe} />
+    <div className="meals-card">
+      <Link className="meals-card__link" to={`/recipes/${recipe.id}`}>
+        <Photo recipe={recipe} className="meals-card__photo" />
+        <span className="meals-card__body">
+          <span className="meals-card__name">{recipe.name}</span>
+          <span className="meals-card__meta">
+            <span className="meals-card__macros">{Math.round(recipe.perServing.kcal)} kcal · {Math.round(recipe.perServing.protein)}g protein</span>
+            <Flags recipe={recipe} />
+          </span>
+          {children}
         </span>
-        {children}
-      </span>
-    </Link>
+      </Link>
+      <FavouriteButton recipe={recipe} className="meals-card__heart" />
+    </div>
+  )
+}
+
+/** The signed-in person's heart for one recipe. Kate's hearts and yours are separate. */
+export function FavouriteButton({ recipe, className = '', withLabel = false }: {
+  recipe: Recipe; className?: string; withLabel?: boolean
+}) {
+  const { ids } = useFavourites()
+  const toggle = useToggleFavourite()
+  const on = ids.has(recipe.id)
+  return (
+    <button type="button" className={`meals-heart ${on ? 'meals-heart--on' : ''} ${withLabel ? 'meals-button' : ''} ${className}`}
+      aria-pressed={on} aria-label={withLabel ? undefined : `Favourite ${recipe.name}`}
+      onClick={() => toggle.mutate({ recipeId: recipe.id, on: !on })}>
+      <Heart size={18} fill={on ? 'currentColor' : 'none'} aria-hidden="true" />
+      {withLabel && 'Favourite'}
+    </button>
+  )
+}
+
+export function Brand() {
+  return (
+    <span className="meals-brand">
+      <img className="meals-brand__mark" src="/meals-logo.svg" alt="" width={34} height={34} />
+      <span className="meals-brand__name">Meals</span>
+    </span>
+  )
+}
+
+/** Keeps the browser chrome (address bar, installed app's title bar) the colour of the page. */
+export function ThemeColor() {
+  const { theme } = useTheme()
+  useEffect(() => {
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#faf6f1' : '#15120f')
+  }, [theme])
+  return null
+}
+
+export function ThemeToggle({ withLabel = false }: { withLabel?: boolean }) {
+  const { theme, toggleTheme } = useTheme()
+  const next = theme === 'dark' ? 'light' : 'dark'
+  const Icon = theme === 'dark' ? Sun : Moon
+  return (
+    <button type="button" className={withLabel ? 'meals-button' : 'meals-icon-button'} onClick={toggleTheme}
+      aria-label={withLabel ? undefined : `Switch to ${next} mode`}>
+      <Icon size={18} aria-hidden="true" />
+      {withLabel && `${next === 'light' ? 'Light' : 'Dark'} mode`}
+    </button>
   )
 }
 

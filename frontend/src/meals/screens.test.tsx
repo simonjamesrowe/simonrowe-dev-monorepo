@@ -11,7 +11,7 @@ import { RecipeEditor } from './RecipeEditor'
 import { RecipePage } from './RecipePage'
 import { Shop } from './Shop'
 import { fakeApi, withApi } from './testing'
-import type { Coverage, Ingredient, InventoryItem, Template } from './types'
+import type { Coverage, Favourite, Ingredient, InventoryItem } from './types'
 import { UpNext } from './UpNext'
 
 const chilli = recipe({ photo: 'abc.jpg' })
@@ -28,6 +28,7 @@ const ingredients = new Map<string, Ingredient>([
 const have: Coverage = { ratio: 1, missing: [], shortOf: [], unknown: [], lines: { 'beef mince': 'HAVE', onion: 'HAVE' } }
 const twoShort: Coverage = { ratio: 0.5, missing: ['onion'], shortOf: ['beef mince'], unknown: [], lines: { 'beef mince': 'SHORT', onion: 'MISSING' } }
 const mince: InventoryItem = { id: 'o|beef mince', name: 'beef mince', tier: 'tracked', quantity: 500, unit: 'g', status: null, useBy: '2026-10-17', updatedAt: '' }
+const heart = (recipeId: string): Favourite => ({ id: `me|${recipeId}`, recipeId, addedAt: '2026-10-18T09:00:00Z' })
 const oatsStaple: InventoryItem = { id: 'o|oats', name: 'oats', tier: 'staple', quantity: null, unit: null, status: 'low', useBy: null, updatedAt: '' }
 
 beforeEach(() => {
@@ -45,6 +46,22 @@ describe('cook screen', () => {
   it('asks what is in when the kitchen is empty', async () => {
     render(withApi(fakeApi(), <Home recipes={[chilli]} byId={byId} now={new Date(2026, 9, 17, 19)} />))
     expect(await screen.findByText("Tell me what's in")).toBeInTheDocument()
+  })
+
+  it('offers favourites, not near misses, while nothing fresh is in', async () => {
+    const api = fakeApi({
+      kitchen: vi.fn().mockResolvedValue([oatsStaple]),
+      favourites: vi.fn().mockResolvedValue([heart('test-chilli')]),
+      suggestions: vi.fn().mockResolvedValue([
+        { recipeId: 'test-oats', score: 30, coverage: twoShort, reasons: [], expiring: [] },
+      ]),
+    })
+    render(withApi(api, <Home recipes={[chilli, oats]} byId={byId} now={new Date(2026, 9, 17, 19)} />))
+
+    expect(await screen.findByText("Tell me what's in")).toBeInTheDocument()
+    const favourites = (await screen.findByRole('heading', { name: 'Your favourites' })).closest('section')!
+    expect(await within(favourites).findByRole('link', { name: /Test Chilli/ })).toHaveAttribute('href', '/recipes/test-chilli')
+    expect(screen.queryByRole('heading', { name: 'One or two things short' })).not.toBeInTheDocument()
   })
 
   it('splits suggestions into cookable now and near misses, and queues one', async () => {
@@ -72,27 +89,85 @@ describe('cook screen', () => {
 })
 
 describe('library', () => {
-  it('filters, searches and sorts, with coverage on each card', async () => {
-    const api = fakeApi({ coverage: vi.fn().mockResolvedValue({ 'test-chilli': have, 'test-oats': twoShort }) })
-    render(withApi(api, <Library recipes={[chilli, oats]} ratings={[rating({ score: 4 })]} />))
-    expect(screen.getByText('2 shown')).toBeInTheDocument()
+  it('searches, filters by meal and in the filter sheet, and sorts', async () => {
+    const api = fakeApi({
+      kitchen: vi.fn().mockResolvedValue([mince]),
+      coverage: vi.fn().mockResolvedValue({ 'test-chilli': have, 'test-oats': twoShort }),
+    })
+    render(withApi(api, <Library recipes={[chilli, oats]} ratings={[rating({ score: 4 })]} />, '/recipes'))
+    expect(screen.getByText(/^2 recipes/)).toBeInTheDocument()
     expect(await screen.findByText('Have it all')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Vegetarian' }))
-    expect(screen.getByText('1 shown')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Vegetarian' }))
     await userEvent.type(screen.getByLabelText('Search recipes'), 'mince')
     expect(screen.queryByText('Test Oats')).not.toBeInTheDocument()
-    await userEvent.clear(screen.getByLabelText('Search recipes'))
+    expect(screen.getByText(/1 of 2 recipes/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Clear search' }))
     await userEvent.click(screen.getByRole('button', { name: 'Breakfast' }))
-    expect(screen.getByText('1 shown')).toBeInTheDocument()
+    expect(screen.queryByText('Test Chilli')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'All' }))
-    for (const sort of ['protein', 'kcal', 'rating', 'az', 'cookable']) {
+
+    await userEvent.click(screen.getByRole('button', { name: /Filters/ }))
+    const sheet = screen.getByRole('dialog', { name: 'Filters' })
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Vegetarian' }))
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Show 1 recipe' }))
+    expect(screen.getByText(/1 of 2 recipes/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Vegetarian' }))
+    expect(screen.getByText(/^2 recipes/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Filters/ }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Beef' }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Under 400' }))
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Show 0 recipes' })).toBeInTheDocument()
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reset' }))
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    for (const sort of ['protein', 'kcal', 'rating', 'cookable', 'az']) {
       await userEvent.selectOptions(screen.getByLabelText('Sort'), sort)
     }
-    await userEvent.selectOptions(screen.getByLabelText('Book'), 'mmmb1')
     expect(screen.getByText('★ 4.0')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Add a recipe/ })).toHaveAttribute('href', '/recipes/new')
+    expect(screen.getByRole('link', { name: /Import a recipe/ })).toHaveAttribute('href', '/recipes/new')
+  })
+
+  it('reads its filters from the address, so coming back keeps them', () => {
+    render(withApi(fakeApi(), <Library recipes={[chilli, oats]} ratings={[]} />, '/recipes?diet=veg&q=oat'))
+    expect(screen.getByLabelText('Search recipes')).toHaveValue('oat')
+    expect(screen.getByText(/1 of 2 recipes/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Vegetarian' })).toBeInTheDocument()
+  })
+
+  it('never mentions the books, and hides coverage until something fresh is in', async () => {
+    const api = fakeApi({ coverage: vi.fn().mockResolvedValue({ 'test-chilli': have }) })
+    render(withApi(api, <Library recipes={[chilli, oats]} ratings={[]} />, '/recipes'))
+    expect(screen.queryByLabelText('Book')).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Most cookable now' })).not.toBeInTheDocument()
+    await waitFor(() => expect(api.kitchen).toHaveBeenCalled())
+    expect(screen.queryByText('Have it all')).not.toBeInTheDocument()
+  })
+
+  it('hearts a recipe and filters to favourites', async () => {
+    const favourites = vi.fn().mockResolvedValueOnce([heart('test-oats')]).mockResolvedValue([heart('test-chilli'), heart('test-oats')])
+    const api = fakeApi({ favourites, favourite: vi.fn().mockResolvedValue(heart('test-chilli')) })
+    render(withApi(api, <Library recipes={[chilli, oats]} ratings={[]} />, '/recipes'))
+
+    const oatsHeart = await screen.findByRole('button', { name: 'Favourite Test Oats' })
+    await waitFor(() => expect(oatsHeart).toHaveAttribute('aria-pressed', 'true'))
+    await userEvent.click(screen.getByRole('button', { name: /^Favourites$/ }))
+    expect(screen.getByText(/1 of 2 recipes/)).toBeInTheDocument()
+    expect(screen.queryByText('Test Chilli')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /^Favourites$/ }))
+
+    const chilliHeart = screen.getByRole('button', { name: 'Favourite Test Chilli' })
+    await userEvent.click(chilliHeart)
+    await waitFor(() => expect(chilliHeart).toHaveAttribute('aria-pressed', 'true'))
+    await waitFor(() => expect(api.favourite).toHaveBeenCalledWith('test-chilli'))
+    await waitFor(() => expect(favourites).toHaveBeenCalledTimes(2))
+    expect(chilliHeart).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('says how to start when there are no favourites', async () => {
+    render(withApi(fakeApi(), <Library recipes={[chilli]} ratings={[]} />, '/recipes?fav=1'))
+    expect(await screen.findByText('No favourites yet')).toBeInTheDocument()
   })
 
   it('fetches a photo with the token once, then serves it from the cache', async () => {
@@ -120,6 +195,8 @@ describe('recipe page', () => {
     render(withApi(api, <RecipePage recipe={chilli} ratings={[]} ingredients={ingredients} />))
 
     expect(await screen.findByText('To get: onion, beef mince.')).toBeInTheDocument()
+    expect(screen.getByText(/Source:/)).toHaveTextContent('Source: Dave Fell')
+    expect(screen.queryByText(/p\.12/)).not.toBeInTheDocument()
     expect(screen.getByText('not enough')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /Add to Up next/ }))
     await waitFor(() => expect(api.queue).toHaveBeenCalledWith('test-chilli', 4))
@@ -201,22 +278,53 @@ describe('kitchen', () => {
   })
 })
 
-describe('up next', () => {
-  const week: Template = { id: 'w1', label: '1500 kcal · week 1', source: 'Meal Plans', kcal: 1500, week: 1, recipeIds: ['test-chilli', 'test-oats'] }
+describe('recipe page source', () => {
+  it('links a web recipe to the site it came from, by name', () => {
+    const web = recipe({ source: { type: 'LINK', book: null, pages: [], url: 'https://www.bbcgoodfood.com/recipes/chilli' } })
+    render(withApi(fakeApi(), <RecipePage recipe={web} ratings={[]} ingredients={ingredients} />))
+    expect(screen.getByRole('link', { name: /BBC Good Food/ })).toHaveAttribute('href', 'https://www.bbcgoodfood.com/recipes/chilli')
+  })
 
-  it('changes portions, removes, and adds one of Dave\'s weeks', async () => {
+  it('does not check an empty kitchen for the ingredients', async () => {
+    const api = fakeApi()
+    render(withApi(api, <RecipePage recipe={chilli} ratings={[]} ingredients={ingredients} />))
+    await waitFor(() => expect(api.kitchen).toHaveBeenCalled())
+    expect(api.recipeCoverage).not.toHaveBeenCalled()
+    expect(screen.queryByText(/To get:/)).not.toBeInTheDocument()
+  })
+})
+
+describe('up next', () => {
+  it('changes portions and removes', async () => {
     const api = fakeApi({ upNext: vi.fn().mockResolvedValue([{ recipeId: 'test-chilli', portions: 4, addedAt: '' }]) })
-    render(withApi(api, <UpNext byId={byId} templates={[week]} />))
+    render(withApi(api, <UpNext recipes={[chilli, oats]} byId={byId} />))
 
     expect(await screen.findByText('Test Chilli')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'More portions' }))
     await waitFor(() => expect(api.queue).toHaveBeenCalledWith('test-chilli', 5))
     await userEvent.click(screen.getByRole('button', { name: 'Remove Test Chilli' }))
     await waitFor(() => expect(api.unqueue).toHaveBeenCalledWith('test-chilli'))
+    expect(screen.getByRole('link', { name: /Shopping list/ })).toHaveAttribute('href', '/shop')
+    expect(screen.queryByText(/Dave/)).not.toBeInTheDocument()
+  })
 
-    await userEvent.click(screen.getByRole('button', { name: /Dave's weeks/ }))
-    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Add 2/ }))
-    await waitFor(() => expect(api.queueTemplate).toHaveBeenCalledWith('w1'))
+  it('finds a recipe to add, and adds a favourite in one tap', async () => {
+    const api = fakeApi({ favourites: vi.fn().mockResolvedValue([heart('test-chilli')]) })
+    render(withApi(api, <UpNext recipes={[chilli, oats]} byId={byId} />))
+
+    expect(await screen.findByText('Nothing planned yet')).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Find a recipe to add'), 'oat')
+    await userEvent.click(screen.getByRole('button', { name: 'Add Test Oats' }))
+    await waitFor(() => expect(api.queue).toHaveBeenCalledWith('test-oats'))
+
+    const favourites = screen.getByRole('heading', { name: /From your favourites/ }).closest('section')!
+    await userEvent.click(await within(favourites).findByRole('button', { name: 'Add Test Chilli' }))
+    await waitFor(() => expect(api.queue).toHaveBeenCalledWith('test-chilli'))
+  })
+
+  it('says how to get favourites here when there are none', async () => {
+    render(withApi(fakeApi(), <UpNext recipes={[chilli]} byId={byId} />))
+    expect(await screen.findByText(/Heart recipes on the/)).toBeInTheDocument()
   })
 })
 

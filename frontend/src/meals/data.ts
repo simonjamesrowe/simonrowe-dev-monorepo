@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { MealsApi } from './api'
-import type { Ingredient, MealSlot, NewRating, Recipe, Template } from './types'
+import type { Favourite, Ingredient, MealSlot, NewRating, Recipe } from './types'
 
 export const MealsApiContext = createContext<MealsApi | null>(null)
 
@@ -16,7 +16,6 @@ export interface Library {
   recipes: Recipe[]
   byId: Map<string, Recipe>
   ingredients: Map<string, Ingredient>
-  templates: Template[]
 }
 
 /** The whole library in one go: it is small, and every screen needs ingredient lines. */
@@ -24,20 +23,18 @@ export function useLibrary() {
   const api = useMealsApi()
   const recipes = useQuery({ queryKey: ['meals', 'recipes'], queryFn: api.recipes, staleTime: 5 * 60_000 })
   const ingredients = useQuery({ queryKey: ['meals', 'ingredients'], queryFn: api.ingredients, staleTime: 5 * 60_000 })
-  const templates = useQuery({ queryKey: ['meals', 'templates'], queryFn: api.templates, staleTime: 5 * 60_000 })
   const library = useMemo<Library | undefined>(() => {
-    if (!recipes.data || !ingredients.data || !templates.data) return undefined
+    if (!recipes.data || !ingredients.data) return undefined
     return {
       recipes: recipes.data,
       byId: new Map(recipes.data.map((r) => [r.id, r])),
       ingredients: new Map(ingredients.data.map((i) => [i.name, i])),
-      templates: templates.data,
     }
-  }, [recipes.data, ingredients.data, templates.data])
+  }, [recipes.data, ingredients.data])
   return {
     library,
-    isLoading: recipes.isLoading || ingredients.isLoading || templates.isLoading,
-    error: recipes.error ?? ingredients.error ?? templates.error,
+    isLoading: recipes.isLoading || ingredients.isLoading,
+    error: recipes.error ?? ingredients.error,
   }
 }
 
@@ -104,4 +101,50 @@ export function useRate() {
 
 export function useDeleteRating() {
   return useMine((api, id: string) => api.deleteRating(id))
+}
+
+const FAVOURITES = [...MINE, 'favourites'] as const
+
+/** The signed-in person's hearted recipes, newest first. */
+export function useFavourites() {
+  const api = useMealsApi()
+  // Every card asks for this; only this person's hearting changes it, and that refetches it.
+  const query = useQuery({ queryKey: FAVOURITES, queryFn: api.favourites, staleTime: 5 * 60_000 })
+  const ids = useMemo(() => new Set((query.data ?? []).map((f) => f.recipeId)), [query.data])
+  return { ...query, ids }
+}
+
+/**
+ * Hearts or un-hearts a recipe. The heart changes at once and is put back if the server refuses;
+ * only the favourites are refetched, since nothing else depends on them.
+ */
+export function useToggleFavourite() {
+  const api = useMealsApi()
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ recipeId, on }: { recipeId: string; on: boolean }) =>
+      on ? api.favourite(recipeId).then(() => undefined) : api.unfavourite(recipeId),
+    onMutate: async ({ recipeId, on }) => {
+      await client.cancelQueries({ queryKey: FAVOURITES })
+      const before = client.getQueryData<Favourite[]>(FAVOURITES)
+      const rest = (before ?? []).filter((f) => f.recipeId !== recipeId)
+      client.setQueryData<Favourite[]>(FAVOURITES, on
+        ? [{ id: recipeId, recipeId, addedAt: new Date().toISOString() }, ...rest]
+        : rest)
+      return { before }
+    },
+    onError: (_error, _vars, context) => client.setQueryData(FAVOURITES, context?.before),
+    onSettled: () => client.invalidateQueries({ queryKey: FAVOURITES }),
+  })
+}
+
+/**
+ * Whether the kitchen holds anything fresh. Until it does, "what can I cook" has nothing to go
+ * on: every fresh ingredient reads as missing and every staple as "check", so a recipe needing
+ * one or two fresh things would look one or two things short of an empty fridge.
+ */
+export function useKitchenHasFood() {
+  const kitchen = useKitchen()
+  const hasFood = (kitchen.data ?? []).some((i) => i.tier === 'tracked' && (i.quantity ?? 0) > 0)
+  return { hasFood, isLoading: kitchen.isLoading, isSuccess: kitchen.isSuccess }
 }

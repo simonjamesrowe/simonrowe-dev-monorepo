@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { Copy, KeyRound, LogOut, Trash2 } from 'lucide-react'
+import { Copy, KeyRound, LogOut, Palette, Trash2 } from 'lucide-react'
 
 import { useMine, useTokens } from './data'
 import { ImportPage } from './ImportPage'
+import { ThemeToggle } from './ui'
 
 /**
- * Settings: Claude Code access, loading recipe bundles (the site admin only, which the server
- * enforces too), and signing out.
+ * Settings: appearance, Claude Code access, signing out, and (for the site admin only, which the
+ * server enforces too) loading recipe bundles.
  */
 export function More({ onSignOut, canImport = true }: { onSignOut: () => void; canImport?: boolean }) {
   const tokens = useTokens()
@@ -20,6 +21,12 @@ export function More({ onSignOut, canImport = true }: { onSignOut: () => void; c
   return (
     <div className="meals-page">
       <header className="meals-page__header"><h1>More</h1></header>
+
+      <section className="meals-panel">
+        <h2 className="meals-panel__title"><Palette size={18} aria-hidden="true" /> Appearance</h2>
+        <p className="meals-muted meals-small">Light or dark. It follows your device until you choose, and simonrowe.dev shares the choice.</p>
+        <div className="meals-row"><ThemeToggle withLabel /></div>
+      </section>
 
       <section className="meals-panel">
         <h2 className="meals-panel__title"><KeyRound size={18} aria-hidden="true" /> Claude Code</h2>
@@ -60,9 +67,9 @@ export function More({ onSignOut, canImport = true }: { onSignOut: () => void; c
         )}
       </section>
 
-      {canImport && <ImportPage />}
+      <button type="button" className="meals-button meals-more__signout" onClick={onSignOut}><LogOut size={16} /> Sign out</button>
 
-      <button type="button" className="meals-button" onClick={onSignOut}><LogOut size={16} /> Sign out</button>
+      {canImport && <ImportPage />}
     </div>
   )
 }

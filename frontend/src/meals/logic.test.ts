@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { rating, recipe } from './fixtures'
-import { averageScore, daysUntil, defaultSlot, describeChange, formatQty, scaledLine, describeUseBy } from './logic'
+import { averageScore, COOKBOOK_AUTHOR, daysUntil, defaultSlot, describeChange, formatQty, scaledLine, describeUseBy, recipeMatches, searchTerms, sourceOf } from './logic'
 
 
 describe('scaling', () => {
@@ -46,5 +46,62 @@ describe('kitchen wording', () => {
     expect(averageScore('none', [])).toBeNull()
     expect(defaultSlot(new Date(2026, 9, 17, 8))).toBe('breakfast')
     expect(defaultSlot(new Date(2026, 9, 17, 13))).toBe('main')
+  })
+})
+
+describe('sourceOf', () => {
+  const at = (url: string | null, type: 'BOOK' | 'LINK' | 'PHOTO' = 'LINK') => recipe({ source: { type, book: null, pages: [], url } })
+
+  it('names the author for a cookbook recipe, never the book', () => {
+    expect(sourceOf(recipe())).toEqual({ label: COOKBOOK_AUTHOR, url: null })
+  })
+
+  it('names known sites by parsed host, subdomains included', () => {
+    expect(sourceOf(at('https://www.bbcgoodfood.com/recipes/x'))?.label).toBe('BBC Good Food')
+    expect(sourceOf(at('https://cooking.nytimes.com/recipes/1'))?.label).toBe('NYT Cooking')
+  })
+
+  it('is not fooled by a lookalike host', () => {
+    expect(sourceOf(at('https://bbcgoodfood.com.example.net/x'))?.label).toBe('bbcgoodfood.com.example.net')
+    expect(sourceOf(at('https://notbbcgoodfood.com/x'))?.label).toBe('notbbcgoodfood.com')
+  })
+
+  it('shows nothing for a missing or unsafe address, and "Your photo" for a photo', () => {
+    expect(sourceOf(at(null))).toBeNull()
+    expect(sourceOf(at('javascript:alert(1)'))).toBeNull()
+    expect(sourceOf(at('not a url'))).toBeNull()
+    expect(sourceOf(at(null, 'PHOTO'))?.label).toBe('Your photo')
+  })
+})
+
+describe('recipe search', () => {
+  const stirFry = recipe({
+    name: 'Chicken Stir Fry', mainProtein: 'chicken',
+    ingredients: [
+      { text: '200g tenderstem broccoli', name: 'tenderstem broccoli', quantity: 200, unit: 'g' },
+      { text: '1 bag broccoli florets', name: 'frozen veg', quantity: 1, unit: 'each' },
+      { text: '3 tomatoes', name: 'tomato', quantity: 3, unit: 'each' },
+    ],
+  })
+  const find = (q: string) => recipeMatches(stirFry, searchTerms(q))
+
+  it('finds an ingredient by its catalogue name or as the recipe prints it', () => {
+    expect(find('broccoli')).toBe(true)
+    expect(find('florets')).toBe(true)
+    expect(find('BROCCOLI')).toBe(true)
+  })
+
+  it('finds a plural search in a singular ingredient', () => {
+    expect(find('tomatoes')).toBe(true)
+    expect(find('chickens')).toBe(true)
+  })
+
+  it('needs every word to match', () => {
+    expect(find('chicken broccoli')).toBe(true)
+    expect(find('beef broccoli')).toBe(false)
+  })
+
+  it('matches everything on an empty search', () => {
+    expect(find('   ')).toBe(true)
   })
 })
