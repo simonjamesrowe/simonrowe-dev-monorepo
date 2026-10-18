@@ -6,7 +6,7 @@ export type { MealSlot }
  * Who the cookbook recipes are by. The app names the author as a recipe's source and never the
  * books themselves.
  */
-export const COOKBOOK_AUTHOR = 'Dave Fowler'
+export const COOKBOOK_AUTHOR = 'Dave Fell'
 
 /** Friendly names for recipe sites, by registrable host. Anything else shows its host name. */
 const SITES: Record<string, string> = {

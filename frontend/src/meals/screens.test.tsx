@@ -195,7 +195,7 @@ describe('recipe page', () => {
     render(withApi(api, <RecipePage recipe={chilli} ratings={[]} ingredients={ingredients} />))
 
     expect(await screen.findByText('To get: onion, beef mince.')).toBeInTheDocument()
-    expect(screen.getByText(/Source:/)).toHaveTextContent('Source: Dave Fowler')
+    expect(screen.getByText(/Source:/)).toHaveTextContent('Source: Dave Fell')
     expect(screen.queryByText(/p\.12/)).not.toBeInTheDocument()
     expect(screen.getByText('not enough')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /Add to Up next/ }))
