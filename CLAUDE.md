@@ -275,6 +275,33 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 054-summary-snippets: **The admin can keep passages from news summaries as snippets**, with a
+  note and tags, and find them again at `/admin/snippets` (`com.simonrowe.snippet`, collection
+  `snippets`, `V061CreateSnippets`). Select text in a summary drawer for Highlight, Add note or
+  Copy with citation. Load-bearing bits:
+  - **Private: everything is under `/api/admin/snippets`.** Unlike favourites, nothing is public.
+    The page calls the snippets API only when `useAdminRole()` is true. **Tests that render the
+    news page must mock `services/snippetsApi`.**
+  - **A snippet stores its quote as text (`exact`, plus 32 characters of `prefix`/`suffix`), and
+    is found again by searching for that text, never by offsets.** It survives a regenerated
+    summary or a pruned article (the citation fields are copied in). `inCurrentSummary` and
+    `articleAvailable` are worked out per request.
+  - **The server checks every quote against the summary** (`SnippetText.renderedText`: commonmark
+    to text, whitespace collapsed) and answers 422 for one the summary never said. The browser's
+    text model (`snippetText.ts`) joins blocks with a blank line and skips react-markdown's
+    newline nodes between blocks. The two differ only in whitespace, which is all the check
+    ignores.
+  - **Highlights use the CSS Custom Highlight API**, so React's DOM for the summary is never
+    touched; where it is missing the marks are skipped and the list still works. The toolbar and
+    popover are portalled to `<body>`; the popover's Escape is a window capture listener so it
+    never closes the drawer behind it.
+  - **The citation says "AI summary of …"** and links the original article, because the quote is
+    model-written text, not the author's words. One formatter (`snippetCitation.ts`) serves every
+    copy and the `.md` download, so there is no server export endpoint.
+  - Making a snippet never hearts the article (favourites are public); the drawer offers "Heart
+    it" after the first one instead. In the backup and restore, with indexes re-created by
+    `RestoreService.ensureSnippetIndexes()`; `SnippetsBackupCoverageTest` pins it.
+  See `specs/054-summary-snippets/`.
 - 053-meals (parts 2 to 5, one PR): **the kitchen, Up next, shopping, recipe import and a
   private MCP server for Claude Code**, plus automatic sign-in. Load-bearing bits:
   - **An unrecorded cupboard staple is "check", never missing**, and assumed ingredients (salt,

@@ -32,6 +32,7 @@ import com.simonrowe.migration.changeunits.V056CreatePlaylist;
 import com.simonrowe.migration.changeunits.V058CreateMeals;
 import com.simonrowe.migration.changeunits.V059CreateMealsKitchen;
 import com.simonrowe.migration.changeunits.V060CreateMealFavourites;
+import com.simonrowe.migration.changeunits.V061CreateSnippets;
 import com.simonrowe.playlist.PlaylistSettings;
 import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
@@ -44,6 +45,7 @@ import com.simonrowe.migration.changeunits.V053ReserveInvitedCoparents;
 import com.simonrowe.migration.changeunits.V054CreateCoparentStatements;
 import com.simonrowe.migration.changeunits.V055CreateCoparentSettlements;
 import com.simonrowe.narration.NarrationRestoreValidator;
+import com.simonrowe.snippet.Snippet;
 import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,7 +124,10 @@ public class RestoreService {
       MealShoppingMark.COLLECTION,
       // Each person's hearted recipes; its index is put back by the post-import hook below.
       MealFavourite.COLLECTION,
-      MealMcpToken.COLLECTION
+      MealMcpToken.COLLECTION,
+      // Snippets (spec 054) point at aggregated_articles by plain id and carry their own copy
+      // of the citation, so order is free. Indexes are put back by the post-import hook.
+      Snippet.COLLECTION
   );
 
   private static final List<String> COPARENT_IMPORT_ORDER = List.of(
@@ -294,7 +299,8 @@ public class RestoreService {
         Map.entry(V049SeedTermTimeProjectPage.MEDIA_COLLECTION, this::ensureMediaIndexes),
         Map.entry(MealRating.COLLECTION, this::ensureMealIndexes),
         Map.entry(MealFavourite.COLLECTION, this::ensureMealIndexes),
-        Map.entry(MealMcpToken.COLLECTION, this::ensureMealIndexes));
+        Map.entry(MealMcpToken.COLLECTION, this::ensureMealIndexes),
+        Map.entry(Snippet.COLLECTION, this::ensureSnippetIndexes));
   }
 
   void restoreCollections(final Path zipFile) throws IOException {
@@ -446,6 +452,15 @@ public class RestoreService {
     V059CreateMealsKitchen.createIndexes(mongoTemplate);
     V060CreateMealFavourites.createIndexes(mongoTemplate);
     LOG.info("Recreated meals indexes after restore");
+  }
+
+  /**
+   * Recreates the snippet indexes (V061) after a restore. Package-private so the backup test
+   * can exercise it directly.
+   */
+  void ensureSnippetIndexes() {
+    V061CreateSnippets.createIndexes(mongoTemplate);
+    LOG.info("Recreated snippet indexes after restore");
   }
 
   /**

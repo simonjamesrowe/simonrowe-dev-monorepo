@@ -84,7 +84,10 @@ public class BackupService {
       // Each person's hearted recipes. Nothing re-derives them.
       "meal_favourites",
       // Only token hashes: kept so a restore does not break the token in Claude Code's config.
-      "meal_mcp_tokens"
+      "meal_mcp_tokens",
+      // Passages kept from summaries, with hand-written notes and tags (spec 054). Nothing
+      // re-derives them: a regenerated summary would not even contain the same words.
+      "snippets"
   );
   private static final Set<String> COPARENT_BACKUP_COLLECTIONS = Set.of(
       "families", "parents", "children", "invitations", "onboardingstates", "events",

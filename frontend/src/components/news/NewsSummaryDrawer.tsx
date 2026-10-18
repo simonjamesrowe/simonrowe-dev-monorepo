@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type RefObject } from 'react'
 import { ExternalLink, Loader2, Sparkles, X } from 'lucide-react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 
@@ -20,6 +20,13 @@ interface NewsSummaryDrawerProps {
   onClose: () => void
   /** Slot for the audio panel, so the drawer stays ignorant of narration plumbing. */
   audioPanel?: React.ReactNode
+  /**
+   * Slot for the admin's snippets (spec 054), rendered under the summary. The drawer knows
+   * nothing about snippets: it only hands over the rendered prose through `proseRef`.
+   */
+  snippetLayer?: React.ReactNode
+  /** Attached to the rendered summary, for a layer that reads or highlights it. */
+  proseRef?: RefObject<HTMLDivElement | null>
 }
 
 /**
@@ -77,6 +84,8 @@ export function NewsSummaryDrawer({
   onRetry,
   onClose,
   audioPanel,
+  snippetLayer,
+  proseRef,
 }: NewsSummaryDrawerProps) {
   useEffect(() => {
     document.body.style.overflow = 'hidden'
@@ -124,7 +133,7 @@ export function NewsSummaryDrawer({
     )
   } else if (summary?.state === 'READY') {
     body = (
-      <div className="news-summary__prose">
+      <div className="news-summary__prose" ref={proseRef}>
         <ReactMarkdown components={MARKDOWN_COMPONENTS}>{summary.body}</ReactMarkdown>
       </div>
     )
@@ -206,6 +215,8 @@ export function NewsSummaryDrawer({
           </p>
 
           {body}
+
+          {snippetLayer}
 
           {audioPanel}
 

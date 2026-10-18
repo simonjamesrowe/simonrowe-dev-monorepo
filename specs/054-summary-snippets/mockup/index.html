@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snippets from summaries — interactive mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:Inter,system-ui,sans-serif;background:#05070c;color:#dfe2ef;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+
+/* ---------- mockup chrome (not part of the product) ---------- */
+.mock-bar{height:52px;display:flex;align-items:center;gap:20px;padding:0 18px;background:#000;border-bottom:1px solid #222;font-size:13px;position:relative;z-index:200}
+.mock-bar__brand{font-weight:600;display:flex;gap:8px;align-items:center}
+.mock-bar__tag{font-size:11px;padding:2px 8px;border-radius:999px;background:#1c2029;color:#889299}
+.mock-group{display:flex;align-items:center;gap:8px}
+.mock-group__label{color:#889299}
+.mock-seg{display:inline-flex;background:#1c2029;border-radius:9px;padding:3px}
+.mock-seg button{border:0;background:transparent;color:#bec8cf;padding:5px 11px;border-radius:7px}
+.mock-seg button.is-on{background:#77d1ff;color:#003548;font-weight:600}
+.mock-hint{margin-left:auto;color:#889299;font-size:12px}
+.stage{height:calc(100vh - 52px);display:flex;justify-content:center;background:#05070c}
+.stage--phone{align-items:center;padding:16px}
+.stage--phone .site{width:390px;height:780px;border-radius:28px;border:8px solid #222}
+
+/* ---------- product (site palette) ---------- */
+.site{
+  --surface:#0f131c;--sc:#1c2029;--sc-low:#181c25;--sc-high:#262a33;--sc-lowest:#0a0e17;
+  --on:#dfe2ef;--on-var:#bec8cf;--muted:#889299;
+  --primary:#77d1ff;--on-primary:#003548;
+  --ai:#b8a6ff;--ai-strong:#d4c9ff;--ai-bg:rgba(184,166,255,.16);--ai-border:rgba(184,166,255,.45);
+  --heart:#ff6b8a;
+  --bs:rgba(255,255,255,.06);--bf:rgba(255,255,255,.1);--bm:rgba(255,255,255,.15);
+  --h:'Space Grotesk',sans-serif;
+  width:100%;height:100%;overflow:auto;background:var(--surface);color:var(--on);position:relative;font-size:15px
+}
+.icon{width:16px;height:16px;display:inline-block;vertical-align:-3px;flex:none}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--bm);background:transparent;border-radius:999px;padding:6px 12px;font-size:13px;color:var(--on)}
+.btn:hover{border-color:var(--primary);color:var(--primary)}
+.btn--primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary);font-weight:600}
+.btn--primary:hover{color:var(--on-primary);filter:brightness(1.08)}
+.btn--ghost{border-color:transparent}
+.btn--danger:hover{border-color:#ffb4ab;color:#ffb4ab}
+.btn[disabled]{opacity:.4;pointer-events:none}
+
+/* header */
+.site-header{position:sticky;top:0;z-index:20;display:flex;justify-content:center;padding:14px 16px;background:linear-gradient(var(--surface) 60%,transparent)}
+.capsule{display:flex;align-items:center;gap:18px;padding:8px 10px 8px 18px;border:1px solid var(--bf);border-radius:999px;background:rgba(15,19,28,.75);backdrop-filter:blur(10px);font-size:14px}
+.capsule__brand{font-family:var(--h);font-weight:700}
+.capsule__nav{display:flex;gap:16px;color:var(--on-var)}
+.capsule__nav b{color:var(--primary);font-weight:500}
+.avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#299bca,#b8a6ff);display:grid;place-items:center;font-size:12px;font-weight:700;color:#0a0e17}
+.stage--phone .capsule__nav{display:none}
+
+/* news page */
+.news{max-width:1080px;margin:0 auto;padding:8px 24px 60px}
+.news h1{font-family:var(--h);font-size:34px;margin:10px 0 4px}
+.news__lede{color:var(--on-var);margin:0 0 20px}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:22px}
+.filters input{flex:1;min-width:200px;background:var(--sc-low);border:1px solid var(--bf);border-radius:999px;padding:8px 14px}
+.toggle{display:inline-flex;gap:6px;align-items:center;padding:7px 13px;border-radius:999px;border:1px solid var(--bf);font-size:13px;color:var(--on-var);background:none}
+.toggle.is-on{border-color:var(--heart);color:var(--heart);background:rgba(255,107,138,.1)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{background:var(--sc);border:1px solid var(--bs);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+.card__img{height:120px;background:var(--grad);position:relative}
+.card__badge{position:absolute;top:10px;right:10px;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;background:rgba(10,14,23,.8);border:1px solid var(--ai-border);color:var(--ai-strong);font-size:12px;font-weight:600}
+.card__body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;flex:1}
+.card__meta{font-size:12px;color:var(--muted);display:flex;gap:8px}
+.card__meta b{color:var(--primary);font-weight:500}
+.card__title{font-family:var(--h);font-size:17px;line-height:1.3;margin:0}
+.card__actions{display:flex;gap:6px;margin-top:auto;padding-top:8px;flex-wrap:wrap}
+.heart{color:var(--heart);border-color:rgba(255,107,138,.35)}
+.btn--ai{border-color:var(--ai-border);color:var(--ai-strong)}
+.btn--ai:hover{color:var(--ai);border-color:var(--ai)}
+
+/* drawer */
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;justify-content:flex-end}
+.drawer{width:min(620px,100%);height:100%;background:var(--sc-lowest);border-left:1px solid var(--bf);display:flex;flex-direction:column}
+.drawer__header{display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid var(--bs)}
+.drawer__title{font-family:var(--h);font-weight:600}
+.drawer__body{overflow:auto;padding:20px 26px 40px;flex:1;position:relative}
+.ns-meta{font-size:12px;color:var(--muted);display:flex;gap:10px}
+.ns-meta b{color:var(--primary);font-weight:500}
+.ns-title{font-family:var(--h);font-size:24px;line-height:1.25;margin:8px 0 10px}
+.ns-disclosure{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--ai-strong);background:var(--ai-bg);border:1px solid var(--ai-border);padding:3px 10px;border-radius:999px;margin-bottom:12px}
+.ns-hint{font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center;margin:0 0 6px}
+.prose{line-height:1.7;color:var(--on)}
+.prose p{margin:0 0 14px}
+.prose--visitor{user-select:text}
+::highlight(snippet){background-color:rgba(184,166,255,.32);color:#fff}
+::highlight(snippet-focus){background-color:rgba(184,166,255,.6);color:#fff}
+::highlight(snippet-new){background-color:rgba(119,209,255,.45);color:#fff}
+.ns-footer{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--bs);padding-top:14px;margin-top:8px}
+.ns-footer a{color:var(--primary);font-size:14px;text-decoration:none}
+
+/* "Your snippets" in the drawer */
+.yours{margin:22px 0 18px;border:1px solid var(--ai-border);border-radius:14px;background:rgba(184,166,255,.05)}
+.yours__head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--bs)}
+.yours__head h3{margin:0;font-family:var(--h);font-size:15px;display:flex;gap:8px;align-items:center;color:var(--ai-strong)}
+.yours__head a{font-size:12.5px;color:var(--primary);text-decoration:none}
+.yours__empty{padding:14px 16px;color:var(--muted);font-size:13.5px}
+.yours__item{padding:12px 16px;border-bottom:1px solid var(--bs);cursor:pointer}
+.yours__item:last-child{border-bottom:0}
+.yours__item:hover{background:rgba(184,166,255,.07)}
+.yours__quote{margin:0;border-left:3px solid var(--ai);padding-left:10px;font-size:14px;line-height:1.5;color:var(--on)}
+.yours__note{font-size:13px;color:var(--on-var);margin:6px 0 0 13px}
+.yours__tags{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0 0 13px}
+.yours__stale{font-size:11.5px;color:#ffb690;margin:6px 0 0 13px;display:flex;gap:5px;align-items:center}
+.tag{font-size:11.5px;padding:2px 8px;border-radius:999px;background:var(--sc-high);color:var(--on-var)}
+
+/* floating selection toolbar */
+.seltool{position:fixed;z-index:120;display:flex;gap:2px;padding:4px;border-radius:12px;background:#262a33;border:1px solid var(--bm);box-shadow:0 12px 30px rgba(0,0,0,.5)}
+.seltool::before{content:"";position:absolute;top:-6px;left:var(--arrow,50%);width:10px;height:10px;background:#262a33;border-left:1px solid var(--bm);border-top:1px solid var(--bm);transform:translateX(-50%) rotate(45deg)}
+.seltool button{border:0;background:none;border-radius:8px;padding:7px 10px;display:flex;gap:6px;align-items:center;font-size:13px;color:var(--on)}
+.seltool button:hover{background:rgba(255,255,255,.08)}
+.seltool .is-main{color:var(--ai-strong);font-weight:600}
+
+/* snippet popover */
+.pop{position:fixed;z-index:130;width:340px;background:#1c2029;border:1px solid var(--ai-border);border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.6);padding:14px}
+.pop__quote{font-size:13px;color:var(--on-var);border-left:3px solid var(--ai);padding-left:9px;margin:0 0 10px;max-height:72px;overflow:hidden;-webkit-mask-image:linear-gradient(#000 70%,transparent)}
+.pop label{display:block;font-size:12px;color:var(--muted);margin:8px 0 4px}
+.pop textarea{width:100%;min-height:64px;resize:vertical;background:var(--sc-lowest);border:1px solid var(--bf);border-radius:10px;padding:8px 10px;font-size:13.5px}
+.tagbox{display:flex;flex-wrap:wrap;gap:5px;align-items:center;background:var(--sc-lowest);border:1px solid var(--bf);border-radius:10px;padding:6px 8px;position:relative}
+.tagbox input{flex:1;min-width:80px;border:0;background:none;outline:none;font-size:13px;padding:2px}
+.tagbox .tag{display:inline-flex;gap:4px;align-items:center;background:var(--ai-bg);color:var(--ai-strong)}
+.tagbox .tag button{border:0;background:none;padding:0;color:inherit;line-height:1}
+.suggest{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.suggest button{border:1px dashed var(--bm);background:none;border-radius:999px;font-size:11.5px;padding:2px 8px;color:var(--on-var)}
+.pop__actions{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+.pop__saved{font-size:12px;color:#8fe3b0;display:flex;gap:5px;align-items:center}
+.stage--phone .pop{left:8px!important;right:8px;width:auto;top:auto!important;bottom:20px}
+
+.nudge{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:0 0 14px;padding:10px 14px;border-radius:12px;background:rgba(255,107,138,.08);border:1px solid rgba(255,107,138,.3);font-size:13px}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:300;background:#dfe2ef;color:#0a0e17;padding:9px 16px;border-radius:999px;font-size:13.5px;font-weight:500;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+
+/* admin */
+.admin{display:flex;min-height:100%}
+.side{width:230px;flex:none;background:var(--sc-lowest);border-right:1px solid var(--bs);padding:18px 12px;font-size:14px}
+.side__brand{font-family:var(--h);font-weight:700;padding:4px 10px 16px}
+.side a{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:9px;color:var(--on-var);text-decoration:none}
+.side a.is-on{background:rgba(119,209,255,.12);color:var(--primary)}
+.side a .new{margin-left:auto;font-size:10px;padding:1px 6px;border-radius:999px;background:var(--ai-bg);color:var(--ai-strong)}
+.stage--phone .side{display:none}
+.amain{flex:1;min-width:0;display:flex}
+.alist{flex:1;min-width:0;padding:24px 28px 60px}
+.alist h1{font-family:var(--h);font-size:26px;margin:0 0 4px;display:flex;gap:10px;align-items:center}
+.alist__sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+.asearch{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.asearch__q{flex:1;min-width:220px;position:relative}
+.asearch__q input{width:100%;background:var(--sc-low);border:1px solid var(--bf);border-radius:10px;padding:9px 12px 9px 34px}
+.asearch__q svg{position:absolute;left:11px;top:11px;color:var(--muted)}
+.asearch select{background:var(--sc-low);border:1px solid var(--bf);border-radius:10px;padding:8px 10px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.chip{border:1px solid var(--bf);background:none;border-radius:999px;padding:4px 10px;font-size:12.5px;color:var(--on-var)}
+.chip span{color:var(--muted);margin-left:4px}
+.chip.is-on{background:var(--ai-bg);border-color:var(--ai-border);color:var(--ai-strong)}
+.bulk{position:sticky;top:0;z-index:5;display:flex;gap:10px;align-items:center;padding:9px 12px;margin-bottom:12px;border-radius:12px;background:#262a33;border:1px solid var(--bm);font-size:13.5px}
+.bulk__count{font-weight:600;margin-right:auto}
+.listhead{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px}
+.listhead label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.scard{display:flex;gap:12px;padding:14px 16px;margin-bottom:10px;background:var(--sc);border:1px solid var(--bs);border-radius:14px;cursor:pointer}
+.scard:hover{border-color:var(--bm)}
+.scard.is-active{border-color:var(--ai-border);background:#1f2030}
+.scard input[type=checkbox]{margin-top:4px;accent-color:#b8a6ff}
+.scard__main{flex:1;min-width:0}
+.scard__quote{margin:0;font-size:14.5px;line-height:1.55;border-left:3px solid var(--ai);padding-left:11px}
+.scard__quote mark{background:rgba(119,209,255,.3);color:inherit;border-radius:2px}
+.scard__note{margin:8px 0 0 14px;font-size:13.5px;color:var(--on-var);display:flex;gap:6px}
+.scard__foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 0 14px;font-size:12.5px;color:var(--muted)}
+.scard__foot b{color:var(--primary);font-weight:500}
+.scard__tags{display:flex;gap:5px;margin-left:auto}
+.stalepill{font-size:11px;color:#ffb690;border:1px solid rgba(255,182,144,.35);border-radius:999px;padding:1px 7px}
+.empty{padding:40px;text-align:center;color:var(--muted);border:1px dashed var(--bf);border-radius:14px}
+.detail{width:340px;flex:none;border-left:1px solid var(--bs);background:var(--sc-lowest);padding:22px 20px;position:sticky;top:0;height:100%;overflow:auto}
+.stage--phone .detail{display:none}
+.detail h2{font-family:var(--h);font-size:16px;margin:0 0 12px}
+.detail .pop__quote{max-height:none;-webkit-mask-image:none;font-size:14px;color:var(--on)}
+.detail label{display:block;font-size:12px;color:var(--muted);margin:12px 0 4px}
+.detail textarea{width:100%;min-height:90px;background:var(--sc-low);border:1px solid var(--bf);border-radius:10px;padding:8px 10px;font-size:13.5px}
+.detail .tagbox{background:var(--sc-low)}
+.detail__src{font-size:13px;color:var(--on-var);line-height:1.5;margin-top:14px;padding:12px;border-radius:10px;background:var(--sc)}
+.detail__src a{color:var(--primary)}
+.detail__actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.detail__empty{color:var(--muted);font-size:14px;line-height:1.5}
+
+/* markdown preview modal */
+.modal{position:fixed;inset:0;z-index:250;background:rgba(0,0,0,.6);display:grid;place-items:center}
+.modal__box{width:min(680px,92vw);max-height:80vh;display:flex;flex-direction:column;background:#1c2029;border:1px solid var(--bm);border-radius:16px}
+.modal__head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--bs)}
+.modal__head h3{margin:0;font-family:var(--h);font-size:16px}
+.modal pre{margin:0;padding:16px 18px;overflow:auto;white-space:pre-wrap;font:12.5px/1.6 ui-monospace,Menlo,monospace;color:var(--on-var)}
+.modal__foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--bs)}
+.annot{font-size:11px;color:#ffb690;margin-left:6px}
+</style>
+</head>
+<body>
+<div class="mock-bar">
+  <div class="mock-bar__brand">Snippets from summaries <span class="mock-bar__tag">054 · mockup</span></div>
+  <div class="mock-group"><span class="mock-group__label">Screen</span>
+    <div class="mock-seg" id="m-screen">
+      <button data-v="news" class="is-on">News · Favourites</button>
+      <button data-v="admin">Admin · Snippets</button>
+    </div></div>
+  <div class="mock-group"><span class="mock-group__label">Signed in as</span>
+    <div class="mock-seg" id="m-who">
+      <button data-v="admin" class="is-on">Simon (admin)</button>
+      <button data-v="visitor">Visitor</button>
+    </div></div>
+  <div class="mock-group"><span class="mock-group__label">Width</span>
+    <div class="mock-seg" id="m-width">
+      <button data-v="desktop" class="is-on">Desktop</button>
+      <button data-v="phone">Phone</button>
+    </div></div>
+  <div class="mock-hint">Open a summary and select some text</div>
+</div>
+<div class="stage" id="stage"><div class="site" id="site"></div></div>
+
+<script>
+/* ---------------- icons (Lucide paths) ---------------- */
+const I = {
+  heart:'<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
+  sparkles:'<path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>',
+  highlighter:'<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>',
+  note:'<path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/>',
+  copy:'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  ext:'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  trash:'<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  news:'<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/>',
+  grid:'<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+  file:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  rss:'<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>',
+  link:'<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/>',
+  alert:'<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+};
+const ic = (n, s = 16, fill = false) =>
+  `<svg class="icon" width="${s}" height="${s}" viewBox="0 0 24 24" fill="${fill ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I[n]}</svg>`;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------------- data (real prod summaries, trimmed) ---------------- */
+const ARTICLES = [
+  { id:'pr', title:'Human PR Review Is Next', source:'TLDR Dev', author:'William Martin', date:'2026-10-12', url:'https://example.com/human-pr-review',
+    hearted:true, grad:'linear-gradient(135deg,#1d3b55,#5a3f8f)',
+    summary:[
+      'William Martin contends that software development is approaching a second major shift: after programmers accepted AI assistance for writing code, they may increasingly delegate line-by-line pull-request review as well. He describes having reviewed code manually for years and once treating that as essential to responsible engineering, but says AI tools changed his view. His proposed constraint is deliberately extreme—acting as though he cannot read any implementation code—and then building a different safety system around tests, guardrails, monitoring, and independent validation.',
+      'The proposed replacement relies on repeated, inexpensive automated passes. Martin recommends asking a frontier model with repository context to conduct adversarial reviews, then using automated cycles of writing, reviewing, fixing, and re-reviewing. He suggests combining models with different scopes and perspectives: one examining only the diff, another seeing the entire repository, and another checking the specification. He also emphasizes pre-code rules and guardrails designed around recurring AI failure modes, including duplication, architectural drift, unnecessary complexity, weak or fabricated tests, unsafe dependencies, and excessive memory use.',
+      'Rather than reviewing how code is implemented, Martin says engineers should review what it is required to do. Using a live NFL-score API as an example, he would begin with user stories and externally observable requirements: accurate live scores, no credential leakage, and response times below 200 milliseconds. Requirements and UAT remain human responsibilities; guardrails are written before the code exists; and review models should differ from the model that produced the implementation. This preserves an independent check without requiring the engineer to understand every function or diff.',
+    ]},
+  { id:'meta', title:'How Meta Built Forum With AI-Native Engineering', source:'TLDR Dev', author:'Meta Engineering', date:'2026-10-15', url:'https://example.com/meta-forum',
+    hearted:true, grad:'linear-gradient(135deg,#123a4a,#2a6f8f)',
+    summary:[
+      'Meta’s Forum is described as a standalone Groups app built from scratch by a small team for users who want to explore conversations in Facebook groups more deeply. Its development also served as an experiment in “AI-native” engineering: rather than using AI merely for autocomplete or isolated coding assistance, the team treated an AI agent as a participant in planning, implementation, testing, verification, and post-launch operations. Success was measured by verified, production-ready outcomes—changes that build successfully, pass tests, survive review, and can be shipped—rather than by the quantity of code generated.',
+      'The engineers distinguish between a human-in-the-loop model, in which a person drives every development step and AI provides assistance, and a human-on-the-loop model, in which the agent conducts repeated cycles of planning, implementation, building, testing, correction, and review while an engineer sets the objective, monitors progress, intervenes when necessary, and approves the result. Its usefulness depends on trustworthy verification: compilation alone is insufficient, so agents must run automated tests and visual checks before work reaches an engineer.',
+      'Four capabilities supported this workflow. Detailed planning and machine-readable context turned ambiguous requests into technical specifications that agents could execute reliably. Automated signals from builds, unit tests, and UI-specification matching ran inside the agent loop. Navigation agents interacted with the live app like users—reading screens, taking actions, and repeatedly following verification paths to detect regressions.',
+    ]},
+  { id:'tessl', title:'How Open Is Your Software Factory?', source:'Tessl Blog', author:'Tessl', date:'2026-10-13', url:'https://example.com/tessl', hearted:true, grad:'linear-gradient(135deg,#3b2a1d,#8f5a3f)', summary:[
+    'Tessl argues that the defining property of an agentic software factory is not its speed but its legibility. A factory you cannot inspect is a factory you cannot trust: every agent decision should leave an artefact a human can read later. The post proposes that specifications, prompts and review outcomes be stored alongside the code they produced, so that a change can be traced back to the intent behind it.',
+    'It closes by distinguishing open factories, whose rules and context are versioned in the repository, from closed ones that live inside a vendor platform, and argues the former age better as models change.',
+  ]},
+  { id:'rel', title:'Releasing AI-generated software', source:'TLDR AI', author:'', date:'2026-10-13', url:'https://example.com/releasing', hearted:true, grad:'linear-gradient(135deg,#1d4a35,#3f8f6a)', summary:[
+    'The piece makes the case that AI-written code should not get a release process of its own. Treat a model-written change like any other untrusted contribution: same gates, same review, same rollback path. The author warns that special-casing it, in either direction, creates a second pipeline that drifts from the first.',
+  ]},
+  { id:'cloud', title:'We built our own cloud agents runtime. Here’s what we learned', source:'TLDR Dev', author:'', date:'2026-10-09', url:'https://example.com/cloud', hearted:true, grad:'linear-gradient(135deg,#2a1d4a,#6a3f8f)', summary:[
+    'The team describes building an internal runtime for long-running coding agents after hosted options could not meet their isolation requirements. Their main lesson was that durable state, rather than raw compute, dominated the design: agents had to survive rescheduling without repeating work or losing context.',
+    '(This summary was regenerated after a prompt change, so one of the snippets taken from the earlier version no longer appears in it.)',
+  ]},
+  { id:'10x', title:'Make Your Coding Assistant a 10x AI Engineer', source:'TLDR AI', author:'', date:'2026-10-12', url:'https://example.com/10x', hearted:false, grad:'linear-gradient(135deg,#4a1d2a,#8f3f5a)', summary:[
+    'The article argues that most of the gap between an average and an excellent coding assistant is context, not model choice. It recommends giving the assistant a written description of the architecture, a list of commands that build and test the project, and explicit conventions for naming, error handling and logging, kept in a file the assistant reads on every session.',
+    'It also suggests that teams treat the assistant’s mistakes as documentation bugs: whenever the agent repeats an error, the fix is a sentence in that file rather than a correction in chat, so the lesson survives into the next session.',
+  ]},
+];
+const art = id => ARTICLES.find(a => a.id === id);
+
+let nextId = 100;
+let SNIPPETS = [
+  { id:'s1', articleId:'pr', exact:'Requirements and UAT remain human responsibilities; guardrails are written before the code exists; and review models should differ from the model that produced the implementation.', note:'Good framing for the "review the what, not the how" slide.', tags:['platform-eng-talk','code-review'], createdAt:'2026-10-16T08:12:00Z' },
+  { id:'s2', articleId:'pr', exact:'one examining only the diff, another seeing the entire repository, and another checking the specification', note:'', tags:['code-review'], createdAt:'2026-10-16T08:14:00Z' },
+  { id:'s3', articleId:'meta', exact:'Success was measured by verified, production-ready outcomes—changes that build successfully, pass tests, survive review, and can be shipped—rather than by the quantity of code generated.', note:'Counter to "lines of code written by AI" metrics.', tags:['platform-eng-talk','metrics'], createdAt:'2026-10-17T19:40:00Z' },
+  { id:'s4', articleId:'tessl', exact:'A factory you cannot inspect is a factory you cannot trust: every agent decision should leave an artefact a human can read later.', note:'', tags:['software-factory'], createdAt:'2026-10-14T12:00:00Z' },
+  { id:'s5', articleId:'cloud', exact:'The hardest part of running agents in the cloud was not compute but state: resuming a half-finished task after a pod is rescheduled.', note:'Temporal is our answer to this. Mention in factory section.', tags:['software-factory','temporal'], createdAt:'2026-10-10T07:30:00Z', stale:true },
+  { id:'s6', articleId:'rel', exact:'Treat a model-written change like any other untrusted contribution: same gates, same review, same rollback path.', note:'', tags:['platform-eng-talk'], createdAt:'2026-10-13T21:05:00Z' },
+];
+
+/* ---------------- state ---------------- */
+const S = { screen:'news', who:'admin', width:'desktop', favOnly:true, open:null, nudge:null,
+  q:'', tags:new Set(), source:'', sort:'newest', selected:new Set(), active:null, modal:null };
+const site = document.getElementById('site');
+const isAdmin = () => S.who === 'admin';
+const fmtDate = d => new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+
+function seg(id, key, after) {
+  document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => {
+    document.querySelectorAll(`#${id} button`).forEach(x => x.classList.toggle('is-on', x === b));
+    S[key] = b.dataset.v; after && after(); render();
+  });
+}
+seg('m-screen','screen',() => { S.open = null; });
+seg('m-who','who');
+seg('m-width','width',() => document.getElementById('stage').classList.toggle('stage--phone', S.width === 'phone'));
+
+function toast(msg) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
+}
+
+/* ---------------- citation format (spec §3.3) ---------------- */
+function citation(s) {
+  const a = art(s.articleId);
+  const by = [a.author, a.source, fmtDate(a.date)].filter(Boolean).join(', ');
+  let md = `> ${s.exact}\n\n— AI summary of "${a.title}" (${by})\n  ${a.url}`;
+  if (s.note) md += `\n\nNote: ${s.note}`;
+  return md;
+}
+function copyText(text, msg) { navigator.clipboard?.writeText(text).catch(() => {}); toast(msg); }
+
+/* ---------------- render ---------------- */
+function render() {
+  hideTool(); hidePop();
+  site.innerHTML = header() + (S.screen === 'news' ? newsPage() : adminPage());
+  if (S.screen === 'news' && S.open) mountDrawer();
+  if (S.modal) mountModal();
+  bind();
+}
+function header() {
+  if (S.screen === 'admin') return '';
+  return `<div class="site-header"><div class="capsule"><span class="capsule__brand">simonrowe.dev</span>
+    <nav class="capsule__nav"><span>About</span><span>Portfolio</span><b>Insights</b><span>Under the hood</span></nav>
+    <span class="avatar">${isAdmin() ? 'SR' : 'V'}</span></div></div>`;
+}
+
+function newsPage() {
+  const list = ARTICLES.filter(a => !S.favOnly || a.hearted);
+  return `<main class="news"><h1>News &amp; Events</h1>
+    <p class="news__lede">What I'm reading across engineering, AI and platform work.</p>
+    <div class="filters"><input placeholder="Search news and events"/>
+      <button class="toggle" disabled>All sources ▾</button>
+      <button class="toggle ${S.favOnly ? 'is-on' : ''}" data-act="fav">${ic('heart',14,S.favOnly)} Favourites</button>
+    </div>
+    <div class="grid">${list.map(card).join('')}</div></main>`;
+}
+function card(a) {
+  const n = SNIPPETS.filter(s => s.articleId === a.id).length;
+  const badge = isAdmin() && n ? `<span class="card__badge" title="${n} snippet${n>1?'s':''} — only you see this">${ic('highlighter',12)} ${n}</span>` : '';
+  return `<article class="card"><div class="card__img" style="--grad:${a.grad}">${badge}</div>
+    <div class="card__body"><div class="card__meta"><b>${esc(a.source)}</b><span>${fmtDate(a.date)}</span></div>
+    <h3 class="card__title">${esc(a.title)}</h3>
+    <div class="card__actions">
+      <button class="btn btn--ai" data-open="${a.id}">${ic('sparkles',14)} ${a.summary ? 'Summary' : 'Summarise'}</button>
+      <button class="btn heart" data-heart="${a.id}" aria-label="Favourite">${ic('heart',14,a.hearted)}</button>
+      <button class="btn btn--ghost">Share</button>
+    </div></div></article>`;
+}
+
+/* ---------------- drawer ---------------- */
+function mountDrawer() {
+  const a = art(S.open);
+  const snips = SNIPPETS.filter(s => s.articleId === a.id);
+  const ov = document.createElement('div');
+  ov.className = 'overlay'; ov.dataset.close = '1';
+  const prose = a.summary
+    ? `<div class="prose" id="prose">${a.summary.map(p => `<p>${esc(p)}</p>`).join('')}</div>`
+    : `<p style="color:var(--muted)">No summary has been written for this article yet.</p>
+       <button class="btn">${ic('sparkles',14)} Summarise</button>
+       <p style="color:var(--muted);font-size:13px;margin-top:14px">(In this mockup, the snippets listed below were made from an earlier summary.)</p>`;
+  const nudge = S.nudge === a.id && !a.hearted
+    ? `<div class="nudge"><span>${ic('heart',14)} Heart this article too, so it's in your Favourites?</span>
+         <span><button class="btn heart" data-heart-nudge="${a.id}">Heart it</button> <button class="btn btn--ghost" data-nudge-x>Not now</button></span></div>` : '';
+  ov.innerHTML = `<div class="drawer" role="dialog">
+    <div class="drawer__header"><span class="drawer__title">Summary</span>
+      <button class="btn btn--ghost" data-close="1" aria-label="Close">${ic('x',18)}</button></div>
+    <div class="drawer__body" id="dbody">
+      <div class="ns-meta"><b>${esc(a.source)}</b><span>${fmtDate(a.date)}</span></div>
+      <h2 class="ns-title">${esc(a.title)}</h2>
+      <span class="ns-disclosure">${ic('sparkles',13)} AI-generated summary</span>
+      ${nudge}
+      ${isAdmin() && a.summary ? `<p class="ns-hint">${ic('highlighter',13)} Select any passage to keep it as a snippet.</p>` : ''}
+      ${prose}
+      ${isAdmin() ? yours(snips) : ''}
+      <div class="ns-footer"><a href="#" onclick="return false">Read the original ${ic('ext',13)}</a>
+        <button class="btn heart" data-heart="${a.id}">${ic('heart',14,a.hearted)} ${a.hearted ? 'Favourited' : 'Favourite'}</button></div>
+    </div></div>`;
+  site.appendChild(ov);
+  paintHighlights();
+}
+function yours(snips) {
+  const order = snips.slice().sort((x, y) => (offsetOf(x) ?? 1e9) - (offsetOf(y) ?? 1e9));
+  return `<section class="yours"><div class="yours__head"><h3>${ic('highlighter',15)} Your snippets (${snips.length})</h3>
+    <a href="#" data-goto-admin>All snippets →</a></div>
+    ${snips.length ? order.map(s => {
+      const missing = offsetOf(s) == null;
+      return `<div class="yours__item" data-yours="${s.id}"><p class="yours__quote">${esc(s.exact)}</p>
+        ${s.note ? `<p class="yours__note">${esc(s.note)}</p>` : ''}
+        ${s.tags.length ? `<div class="yours__tags">${s.tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}</div>` : ''}
+        ${missing ? `<div class="yours__stale">${ic('alert',12)} No longer in the current summary. Your copy is kept.</div>` : ''}</div>`;
+    }).join('') : `<div class="yours__empty">Nothing kept from this summary yet. Select some text above.</div>`}
+  </section>`;
+}
+
+/* ---------- text anchoring: find each snippet by its text (spec §4.3) ---------- */
+function textNodes(root) {
+  const out = []; const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let pos = 0, n;
+  while ((n = w.nextNode())) { out.push({ node:n, start:pos }); pos += n.data.length; }
+  return out;
+}
+function proseText() { const p = document.getElementById('prose'); return p ? p.textContent : ''; }
+function offsetOf(s) {
+  const a = art(s.articleId); if (!a.summary) return null;
+  const full = a.summary.join(''); const i = full.indexOf(s.exact);
+  return i < 0 ? null : i;
+}
+function rangeFor(start, end) {
+  const prose = document.getElementById('prose'); if (!prose) return null;
+  const nodes = textNodes(prose); const r = document.createRange();
+  let set = false;
+  for (const { node, start:ns } of nodes) {
+    const ne = ns + node.data.length;
+    if (!set && start >= ns && start <= ne) { r.setStart(node, start - ns); set = true; }
+    if (set && end >= ns && end <= ne) { r.setEnd(node, end - ns); return r; }
+  }
+  return null;
+}
+let focusId = null, newId = null;
+function paintHighlights() {
+  if (!('highlights' in CSS)) return; // runtime feature detection: list still works without marks
+  CSS.highlights.delete('snippet'); CSS.highlights.delete('snippet-focus'); CSS.highlights.delete('snippet-new');
+  if (!isAdmin() || !S.open) return;
+  const text = proseText(); const all = [], foc = [], fresh = [];
+  for (const s of SNIPPETS.filter(x => x.articleId === S.open)) {
+    const i = text.indexOf(s.exact); if (i < 0) continue;
+    const r = rangeFor(i, i + s.exact.length); if (!r) continue;
+    (s.id === focusId ? foc : s.id === newId ? fresh : all).push(r);
+  }
+  CSS.highlights.set('snippet', new Highlight(...all));
+  CSS.highlights.set('snippet-focus', new Highlight(...foc));
+  CSS.highlights.set('snippet-new', new Highlight(...fresh));
+}
+function snippetAtPoint(x, y) {
+  const prose = document.getElementById('prose'); if (!prose) return null;
+  let node, off;
+  if (document.caretPositionFromPoint) { const c = document.caretPositionFromPoint(x, y); if (!c) return null; node = c.offsetNode; off = c.offset; }
+  else if (document.caretRangeFromPoint) { const c = document.caretRangeFromPoint(x, y); if (!c) return null; node = c.startContainer; off = c.startOffset; }
+  if (!node || !prose.contains(node)) return null;
+  const hit = textNodes(prose).find(t => t.node === node); if (!hit) return null;
+  const pos = hit.start + off; const text = proseText();
+  return SNIPPETS.find(s => { if (s.articleId !== S.open) return false; const i = text.indexOf(s.exact); return i >= 0 && pos >= i && pos <= i + s.exact.length; });
+}
+
+/* ---------- selection → toolbar ---------- */
+let tool = null, pending = null;
+function hideTool() { tool?.remove(); tool = null; }
+function onSelectionDone() {
+  if (!isAdmin() || !S.open) return;
+  const prose = document.getElementById('prose'); const sel = window.getSelection();
+  if (!prose || !sel || sel.isCollapsed || !sel.rangeCount) return hideTool();
+  // clip the selection to the prose (spec §4.5)
+  const r = sel.getRangeAt(0).cloneRange(); const pr = document.createRange(); pr.selectNodeContents(prose);
+  if (r.compareBoundaryPoints(Range.START_TO_START, pr) < 0) r.setStart(pr.startContainer, pr.startOffset);
+  if (r.compareBoundaryPoints(Range.END_TO_END, pr) > 0) r.setEnd(pr.endContainer, pr.endOffset);
+  const exact = r.toString().trim();
+  if (!exact || !prose.contains(r.commonAncestorContainer) && r.commonAncestorContainer !== prose) return hideTool();
+  const text = proseText(); const at = text.indexOf(exact);
+  pending = { exact, prefix: text.slice(Math.max(0, at - 32), at), suffix: text.slice(at + exact.length, at + exact.length + 32) };
+  const rect = r.getBoundingClientRect(); const last = [...r.getClientRects()].pop() || rect;
+  hideTool(); tool = document.createElement('div'); tool.className = 'seltool';
+  tool.innerHTML = `<button class="is-main" data-t="hl">${ic('highlighter',14)} Highlight</button>
+    <button data-t="note">${ic('note',14)} Add note</button>
+    <button data-t="copy">${ic('copy',14)} Copy with citation</button>`;
+  document.body.appendChild(tool);
+  const w = tool.offsetWidth; const left = Math.min(Math.max(8, last.left + last.width / 2 - w / 2), innerWidth - w - 8);
+  tool.style.left = left + 'px'; tool.style.top = (last.bottom + 10) + 'px';
+  tool.style.setProperty('--arrow', (last.left + last.width / 2 - left) + 'px');
+  tool.onmousedown = e => e.preventDefault();
+  tool.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.t === 'copy') {
+      copyText(citation({ articleId:S.open, exact:pending.exact, note:'' }), 'Copied with citation (not saved)');
+      hideTool(); return;
+    }
+    const s = { id:'s' + (nextId++), articleId:S.open, exact:pending.exact, note:'', tags:[], createdAt:new Date().toISOString() };
+    SNIPPETS.push(s); newId = s.id;
+    window.getSelection().removeAllRanges(); hideTool();
+    if (!art(S.open).hearted && !SNIPPETS.some(x => x.articleId === S.open && x.id !== s.id)) S.nudge = S.open;
+    refreshDrawer();
+    if (b.dataset.t === 'note') openPop(s, last); else toast('Snippet saved');
+    setTimeout(() => { if (newId === s.id) { newId = null; paintHighlights(); } }, 1600);
+  };
+}
+function updateYours() {
+  const box = site.querySelector('.yours'); if (!box) return;
+  box.outerHTML = yours(SNIPPETS.filter(s => s.articleId === S.open)); bindYours();
+}
+function refreshDrawer() {
+  const scroll = document.getElementById('dbody')?.scrollTop ?? 0;
+  site.querySelector('.overlay')?.remove(); mountDrawer(); bind();
+  const db = document.getElementById('dbody'); if (db) db.scrollTop = scroll;
+}
+
+/* ---------- snippet popover ---------- */
+let pop = null;
+function hidePop() { pop?.remove(); pop = null; if (focusId) { focusId = null; paintHighlights(); } }
+const allTags = () => { const m = new Map(); SNIPPETS.forEach(s => s.tags.forEach(t => m.set(t, (m.get(t) || 0) + 1))); return [...m].sort((a, b) => b[1] - a[1]); };
+function normTag(t) { return t.trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, '-'); }
+function tagEditor(s, onChange) {
+  const box = document.createElement('div');
+  const draw = () => {
+    box.innerHTML = `<div class="tagbox">${s.tags.map(t => `<span class="tag">#${esc(t)} <button data-rm="${esc(t)}" aria-label="Remove ${esc(t)}">×</button></span>`).join('')}
+      <input placeholder="${s.tags.length ? '' : 'Add a tag, press Enter'}"/></div>
+      <div class="suggest">${allTags().filter(([t]) => !s.tags.includes(t)).slice(0, 5).map(([t, n]) => `<button data-add="${esc(t)}">+ ${esc(t)} <span style="opacity:.6">${n}</span></button>`).join('')}</div>`;
+    const inp = box.querySelector('input');
+    inp.onkeydown = e => {
+      if ((e.key === 'Enter' || e.key === ',') && inp.value.trim()) { e.preventDefault(); const t = normTag(inp.value); if (t && !s.tags.includes(t)) s.tags.push(t); draw(); onChange(); box.querySelector('input').focus(); }
+      if (e.key === 'Backspace' && !inp.value && s.tags.length) { s.tags.pop(); draw(); onChange(); box.querySelector('input').focus(); }
+    };
+    box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { s.tags = s.tags.filter(t => t !== b.dataset.rm); draw(); onChange(); });
+    box.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { s.tags.push(b.dataset.add); draw(); onChange(); });
+  };
+  draw(); return box;
+}
+function openPop(s, rect) {
+  hidePop(); focusId = s.id; paintHighlights();
+  pop = document.createElement('div'); pop.className = 'pop';
+  pop.innerHTML = `<p class="pop__quote">${esc(s.exact)}</p>
+    <label>Note</label><textarea placeholder="Why you kept this, where it might go…">${esc(s.note)}</textarea>
+    <label>Tags</label><div data-tags></div>
+    <div class="pop__actions"><span class="pop__saved">${ic('check',13)} Saved</span>
+      <span style="display:flex;gap:4px">
+        <button class="btn btn--ghost" data-p="copy" title="Copy with citation">${ic('copy',14)}</button>
+        <button class="btn btn--ghost btn--danger" data-p="del" title="Delete snippet">${ic('trash',14)}</button>
+        <button class="btn btn--primary" data-p="done">Done</button></span></div>`;
+  const saved = pop.querySelector('.pop__saved');
+  const touched = () => { saved.innerHTML = `${ic('check',13)} Saved`; s.updatedAt = new Date().toISOString(); updateYours(); };
+  pop.querySelector('[data-tags]').appendChild(tagEditor(s, touched));
+  pop.querySelector('textarea').oninput = e => { s.note = e.target.value; touched(); };
+  pop.onclick = e => {
+    const b = e.target.closest('[data-p]'); if (!b) return;
+    if (b.dataset.p === 'copy') copyText(citation(s), 'Copied with citation');
+    if (b.dataset.p === 'del') { SNIPPETS = SNIPPETS.filter(x => x !== s); hidePop(); refreshDrawer(); toast('Snippet deleted'); }
+    if (b.dataset.p === 'done') { hidePop(); refreshDrawer(); }
+  };
+  document.body.appendChild(pop);
+  const top = Math.min(rect.bottom + 10, innerHeight - pop.offsetHeight - 12);
+  pop.style.left = Math.min(Math.max(8, rect.left), innerWidth - 352) + 'px'; pop.style.top = top + 'px';
+  setTimeout(() => pop?.querySelector('textarea').focus(), 0);
+}
+
+/* ---------------- admin: /admin/snippets ---------------- */
+function filtered() {
+  const terms = S.q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 6);
+  let list = SNIPPETS.filter(s => {
+    const a = art(s.articleId);
+    if (S.tags.size && ![...S.tags].every(t => s.tags.includes(t))) return false;
+    if (S.source && a.source !== S.source) return false;
+    const hay = [s.exact, s.note, s.tags.join(' '), a.title, a.source].join(' ').toLowerCase();
+    return terms.every(t => hay.includes(t));
+  });
+  list.sort(S.sort === 'article' ? (x, y) => art(y.articleId).date.localeCompare(art(x.articleId).date) : (x, y) => y.createdAt.localeCompare(x.createdAt));
+  return list;
+}
+function hl(text) {
+  let out = esc(text); const terms = S.q.split(/\s+/).filter(t => t.length > 1);
+  for (const t of terms) out = out.replace(new RegExp(`(${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<mark>$1</mark>');
+  return out;
+}
+function adminPage() {
+  const list = filtered(); const sources = [...new Set(ARTICLES.map(a => a.source))];
+  const active = SNIPPETS.find(s => s.id === S.active);
+  const visibleSelected = list.filter(s => S.selected.has(s.id));
+  return `<div class="admin">
+    <nav class="side"><div class="side__brand">simonrowe.dev admin</div>
+      <a>${ic('grid')} Dashboard</a><a>${ic('file')} Content</a><a>${ic('news')} News &amp; Events</a>
+      <a class="is-on">${ic('highlighter')} Snippets <span class="new">new</span></a>
+      <a>${ic('rss')} Content Sources</a><a>${ic('link')} Share Links</a></nav>
+    <div class="amain"><section class="alist">
+      <h1>${ic('highlighter',22)} Snippets</h1>
+      <p class="alist__sub">${SNIPPETS.length} passages kept from ${new Set(SNIPPETS.map(s => s.articleId)).size} summaries. Only you can see these.</p>
+      <div class="asearch">
+        <div class="asearch__q">${ic('search',15)}<input id="q" placeholder="Search quotes, notes, tags, titles…" value="${esc(S.q)}"/></div>
+        <select id="src"><option value="">All sources</option>${sources.map(x => `<option ${S.source === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
+        <select disabled><option>Any date</option></select>
+        <select id="sort"><option value="newest" ${S.sort === 'newest' ? 'selected' : ''}>Newest snippet</option><option value="article" ${S.sort === 'article' ? 'selected' : ''}>Newest article</option></select>
+      </div>
+      <div class="chips">${allTags().map(([t, n]) => `<button class="chip ${S.tags.has(t) ? 'is-on' : ''}" data-chip="${esc(t)}">#${esc(t)}<span>${n}</span></button>`).join('')}</div>
+      ${visibleSelected.length ? `<div class="bulk"><span class="bulk__count">${visibleSelected.length} selected</span>
+        <button class="btn" data-bulk="copy">${ic('copy',14)} Copy as Markdown</button>
+        <button class="btn" data-bulk="dl">${ic('download',14)} Download .md</button>
+        <button class="btn btn--ghost" data-bulk="clear">Clear</button></div>` : ''}
+      <div class="listhead"><label><input type="checkbox" id="all" ${list.length && visibleSelected.length === list.length ? 'checked' : ''}/> Select all shown</label>
+        <span>· ${list.length} shown</span></div>
+      ${list.length ? list.map(s => scard(s)).join('') : `<div class="empty">No snippets match. Try fewer words, or clear a tag.</div>`}
+    </section>
+    <aside class="detail">${active ? detail(active) : `<h2>Snippet</h2><p class="detail__empty">Pick a snippet to edit its note and tags, copy it, or go back to the summary it came from.<br><br>Tick several and use <b>Copy as Markdown</b> to drop a talk's reading list straight into your notes.</p>`}</aside>
+    </div></div>`;
+}
+function scard(s) {
+  const a = art(s.articleId);
+  return `<div class="scard ${S.active === s.id ? 'is-active' : ''}" data-card="${s.id}">
+    <input type="checkbox" data-sel="${s.id}" ${S.selected.has(s.id) ? 'checked' : ''} aria-label="Select snippet"/>
+    <div class="scard__main"><p class="scard__quote">${hl(s.exact)}</p>
+      ${s.note ? `<p class="scard__note">${ic('note',13)} <span>${hl(s.note)}</span></p>` : ''}
+      <div class="scard__foot"><b>${esc(a.source)}</b><span>${hl(a.title)}</span><span>· ${fmtDate(a.date)}</span>
+        ${s.stale ? `<span class="stalepill" title="The summary was regenerated and this text is no longer in it. Your copy is kept.">not in current summary</span>` : ''}
+        <span class="scard__tags">${s.tags.map(t => `<span class="tag">#${hl(t)}</span>`).join('')}</span></div></div></div>`;
+}
+function detail(s) {
+  const a = art(s.articleId);
+  return `<h2>Snippet</h2><p class="pop__quote">${esc(s.exact)}</p>
+    <label>Note</label><textarea id="dnote" placeholder="Why you kept this…">${esc(s.note)}</textarea>
+    <label>Tags</label><div id="dtags"></div>
+    <div class="detail__src">AI summary of <b>${esc(a.title)}</b><br>${[a.author, a.source, fmtDate(a.date)].filter(Boolean).map(esc).join(' · ')}<br>
+      <a href="#" onclick="return false">Original article ${ic('ext',12)}</a></div>
+    <div class="detail__actions">
+      <button class="btn btn--primary" data-d="copy">${ic('copy',14)} Copy</button>
+      <button class="btn" data-d="open">${ic('sparkles',14)} Open summary</button>
+      <button class="btn btn--danger" data-d="del">${ic('trash',14)} Delete</button></div>
+    <p style="font-size:12px;color:var(--muted);margin-top:16px">Kept ${fmtDate(s.createdAt)}. The quote itself can't be edited, because then it would no longer be a quote.</p>`;
+}
+function exportMd(list) {
+  const byTag = [...S.tags].map(t => '#' + t).join(' ');
+  return `# Snippets${byTag ? ' — ' + byTag : ''}\n\n_Exported ${fmtDate(new Date())}. Quotes are from AI-generated summaries, not the original authors._\n\n` +
+    list.map(citation).join('\n\n---\n\n') + '\n';
+}
+function mountModal() {
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="modal__box"><div class="modal__head"><h3>${S.modal.title}</h3><button class="btn btn--ghost" data-mx>${ic('x',16)}</button></div>
+    <pre>${esc(S.modal.text)}</pre><div class="modal__foot"><span class="annot" style="margin-right:auto;align-self:center">Mockup: shows what lands on the clipboard / in the file</span>
+    <button class="btn btn--primary" data-mx>Done</button></div></div>`;
+  m.onclick = e => { if (e.target === m || e.target.closest('[data-mx]')) { S.modal = null; render(); } };
+  document.body.appendChild(m);
+}
+
+/* ---------------- events ---------------- */
+function bind() {
+  site.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { S.open = b.dataset.open; render(); });
+  site.querySelectorAll('[data-heart]').forEach(b => b.onclick = () => { const a = art(b.dataset.heart); a.hearted = !a.hearted; if (S.open) refreshDrawer(); else render(); });
+  site.querySelectorAll('[data-heart-nudge]').forEach(b => b.onclick = () => { art(b.dataset.heartNudge).hearted = true; S.nudge = null; refreshDrawer(); toast('Added to Favourites'); });
+  site.querySelectorAll('[data-nudge-x]').forEach(b => b.onclick = () => { S.nudge = null; refreshDrawer(); });
+  site.querySelector('[data-act=fav]')?.addEventListener('click', () => { S.favOnly = !S.favOnly; render(); });
+  site.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', e => { if (e.target === el || el.tagName === 'BUTTON') { S.open = null; S.nudge = null; render(); } }));
+  bindYours();
+  bindRest();
+}
+function bindYours() {
+  site.querySelector('[data-goto-admin]')?.addEventListener('click', e => { e.preventDefault(); S.screen = 'admin'; S.open = null; syncSeg('m-screen','admin'); render(); });
+  site.querySelectorAll('[data-yours]').forEach(el => el.onclick = () => {
+    const s = SNIPPETS.find(x => x.id === el.dataset.yours); const text = proseText(); const i = text.indexOf(s.exact);
+    const r = i >= 0 ? rangeFor(i, i + s.exact.length) : null;
+    if (r) { r.startContainer.parentElement.scrollIntoView({ block:'center', behavior:'smooth' }); setTimeout(() => openPop(s, r.getBoundingClientRect()), 350); }
+    else openPop(s, el.getBoundingClientRect());
+  });
+}
+function bindRest() {
+  const prose = document.getElementById('prose');
+  if (prose) {
+    prose.addEventListener('mouseup', e => setTimeout(() => {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return onSelectionDone();
+      const s = isAdmin() && snippetAtPoint(e.clientX, e.clientY);
+      if (s) openPop(s, { left:e.clientX - 20, bottom:e.clientY + 8 });
+    }, 0));
+    prose.addEventListener('touchend', () => setTimeout(onSelectionDone, 250));
+    if (isAdmin()) prose.addEventListener('mousemove', e => { prose.style.cursor = snippetAtPoint(e.clientX, e.clientY) ? 'pointer' : 'text'; });
+  }
+  document.getElementById('dbody')?.addEventListener('scroll', () => { hideTool(); });
+
+  // admin
+  const q = document.getElementById('q');
+  if (q) { q.oninput = () => { S.q = q.value; const pos = q.selectionStart; render(); const n = document.getElementById('q'); n.focus(); n.setSelectionRange(pos, pos); }; }
+  document.getElementById('src')?.addEventListener('change', e => { S.source = e.target.value; render(); });
+  document.getElementById('sort')?.addEventListener('change', e => { S.sort = e.target.value; render(); });
+  site.querySelectorAll('[data-chip]').forEach(b => b.onclick = () => { const t = b.dataset.chip; S.tags.has(t) ? S.tags.delete(t) : S.tags.add(t); render(); });
+  site.querySelectorAll('[data-sel]').forEach(c => c.onclick = e => { e.stopPropagation(); c.checked ? S.selected.add(c.dataset.sel) : S.selected.delete(c.dataset.sel); render(); });
+  document.getElementById('all')?.addEventListener('click', e => { const list = filtered(); list.forEach(s => e.target.checked ? S.selected.add(s.id) : S.selected.delete(s.id)); render(); });
+  site.querySelectorAll('[data-card]').forEach(c => c.onclick = () => { S.active = c.dataset.card; render(); });
+  site.querySelectorAll('[data-bulk]').forEach(b => b.onclick = () => {
+    const list = filtered().filter(s => S.selected.has(s.id));
+    if (b.dataset.bulk === 'clear') { S.selected.clear(); return render(); }
+    const md = exportMd(list);
+    if (b.dataset.bulk === 'copy') copyText(md, `Copied ${list.length} snippets as Markdown`);
+    S.modal = { title: b.dataset.bulk === 'copy' ? 'Copied as Markdown' : 'snippets-' + new Date().toISOString().slice(0, 10) + '.md', text: md }; render();
+  });
+  const active = SNIPPETS.find(s => s.id === S.active);
+  if (active && document.getElementById('dtags')) {
+    document.getElementById('dtags').appendChild(tagEditor(active, () => {
+      site.querySelector(`[data-card="${active.id}"] .scard__tags`).innerHTML = active.tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('');
+      site.querySelector('.chips').innerHTML = allTags().map(([t, n]) => `<button class="chip ${S.tags.has(t) ? 'is-on' : ''}" data-chip="${esc(t)}">#${esc(t)}<span>${n}</span></button>`).join('');
+      site.querySelectorAll('[data-chip]').forEach(b => b.onclick = () => { const t = b.dataset.chip; S.tags.has(t) ? S.tags.delete(t) : S.tags.add(t); render(); });
+    }));
+    document.getElementById('dnote').oninput = e => { active.note = e.target.value; };
+    site.querySelectorAll('[data-d]').forEach(b => b.onclick = () => {
+      if (b.dataset.d === 'copy') { copyText(citation(active), 'Copied with citation'); S.modal = { title:'Copied with citation', text:citation(active) }; render(); }
+      if (b.dataset.d === 'del') { SNIPPETS = SNIPPETS.filter(x => x !== active); S.active = null; S.selected.delete(active.id); render(); toast('Snippet deleted'); }
+      if (b.dataset.d === 'open') { S.screen = 'news'; S.open = active.articleId; syncSeg('m-screen','news'); render(); }
+    });
+  }
+}
+function syncSeg(id, v) { document.querySelectorAll(`#${id} button`).forEach(x => x.classList.toggle('is-on', x.dataset.v === v)); }
+document.addEventListener('mousedown', e => {
+  if (tool && !tool.contains(e.target)) hideTool();
+  if (pop && !pop.contains(e.target) && !e.target.closest('[data-yours]')) { hidePop(); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (pop) hidePop(); else if (tool) hideTool(); else if (S.open) { S.open = null; render(); } } });
+
+render();
+</script>
+</body>
+</html>
