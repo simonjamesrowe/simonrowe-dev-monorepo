@@ -4,7 +4,9 @@ import com.simonrowe.narration.NarrationProvider.FailureKind;
 import com.simonrowe.narration.NarrationProvider.NarrationProviderException;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -139,9 +141,32 @@ public class NarrationSynthesizer {
   /**
    * A synthesised narration.
    *
+   * <p>Equality and hashing compare the audio's bytes, not the array's identity, and
+   * {@code toString} gives only its length: the record default would print a reference, or,
+   * if anyone "fixed" it with {@code Arrays.toString}, hundreds of kilobytes of audio into a log.
+   *
    * @param audio the joined MP3 stream
    * @param timings when each word is spoken
    */
   public record Synthesis(byte[] audio, NarrationTimings timings) {
+
+    @Override
+    public boolean equals(final Object other) {
+      return other instanceof Synthesis that
+          && Arrays.equals(audio, that.audio)
+          && Objects.equals(timings, that.timings);
+    }
+
+    @Override
+    public int hashCode() {
+      return 31 * Arrays.hashCode(audio) + Objects.hashCode(timings);
+    }
+
+    @Override
+    public String toString() {
+      return "Synthesis[audio=%d bytes, words=%d]".formatted(
+          audio == null ? 0 : audio.length,
+          timings == null ? 0 : timings.words().size());
+    }
   }
 }

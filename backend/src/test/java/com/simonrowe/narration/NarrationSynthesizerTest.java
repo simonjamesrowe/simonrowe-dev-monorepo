@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.simonrowe.narration.NarrationProvider.FailureKind;
 import com.simonrowe.narration.NarrationProvider.NarrationProviderException;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -74,6 +75,22 @@ class NarrationSynthesizerTest {
     assertThatThrownBy(() -> synthesizer(provider, 1, 3).synthesize(SCRIPT, () -> { }))
         .isInstanceOf(NarrationProviderException.class);
     assertThat(provider.callsFor(FIRST)).isEqualTo(1);
+  }
+
+  @Test
+  void synthesisComparesAudioByContentAndNeverPrintsIt() {
+    NarrationTimings timings = NarrationTimings.of(List.of("Hi."), List.of(1.0));
+    NarrationSynthesizer.Synthesis one =
+        new NarrationSynthesizer.Synthesis(new byte[]{(byte) 0xff, (byte) 0xf3, 7}, timings);
+    NarrationSynthesizer.Synthesis same =
+        new NarrationSynthesizer.Synthesis(new byte[]{(byte) 0xff, (byte) 0xf3, 7}, timings);
+    NarrationSynthesizer.Synthesis different =
+        new NarrationSynthesizer.Synthesis(new byte[]{(byte) 0xff, (byte) 0xf3, 8}, timings);
+
+    assertThat(one).isEqualTo(same).hasSameHashCodeAs(same).isNotEqualTo(different);
+    assertThat(one.toString())
+        .isEqualTo("Synthesis[audio=3 bytes, words=1]")
+        .doesNotContain("-1", "-13", "[B@");
   }
 
   private static NarrationSynthesizer synthesizer(

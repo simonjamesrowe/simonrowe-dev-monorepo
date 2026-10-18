@@ -236,6 +236,9 @@ export function ReadAlong({ markdown, timingsUrl, className }: ReadAlongProps) {
 
   return (
     <div className={`read-along${timings ? ' read-along--timed' : ''} ${className ?? ''}`}>
+      {/* Focusable although not interactive, deliberately (Sonar typescript:S6845 declined): it
+          is a scrolling box, and without a tab stop a keyboard user cannot scroll it at all.
+          Safari does not make scrollers focusable by itself. WCAG 2.1.1. */}
       <div
         aria-label="Read along"
         className="read-along__text"
