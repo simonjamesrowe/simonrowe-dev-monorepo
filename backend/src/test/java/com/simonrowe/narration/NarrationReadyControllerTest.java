@@ -37,8 +37,8 @@ class NarrationReadyControllerTest {
   @Test
   void listsReadyBlogNarrationsWithTheFieldNamesTheCardsRead() throws Exception {
     when(service.readyNarrations(NarrationContentType.BLOG)).thenReturn(List.of(
-        new ReadyNarration("blog-1", "/uploads/narrations/aaa/narration.mp3", 734L),
-        new ReadyNarration("blog-2", "/uploads/narrations/bbb/narration.mp3", 412L)));
+        new ReadyNarration("blog-1", "/uploads/narrations/aaa/narration.mp3", 734L, null),
+        new ReadyNarration("blog-2", "/uploads/narrations/bbb/narration.mp3", 412L, null)));
 
     mockMvc.perform(get("/api/narrations/ready").param("contentType", "BLOG"))
         .andExpect(status().isOk())
@@ -58,7 +58,7 @@ class NarrationReadyControllerTest {
   @Test
   void listsReadyArticleSummaryNarrationsKeyedByArticleId() throws Exception {
     when(service.readyNarrations(NarrationContentType.ARTICLE_SUMMARY)).thenReturn(List.of(
-        new ReadyNarration("article-9", "/uploads/narrations/ccc/narration.mp3", 180L)));
+        new ReadyNarration("article-9", "/uploads/narrations/ccc/narration.mp3", 180L, null)));
 
     mockMvc.perform(get("/api/narrations/ready").param("contentType", "ARTICLE_SUMMARY"))
         .andExpect(status().isOk())

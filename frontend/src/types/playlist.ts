@@ -28,6 +28,8 @@ export interface PlaylistAudio {
   /** Site-relative path under `/uploads/`, only when `state` is `READY`. */
   audioUrl?: string
   durationSeconds?: number
+  /** The read-along timings beside the audio, when it has them. */
+  timingsUrl?: string
 }
 
 export interface PlaylistEntry {

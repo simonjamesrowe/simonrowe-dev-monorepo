@@ -3,6 +3,8 @@ package com.simonrowe.narration;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -29,6 +31,22 @@ public class NarrationScriptChunker {
 
   /** End of sentence followed by whitespace. */
   private static final Pattern SENTENCE_END = Pattern.compile("[.!?][\"')\\]]?\\s+");
+
+  /**
+   * A sentence end for {@link #segments}. Possessive, because the script is unbounded input:
+   * a blog can run to 50,000 characters.
+   */
+  private static final Pattern SEGMENT_END = Pattern.compile("[.!?][\"')\\]]?+\\s++");
+
+  /** The word before a full stop that does not end a sentence: "e.g. this", "Dr. Smith". */
+  private static final Set<String> ABBREVIATIONS = Set.of(
+      "e.g", "i.e", "mr", "mrs", "ms", "dr", "vs", "st", "cf", "approx");
+
+  /**
+   * Segments shorter than this are joined to the next one. Every join adds about 0.6s of
+   * silence (Google pads each clip), so "Yes." on its own would cost more pause than speech.
+   */
+  static final int MIN_SEGMENT_CHARS = 40;
 
   /**
    * Splits the script into chunks, each within {@code maxBytes} when UTF-8 encoded.
@@ -63,6 +81,80 @@ public class NarrationScriptChunker {
     }
     chunks.removeIf(String::isBlank);
     return List.copyOf(chunks);
+  }
+
+  /**
+   * Splits the script into sentences, one synthesis request each, so that each sentence's own
+   * audio length places it on the read-along timeline (see {@link NarrationTimings}).
+   *
+   * <p>Very short sentences are joined to the next, and a sentence over {@code maxBytes} is cut
+   * further by {@link #chunk}. Joining the segments with single spaces gives back the script
+   * with its whitespace collapsed, which is what the timings' words are numbered against.
+   *
+   * @param script the full narration script
+   * @param maxBytes the per-request ceiling in UTF-8 bytes
+   * @return the segments in order, empty for a blank script
+   */
+  public List<String> segments(final String script, final int maxBytes) {
+    if (script == null || script.isBlank()) {
+      return List.of();
+    }
+    if (maxBytes <= 0) {
+      throw new IllegalArgumentException("maxBytes must be positive");
+    }
+    String text = script.trim();
+    List<String> sentences = new ArrayList<>();
+    int start = 0;
+    Matcher matcher = SEGMENT_END.matcher(text);
+    while (matcher.find()) {
+      if (isAbbreviation(text, matcher.start())) {
+        continue;
+      }
+      sentences.add(text.substring(start, matcher.end()).trim());
+      start = matcher.end();
+    }
+    if (start < text.length()) {
+      sentences.add(text.substring(start).trim());
+    }
+
+    List<String> merged = new ArrayList<>();
+    StringBuilder pending = new StringBuilder();
+    for (String sentence : sentences) {
+      if (!pending.isEmpty()) {
+        pending.append(' ');
+      }
+      pending.append(sentence);
+      if (pending.length() >= MIN_SEGMENT_CHARS) {
+        merged.add(pending.toString());
+        pending.setLength(0);
+      }
+    }
+    if (!pending.isEmpty()) {
+      if (merged.isEmpty()) {
+        merged.add(pending.toString());
+      } else {
+        merged.set(merged.size() - 1, merged.getLast() + " " + pending);
+      }
+    }
+
+    List<String> segments = new ArrayList<>();
+    for (String segment : merged) {
+      segments.addAll(chunk(segment, maxBytes));
+    }
+    return List.copyOf(segments);
+  }
+
+  /** Whether the full stop at {@code dot} follows an abbreviation or a single initial. */
+  private static boolean isAbbreviation(final String text, final int dot) {
+    if (text.charAt(dot) != '.') {
+      return false;
+    }
+    int wordStart = text.lastIndexOf(' ', dot - 1) + 1;
+    String word = text.substring(wordStart, dot).toLowerCase(Locale.ROOT);
+    if (word.length() == 1 && Character.isLetter(word.charAt(0))) {
+      return true;
+    }
+    return ABBREVIATIONS.contains(word);
   }
 
   /**

@@ -24,6 +24,7 @@ export function toTrack(entry: PlaylistEntry): NarrationTrack {
     external: entry.external,
     audioUrl: entry.audio.audioUrl,
     durationSeconds: entry.audio.durationSeconds,
+    timingsUrl: entry.audio.timingsUrl,
     imageUrl: entry.imageUrl,
     sourceName: entry.sourceName,
     resumeAt: entry.status === 'QUEUED' ? entry.progressSeconds : 0,

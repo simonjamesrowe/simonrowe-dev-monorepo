@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,26 @@ class NarrationRestoreValidatorTest extends AbstractIntegrationTest {
         }
       }
     }
+  }
+
+  @Test
+  void keepsPlayableAudioWhoseTimingsAreMissingButForgetsTheTimings() throws IOException {
+    Narration narration = narration("timed");
+    NarrationStorage.StoredNarration stored = storage.store("timed",
+        Mp3FramesTest.googleFrames(4),
+        NarrationTimings.of(List.of("Hello there."), List.of(0.096)));
+    narration.markReady(stored, Instant.now());
+    repository.save(narration);
+    Files.delete(Path.of("target/test-narration-restore-uploads")
+        .resolve(stored.timingsPath().substring("/uploads/".length())));
+
+    NarrationRestoreValidator.ReconciliationResult result = validator.reconcile();
+
+    assertThat(result.ready()).isEqualTo(1);
+    Narration reconciled = repository.findById("timed").orElseThrow();
+    assertThat(reconciled.status()).isEqualTo(NarrationStatus.READY);
+    assertThat(reconciled.audioPath()).isEqualTo(stored.publicPath());
+    assertThat(reconciled.timingsPath()).isNull();
   }
 
   @Test

@@ -375,6 +375,7 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
         contentId: request.contentId,
         audioUrl: response.audioUrl,
         durationSeconds: response.durationSeconds,
+        timingsUrl: response.timingsUrl,
       })
       return next
     })
@@ -444,6 +445,7 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
       ...request,
       audioUrl: response.audioUrl,
       durationSeconds: response.durationSeconds,
+      timingsUrl: response.timingsUrl,
     }
     setTrack(next)
     setStage('ready')
@@ -569,6 +571,7 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
         ...request,
         audioUrl: ready.audioUrl,
         durationSeconds: ready.durationSeconds,
+        timingsUrl: ready.timingsUrl,
       }
       setTrack(next)
       setStage('ready')
@@ -872,7 +875,10 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
     [stage, track],
   )
 
+  const currentTime = useCallback(() => audioRef.current?.currentTime ?? 0, [])
+
   const value = useMemo<NarrationAudioApi>(() => ({
+    currentTime,
     track,
     stage,
     playing,
@@ -902,7 +908,7 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
     setJourney,
     dismissNotice,
   }), [
-    changeRate, delayed, dismiss, dismissNotice, duration, error, journeyEndsAt, lastCompleted,
+    changeRate, currentTime, delayed, dismiss, dismissNotice, duration, error, journeyEndsAt, lastCompleted,
     listen, next, notice, playQueue, playing, position, previous, rate, readyFor, recheck, retry,
     seek, setJourney, setUpNext, skipBy, stage, stageFor, togglePlay, track, upNext,
   ])

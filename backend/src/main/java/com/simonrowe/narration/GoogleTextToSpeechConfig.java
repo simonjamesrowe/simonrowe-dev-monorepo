@@ -12,7 +12,7 @@ import org.springframework.lang.Nullable;
 import org.springframework.web.client.RestClient;
 
 @Configuration
-@EnableConfigurationProperties(NarrationProperties.class)
+@EnableConfigurationProperties({NarrationProperties.class, NarrationTimingsProperties.class})
 public class GoogleTextToSpeechConfig {
 
   private static final Logger LOG =

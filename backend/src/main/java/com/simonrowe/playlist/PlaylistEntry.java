@@ -66,12 +66,14 @@ public record PlaylistEntry(
    * @param state the narration's public state
    * @param audioUrl site-relative path under {@code /uploads/}, only when ready
    * @param durationSeconds audio length, only when ready
+   * @param timingsUrl the read-along timings, only when ready and the audio has them
    */
   @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Audio(
       NarrationResponse.PublicState state,
       String audioUrl,
-      Long durationSeconds
+      Long durationSeconds,
+      String timingsUrl
   ) {
   }
 }

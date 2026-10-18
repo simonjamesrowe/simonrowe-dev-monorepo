@@ -9,8 +9,21 @@ public record NarrationResponse(
     String audioUrl,
     Long durationSeconds,
     boolean retryable,
-    String message
+    String message,
+    String timingsUrl
 ) {
+
+  /** A response with no read-along timings, which is every state but {@code READY}. */
+  public NarrationResponse(
+      final PublicState state,
+      final long version,
+      final String audioUrl,
+      final Long durationSeconds,
+      final boolean retryable,
+      final String message
+  ) {
+    this(state, version, audioUrl, durationSeconds, retryable, message, null);
+  }
 
   public enum PublicState {
     NOT_REQUESTED,
@@ -42,7 +55,8 @@ public record NarrationResponse(
           narration.audioPath(),
           narration.durationSeconds(),
           false,
-          "Generated narration is ready");
+          "Generated narration is ready",
+          narration.timingsPath());
       case FAILED -> new NarrationResponse(
           "BUDGET_EXHAUSTED".equals(narration.failureCode())
               ? PublicState.UNAVAILABLE : PublicState.FAILED,

@@ -39,6 +39,39 @@ class NarrationBudgetServiceTest {
         .allows(narration("new", 1), Instant.now())).isFalse();
   }
 
+  @Test
+  void countsAudioReMadeThisMonthAsWellAsAudioFirstMadeThisMonth() {
+    Narration made = narration("made", 30);
+    made.markProviderRequestStarted(Instant.parse("2026-08-01T00:00:00Z"));
+    when(repository.findByProviderRequestStartedTrueAndRequestedAtBetween(
+        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+        .thenReturn(List.of(made));
+    when(repository.findByResynthesizedAtBetween(
+        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+        .thenReturn(List.of(narration("remade", 30)));
+    NarrationBudgetService budget = new NarrationBudgetService(repository, properties(100));
+    Instant now = Instant.parse("2026-08-11T12:00:00Z");
+
+    assertThat(budget.allows(narration("exact", 40), now)).isTrue();
+    assertThat(budget.allows(narration("over", 41), now)).isFalse();
+  }
+
+  @Test
+  void reMakingOnlySpendsBelowItsShareOfTheBudget() {
+    Narration made = narration("made", 30);
+    made.markProviderRequestStarted(Instant.parse("2026-08-01T00:00:00Z"));
+    when(repository.findByProviderRequestStartedTrueAndRequestedAtBetween(
+        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+        .thenReturn(List.of(made));
+    NarrationBudgetService budget = new NarrationBudgetService(repository, properties(100));
+    Instant now = Instant.parse("2026-08-11T12:00:00Z");
+
+    assertThat(budget.allowsResynthesis(narration("fits", 20), 0.5, now)).isTrue();
+    assertThat(budget.allowsResynthesis(narration("over", 21), 0.5, now)).isFalse();
+    assertThat(new NarrationBudgetService(repository, properties(0))
+        .allowsResynthesis(narration("none", 1), 0.5, now)).isFalse();
+  }
+
   private static Narration narration(final String id, final int characters) {
     return new Narration(id, NarrationContentType.BLOG, "blog", characters, "voice", "en-GB", "MP3",
         "narrations/" + id + ".mp3", Instant.now());

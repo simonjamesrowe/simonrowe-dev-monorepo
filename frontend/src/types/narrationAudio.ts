@@ -30,6 +30,8 @@ export interface ReadyNarration {
   contentId: string
   audioUrl: string
   durationSeconds: number
+  /** When each word is spoken, for the read-along. Absent for audio made before it existed. */
+  timingsUrl?: string
 }
 
 /** What the docked bar is currently on. */
@@ -47,6 +49,8 @@ export interface NarrationTrack {
   /** Known immediately for a ready track; filled in when a generation chain completes. */
   audioUrl?: string
   durationSeconds?: number
+  /** When each word of `audioUrl` is spoken, for the read-along. Only ever beside its audio. */
+  timingsUrl?: string
   /** Artwork for the full player and the phone's lock screen. */
   imageUrl?: string
   /** The publisher, or "Simon Rowe" for a post. Shown under the title. */

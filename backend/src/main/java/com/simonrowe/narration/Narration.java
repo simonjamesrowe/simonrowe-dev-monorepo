@@ -57,6 +57,21 @@ public class Narration {
   private Instant updatedAt;
   private String failureCode;
   private boolean retryable;
+  /** The read-along timings beside {@link #audioPath}, or null for audio made without them. */
+  private String timingsPath;
+  /**
+   * When this narration's audio was last re-made to add timings. The re-make costs characters
+   * in that month, which {@link NarrationBudgetService} counts from here.
+   */
+  private Instant resynthesizedAt;
+  /** Failed attempts to re-make this narration's audio with timings. */
+  private int timingsAttempts;
+  /**
+   * The audio a re-make replaced. Kept on disk for a while because somebody may be halfway
+   * through it, and players fetch audio in ranges as they go.
+   */
+  private String retiredAudioPath;
+  private Instant retiredAt;
 
   @SuppressWarnings("unused")
   private Narration() {
@@ -193,6 +208,26 @@ public class Narration {
     return retryable;
   }
 
+  public String timingsPath() {
+    return timingsPath;
+  }
+
+  public Instant resynthesizedAt() {
+    return resynthesizedAt;
+  }
+
+  public int timingsAttempts() {
+    return timingsAttempts;
+  }
+
+  public String retiredAudioPath() {
+    return retiredAudioPath;
+  }
+
+  public Instant retiredAt() {
+    return retiredAt;
+  }
+
   public void markProviderRequestStarted(final Instant now) {
     providerRequestStarted = true;
     failureCode = null;
@@ -210,6 +245,7 @@ public class Narration {
     fileSize = stored.fileSize();
     checksumSha256 = stored.checksumSha256();
     durationSeconds = stored.durationSeconds();
+    timingsPath = stored.timingsPath();
     leaseUntil = null;
     completedAt = now;
     failureCode = null;
@@ -249,6 +285,12 @@ public class Narration {
     touch(now);
   }
 
+  /** Forgets timings whose file is gone, so the upgrade sweep makes them again. */
+  public void clearTimings(final Instant now) {
+    timingsPath = null;
+    touch(now);
+  }
+
   public void incrementReuse(final Instant now) {
     reuseCount++;
     touch(now);
@@ -278,5 +320,6 @@ public class Narration {
     fileSize = null;
     checksumSha256 = null;
     durationSeconds = null;
+    timingsPath = null;
   }
 }

@@ -1,4 +1,5 @@
 import {
+  BookOpenText,
   ChevronDown,
   ExternalLink,
   Headphones,
@@ -12,14 +13,15 @@ import {
   TrainFront,
 } from 'lucide-react'
 import { useEffect, useState, type Ref } from 'react'
-import ReactMarkdown, { type Components } from 'react-markdown'
 import { Link } from 'react-router-dom'
 
 import { formatClock, formatDate, toTrack } from './playlistFormat'
+import { ReadAlong } from './ReadAlong'
 import { useAuth } from '../../auth/useAuth'
 import { itemKey, upNextOf, usePlaylistSnapshot } from '../../hooks/playlistStore'
 import { usePlaylistActions } from '../../hooks/usePlaylistActions'
 import { fetchArticleSummary } from '../../services/articleSummaryApi'
+import { fetchBlogById } from '../../services/blogApi'
 import { narrationMediaUrl } from '../narration/narrationMedia'
 import { PLAYBACK_SPEEDS } from '../narration/playbackSpeeds'
 import { useNarrationAudio } from '../narration/useNarrationAudio'
@@ -27,17 +29,15 @@ import { useNarrationAudio } from '../narration/useNarrationAudio'
 const SKIP_BACK_SECONDS = 15
 const SKIP_FORWARD_SECONDS = 30
 
-/**
- * The summary is model output, so it gets the same treatment the summary drawer gives it, only
- * stricter: no link survives as a link and no image is shown. The prompt forbids both anyway.
- */
-const SUMMARY_COMPONENTS: Components = {
-  a({ children }) {
-    return <>{children}</>
-  },
-  img() {
-    return null
-  },
+/** Remembers whether the phone player shows the text instead of the artwork. */
+const READ_ALONG_KEY = 'narration-read-along'
+
+function readAlongPreferred(): boolean {
+  try {
+    return window.localStorage.getItem(READ_ALONG_KEY) === 'on'
+  } catch {
+    return false
+  }
 }
 
 interface NowPlayingPanelProps {
@@ -59,7 +59,8 @@ export function NowPlayingPanel({ variant, onClose, headingRef }: NowPlayingPane
   const { isAuthenticated } = useAuth()
   const { data } = usePlaylistSnapshot()
   const { toggleFavourite } = usePlaylistActions()
-  const [summary, setSummary] = useState<string | null>(null)
+  const [text, setText] = useState<string | null>(null)
+  const [reading, setReading] = useState(readAlongPreferred)
 
   const entry = track
     ? data?.items.find((item) => itemKey(item) === itemKey(track))
@@ -67,23 +68,37 @@ export function NowPlayingPanel({ variant, onClose, headingRef }: NowPlayingPane
   const queue = data ? upNextOf(data.items) : []
   const queueIndex = track ? queue.findIndex((item) => itemKey(item) === itemKey(track)) : -1
 
-  // Read along on the wide card: fetch the summary being heard. Public, and cheap.
-  const summaryId = variant === 'card' && track?.contentType === 'ARTICLE_SUMMARY'
-    ? track.contentId
-    : null
+  // Read along: fetch the text being heard, a summary or a post. Both are public, and cheap.
+  const contentType = track?.contentType
+  const contentId = track?.contentId
   useEffect(() => {
-    setSummary(null)
-    if (!summaryId) return undefined
+    setText(null)
+    if (!contentType || !contentId) return undefined
     const controller = new AbortController()
-    fetchArticleSummary(summaryId, { signal: controller.signal })
-      .then((response) => {
-        if (!controller.signal.aborted && response.state === 'READY') setSummary(response.body)
+    const load = contentType === 'BLOG'
+      ? fetchBlogById(contentId).then((blog) => blog.content)
+      : fetchArticleSummary(contentId, { signal: controller.signal })
+        .then((response) => (response.state === 'READY' ? response.body : null))
+    load
+      .then((body) => {
+        if (!controller.signal.aborted && body) setText(body)
       })
       .catch(() => {
         // The read-along is a nicety. The audio plays without it.
       })
     return () => controller.abort()
-  }, [summaryId])
+  }, [contentId, contentType])
+
+  const toggleReading = () => {
+    setReading((on) => {
+      try {
+        window.localStorage.setItem(READ_ALONG_KEY, on ? 'off' : 'on')
+      } catch {
+        // Private browsing: the choice lasts until the page closes.
+      }
+      return !on
+    })
+  }
 
   if (!track) {
     return (
@@ -128,11 +143,15 @@ export function NowPlayingPanel({ variant, onClose, headingRef }: NowPlayingPane
         </div>
       )}
 
-      <div className="now-playing__art">
-        {track.imageUrl
-          ? <img alt="" src={narrationMediaUrl(track.imageUrl)} />
-          : <Headphones aria-hidden="true" size={40} />}
-      </div>
+      {variant === 'sheet' && reading && text
+        ? <ReadAlong className="read-along--sheet" markdown={text} timingsUrl={track.timingsUrl} />
+        : (
+          <div className="now-playing__art">
+            {track.imageUrl
+              ? <img alt="" src={narrationMediaUrl(track.imageUrl)} />
+              : <Headphones aria-hidden="true" size={40} />}
+          </div>
+        )}
 
       <div className="now-playing__body">
         <p className="now-playing__from">
@@ -216,6 +235,16 @@ export function NowPlayingPanel({ variant, onClose, headingRef }: NowPlayingPane
           >
             {rate}×
           </button>
+          {variant === 'sheet' && text && (
+            <button
+              aria-pressed={reading}
+              className={`now-playing__option${reading ? ' now-playing__option--on' : ''}`}
+              onClick={toggleReading}
+              type="button"
+            >
+              <BookOpenText aria-hidden="true" size={14} /> Read along
+            </button>
+          )}
           {minutesToStop !== null && (
             <button
               aria-label={`Pauses in ${minutesToStop} minutes. Cancel`}
@@ -242,12 +271,14 @@ export function NowPlayingPanel({ variant, onClose, headingRef }: NowPlayingPane
 
         {variant === 'card' && (
           <div className="now-playing__read">
-            {summary && (
+            {text && (
               <>
-                <h3 className="now-playing__read-title">The summary</h3>
-                <div className="now-playing__summary">
-                  <ReactMarkdown components={SUMMARY_COMPONENTS}>{summary}</ReactMarkdown>
-                </div>
+                <h3 className="now-playing__read-title">
+                  {track.timingsUrl
+                    ? 'Read along'
+                    : track.contentType === 'BLOG' ? 'The post' : 'The summary'}
+                </h3>
+                <ReadAlong markdown={text} timingsUrl={track.timingsUrl} />
               </>
             )}
             {track.external

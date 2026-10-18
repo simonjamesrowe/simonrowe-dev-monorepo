@@ -62,6 +62,8 @@ export interface NarrationAudioApi extends NarrationAudioState {
   /** Pause after this many minutes of wall-clock time, or never with null. */
   setJourney: (minutes: number | null) => void
   dismissNotice: () => void
+  /** The audio element's own clock, for consumers that need more than `position`'s ~4Hz. */
+  currentTime: () => number
 }
 
 export const NarrationAudioContext = createContext<NarrationAudioApi | null>(null)

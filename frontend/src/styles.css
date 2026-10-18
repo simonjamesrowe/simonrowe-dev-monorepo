@@ -16113,18 +16113,6 @@ a.project-question:hover {
   text-transform: uppercase;
 }
 
-.now-playing__summary {
-  max-height: 18rem;
-  overflow-y: auto;
-  color: var(--on-surface-variant);
-  font-size: 0.875rem;
-  line-height: 1.6;
-}
-
-.now-playing__summary p {
-  margin: 0 0 0.6rem;
-}
-
 .now-playing__link {
   display: inline-flex;
   align-items: center;
@@ -17791,5 +17779,110 @@ label.meals-button { position: relative; }
   /* Nothing chosen: the hint is for a wide screen, where the panel sits beside the list. */
   .snippets-admin__detail--empty {
     display: none;
+  }
+}
+
+/* Read along: the text being heard, with the spoken word and its sentence highlighted. */
+.read-along {
+  position: relative;
+}
+
+.read-along__text {
+  /* So a word's offsetTop is measured from the box it scrolls in. */
+  position: relative;
+  max-height: 18rem;
+  overflow-y: auto;
+  color: var(--on-surface-variant);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  scroll-padding: 2rem 0;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 1.5rem, #000 calc(100% - 2.5rem), transparent 100%);
+}
+
+.read-along__text p {
+  margin: 0 0 0.75rem;
+}
+
+.read-along__text:focus-visible {
+  outline: 2px solid var(--ai-accent-border);
+  outline-offset: 2px;
+}
+
+.read-along__text pre {
+  overflow-x: auto;
+  font-size: 0.8125rem;
+}
+
+.read-along__text table {
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.read-along__text th,
+.read-along__text td {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border-faint);
+}
+
+/* With timings, what is not being read steps back, so the sentence being read stands out. */
+.read-along--timed .read-along__text {
+  color: color-mix(in srgb, var(--on-surface-variant) 60%, transparent);
+}
+
+.read-along--timed .read-along__word--timed {
+  border-radius: 0.3em;
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.2s;
+}
+
+.read-along--timed .read-along__word--spoken {
+  color: var(--on-surface-variant);
+}
+
+.read-along--timed .read-along__word--sentence {
+  color: var(--on-surface);
+}
+
+.read-along--timed .read-along__word--current {
+  background: var(--ai-accent-bg);
+  box-shadow: 0 0 0 0.12em var(--ai-accent-bg);
+  color: var(--ai-accent-strong);
+}
+
+.read-along--timed .read-along__word--timed:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--ai-accent-border);
+}
+
+.read-along__follow {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--ai-accent-border);
+  border-radius: 999px;
+  background: var(--surface-container-high);
+  color: var(--ai-accent-strong);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.read-along--sheet {
+  /* Clears the sheet's floating top bar, and the title block's -1.75rem pull over the art. */
+  margin: 0 1.4rem 2.5rem;
+  padding-top: calc(4rem + env(safe-area-inset-top));
+}
+
+.read-along--sheet .read-along__text {
+  height: 42vh;
+  max-height: none;
+  font-size: 1.125rem;
+  line-height: 1.65;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .read-along--timed .read-along__word--timed {
+    transition: none;
   }
 }

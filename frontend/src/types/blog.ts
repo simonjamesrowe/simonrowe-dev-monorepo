@@ -70,11 +70,13 @@ export type BlogNarrationResponse =
       state: 'READY'
       audioUrl: string
       durationSeconds: number
+      timingsUrl?: string
     })
   | (BlogNarrationResponseBase & {
       state: Exclude<BlogNarrationState, 'READY'>
       audioUrl?: never
       durationSeconds?: never
+      timingsUrl?: never
     })
 
 export interface BlogSearchResult {

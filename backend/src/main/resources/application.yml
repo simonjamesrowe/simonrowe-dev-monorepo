@@ -371,6 +371,16 @@ narration:
   operation-timeout: ${NARRATION_OPERATION_TIMEOUT:5m}
   lease-duration: ${NARRATION_LEASE_DURATION:2m}
   recovery-delay: ${NARRATION_RECOVERY_DELAY:30s}
+  # Read-along: each sentence is synthesised on its own so its audio places it on the timeline.
+  timings:
+    concurrency: ${NARRATION_TIMINGS_CONCURRENCY:4}
+    segment-attempts: ${NARRATION_TIMINGS_SEGMENT_ATTEMPTS:3}
+    # Re-makes audio made before timings existed, newest first, only while this month's spend
+    # is under the share below, so what a reader asks for always has room in the free tier.
+    upgrade-enabled: ${NARRATION_TIMINGS_UPGRADE_ENABLED:false}
+    upgrade-budget-share: ${NARRATION_TIMINGS_UPGRADE_BUDGET_SHARE:0.5}
+    upgrade-interval: ${NARRATION_TIMINGS_UPGRADE_INTERVAL:5m}
+    upgrade-max-attempts: ${NARRATION_TIMINGS_UPGRADE_MAX_ATTEMPTS:3}
 
 search:
   sync:

@@ -133,6 +133,26 @@ class NarrationReadyAggregationTest extends AbstractIntegrationTest {
     assertThat(narrationService.readyNarrations(NarrationContentType.ARTICLE_SUMMARY)).isEmpty();
   }
 
+  @Test
+  void carriesTheReadAlongTimingsOfTheRowItPicks() {
+    save(ready("blog-a-old", NarrationContentType.BLOG, "blog-a", 100,
+        NOW.minus(5, ChronoUnit.DAYS)));
+    Narration timed = queued("blog-a-new", NarrationContentType.BLOG, "blog-a");
+    timed.markReady(new NarrationStorage.StoredNarration(
+        "/uploads/narrations/blog-a-new/audio-abc.mp3", 4096, "checksum", 120,
+        "/uploads/narrations/blog-a-new/timings-abc.json"), NOW);
+    save(timed);
+    save(ready("blog-b", NarrationContentType.BLOG, "blog-b", 412, NOW));
+
+    List<ReadyNarration> ready = narrationService.readyNarrations(NarrationContentType.BLOG);
+
+    assertThat(ready)
+        .extracting(ReadyNarration::contentId, ReadyNarration::timingsUrl)
+        .containsExactlyInAnyOrder(
+            tuple("blog-a", "/uploads/narrations/blog-a-new/timings-abc.json"),
+            tuple("blog-b", null));
+  }
+
   private void save(final Narration narration) {
     mongoTemplate.save(narration);
   }

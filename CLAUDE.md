@@ -275,6 +275,34 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- playlist-read-along: **The player highlights the word being spoken, and its sentence**, for
+  summaries and posts, on the playlist card and (behind a "Read along" toggle) the phone sheet.
+  Load-bearing bits:
+  - **Chirp 3 HD has no `<mark>` and no timepointing, so every narration is synthesised one
+    sentence per request** (`NarrationSynthesizer`, `NarrationScriptChunker.segments`). Each
+    clip's exact length comes from walking its MP3 frames (`Mp3Frames`), and words are spread
+    across their sentence by length (`NarrationTimings`). Against Whisper on a real summary: median
+    word 0.19s out, nine in ten within 0.42s, no early or late lean. Spreading words across the
+    whole narration instead was 1.5s out.
+  - **The cost, accepted: each join is about 0.6s of Google's own lead-in and tail silence.** A
+    measured summary went from 172s to 188s and its longest pause from 0.61s to 1.13s. The lead-in
+    cannot be trimmed: MP3 frames borrow from earlier frames and no frame after the first starts
+    clean, so cutting plays noise. Sentences under 40 characters are joined to the next instead.
+  - **Timed audio is content-addressed** (`audio-<hash>.mp3` beside `timings-<hash>.json`), so a
+    cached old MP3 can never be paired with new timings. Untimed audio keeps `narration.mp3`.
+    `timingsUrl` is on `NarrationResponse`, `ReadyNarration` and the playlist entry's `audio`.
+  - **Old audio is re-made by `NarrationTimingsUpgradeSweep`, newest first, one per 5 minutes,
+    only while the month's spend is under half the budget** (`narration.timings.upgrade-budget-share`),
+    so a reader's request always has room in the free tier. The budget now also counts
+    `resynthesizedAt`. The swap is one conditional update on status and checksum, never version,
+    which every reuse bumps. Replaced audio is retired for 6 hours, not deleted, because players
+    fetch in ranges and a listener may be mid-file. For the same reason the reuse path in
+    `NarrationService.request` is now an atomic `$inc`: saving the loaded document back would
+    undo a swap.
+  - The frontend matches timings onto the rendered markdown in order (`readAlongTimings.ts`):
+    the title is spoken but not shown, and code blocks and tables are not narrated, so their
+    words stay unwrapped. The highlight runs on `requestAnimationFrame` from the player's new
+    `currentTime()`, toggling classes on only the spans that change.
 - 054-summary-snippets: **The admin can keep passages from news summaries as snippets**, with a
   note and tags, and find them again at `/admin/snippets` (`com.simonrowe.snippet`, collection
   `snippets`, `V061CreateSnippets`). Select text in a summary drawer for Highlight, Add note or
