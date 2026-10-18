@@ -20,6 +20,7 @@ import com.simonrowe.summary.ArticleSummary;
 import com.simonrowe.summary.ArticleSummaryRepository;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +47,17 @@ class SnippetApiTest extends AbstractIntegrationTest {
   @Autowired private ArticleSummaryRepository summaryRepository;
   @Autowired private SnippetRepository snippetRepository;
   @Autowired private ObjectMapper objectMapper;
+
+  /**
+   * Leaves nothing behind for the next class on the shared Mongo: other tests count the
+   * articles and READY summaries they see (`/api/news/summaries/ids` must start empty).
+   */
+  @AfterEach
+  void removeWhatThisClassWrote() {
+    mongoTemplate.dropCollection(Snippet.COLLECTION);
+    articleRepository.deleteAll();
+    summaryRepository.deleteAll();
+  }
 
   @BeforeEach
   void freshCollections() {
