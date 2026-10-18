@@ -114,6 +114,7 @@ export function createMealsApi(getToken: TokenGetter) {
     clearBasket: async () => { await request('/shopping/basket', { method: 'DELETE' }) },
 
     readRecipeLink: (url: string) => send<RecipeInput>('/recipes/read/link', 'POST', { url }),
+    readRecipeText: (text: string) => send<RecipeInput>('/recipes/read/text', 'POST', { text }),
     readRecipePhoto: (image: Blob) => {
       const form = new FormData()
       form.append('image', image, 'recipe.jpg')
@@ -124,6 +125,10 @@ export function createMealsApi(getToken: TokenGetter) {
       form.append('image', image, 'photo.jpg')
       return json<{ name: string }>('/images', { method: 'POST', body: form })
     },
+    generatePhoto: (name: string, ingredients: string[], signal?: AbortSignal) =>
+      json<{ name: string }>('/images/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, ingredients }), signal,
+      }),
     createRecipe: (input: RecipeInput) => send<Recipe>('/recipes', 'POST', input),
     updateRecipe: (id: string, input: RecipeInput) =>
       send<Recipe>(`/recipes/${encodeURIComponent(id)}`, 'PUT', input),

@@ -4,6 +4,7 @@ import com.simonrowe.webfetch.UrlFetcher;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.jsoup.nodes.Document;
@@ -18,7 +19,8 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Reads a recipe from a web page or a photo into a draft the owner reviews before it is saved.
+ * Reads a recipe from a web page, pasted text or a photo into a draft the owner reviews before it
+ * is saved.
  *
  * <p>A page's schema.org {@code Recipe} JSON-LD is preferred over its text: it is what recipe
  * sites publish for search engines, and it carries the ingredient list and steps without the
@@ -47,6 +49,10 @@ public class RecipeReader {
         tier (tracked for fresh food, meat, fish, dairy, eggs and bread; staple for dry goods,
         tins, frozen, spices, sauces and condiments) and aisle.
       Never invent ingredients or steps the source does not have.
+      The source may be a social media post: ignore the chatter, emoji, hashtags and plugs. Every
+      ingredient list belongs to the recipe, including ones under their own heading (a topping,
+      a sauce, a glaze), and lines such as "pinch of salt" or "sweetener to taste" are still
+      ingredients, with a null quantity.
 
       Known ingredients (name | unit):
       %s
@@ -129,6 +135,24 @@ public class RecipeReader {
     return withSource(structure(source, null, null), "LINK", page.finalUrl());
   }
 
+  /**
+   * Reads a recipe pasted as text: a social media caption, a message, a page copied by hand.
+   * Text longer than a page is refused rather than clipped, because the end of a recipe is the
+   * method, and a draft without it looks complete.
+   */
+  public RecipeService.RecipeInput fromText(final String text) {
+    String trimmed = text == null ? "" : text.strip();
+    if (trimmed.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paste the recipe's text");
+    }
+    if (trimmed.length() > MAX_PAGE_TEXT) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "That is too long to be one recipe. Paste just the recipe.");
+    }
+    return withSource(structure("Pasted recipe:%n%n%s".formatted(trimmed), null, null), "TEXT",
+        null);
+  }
+
   /** Reads the recipe in a photo: a cookbook page, a screenshot, a card. */
   public RecipeService.RecipeInput fromImage(final byte[] image, final String type) {
     return withSource(structure("Read the recipe in the attached image.", image, type), "PHOTO",
@@ -202,15 +226,24 @@ public class RecipeReader {
     }
   }
 
-  /** The model's newIngredients, minus any it listed that the catalogue already has. */
+  /**
+   * The draft with every line's name normalised as the catalogue keys it (stripped, lower case),
+   * and the model's newIngredients minus any the catalogue already has. Both sides go through
+   * {@link #normalName}: the model sometimes capitalises a line's name ("Greek yogurt") while
+   * listing it new in lower case, and comparing the two raw dropped it from the new list.
+   */
   private static RecipeService.RecipeInput keepOnlyNewIngredients(
       final RecipeService.RecipeInput d, final Map<String, MealIngredient> catalogue) {
+    List<MealRecipe.IngredientLine> lines = d.ingredients() == null ? List.of()
+        : d.ingredients().stream()
+            .map(l -> new MealRecipe.IngredientLine(l.text(), normalName(l.name()), l.quantity(),
+                l.unit()))
+            .toList();
     List<MealIngredient> fresh = new ArrayList<>();
     for (MealIngredient i : d.newIngredients() == null ? List.<MealIngredient>of()
         : d.newIngredients()) {
-      String name = i.name() == null ? "" : i.name().strip().toLowerCase();
-      boolean used = d.ingredients() != null
-          && d.ingredients().stream().anyMatch(l -> name.equals(l.name()));
+      String name = normalName(i.name());
+      boolean used = lines.stream().anyMatch(l -> name.equals(l.name()));
       if (!name.isEmpty() && used && !catalogue.containsKey(name)
           && fresh.stream().noneMatch(f -> f.name().equals(name))) {
         fresh.add(new MealIngredient(name, i.unit(), i.tier(), i.aisle(), false));
@@ -218,8 +251,12 @@ public class RecipeReader {
     }
     return new RecipeService.RecipeInput(d.name(), d.category(), d.section(), d.servings(),
         d.perServing(), d.macrosEstimated(), d.vegetarian(), d.vegan(), d.freezable(),
-        d.mainProtein(), d.ingredients(), d.method(), d.tips(), d.swaps(), d.sourceType(),
+        d.mainProtein(), lines, d.method(), d.tips(), d.swaps(), d.sourceType(),
         d.sourceUrl(), d.photo(), fresh);
+  }
+
+  private static String normalName(final String name) {
+    return name == null ? "" : name.strip().toLowerCase(Locale.ROOT);
   }
 
   private static RecipeService.RecipeInput withSource(final RecipeService.RecipeInput d,

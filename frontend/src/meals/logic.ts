@@ -139,3 +139,93 @@ export function describeChange(c: InventoryChange): string {
     default: return `${c.name}: ${c.status ?? 'have'}`
   }
 }
+
+/**
+ * The address to read when what was pasted is just a link, otherwise null and the text is read
+ * as a recipe. A bare host and path ("bbcgoodfood.com/recipes/x") counts, as https. Anything
+ * with a space in it is text, even if it holds a link: a caption that ends "recipe on my site
+ * https://…" is still the recipe.
+ */
+export function recipeLink(pasted: string): string | null {
+  const text = pasted.trim()
+  if (!text || /\s/.test(text)) return null
+  const candidate = /^https?:\/\//i.test(text) ? text : /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(text) ? `https://${text}` : null
+  if (!candidate) return null
+  try {
+    const url = new URL(candidate)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+const FRACTIONS: Record<string, number> = { '½': 0.5, '¼': 0.25, '¾': 0.75, '⅓': 1 / 3, '⅔': 2 / 3, '⅛': 0.125 }
+const UNITS: { pattern: RegExp; unit: Unit; factor: number }[] = [
+  { pattern: /^(kg|kilos?|kilograms?)$/, unit: 'g', factor: 1000 },
+  { pattern: /^(g|grams?|gr)$/, unit: 'g', factor: 1 },
+  { pattern: /^(l|litres?|liters?)$/, unit: 'ml', factor: 1000 },
+  { pattern: /^(ml|millilitres?|milliliters?)$/, unit: 'ml', factor: 1 },
+  { pattern: /^(tbsps?|tablespoons?)$/, unit: 'ml', factor: 15 },
+  { pattern: /^(tsps?|teaspoons?)$/, unit: 'ml', factor: 5 },
+]
+
+/**
+ * A best guess at a typed ingredient line's name, amount and unit, so a line added by hand
+ * needs no more than the line itself. Recipes read by the model never go through this: it is
+ * only the fallback for "+ Line". Units follow the reader's rules (g, ml or each; a teaspoon is
+ * 5 ml and a tablespoon 15 ml).
+ */
+export function parseLine(text: string): Pick<IngredientLine, 'name' | 'quantity' | 'unit'> {
+  let rest = text.trim().replace(/^[-•*–]\s*/, '')
+  const amount = leadingAmount(rest)
+  let quantity = amount?.value ?? null
+  if (amount) rest = rest.slice(amount.length).trim()
+  let unit: Unit | null = null
+  if (quantity != null) {
+    const word = /^([a-z]+)\.?\b/i.exec(rest)
+    const known = word && UNITS.find((u) => u.pattern.test(word[1].toLowerCase()))
+    if (known && word) {
+      unit = known.unit
+      quantity = +(quantity * known.factor).toFixed(2)
+      rest = rest.slice(word[0].length).trim()
+    } else {
+      unit = 'each'
+    }
+  }
+  const name = rest
+    .replace(/\([^)]*\)/g, ' ')
+    .split(',')[0]
+    .replace(/^(a\s+)?(pinch|splash|dash|handful|sprinkle|zest|juice)\s+(of\s+)?/i, '')
+    .replace(/^of\s+/i, '')
+    .split(/\s+/)
+    .filter((w) => w && !/^\d+(\.\d+)?%$/.test(w))
+    .join(' ')
+    .toLowerCase()
+  return { name, quantity, unit }
+}
+
+/** "1 1/2", "1/2", "1½", "½" or "40" at the start of a line, and how many characters it took. */
+function leadingAmount(text: string): { value: number; length: number } | null {
+  let m = /^(\d+)\s+(\d+)\/(\d+)/.exec(text)
+  if (m && Number(m[3])) return { value: Number(m[1]) + Number(m[2]) / Number(m[3]), length: m[0].length }
+  m = /^(\d+)\/(\d+)/.exec(text)
+  if (m && Number(m[2])) return { value: Number(m[1]) / Number(m[2]), length: m[0].length }
+  m = /^(\d+(?:\.\d+)?)?\s?([½¼¾⅓⅔⅛])/.exec(text)
+  if (m) return { value: (m[1] ? Number(m[1]) : 0) + FRACTIONS[m[2]], length: m[0].length }
+  m = /^\d+(?:\.\d+)?/.exec(text)
+  return m ? { value: Number(m[0]), length: m[0].length } : null
+}
+
+/** Up to four known ingredient names close to one that is not known, for fixing a near miss. */
+export function nearNames(name: string, known: Iterable<string>): string[] {
+  const wanted = name.trim().toLowerCase()
+  if (wanted.length < 3) return []
+  const all = [...known]
+  if (all.includes(wanted)) return []
+  const words = wanted.split(/\s+/).filter((w) => w.length > 3)
+  const score = (k: string) => (k.includes(wanted) || wanted.includes(k) ? 2 : words.some((w) => k.split(/\s+/).includes(w)) ? 1 : 0)
+  return all
+    .filter((k) => score(k) > 0)
+    .sort((a, b) => score(b) - score(a) || Math.abs(a.length - wanted.length) - Math.abs(b.length - wanted.length) || a.localeCompare(b))
+    .slice(0, 4)
+}

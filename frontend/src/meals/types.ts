@@ -1,4 +1,7 @@
 export type Unit = 'g' | 'ml' | 'each'
+
+/** A book, a web page, a photo, or pasted or typed text. */
+export type RecipeSourceType = 'BOOK' | 'LINK' | 'PHOTO' | 'TEXT'
 export type Category = 'breakfast' | 'main' | 'snack' | 'drink' | 'dessert'
 
 export interface IngredientLine {
@@ -11,7 +14,7 @@ export interface IngredientLine {
 export interface Recipe {
   id: string
   name: string
-  source: { type: 'BOOK' | 'LINK' | 'PHOTO'; book: string | null; pages: number[]; url: string | null }
+  source: { type: RecipeSourceType; book: string | null; pages: number[]; url: string | null }
   section: string | null
   category: Category
   vegetarian: boolean
@@ -184,7 +187,7 @@ export interface RecipeInput {
   method: string[]
   tips: string[]
   swaps: string[]
-  sourceType: 'BOOK' | 'LINK' | 'PHOTO' | null
+  sourceType: RecipeSourceType | null
   sourceUrl: string | null
   photo: string | null
   newIngredients: NewIngredient[]

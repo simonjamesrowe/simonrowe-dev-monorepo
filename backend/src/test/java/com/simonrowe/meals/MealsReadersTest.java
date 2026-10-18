@@ -119,6 +119,66 @@ class MealsReadersTest {
   }
 
   @Test
+  void recipeReaderReadsPastedTextAsText() {
+    RecipeReader reader = new RecipeReader(mock(UrlFetcher.class), model, kitchen);
+    when(model.structured(anyString(), anyString(), any(), any(), anyString(),
+        eq(MealsModel.LONG_CALL_TIMEOUT))).thenReturn("""
+        {"name":"Test Pancakes","category":"breakfast","section":null,"servings":1,
+         "perServing":{"kcal":400,"protein":30,"carbs":40,"fat":10},"macrosEstimated":false,
+         "vegetarian":true,"vegan":false,"freezable":null,"mainProtein":"egg",
+         "ingredients":[{"text":"40g oats","name":"oats","quantity":40,"unit":"g"},
+                        {"text":"Pinch of salt","name":"salt","quantity":null,"unit":null}],
+         "method":["Blend.","Cook."],"tips":[],"swaps":[],
+         "newIngredients":[{"name":"salt","unit":null,"tier":"staple","aisle":"Cupboard"}]}""");
+
+    RecipeService.RecipeInput draft =
+        reader.fromText("  TEST PANCAKES 🥞\n-40g oats\n-Pinch of salt\n1. Blend. 2. Cook.  ");
+
+    assertThat(draft.name()).isEqualTo("Test Pancakes");
+    assertThat(draft.sourceType()).isEqualTo("TEXT");
+    assertThat(draft.sourceUrl()).isNull();
+    assertThat(draft.newIngredients()).extracting(MealIngredient::name).containsExactly("salt");
+    verify(model).structured(contains("social media post"),
+        eq("Pasted recipe:%n%nTEST PANCAKES 🥞\n-40g oats\n-Pinch of salt\n1. Blend. 2. Cook."
+            .formatted()),
+        isNull(), isNull(), anyString(), eq(MealsModel.LONG_CALL_TIMEOUT));
+  }
+
+  @Test
+  void recipeReaderMatchesNewIngredientsWhateverTheCaseOfTheLine() {
+    RecipeReader reader = new RecipeReader(mock(UrlFetcher.class), model, kitchen);
+    when(model.structured(anyString(), anyString(), any(), any(), anyString(),
+        eq(MealsModel.LONG_CALL_TIMEOUT))).thenReturn("""
+        {"name":"Test Bowl","category":"breakfast","section":null,"servings":1,
+         "perServing":{"kcal":200,"protein":20,"carbs":10,"fat":5},"macrosEstimated":false,
+         "vegetarian":true,"vegan":false,"freezable":null,"mainProtein":null,
+         "ingredients":[{"text":"125g 0% Greek yogurt","name":" Greek Yogurt ","quantity":125,
+                         "unit":"g"},
+                        {"text":"40g Oats","name":"Oats","quantity":40,"unit":"g"}],
+         "method":["Mix."],"tips":[],"swaps":[],
+         "newIngredients":[{"name":"greek yogurt","unit":"g","tier":"tracked",
+                            "aisle":"Dairy & eggs"}]}""");
+
+    RecipeService.RecipeInput draft = reader.fromText("Test bowl");
+
+    assertThat(draft.ingredients()).extracting(MealRecipe.IngredientLine::name)
+        .containsExactly("greek yogurt", "oats");
+    assertThat(draft.newIngredients()).extracting(MealIngredient::name)
+        .containsExactly("greek yogurt");
+  }
+
+  @Test
+  void recipeReaderRefusesEmptyOrOverlongText() {
+    RecipeReader reader = new RecipeReader(mock(UrlFetcher.class), model, kitchen);
+
+    assertThatThrownBy(() -> reader.fromText("   ")).isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Paste");
+    assertThatThrownBy(() -> reader.fromText(null)).isInstanceOf(ResponseStatusException.class);
+    assertThatThrownBy(() -> reader.fromText("x".repeat(RecipeReader.MAX_PAGE_TEXT + 1)))
+        .isInstanceOf(ResponseStatusException.class).hasMessageContaining("too long");
+  }
+
+  @Test
   void recipeReaderRefusesPrivateAddresses() {
     RecipeReader reader = new RecipeReader(mock(UrlFetcher.class), model, kitchen);
 

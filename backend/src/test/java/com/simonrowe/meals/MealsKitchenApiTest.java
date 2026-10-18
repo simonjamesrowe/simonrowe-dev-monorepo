@@ -224,6 +224,30 @@ class MealsKitchenApiTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void pastedRecipeIsSavedAsTextWithNoAddress() throws Exception {
+    mockMvc.perform(post("/api/meals/recipes").with(owner("simon"))
+            .contentType(MediaType.APPLICATION_JSON).content("""
+                {"name":"Pasted Pancakes","category":"breakfast","servings":1,
+                 "perServing":{"kcal":465,"protein":46,"carbs":44,"fat":11},
+                 "ingredients":[{"text":"40g oats","name":"oats","quantity":40,"unit":"g"}],
+                 "method":["Blend.","Cook."],"sourceType":"TEXT",
+                 "sourceUrl":"https://example.com/ignored"}"""))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.source.type").value("TEXT"))
+        .andExpect(jsonPath("$.source.url").doesNotExist());
+  }
+
+  @Test
+  void generatedPhotoNeedsSignInAndName() throws Exception {
+    mockMvc.perform(post("/api/meals/images/generate")
+            .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Pancakes\"}"))
+        .andExpect(status().isUnauthorized());
+    mockMvc.perform(post("/api/meals/images/generate").with(owner("simon"))
+            .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"  \"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void recipePhotoIsStoredOnlyWhenItIsAnImage() throws Exception {
     mockMvc.perform(multipart("/api/meals/images")
             .file(new MockMultipartFile("image", "p.png", "image/png", MealBundles.PNG))

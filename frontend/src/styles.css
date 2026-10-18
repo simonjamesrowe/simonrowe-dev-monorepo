@@ -16931,3 +16931,58 @@ label.meals-button { position: relative; }
 .meals-cta__note { font-weight: 500; opacity: 0.85; font-size: 0.85rem; }
 .meals-cta__note::before { content: '·'; margin-right: 7px; }
 .meals-more__signout { align-self: flex-start; }
+
+/* Meals: adding a recipe (one paste box) and checking it (chips, not native selects) */
+.meals-import__box { min-height: 180px; font-size: 0.95rem; }
+.meals-import__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.meals-import__actions .meals-button--primary { flex: 1 1 180px; justify-content: center; }
+.meals-button--disabled { opacity: 0.45; pointer-events: none; }
+.meals-link:disabled { opacity: 0.45; cursor: default; }
+.meals-rotate { transform: rotate(180deg); }
+
+.meals-editor { padding-bottom: 0; }
+.meals-editor .meals-form { gap: 20px; }
+.meals-editor__photo { display: flex; flex-direction: column; gap: 10px; }
+.meals-editor__photo-frame { aspect-ratio: 3 / 2; max-height: 300px; width: 100%; border-radius: var(--meals-radius); }
+.meals-editor__photo-making { display: inline-flex; align-items: center; gap: 8px; color: var(--on-surface-variant); font-size: 0.9rem; }
+.meals-editor__photo-actions { gap: 8px; }
+.meals-editor__pair { display: grid; gap: 20px; }
+@media (min-width: 640px) { .meals-editor__pair { grid-template-columns: auto 1fr; align-items: start; } }
+.meals-editor .meals-stepper { align-self: flex-start; color: var(--on-surface); }
+.meals-editor .meals-stepper > span { min-width: 84px; text-align: center; }
+.meals-editor__macros legend { display: flex; align-items: center; gap: 8px; }
+.meals-editor__macro-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.meals-editor__macro { display: flex; flex-direction: column; gap: 4px; font-size: 0.74rem; color: var(--on-surface-variant); text-align: center; }
+.meals-editor__macro .meals-input { padding: 9px 6px; text-align: center; font-weight: 600; }
+.meals-editor__section { display: flex; flex-direction: column; gap: 8px; }
+.meals-editor__heading { font-size: 0.9rem !important; font-weight: 600; margin: 0; display: flex; gap: 8px; align-items: baseline; }
+.meals-editor__lines { list-style: none; margin: 0; padding: 0; border-radius: var(--meals-radius); background: var(--surface-container); border: 1px solid var(--border-faint); overflow: hidden; }
+.meals-editor__line { border-top: 1px solid var(--border-subtle); }
+.meals-editor__line:first-child { border-top: 0; }
+.meals-editor__line-view { display: flex; align-items: center; gap: 2px; padding: 8px 6px 8px 14px; }
+.meals-editor__line-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.meals-editor__line-text { font-size: 0.92rem; color: var(--on-surface); }
+.meals-editor__line-match { font-size: 0.76rem; color: var(--on-surface-variant); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.meals-editor__line-edit { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--surface-container-low); }
+.meals-editor__line-fields { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.meals-editor__line-name { flex: 1 1 160px; width: auto; }
+.meals-editor__line-fields .meals-input--qty { width: 84px; }
+.meals-editor__near { align-items: center; }
+.meals-editor__add { align-self: flex-start; }
+.meals-editor__new { gap: 12px; }
+.meals-editor__new-summary {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; width: 100%; padding: 0;
+  background: none; border: 0; color: var(--on-surface); font: inherit; font-size: 0.9rem; text-align: left; cursor: pointer;
+}
+.meals-editor__new-names { display: block; margin-top: 4px; font-size: 0.78rem; color: var(--on-surface-variant); }
+.meals-editor__new-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.meals-editor__new-item { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+.meals-editor__new-item .meals-segmented { align-self: flex-start; }
+.meals-editor__extras { align-self: flex-start; }
+.meals-editor__bar {
+  position: sticky; bottom: calc(var(--meals-nav-height) + env(safe-area-inset-bottom)); z-index: 5;
+  margin: 0 -16px; padding: 12px 16px; background: var(--meals-glass); backdrop-filter: blur(14px);
+  border-top: 1px solid var(--border-faint); display: flex; flex-direction: column; gap: 8px;
+}
+@media (min-width: 900px) { .meals-editor__bar { bottom: 0; } }
+.meals-editor__bar .meals-error { margin: 0; }

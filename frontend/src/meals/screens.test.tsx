@@ -369,44 +369,124 @@ describe('shop', () => {
 })
 
 describe('recipe editor', () => {
-  it('reads a link into a draft, asks about new ingredients, and saves it', async () => {
+  const pancakes = {
+    name: 'Test Pancakes', category: 'breakfast', section: null, servings: 1,
+    perServing: { kcal: 465, protein: 46, carbs: 44, fat: 11 }, macrosEstimated: false,
+    vegetarian: true, vegan: false, freezable: null, mainProtein: 'egg',
+    ingredients: [
+      { text: '40g rolled oats', name: 'oats', quantity: 40, unit: 'g' },
+      { text: '150g 1% cottage cheese', name: 'cottage cheese', quantity: 150, unit: 'g' },
+    ],
+    method: ['Blend.', 'Cook.'], tips: [], swaps: [], sourceType: 'TEXT', sourceUrl: null, photo: null,
+    newIngredients: [{ name: 'cottage cheese', unit: 'g', tier: 'tracked', aisle: 'Dairy & eggs' }],
+  } as const
+
+  it('reads pasted text, makes a photo while it is checked, and saves with nothing else to do', async () => {
     const api = fakeApi({
-      readRecipeLink: vi.fn().mockResolvedValue({
-        name: 'Test Omelette', category: 'breakfast', section: null, servings: 1,
-        perServing: { kcal: 300, protein: 20, carbs: 2, fat: 22 }, macrosEstimated: true,
-        vegetarian: true, vegan: false, freezable: null, mainProtein: 'egg',
-        ingredients: [{ text: '3 eggs', name: 'egg', quantity: 3, unit: 'each' }],
-        method: ['Whisk.', 'Cook.'], tips: [], swaps: [], sourceType: 'LINK', sourceUrl: 'https://example.com/o',
-        photo: null, newIngredients: [{ name: 'egg', unit: 'each', tier: 'tracked', aisle: 'Dairy & eggs' }],
-      }),
-      createRecipe: vi.fn().mockResolvedValue({ id: 'test-omelette' }),
+      readRecipeText: vi.fn().mockResolvedValue(pancakes),
+      generatePhoto: vi.fn().mockResolvedValue({ name: 'made.jpg' }),
+      createRecipe: vi.fn().mockResolvedValue({ id: 'test-pancakes' }),
     })
     render(withApi(api, <RecipeEditor knownIngredients={new Set(['oats'])} />))
 
-    await userEvent.type(screen.getByLabelText('Recipe address'), 'https://example.com/o')
-    await userEvent.click(screen.getByRole('button', { name: /Read it/ }))
-    expect(await screen.findByDisplayValue('Test Omelette')).toBeInTheDocument()
-    expect(screen.getByText(/these are estimates/)).toBeInTheDocument()
-    await userEvent.selectOptions(screen.getByLabelText('egg kept as'), 'tracked')
+    await userEvent.click(screen.getByLabelText('Recipe or link'))
+    await userEvent.paste('TEST PANCAKES\n-40g rolled oats\n-150g 1% cottage cheese\n1. Blend. 2. Cook.')
+    await userEvent.click(screen.getByRole('button', { name: 'Read it' }))
+
+    expect(await screen.findByDisplayValue('Test Pancakes')).toBeInTheDocument()
+    expect(api.readRecipeText).toHaveBeenCalledWith(expect.stringContaining('TEST PANCAKES'))
+    expect(api.readRecipeLink).not.toHaveBeenCalled()
+    expect(api.generatePhoto).toHaveBeenCalledWith('Test Pancakes', ['oats', 'cottage cheese'], expect.any(AbortSignal))
+    expect(screen.getByRole('button', { name: 'Breakfast' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('150g 1% cottage cheese')).toBeInTheDocument()
+    expect(screen.getByText(/1 new ingredient/)).toBeInTheDocument()
+    expect(screen.getByText(/cottage cheese \(Dairy & eggs\)/)).toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: /Make another/ })).toBeEnabled())
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(api.createRecipe).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'Test Omelette', sourceType: 'LINK',
-      newIngredients: [{ name: 'egg', unit: 'each', tier: 'tracked', aisle: 'Dairy & eggs' }],
+      name: 'Test Pancakes', sourceType: 'TEXT', photo: 'made.jpg',
+      newIngredients: [{ name: 'cottage cheese', unit: 'g', tier: 'tracked', aisle: 'Dairy & eggs' }],
+    })))
+    expect(api.uploadPhoto).not.toHaveBeenCalled()
+  })
+
+  it('waits for the photo when saved while it is still being made', async () => {
+    let finish: (v: { name: string }) => void = () => undefined
+    const api = fakeApi({
+      readRecipeText: vi.fn().mockResolvedValue(pancakes),
+      generatePhoto: vi.fn().mockReturnValue(new Promise((resolve) => { finish = resolve })),
+      createRecipe: vi.fn().mockResolvedValue({ id: 'test-pancakes' }),
+    })
+    render(withApi(api, <RecipeEditor knownIngredients={new Set(['oats'])} />))
+    await userEvent.type(screen.getByLabelText('Recipe or link'), 'Pancakes, oats, cottage cheese')
+    await userEvent.click(screen.getByRole('button', { name: 'Read it' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Finishing the photo…')).toBeInTheDocument()
+    expect(api.createRecipe).not.toHaveBeenCalled()
+    finish({ name: 'late.jpg' })
+    await waitFor(() => expect(api.createRecipe).toHaveBeenCalledWith(expect.objectContaining({ photo: 'late.jpg' })))
+  })
+
+  it('reads a bare link as a page, and lets the owner change what the model chose', async () => {
+    const api = fakeApi({
+      readRecipeLink: vi.fn().mockResolvedValue({
+        ...pancakes, sourceType: 'LINK', sourceUrl: 'https://www.example.com/o', macrosEstimated: true, photo: 'page.jpg',
+      }),
+      createRecipe: vi.fn().mockResolvedValue({ id: 'test-pancakes' }),
+    })
+    render(withApi(api, <RecipeEditor knownIngredients={new Set(['oats'])} />))
+
+    await userEvent.type(screen.getByLabelText('Recipe or link'), 'example.com/o')
+    await userEvent.click(screen.getByRole('button', { name: 'Read the page' }))
+    expect(await screen.findByText(/Read from example.com/)).toBeInTheDocument()
+    expect(api.readRecipeLink).toHaveBeenCalledWith('https://example.com/o')
+    expect(screen.getByText('estimated')).toBeInTheDocument()
+    expect(api.generatePhoto).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Main' }))
+    await userEvent.click(screen.getByRole('button', { name: 'More portions' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Freezes' }))
+    await userEvent.click(screen.getByRole('button', { name: /new ingredient/ }))
+    await userEvent.click(within(screen.getByRole('group', { name: 'cottage cheese kept as' })).getByRole('button', { name: 'Cupboard staple' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(api.createRecipe).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'main', servings: 2, freezable: true, sourceType: 'LINK', photo: 'page.jpg', macrosEstimated: true,
+      newIngredients: [{ name: 'cottage cheese', unit: 'g', tier: 'staple', aisle: 'Dairy & eggs' }],
     })))
   })
 
-  it('edits an existing recipe in place', async () => {
+  it('says why a read failed and keeps what was pasted', async () => {
+    const api = fakeApi({ readRecipeText: vi.fn().mockRejectedValue(new Error('The model timed out')) })
+    render(withApi(api, <RecipeEditor knownIngredients={new Set()} />))
+    await userEvent.type(screen.getByLabelText('Recipe or link'), 'Some pancakes')
+    await userEvent.click(screen.getByRole('button', { name: 'Read it' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The model timed out')
+    expect(screen.getByLabelText('Recipe or link')).toHaveValue('Some pancakes')
+  })
+
+  it('edits an existing recipe in place, filling in a typed line', async () => {
     const api = fakeApi({ updateRecipe: vi.fn().mockResolvedValue({ id: 'test-chilli' }) })
     render(withApi(api, <RecipeEditor recipe={chilli} knownIngredients={new Set(['beef mince', 'onion', 'salt'])} />))
 
+    expect(api.generatePhoto).not.toHaveBeenCalled()
     await userEvent.clear(screen.getByLabelText('Name'))
     await userEvent.type(screen.getByLabelText('Name'), 'Better Chilli')
-    await userEvent.click(screen.getByRole('button', { name: /Line/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Add an ingredient/ }))
+    const index = chilli.ingredients.length + 1
+    await userEvent.type(screen.getByLabelText(`Ingredient ${index}`), '2 tbsp tomato puree')
+    expect(screen.getByLabelText(`Ingredient ${index} name`)).toHaveValue('tomato puree')
+    expect(screen.getByLabelText(`Ingredient ${index} quantity`)).toHaveValue(30)
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(api.updateRecipe).toHaveBeenCalledWith('test-chilli', expect.objectContaining({
-      name: 'Better Chilli', newIngredients: [],
+      name: 'Better Chilli',
+      ingredients: expect.arrayContaining([{ text: '2 tbsp tomato puree', name: 'tomato puree', quantity: 30, unit: 'ml' }]),
+      newIngredients: [{ name: 'tomato puree', unit: 'ml', tier: 'tracked', aisle: 'Other' }],
     })))
   })
 })
