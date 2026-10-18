@@ -190,13 +190,13 @@ public class PlaylistQueryService {
   ) {
     if (ready != null) {
       return new PlaylistEntry.Audio(NarrationResponse.PublicState.READY,
-          ready.audioUrl(), ready.durationSeconds());
+          ready.audioUrl(), ready.durationSeconds(), ready.timingsUrl());
     }
     // A READY row missing from readyNarrations has no playable file; treat it as absent.
     NarrationResponse.PublicState state = latest == null
         || latest == NarrationResponse.PublicState.READY
         ? NarrationResponse.PublicState.NOT_REQUESTED : latest;
-    return new PlaylistEntry.Audio(state, null, null);
+    return new PlaylistEntry.Audio(state, null, null, null);
   }
 
   private Map<String, ReadyNarration> readyAudio(final NarrationContentType contentType) {

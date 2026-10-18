@@ -17,4 +17,6 @@ public interface NarrationRepository extends MongoRepository<Narration, String> 
 
   List<Narration> findByProviderRequestStartedTrueAndRequestedAtBetween(
       Instant from, Instant to);
+
+  List<Narration> findByResynthesizedAtBetween(Instant from, Instant to);
 }

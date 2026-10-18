@@ -53,6 +53,8 @@ export function narrationAudioStub(
     stage: options.stage ?? 'idle',
     playing: options.playing ?? false,
     position: options.position ?? 0,
+    // The audio clock: the read-along reads it every frame. Tests move it with `position`.
+    currentTime: () => options.position ?? 0,
     duration: options.duration ?? 0,
     rate: options.rate ?? 1,
     error: options.error ?? null,

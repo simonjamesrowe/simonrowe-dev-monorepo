@@ -4,9 +4,7 @@ import com.simonrowe.events.NarrationRequestEvent;
 import com.simonrowe.narration.NarrationProvider.FailureKind;
 import com.simonrowe.narration.NarrationProvider.NarrationProviderException;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.io.ByteArrayOutputStream;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +24,7 @@ public class NarrationRequestConsumer {
   private final NarrationBudgetService budgetService;
   private final NarrationProperties properties;
   private final NarrationRequestPublisher publisher;
-  private final NarrationScriptChunker chunker;
+  private final NarrationSynthesizer synthesizer;
   private final MeterRegistry meterRegistry;
 
   public NarrationRequestConsumer(
@@ -37,7 +35,7 @@ public class NarrationRequestConsumer {
       final NarrationBudgetService budgetService,
       final NarrationProperties properties,
       final NarrationRequestPublisher publisher,
-      final NarrationScriptChunker chunker,
+      final NarrationSynthesizer synthesizer,
       final MeterRegistry meterRegistry
   ) {
     this.narrationService = narrationService;
@@ -47,7 +45,7 @@ public class NarrationRequestConsumer {
     this.budgetService = budgetService;
     this.properties = properties;
     this.publisher = publisher;
-    this.chunker = chunker;
+    this.synthesizer = synthesizer;
     this.meterRegistry = meterRegistry;
   }
 
@@ -90,22 +88,27 @@ public class NarrationRequestConsumer {
         narration.markProviderRequestStarted(Instant.now());
         narrationRepository.save(narration);
 
-        // Short scripts go through the ordinary synthesis endpoint, which still returns
-        // MP3 directly. Google's long-audio endpoint currently rejects MP3 outright, so
-        // this is the only path that produces the format we store. Routing on script size
-        // rather than content type means a short blog benefits too.
-        List<String> chunks = synthesisChunks(descriptor.script());
-        if (!chunks.isEmpty()) {
-          byte[] audio;
+        // Every script goes through the ordinary synthesis endpoint, one sentence per
+        // request: it still returns MP3, which Google's long-audio endpoint now refuses, and
+        // each sentence's own audio length is what places its words for the read-along.
+        if (synthesizer.available()) {
+          NarrationSynthesizer.Synthesis synthesis;
           try {
-            audio = synthesizeChunks(narration, chunks);
+            synthesis = synthesizer.synthesize(descriptor.script(), () -> {
+              // A long blog is a few hundred requests, which can outlast the claim; without
+              // this the recovery scheduler would republish the job and we would pay to
+              // synthesise the same script twice.
+              narration.extendLease(
+                  Instant.now().plus(properties.leaseDuration()), Instant.now());
+              narrationRepository.save(narration);
+            });
           } catch (NarrationProviderException ex) {
             handleProviderFailure(narration, ex, true);
             return;
           }
           meterRegistry.counter("narration.provider.characters")
               .increment(narration.scriptCharacterCount());
-          store(narration, audio);
+          store(narration, synthesis.audio(), synthesis.timings());
           return;
         }
 
@@ -159,48 +162,6 @@ public class NarrationRequestConsumer {
     publisher.publish(narration.id());
   }
 
-  /**
-   * The script split into synchronous-synthesis requests, or empty when the provider has no
-   * synchronous path and the long-audio route must be used instead.
-   */
-  private List<String> synthesisChunks(final String script) {
-    int limit = provider.maxImmediateBytes();
-    if (limit <= 0) {
-      return List.of();
-    }
-    return chunker.chunk(script, limit);
-  }
-
-  /**
-   * Synthesises every chunk and joins the results into one MP3.
-   *
-   * <p>Plain byte concatenation is sound here: Google returns a bare MPEG frame stream with
-   * no ID3 header, and every chunk is encoded with identical voice and audio settings, so
-   * the frames simply continue.
-   *
-   * <p>The lease is extended between chunks. A long blog is a dozen sequential requests,
-   * which can outlast the claim; without this the recovery scheduler would republish the
-   * job and we would pay to synthesise the same script twice.
-   */
-  private byte[] synthesizeChunks(
-      final Narration narration, final List<String> chunks) {
-    if (chunks.size() > 1) {
-      LOG.info("Synthesising narration in {} chunks: narrationId={}",
-          chunks.size(), narration.id());
-    }
-    ByteArrayOutputStream combined = new ByteArrayOutputStream();
-    for (int i = 0; i < chunks.size(); i++) {
-      byte[] part = provider.synthesizeImmediately(chunks.get(i));
-      combined.writeBytes(part);
-      if (i < chunks.size() - 1) {
-        narration.extendLease(
-            Instant.now().plus(properties.leaseDuration()), Instant.now());
-        narrationRepository.save(narration);
-      }
-    }
-    return combined.toByteArray();
-  }
-
   private void finish(final Narration narration) {
     byte[] audio;
     try {
@@ -209,19 +170,25 @@ public class NarrationRequestConsumer {
       handleProviderFailure(narration, ex, false);
       return;
     }
-    store(narration, audio);
+    // The long-audio route is one request for the whole script, so it has no timings.
+    store(narration, audio, null);
   }
 
   /** Validates, stores and marks ready, re-checking currency either side of the write. */
-  private void store(final Narration narration, final byte[] audio) {
+  private void store(
+      final Narration narration,
+      final byte[] audio,
+      final NarrationTimings timings
+  ) {
     if (!narrationService.isCurrentAndPublished(narration)) {
       markStale(narration);
       return;
     }
     try {
-      NarrationStorage.StoredNarration stored = storage.store(narration.id(), audio);
+      NarrationStorage.StoredNarration stored =
+          storage.store(narration.id(), audio, timings);
       if (!narrationService.isCurrentAndPublished(narration)) {
-        storage.delete(narration.id());
+        storage.delete(stored);
         markStale(narration);
         return;
       }

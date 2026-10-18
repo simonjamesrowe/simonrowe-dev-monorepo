@@ -36,6 +36,11 @@ public class NarrationRestoreValidator {
     for (Narration narration : repository.findAll()) {
       if (narration.status() == NarrationStatus.READY) {
         if (storage.isValid(narration)) {
+          if (narration.timingsPath() != null && !storage.timingsExist(narration)) {
+            // Playable, but its highlight is gone. The upgrade sweep makes the timings again.
+            narration.clearTimings(Instant.now());
+            repository.save(narration);
+          }
           ready++;
         } else {
           storage.delete(narration);

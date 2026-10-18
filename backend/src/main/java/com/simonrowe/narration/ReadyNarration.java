@@ -1,5 +1,7 @@
 package com.simonrowe.narration;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 /**
  * One item that has playable audio right now, as a listing page needs it.
  *
@@ -18,10 +20,13 @@ package com.simonrowe.narration;
  * @param contentId the blog id, or the aggregated article id for an article summary
  * @param audioUrl site-relative path under {@code /uploads/}; clients prefix the API base URL
  * @param durationSeconds audio length, rendered on the card as an approximate minute count
+ * @param timingsUrl the read-along timings beside the audio, or null for audio made without them
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ReadyNarration(
     String contentId,
     String audioUrl,
-    Long durationSeconds
+    Long durationSeconds,
+    String timingsUrl
 ) {
 }

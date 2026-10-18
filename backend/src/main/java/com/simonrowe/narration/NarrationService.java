@@ -37,6 +37,10 @@ public class NarrationService {
   /** Mongo field names used from more than one query in this class. */
   private static final String STATUS_FIELD = "status";
   private static final String DURATION_FIELD = "durationSeconds";
+  private static final String ID_FIELD = "_id";
+  private static final String VERSION_FIELD = "version";
+  private static final String UPDATED_FIELD = "updatedAt";
+  private static final String TIMINGS_FIELD = "timingsPath";
 
   private final NarrationRepository narrationRepository;
   private final NarrationProperties properties;
@@ -120,8 +124,14 @@ public class NarrationService {
     if (existing.isPresent()) {
       Narration narration = existing.get();
       if (narration.status() == NarrationStatus.READY && storage.isValid(narration)) {
-        narration.incrementReuse(Instant.now());
-        narrationRepository.save(narration);
+        // An atomic increment, not a save of the loaded document: the timings upgrade swaps
+        // the audio of READY narrations in place, and saving this copy back would undo it.
+        Instant now = Instant.now();
+        narration.incrementReuse(now);
+        mongoTemplate.updateFirst(
+            Query.query(Criteria.where(ID_FIELD).is(narration.id())),
+            new Update().inc("reuseCount", 1).inc(VERSION_FIELD, 1).set(UPDATED_FIELD, now),
+            Narration.class);
         meterRegistry.counter("narration.requests", "result", "reused").increment();
         return new RequestResult(NarrationResponse.from(narration), false);
       }
@@ -189,11 +199,12 @@ public class NarrationService {
     Aggregation aggregation = Aggregation.newAggregation(
         Aggregation.match(Criteria.where("contentType").is(contentType)
             .and(STATUS_FIELD).is(NarrationStatus.READY)),
-        Aggregation.sort(Sort.by(Sort.Direction.DESC, "updatedAt")),
+        Aggregation.sort(Sort.by(Sort.Direction.DESC, UPDATED_FIELD)),
         Aggregation.group("contentId")
             .first("audioPath").as("audioUrl")
-            .first(DURATION_FIELD).as(DURATION_FIELD),
-        Aggregation.project("audioUrl", DURATION_FIELD).and("_id").as("contentId"));
+            .first(DURATION_FIELD).as(DURATION_FIELD)
+            .first("timingsPath").as("timingsUrl"),
+        Aggregation.project("audioUrl", DURATION_FIELD, "timingsUrl").and("_id").as("contentId"));
 
     return mongoTemplate
         .aggregate(aggregation, Narration.class, ReadyNarration.class)
@@ -229,7 +240,7 @@ public class NarrationService {
     }
     Query query = Query.query(Criteria.where("contentType").is(contentType)
             .and("contentId").in(contentIds))
-        .with(Sort.by(Sort.Direction.DESC, "updatedAt"));
+        .with(Sort.by(Sort.Direction.DESC, UPDATED_FIELD));
     Map<String, NarrationResponse.PublicState> states = new HashMap<>();
     for (Narration narration : mongoTemplate.find(query, Narration.class)) {
       states.putIfAbsent(narration.contentId(), NarrationResponse.from(narration).state());
@@ -245,22 +256,132 @@ public class NarrationService {
    * @return the claimed narration, or empty when another worker got there first
    */
   public Optional<Narration> claim(final String narrationId, final Instant now) {
-    Query query = Query.query(Criteria.where("_id").is(narrationId)
+    Query query = Query.query(Criteria.where(ID_FIELD).is(narrationId)
         .and(STATUS_FIELD).is(NarrationStatus.QUEUED));
     Update update = new Update()
         .set(STATUS_FIELD, NarrationStatus.PROCESSING)
         .set("leaseUntil", now.plus(properties.leaseDuration()))
         .set("startedAt", now)
-        .set("updatedAt", now)
+        .set(UPDATED_FIELD, now)
         .set("retryable", false)
         .inc("attemptCount", 1)
-        .inc("version", 1);
+        .inc(VERSION_FIELD, 1);
     Narration claimed = mongoTemplate.findAndModify(
         query,
         update,
         FindAndModifyOptions.options().returnNew(true),
         Narration.class);
     return Optional.ofNullable(claimed);
+  }
+
+  /**
+   * The newest {@code READY} narration whose audio predates read-along timings, and which the
+   * upgrade has not already given up on.
+   *
+   * @param maxAttempts failed upgrade attempts after which a narration is skipped
+   * @return the narration to re-make next, if any
+   */
+  public Optional<Narration> nextWithoutTimings(final int maxAttempts) {
+    Query query = Query.query(Criteria.where(STATUS_FIELD).is(NarrationStatus.READY)
+            .and(TIMINGS_FIELD).is(null)
+            // not().gte rather than lt, so documents written before the field existed match.
+            .and("timingsAttempts").not().gte(maxAttempts))
+        .with(Sort.by(Sort.Direction.DESC, "completedAt"))
+        .limit(1);
+    return Optional.ofNullable(mongoTemplate.findOne(query, Narration.class));
+  }
+
+  /**
+   * Points a narration at re-made audio with timings, retiring the audio it had.
+   *
+   * <p>Conditional on the narration still being {@code READY} with the audio it had when the
+   * re-make started, so a narration invalidated or regenerated meanwhile is left alone. Not
+   * conditional on {@code version}, which every reuse bumps: a popular item would never swap.
+   *
+   * @param narration the narration as it was when the re-make started
+   * @param stored the re-made audio and timings
+   * @param now the current instant
+   * @return true when the narration now plays the new audio
+   */
+  public boolean replaceAudio(
+      final Narration narration,
+      final NarrationStorage.StoredNarration stored,
+      final Instant now
+  ) {
+    Query query = Query.query(Criteria.where(ID_FIELD).is(narration.id())
+        .and(STATUS_FIELD).is(NarrationStatus.READY)
+        .and("checksumSha256").is(narration.checksumSha256()));
+    Update update = new Update()
+        .set("audioPath", stored.publicPath())
+        .set("fileSize", stored.fileSize())
+        .set("checksumSha256", stored.checksumSha256())
+        .set(DURATION_FIELD, stored.durationSeconds())
+        .set(TIMINGS_FIELD, stored.timingsPath())
+        .set("resynthesizedAt", now)
+        .set("retiredAudioPath", narration.audioPath())
+        .set("retiredAt", now)
+        .set(UPDATED_FIELD, now)
+        .inc(VERSION_FIELD, 1);
+    return mongoTemplate.updateFirst(query, update, Narration.class).getModifiedCount() == 1;
+  }
+
+  /**
+   * Whether a narration currently plays the given file.
+   *
+   * @param narrationId the narration
+   * @param audioPath a public audio path
+   * @return true when that is its audio now
+   */
+  public boolean plays(final String narrationId, final String audioPath) {
+    return narrationRepository.findById(narrationId)
+        .map(current -> audioPath.equals(current.audioPath()))
+        .orElse(false);
+  }
+
+  /**
+   * Records an upgrade attempt that did not swap the audio.
+   *
+   * @param narration the narration
+   * @param charged whether characters were sent to the provider, so the month's budget counts
+   *     them
+   * @param now the current instant
+   */
+  public void recordFailedUpgrade(
+      final Narration narration, final boolean charged, final Instant now) {
+    Update update = new Update().inc("timingsAttempts", 1);
+    if (charged) {
+      update.set("resynthesizedAt", now);
+    }
+    mongoTemplate.updateFirst(
+        Query.query(Criteria.where(ID_FIELD).is(narration.id())), update, Narration.class);
+  }
+
+  /**
+   * Narrations whose replaced audio has been retired for long enough to delete.
+   *
+   * @param before retired before this instant
+   * @return the narrations
+   */
+  public List<Narration> retiredBefore(final Instant before) {
+    return mongoTemplate.find(
+        Query.query(Criteria.where("retiredAt").lt(before)), Narration.class);
+  }
+
+  /**
+   * Deletes a narration's retired audio and forgets it.
+   *
+   * @param narration a narration from {@link #retiredBefore}
+   */
+  public void deleteRetired(final Narration narration) {
+    // Never the file it plays now: a regeneration since may have reused the name.
+    if (narration.retiredAudioPath() != null
+        && !narration.retiredAudioPath().equals(narration.audioPath())) {
+      storage.deletePublicPath(narration.retiredAudioPath());
+    }
+    mongoTemplate.updateFirst(
+        Query.query(Criteria.where(ID_FIELD).is(narration.id())),
+        new Update().unset("retiredAudioPath").unset("retiredAt"),
+        Narration.class);
   }
 
   /**

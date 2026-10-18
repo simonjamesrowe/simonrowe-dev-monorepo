@@ -72,6 +72,27 @@ class PlaylistApiIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void audioWithReadAlongTimingsCarriesTheirUrl() throws Exception {
+    article("a-2", "Agent observability", true);
+    readySummary("a-2", "Traces follow the GenAI conventions.");
+    String id = NarrationContentType.ARTICLE_SUMMARY + "-a-2";
+    Narration narration = new Narration(id, NarrationContentType.ARTICLE_SUMMARY, "a-2", 3500,
+        "voice", "en-GB", "MP3", "narrations/" + id + ".mp3", NOW);
+    narration.markReady(new NarrationStorage.StoredNarration(
+        "/uploads/narrations/" + id + "/audio-abc.mp3", 4096, "checksum", 172,
+        "/uploads/narrations/" + id + "/timings-abc.json"), NOW);
+    mongoTemplate.save(narration);
+    add("articles", "a-2");
+
+    mockMvc.perform(get("/api/playlist"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].audio.audioUrl")
+            .value("/uploads/narrations/" + id + "/audio-abc.mp3"))
+        .andExpect(jsonPath("$.items[0].audio.timingsUrl")
+            .value("/uploads/narrations/" + id + "/timings-abc.json"));
+  }
+
+  @Test
   void anArticleIsListedWithItsSummaryAudioAndHeart() throws Exception {
     article("a-1", "Grieving the Loss of Details", true);
     readySummary("a-1", "Details used to be where craft lived.");
@@ -96,6 +117,8 @@ class PlaylistApiIntegrationTest extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.items[0].audio.audioUrl")
             .value("/uploads/narrations/ARTICLE_SUMMARY-a-1/narration.mp3"))
         .andExpect(jsonPath("$.items[0].audio.durationSeconds").value(255))
+        // Audio made before read-along has no timings, and the field is left out.
+        .andExpect(jsonPath("$.items[0].audio.timingsUrl").doesNotExist())
         // Only items still waiting for audio carry a guess at its length.
         .andExpect(jsonPath("$.items[0].estimatedSeconds").doesNotExist());
   }

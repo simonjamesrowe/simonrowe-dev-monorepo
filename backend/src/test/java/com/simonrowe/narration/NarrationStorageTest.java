@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -75,6 +76,54 @@ class NarrationStorageTest {
   @Test
   void deleteAllTreatsMissingNarrationsDirectoryAsNothingToDo() {
     assertThat(new NarrationStorage(uploads.toString()).deleteAll()).isZero();
+  }
+
+  @Test
+  void storesTimedAudioUnderNamesTakenFromItsContent() throws Exception {
+    NarrationStorage storage = new NarrationStorage(uploads.toString());
+    byte[] audio = Mp3FramesTest.googleFrames(250);
+    NarrationTimings timings = NarrationTimings.of(List.of("Hello there."), List.of(6.0));
+
+    NarrationStorage.StoredNarration stored = storage.store("narration-1", audio, timings);
+
+    String hash = stored.checksumSha256().substring(0, 16);
+    assertThat(stored.publicPath())
+        .isEqualTo("/uploads/narrations/narration-1/audio-" + hash + ".mp3");
+    assertThat(stored.timingsPath())
+        .isEqualTo("/uploads/narrations/narration-1/timings-" + hash + ".json");
+    assertThat(stored.durationSeconds()).isEqualTo(6);
+    assertThat(uploads.resolve("narrations/narration-1/timings-" + hash + ".json"))
+        .hasBinaryContent(timings.toJson());
+    assertThat(uploads.resolve("narrations/narration-1/.work")).doesNotExist();
+
+    Narration narration = narration("narration-1");
+    narration.markReady(stored, Instant.now());
+    assertThat(storage.isValid(narration)).isTrue();
+    assertThat(storage.timingsExist(narration)).isTrue();
+  }
+
+  @Test
+  void deletesTimedAudioAndItsTimingsTogether() {
+    NarrationStorage storage = new NarrationStorage(uploads.toString());
+    NarrationStorage.StoredNarration stored = storage.store("narration-1",
+        Mp3FramesTest.googleFrames(10), NarrationTimings.of(List.of("Hi."), List.of(0.24)));
+
+    storage.delete(stored);
+
+    assertThat(uploads.resolve(stored.publicPath().substring("/uploads/".length())))
+        .doesNotExist();
+    assertThat(uploads.resolve(stored.timingsPath().substring("/uploads/".length())))
+        .doesNotExist();
+  }
+
+  @Test
+  void deleteAllAlsoRemovesTimingsFiles() {
+    NarrationStorage storage = new NarrationStorage(uploads.toString());
+    storage.store("narration-1", Mp3FramesTest.googleFrames(10),
+        NarrationTimings.of(List.of("Hi."), List.of(0.24)));
+
+    assertThat(storage.deleteAll()).isEqualTo(1);
+    assertThat(uploads.resolve("narrations")).doesNotExist();
   }
 
   private static Narration narration(final String id) {

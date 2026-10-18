@@ -14,6 +14,7 @@ import com.simonrowe.events.NarrationRequestEvent;
 import com.simonrowe.narration.NarrationProvider.FailureKind;
 import com.simonrowe.narration.NarrationProvider.NarrationProviderException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -41,7 +42,8 @@ class NarrationRequestConsumerTest {
     metrics = new SimpleMeterRegistry();
     consumer = new NarrationRequestConsumer(service, repository,
         provider, storage, budget, NarrationBudgetServiceTest.properties(1_000_000),
-        publisher, new NarrationScriptChunker(), metrics);
+        publisher, new NarrationSynthesizer(provider, new NarrationScriptChunker(),
+            timingsProperties()), metrics);
   }
 
   @Test
@@ -60,7 +62,7 @@ class NarrationRequestConsumerTest {
     when(provider.download("narrations/narration-1.mp3"))
         .thenReturn(new byte[]{'I', 'D', '3', 1});
     when(service.isCurrentAndPublished(narration)).thenReturn(true);
-    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+    when(storage.store(any(), any(), any())).thenReturn(new NarrationStorage.StoredNarration(
         "/uploads/narrations/narration-1/narration.mp3", 4, "checksum", 1));
 
     consumer.handle(event("narration-1"));
@@ -127,7 +129,7 @@ class NarrationRequestConsumerTest {
     when(provider.synthesizeImmediately("Speech"))
         .thenReturn(new byte[]{'I', 'D', '3', 1});
     when(service.isCurrentAndPublished(narration)).thenReturn(true);
-    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+    when(storage.store(any(), any(), any())).thenReturn(new NarrationStorage.StoredNarration(
         "/uploads/narrations/narration-1/narration.mp3", 4, "checksum", 1));
 
     consumer.handle(event("narration-1"));
@@ -155,7 +157,7 @@ class NarrationRequestConsumerTest {
     when(provider.synthesizeImmediately("Speech"))
         .thenReturn(new byte[]{'I', 'D', '3', 1});
     when(service.isCurrentAndPublished(narration)).thenReturn(true);
-    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+    when(storage.store(any(), any(), any())).thenReturn(new NarrationStorage.StoredNarration(
         "/uploads/narrations/narration-1/narration.mp3", 4, "checksum", 1));
 
     consumer.handle(event("narration-1"));
@@ -196,7 +198,7 @@ class NarrationRequestConsumerTest {
     when(provider.synthesizeImmediately(anyString()))
         .thenReturn(new byte[]{(byte) 0xff, (byte) 0xf3, 1, 2});
     when(service.isCurrentAndPublished(narration)).thenReturn(true);
-    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+    when(storage.store(any(), any(), any())).thenReturn(new NarrationStorage.StoredNarration(
         "/uploads/narrations/narration-1/narration.mp3", 16, "checksum", 1));
 
     consumer.handle(event("narration-1"));
@@ -209,7 +211,7 @@ class NarrationRequestConsumerTest {
     // The stored bytes are every chunk's audio concatenated in order.
     org.mockito.ArgumentCaptor<byte[]> audio =
         org.mockito.ArgumentCaptor.forClass(byte[].class);
-    verify(storage).store(any(), audio.capture());
+    verify(storage).store(any(), audio.capture(), any());
     assertThat(audio.getValue().length % 4).isZero();
     assertThat(audio.getValue()[0]).isEqualTo((byte) 0xff);
   }
@@ -231,7 +233,7 @@ class NarrationRequestConsumerTest {
     when(provider.synthesizeImmediately(anyString()))
         .thenReturn(new byte[]{(byte) 0xff, (byte) 0xf3, 1, 2});
     when(service.isCurrentAndPublished(narration)).thenReturn(true);
-    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+    when(storage.store(any(), any(), any())).thenReturn(new NarrationStorage.StoredNarration(
         "/uploads/narrations/narration-1/narration.mp3", 16, "checksum", 1));
 
     // markReady() clears the lease at the end, so the extension has to be observed while
@@ -271,7 +273,7 @@ class NarrationRequestConsumerTest {
     when(provider.synthesizeImmediately(script))
         .thenReturn(new byte[]{'I', 'D', '3', 1});
     when(service.isCurrentAndPublished(narration)).thenReturn(true);
-    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+    when(storage.store(any(), any(), any())).thenReturn(new NarrationStorage.StoredNarration(
         "/uploads/narrations/narration-1/narration.mp3", 4, "checksum", 1));
 
     consumer.handle(event("narration-1"));
@@ -288,7 +290,7 @@ class NarrationRequestConsumerTest {
     when(provider.download("narrations/narration-1.mp3"))
         .thenReturn(new byte[]{'I', 'D', '3', 1});
     when(service.isCurrentAndPublished(narration)).thenReturn(true);
-    when(storage.store(any(), any())).thenReturn(new NarrationStorage.StoredNarration(
+    when(storage.store(any(), any(), any())).thenReturn(new NarrationStorage.StoredNarration(
         "/uploads/narrations/narration-1/narration.mp3", 4, "checksum", 1));
   }
 
@@ -298,6 +300,10 @@ class NarrationRequestConsumerTest {
         "narrations/" + id + ".mp3", Instant.now());
     narration.claimed(Instant.now().plusSeconds(60), Instant.now());
     return narration;
+  }
+
+  static NarrationTimingsProperties timingsProperties() {
+    return new NarrationTimingsProperties(1, 1, false, 0.5, Duration.ofMinutes(5), 3);
   }
 
   private static NarrationRequestEvent event(final String id) {
