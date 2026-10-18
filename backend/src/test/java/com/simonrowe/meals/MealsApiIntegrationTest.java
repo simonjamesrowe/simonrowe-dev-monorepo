@@ -28,6 +28,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -51,6 +52,23 @@ class MealsApiIntegrationTest extends AbstractIntegrationTest {
         .andExpect(status().isForbidden());
     mockMvc.perform(multipart("/api/meals/admin/bundles").file(bundle(MealBundles.valid()))
         .with(jwt().jwt(j -> j.subject("someone")))).andExpect(status().isForbidden());
+  }
+
+  @Test
+  void mealsUserGetsTheAppButNotTheBooksOrTheSiteAdmin() throws Exception {
+    importBundle(MealBundles.valid()).andExpect(status().isOk());
+
+    mockMvc.perform(get("/api/meals/recipes").with(mealsUser("kate")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$", hasSize(2)));
+    mockMvc.perform(get("/api/meals/kitchen").with(mealsUser("kate")))
+        .andExpect(status().isOk());
+    mockMvc.perform(get("/api/meals/shopping").with(mealsUser("kate")))
+        .andExpect(status().isOk());
+    mockMvc.perform(multipart("/api/meals/admin/bundles").file(bundle(MealBundles.valid()))
+        .with(mealsUser("kate"))).andExpect(status().isForbidden());
+    mockMvc.perform(get("/api/admin/blogs").with(mealsUser("kate")))
+        .andExpect(status().isForbidden());
   }
 
   @Test
@@ -169,5 +187,10 @@ class MealsApiIntegrationTest extends AbstractIntegrationTest {
 
   private static JwtRequestPostProcessor owner(final String subject) {
     return adminJwt().jwt(j -> j.subject(subject));
+  }
+
+  private static JwtRequestPostProcessor mealsUser(final String subject) {
+    return jwt().authorities(new SimpleGrantedAuthority("ROLE_MEALS_USER"))
+        .jwt(j -> j.subject(subject));
   }
 }

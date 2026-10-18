@@ -26,7 +26,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * <p>It is a separate chain because the main chain's OAuth2 resource server would try to decode
  * the personal token as a JWT and reject it. Everything else under {@code /api/meals/**} stays on
- * the main chain and its Auth0 admin role.
+ * the main chain and its Auth0 roles.
  */
 @Configuration
 public class MealsMcpSecurity {
@@ -53,7 +53,10 @@ public class MealsMcpSecurity {
     return http.build();
   }
 
-  /** Authenticates a {@code Bearer meals_...} token as its owner, with the admin role. */
+  /**
+   * Authenticates a {@code Bearer meals_...} token as its owner, with the meals role only: a
+   * token minted by the site admin must not carry admin rights, and this chain needs none.
+   */
   static final class TokenFilter extends OncePerRequestFilter {
 
     private final McpTokenService tokens;
@@ -72,7 +75,7 @@ public class MealsMcpSecurity {
           request.setAttribute(OWNER_ATTRIBUTE, token.ownerId());
           SecurityContextHolder.getContext().setAuthentication(
               UsernamePasswordAuthenticationToken.authenticated(token.ownerId(), null,
-                  List.of(new SimpleGrantedAuthority("ROLE_DEV_PORTAL_ADMIN"))));
+                  List.of(new SimpleGrantedAuthority("ROLE_MEALS_USER"))));
         });
       }
       chain.doFilter(request, response);

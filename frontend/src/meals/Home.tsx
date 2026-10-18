@@ -9,7 +9,9 @@ import { CoverageBar, Empty, Loading, Photo } from './ui'
 import type { MealSlot, Recipe, Suggestion } from './types'
 
 /** "What shall I eat?": what the kitchen can make now, and what is one or two things short. */
-export function Home({ recipes, byId, now }: { recipes: Recipe[]; byId: Map<string, Recipe>; now?: Date }) {
+export function Home({ recipes, byId, now, canImport = true }: {
+  recipes: Recipe[]; byId: Map<string, Recipe>; now?: Date; canImport?: boolean
+}) {
   const [today] = useState(() => now ?? new Date())
   const [slot, setSlot] = useState<MealSlot>(() => defaultSlot(today))
   const suggestions = useSuggestions(slot)
@@ -21,7 +23,9 @@ export function Home({ recipes, byId, now }: { recipes: Recipe[]; byId: Map<stri
     return (
       <div className="meals-page">
         <Empty icon={<BookOpen size={32} />} title="The library is empty">
-          Upload the recipe bundles on the <Link to="/more">More</Link> page.
+          {canImport
+            ? <>Upload the recipe bundles on the <Link to="/more">More</Link> page.</>
+            : <>No recipes have been loaded yet.</>}
         </Empty>
       </div>
     )

@@ -1,7 +1,25 @@
 # Meals (`meals.simonrowe.dev`)
 
 A private recipe, kitchen and shopping app for the site owner (spec `specs/053-meals/`). Every
-route under `/api/meals/**` needs the `DEV_PORTAL_ADMIN` role, images included.
+route under `/api/meals/**` needs the `DEV_PORTAL_ADMIN` or `MEALS_USER` role, images included.
+Uploading recipe bundles (`/api/meals/admin/**`) needs `DEV_PORTAL_ADMIN`.
+
+## Letting someone else use it
+
+Give them the Auth0 role **`MEALS_USER`**, never `DEV_PORTAL_ADMIN`: the admin role also opens the
+whole CMS, Data Ops, the Software Factory console, Term Time's private tier, Langfuse,
+Dependency-Track and the Temporal UI. `MEALS_USER` opens meals and nothing else.
+
+1. They sign in once at `meals.simonrowe.dev` (with Google), so Auth0 has a user for them. They
+   will see "This is a private app."
+2. Auth0 dashboard → **User Management** → **Users** → them → **Roles** → **Assign Roles** →
+   `MEALS_USER`. (Create the role under **Roles** first if it is missing; the Post-Login Action
+   already copies every role into the token, so nothing else changes.)
+3. They sign out and in again, so the new token carries the role.
+
+The recipe library is shared, and they can add and edit recipes. Kitchen, Up next, shopping,
+ratings and MCP tokens are per person, keyed on the Auth0 subject, so they start with an empty
+kitchen of their own. A meals MCP token carries `MEALS_USER` whoever minted it.
 
 ## The books are copyrighted: nothing about them goes in this repository
 
@@ -18,7 +36,7 @@ The recipes come from five purchased ebooks. The repository is public, so:
 `meals.simonrowe.dev` is a fourth Vite entry (`frontend/meals/`, `frontend/src/meals/`) in the
 shared frontend image; `frontend/nginx.conf` picks `/meals/index.html` from the Host header, and
 the edge proxy routes only `/api/meals/` to the backend from that hostname. It signs in with the
-**main site's** Auth0 application (its token already carries `DEV_PORTAL_ADMIN`), keeping the
+**main site's** Auth0 application (its token already carries the roles claim), keeping the
 token in local storage like CoParent. Photos are fetched with the token as blobs, because an
 `<img src>` cannot send one. Locally: `http://meals.localhost:5173` (Vite rewrites that host to
 the meals entry; the backend's default CORS list includes it).

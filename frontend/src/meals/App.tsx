@@ -18,10 +18,13 @@ import type { Rating } from './types'
 
 export const ROLES_CLAIM = 'https://simonrowe.dev/roles'
 export const ADMIN_ROLE = 'DEV_PORTAL_ADMIN'
+/** Opens meals without making someone a site admin. Loading the books stays with the admin. */
+export const MEALS_ROLE = 'MEALS_USER'
 
 /**
- * Meals is for the site owner alone. The backend enforces that on every route; this gate is
- * only so a signed-in visitor without the role sees a sentence instead of a wall of 403s.
+ * Meals is private: the site admin, plus anyone given the meals role. The backend enforces that
+ * on every route; this gate is only so a signed-in visitor without either role sees a sentence
+ * instead of a wall of 403s.
  *
  * Signing in is automatic: a visitor who is not signed in is sent straight to Auth0, once per
  * page load. If that fails (an error comes back), the button stays as the way to try again.
@@ -43,8 +46,9 @@ export function App() {
   if (!isAuthenticated) {
     return <SignIn message="Signing you in…" onSignIn={() => loginWithRedirect({ appState: { returnTo: pathname } })} />
   }
-  const roles = user?.[ROLES_CLAIM]
-  if (!Array.isArray(roles) || !roles.includes(ADMIN_ROLE)) {
+  const roles: unknown = user?.[ROLES_CLAIM]
+  const isAdmin = Array.isArray(roles) && roles.includes(ADMIN_ROLE)
+  if (!isAdmin && !(Array.isArray(roles) && roles.includes(MEALS_ROLE))) {
     return (
       <div className="meals-gate">
         <h1>Meals</h1>
@@ -56,7 +60,7 @@ export function App() {
 
   return (
     <MealsApiContext.Provider value={api}>
-      <Shell onSignOut={() => logout({ logoutParams: { returnTo: window.location.origin } })} />
+      <Shell canImport={isAdmin} onSignOut={() => logout({ logoutParams: { returnTo: window.location.origin } })} />
     </MealsApiContext.Provider>
   )
 }
@@ -71,7 +75,7 @@ function SignIn({ onSignIn, message }: { onSignIn: () => void; message?: string 
   )
 }
 
-function Shell({ onSignOut }: { onSignOut: () => void }) {
+function Shell({ canImport, onSignOut }: { canImport: boolean; onSignOut: () => void }) {
   const { library, isLoading, error } = useLibrary()
   const ratings = useRatings()
   const upNext = useUpNext()
@@ -96,7 +100,7 @@ function Shell({ onSignOut }: { onSignOut: () => void }) {
     const known = new Set(library.ingredients.keys())
     page = (
       <Routes>
-        <Route path="/" element={<Home recipes={library.recipes} byId={library.byId} />} />
+        <Route path="/" element={<Home recipes={library.recipes} byId={library.byId} canImport={canImport} />} />
         <Route path="/recipes" element={<Library recipes={library.recipes} ratings={ratings.data} />} />
         <Route path="/recipes/new" element={<RecipeEditor knownIngredients={known} />} />
         <Route path="/recipes/:id" element={<RecipeRoute library={library} ratings={ratings.data} />} />
@@ -104,7 +108,7 @@ function Shell({ onSignOut }: { onSignOut: () => void }) {
         <Route path="/up-next" element={<UpNext byId={library.byId} templates={library.templates} />} />
         <Route path="/shop" element={<Shop />} />
         <Route path="/kitchen" element={<Kitchen ingredients={library.ingredients} />} />
-        <Route path="/more" element={<More onSignOut={onSignOut} />} />
+        <Route path="/more" element={<More canImport={canImport} onSignOut={onSignOut} />} />
         <Route path="*" element={<Empty icon={<CookingPot size={32} />} title="Nothing here" />} />
       </Routes>
     )

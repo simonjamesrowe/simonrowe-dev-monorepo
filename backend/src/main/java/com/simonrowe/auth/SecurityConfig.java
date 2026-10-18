@@ -16,6 +16,8 @@ import org.springframework.security.oauth2.server.resource.web.authentication.Be
 public class SecurityConfig {
 
   static final String ADMIN_ROLE = "DEV_PORTAL_ADMIN";
+  /** Opens the meals app and nothing else, for someone who should not be a site admin. */
+  static final String MEALS_ROLE = "MEALS_USER";
 
   @Bean
   public SecurityFilterChain filterChain(
@@ -27,9 +29,13 @@ public class SecurityConfig {
         .cors(Customizer.withDefaults())
         .authorizeHttpRequests(auth -> auth
             .requestMatchers("/api/admin/**").hasRole(ADMIN_ROLE)
-            // Meals holds recipes from copyrighted ebooks and one person's kitchen: every
-            // route, images included, is for the site owner alone (spec 053).
-            .requestMatchers("/api/meals/**").hasRole(ADMIN_ROLE)
+            // Meals holds recipes from copyrighted ebooks: every route, images included, is
+            // private (spec 053). MEALS_USER opens it without making someone a site admin;
+            // kitchen, Up next, shopping and ratings are per person, keyed on the subject.
+            // Loading the books stays with the owner, who bought them. Order matters: the
+            // narrower admin path must come before the meals-wide rule that would match it.
+            .requestMatchers("/api/meals/admin/**").hasRole(ADMIN_ROLE)
+            .requestMatchers("/api/meals/**").hasAnyRole(ADMIN_ROLE, MEALS_ROLE)
             // Favourites are globally shared: reads are public, only writes need a session.
             .requestMatchers(HttpMethod.PUT, "/api/favourites/**").authenticated()
             .requestMatchers(HttpMethod.DELETE, "/api/favourites/**").authenticated()

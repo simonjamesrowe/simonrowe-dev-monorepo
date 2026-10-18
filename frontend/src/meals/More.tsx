@@ -4,8 +4,11 @@ import { Copy, KeyRound, LogOut, Trash2 } from 'lucide-react'
 import { useMine, useTokens } from './data'
 import { ImportPage } from './ImportPage'
 
-/** Settings: Claude Code access, loading recipe bundles, and signing out. */
-export function More({ onSignOut }: { onSignOut: () => void }) {
+/**
+ * Settings: Claude Code access, loading recipe bundles (the site admin only, which the server
+ * enforces too), and signing out.
+ */
+export function More({ onSignOut, canImport = true }: { onSignOut: () => void; canImport?: boolean }) {
   const tokens = useTokens()
   const [label, setLabel] = useState('Claude Code')
   const [minted, setMinted] = useState<string | null>(null)
@@ -57,7 +60,7 @@ export function More({ onSignOut }: { onSignOut: () => void }) {
         )}
       </section>
 
-      <ImportPage />
+      {canImport && <ImportPage />}
 
       <button type="button" className="meals-button" onClick={onSignOut}><LogOut size={16} /> Sign out</button>
     </div>
