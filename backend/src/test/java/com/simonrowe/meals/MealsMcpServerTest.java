@@ -4,13 +4,16 @@ import static com.simonrowe.AdminTestAuth.adminJwt;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.simonrowe.AbstractIntegrationTest;
 import com.simonrowe.migration.changeunits.V058CreateMeals;
 import com.simonrowe.migration.changeunits.V059CreateMealsKitchen;
+import com.simonrowe.migration.changeunits.V060CreateMealFavourites;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -27,6 +30,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -56,8 +60,10 @@ class MealsMcpServerTest extends AbstractIntegrationTest {
   void emptyMeals() {
     V058CreateMeals.COLLECTIONS.forEach(mongoTemplate::dropCollection);
     V059CreateMealsKitchen.COLLECTIONS.forEach(mongoTemplate::dropCollection);
+    mongoTemplate.dropCollection(MealFavourite.COLLECTION);
     V058CreateMeals.createIndexes(mongoTemplate);
     V059CreateMealsKitchen.createIndexes(mongoTemplate);
+    V060CreateMealFavourites.createIndexes(mongoTemplate);
   }
 
   @Test
@@ -97,7 +103,7 @@ class MealsMcpServerTest extends AbstractIntegrationTest {
         .map(t -> t.path("name").asString()).toList();
     assertThat(names).contains("search_recipes", "suggest_meals", "what_can_i_cook_now",
         "update_inventory", "plan_meal", "get_shopping_list", "record_cooked",
-        "import_recipe_from_url");
+        "import_recipe_from_url", "get_favourites");
 
     JsonNode updated = body(rpc(token, "tools/call", """
         {"name":"update_inventory","arguments":{"changes":[
@@ -114,6 +120,27 @@ class MealsMcpServerTest extends AbstractIntegrationTest {
     JsonNode bad = body(rpc(token, "tools/call", """
         {"name":"get_recipe","arguments":{"id":"no-such-recipe"}}"""));
     assertThat(bad.path("result").path("isError").asBoolean()).isTrue();
+  }
+
+  @Test
+  void favouritesToolListsOnlyTheTokensOwnersHearts() throws Exception {
+    mockMvc.perform(multipart("/api/meals/admin/bundles")
+            .file(new MockMultipartFile("file", "b.zip", "application/zip", MealBundles.valid()))
+            .with(adminJwt().jwt(j -> j.subject("simon"))))
+        .andExpect(status().isOk());
+    mockMvc.perform(put("/api/meals/favourites/test-chilli")
+            .with(adminJwt().jwt(j -> j.subject("simon"))))
+        .andExpect(status().isOk());
+    mockMvc.perform(put("/api/meals/favourites/test-oats")
+            .with(adminJwt().jwt(j -> j.subject("other"))))
+        .andExpect(status().isOk());
+
+    JsonNode result = body(rpc(mint(), "tools/call", """
+        {"name":"get_favourites","arguments":{}}"""));
+
+    assertThat(result.path("result").path("isError").asBoolean()).isFalse();
+    assertThat(result.path("result").path("content").get(0).path("text").asString())
+        .contains("Test Chilli").doesNotContain("Test Oats");
   }
 
   @Test

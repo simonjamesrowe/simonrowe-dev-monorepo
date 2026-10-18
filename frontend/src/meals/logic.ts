@@ -1,11 +1,52 @@
-import type { Category, IngredientLine, InventoryChange, MealSlot, Rating, Unit } from './types'
+import type { Category, IngredientLine, InventoryChange, MealSlot, Rating, Recipe, Unit } from './types'
 
 export type { MealSlot }
 
-export const BOOKS: Record<string, string> = {
-  mmmb1: 'Macro Meals, Micro Budget',
-  mmmb2: 'Macro Meals, Micro Budget Vol. 2',
-  mpmb: 'Macro Prep, Micro Budget',
+/**
+ * Who the cookbook recipes are by. The app names the author as a recipe's source and never the
+ * books themselves.
+ */
+export const COOKBOOK_AUTHOR = 'Dave Fowler'
+
+/** Friendly names for recipe sites, by registrable host. Anything else shows its host name. */
+const SITES: Record<string, string> = {
+  'bbcgoodfood.com': 'BBC Good Food',
+  'bbc.co.uk': 'BBC Food',
+  'jamieoliver.com': 'Jamie Oliver',
+  'nigella.com': 'Nigella',
+  'deliciousmagazine.co.uk': 'delicious.',
+  'theguardian.com': 'The Guardian',
+  'nytimes.com': 'NYT Cooking',
+  'seriouseats.com': 'Serious Eats',
+  'bonappetit.com': 'Bon Appétit',
+  'allrecipes.com': 'Allrecipes',
+  'recipetineats.com': 'RecipeTin Eats',
+  'olivemagazine.com': 'Olive',
+  'waitrose.com': 'Waitrose',
+  'tesco.com': 'Tesco Real Food',
+}
+
+export interface RecipeSourceLabel {
+  label: string
+  url: string | null
+}
+
+/** Where a recipe came from, as a reader would say it: an author, a site, or your own photo. */
+export function sourceOf(recipe: Recipe): RecipeSourceLabel | null {
+  const { type, url } = recipe.source
+  if (type === 'BOOK') return { label: COOKBOOK_AUTHOR, url: null }
+  if (type === 'PHOTO') return { label: 'Your photo', url: null }
+  if (!url) return null
+  let host: string
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null
+    host = parsed.hostname.toLowerCase().replace(/^www\./, '')
+  } catch {
+    return null
+  }
+  const known = Object.keys(SITES).find((site) => host === site || host.endsWith(`.${site}`))
+  return { label: known ? SITES[known] : host, url }
 }
 
 export const TAGS = ['filling', 'spicy', 'quick', 'faff', 'great for prep', 'too sweet', 'bland', 'kids liked it']

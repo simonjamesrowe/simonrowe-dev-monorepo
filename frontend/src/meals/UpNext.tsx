@@ -1,103 +1,149 @@
 import { useState } from 'react'
-import { CalendarRange, ListTodo, Minus, Plus, ShoppingBasket, Trash2 } from 'lucide-react'
+import { Check, Heart, ListTodo, Minus, Plus, Search, ShoppingBasket, Trash2, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-import { useCoverage, useMine, useUpNext } from './data'
-import { CoverageBar, Empty, Loading, Photo, Sheet } from './ui'
-import type { Recipe, Template } from './types'
+import { useCoverage, useFavourites, useKitchenHasFood, useMine, useShopping, useUpNext } from './data'
+import { CoverageBar, Empty, Loading, Photo } from './ui'
+import type { Recipe } from './types'
 
-/** What the owner means to cook soon. No days, no slots: the shopping list is built from this. */
-export function UpNext({ byId, templates }: { byId: Map<string, Recipe>; templates: Template[] }) {
+const RESULTS = 8
+
+/**
+ * What you are planning to cook. No days and no slots: find a recipe or tap a favourite to add
+ * it, set the portions, and the shopping list is built from whatever is here.
+ */
+export function UpNext({ recipes, byId }: { recipes: Recipe[]; byId: Map<string, Recipe> }) {
   const upNext = useUpNext()
+  const favourites = useFavourites()
+  const shopping = useShopping()
   const coverage = useCoverage().data
-  const [weeks, setWeeks] = useState(false)
+  const { hasFood } = useKitchenHasFood()
+  const [query, setQuery] = useState('')
+  const add = useMine((api, id: string) => api.queue(id))
   const setPortions = useMine((api, v: { id: string; portions: number }) => api.queue(v.id, v.portions))
   const remove = useMine((api, id: string) => api.unqueue(id))
-  const addWeek = useMine((api, id: string) => api.queueTemplate(id))
+
   const items = (upNext.data ?? []).filter((u) => byId.has(u.recipeId))
+  const planned = new Set(items.map((u) => u.recipeId))
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+  const results = terms.length === 0 ? [] : recipes
+    .filter((r) => terms.every((t) => r.name.toLowerCase().includes(t) || r.ingredients.some((l) => l.name.includes(t))))
+    .slice(0, RESULTS)
+  const favouriteRecipes = (favourites.data ?? [])
+    .map((f) => byId.get(f.recipeId))
+    .filter((r): r is Recipe => !!r && !planned.has(r.id))
+  const toBuy = (shopping.data?.items ?? []).filter((i) => !i.basket).length
 
   return (
     <div className="meals-page">
       <header className="meals-page__header">
         <h1>Up next</h1>
-        <p className="meals-muted">What you mean to cook soon. The shopping list is built from this.</p>
+        <p className="meals-muted">What you're planning to cook. Your shopping list is made from it.</p>
       </header>
-      <div className="meals-row">
-        <button type="button" className="meals-button" onClick={() => setWeeks(true)}><CalendarRange size={16} /> Start from one of Dave's weeks</button>
-        {items.length > 0 && <Link className="meals-button meals-button--primary" to="/shop"><ShoppingBasket size={16} /> Shopping list</Link>}
-      </div>
 
-      {upNext.isLoading ? <Loading /> : items.length === 0 ? (
-        <Empty icon={<ListTodo size={32} />} title="Nothing queued">
-          Add recipes from a recipe page or the Cook screen, or start from one of Dave's weeks.
-        </Empty>
-      ) : (
-        <ul className="meals-queue">
-          {items.map((u) => {
-            const recipe = byId.get(u.recipeId)!
-            return (
-              <li key={u.recipeId} className="meals-queue__item">
-                <Link className="meals-queue__open" to={`/recipes/${recipe.id}`}>
-                  <Photo recipe={recipe} className="meals-queue__photo" />
-                  <span className="meals-queue__body">
-                    <span className="meals-queue__name">{recipe.name}</span>
-                    <CoverageBar coverage={coverage?.[recipe.id]} />
-                  </span>
-                </Link>
-                <span className="meals-stepper meals-stepper--small" role="group" aria-label={`${recipe.name} portions`}>
-                  <button type="button" className="meals-icon-button" aria-label="Fewer portions" disabled={u.portions <= 1}
-                    onClick={() => setPortions.mutate({ id: u.recipeId, portions: u.portions - 1 })}><Minus size={14} /></button>
-                  <span>{u.portions}</span>
-                  <button type="button" className="meals-icon-button" aria-label="More portions"
-                    onClick={() => setPortions.mutate({ id: u.recipeId, portions: u.portions + 1 })}><Plus size={14} /></button>
+      <section className="meals-adder" aria-label="Add a recipe">
+        <label className="meals-search">
+          <Search size={18} aria-hidden="true" />
+          <input className="meals-search__input" placeholder="Find a recipe to add…" value={query}
+            onChange={(e) => setQuery(e.target.value)} aria-label="Find a recipe to add" />
+          {query && (
+            <button type="button" className="meals-icon-button meals-icon-button--small" aria-label="Clear search"
+              onClick={() => setQuery('')}><X size={16} /></button>
+          )}
+        </label>
+        {terms.length > 0 && (
+          results.length === 0 ? <p className="meals-muted meals-small">No recipe matches “{query}”.</p> : (
+            <ul className="meals-results" aria-label="Matching recipes">
+              {results.map((r) => {
+                const isPlanned = planned.has(r.id)
+                return (
+                  <li key={r.id} className="meals-result">
+                    <Photo recipe={r} className="meals-result__photo" />
+                    <span className="meals-result__body">
+                      <span className="meals-result__name">{r.name}</span>
+                      <span className="meals-muted meals-small">{Math.round(r.perServing.kcal)} kcal · {Math.round(r.perServing.protein)}g protein</span>
+                    </span>
+                    <button type="button" className={`meals-button meals-button--small ${isPlanned ? '' : 'meals-button--primary'}`}
+                      disabled={isPlanned} aria-label={isPlanned ? `${r.name} is planned` : `Add ${r.name}`}
+                      onClick={() => add.mutate(r.id)}>
+                      {isPlanned ? <><Check size={14} /> Planned</> : <><Plus size={14} /> Add</>}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )
+        )}
+      </section>
+
+      <section className="meals-section">
+        <h2 className="meals-section__title"><Heart size={16} aria-hidden="true" /> From your favourites</h2>
+        {(favourites.data?.length ?? 0) === 0 ? (
+          <p className="meals-muted meals-small">
+            Heart recipes on the <Link className="meals-link" to="/recipes">Recipes</Link> tab and they'll be here to add in one tap.
+          </p>
+        ) : favouriteRecipes.length === 0 ? (
+          <p className="meals-muted meals-small">Every favourite is already planned.</p>
+        ) : (
+          <div className="meals-mini-strip">
+            {favouriteRecipes.map((r) => (
+              <button key={r.id} type="button" className="meals-mini-card meals-mini-card--add" aria-label={`Add ${r.name}`}
+                onClick={() => add.mutate(r.id)}>
+                <span className="meals-mini-card__photo">
+                  <Photo recipe={r} />
+                  <span className="meals-mini-card__plus" aria-hidden="true"><Plus size={16} /></span>
                 </span>
-                <button type="button" className="meals-icon-button" aria-label={`Remove ${recipe.name}`} onClick={() => remove.mutate(u.recipeId)}><Trash2 size={16} /></button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+                <span>{r.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
 
-      {weeks && (
-        <WeekPicker templates={templates} byId={byId} onClose={() => setWeeks(false)}
-          onPick={(t) => addWeek.mutate(t.id, { onSuccess: () => setWeeks(false) })} />
-      )}
-    </div>
-  )
-}
+      <section className="meals-section">
+        <h2 className="meals-section__title">Planned{items.length > 0 && ` · ${items.length}`}</h2>
+        {upNext.isLoading ? <Loading /> : items.length === 0 ? (
+          <Empty icon={<ListTodo size={32} />} title="Nothing planned yet">
+            Search above or tap a favourite to start.
+          </Empty>
+        ) : (
+          <ul className="meals-queue">
+            {items.map((u) => {
+              const recipe = byId.get(u.recipeId)!
+              return (
+                <li key={u.recipeId} className="meals-queue__item">
+                  <Link className="meals-queue__open" to={`/recipes/${recipe.id}`}>
+                    <Photo recipe={recipe} className="meals-queue__photo" />
+                    <span className="meals-queue__body">
+                      <span className="meals-queue__name">{recipe.name}</span>
+                      {hasFood
+                        ? <CoverageBar coverage={coverage?.[recipe.id]} />
+                        : <span className="meals-muted meals-small">{Math.round(recipe.perServing.kcal)} kcal · {Math.round(recipe.perServing.protein)}g protein</span>}
+                    </span>
+                  </Link>
+                  <span className="meals-stepper meals-stepper--small" role="group" aria-label={`${recipe.name} portions`}>
+                    <button type="button" className="meals-icon-button" aria-label="Fewer portions" disabled={u.portions <= 1}
+                      onClick={() => setPortions.mutate({ id: u.recipeId, portions: u.portions - 1 })}><Minus size={14} /></button>
+                    <span>{u.portions}</span>
+                    <button type="button" className="meals-icon-button" aria-label="More portions"
+                      onClick={() => setPortions.mutate({ id: u.recipeId, portions: u.portions + 1 })}><Plus size={14} /></button>
+                  </span>
+                  <button type="button" className="meals-icon-button" aria-label={`Remove ${recipe.name}`} onClick={() => remove.mutate(u.recipeId)}><Trash2 size={16} /></button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
 
-function WeekPicker({ templates, byId, onClose, onPick }: {
-  templates: Template[]; byId: Map<string, Recipe>; onClose: () => void; onPick: (t: Template) => void
-}) {
-  const sources = [...new Set(templates.map((t) => t.source))]
-  const [source, setSource] = useState(sources[0] ?? '')
-  return (
-    <Sheet title="Dave's weeks" onClose={onClose}>
-      <p className="meals-muted meals-small">Each week is a set of recipes Dave put together. Adding one queues its recipes; the calorie figure is just his label.</p>
-      {sources.length > 1 && (
-        <div className="meals-segmented" role="tablist" aria-label="Book">
-          {sources.map((s) => (
-            <button key={s} type="button" role="tab" aria-selected={s === source}
-              className={s === source ? 'meals-segmented__on' : ''} onClick={() => setSource(s)}>{s}</button>
-          ))}
+      {items.length > 0 && (
+        <div className="meals-cta">
+          <Link className="meals-button meals-button--primary meals-cta__button" to="/shop">
+            <ShoppingBasket size={18} aria-hidden="true" /> Shopping list
+            {shopping.isSuccess && <span className="meals-cta__note">{toBuy === 0 ? 'nothing to buy' : `${toBuy} to buy`}</span>}
+          </Link>
         </div>
       )}
-      <ul className="meals-weeks">
-        {templates.filter((t) => t.source === source).map((t) => {
-          const recipes = t.recipeIds.map((id) => byId.get(id)).filter(Boolean) as Recipe[]
-          return (
-            <li key={t.id} className="meals-week">
-              <div className="meals-week__head">
-                <strong>{t.label}</strong>
-                <button type="button" className="meals-button meals-button--small" onClick={() => onPick(t)}><Plus size={14} /> Add {recipes.length}</button>
-              </div>
-              <div className="meals-week__thumbs">
-                {recipes.map((r) => <span key={r.id} className="meals-week__thumb" title={r.name}><Photo recipe={r} /><span>{r.name}</span></span>)}
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-    </Sheet>
+    </div>
   )
 }

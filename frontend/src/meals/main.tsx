@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
 
 import { AUTH0_AUDIENCE, AUTH0_CLIENT_ID, AUTH0_DOMAIN } from '../config/auth'
+import { ThemeProvider } from '../contexts/ThemeContext'
 import { App } from './App'
+import { ThemeColor } from './ui'
 import '../styles.css'
 
 /**
@@ -48,11 +50,14 @@ createRoot(document.getElementById('root')!).render(
       onRedirectCallback={returnTo}
     >
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <div className="meals-app">
-            <App />
-          </div>
-        </BrowserRouter>
+        <ThemeProvider>
+          <ThemeColor />
+          <BrowserRouter>
+            <div className="meals-app">
+              <App />
+            </div>
+          </BrowserRouter>
+        </ThemeProvider>
       </QueryClientProvider>
     </Auth0Provider>
   </StrictMode>,

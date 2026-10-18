@@ -69,7 +69,8 @@ A bundle is a zip with `manifest.json` (`version: 1`, `recipes`, `ingredients`, 
 the `photos/` it names. The bundles were built from the books while prototyping, outside the
 repository, one per book to stay under the 10 MB upload limit.
 
-Upload them on the app's **Import** page (several at once is fine), or with
+Upload them under **Load recipe bundles** at the bottom of the app's **More** page (the site admin
+only; several at once is fine), or with
 `curl -F file=@meals-bundle-mmmb1.zip -H "Authorization: Bearer $TOKEN" .../api/meals/admin/bundles`.
 
 Importing is insert-if-absent by id for recipes, ingredients and weeks: re-uploading adds
@@ -109,13 +110,46 @@ until the owner reviews and applies the list. Its prompt carries today's date in
 
 ## Up next and shopping
 
-There is no week planner. **Up next** (`meal_up_next`) is a shortlist of recipes and portions;
-Dave's weeks add their recipes to it. The **shopping list** is Up next's needs minus the kitchen,
+There is no week planner. **Up next** (`meal_up_next`) is a shortlist of recipes and portions:
+the page finds any recipe by name or ingredient to add, and offers the person's favourites to add
+in one tap. The app no longer shows the books' weekly plans (`meal_plan_templates` is still
+imported, backed up and reachable through the MCP server and `POST /api/meals/up-next/templates/{id}`;
+it just has no button). The **shopping list** is Up next's needs minus the kitchen,
 grouped by aisle, plus extras the owner typed, with unrecorded staples in a "Check the cupboard"
 group. `meal_shopping` keeps per-line marks: in the basket, and at which shop (Ocado, Amazon,
 Deliveroo). Each line carries a search term to paste into the shop. **Delivered** adds what was in
 the basket to the kitchen (the list's quantity, or "have" for a staple) and clears it; pasting the
 shop's order confirmation through quick add does the same with the real quantities.
+
+## Favourites
+
+A heart on a recipe adds it to that person's **favourites** (`meal_favourites`), keyed
+`<ownerId>|<recipeId>`. Hearts are per person and never shared: someone with `MEALS_USER` sees
+only their own, never the owner's. `GET /api/meals/favourites` lists them newest first,
+`PUT /api/meals/favourites/{recipeId}` hearts one (404 for an unknown recipe; hearting it again
+keeps its original `addedAt`), and `DELETE` un-hearts it (204, also when it was not hearted). The
+collection is in the full backup, and its `{ownerId: 1, addedAt: -1}` index
+(`V060CreateMealFavourites`) is re-created on restore. The MCP server's `get_favourites` tool
+reads them as the token's owner.
+
+## The app's look, and what it says about sources
+
+- **Light and dark**, sharing the main site's `theme-preference` key: an inline script in
+  `frontend/meals/index.html` applies it before first paint. Meals has its own warm palette,
+  defined by re-pointing the site's colour tokens under `:root:has(.meals-app)` in `styles.css`,
+  so every `meals-*` rule follows the theme without a second set of variable names.
+- **The logo** is `frontend/public/meals-logo.svg`. The favicon, Apple touch icon and PWA icons
+  are rendered from it (`rsvg-convert`); the PWA ones use a square, full-bleed tile so a maskable
+  crop never cuts the bowl.
+- **The books are never named in the app.** A recipe page says where a recipe came from:
+  `COOKBOOK_AUTHOR` (in `frontend/src/meals/logic.ts`) for a book recipe, the site's name for a
+  link (matched on the parsed host, so a lookalike host shows as itself), or "Your photo".
+- **The Recipes page keeps its search, filters and sort in the address**, and its scroll position
+  in session storage keyed on that address, so Back from a recipe returns to the same place.
+- **"What can I cook" waits for something fresh.** Until the kitchen holds a tracked item with a
+  quantity, the Cook page shows favourites instead of near misses, and recipe pages and cards
+  hide coverage. Against an empty fridge every recipe needing one or two fresh things looked
+  "one or two things short".
 
 ## Adding and editing recipes
 
@@ -144,8 +178,8 @@ claude mcp add --transport http meals https://meals.simonrowe.dev/api/meals/mcp 
   same page. `lastUsedAt` is updated at most every ten minutes.
 - The path has its own `@Order(1)` security chain that accepts only a `meals_` token, never an
   Auth0 JWT, and every tool acts as the token's owner.
-- Twelve tools (search, recipe, suggestions, what can I cook now, inventory read and update, Up
-  next, shopping list, cooked, import from a URL) and two prompts (`plan-my-week`,
+- Thirteen tools (search, recipe, suggestions, what can I cook now, inventory read and update,
+  favourites, Up next, shopping list, cooked, import from a URL) and two prompts (`plan-my-week`,
   `use-up-whats-expiring`).
 - **The meals tools must never be a `ToolCallbackProvider` bean.** The public `/mcp` server
   collects every such bean, so one would publish the owner's kitchen to the world.
@@ -153,14 +187,14 @@ claude mcp add --transport http meals https://meals.simonrowe.dev/api/meals/mcp 
 
 ## Backup and restore
 
-All nine collections (`meal_recipes`, `meal_ingredients`, `meal_plan_templates`, `meal_ratings`,
-`meal_inventory`, `meal_inventory_events`, `meal_up_next`, `meal_shopping`, `meal_mcp_tokens`)
-are in the full backup, and the photos travel as `meal-images/`.
+All ten collections (`meal_recipes`, `meal_ingredients`, `meal_plan_templates`, `meal_ratings`,
+`meal_inventory`, `meal_inventory_events`, `meal_up_next`, `meal_shopping`, `meal_favourites`,
+`meal_mcp_tokens`) are in the full backup, and the photos travel as `meal-images/`.
 
 - A restore replaces the collections and **adds** photos (files on disk are kept; a photo is
   named by the hash of its bytes, so a same-named file is the same photo).
-- `RestoreService.ensureMealIndexes()` re-creates the indexes of `V058CreateMeals` and
-  `V059CreateMealsKitchen`, because Mongock never re-runs a recorded unit. The unique token-hash
+- `RestoreService.ensureMealIndexes()` re-creates the indexes of `V058CreateMeals`,
+  `V059CreateMealsKitchen` and `V060CreateMealFavourites`, because Mongock never re-runs a recorded unit. The unique token-hash
   index matters most: without it a token lookup could match two rows.
 - Restoring `meal_mcp_tokens` brings back the tokens as they were at backup time, so a token
   revoked since then works again. Revoke it again after a restore.

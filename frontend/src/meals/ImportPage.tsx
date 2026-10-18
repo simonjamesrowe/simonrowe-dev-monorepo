@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Upload } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 import { useMealsApi } from './data'
 import type { ImportReport } from './types'
@@ -39,8 +40,12 @@ export function ImportPage() {
 
   return (
     <section className="meals-panel">
-      <h2 className="meals-panel__title">Import recipe bundles</h2>
-      <p className="meals-muted meals-small">Upload recipe bundles (zip). Anything already in the library is left as it is.</p>
+      <h2 className="meals-panel__title">Load recipe bundles</h2>
+      <p className="meals-muted meals-small">
+        A one-off admin tool for loading recipe collections from a zip bundle. Uploading a bundle again adds
+        nothing, and recipes already in the library are left as they are. To add a single recipe, use{' '}
+        <Link className="meals-link" to="/recipes/new">Import a recipe</Link> instead.
+      </p>
       <label className={`meals-dropzone ${busy ? 'meals-dropzone--busy' : ''}`}>
         <Upload size={24} aria-hidden="true" />
         <span>{busy ? 'Importing…' : 'Choose bundles'}</span>
@@ -57,7 +62,7 @@ export function ImportPage() {
                 <>
                   <p>
                     {r.report.recipesAdded} recipes added, {r.report.recipesExisting} already there,{' '}
-                    {r.report.ingredientsAdded} ingredients, {r.report.templatesAdded} weeks, {r.report.photosStored} photos.
+                    {r.report.ingredientsAdded} ingredients, {r.report.photosStored} photos.
                   </p>
                   {r.report.skipped.length > 0 && (
                     <details>

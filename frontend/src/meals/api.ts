@@ -1,7 +1,7 @@
 import type {
   CookedRequest, Coverage, Deduction, ImportReport, Ingredient, InventoryChange, InventoryEvent,
   InventoryItem, McpToken, MealSlot, NewRating, Proposal, Rating, Recipe, RecipeInput, Shop,
-  ShoppingList, Suggestion, Template, UpNextItem,
+  ShoppingList, Suggestion, UpNextItem, Favourite,
 } from './types'
 
 export type TokenGetter = () => Promise<string>
@@ -51,7 +51,6 @@ export function createMealsApi(getToken: TokenGetter) {
   return {
     recipes: () => json<Recipe[]>('/recipes'),
     ingredients: () => json<Ingredient[]>('/ingredients'),
-    templates: () => json<Template[]>('/templates'),
     ratings: () => json<Rating[]>('/ratings'),
     rate: (rating: NewRating) => send<Rating>('/ratings', 'POST', rating),
     deleteRating: async (id: string) => { await request(`/ratings/${encodeURIComponent(id)}`, { method: 'DELETE' }) },
@@ -90,8 +89,12 @@ export function createMealsApi(getToken: TokenGetter) {
     unqueue: async (recipeId: string) => {
       await request(`/up-next/${encodeURIComponent(recipeId)}`, { method: 'DELETE' })
     },
-    queueTemplate: (templateId: string) =>
-      json<UpNextItem[]>(`/up-next/templates/${encodeURIComponent(templateId)}`, { method: 'POST' }),
+
+    favourites: () => json<Favourite[]>('/favourites'),
+    favourite: (recipeId: string) => send<Favourite>(`/favourites/${encodeURIComponent(recipeId)}`, 'PUT', {}),
+    unfavourite: async (recipeId: string) => {
+      await request(`/favourites/${encodeURIComponent(recipeId)}`, { method: 'DELETE' })
+    },
 
     shopping: () => json<ShoppingList>('/shopping'),
     basket: async (name: string, shop: Shop | null) => {

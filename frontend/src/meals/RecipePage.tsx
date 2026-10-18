@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ArrowLeft, Check, ChefHat, ChevronLeft, ChevronRight, ListPlus, ListX, Minus, Pencil, Plus, Trash2, X,
+  ArrowLeft, Check, ChefHat, ChevronLeft, ChevronRight, ExternalLink, ListPlus, ListX, Minus, Pencil, Plus, Trash2, X,
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { CookedSheet } from './CookedSheet'
-import { MINE, useDeleteRating, useMealsApi, useMine, useUpNext } from './data'
-import { averageScore, BOOKS, ratingsFor, scaledLine } from './logic'
-import { Flags, Macros, Photo, Stars } from './ui'
+import { MINE, useDeleteRating, useKitchenHasFood, useMealsApi, useMine, useUpNext } from './data'
+import { averageScore, ratingsFor, scaledLine, sourceOf } from './logic'
+import { FavouriteButton, Flags, Macros, Photo, Stars } from './ui'
 import type { Ingredient, Rating, Recipe } from './types'
 
 interface Props {
@@ -23,9 +23,12 @@ export function RecipePage({ recipe, ratings, ingredients }: Props) {
   const upNext = useUpNext()
   const queued = upNext.data?.find((u) => u.recipeId === recipe.id)
   const [portions, setPortions] = useState(queued?.portions ?? recipe.servings)
+  const { hasFood } = useKitchenHasFood()
+  // Against an empty kitchen every fresh line reads as missing, which says nothing useful.
   const coverage = useQuery({
     queryKey: [...MINE, 'recipe-coverage', recipe.id, portions],
     queryFn: () => api.recipeCoverage(recipe.id, portions),
+    enabled: hasFood,
   }).data
   const queue = useMine((a, p: number) => a.queue(recipe.id, p))
   const unqueue = useMine((a) => a.unqueue(recipe.id))
@@ -35,8 +38,7 @@ export function RecipePage({ recipe, ratings, ingredients }: Props) {
   const scale = portions / recipe.servings
   const history = ratingsFor(recipe.id, ratings)
   const avg = averageScore(recipe.id, ratings)
-  const book = recipe.source.book ? BOOKS[recipe.source.book] ?? recipe.source.book : null
-  const page = recipe.source.pages[0]
+  const source = sourceOf(recipe)
 
   useEffect(() => { window.scrollTo(0, 0) }, [recipe.id])
   useEffect(() => { if (queued) setPortions(queued.portions) }, [queued])
@@ -57,10 +59,19 @@ export function RecipePage({ recipe, ratings, ingredients }: Props) {
           onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/recipes'))}>
           <ArrowLeft size={20} />
         </button>
+        <FavouriteButton recipe={recipe} className="meals-recipe__heart" />
       </div>
       <div className="meals-recipe__content">
-        <p className="meals-eyebrow">{[recipe.section, book && `${book}${page ? `, p.${page}` : ''}`].filter(Boolean).join(' · ')}</p>
+        {recipe.section && <p className="meals-eyebrow">{recipe.section}</p>}
         <h1 className="meals-recipe__title">{recipe.name}</h1>
+        {source && (
+          <p className="meals-source">
+            Source:{' '}
+            {source.url
+              ? <a href={source.url} target="_blank" rel="noopener noreferrer">{source.label} <ExternalLink size={12} aria-hidden="true" /></a>
+              : source.label}
+          </p>
+        )}
         <div className="meals-recipe__sub">
           <Flags recipe={recipe} />
           {avg != null && <span className="meals-rating-pill">★ {avg.toFixed(1)} · cooked {history.length}×</span>}
@@ -97,7 +108,7 @@ export function RecipePage({ recipe, ratings, ingredients }: Props) {
           )}
           <ul className="meals-ingredients">
             {recipe.ingredients.map((line, i) => {
-              const state = ingredients.get(line.name)?.assumed ? 'assumed' : coverage?.lines[line.name]?.toLowerCase() ?? 'unknown'
+              const state = ingredients.get(line.name)?.assumed ? 'assumed' : coverage ? coverage.lines[line.name]?.toLowerCase() ?? 'unknown' : 'plain'
               return (
                 <li key={i} className={`meals-ingredient meals-ingredient--${state}`}>
                   {scaledLine(line, scale)}

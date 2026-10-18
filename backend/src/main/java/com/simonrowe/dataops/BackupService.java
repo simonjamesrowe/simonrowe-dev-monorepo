@@ -81,6 +81,8 @@ public class BackupService {
       // books' bundles are not kept and every correction since would be lost.
       "meal_recipes", "meal_ingredients", "meal_plan_templates", "meal_ratings",
       "meal_inventory", "meal_inventory_events", "meal_up_next", "meal_shopping",
+      // Each person's hearted recipes. Nothing re-derives them.
+      "meal_favourites",
       // Only token hashes: kept so a restore does not break the token in Claude Code's config.
       "meal_mcp_tokens"
   );

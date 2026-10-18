@@ -97,8 +97,12 @@ export function RecipeEditor({ recipe, knownIngredients }: { recipe?: Recipe; kn
     return (
       <div className="meals-page">
         <header className="meals-page__header">
-          <h1>Add a recipe</h1>
-          <p className="meals-muted">From a web page, a photo of a cookbook page or screenshot, or by hand. You check it before it is saved.</p>
+          <h1>Import a recipe</h1>
+          <p className="meals-muted">
+            Paste a link to any recipe page (BBC Good Food, a blog…) or photograph a cookbook page. It reads the
+            ingredients, method and macros into a draft, which takes up to a minute. Nothing is saved until you
+            have checked it.
+          </p>
         </header>
         <section className="meals-panel">
           <h2 className="meals-panel__title"><Link2 size={18} aria-hidden="true" /> From a link</h2>
