@@ -48,7 +48,7 @@ interface Filters {
 }
 
 function number(value: string | null): number | null {
-  const n = value == null ? NaN : Number(value)
+  const n = value == null ? Number.NaN : Number(value)
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
