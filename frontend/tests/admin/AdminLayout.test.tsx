@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -155,5 +155,36 @@ describe('AdminLayout', () => {
     expectedLabels.forEach((label) => {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument()
     })
+  })
+  /**
+   * The overlay behind the opened phone sidebar is a mouse convenience and hidden from
+   * assistive technology; the sidebar's own Close navigation button is the accessible way out.
+   */
+  it('shows a decorative overlay while the sidebar is open, and a click on it closes the sidebar', () => {
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      user: { email: 'admin@example.com' },
+      login: vi.fn(),
+      logout: vi.fn(),
+      getAccessToken: vi.fn(),
+    })
+    mockUseAdminRole.mockReturnValue(true)
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <AdminLayout />
+      </MemoryRouter>,
+    )
+    expect(container.querySelector('.admin-sidebar-overlay')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }))
+    const overlay = container.querySelector('.admin-sidebar-overlay')
+    expect(overlay).toHaveAttribute('aria-hidden', 'true')
+    expect(container.querySelector('.admin-sidebar')).toHaveClass('admin-sidebar--open')
+
+    fireEvent.click(overlay!)
+    expect(container.querySelector('.admin-sidebar-overlay')).toBeNull()
+    expect(container.querySelector('.admin-sidebar')).not.toHaveClass('admin-sidebar--open')
   })
 })
