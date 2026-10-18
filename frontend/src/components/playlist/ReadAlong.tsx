@@ -101,6 +101,7 @@ export function ReadAlong({ markdown, timingsUrl, className }: ReadAlongProps) {
   const lastIndexRef = useRef(-1)
   const lastLineRef = useRef<number | null>(null)
   const pausedUntilRef = useRef(0)
+  const pauseTimerRef = useRef<number | undefined>(undefined)
   const [timings, setTimings] = useState<WordTiming[] | null>(null)
   const [paused, setPaused] = useState(false)
 
@@ -204,19 +205,19 @@ export function ReadAlong({ markdown, timingsUrl, className }: ReadAlongProps) {
     if (timings && !playing) paintNow()
   }, [paintNow, playing, position, timings])
 
-  useEffect(() => {
-    if (!paused) return undefined
-    const timer = window.setTimeout(() => setPaused(false), MANUAL_SCROLL_GRACE_MS)
-    return () => window.clearTimeout(timer)
-  }, [paused])
+  useEffect(() => () => window.clearTimeout(pauseTimerRef.current), [])
 
+  // Every scroll restarts the grace period, so the button and the pause end together.
   const pauseFollowing = () => {
     if (!timings) return
     pausedUntilRef.current = Date.now() + MANUAL_SCROLL_GRACE_MS
+    window.clearTimeout(pauseTimerRef.current)
+    pauseTimerRef.current = window.setTimeout(() => setPaused(false), MANUAL_SCROLL_GRACE_MS)
     setPaused(true)
   }
 
   const resumeFollowing = () => {
+    window.clearTimeout(pauseTimerRef.current)
     pausedUntilRef.current = 0
     lastLineRef.current = null
     setPaused(false)

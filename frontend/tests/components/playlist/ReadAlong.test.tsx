@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -124,6 +124,28 @@ describe('ReadAlong', () => {
     await userEvent.click(screen.getByRole('button', { name: "Back to where it's reading" }))
     expect(screen.queryByRole('button', { name: "Back to where it's reading" })).toBeNull()
     expect(word('follow')).toHaveClass('read-along__word--current')
+  })
+
+  it('keeps offering the way back for as long as the reader keeps scrolling', async () => {
+    renderAt(3.0)
+    await waitFor(() => expect(word('follow')).toHaveClass('read-along__word--current'))
+    vi.useFakeTimers()
+    try {
+      const region = screen.getByRole('region', { name: 'Read along' })
+      const back = () => screen.queryByRole('button', { name: "Back to where it's reading" })
+
+      fireEvent.wheel(region)
+      act(() => { vi.advanceTimersByTime(4000) })
+      fireEvent.wheel(region)
+      act(() => { vi.advanceTimersByTime(4000) })
+      // Six seconds after the first scroll, but only four after the second.
+      expect(back()).not.toBeNull()
+
+      act(() => { vi.advanceTimersByTime(2500) })
+      expect(back()).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('shows the text plainly when the audio has no timings', () => {
