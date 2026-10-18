@@ -167,7 +167,7 @@ public class BackupService {
       operationsService.updateProgress("Exporting database collections...", 10);
       String timestamp = TIMESTAMP_FORMAT.format(Instant.now());
       String fileName = "backup-" + timestamp + ".zip";
-      tempFile = Files.createTempFile("backup-", ".zip");
+      tempFile = PrivateTempFiles.create("backup-", ".zip");
 
       Map<String, Integer> collectionCounts = new LinkedHashMap<>();
       int mediaFileCount = 0;
@@ -310,7 +310,7 @@ public class BackupService {
 
   public Path createLocalBackup() throws IOException {
     String timestamp = TIMESTAMP_FORMAT.format(Instant.now());
-    Path tempFile = Files.createTempFile("pre-restore-backup-", ".zip");
+    Path tempFile = PrivateTempFiles.create("pre-restore-backup-", ".zip");
 
     try (OutputStream fos = new BufferedOutputStream(Files.newOutputStream(tempFile));
          ZipOutputStream zos = new ZipOutputStream(fos)) {

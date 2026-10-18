@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 
 interface TagInputProps {
@@ -6,14 +6,18 @@ interface TagInputProps {
   selected: string[]
   onChange: (selected: string[]) => void
   placeholder?: string
+  /** The text input's id, so a `<label htmlFor>` beside the field names it. */
+  id?: string
 }
 
-export function TagInput({ options, selected, onChange, placeholder = 'Type to search...' }: TagInputProps) {
+export function TagInput({ options, selected, onChange, placeholder = 'Type to search...', id }: TagInputProps) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const listboxId = useId()
+  const optionId = (index: number) => `${listboxId}-option-${index}`
 
   const filtered = options.filter(
     (opt) => !selected.includes(opt.id) && opt.name.toLowerCase().includes(query.toLowerCase()),
@@ -67,9 +71,12 @@ export function TagInput({ options, selected, onChange, placeholder = 'Type to s
 
   return (
     <div className="tag-input" ref={containerRef}>
+      {/* A mouse convenience: clicking the padding or a pill focuses the text input. Keyboard
+          users reach that input directly, so this wrapper carries no role of its own. */}
       <div
         className="tag-input__selected"
         onClick={() => inputRef.current?.focus()}
+        role="presentation"
       >
         {selectedOptions.map((opt) => (
           <span key={opt.id} className="tag-input__pill">
@@ -86,6 +93,7 @@ export function TagInput({ options, selected, onChange, placeholder = 'Type to s
         ))}
         <input
           ref={inputRef}
+          id={id}
           type="text"
           className="tag-input__input"
           value={query}
@@ -95,14 +103,23 @@ export function TagInput({ options, selected, onChange, placeholder = 'Type to s
           placeholder={selectedOptions.length === 0 ? placeholder : ''}
           role="combobox"
           aria-expanded={open}
+          aria-controls={open && filtered.length > 0 ? listboxId : undefined}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            open && highlightedIndex >= 0 && highlightedIndex < filtered.length
+              ? optionId(highlightedIndex)
+              : undefined
+          }
         />
       </div>
 
       {open && filtered.length > 0 && (
-        <div className="tag-input__dropdown">
+        <div className="tag-input__dropdown" id={listboxId} role="listbox">
           {filtered.map((opt, index) => (
             <div
               key={opt.id}
+              id={optionId(index)}
+              tabIndex={-1}
               className={`tag-input__option${index === highlightedIndex ? ' tag-input__option--highlighted' : ''}`}
               onClick={() => selectOption(opt.id)}
               role="option"

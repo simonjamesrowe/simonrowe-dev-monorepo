@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown'
 
 import { fetchCodeExample } from '../../services/codeExampleApi'
 import type { CodeExample } from '../../services/codeExampleApi'
+import { closeOnBackdropClick } from '../../utils/backdropClick'
 
 interface CodeExampleDrawerProps {
   codeExampleId: string
@@ -46,8 +47,8 @@ export function CodeExampleDrawer({ codeExampleId, onClose }: CodeExampleDrawerP
   }, [onClose])
 
   return (
-    <div className="drawer-overlay" onClick={onClose}>
-      <div className="drawer" onClick={e => e.stopPropagation()}>
+    <div className="drawer-overlay" onClick={closeOnBackdropClick(onClose)} role="presentation">
+      <div className="drawer">
         <div className="drawer__header">
           <span className="drawer__title">
             {loading ? 'Loading...' : example?.title ?? 'Code Example'}

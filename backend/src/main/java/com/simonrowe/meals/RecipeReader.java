@@ -105,6 +105,9 @@ public class RecipeReader {
   }
 
   /** Reads the recipe on a public web page. */
+  // java:S2583: a null check on a third-party return value, kept on purpose. The library
+  // says it cannot be null today; a future version may disagree, and the check is cheaper.
+  @SuppressWarnings("java:S2583")
   public RecipeService.RecipeInput fromUrl(final String url) {
     if (!UrlFetcher.isFetchableUrl(url)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,

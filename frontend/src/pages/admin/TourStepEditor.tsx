@@ -198,8 +198,9 @@ export function TourStepEditor() {
 
           <div className="blog-editor__top-right">
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Title Image</label>
+              <span className="blog-editor__section-label">Title Image</span>
               <ImagePicker
+                label="Title Image"
                 value={form.titleImage || null}
                 onChange={(url) => { setForm((f) => ({ ...f, titleImage: url })); setDirty(true) }}
               />
@@ -283,7 +284,7 @@ export function TourStepEditor() {
         </div>
 
         <div className="blog-editor__section blog-editor__content">
-          <label className="blog-editor__section-label">Description</label>
+          <span className="blog-editor__section-label">Description</span>
           <MDXEditor
             key={editorKey}
             ref={editorRef}

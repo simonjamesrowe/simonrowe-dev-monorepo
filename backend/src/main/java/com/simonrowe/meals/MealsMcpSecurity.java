@@ -34,6 +34,8 @@ public class MealsMcpSecurity {
   public static final String PATH = "/api/meals/mcp";
   static final String OWNER_ATTRIBUTE = "meals.mcp.owner";
 
+  // java:S4502: see the CSRF comment in the chain below.
+  @SuppressWarnings("java:S4502")
   @Bean
   @Order(1)
   public SecurityFilterChain mealsMcpFilterChain(final HttpSecurity http,

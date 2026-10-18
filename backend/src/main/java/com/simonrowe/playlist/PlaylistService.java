@@ -4,6 +4,7 @@ import com.mongodb.client.result.UpdateResult;
 import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.blog.BlogRepository;
+import com.simonrowe.common.LogSafe;
 import com.simonrowe.narration.NarrationResponse;
 import com.simonrowe.narration.NarrationService;
 import com.simonrowe.summary.ArticleSummary;
@@ -87,11 +88,12 @@ public class PlaylistService implements PlaylistRecorder {
         return;
       }
       if (insertIfAbsent(contentType, contentId, source)) {
-        LOG.info("Added to playlist: {} {} via {}", contentType, contentId, source);
+        LOG.info("Added to playlist: {} {} via {}", contentType, LogSafe.value(contentId), source);
         voiceIfAutomatic(contentType, contentId);
       }
     } catch (RuntimeException ex) {
-      LOG.warn("Could not add to playlist: {} {} via {}", contentType, contentId, source, ex);
+      LOG.warn("Could not add to playlist: {} {} via {}", contentType, LogSafe.value(contentId),
+          source, ex);
     }
   }
 
@@ -201,7 +203,7 @@ public class PlaylistService implements PlaylistRecorder {
    */
   public PlaylistSettings settings() {
     PlaylistSettings settings =
-        mongoTemplate.findById(PlaylistSettings.ID, PlaylistSettings.class);
+        mongoTemplate.findById(PlaylistSettings.SINGLETON_ID, PlaylistSettings.class);
     return settings == null ? PlaylistSettings.defaults() : settings;
   }
 
@@ -212,7 +214,7 @@ public class PlaylistService implements PlaylistRecorder {
    * @return the saved setting
    */
   public PlaylistSettings updateSettings(final boolean autoVoice) {
-    return mongoTemplate.save(new PlaylistSettings(PlaylistSettings.ID, autoVoice));
+    return mongoTemplate.save(new PlaylistSettings(PlaylistSettings.SINGLETON_ID, autoVoice));
   }
 
   /**

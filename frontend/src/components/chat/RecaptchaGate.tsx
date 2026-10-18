@@ -2,6 +2,7 @@ import ReCAPTCHA from 'react-google-recaptcha'
 import { useEffect, useRef, useState } from 'react'
 import { ShieldCheck, X } from 'lucide-react'
 import { API_BASE_URL } from '../../config/api'
+import { closeOnBackdropClick } from '../../utils/backdropClick'
 
 interface RecaptchaGateProps {
   onVerified: () => void
@@ -56,8 +57,8 @@ export function RecaptchaGate({ onVerified, onCancel }: RecaptchaGateProps) {
   }
 
   return (
-    <div className="recaptcha-gate__backdrop" onClick={onCancel}>
-      <div className="recaptcha-gate" onClick={(e) => e.stopPropagation()}>
+    <div className="recaptcha-gate__backdrop" onClick={closeOnBackdropClick(onCancel)} role="presentation">
+      <div className="recaptcha-gate">
         <button
           className="recaptcha-gate__close"
           onClick={onCancel}

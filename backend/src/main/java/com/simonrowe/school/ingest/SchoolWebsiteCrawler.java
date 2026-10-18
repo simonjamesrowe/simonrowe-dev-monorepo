@@ -46,7 +46,7 @@ public class SchoolWebsiteCrawler {
 
   private static final Logger LOG = LoggerFactory.getLogger(SchoolWebsiteCrawler.class);
   private static final Duration TIMEOUT = Duration.ofSeconds(20);
-  private static final Pattern SITEMAP_LOC = Pattern.compile("<loc>\\s*(.*?)\\s*</loc>");
+  private static final Pattern SITEMAP_LOC = Pattern.compile("<loc>([^<]*+)</loc>");
   private static final int MAX_PAGES = 250;
 
   private final SchoolProperties properties;
@@ -138,6 +138,9 @@ public class SchoolWebsiteCrawler {
    * @param url the page URL
    * @return the page, or null if it could not be read
    */
+  // java:S2583: a null check on a third-party return value, kept on purpose. The library
+  // says it cannot be null today; a future version may disagree, and the check is cheaper.
+  @SuppressWarnings("java:S2583")
   public CrawledPage fetchPage(final String url) {
     final String html = fetchText(url);
     if (html == null) {

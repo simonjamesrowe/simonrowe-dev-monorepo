@@ -12,6 +12,7 @@ import {
   type AdminTag,
 } from '../../services/adminApi'
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
+import { focusOnMount } from '../../utils/focusOnMount'
 
 export function TagsAdmin() {
   const { getAccessToken } = useAuth()
@@ -220,7 +221,7 @@ export function TagsAdmin() {
                   <tr key={tag.id} className="admin-table__row admin-table__row--editing">
                     <td className="admin-table__td">
                       <input
-                        autoFocus
+                        ref={focusOnMount}
                         className="admin-form__input admin-form__input--compact"
                         onChange={(e) => setEditName(e.target.value)}
                         type="text"

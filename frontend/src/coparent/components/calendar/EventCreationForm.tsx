@@ -498,12 +498,16 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
               </div>
             </div>
 
+            {/* aria-label names the box "All day" (the visible text sits too deep for the
+                label check to find), and the line under it stays as its description. */}
             <label
               htmlFor="event-all-day"
+              aria-label="All day"
               className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-2.5 dark:border-slate-700"
             >
               <input
                 id="event-all-day"
+                aria-describedby="event-all-day-hint"
                 type="checkbox"
                 checked={isCustody ? true : allDay}
                 onChange={(event) => setAllDay(event.target.checked)}
@@ -514,7 +518,7 @@ export const EventCreationForm = forwardRef<EventCreationFormRef, EventCreationF
                 <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
                   All day
                 </span>
-                <span className="block text-xs text-slate-500 dark:text-slate-400">
+                <span id="event-all-day-hint" className="block text-xs text-slate-500 dark:text-slate-400">
                   {isCustody ? 'Custody always runs all day.' : 'No start or end time.'}
                 </span>
               </span>

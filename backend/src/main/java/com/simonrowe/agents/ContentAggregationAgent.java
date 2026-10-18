@@ -19,7 +19,6 @@ import com.simonrowe.media.ExternalImageDownloader;
 import com.simonrowe.media.MediaVariantResolver;
 import com.simonrowe.shortlink.ShortLinkContentType;
 import com.simonrowe.shortlink.ShortLinkService;
-import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -148,7 +147,7 @@ public class ContentAggregationAgent {
 
   /** Imports a single article or event from a URL. */
   public String importFromUrl(final String url) {
-    String normalizedUrl = normalizeUrl(url);
+    String normalizedUrl = SitemapHtmlScraper.normalizeUrl(url);
     boolean alreadyExists =
         articleRepository.existsByOriginalUrl(normalizedUrl)
             || eventRepository.existsByOriginalUrl(normalizedUrl);
@@ -211,23 +210,6 @@ public class ContentAggregationAgent {
       return false;
     }
     return true;
-  }
-
-  // Fix 6: URL normalization matching the scraper's normalizeUrl logic
-  private String normalizeUrl(String url) {
-    if (url == null) {
-      return null;
-    }
-    try {
-      URI uri = URI.create(url);
-      return new URI(
-          uri.getScheme(),
-          uri.getHost().toLowerCase(),
-          uri.getPath().replaceAll("/+$", ""),
-          null, null).toString();
-    } catch (Exception e) {
-      return url.replaceAll("[?#].*$", "").replaceAll("/+$", "");
-    }
   }
 
   /** Aggregates content from every active source. */

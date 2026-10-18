@@ -92,6 +92,9 @@ public class LumaApiScraper {
             title, eventUrl, description, startAt, null, imageUrl, true, venue, location));
       }
       log.info("Scraped {} events from Luma calendar: {}", results.size(), calendarId);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      log.error("Interrupted scraping Luma calendar: {}", calendarId, e);
     } catch (Exception e) {
       log.error("Failed to scrape Luma calendar: {}", calendarId, e);
     }

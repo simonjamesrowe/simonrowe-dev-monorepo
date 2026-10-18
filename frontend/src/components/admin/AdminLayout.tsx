@@ -95,7 +95,9 @@ export function AdminLayout() {
         <Menu size={20} />
       </button>
       {sidebarOpen && (
+        // Decorative: the sidebar's own Close navigation button is the accessible way out.
         <div
+          aria-hidden="true"
           className="admin-sidebar-overlay"
           onClick={() => setSidebarOpen(false)}
         />

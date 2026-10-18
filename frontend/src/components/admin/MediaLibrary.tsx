@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
 import { fetchAdminMedia, type MediaAsset, type PageResponse } from '../../services/adminApi'
 import { MediaPreview } from './MediaPreview'
+import { closeOnBackdropClick } from '../../utils/backdropClick'
 
 interface MediaLibraryProps {
   onSelect: (asset: MediaAsset) => void
@@ -106,11 +107,8 @@ export function MediaLibrary({ onSelect, onClose, accept }: MediaLibraryProps) {
   }
 
   return (
-    <div className="drawer-overlay" onClick={onClose} role="dialog" aria-modal="true">
-      <div
-        className="drawer"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="drawer-overlay" onClick={closeOnBackdropClick(onClose)} role="dialog" aria-modal="true">
+      <div className="drawer">
         <div className="drawer__header">
           <h2 className="drawer__title">Media Library</h2>
           <button

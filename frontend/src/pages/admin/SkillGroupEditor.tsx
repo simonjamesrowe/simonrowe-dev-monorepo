@@ -199,8 +199,9 @@ export function SkillGroupEditor() {
         <div className="blog-editor__top-row">
           <div className="blog-editor__top-left">
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Name</label>
+              <label className="blog-editor__section-label" htmlFor="skill-group-editor-name">Name</label>
               <input
+                id="skill-group-editor-name"
                 type="text"
                 className="admin-form__input"
                 value={form.name}
@@ -209,8 +210,9 @@ export function SkillGroupEditor() {
               />
             </div>
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Rating (0-10)</label>
+              <label className="blog-editor__section-label" htmlFor="skill-group-editor-rating">Rating (0-10)</label>
               <input
+                id="skill-group-editor-rating"
                 type="number"
                 className="admin-form__input"
                 min={0}
@@ -222,8 +224,9 @@ export function SkillGroupEditor() {
           </div>
           <div className="blog-editor__top-right">
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Image</label>
+              <span className="blog-editor__section-label">Image</span>
               <ImagePicker
+                label="Image"
                 value={form.image || null}
                 onChange={(url) => { setForm({ ...form, image: url }); setDirty(true) }}
               />
@@ -232,7 +235,7 @@ export function SkillGroupEditor() {
         </div>
 
         <div className="blog-editor__section blog-editor__content">
-          <label className="blog-editor__section-label">Description</label>
+          <span className="blog-editor__section-label">Description</span>
           <MDXEditor
             key={editorKey}
             ref={editorRef}
@@ -273,7 +276,7 @@ export function SkillGroupEditor() {
 
         <div className="blog-editor__section">
           <div className="admin-header">
-            <label className="blog-editor__section-label">Skills</label>
+            <span className="blog-editor__section-label">Skills</span>
             <button
               type="button"
               className="admin-btn admin-btn--primary admin-btn--sm"

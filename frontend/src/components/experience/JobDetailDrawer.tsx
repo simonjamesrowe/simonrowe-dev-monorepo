@@ -6,6 +6,7 @@ import { fetchJob } from '../../services/jobsApi'
 import type { IJobDetail } from '../../types/job'
 import { API_BASE_URL } from '../../config/api'
 import { SkillRatingBar } from '../skills/SkillRatingBar'
+import { closeOnBackdropClick } from '../../utils/backdropClick'
 
 interface JobDetailDrawerProps {
   jobId: string
@@ -62,8 +63,8 @@ export function JobDetailDrawer({ jobId, onClose, onSkillGroupClick }: JobDetail
     : ''
 
   return (
-    <div className="drawer-overlay" onClick={onClose}>
-      <div className="drawer" onClick={e => e.stopPropagation()}>
+    <div className="drawer-overlay" onClick={closeOnBackdropClick(onClose)} role="presentation">
+      <div className="drawer">
         <div className="drawer__header">
           <span className="drawer__title">{loading ? 'Loading...' : job?.title ?? 'Job Detail'}</span>
           <button className="drawer__close" onClick={onClose} aria-label="Close" type="button">

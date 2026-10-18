@@ -111,6 +111,10 @@ public class ExternalImageDownloader {
       LOG.info("Downloaded external image: {} -> {}", externalUrl, originalPath);
       return originalPath;
 
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      LOG.debug("Interrupted downloading image: {}", externalUrl, e);
+      return null;
     } catch (Exception e) {
       LOG.debug("Failed to download image: {}", externalUrl, e);
       return null;

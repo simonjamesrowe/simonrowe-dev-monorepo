@@ -269,6 +269,9 @@ public class SchoolChatService {
    * @param sessionId the chat session, or null
    * @param clientAddress the caller's address, hashed before storage, or null
    */
+  // java:S2583: a null check on a third-party return value, kept on purpose. The library
+  // says it cannot be null today; a future version may disagree, and the check is cheaper.
+  @SuppressWarnings("java:S2583")
   void recordChatUsage(final org.springframework.ai.chat.model.ChatResponse response,
       final String sessionId, final String clientAddress) {
     if (response == null || response.getMetadata() == null

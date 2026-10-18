@@ -75,4 +75,24 @@ class NarrationScriptBuilderTest {
     assertThat(builder.fingerprint("Script one.", "voice", "en-GB", "MP3"))
         .isNotEqualTo(builder.fingerprint("Script two.", "voice", "en-GB", "MP3"));
   }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+      "| --- | --- |", "|---|---|", "--- | ---", "|:---:|---:|", " | :-- | --- | ", "---|",
+      "| -- | --- |", "| --- |x", "|", "", "text", "| a | b |", "|----------|"})
+  void tableSeparatorAgreesWithTheOldRegex(final String line) {
+    final String old = "^\\s*\\|?(?:\\s*:?-{3,}:?\\s*\\|)+\\s*$";
+
+    assertThat(NarrationScriptBuilder.TABLE_SEPARATOR.matcher(line).matches())
+        .isEqualTo(line.matches(old));
+  }
+
+  @Test
+  void tableSeparatorIsLinearOnHostileLine() {
+    final String hostile = "| --- ".repeat(20_000) + "x";
+
+    org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(1),
+        () -> assertThat(NarrationScriptBuilder.TABLE_SEPARATOR.matcher(hostile).matches())
+            .isFalse());
+  }
 }

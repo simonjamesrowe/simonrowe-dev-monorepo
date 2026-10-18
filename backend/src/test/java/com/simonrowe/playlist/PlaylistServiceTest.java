@@ -120,7 +120,7 @@ class PlaylistServiceTest {
   }
 
   private void settings(final boolean autoVoice) {
-    lenient().when(mongoTemplate.findById(PlaylistSettings.ID, PlaylistSettings.class))
-        .thenReturn(new PlaylistSettings(PlaylistSettings.ID, autoVoice));
+    lenient().when(mongoTemplate.findById(PlaylistSettings.SINGLETON_ID, PlaylistSettings.class))
+        .thenReturn(new PlaylistSettings(PlaylistSettings.SINGLETON_ID, autoVoice));
   }
 }

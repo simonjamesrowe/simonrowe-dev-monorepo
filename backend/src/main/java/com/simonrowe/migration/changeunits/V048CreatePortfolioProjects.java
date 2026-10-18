@@ -32,7 +32,7 @@ public class V048CreatePortfolioProjects {
   public static final String PUBLISHED_ORDER_INDEX = "idx_portfolio_published_order";
 
   /** slug, name, accent hue, tagline — in display order. */
-  static final List<String[]> SEED = List.of(
+  static final List<String[]> SEED_ROWS = List.of(
       new String[] {"software-factory", "Software Factory", "212",
           "An autonomous loop that reviews, deploys and watches this site."},
       new String[] {"term-time", "Term Time", "152",
@@ -50,7 +50,7 @@ public class V048CreatePortfolioProjects {
   @RollbackExecution
   public void rollback(final MongoTemplate mongoTemplate) {
     var collection = mongoTemplate.getCollection(COLLECTION);
-    for (String[] row : SEED) {
+    for (String[] row : SEED_ROWS) {
       collection.deleteOne(new Document("slug", row[0])
           .append("tagline", row[3])
           .append("status", "COMING_SOON"));
@@ -69,8 +69,8 @@ public class V048CreatePortfolioProjects {
   static void seed(final MongoTemplate mongoTemplate) {
     var collection = mongoTemplate.getCollection(COLLECTION);
     Date now = Date.from(Instant.now());
-    for (int order = 0; order < SEED.size(); order++) {
-      String[] row = SEED.get(order);
+    for (int order = 0; order < SEED_ROWS.size(); order++) {
+      String[] row = SEED_ROWS.get(order);
       Document project = new Document("slug", row[0])
           .append("name", row[1])
           .append("tagline", row[3])

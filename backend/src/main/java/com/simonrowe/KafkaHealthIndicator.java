@@ -33,6 +33,9 @@ public class KafkaHealthIndicator implements HealthIndicator {
             nodes.iterator().next().idString());
       }
       return builder.build();
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      return Health.down(ex).build();
     } catch (Exception ex) {
       return Health.down(ex).build();
     }

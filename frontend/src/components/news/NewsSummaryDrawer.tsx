@@ -6,6 +6,7 @@ import { FavouriteButton } from '../common/FavouriteButton'
 import { classifyLink, isAllowedImage } from '../chat/linkPolicy'
 import type { ArticleSummaryResponse } from '../../types/articleSummary'
 import type { ArticleResponse } from '../../types/news'
+import { closeOnBackdropClick } from '../../utils/backdropClick'
 
 interface NewsSummaryDrawerProps {
   article: ArticleResponse
@@ -160,11 +161,10 @@ export function NewsSummaryDrawer({
   }
 
   return (
-    <div className="drawer-overlay" onClick={onClose}>
+    <div className="drawer-overlay" onClick={closeOnBackdropClick(onClose)} role="presentation">
       <div
         aria-label={`Summary of ${article.title}`}
         className="drawer"
-        onClick={e => e.stopPropagation()}
         role="dialog"
       >
         <div className="drawer__header">

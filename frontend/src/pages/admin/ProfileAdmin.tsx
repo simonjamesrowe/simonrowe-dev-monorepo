@@ -287,8 +287,9 @@ export function ProfileAdmin() {
           <div className="blog-editor__top-row">
             <div className="blog-editor__top-left">
               <div className="blog-editor__section">
-                <label className="blog-editor__section-label">Name</label>
+                <label className="blog-editor__section-label" htmlFor="profile-admin-name">Name</label>
                 <input
+                  id="profile-admin-name"
                   className="admin-form__input"
                   name="name"
                   onChange={handleProfileChange}
@@ -297,8 +298,9 @@ export function ProfileAdmin() {
                 />
               </div>
               <div className="blog-editor__section">
-                <label className="blog-editor__section-label">Title</label>
+                <label className="blog-editor__section-label" htmlFor="profile-admin-title">Title</label>
                 <input
+                  id="profile-admin-title"
                   className="admin-form__input"
                   name="title"
                   onChange={handleProfileChange}
@@ -307,8 +309,9 @@ export function ProfileAdmin() {
                 />
               </div>
               <div className="blog-editor__section">
-                <label className="blog-editor__section-label">Headline</label>
+                <label className="blog-editor__section-label" htmlFor="profile-admin-headline">Headline</label>
                 <input
+                  id="profile-admin-headline"
                   className="admin-form__input"
                   name="headline"
                   onChange={handleProfileChange}
@@ -319,8 +322,9 @@ export function ProfileAdmin() {
             </div>
             <div className="blog-editor__top-right">
               <div className="blog-editor__section">
-                <label className="blog-editor__section-label">Profile Image</label>
+                <span className="blog-editor__section-label">Profile Image</span>
                 <ImagePicker
+                  label="Profile Image"
                   value={form.profileImage?.url ?? null}
                   onChange={(url) => updateField('profileImage', url ? { url } : null)}
                 />
@@ -330,8 +334,9 @@ export function ProfileAdmin() {
 
           <div className="blog-editor__two-col">
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Location</label>
+              <label className="blog-editor__section-label" htmlFor="profile-admin-location">Location</label>
               <input
+                id="profile-admin-location"
                 className="admin-form__input"
                 name="location"
                 onChange={handleProfileChange}
@@ -340,8 +345,9 @@ export function ProfileAdmin() {
               />
             </div>
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Phone Number</label>
+              <label className="blog-editor__section-label" htmlFor="profile-admin-phone-number">Phone Number</label>
               <input
+                id="profile-admin-phone-number"
                 className="admin-form__input"
                 name="phoneNumber"
                 onChange={handleProfileChange}
@@ -353,8 +359,9 @@ export function ProfileAdmin() {
 
           <div className="blog-editor__two-col">
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Primary Email</label>
+              <label className="blog-editor__section-label" htmlFor="profile-admin-primary-email">Primary Email</label>
               <input
+                id="profile-admin-primary-email"
                 className="admin-form__input"
                 name="primaryEmail"
                 onChange={handleProfileChange}
@@ -363,8 +370,9 @@ export function ProfileAdmin() {
               />
             </div>
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Secondary Email</label>
+              <label className="blog-editor__section-label" htmlFor="profile-admin-secondary-email">Secondary Email</label>
               <input
+                id="profile-admin-secondary-email"
                 className="admin-form__input"
                 name="secondaryEmail"
                 onChange={handleProfileChange}
@@ -375,7 +383,7 @@ export function ProfileAdmin() {
           </div>
 
           <div className="blog-editor__section blog-editor__content">
-            <label className="blog-editor__section-label">Description</label>
+            <span className="blog-editor__section-label">Description</span>
             <MDXEditor
               key={editorKey}
               ref={editorRef}
@@ -433,15 +441,17 @@ export function ProfileAdmin() {
           <h3 className="blog-editor__section-label" style={{ marginTop: '1rem' }}>Images</h3>
           <div className="blog-editor__two-col">
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Sidebar Image</label>
+              <span className="blog-editor__section-label">Sidebar Image</span>
               <ImagePicker
+                label="Sidebar Image"
                 value={form.sidebarImage?.url ?? null}
                 onChange={(url) => updateField('sidebarImage', url ? { url } : null)}
               />
             </div>
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Background Image</label>
+              <span className="blog-editor__section-label">Background Image</span>
               <ImagePicker
+                label="Background Image"
                 value={form.backgroundImage?.url ?? null}
                 onChange={(url) => updateField('backgroundImage', url ? { url } : null)}
               />
@@ -449,8 +459,9 @@ export function ProfileAdmin() {
           </div>
           <div className="blog-editor__two-col">
             <div className="blog-editor__section">
-              <label className="blog-editor__section-label">Mobile Background Image</label>
+              <span className="blog-editor__section-label">Mobile Background Image</span>
               <ImagePicker
+                label="Mobile Background Image"
                 value={form.mobileBackgroundImage?.url ?? null}
                 onChange={(url) => updateField('mobileBackgroundImage', url ? { url } : null)}
               />

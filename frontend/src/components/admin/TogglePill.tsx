@@ -12,9 +12,11 @@ export function TogglePill({
   inactiveLabel = 'Draft',
 }: TogglePillProps) {
   return (
-    <label className="toggle-pill" role="switch" aria-checked={checked}>
+    <label className="toggle-pill">
       <input
         type="checkbox"
+        role="switch"
+        aria-checked={checked}
         className="toggle-pill__checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}

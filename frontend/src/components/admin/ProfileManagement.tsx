@@ -12,8 +12,9 @@ export function ProfileManagement() {
       <div className="profile-mgmt__layout">
         <div className="profile-mgmt__fields">
           <div className="profile-mgmt__field">
-            <label className="profile-mgmt__label">Short Biography</label>
+            <label className="profile-mgmt__label" htmlFor="profile-mgmt-short-biography">Short Biography</label>
             <textarea
+              id="profile-mgmt-short-biography"
               className="profile-mgmt__bio"
               value={bio}
               onChange={(e) => setBio(e.target.value)}
@@ -22,8 +23,9 @@ export function ProfileManagement() {
           </div>
           <div className="profile-mgmt__uploads">
             <div className="profile-mgmt__upload-field">
-              <label className="profile-mgmt__label">Primary CV Link</label>
+              <label className="profile-mgmt__label" htmlFor="profile-mgmt-primary-cv-link">Primary CV Link</label>
               <input
+                id="profile-mgmt-primary-cv-link"
                 type="text"
                 className="profile-mgmt__input"
                 defaultValue={profile?.cvUrl ?? ''}
@@ -31,8 +33,9 @@ export function ProfileManagement() {
               />
             </div>
             <div className="profile-mgmt__upload-field">
-              <label className="profile-mgmt__label">Technical Portfolio PDF</label>
+              <label className="profile-mgmt__label" htmlFor="profile-mgmt-technical-portfolio-pdf">Technical Portfolio PDF</label>
               <input
+                id="profile-mgmt-technical-portfolio-pdf"
                 type="text"
                 className="profile-mgmt__input"
                 placeholder="Upload portfolio..."

@@ -28,6 +28,7 @@ import {
   type AdminSkill,
   type GetAccessToken,
 } from '../../services/adminApi'
+import { closeOnBackdropClick } from '../../utils/backdropClick'
 
 interface SkillEditorModalProps {
   open: boolean
@@ -83,7 +84,7 @@ export function SkillEditorModal({ open, skillId, getAccessToken, onSave, onClos
           setLoading(false)
         }
       }
-      load()
+      void load()
     } else {
       setForm(emptyForm)
       setEditorKey((k) => k + 1)
@@ -134,8 +135,8 @@ export function SkillEditorModal({ open, skillId, getAccessToken, onSave, onClos
   if (!open) return null
 
   return (
-    <div className="drawer-overlay" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="drawer" onClick={(e) => e.stopPropagation()}>
+    <div className="drawer-overlay" onClick={closeOnBackdropClick(onClose)} role="dialog" aria-modal="true">
+      <div className="drawer">
         <div className="drawer__header">
           <h2 className="drawer__title">{skillId ? 'Edit Skill' : 'New Skill'}</h2>
           <button type="button" className="drawer__close" onClick={onClose} title="Close">
@@ -153,8 +154,9 @@ export function SkillEditorModal({ open, skillId, getAccessToken, onSave, onClos
               <div className="blog-editor__top-row">
                 <div className="blog-editor__top-left">
                   <div className="blog-editor__section">
-                    <label className="blog-editor__section-label">Name</label>
+                    <label className="blog-editor__section-label" htmlFor="skill-editor-name">Name</label>
                     <input
+                      id="skill-editor-name"
                       type="text"
                       className="admin-form__input"
                       value={form.name}
@@ -163,8 +165,9 @@ export function SkillEditorModal({ open, skillId, getAccessToken, onSave, onClos
                     />
                   </div>
                   <div className="blog-editor__section">
-                    <label className="blog-editor__section-label">Rating (0-10)</label>
+                    <label className="blog-editor__section-label" htmlFor="skill-editor-rating">Rating (0-10)</label>
                     <input
+                      id="skill-editor-rating"
                       type="number"
                       className="admin-form__input"
                       min={0}
@@ -176,8 +179,9 @@ export function SkillEditorModal({ open, skillId, getAccessToken, onSave, onClos
                 </div>
                 <div className="blog-editor__top-right">
                   <div className="blog-editor__section">
-                    <label className="blog-editor__section-label">Image</label>
+                    <span className="blog-editor__section-label">Image</span>
                     <ImagePicker
+                      label="Image"
                       value={form.image || null}
                       onChange={(url) => setForm({ ...form, image: url })}
                     />
@@ -186,7 +190,7 @@ export function SkillEditorModal({ open, skillId, getAccessToken, onSave, onClos
               </div>
 
               <div className="blog-editor__section blog-editor__content">
-                <label className="blog-editor__section-label">Description</label>
+                <span className="blog-editor__section-label">Description</span>
                 <MDXEditor
                   key={editorKey}
                   ref={editorRef}

@@ -26,6 +26,7 @@ import {
   type DataOperationsStatus,
   type BackupMetadata,
 } from '../../services/dataOperationsApi'
+import { closeOnBackdropClick } from '../../utils/backdropClick'
 
 export function DataOperationsAdmin() {
   const { getAccessToken } = useAuth()
@@ -386,8 +387,12 @@ export function DataOperationsAdmin() {
 
       {/* Backup List Panel */}
       {showBackups && (
-        <div className="confirm-dialog-backdrop" onClick={() => setShowBackups(false)}>
-          <div className="data-ops__backup-panel" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="confirm-dialog-backdrop"
+          onClick={closeOnBackdropClick(() => setShowBackups(false))}
+          role="presentation"
+        >
+          <div className="data-ops__backup-panel">
             <h2 className="data-ops__backup-panel-title">Available Backups</h2>
             {backups.length === 0 ? (
               <p className="data-ops__backup-empty">No backups found in Google Drive.</p>
@@ -441,8 +446,12 @@ export function DataOperationsAdmin() {
 
       {/* Restore Confirm Dialog */}
       {showRestoreConfirm && selectedBackup && (
-        <div className="confirm-dialog-backdrop" onClick={() => setShowRestoreConfirm(false)}>
-          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="confirm-dialog-backdrop"
+          onClick={closeOnBackdropClick(() => setShowRestoreConfirm(false))}
+          role="presentation"
+        >
+          <div className="confirm-dialog">
             <h2 className="confirm-dialog__title">Confirm Restore</h2>
             <p className="confirm-dialog__message">
               All current data will be replaced with the contents of <strong>{selectedBackup.fileName}</strong>.
@@ -470,8 +479,12 @@ export function DataOperationsAdmin() {
 
       {/* Clear Confirm Dialog */}
       {showClearConfirm && (
-        <div className="confirm-dialog-backdrop" onClick={() => { setShowClearConfirm(false); setClearPhrase('') }}>
-          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="confirm-dialog-backdrop"
+          onClick={closeOnBackdropClick(() => { setShowClearConfirm(false); setClearPhrase('') })}
+          role="presentation"
+        >
+          <div className="confirm-dialog">
             <h2 className="confirm-dialog__title">Clear All Data</h2>
             <p className="confirm-dialog__message">
               This will permanently delete all database collections, uploaded media files, and search indices.
@@ -510,8 +523,12 @@ export function DataOperationsAdmin() {
 
       {/* Rebuild Confirm Dialog */}
       {showRebuildConfirm && (
-        <div className="confirm-dialog-backdrop" onClick={() => setShowRebuildConfirm(false)}>
-          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="confirm-dialog-backdrop"
+          onClick={closeOnBackdropClick(() => setShowRebuildConfirm(false))}
+          role="presentation"
+        >
+          <div className="confirm-dialog">
             <h2 className="confirm-dialog__title">Rebuild Search Index</h2>
             <p className="confirm-dialog__message">
               This will delete and recreate all search indices, then re-index all content from the database.
@@ -538,8 +555,12 @@ export function DataOperationsAdmin() {
 
       {/* Reembed Confirm Dialog */}
       {showReembedConfirm && (
-        <div className="confirm-dialog-backdrop" onClick={() => setShowReembedConfirm(false)}>
-          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="confirm-dialog-backdrop"
+          onClick={closeOnBackdropClick(() => setShowReembedConfirm(false))}
+          role="presentation"
+        >
+          <div className="confirm-dialog">
             <h2 className="confirm-dialog__title">Re-embed All Content</h2>
             <p className="confirm-dialog__message">
               This will regenerate vector embeddings for all blog posts, jobs, skills, and code examples.

@@ -194,7 +194,8 @@ public class SchoolQueryService {
   static LocalDate endOfWeek(final LocalDate today) {
     final LocalDate sunday = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
     final DayOfWeek day = today.getDayOfWeek();
-    return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY ? sunday.plusWeeks(1) : sunday;
+    return day.equals(DayOfWeek.SATURDAY) || day.equals(DayOfWeek.SUNDAY)
+        ? sunday.plusWeeks(1) : sunday;
   }
 
   /**
