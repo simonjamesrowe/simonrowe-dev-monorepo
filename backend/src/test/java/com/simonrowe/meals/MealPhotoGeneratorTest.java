@@ -82,6 +82,25 @@ class MealPhotoGeneratorTest {
   }
 
   @Test
+  void refusesOversizedInputWithoutCallingTheModel() {
+    MealPhotoGenerator generator =
+        new MealPhotoGenerator(imageModel, new MealImageStore(temp.toString()));
+    List<String> tooMany = new ArrayList<>();
+    for (int i = 0; i <= MealPhotoGenerator.MAX_LINES; i++) {
+      tooMany.add("thing" + i);
+    }
+
+    assertThatThrownBy(() -> generator.generate("x".repeat(MealPhotoGenerator.MAX_NAME + 1),
+        List.of())).isInstanceOf(ResponseStatusException.class).hasMessageContaining("name");
+    assertThatThrownBy(() -> generator.generate("Stew", tooMany))
+        .isInstanceOf(ResponseStatusException.class).hasMessageContaining("ingredients");
+    assertThatThrownBy(() -> generator.generate("Stew",
+        List.of("y".repeat(MealPhotoGenerator.MAX_INGREDIENT_NAME + 1))))
+        .isInstanceOf(ResponseStatusException.class);
+    verifyNoInteractions(imageModel);
+  }
+
+  @Test
   void anEmptyAnswerIsAnErrorNotAnEmptyPhoto() {
     when(imageModel.call(any())).thenReturn(response(null));
 

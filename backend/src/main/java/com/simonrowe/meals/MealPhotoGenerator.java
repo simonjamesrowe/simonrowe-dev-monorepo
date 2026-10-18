@@ -52,6 +52,10 @@ public class MealPhotoGenerator {
   static final String IMAGE_MODEL = "gpt-image-2";
   static final Duration CALL_TIMEOUT = Duration.ofSeconds(90);
   static final int MAX_INGREDIENTS = 12;
+  /** The same bounds a saved recipe has: 80 lines, ingredient names of at most 80 characters. */
+  static final int MAX_NAME = 200;
+  static final int MAX_LINES = 80;
+  static final int MAX_INGREDIENT_NAME = 80;
   private static final int WIDTH = 1536;
   private static final int HEIGHT = 1024;
   private static final float JPEG_QUALITY = 0.86f;
@@ -76,6 +80,18 @@ public class MealPhotoGenerator {
   public String generate(final String name, final List<String> ingredients) {
     if (name == null || name.isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name the recipe first");
+    }
+    // Checked before the paid call, like the 15,000-character bound on a pasted recipe: this is
+    // the one place every caller passes through.
+    if (name.length() > MAX_NAME) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "A recipe name is at most %d characters".formatted(MAX_NAME));
+    }
+    if (ingredients != null && (ingredients.size() > MAX_LINES || ingredients.stream()
+        .anyMatch(i -> i != null && i.length() > MAX_INGREDIENT_NAME))) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "At most %d ingredients, each named in at most %d characters"
+              .formatted(MAX_LINES, MAX_INGREDIENT_NAME));
     }
     String prompt = prompt(name, ingredients);
     Future<ImageResponse> call = CALLS.submit(() -> imageModel.call(new ImagePrompt(prompt,

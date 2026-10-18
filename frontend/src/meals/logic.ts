@@ -192,8 +192,10 @@ export function parseLine(text: string): Pick<IngredientLine, 'name' | 'quantity
       unit = 'each'
     }
   }
+  // [^()] rather than [^)]: each attempt stops at the next bracket, so a line of unclosed "("
+  // is linear rather than quadratic.
   const name = rest
-    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\([^()]*\)/g, ' ')
     .split(',')[0]
     .replace(/^(a\s+)?(pinch|splash|dash|handful|sprinkle|zest|juice)\s+(of\s+)?/i, '')
     .replace(/^of\s+/i, '')

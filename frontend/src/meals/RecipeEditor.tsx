@@ -363,9 +363,14 @@ function LineEditor({ index, line, known, onText, onChange, onDone, onRemove }: 
 }) {
   const near = nearNames(line.name, known)
   const label = `Ingredient ${index + 1}`
+  // A line opened empty was just added by the owner, so typing goes straight into it. Focused
+  // once on mount, not on every render, so clearing the text later never steals focus.
+  const textRef = useRef<HTMLInputElement>(null)
+  const openedEmpty = useRef(!line.text)
+  useEffect(() => { if (openedEmpty.current) textRef.current?.focus() }, [])
   return (
     <div className="meals-editor__line-edit">
-      <input className="meals-input" placeholder="As written, e.g. 500g lean mince" aria-label={label} autoFocus={!line.text}
+      <input className="meals-input" placeholder="As written, e.g. 500g lean mince" aria-label={label} ref={textRef}
         value={line.text} onChange={(e) => onText(e.target.value)} />
       <div className="meals-editor__line-fields">
         <input className="meals-input meals-editor__line-name" placeholder="ingredient" aria-label={`${label} name`}

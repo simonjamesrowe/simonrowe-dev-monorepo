@@ -136,6 +136,13 @@ describe('parseLine', () => {
   ])('reads %s', (text, name, quantity, unit) => {
     expect(parseLine(text)).toEqual({ name, quantity, unit })
   })
+
+  it('stays linear on a line of unclosed brackets', () => {
+    const hostile = `1 ${'('.repeat(100_000)}egg`
+    const started = performance.now()
+    expect(parseLine(hostile).quantity).toBe(1)
+    expect(performance.now() - started).toBeLessThan(500)
+  })
 })
 
 describe('nearNames', () => {
