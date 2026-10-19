@@ -64,6 +64,6 @@ describe('FloatingAskPill', () => {
     renderPill()
     act(() => { vi.advanceTimersByTime(700) })
     fireEvent.click(screen.getByRole('button', { name: 'Ask Simon anything' }))
-    expect(openChat).toHaveBeenCalledWith()
+    expect(openChat).toHaveBeenCalledWith(undefined, 'pill')
   })
 })

@@ -2,6 +2,7 @@ import { Headphones, LogIn } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
+import { track as trackEvent } from '../analytics/analytics'
 import { useAuth } from '../auth/useAuth'
 import { AwaitingAudio } from '../components/playlist/AwaitingAudio'
 import { planJourney } from '../components/playlist/journey'
@@ -104,6 +105,7 @@ export function PlaylistPage() {
       return
     }
     playQueue(queue.map(toTrack), index)
+    trackEvent('Playlist Played', { queueLength: queue.length })
   }
 
   const playOne = (entry: PlaylistEntry) => {

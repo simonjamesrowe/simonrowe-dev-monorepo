@@ -101,7 +101,7 @@ function OpenSheet({ onClose, groups, isAdmin, focusSearch }: MobileNavSheetProp
         <SiteSearch
           onChatStart={query => {
             onClose()
-            openChat(query)
+            openChat(query, 'mobile')
           }}
         />
       </div>
@@ -161,7 +161,7 @@ function OpenSheet({ onClose, groups, isAdmin, focusSearch }: MobileNavSheetProp
           className="site-header__ask nav-sheet__ask"
           onClick={() => {
             onClose()
-            openChat()
+            openChat(undefined, 'mobile')
           }}
           type="button"
         >

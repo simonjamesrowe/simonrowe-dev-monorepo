@@ -2,6 +2,7 @@ import { AlertTriangle, ArrowLeft, Landmark, Lock, Sparkles, Upload } from 'luci
 import { useRef, useState, type DragEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
+import { track } from '../../analytics/analytics';
 import { CategoryTile } from '../components/expenses/CategoryTile';
 import { ExpenseFormDrawer, type ExpenseFormSource } from '../components/expenses/ExpenseFormDrawer';
 import { formatMoney } from '../components/expenses/money';
@@ -220,6 +221,7 @@ const StatementsPage = () => {
         { result, rows: result.rows, checked: 0, failed: 0, done: !result.upload || !result.aiEnabled },
       ]);
       if (!result.upload) {
+        track('Statement Uploaded', { rowCount: result.rows.length, suggestedCount: 0 });
         showToast({
           variant: 'info',
           title: 'Nothing new in that file',
@@ -229,6 +231,7 @@ const StatementsPage = () => {
       }
       setTab('import');
       const checked = await checkSession(position, result);
+      track('Statement Uploaded', { rowCount: result.rows.length, suggestedCount: checked.suggested });
       suggested += checked.suggested;
       failed += checked.failed;
     }

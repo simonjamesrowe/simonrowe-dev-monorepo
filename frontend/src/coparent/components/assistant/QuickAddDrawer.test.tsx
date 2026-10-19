@@ -4,6 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { QuickAddDrawer } from './QuickAddDrawer';
 
+const { track } = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('../../../analytics/analytics', () => ({
+  track,
+  isAnalyticsConfigured: () => false,
+  openCookieSettings: vi.fn(),
+}));
+
 const analyse = {
   mutateAsync: vi.fn(),
   isPending: false,
@@ -90,6 +97,22 @@ describe('QuickAddDrawer', () => {
     expect(screen.getByRole('heading', { name: 'Review each proposed action' }))
       .toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: /Note/i })).not.toBeInTheDocument();
+  });
+
+  it('reports how many actions a note produced, and whether a photo was used, never the note', async () => {
+    const user = userEvent.setup();
+    track.mockClear();
+    analyse.mutateAsync.mockResolvedValue({ id: 'new-batch', actions: [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }] });
+    render(<QuickAddDrawer open onClose={vi.fn()} />);
+
+    await user.type(
+      await screen.findByRole('textbox', { name: /Note/i }),
+      'School concert next Thursday',
+    );
+    await user.click(screen.getByRole('button', { name: 'Next: review actions' }));
+
+    await waitFor(() => expect(track).toHaveBeenCalled());
+    expect(track.mock.calls).toEqual([['Quick Add Used', { itemCount: 3, withPhoto: false }]]);
   });
 
   it('retains source text after failed analysis for a retry', async () => {

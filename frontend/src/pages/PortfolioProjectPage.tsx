@@ -2,6 +2,7 @@ import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { track } from '../analytics/analytics'
 import { MarkdownRenderer } from '../components/blog/MarkdownRenderer'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
@@ -36,7 +37,9 @@ export function PortfolioProjectPage() {
     setState({ kind: 'loading' })
     fetchPortfolioProject(slug)
       .then(found => {
-        if (!cancelled) setState(found ? { kind: 'found', project: found } : { kind: 'missing' })
+        if (cancelled) return
+        setState(found ? { kind: 'found', project: found } : { kind: 'missing' })
+        if (found) track('Portfolio Project Viewed', { slug: found.slug })
       })
       .catch(error => {
         if (!cancelled) setState({ kind: 'error', message: error instanceof Error ? error.message : 'Unable to load this project.' })

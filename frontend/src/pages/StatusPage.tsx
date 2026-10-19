@@ -1,5 +1,3 @@
-import { useEffect } from 'react'
-
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { CollapsibleSection } from '../components/status/CollapsibleSection'
@@ -11,7 +9,6 @@ import { frontendServiceVersion } from '../config/version'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { usePlatformStatus } from '../hooks/usePlatformStatus'
 import { useReleases } from '../hooks/useReleases'
-import { trackPageView } from '../services/analytics'
 
 /**
  * What is running in production, and what shipped recently.
@@ -24,10 +21,6 @@ export function StatusPage() {
   const changelog = useReleases()
 
   usePageTitle('Platform Status')
-
-  useEffect(() => {
-    trackPageView('/status')
-  }, [])
 
   // The backend reports itself first and the frontend inserts itself second, so the two
   // services a reader most often compares sit next to each other.

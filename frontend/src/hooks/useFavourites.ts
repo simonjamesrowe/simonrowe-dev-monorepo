@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { track } from '../analytics/analytics'
 import { useAuth } from '../auth/useAuth'
 import { addFavourite, getFavouriteIds, removeFavourite } from '../services/favouritesApi'
 import type { FavouriteContentType } from '../types/favourites'
@@ -62,6 +63,10 @@ export function useFavourites(type: FavouriteContentType) {
         } else {
           await addFavourite(getAccessToken, type, id)
         }
+        track('Favourite Toggled', {
+          contentType: type === 'news' ? 'article' : 'event',
+          favourited: !removing,
+        })
       } catch {
         setFavouriteIds(prev => {
           const next = new Set(prev)

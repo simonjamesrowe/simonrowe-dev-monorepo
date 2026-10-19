@@ -1,6 +1,8 @@
 import { GraduationCap, Moon, Sun, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { track } from '../analytics/analytics'
+import { CookieSettingsLink } from '../analytics/CookieSettingsLink'
 import { useTheme } from '../contexts/ThemeContext'
 
 import { ChatInput } from '../components/chat/ChatInput'
@@ -32,6 +34,15 @@ const SCHOOL_URL = 'https://www.kilmorieschool.co.uk'
 const SITE_STATUS_POLL_MS = 10_000
 
 type MobileTab = 'upcoming' | 'ask'
+
+/** Where a question came from, for analytics: typed, a suggestion chip, the calendar, or `?q=`. */
+type QuestionSource = 'input' | 'chip' | 'calendar' | 'link'
+
+/** The question in flight, for the analytics event its answer closes. Never the question's text. */
+interface PendingAnswer {
+  startedAt: number
+  toolCount: number
+}
 
 /** The input box's limit, applied to a question handed over in the address too. */
 const MAX_QUESTION_LENGTH = 500
@@ -160,10 +171,24 @@ export default function App() {
   const initialQuestionSentRef = useRef(false)
   const sessionIdRef = useRef<string>(newSessionId())
   const endRef = useRef<HTMLDivElement>(null)
+  // Set when a question is sent and cleared by whichever ends it first (the answer, an error or
+  // an undelivered message), so each question reports one Answer Received at most.
+  const pendingAnswerRef = useRef<PendingAnswer | null>(null)
 
+  const finishAnswer = useCallback((failed: boolean) => {
+    const pending = pendingAnswerRef.current
+    if (!pending) return
+    pendingAnswerRef.current = null
+    track('Answer Received', {
+      toolCount: pending.toolCount,
+      latencyMs: Math.max(0, Math.round(performance.now() - pending.startedAt)),
+      failed,
+    })
+  }, [])
 
   const onFrame = useCallback((response: ChatResponse) => {
     if (response.type === 'ERROR') {
+      finishAnswer(true)
       setAwaiting(false)
       setError(response.content)
       return
@@ -177,10 +202,17 @@ export default function App() {
       next[next.length - 1] = applyChatStreamEvent(last, response)
       return next
     })
+    // Counted from the frames rather than read back from the reduced message: the state updater
+    // above may run twice under StrictMode, and a side effect inside it would double-count. The
+    // reducer adds one tool block for exactly these frames.
+    if (response.type === 'TOOL_START' && response.toolLabel && pendingAnswerRef.current) {
+      pendingAnswerRef.current.toolCount += 1
+    }
     if (response.type === 'STREAM_END') {
+      finishAnswer(false)
       setAwaiting(false)
     }
-  }, [])
+  }, [finishAnswer])
 
   /**
    * A message typed while the socket was down and never delivered.
@@ -191,6 +223,7 @@ export default function App() {
    * stops, and the reader is told plainly.
    */
   const onUndelivered = useCallback(() => {
+    finishAnswer(true)
     setAwaiting(false)
     setMessages((prior) => {
       const last = prior[prior.length - 1]
@@ -202,7 +235,7 @@ export default function App() {
       'That question did not get through — Term Time could not reach the server. ' +
         'Please try again in a moment.',
     )
-  }, [])
+  }, [finishAnswer])
 
   // One object, so clearChat reconnects with the same handlers the effect installed rather
   // than assembling its own.
@@ -215,6 +248,12 @@ export default function App() {
     }),
     [onFrame, onUndelivered],
   )
+
+  // Once per drop into 'offline', the state the transport reaches only after its retries have
+  // genuinely failed. A routine 'reconnecting' blip is not reported, as it is not shown.
+  useEffect(() => {
+    if (connection === 'offline') track('Connection Lost')
+  }, [connection])
 
   useEffect(() => {
     schoolChat.connect(sessionIdRef.current, handlers)
@@ -266,6 +305,8 @@ export default function App() {
     // leave the previous subscription live.
     schoolChat.disconnect()
     sessionIdRef.current = newSessionId()
+    // The old session's answer can no longer arrive, so it is not waited on.
+    pendingAnswerRef.current = null
     setMessages([])
     setError(null)
     setAwaiting(false)
@@ -274,15 +315,18 @@ export default function App() {
 
   function chooseYears(next: string[]) {
     setYearGroups(next)
+    track('Year Group Selected', { yearGroupCount: next.length })
     writeStored(YEAR_STORAGE_KEY, next.length === 0 ? null : JSON.stringify(next))
   }
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, source: QuestionSource) => {
       const trimmed = text.trim()
       if (!trimmed || awaiting) {
         return
       }
+      track('Question Asked', { source, yearGroupCount: yearGroups.length })
+      pendingAnswerRef.current = { startedAt: performance.now(), toolCount: 0 }
       setError(null)
       setAwaiting(true)
 
@@ -313,7 +357,7 @@ export default function App() {
   const askAboutEvent = useCallback(
     (question: string) => {
       setMobileTab('ask')
-      void send(question.slice(0, MAX_QUESTION_LENGTH))
+      void send(question.slice(0, MAX_QUESTION_LENGTH), 'calendar')
     },
     [send],
   )
@@ -325,7 +369,7 @@ export default function App() {
     if (!initialQuestion || initialQuestionSentRef.current) return
     const timer = setTimeout(() => {
       initialQuestionSentRef.current = true
-      void send(initialQuestion)
+      void send(initialQuestion, 'link')
     }, 0)
     return () => clearTimeout(timer)
   }, [initialQuestion, send])
@@ -419,7 +463,7 @@ export default function App() {
                     <button
                       key={suggestion}
                       className="chat-panel__welcome-chip"
-                      onClick={() => void send(suggestion)}
+                      onClick={() => void send(suggestion, 'chip')}
                     >
                       {suggestion}
                     </button>
@@ -476,7 +520,7 @@ export default function App() {
             <div ref={endRef} />
           </div>
 
-          <ChatInput onSend={(text) => void send(text)} disabled={awaiting} maxLength={MAX_QUESTION_LENGTH} />
+          <ChatInput onSend={(text) => void send(text, 'input')} disabled={awaiting} maxLength={MAX_QUESTION_LENGTH} />
         </div>
 
         <div className="school-page__upcoming">
@@ -493,6 +537,7 @@ export default function App() {
           </a>{' '}
           for anything that matters.
         </p>
+        <CookieSettingsLink />
       </footer>
     </div>
   )

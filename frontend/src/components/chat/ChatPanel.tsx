@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { MessageCircle, RotateCcw, X } from 'lucide-react'
+import { track } from '../../analytics/analytics'
 import * as chatService from '../../services/chatService'
 import type { ChatResponse } from '../../services/chatService'
 import { ChatMessage } from './ChatMessage'
@@ -32,6 +33,10 @@ interface ChatPanelProps {
   visible?: boolean
 }
 
+function countTools(message: ChatMessageModel): number {
+  return (message.blocks ?? []).filter((block) => block.kind === 'tool').length
+}
+
 function formatTimestamp(): string {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
@@ -55,6 +60,9 @@ export function ChatPanel({
   const initialQuerySentRef = useRef(false)
   const activeAssistantRef = useRef<ChatMessageModel | null>(null)
   const initialResponseReportedRef = useRef(false)
+  // When the question awaiting an answer was sent; null once its answer has been reported, so a
+  // late or duplicate frame never reports one answer twice.
+  const questionSentAtRef = useRef<number | null>(null)
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length
   const limitReached = userMessageCount >= MAX_USER_MESSAGES
@@ -64,16 +72,34 @@ export function ChatPanel({
     setActiveAssistantState(message)
   }, [])
 
+  const markQuestionSent = useCallback(() => {
+    questionSentAtRef.current = performance.now()
+    track('Chat Question Sent')
+  }, [])
+
+  const reportAnswer = useCallback((message: ChatMessageModel | null, failed: boolean) => {
+    const sentAt = questionSentAtRef.current
+    if (sentAt === null) return
+    questionSentAtRef.current = null
+    track('Chat Answer Received', {
+      toolCount: message ? countTools(message) : 0,
+      latencyMs: Math.round(performance.now() - sentAt),
+      failed,
+    })
+  }, [])
+
   const finalizeStream = useCallback(() => {
     if (streamFinalized.current) return
     streamFinalized.current = true
     clearTimeout(streamTimeoutRef.current)
     const finalMessage = activeAssistantRef.current
     setActiveAssistant(null)
+    // The stream stalled, so whatever arrived is not a whole answer.
+    reportAnswer(finalMessage, true)
     if (finalMessage && (finalMessage.blocks?.length ?? 0) > 0) {
       setMessages((msgs) => [...msgs, finalizeAssistantMessage(finalMessage)])
     }
-  }, [setActiveAssistant])
+  }, [reportAnswer, setActiveAssistant])
 
   const resetStreamTimeout = useCallback(() => {
     clearTimeout(streamTimeoutRef.current)
@@ -98,6 +124,7 @@ export function ChatPanel({
       const current = activeAssistantRef.current ?? createEmptyAssistantMessage(formatTimestamp())
       const finalMessage = applyChatStreamEvent(current, response)
       setActiveAssistant(null)
+      reportAnswer(finalMessage, false)
       if ((finalMessage.blocks?.length ?? 0) > 0) {
         setMessages((msgs) => [...msgs, finalMessage])
       }
@@ -108,6 +135,7 @@ export function ChatPanel({
       const current = activeAssistantRef.current ?? createEmptyAssistantMessage(formatTimestamp())
       const finalMessage = applyChatStreamEvent(current, response)
       setActiveAssistant(null)
+      reportAnswer(finalMessage, true)
       setMessages((msgs) => [...msgs, finalMessage])
     } else {
       // Ignore any late chunk/tool/widget frame that arrives after the answer was
@@ -118,7 +146,7 @@ export function ChatPanel({
       setActiveAssistant(next)
       resetStreamTimeout()
     }
-  }, [resetStreamTimeout, setActiveAssistant])
+  }, [reportAnswer, resetStreamTimeout, setActiveAssistant])
 
   useEffect(() => {
     const sessionId = crypto.randomUUID()
@@ -155,6 +183,7 @@ export function ChatPanel({
           initialQueryTimeoutRef.current = setTimeout(() => {
             if (!cancelledRef.current) {
               chatService.sendMessage({ sessionId, message: initialQuery })
+              markQuestionSent()
             }
           }, 50)
         }
@@ -171,7 +200,7 @@ export function ChatPanel({
       clearTimeout(streamTimeoutRef.current)
       chatService.disconnect()
     }
-  }, [initialQuery, onMessage, setActiveAssistant])
+  }, [initialQuery, markQuestionSent, onMessage, setActiveAssistant])
 
   useEffect(() => {
     if (!onInitialResponse || initialResponseReportedRef.current) return
@@ -214,10 +243,12 @@ export function ChatPanel({
     setMessages((msgs) => [...msgs, userMessage])
     setActiveAssistant(createEmptyAssistantMessage(formatTimestamp()))
     chatService.sendMessage({ sessionId: sessionIdRef.current, message: text })
+    markQuestionSent()
   }
 
   const handleClearChat = () => {
     chatService.disconnect()
+    questionSentAtRef.current = null
     setMessages([])
     setActiveAssistant(null)
     setConnected(false)

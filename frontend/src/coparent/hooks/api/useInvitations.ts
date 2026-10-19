@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { track } from '../../../analytics/analytics';
 import type { Invitation, CreateInvitationRequest } from '../../lib/api/client';
 import { apiClient } from '../../lib/api/client';
 
@@ -38,6 +39,7 @@ export function useCreateInvitation() {
       return data;
     },
     onSuccess: (data) => {
+      track('Invite Sent');
       queryClient.invalidateQueries({ queryKey: invitationKeys.list(data.familyId) });
       queryClient.invalidateQueries({ queryKey: familyKeys.detail(data.familyId) });
       // An invitation reserves the invited parent, whom expenses can then name.

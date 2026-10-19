@@ -2,6 +2,8 @@
 
 import { LogOut } from 'lucide-react';
 
+import { CookieSettingsLink } from '../../../analytics/CookieSettingsLink';
+
 interface UserMenuProps {
   user?: {
     name: string;
@@ -59,6 +61,10 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
           </button>
         )}
       </div>
+
+      {/* Renders nothing in a build without analytics. Beside Log out so withdrawing consent is
+          as easy to find as signing out. */}
+      <CookieSettingsLink className="mt-2 block text-xs text-slate-500 transition-colors hover:text-slate-700 hover:underline dark:text-slate-400 dark:hover:text-slate-200" />
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { Auth0Provider, type AppState } from '@auth0/auth0-react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
 
+import { AnalyticsIdentity } from '../analytics/AnalyticsIdentity'
+import { initAnalytics } from '../analytics/analytics'
 import { AUTH0_AUDIENCE, AUTH0_CLIENT_ID, AUTH0_DOMAIN } from '../config/auth'
 import { ThemeProvider } from '../contexts/ThemeContext'
 import { App } from './App'
@@ -34,6 +36,8 @@ function returnTo(appState?: AppState) {
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
+initAnalytics('meals')
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Auth0Provider
@@ -49,6 +53,7 @@ createRoot(document.getElementById('root')!).render(
       useRefreshTokensFallback
       onRedirectCallback={returnTo}
     >
+      <AnalyticsIdentity />
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <ThemeColor />

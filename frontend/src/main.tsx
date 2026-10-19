@@ -2,10 +2,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import App from './App'
-import { initializeAnalytics } from './services/analytics'
+import { initAnalytics } from './analytics/analytics'
 import './styles.css'
 
-initializeAnalytics()
+initAnalytics('main')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

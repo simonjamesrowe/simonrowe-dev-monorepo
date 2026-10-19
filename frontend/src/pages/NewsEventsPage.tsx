@@ -14,13 +14,13 @@ import { SummaryNarration } from '../components/news/SummaryNarration'
 import { SummaryButton } from '../components/news/SummaryButton'
 import { SnippetCountBadge } from '../components/news/snippets/SnippetCountBadge'
 import { SummarySnippets } from '../components/news/snippets/SummarySnippets'
+import { track } from '../analytics/analytics'
 import { useAdminRole } from '../auth/useAdminRole'
 import { useArticleSummaries } from '../hooks/useArticleSummaries'
 import { useFavourites } from '../hooks/useFavourites'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useScrollToHash } from '../hooks/useScrollToHash'
 import { useSnippetCounts } from '../hooks/useSnippetCounts'
-import { trackPageView } from '../services/analytics'
 import { fetchNews, fetchNewsById, fetchNewsSources } from '../services/newsApi'
 import { fetchEvents, fetchEventsById } from '../services/eventsApi'
 import { getFavourites } from '../services/favouritesApi'
@@ -137,14 +137,12 @@ export function NewsEventsPage() {
   // Discards any news response that has been superseded — switching source while a
   // "Load more" is in flight would otherwise append the previous source's articles.
   const newsRequestId = useRef(0)
+  // A search is counted once per query, not again when a source filter re-runs it.
+  const trackedQuery = useRef('')
 
   // Scroll to #news / #events once content has loaded (section ids exist).
   useScrollToHash(!loading)
   usePageTitle('News & Events')
-
-  useEffect(() => {
-    trackPageView('/news-events')
-  }, [])
 
   // The timer is cleared on every keystroke and on unmount, so a query the visitor has
   // already moved past never lands and nothing is scheduled against a gone component.
@@ -163,6 +161,11 @@ export function NewsEventsPage() {
     fetchNews(0, NEWS_PAGE_SIZE, { sources: selectedSources, query: appliedQuery })
       .then((newsPage) => {
         if (newsRequestId.current !== requestId) return
+        const query = appliedQuery.trim()
+        if (query && query !== trackedQuery.current) {
+          trackedQuery.current = query
+          track('Search Performed', { surface: 'news', resultCount: newsPage.totalElements })
+        }
         setArticles(newsPage.content)
         setNewsPageNumber(newsPage.number)
         setIsLastNewsPage(newsPage.last)
@@ -266,6 +269,7 @@ export function NewsEventsPage() {
    */
   const handleSummaryOpen = (article: ArticleResponse) => {
     setSummaryArticleId(article.id)
+    track('Summary Opened', { articleId: article.id, ready: summaries.hasSummary(article.id) })
     if (summaries.hasSummary(article.id)) {
       void summaries.loadSummary(article.id)
     } else {
@@ -536,7 +540,7 @@ export function NewsEventsPage() {
                         labels collapse to icons under 30rem rather than any of these being
                         dropped — see .feed__card-actions in styles.css. */}
                     {article.shortUrl && (
-                      <ShareButton title={article.title} url={article.shortUrl} />
+                      <ShareButton contentType="article" title={article.title} url={article.shortUrl} />
                     )}
                   </div>
                   <div className="feed__hero-overlay">
@@ -605,7 +609,7 @@ export function NewsEventsPage() {
                         labels collapse to icons under 30rem rather than any of these being
                         dropped — see .feed__card-actions in styles.css. */}
                     {article.shortUrl && (
-                      <ShareButton title={article.title} url={article.shortUrl} />
+                      <ShareButton contentType="article" title={article.title} url={article.shortUrl} />
                     )}
                   </div>
                   <div className="feed__card-body">
@@ -671,7 +675,7 @@ export function NewsEventsPage() {
                       <div className="feed__timeline-content">
                         <div className="feed__timeline-actions">
                           {event.shortUrl && (
-                            <ShareButton title={event.title} url={event.shortUrl} />
+                            <ShareButton contentType="event" title={event.title} url={event.shortUrl} />
                           )}
                           <FavouriteButton
                             active={eventFavourites.isFavourite(event.id)}

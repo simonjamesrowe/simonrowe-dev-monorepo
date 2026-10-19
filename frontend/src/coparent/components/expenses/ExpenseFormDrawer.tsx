@@ -1,6 +1,7 @@
 import { AlertCircle, Calendar, Camera, Check, Info, Landmark, Mail, Sparkles, Wallet } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { track } from '../../../analytics/analytics';
 import { prepareSchoolNoteImage } from '../../../pages/admin/schoolNoteImage';
 import { useCreateExpense, useUpdateExpense, useUploadReceipt } from '../../hooks/api';
 import type { Child, Parent } from '../../lib/api/client';
@@ -258,6 +259,8 @@ export function ExpenseFormDrawer({
         : source
           ? await source.submit(request)
           : await createExpense.mutateAsync({ familyId, ...request });
+      // A new expense only, not an edit. A source is a statement transaction being converted.
+      if (!expense) track('Expense Created', { source: source ? 'statement' : 'manual', count: 1 });
       let failures = 0;
       let latest = saved;
       // One at a time, after the expense exists: a failed upload never loses the expense.

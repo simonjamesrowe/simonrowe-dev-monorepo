@@ -123,7 +123,8 @@ export function ChatMessage({
         )}
       </div>
       <div>
-        <div className="chat-message__bubble">
+        {/* What the visitor typed is hidden from session replay; the answer is public content. */}
+        <div className="chat-message__bubble" data-amp-mask={isUser ? '' : undefined}>
           {isUser ? (
             content
           ) : assistantBlocks ? (

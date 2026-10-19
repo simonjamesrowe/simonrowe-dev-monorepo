@@ -41,7 +41,7 @@ export function FeaturedArticle({ blog }: FeaturedArticleProps) {
             href={`/blogs/${blog.id}`}
             title={blog.title}
           />
-          {blog.shortUrl && <ShareButton title={blog.title} url={blog.shortUrl} />}
+          {blog.shortUrl && <ShareButton contentType="blog" title={blog.title} url={blog.shortUrl} />}
         </div>
       </div>
     </article>

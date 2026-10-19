@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { track } from '../../../analytics/analytics';
 import { apiClient } from '../../lib/api/client';
 import type {
   AssistantAction,
@@ -181,6 +182,9 @@ function useDecision(decision: 'approve' | 'reject') {
       queryClient.setQueryData<AssistantBatch>(assistantKeys.batch(familyId, batchId), (batch) =>
         replaceAction(batch, action));
       if (action.status === 'APPLIED') invalidateDomain(queryClient, familyId, action.actionType);
+      if (decision === 'approve' && action.status === 'APPLIED' && action.actionType === 'CREATE_EXPENSE') {
+        track('Expense Created', { source: 'quick-add', count: 1 });
+      }
     },
   });
 }

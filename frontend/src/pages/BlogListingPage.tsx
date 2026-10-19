@@ -7,7 +7,6 @@ import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { fetchBlogs } from '../services/blogApi'
-import { trackPageView } from '../services/analytics'
 import type { BlogSummary } from '../types/blog'
 
 /** `GET /api/blogs` is unpaged (~43 posts), so the split is a client-side filter. */
@@ -33,10 +32,6 @@ export function BlogListingPage() {
   const [activeTab, setActiveTab] = useState<BlogContentFilter>('ENGINEERING')
 
   usePageTitle('Blog')
-
-  useEffect(() => {
-    trackPageView('/blogs')
-  }, [])
 
   useEffect(() => {
     let cancelled = false

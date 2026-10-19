@@ -4,7 +4,6 @@ import { Calendar, ExternalLink, MapPin } from 'lucide-react'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { fetchEvents } from '../services/eventsApi'
-import { trackPageView } from '../services/analytics'
 import type { EventResponse } from '../types/events'
 
 export function EventsPage() {
@@ -14,7 +13,6 @@ export function EventsPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    trackPageView('/events')
     document.title = 'Events'
   }, [])
 

@@ -372,7 +372,7 @@ describe('HomePage', () => {
 
     const pill = await screen.findByRole('button', { name: /Ask Simon anything\s*Start chat/i })
     await user.click(pill)
-    expect(openChat).toHaveBeenCalledWith()
+    expect(openChat).toHaveBeenCalledWith(undefined, 'hero')
 
     await user.click(screen.getByRole('button', { name: /^Take a tour/ }))
     expect(startTour).toHaveBeenCalled()
@@ -381,7 +381,7 @@ describe('HomePage', () => {
     fireEvent.keyDown(screen.getByRole('searchbox', { name: /search or ask a question/i }), {
       key: 'Enter',
     })
-    expect(openChat).toHaveBeenCalledWith('Kafka')
+    expect(openChat).toHaveBeenCalledWith('Kafka', 'search')
   })
 
   it('renders landing navigation and a keyboard-operable Ask pill', async () => {
@@ -406,6 +406,6 @@ describe('HomePage', () => {
     const pill = document.querySelector<HTMLButtonElement>('.landing-hero__pill')!
     pill.focus()
     await user.keyboard('{Enter}')
-    expect(openChat).toHaveBeenCalledWith()
+    expect(openChat).toHaveBeenCalledWith(undefined, 'hero')
   })
 })

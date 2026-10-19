@@ -1,6 +1,7 @@
 import { createContext, useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
+import { track } from '../../analytics/analytics'
 import { fetchTourSteps } from '../../services/tourApi'
 import type { TourStep } from '../../types/tour'
 import { useTourNarration } from './useTourNarration'
@@ -191,8 +192,14 @@ export function TourProvider({ children }: TourProviderProps) {
 
   const exit = useCallback(() => {
     clearAutoAdvanceTimer()
+    // Every way out (Exit, Finish, the overlay, a narrowed window) ends here. Leaving from the
+    // last step is a completion: the visitor has seen every stop.
+    if (state.isActive) {
+      if (state.currentStepIndex >= state.steps.length - 1) track('Tour Completed')
+      else track('Tour Dismissed', { step: state.currentStepIndex + 1 })
+    }
     dispatch({ type: 'EXIT' })
-  }, [clearAutoAdvanceTimer])
+  }, [clearAutoAdvanceTimer, state.isActive, state.currentStepIndex, state.steps.length])
 
   const start = useCallback(async () => {
     try {
@@ -203,6 +210,7 @@ export function TourProvider({ children }: TourProviderProps) {
           navigate(firstStep.route)
         }
         dispatch({ type: 'START', steps })
+        track('Tour Started', { stepCount: steps.length })
       }
     } catch {
       // Silently fail - tour is non-critical
@@ -364,6 +372,7 @@ export function TourProvider({ children }: TourProviderProps) {
   // measured from here so time spent waiting for a slow route counts towards it.
   useEffect(() => {
     stepStartedAtRef.current = Date.now()
+    if (state.isActive) track('Tour Step Viewed', { step: state.currentStepIndex + 1 })
   }, [state.currentStepIndex, state.isActive])
 
   /*

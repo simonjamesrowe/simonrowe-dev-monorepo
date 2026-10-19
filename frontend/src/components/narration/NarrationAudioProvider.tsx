@@ -4,6 +4,7 @@ import { narrationMediaUrl } from './narrationMedia'
 import { NarrationAudioContext, type NarrationAudioApi } from './narrationAudioContext'
 import { LONG_POLL_SECONDS, MAX_LONG_POLLS } from './useNarration'
 import { useAuth } from '../../auth/useAuth'
+import { track as trackEvent } from '../../analytics/analytics'
 import { useEnsureAuthenticated } from '../../hooks/useEnsureAuthenticated'
 import { loadPlaylist, updatePlaylist } from '../../hooks/playlistStore'
 import { fetchArticleSummary } from '../../services/articleSummaryApi'
@@ -44,6 +45,12 @@ const SKIP_BACK_SECONDS = 15
 const SKIP_FORWARD_SECONDS = 30
 
 const JOURNEY_NOTICE = "Your journey's up, so the playlist is paused."
+
+/** The analytics name for each narrated content type. */
+const ANALYTICS_CONTENT_TYPE = { BLOG: 'blog', ARTICLE_SUMMARY: 'article' } as const satisfies Record<
+  NarrationAudioContentType,
+  string
+>
 
 /** BLOG and ARTICLE_SUMMARY ids come from different collections and could collide. */
 function keyFor(contentType: NarrationAudioContentType, contentId: string): string {
@@ -566,6 +573,10 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
     replaceUpNext([])
 
     const ready = readyMap.get(key)
+    trackEvent('Listen Pressed', {
+      contentType: ANALYTICS_CONTENT_TYPE[request.contentType],
+      ready: Boolean(ready),
+    })
     if (ready) {
       const next: NarrationTrack = {
         ...request,
@@ -722,6 +733,12 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
   /** A track played to its end: record it as heard, then carry on down the list. */
   const finished = useCallback(() => {
     const current = trackRef.current
+    if (current) {
+      trackEvent('Narration Completed', {
+        contentType: ANALYTICS_CONTENT_TYPE[current.contentType],
+        fromPlaylist: Boolean(current.fromPlaylist),
+      })
+    }
     if (current?.fromPlaylist && authRef.current.isAuthenticated) {
       void markPlaylistListened(authRef.current.getAccessToken, current)
         .then(() => loadPlaylist(true))

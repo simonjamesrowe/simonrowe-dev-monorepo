@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { MessageCircle } from 'lucide-react'
+import { track } from '../../analytics/analytics'
 import { blogSearch, siteSearch, type GroupedSearchResponse } from '../../services/searchApi'
 import { SearchDropdown } from './SearchDropdown'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
@@ -16,6 +17,10 @@ const CHAT_SUGGESTIONS = [
   'What has Simon written about?',
   'How can I contact Simon?',
 ]
+
+function resultCount(results: GroupedSearchResponse): number {
+  return Object.values(results).reduce((total, group) => total + (group?.length ?? 0), 0)
+}
 
 interface SiteSearchProps {
   onChatStart?: (query: string) => void
@@ -38,6 +43,13 @@ export function SiteSearch({ onChatStart, compact = false }: SiteSearchProps) {
 
   const { isActive: tourActive, searchValue: tourSearchValue, currentStepIndex, steps } = useTour()
   const isSearchTourStep = tourActive && steps[currentStepIndex]?.targetSelector === '.tour-search'
+  // Read inside the search effect without re-running it: the tour's own demonstration search
+  // is not a visitor searching, so it is not counted.
+  const searchTourRef = useRef(isSearchTourStep)
+  useEffect(() => {
+    searchTourRef.current = isSearchTourStep
+  }, [isSearchTourStep])
+  const surface = isBlogPage ? 'blogs' : compact ? 'header' : 'mobile'
 
   // Sync tour search simulation into local query state
   useEffect(() => {
@@ -85,6 +97,9 @@ export function SiteSearch({ onChatStart, compact = false }: SiteSearchProps) {
             setResults(data)
             setOpen(true)
             setLoading(false)
+            if (!searchTourRef.current) {
+              track('Search Performed', { surface, resultCount: resultCount(data) })
+            }
           }
         })
         .catch(() => {
@@ -100,7 +115,7 @@ export function SiteSearch({ onChatStart, compact = false }: SiteSearchProps) {
       }
       controller?.abort()
     }
-  }, [query, isBlogPage])
+  }, [query, isBlogPage, surface])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Copy, KeyRound, LogOut, Palette, Trash2 } from 'lucide-react'
+import { Cookie, Copy, KeyRound, LogOut, Palette, Trash2 } from 'lucide-react'
 
+import { isAnalyticsConfigured } from '../analytics/analytics'
+import { CookieSettingsLink } from '../analytics/CookieSettingsLink'
 import { useMine, useTokens } from './data'
 import { ImportPage } from './ImportPage'
 import { ThemeToggle } from './ui'
@@ -36,7 +38,8 @@ export function More({ onSignOut, canImport = true }: { onSignOut: () => void; c
         </p>
         {minted ? (
           <div className="meals-minted">
-            <code className="meals-code">{command}</code>
+            {/* Carries a live bearer token, so replay draws an empty box here. */}
+            <code className="meals-code" data-amp-block>{command}</code>
             <div className="meals-row">
               <button type="button" className="meals-button meals-button--small" onClick={() => navigator.clipboard?.writeText(command)}><Copy size={14} /> Copy</button>
               <button type="button" className="meals-button meals-button--small" onClick={() => setMinted(null)}>Done</button>
@@ -51,7 +54,7 @@ export function More({ onSignOut, canImport = true }: { onSignOut: () => void; c
         )}
         {mint.error && <p className="meals-error" role="alert">{mint.error.message}</p>}
         {(tokens.data?.length ?? 0) > 0 && (
-          <ul className="meals-tokens">
+          <ul className="meals-tokens" data-amp-mask>
             {tokens.data!.map((t) => (
               <li key={t.id} className={t.revokedAt ? 'meals-tokens__revoked' : ''}>
                 <span><strong>{t.label}</strong> <code>{t.hint}…</code></span>
@@ -66,6 +69,15 @@ export function More({ onSignOut, canImport = true }: { onSignOut: () => void; c
           </ul>
         )}
       </section>
+
+      {/* Only in a build with analytics, where there is a choice to revisit. */}
+      {isAnalyticsConfigured() && (
+        <section className="meals-panel">
+          <h2 className="meals-panel__title"><Cookie size={18} aria-hidden="true" /> Cookies</h2>
+          <p className="meals-muted meals-small">Change whether usage analytics and session replay are allowed. The choice covers all of simonrowe.dev.</p>
+          <div className="meals-row"><CookieSettingsLink className="meals-button meals-button--small" /></div>
+        </section>
+      )}
 
       <button type="button" className="meals-button meals-more__signout" onClick={onSignOut}><LogOut size={16} /> Sign out</button>
 

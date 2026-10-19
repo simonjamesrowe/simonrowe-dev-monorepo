@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
-import { trackPageView } from '../services/analytics'
 import { fetchNews } from '../services/newsApi'
 import type { ArticleResponse } from '../types/news'
 
@@ -12,7 +11,6 @@ export function NewsPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    trackPageView('/news')
     document.title = 'News'
   }, [])
 

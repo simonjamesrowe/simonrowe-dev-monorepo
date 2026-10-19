@@ -2,6 +2,7 @@ import { Download, Github, Linkedin, Mail, Twitter } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
+import { CookieSettingsLink } from '../../analytics/CookieSettingsLink'
 import { API_BASE_URL } from '../../config/api'
 import { useProfile } from '../../hooks/useProfile'
 import { VersionBadge } from './VersionBadge'
@@ -106,9 +107,12 @@ export function Footer() {
 
         {/* AboutPage opens its contact drawer when the hash is #contact, so this
             lands straight on the form rather than scrolling the page. */}
-        <Link className="footer__contact-link" to="/about#contact">
-          Get in touch
-        </Link>
+        <div className="footer__actions">
+          <CookieSettingsLink className="footer__cookie-settings" />
+          <Link className="footer__contact-link" to="/about#contact">
+            Get in touch
+          </Link>
+        </div>
       </div>
     </footer>
   )

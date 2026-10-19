@@ -6,7 +6,6 @@ import { ConnectInstructions } from '../components/mcp/ConnectInstructions'
 import { ToolCard } from '../components/mcp/ToolCard'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { createMcpClient, type McpClient } from '../services/mcpClient'
-import { trackPageView } from '../services/analytics'
 import type { McpTool } from '../types/mcp'
 
 interface McpPageProps {
@@ -23,10 +22,6 @@ export function McpPage({ client }: McpPageProps) {
   const [attempt, setAttempt] = useState(0)
 
   usePageTitle('MCP Tools')
-
-  useEffect(() => {
-    trackPageView('/mcp')
-  }, [])
 
   useEffect(() => {
     let cancelled = false

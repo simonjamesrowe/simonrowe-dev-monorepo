@@ -10,6 +10,13 @@ import type { StatementOverview, StatementTransaction, StatementUploadResult } f
 
 import StatementsPage from './StatementsPage';
 
+const { track } = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('../../analytics/analytics', () => ({
+  track,
+  isAnalyticsConfigured: () => false,
+  openCookieSettings: vi.fn(),
+}));
+
 vi.mock('../hooks/api', () => ({
   useFamilies: vi.fn(),
   useParentsWithInvited: vi.fn(),
@@ -303,5 +310,89 @@ describe('StatementsPage', () => {
     await user.upload(screen.getByLabelText('Statement files'), new File(['x'], 'notes.csv', { type: 'text/csv' }));
 
     expect(await screen.findByText("notes.csv couldn't be read")).toBeInTheDocument();
+  });
+});
+
+describe('StatementsPage analytics', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('reports each uploaded statement with its row and suggestion counts, never its contents', async () => {
+    const user = userEvent.setup();
+    setUp({ overview: overview(0) });
+    mutateAsync.upload.mockResolvedValue(uploadResult(true));
+    mutateAsync.check.mockResolvedValue([
+      { fingerprint: 'b'.repeat(64), state: 'checked', transaction: null },
+      { fingerprint: 'c'.repeat(64), state: 'suggested', transaction: { ...gym, id: 'tx-2' } },
+    ]);
+    renderPage();
+
+    await user.upload(screen.getByLabelText('Statement files'), new File(['x'], 'activity.csv', { type: 'text/csv' }));
+
+    await screen.findByText('1 possible shared cost found');
+    expect(track.mock.calls).toEqual([['Statement Uploaded', { rowCount: 2, suggestedCount: 1 }]]);
+  });
+
+  it('reports a statement already imported as an upload with nothing suggested', async () => {
+    const user = userEvent.setup();
+    setUp({ overview: overview(0) });
+    mutateAsync.upload.mockResolvedValue(uploadResult(false));
+    renderPage();
+
+    await user.upload(screen.getByLabelText('Statement files'), new File(['x'], 'activity.csv', { type: 'text/csv' }));
+
+    await screen.findByText('Nothing new in that file');
+    expect(track.mock.calls).toEqual([['Statement Uploaded', { rowCount: 2, suggestedCount: 0 }]]);
+  });
+
+  it('reports a converted transaction, and then the same-merchant batch, as created from a statement', async () => {
+    const user = userEvent.setup();
+    setUp({ overview: overview(1), listed: [gym] });
+    mutateAsync.convert.mockResolvedValue(testExpense({ id: 'new', payerId: 'sam' }));
+    renderPage();
+
+    await user.click(
+      within(screen.getByTestId('statement-suggestion-tx-1')).getByRole('button', { name: 'Turn into expense' }),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Add expense' }));
+    await screen.findByText('Expense added');
+
+    // Counted once, by the form that saved it, not again by the page that opened the form.
+    expect(track.mock.calls).toEqual([['Expense Created', { source: 'statement', count: 1 }]]);
+  });
+
+  it('counts only the same-merchant payments that actually became expenses', async () => {
+    const user = userEvent.setup();
+    setUp({ overview: overview(0) });
+    const statement = uploadResult(false);
+    const row = (letter: string, amountPence: number) => ({
+      ...statement.rows[0],
+      fingerprint: letter.repeat(64),
+      description: 'BOOTS 0712',
+      amountPence,
+    });
+    mutateAsync.upload.mockResolvedValue({ ...statement, rows: [row('d', 2585), row('e', 1099), row('f', 450)] });
+    mutateAsync.convert.mockResolvedValue(testExpense({ id: 'new', title: 'Calpol', amountPence: 2585 }));
+    mutateAsync.convertAll.mockResolvedValue([
+      { fingerprint: 'e'.repeat(64), expense: testExpense({ id: 'new-2' }), message: null },
+      { fingerprint: 'f'.repeat(64), expense: null, message: 'Already logged' },
+    ]);
+    renderPage();
+
+    await user.upload(screen.getByLabelText('Statement files'), new File(['x'], 'activity.csv', { type: 'text/csv' }));
+    await screen.findByText('Nothing new in that file');
+    await user.click(screen.getByRole('button', { name: /Latest upload/ }));
+    await user.click(
+      within(screen.getByTestId(`statement-row-${'d'.repeat(64)}`)).getByRole('button', { name: 'Turn into expense' }),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Add expense' }));
+    await user.click(await screen.findByRole('button', { name: 'Log 2 expenses' }));
+
+    await waitFor(() => expect(mutateAsync.convertAll).toHaveBeenCalledTimes(1));
+    expect(track.mock.calls.filter(([name]) => name === 'Expense Created')).toEqual([
+      ['Expense Created', { source: 'statement', count: 1 }],
+      ['Expense Created', { source: 'statement', count: 1 }],
+    ]);
   });
 });

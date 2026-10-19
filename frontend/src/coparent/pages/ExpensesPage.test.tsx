@@ -10,6 +10,13 @@ import type { ExpenseSettlement, ExpenseSummary } from '../types/expenses';
 
 import ExpensesPage from './ExpensesPage';
 
+const { track } = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('../../analytics/analytics', () => ({
+  track,
+  isAnalyticsConfigured: () => false,
+  openCookieSettings: vi.fn(),
+}));
+
 vi.mock('../hooks/api', () => ({
   useFamilies: vi.fn(),
   useParentsWithInvited: vi.fn(),
@@ -660,5 +667,48 @@ describe('ExpensesPage', () => {
     expect(transitionMutate).toHaveBeenCalledWith(
       expect.objectContaining({ transition: 'agree', expense: expect.objectContaining({ id: 'theirs' }) }),
     );
+  });
+});
+
+describe('ExpensesPage analytics', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    createMutate.mockResolvedValue(testExpense({ id: 'new' }));
+  });
+
+  it('reports a hand-logged expense as manual, never its title or amount', async () => {
+    setUp();
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: /Add expense/ }));
+    await user.type(screen.getByPlaceholderText('e.g. School shoes'), 'Hay fever medicine');
+    await user.type(screen.getByLabelText('Amount in pounds'), '12.80');
+    await user.click(screen.getByRole('button', { name: 'Sam' }));
+    await user.click(screen.getByRole('button', { name: /^Add expense$/ }));
+
+    expect(track.mock.calls).toEqual([['Expense Created', { source: 'manual', count: 1 }]]);
+  });
+
+  it('reports a recorded settle-up with how many expenses it settled', async () => {
+    const owedToSam = testExpense({
+      id: 'owed',
+      payerId: 'sam',
+      debtorParentId: 'alex',
+      creditorParentId: 'sam',
+      agreement: { status: 'agreed', requestedBy: 'sam', respondedBy: 'alex', respondedAt: null, note: null },
+      reimbursement: { status: 'outstanding', claimedBy: null, claimedAt: null, settledBy: null, settledAt: null, note: null, settlementId: null },
+      countsTowardsBalance: true,
+      owedPence: 3000,
+      version: 2,
+    });
+    recordMutate.mockResolvedValue({ settlement: null, results: [{ id: 'owed', outcome: 'claimed' }] });
+    setUp({ expenses: [owedToSam] });
+    const user = userEvent.setup();
+    renderPage('/expenses?settle=1');
+
+    await user.click(screen.getByRole('button', { name: /Record payment/ }));
+
+    expect(track.mock.calls).toEqual([['Settlement Recorded', { expenseCount: 1 }]]);
   });
 });

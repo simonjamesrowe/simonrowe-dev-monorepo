@@ -6,6 +6,7 @@ import {
   fetchSummarisedArticleIds,
   requestArticleSummary,
 } from '../services/articleSummaryApi'
+import { track } from '../analytics/analytics'
 import { useAuth } from '../auth/useAuth'
 import type { ArticleSummaryResponse } from '../types/articleSummary'
 
@@ -177,6 +178,7 @@ export function useArticleSummaries(): ArticleSummariesApi {
     // Sign-in first. A dismissed popup means no request is issued at all, so a visitor who
     // changes their mind never triggers a paid call.
     if (!(await ensureAuthenticated())) return
+    track('Summary Requested', { articleId })
 
     const controller = replaceController(articleId)
     setErrors(prev => {

@@ -1,6 +1,7 @@
 import { Check, Info } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { track } from '../../../analytics/analytics';
 import { useConvertStatementTransactions } from '../../hooks/api';
 import { apiErrorMessage } from '../../lib/api/errorMessage';
 import type { Expense } from '../../types/expenses';
@@ -83,6 +84,9 @@ export function SameMerchantDrawer({
           notes: logged.notes,
         },
       });
+      // A refused row is reported and the rest still go, so only the ones that became expenses count.
+      const created = results.filter((result) => result.expense !== null).length;
+      if (created > 0) track('Expense Created', { source: 'statement', count: created });
       onLogged(results);
     } catch (caught) {
       setError(caught);

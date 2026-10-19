@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Upload } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import { track } from '../analytics/analytics'
 import { useMealsApi } from './data'
 import type { ImportReport } from './types'
 
@@ -29,6 +30,7 @@ export function ImportPage() {
     for (const file of Array.from(files)) {
       try {
         done.push({ file: file.name, report: await api.importBundle(file) })
+        track('Recipe Imported', { via: 'bundle' })
       } catch (e) {
         done.push({ file: file.name, error: e instanceof Error ? e.message : String(e) })
       }

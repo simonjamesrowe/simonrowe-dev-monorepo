@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Camera, Loader2, Sparkles, X } from 'lucide-react'
 
+import { track } from '../analytics/analytics'
 import { useMealsApi, useMine } from './data'
 import { shrinkImage } from './images'
 import { describeChange } from './logic'
@@ -47,8 +48,10 @@ export function QuickAdd({ mode, onDone }: Props) {
   function confirm() {
     const chosen: InventoryChange[] = (proposed ?? []).filter((c) => c.keep)
       .map(({ name, action, quantity, unit, status, useBy, source }) => ({ name, action, quantity, unit, status, useBy, source }))
+    const withPhoto = photo !== null
     apply.mutate(chosen, {
       onSuccess: () => {
+        track('Quick Add Used', { itemCount: chosen.length, withPhoto })
         setProposed(null)
         setText('')
         setPhoto(null)
@@ -71,7 +74,8 @@ export function QuickAdd({ mode, onDone }: Props) {
                   <strong>{describeChange(c)}</strong>
                   {fresh.includes(c.name) && <span className="meals-tag meals-tag--new">new ingredient</span>}
                   {c.useBy && <span className="meals-tag">use by {c.useBy}</span>}
-                  {c.source && <span className="meals-changes__source">“{c.source}”</span>}
+                  {/* The words this change was read from: the owner's own note or order. */}
+                  {c.source && <span className="meals-changes__source" data-amp-mask>“{c.source}”</span>}
                 </span>
               </label>
             </li>

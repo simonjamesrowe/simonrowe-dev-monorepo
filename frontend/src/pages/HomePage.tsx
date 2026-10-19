@@ -13,7 +13,6 @@ import { useHomePage } from '../hooks/useHomePage'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useProfile } from '../hooks/useProfile'
-import { trackPageView } from '../services/analytics'
 import { fetchLatestBlogs } from '../services/blogApi'
 import { fetchJobs } from '../services/jobsApi'
 import type { BlogSummary } from '../types/blog'
@@ -36,10 +35,6 @@ export function HomePage() {
   const { openJob } = useDrawer()
 
   usePageTitle()
-
-  useEffect(() => {
-    trackPageView(window.location.pathname)
-  }, [])
 
   // Jobs and posts feed the sections below the hero. Neither is allowed to break the
   // page: a rejected fetch leaves its section's data empty, and the section renders

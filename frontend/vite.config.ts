@@ -112,6 +112,23 @@ export default defineConfig(({ mode }) => {
         target: apiTarget,
         changeOrigin: true,
       },
+      // Amplitude, mirroring the three /amp/ routes in nginx.conf (spec 055). Only reached
+      // when VITE_AMPLITUDE_API_KEY is set locally and the banner is accepted.
+      '/amp/e': {
+        target: 'https://api.eu.amplitude.com',
+        changeOrigin: true,
+        rewrite: () => '/2/httpapi',
+      },
+      '/amp/sr/': {
+        target: 'https://api-sr.eu.amplitude.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/amp\/sr/, ''),
+      },
+      '/amp/cfg/': {
+        target: 'https://sr-client-cfg.eu.amplitude.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/amp\/cfg/, ''),
+      },
       '/uploads': {
         target: apiTarget,
         changeOrigin: true,

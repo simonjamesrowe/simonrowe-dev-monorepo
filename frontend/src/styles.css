@@ -1230,6 +1230,34 @@ a:hover {
   outline-offset: 2px;
 }
 
+.footer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.footer__cookie-settings {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--on-surface-variant);
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.footer__cookie-settings:hover {
+  color: var(--primary);
+}
+
+.footer__cookie-settings:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 @media (max-width: 768px) {
   .footer {
     padding: 2rem 1.5rem;
@@ -17885,4 +17913,70 @@ label.meals-button { position: relative; }
   .read-along--timed .read-along__word--timed {
     transition: none;
   }
+}
+
+/* ==================== Consent banner (spec 055) ==================== */
+/*
+ * vanilla-cookieconsent's own stylesheet does the layout; these map its colours onto the site's
+ * palette so the banner follows light and dark mode on all four apps. #cc-main is the element the
+ * library mounts, so the selector is its, not ours. `:root #cc-main` outranks the library's own
+ * `#cc-main` defaults, which load after this file (with the consent chunk) and would otherwise win.
+ */
+:root #cc-main {
+  --cc-font-family: var(--font-main);
+  --cc-bg: var(--surface-container);
+  --cc-primary-color: var(--on-surface);
+  --cc-secondary-color: var(--on-surface-variant);
+  --cc-link-color: var(--primary);
+  --cc-modal-border-radius: 0.9rem;
+  --cc-btn-border-radius: 0.6rem;
+  --cc-btn-primary-bg: var(--primary);
+  --cc-btn-primary-color: var(--on-primary);
+  --cc-btn-primary-border-color: var(--primary);
+  --cc-btn-primary-hover-bg: var(--primary-container);
+  --cc-btn-primary-hover-color: var(--on-primary);
+  --cc-btn-primary-hover-border-color: var(--primary-container);
+  --cc-btn-secondary-bg: var(--surface-container-high);
+  --cc-btn-secondary-color: var(--on-surface);
+  --cc-btn-secondary-border-color: var(--outline-variant);
+  --cc-btn-secondary-hover-bg: var(--surface-bright);
+  --cc-btn-secondary-hover-color: var(--on-surface);
+  --cc-btn-secondary-hover-border-color: var(--outline);
+  --cc-separator-border-color: var(--outline-variant);
+  --cc-toggle-on-bg: var(--primary);
+  --cc-toggle-off-bg: var(--outline);
+  --cc-toggle-on-knob-bg: var(--surface);
+  --cc-toggle-off-knob-bg: var(--surface-container-highest);
+  --cc-toggle-enabled-icon-color: var(--surface);
+  --cc-toggle-disabled-icon-color: var(--surface-container-highest);
+  --cc-toggle-readonly-bg: var(--outline-variant);
+  --cc-toggle-readonly-knob-bg: var(--surface-container-high);
+  --cc-toggle-readonly-knob-icon-color: var(--outline-variant);
+  --cc-section-category-border: var(--outline-variant);
+  --cc-cookie-category-block-bg: var(--surface-container-low);
+  --cc-cookie-category-block-border: var(--outline-variant);
+  --cc-cookie-category-block-hover-bg: var(--surface-container-high);
+  --cc-cookie-category-block-hover-border: var(--outline);
+  --cc-cookie-category-expanded-block-bg: var(--surface-container-low);
+  --cc-cookie-category-expanded-block-hover-bg: var(--surface-container-high);
+  --cc-overlay-bg: rgba(0, 0, 0, 0.6);
+  --cc-footer-bg: var(--surface-container-low);
+  --cc-footer-color: var(--on-surface-variant);
+  --cc-footer-border-color: var(--outline-variant);
+}
+
+.cookie-settings-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.cookie-settings-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }

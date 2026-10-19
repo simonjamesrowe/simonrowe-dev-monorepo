@@ -47,7 +47,7 @@ export function ArticleCard({ blog }: ArticleCardProps) {
             title={blog.title}
           />
           {/* Absent, not disabled, when the post has no link minted yet. */}
-          {blog.shortUrl && <ShareButton title={blog.title} url={blog.shortUrl} />}
+          {blog.shortUrl && <ShareButton contentType="blog" title={blog.title} url={blog.shortUrl} />}
         </div>
       </div>
     </article>

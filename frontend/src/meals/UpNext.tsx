@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, Heart, ListTodo, Minus, Plus, Search, ShoppingBasket, Trash2, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import { track } from '../analytics/analytics'
 import { useCoverage, useFavourites, useKitchenHasFood, useMine, useShopping, useUpNext } from './data'
 import { recipeMatches, searchTerms } from './logic'
 import { CoverageBar, Empty, Loading, Photo } from './ui'
@@ -25,6 +26,15 @@ export function UpNext({ recipes, byId }: { recipes: Recipe[]; byId: Map<string,
   const remove = useMine((api, id: string) => api.unqueue(id))
 
   const items = (upNext.data ?? []).filter((u) => byId.has(u.recipeId))
+
+  // Once per visit, when Up next first loads: changing portions refetches it.
+  const viewed = useRef(false)
+  const loadedCount = upNext.data ? items.length : null
+  useEffect(() => {
+    if (viewed.current || loadedCount === null) return
+    viewed.current = true
+    track('Up Next Viewed', { itemCount: loadedCount })
+  }, [loadedCount])
   const planned = new Set(items.map((u) => u.recipeId))
   const terms = searchTerms(query)
   const results = terms.length === 0 ? [] : recipes.filter((r) => recipeMatches(r, terms)).slice(0, RESULTS)
@@ -51,7 +61,7 @@ export function UpNext({ recipes, byId }: { recipes: Recipe[]; byId: Map<string,
           )}
         </label>
         {terms.length > 0 && (
-          results.length === 0 ? <p className="meals-muted meals-small">No recipe matches “{query}”.</p> : (
+          results.length === 0 ? <p className="meals-muted meals-small" data-amp-mask>No recipe matches “{query}”.</p> : (
             <ul className="meals-results" aria-label="Matching recipes">
               {results.map((r) => {
                 const isPlanned = planned.has(r.id)

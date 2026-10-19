@@ -1,7 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { track } from '../../src/analytics/analytics'
 import { ShareButton } from '../../src/components/common/ShareButton'
+
+vi.mock('../../src/analytics/analytics', () => ({ track: vi.fn() }))
 
 const URL = 'https://simonrowe.dev/s/exactly-once'
 const TITLE = 'Exactly-once semantics'
@@ -41,7 +44,7 @@ describe('ShareButton', () => {
   describe('native share sheet', () => {
     it('opens the OS sheet with the title and the url when one is available', async () => {
       withShare(() => Promise.resolve())
-      render(<ShareButton title={TITLE} url={URL} />)
+      render(<ShareButton contentType="blog" title={TITLE} url={URL} />)
 
       fireEvent.click(screen.getByRole('button', { name: `Share ${TITLE}` }))
 
@@ -51,7 +54,7 @@ describe('ShareButton', () => {
 
     it('shows no confirmation after a native share, because the OS already did', async () => {
       withShare(() => Promise.resolve())
-      render(<ShareButton title={TITLE} url={URL} />)
+      render(<ShareButton contentType="blog" title={TITLE} url={URL} />)
 
       fireEvent.click(screen.getByRole('button'))
 
@@ -64,7 +67,7 @@ describe('ShareButton', () => {
       const abort = Object.assign(new Error('cancelled'), { name: 'AbortError' })
       withShare(() => Promise.reject(abort))
       withClipboard(() => Promise.resolve())
-      render(<ShareButton title={TITLE} url={URL} />)
+      render(<ShareButton contentType="blog" title={TITLE} url={URL} />)
 
       fireEvent.click(screen.getByRole('button'))
 
@@ -77,7 +80,7 @@ describe('ShareButton', () => {
     it('falls back to the clipboard when the sheet errors for any other reason', async () => {
       withShare(() => Promise.reject(new Error('not allowed')))
       withClipboard(() => Promise.resolve())
-      render(<ShareButton title={TITLE} url={URL} />)
+      render(<ShareButton contentType="blog" title={TITLE} url={URL} />)
 
       fireEvent.click(screen.getByRole('button'))
 
@@ -93,7 +96,7 @@ describe('ShareButton', () => {
 
     it('copies the url and confirms', async () => {
       withClipboard(() => Promise.resolve())
-      render(<ShareButton title={TITLE} url={URL} />)
+      render(<ShareButton contentType="blog" title={TITLE} url={URL} />)
 
       fireEvent.click(screen.getByRole('button', { name: `Share ${TITLE}` }))
 
@@ -106,7 +109,7 @@ describe('ShareButton', () => {
       vi.useFakeTimers()
       try {
         withClipboard(() => Promise.resolve())
-        render(<ShareButton title={TITLE} url={URL} />)
+        render(<ShareButton contentType="blog" title={TITLE} url={URL} />)
 
         fireEvent.click(screen.getByRole('button'))
         await act(async () => {})
@@ -133,7 +136,7 @@ describe('ShareButton', () => {
         configurable: true,
         writable: true,
       })
-      render(<ShareButton title={TITLE} url={URL} />)
+      render(<ShareButton contentType="blog" title={TITLE} url={URL} />)
 
       fireEvent.click(screen.getByRole('button'))
 
@@ -150,7 +153,7 @@ describe('ShareButton', () => {
         configurable: true,
         writable: true,
       })
-      render(<ShareButton title={TITLE} url={URL} />)
+      render(<ShareButton contentType="blog" title={TITLE} url={URL} />)
 
       fireEvent.click(screen.getByRole('button'))
 
@@ -167,7 +170,7 @@ describe('ShareButton', () => {
       const onAnchorClick = vi.fn((e: React.MouseEvent) => e.preventDefault())
       render(
         <a href="https://example.com/article" onClick={onAnchorClick}>
-          <ShareButton title={TITLE} url={URL} />
+          <ShareButton contentType="blog" title={TITLE} url={URL} />
         </a>,
       )
 
@@ -180,11 +183,47 @@ describe('ShareButton', () => {
 
   describe('presentation', () => {
     it('hides the label when asked, for rows that are crowded at mobile width', () => {
-      render(<ShareButton iconOnly title={TITLE} url={URL} />)
+      render(<ShareButton iconOnly contentType="blog" title={TITLE} url={URL} />)
 
       expect(screen.queryByText('Share')).not.toBeInTheDocument()
       // The accessible name still carries it, so the control is not unlabelled.
       expect(screen.getByRole('button')).toHaveAccessibleName(`Share ${TITLE}`)
+    })
+  })
+
+  describe('analytics', () => {
+    beforeEach(() => vi.mocked(track).mockClear())
+
+    it('records a native share with what was shared', async () => {
+      withShare(() => Promise.resolve())
+      render(<ShareButton contentType="article" title={TITLE} url={URL} />)
+
+      fireEvent.click(screen.getByRole('button'))
+
+      await waitFor(() =>
+        expect(track).toHaveBeenCalledWith('Share Clicked', { contentType: 'article', method: 'native' }))
+    })
+
+    it('records a copy', async () => {
+      Object.defineProperty(navigator, 'share', { value: undefined, configurable: true })
+      withClipboard(() => Promise.resolve())
+      render(<ShareButton contentType="event" title={TITLE} url={URL} />)
+
+      fireEvent.click(screen.getByRole('button'))
+
+      await waitFor(() =>
+        expect(track).toHaveBeenCalledWith('Share Clicked', { contentType: 'event', method: 'copy' }))
+    })
+
+    it('records nothing when the sheet is dismissed', async () => {
+      const abort = Object.assign(new Error('cancelled'), { name: 'AbortError' })
+      withShare(() => Promise.reject(abort))
+      render(<ShareButton contentType="blog" title={TITLE} url={URL} />)
+
+      fireEvent.click(screen.getByRole('button'))
+
+      await waitFor(() => expect(navigator.share).toHaveBeenCalled())
+      expect(track).not.toHaveBeenCalled()
     })
   })
 })
