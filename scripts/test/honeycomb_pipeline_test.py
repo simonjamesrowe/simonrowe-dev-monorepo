@@ -144,7 +144,7 @@ otelcol.exporter.otlphttp "langfuse" {{
             wait_for(send, "Alloy did not accept OTLP")
             wait_for(lambda: any(p.startswith("/langfuse/") for p, _ in received),
                      "Langfuse sibling branch received nothing")
-            active = enabled and bool(key) and expiry > time.time()
+            active = enabled and bool(key) and expiry > time.time() and percentage > 0
             if active:
                 wait_for(lambda: any(p.startswith("/honeycomb/") for p, _ in received),
                          "Honeycomb received nothing")
@@ -193,7 +193,9 @@ if __name__ == "__main__":
         for config in ("config.alloy", "config.local.alloy"):
             docker("run", "--rm", "-v", f"{ROOT / 'config/alloy'}:/etc/alloy:ro",
                    IMAGE, "validate", f"/etc/alloy/{config}")
-        for settings in ({}, {"percentage": 10}, {"enabled": False}, {"key": ""}, {"expiry": 1}):
+        for settings in ({}, {"percentage": 10}, {"percentage": 0},
+                         {"enabled": False, "percentage": 0},
+                         {"enabled": False}, {"key": ""}, {"expiry": 1}):
             exercise(server.server_port, **settings)
             print(f"PASS Honeycomb pipeline {settings or 'sanitization and parentage'}")
     finally:

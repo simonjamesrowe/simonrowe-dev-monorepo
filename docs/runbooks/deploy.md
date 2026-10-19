@@ -8,6 +8,12 @@ image, the GitHub App, the Claude credential and the `env_file` prohibition
 applies to the `deployer` too — it is the same image, run a second time with
 different module flags, the pattern `FACTORY_CVEFIX_ENABLED` already established.
 
+When Honeycomb is enabled or its pipeline changes, follow the
+[Honeycomb post-deployment browser verification](honeycomb-observability.md#post-deployment-browser-verification)
+after the runtime checks. The `prod-deploy` agent skill invokes `honeycomb-verify`
+using Playwright MCP. Record that result separately: Temporal's automated health
+checks do not open Honeycomb or prove fresh trace ingestion.
+
 ## Shape
 
 | Component | Role | Docker socket | Public ingress |

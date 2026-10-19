@@ -41,7 +41,8 @@ Production requires all three: `HONEYCOMB_ENABLED=true`, a nonempty
 `HONEYCOMB_API_KEY`, and a future `HONEYCOMB_EXPORT_UNTIL` in absolute Unix seconds.
 Zero/past expiry or a missing key drops every Honeycomb span. Restarts cannot
 extend the capture. Set `HONEYCOMB_ENVIRONMENT=production` and
-`HONEYCOMB_SAMPLE_PERCENTAGE=10` (supported range greater than 0 through 100).
+`HONEYCOMB_SAMPLE_PERCENTAGE=10` (supported range 0 through 100; zero drops all
+Honeycomb spans without interrupting Langfuse or Loki).
 For example, `python3 -c 'import time; print(int(time.time()) + 3600)'` prints a
 one-hour deadline. Use 100% only for a brief observed diagnostic capture.
 
@@ -70,10 +71,8 @@ traffic before budget accounting is implemented. Do not upgrade the plan.
    and the new module. Pull `grafana/alloy:v1.19.2` and recreate **Alloy only**
    after the reviewed change lands. Do not use `docker compose config` without
    `--quiet`, because its rendered output exposes env credentials.
-3. Generate a harmless request, then verify its service/route/time in Honeycomb
-   and confirm Langfuse still receives an AI turn. Inspect Alloy exporter errors
-   and compare accepted/sent/failed counters with Honeycomb Usage. The container's
-   `--version` healthcheck is not proof that export works.
+3. Complete the [post-deployment browser verification](#post-deployment-browser-verification)
+   below. The container's `--version` healthcheck is not proof that export works.
 4. Confirm export stops at the deadline. Export retries are bounded to 30 seconds;
    an already buffered/in-flight batch can arrive after expiry. Queues are in
    memory, at most 64 export requests, with batches up to 128 spans.
@@ -81,6 +80,35 @@ traffic before budget accounting is implemented. Do not upgrade the plan.
 Rollback: set `HONEYCOMB_ENABLED=false` and recreate Alloy to apply env changes.
 For a collector regression, restore the previous validated image/config together.
 No data migration or application redeployment is required for the export switch.
+
+## Post-deployment browser verification
+
+Run the agent-setup
+[`honeycomb-verify` skill](https://github.com/simonjamesrowe/agent-setup/blob/main/components/skills/honeycomb-verify/SKILL.md)
+through **Playwright MCP** after the deployed checkout and running release have
+been verified. `prod-deploy` invokes this check when Honeycomb is enabled or its
+pipeline changes. This is an agent-driven browser check, separate from Temporal's
+automated deployment health checks; a green deploy workflow does not imply it ran.
+
+The skill sends a harmless public API request with a unique W3C trace ID, finds
+that exact fresh trace in the correct Honeycomb team/environment, and inspects
+service, route template, method/status, environment, sampling weight and allowed
+fields. Pipeline changes also require a fresh harmless chat turn: check an actual
+parent/child pair in Honeycomb and the same turn in production Langfuse. The
+synthetic local `test` trace used during setup is not production evidence.
+
+Use a brief observed 100% capture within the authorized rollout when deterministic
+evidence is needed; restore the prior sampling configuration afterwards, including
+on failure, and never extend the absolute deadline accidentally. At the normal
+10% rate, bounded probes can all be sampled out. Report that as **INCONCLUSIVE**,
+not success; do not repeatedly call the model or silently raise sampling.
+
+Save a sanitized screenshot, trace URL/ID, UTC time, deployed SHA, capture
+settings/usage and each subcheck's result under `.context/`. Overall **PASS** needs
+fresh matching evidence for every required check. Observed export/privacy/field
+failures are **FAIL**; missing evidence or access is **INCONCLUSIVE**; intentionally
+disabled/expired capture is **NOT RUN**, never a successful ingest check. This
+backend pilot does not verify browser, Kafka, STOMP or factory instrumentation.
 
 ## Agent access
 

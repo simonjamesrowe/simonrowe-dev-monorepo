@@ -64,7 +64,9 @@ declare "pipeline" {
         `set(trace_state, "")`,
         // This is an independent fixed probability after any SDK sampling.
         // Do not claim totals are corrected for upstream drops.
-        string.format("set(attributes[\"SampleRate\"], %v)", 100 / argument.sample_percentage.value),
+        // Calculate per span: 0% drops everything without dividing by zero while
+        // Alloy builds the shared graph (including Langfuse and Loki).
+        string.format("set(attributes[\"SampleRate\"], 100.0 / %v) where %v > 0", argument.sample_percentage.value, argument.sample_percentage.value),
         `set(attributes["app.module"], "site") where attributes["http.route"] != nil`,
         `set(attributes["app.module"], "coparent") where IsMatch(attributes["http.route"], "^/api/coparent(/|$)")`,
         `set(attributes["app.module"], "school") where IsMatch(attributes["http.route"], "^/api/school(/|$)")`,

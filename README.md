@@ -97,7 +97,6 @@ project in `frontend/`. Shared JVM dependency versions live in
 | [Temporal code reviewer](docs/temporal-code-reviewer.md) | Original design rationale and operational boundaries for code review |
 | [Model usage audit](docs/model-usage.md) | Every place this app calls a model, and where the model id is set |
 | [Honeycomb proposal](docs/honeycomb-observability-plan.md) | Current telemetry audit, span context, staged integration and ingest budget |
-- [Honeycomb Free pilot runbook](docs/runbooks/honeycomb-observability.md) — configuration, validation and rollback.
 | [`specs/`](specs/) | Per-feature specs, plans and research (spec-driven development) |
 | [`docs/superpowers/`](docs/superpowers/) | Design docs and implementation plans for individual changes |
 | [`designs/`](designs/) | Visual design system, colour and type tokens, page explorations |
@@ -116,6 +115,7 @@ project in `frontend/`. Shared JVM dependency versions live in
 | [Dependency-Track](docs/runbooks/dependency-track.md) | Vulnerability findings and SBOM ingestion |
 | [Static analysis](docs/runbooks/static-analysis.md) | SonarQube Cloud, coverage reports, quality gate |
 | [Langfuse observability](docs/runbooks/langfuse-observability.md) | LLM traces are missing or shallow |
+| [Honeycomb Free pilot](docs/runbooks/honeycomb-observability.md) | Configure capture, verify deployed traces, or roll back |
 | [Article summaries](docs/runbooks/article-summaries.md) | On-demand summary generation |
 | [CoParent cutover](docs/runbooks/coparent-cutover.md) | Rehearsing, enabling, rolling back, or retiring the legacy CoParent runtime |
 
