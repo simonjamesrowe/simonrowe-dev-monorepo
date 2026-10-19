@@ -12,6 +12,7 @@ import com.simonrowe.factory.feedback.config.FeedbackTaskQueues;
 import com.simonrowe.factory.feedback.domain.DistillationOutcome;
 import com.simonrowe.factory.feedback.domain.DistillationStatus;
 import com.simonrowe.factory.feedback.domain.FeedbackRequest;
+import com.simonrowe.factory.feedback.domain.GuidancePaths;
 import com.simonrowe.factory.feedback.domain.Lesson;
 import com.simonrowe.factory.feedback.domain.LessonScope;
 import com.simonrowe.factory.feedback.domain.ReviewConversation;
@@ -19,6 +20,7 @@ import com.simonrowe.factory.feedback.github.ConversationGateway;
 import com.simonrowe.factory.feedback.github.FeedbackPrGateway;
 import com.simonrowe.factory.feedback.persistence.LearningRecord;
 import com.simonrowe.factory.feedback.persistence.LearningRepository;
+import com.simonrowe.factory.git.PullRequestUrl;
 import com.simonrowe.factory.git.RepositoryWorkspace;
 import com.simonrowe.factory.git.RepositoryWorkspaceFactory;
 import io.temporal.activity.Activity;
@@ -26,6 +28,7 @@ import io.temporal.spring.boot.ActivityImpl;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -49,13 +52,6 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "factory.feedback.enabled", havingValue = "true")
 @ActivityImpl(taskQueues = FeedbackTaskQueues.REVIEW_FEEDBACK)
 public class FeedbackActivitiesImpl implements FeedbackActivities {
-
-  private static final List<String> AGENT_SETUP_ALLOWED =
-      List.of(
-          "components/instructions/global.md",
-          "components/instructions/monorepo-additions.md",
-          "components/skills/**");
-  private static final List<String> SOURCE_REPO_ALLOWED = List.of("CLAUDE.md");
 
   private final ConversationGateway conversationGateway;
   private final HarvestEngine harvestEngine;
@@ -215,6 +211,22 @@ public class FeedbackActivitiesImpl implements FeedbackActivities {
             existing.linearIssueIdentifier(), existing.linearIssueUrl()));
   }
 
+  @Override
+  public List<String> unmergedPullRequests(final List<String> pullRequestUrls) {
+    List<String> unmerged = new ArrayList<>();
+    for (String url : pullRequestUrls) {
+      Optional<PullRequestUrl> pullRequest = PullRequestUrl.parse(url);
+      if (pullRequest.isEmpty()
+          || !prGateway.merged(
+              pullRequest.get(),
+              credentials.installationId(
+                  pullRequest.get().owner(), pullRequest.get().repository()))) {
+        unmerged.add(url);
+      }
+    }
+    return unmerged;
+  }
+
   /** Package-private for testing: repos/paths to distill guidance into for this PR's lessons. */
   static List<Target> resolveTargets(
       final FeedbackRequest request, final List<Lesson> lessons, final String agentSetupRepo) {
@@ -224,7 +236,7 @@ public class FeedbackActivitiesImpl implements FeedbackActivities {
     // the monorepo also land in monorepo-additions.md (canonical text lives in agent-setup).
     targets.add(
         new Target(
-            agentSetup[0], agentSetup[1], AGENT_SETUP_ALLOWED,
+            agentSetup[0], agentSetup[1], GuidancePaths.AGENT_SETUP,
             "the org-wide agent guidance package", lessons));
     boolean repoSpecific =
         lessons.stream().anyMatch(lesson -> lesson.scope() == LessonScope.REPO_SPECIFIC);
@@ -233,7 +245,7 @@ public class FeedbackActivitiesImpl implements FeedbackActivities {
     if (repoSpecific && !sourceIsAgentSetup) {
       targets.add(
           new Target(
-              request.owner(), request.repository(), SOURCE_REPO_ALLOWED,
+              request.owner(), request.repository(), GuidancePaths.SOURCE_REPOSITORY,
               "the source repository's CLAUDE.md agent instructions",
               lessons.stream()
                   .filter(lesson -> lesson.scope() == LessonScope.REPO_SPECIFIC)

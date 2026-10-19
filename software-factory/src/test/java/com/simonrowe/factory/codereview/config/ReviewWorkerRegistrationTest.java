@@ -7,6 +7,7 @@ import com.simonrowe.factory.codereview.agent.ReviewEngine;
 import com.simonrowe.factory.codereview.github.AutoMergeGateway;
 import com.simonrowe.factory.codereview.github.CheckRunGateway;
 import com.simonrowe.factory.codereview.github.GitHubGateway;
+import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.codereview.workflow.ReviewActivitiesImpl;
 import io.temporal.spring.boot.ActivityImpl;
 import org.junit.jupiter.api.Test;
@@ -96,6 +97,11 @@ class ReviewWorkerRegistrationTest {
     @Bean
     GitHubGateway gitHubGateway() {
       return mock(GitHubGateway.class);
+    }
+
+    @Bean
+    FeedbackProperties feedbackProperties() {
+      return mock(FeedbackProperties.class);
     }
 
     @Bean

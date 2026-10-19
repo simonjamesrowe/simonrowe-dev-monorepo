@@ -4,8 +4,10 @@ import com.simonrowe.factory.linear.domain.AbsenceSweep;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.domain.SweepReport;
+import com.simonrowe.factory.linear.domain.LinkedIssue;
 import io.temporal.activity.ActivityInterface;
 import io.temporal.activity.ActivityMethod;
+import java.util.List;
 
 /**
  * The sink's activities.
@@ -44,4 +46,34 @@ public interface LinearActivities {
   /** Attaches a related URL, such as a guidance pull request, exactly once. */
   @ActivityMethod
   void attachUrl(String issueId, String url, String title);
+
+  /**
+   * Every issue a URL is attached to, with each one's attachments.
+   *
+   * @param url the attached URL
+   * @return the issues; empty when none
+   */
+  @ActivityMethod
+  List<LinkedIssue> issuesLinkedTo(String url);
+
+  /**
+   * Comments on an issue. Honours {@code factory.linear.dry-run}.
+   *
+   * @param issueId the Linear issue UUID
+   * @param body the comment, in Markdown
+   */
+  @ActivityMethod
+  void commentOn(String issueId, String body);
+
+  /**
+   * Comments on an issue and moves it to the team's completed state. Honours {@code
+   * factory.linear.dry-run}.
+   *
+   * @param issueId the Linear issue UUID
+   * @param body the comment explaining why it is done, in Markdown
+   * @return true when it was moved; false when the team has no completed state or this is a
+   *     dry run
+   */
+  @ActivityMethod
+  boolean complete(String issueId, String body);
 }

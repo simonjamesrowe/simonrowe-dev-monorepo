@@ -33,4 +33,14 @@ public interface FeedbackActivities {
 
   @ActivityMethod
   void recordDistillation(FeedbackRequest request, DistillationOutcome outcome);
+
+  /**
+   * Which of these pull requests have not merged.
+   *
+   * @param pullRequestUrls GitHub pull request web addresses
+   * @return the ones that are open or were closed without merging, in the order given. A URL that
+   *     is not a GitHub pull request is reported as unmerged, so it can only hold a ticket open
+   */
+  @ActivityMethod
+  List<String> unmergedPullRequests(List<String> pullRequestUrls);
 }

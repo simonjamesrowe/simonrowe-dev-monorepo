@@ -275,6 +275,33 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- feedback-guidance-auto-merge: **Guidance pull requests from the feedback loop merge themselves,
+  and their Linear ticket closes when the last one does.** All ~23 before this were merged by hand
+  unchanged, and their tickets sat in Triage afterwards. Load-bearing bits:
+  - **The factory trusts its own App by identity.** `/collaborators/{login}/permission` answers
+    `none` for an App's bot user (checked against `simonrowe-software-factory[bot]`), so the trust
+    rule could never pass for the factory's own pull requests. `AutoMergeState.authorIsThisApp`
+    is true when the author is a `Bot` whose login is `<slug>[bot]`, the slug read from `GET /app`
+    (`GitHubCredentials.appBotLogin`, cached once found, never configured). A failed lookup is not
+    cached and trusts no bot. Forks are still refused first.
+  - **`agent-feedback` changes the path rule rather than refusing.** An App-opened guidance pull
+    request is classified against `GuidancePaths`, the same list the distiller validates before it
+    pushes (one list, so the two checks cannot drift), instead of `MergeDisposition`. Without
+    that, `agent-setup`'s `components/instructions/global.md` is an unrecognised path (manual).
+    A person adding the label gets "not opened by the factory". Glob matching moved to
+    `git.PathGlobs` (`FileSystem` globs, where `*` does not cross `/`).
+  - **`GuidanceClosedWorkflow` closes the ticket**, started from `pull_request closed` on an
+    `agent-feedback` pull request (still never a harvest: that label is the loop guard). The
+    ticket's own Linear attachments are the list of guidance pull requests it waits on, so
+    detaching one you will not merge lets the ticket close when the rest do. `agent-setup` pull
+    requests are followed up even when `FACTORY_FEEDBACK_REPOS` omits it. Honours
+    `FACTORY_LINEAR_DRY_RUN`.
+  - **Operator action, `agent-setup`:** it has no ruleset and auto-merge is off. Arming on a
+    repository with no required checks merges before the review completes, so add a `main`
+    ruleset requiring `Code Review` and `validate`, then switch **Allow auto-merge** on. Until
+    then arming there fails harmlessly as `ARM_FAILED`.
+  See `docs/runbooks/pr-governance.md` (rule 4 and rule 8) and `docs/runbooks/software-factory.md`
+  ("Guidance pull requests merge themselves").
 - reading-list: **`/reading` is a CMS-managed list of recommended books** (`com.simonrowe.books`,
   collection `books`, `V062CreateBooks`), under Insights in the header, edited at `/admin/books`.
   Each card shows the cover, authors and a summary with a buy link; the drawer (`?book=<slug>`)
@@ -1103,8 +1130,9 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     `author_association`.** It is computed for the viewer, and an App token cannot see a private
     organisation membership, so the first live pull request (#194) was refused with the repository
     owner reading as `CONTRIBUTOR`. `simonrowe`'s membership of `simonjamesrowe` is private, which
-    is why it looks correct (`MEMBER`) through a personal token and wrong through the App. `agent-feedback` guidance pull requests are excluded (they touch root
-    `*.md`, which the path rules alone would call auto-merge), and `no-auto-merge` is the opt-out.
+    is why it looks correct (`MEMBER`) through a personal token and wrong through the App.
+    `no-auto-merge` is the opt-out. (`agent-feedback` guidance pull requests were excluded here
+    until `feedback-guidance-auto-merge`, below, which classifies them by the distill allowlist.)
   - **The classifier exists twice, held together by one fixture.**
     `codereview/domain/MergeDisposition.java` is a port of `scripts/classify-change.sh`, and both
     test suites read `scripts/test/fixtures/merge-disposition-cases.tsv`. Its glob copies bash

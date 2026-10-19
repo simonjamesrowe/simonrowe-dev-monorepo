@@ -17,6 +17,7 @@ import com.simonrowe.factory.linear.domain.FilingDecision;
 import com.simonrowe.factory.linear.domain.Fingerprint;
 import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.domain.IssueStateType;
+import com.simonrowe.factory.linear.domain.LinkedIssue;
 import com.simonrowe.factory.linear.domain.SweepReport;
 import com.simonrowe.factory.linear.domain.TrackedIssue;
 import com.simonrowe.factory.linear.linear.LinearGateway;
@@ -256,6 +257,21 @@ class LogWatchSweepPastTheCapTest {
     @Override
     public void attachUrl(final String issueId, final String url, final String title) {
       // Not under test.
+    }
+
+    @Override
+    public List<LinkedIssue> issuesLinkedTo(final String url) {
+      throw new UnsupportedOperationException("not under test");
+    }
+
+    @Override
+    public void commentOn(final String issueId, final String body) {
+      throw new UnsupportedOperationException("not under test");
+    }
+
+    @Override
+    public boolean complete(final String issueId, final String body) {
+      throw new UnsupportedOperationException("not under test");
     }
   }
 }

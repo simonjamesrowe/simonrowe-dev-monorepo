@@ -844,6 +844,26 @@ failing with the CLI's `api_error_status`.
 
 On PR close, `review-feedback-{owner}-{repo}-{pr}` workflow on the `review-feedback` task queue harvests the conversation (Haiku), writes `software_factory.review_learnings` in Mongo, and — when lessons exist — opens `agent-feedback`-labeled guidance PRs (Sonnet) against agent-setup and/or the source repo. PRs labeled `agent-feedback` are never harvested (loop guard). Master switch `FACTORY_FEEDBACK_ENABLED`.
 
+### Guidance pull requests merge themselves, and close their ticket
+
+The reviewer arms auto-merge on a guidance pull request when every path is in the distiller's
+allowlist (see `pr-governance.md`, rule 8). When one closes, the webhook starts
+`guidance-closed-{owner}-{repo}-{pr}` (`GuidanceClosedWorkflow`, on `review-feedback`) instead of a
+harvest:
+
+- It finds the ticket by the pull request URL the feedback workflow attached to it
+  (`attachmentsForURL`), and reads that ticket's other attachments to see which guidance pull
+  requests it is waiting on. **The ticket's attachments are the list**, not Mongo: detach a
+  guidance pull request you have decided not to merge, and the ticket closes when the rest do.
+- Merged, and every other attached pull request merged too: comment and move to Done.
+- Merged, others still open: comment naming them, leave it open.
+- Closed without merging: comment, leave it open.
+- A ticket already completed or cancelled is left alone.
+
+`agent-setup` guidance pull requests are followed up even when `FACTORY_FEEDBACK_REPOS` omits
+`agent-setup`, because that allowlist names *source* repositories. The workflow honours
+`FACTORY_LINEAR_DRY_RUN`.
+
 ### One-time GitHub App changes
 
 The existing `simonrowe-code-reviewer` GitHub App must be updated to permit the feedback loop to open guidance PRs:

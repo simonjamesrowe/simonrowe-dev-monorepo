@@ -1,9 +1,11 @@
 package com.simonrowe.factory.linear.workflow;
 
+import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.AbsenceSweep;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.domain.LinkedIssue;
 import com.simonrowe.factory.linear.domain.SweepReport;
 import com.simonrowe.factory.linear.linear.LinearApiException;
 import com.simonrowe.factory.linear.linear.LinearGateway;
@@ -11,6 +13,10 @@ import com.simonrowe.factory.linear.service.IssueFiler;
 import com.simonrowe.factory.linear.service.IssueResolver;
 import io.temporal.failure.ApplicationFailure;
 import io.temporal.spring.boot.ActivityImpl;
+import java.util.List;
+import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -29,22 +35,30 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "factory.linear.enabled", havingValue = "true")
 public class LinearActivitiesImpl implements LinearActivities {
 
+  private static final Logger LOG = LoggerFactory.getLogger(LinearActivitiesImpl.class);
+
   private final IssueFiler filer;
   private final IssueResolver resolver;
   private final LinearGateway gateway;
+  private final LinearProperties properties;
 
   /**
    * Creates the activity implementation.
    *
    * @param filer the filing orchestration this activity is a thin shell over
    * @param resolver the absence-sweep orchestration
-   * @param gateway the Linear API, used directly by {@link #attachUrl}
+   * @param gateway the Linear API, used directly by {@link #attachUrl} and the ticket methods
+   * @param properties the bound {@code factory.linear} configuration, for its dry-run flag
    */
   public LinearActivitiesImpl(
-      final IssueFiler filer, final IssueResolver resolver, final LinearGateway gateway) {
+      final IssueFiler filer,
+      final IssueResolver resolver,
+      final LinearGateway gateway,
+      final LinearProperties properties) {
     this.filer = filer;
     this.resolver = resolver;
     this.gateway = gateway;
+    this.properties = properties;
   }
 
   @Override
@@ -90,6 +104,61 @@ public class LinearActivitiesImpl implements LinearActivities {
       }
       throw ApplicationFailure.newNonRetryableFailureWithCause(
           exception.getMessage(), "LINEAR_API_ERROR", exception, issueId, url);
+    }
+  }
+
+  @Override
+  public List<LinkedIssue> issuesLinkedTo(final String url) {
+    return call(() -> gateway.linkedIssues(url), url);
+  }
+
+  @Override
+  public void commentOn(final String issueId, final String body) {
+    if (properties.dryRun()) {
+      LOG.info("Linear dry run: would comment on {}", issueId);
+      return;
+    }
+    call(
+        () -> {
+          gateway.addComment(issueId, body);
+          return null;
+        },
+        issueId);
+  }
+
+  @Override
+  public boolean complete(final String issueId, final String body) {
+    return call(
+        () -> {
+          String completedStateId = gateway.teamContext().completedStateId();
+          if (completedStateId == null) {
+            LOG.warn("Linear team has no completed state; leaving {} open", issueId);
+            return false;
+          }
+          if (properties.dryRun()) {
+            LOG.info("Linear dry run: would complete {}", issueId);
+            return false;
+          }
+          gateway.addComment(issueId, body);
+          gateway.updateIssue(issueId, null, completedStateId);
+          return true;
+        },
+        issueId);
+  }
+
+  /**
+   * Runs a gateway call with the sink's retry translation: a retryable fault escapes for Temporal
+   * to back off, anything else fails the activity for good.
+   */
+  private <T> T call(final Supplier<T> action, final String subject) {
+    try {
+      return action.get();
+    } catch (LinearApiException exception) {
+      if (exception.retryable()) {
+        throw exception;
+      }
+      throw ApplicationFailure.newNonRetryableFailureWithCause(
+          exception.getMessage(), "LINEAR_API_ERROR", exception, subject);
     }
   }
 }

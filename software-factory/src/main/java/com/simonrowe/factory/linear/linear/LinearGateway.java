@@ -6,6 +6,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.linear.domain.IssueStateType;
+import com.simonrowe.factory.linear.domain.LinkedIssue;
 import com.simonrowe.factory.linear.domain.TrackedIssue;
 import java.io.IOException;
 import java.net.URI;
@@ -15,6 +16,7 @@ import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -44,6 +46,12 @@ public class LinearGateway {
       """
       query($url:String!){attachmentsForURL(url:$url){nodes{issue{id identifier url \
       createdAt state{type}}}}}\
+      """;
+
+  private static final String LINKED_ISSUES_QUERY =
+      """
+      query($url:String!){attachmentsForURL(url:$url){nodes{issue{id identifier url \
+      state{type} attachments{nodes{url}}}}}}\
       """;
 
   private static final String CREATE_ISSUE =
@@ -186,6 +194,46 @@ public class LinearGateway {
               Instant.parse(issue.path("createdAt").asText("1970-01-01T00:00:00.000Z"))));
     }
     return List.copyOf(issues);
+  }
+
+  /**
+   * Every issue a URL is attached to, each with all of its own attachment URLs.
+   *
+   * <p>One issue can appear twice when the same URL was attached to it twice; it is reported once.
+   *
+   * @param url the attached URL, such as a guidance pull request
+   * @return the issues, in the order Linear returned them; empty when none
+   * @throws LinearApiException on any API fault
+   */
+  public List<LinkedIssue> linkedIssues(final String url) {
+    JsonNode nodes =
+        execute(LINKED_ISSUES_QUERY, Map.of("url", url))
+            .path("attachmentsForURL")
+            .path(FIELD_NODES);
+    Map<String, LinkedIssue> issues = new LinkedHashMap<>();
+    for (JsonNode node : nodes) {
+      JsonNode issue = node.path("issue");
+      String id = issue.path("id").asText("");
+      if (id.isEmpty() || issues.containsKey(id)) {
+        continue;
+      }
+      List<String> attachmentUrls = new ArrayList<>();
+      for (JsonNode attachment : issue.path("attachments").path(FIELD_NODES)) {
+        String attached = attachment.path("url").asText("");
+        if (!attached.isEmpty()) {
+          attachmentUrls.add(attached);
+        }
+      }
+      issues.put(
+          id,
+          new LinkedIssue(
+              id,
+              issue.path("identifier").asText(),
+              issue.path("url").asText(),
+              IssueStateType.from(issue.path("state").path("type").asText(null)),
+              attachmentUrls));
+    }
+    return List.copyOf(issues.values());
   }
 
   /**

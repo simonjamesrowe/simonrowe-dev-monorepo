@@ -21,6 +21,7 @@ import com.simonrowe.factory.feedback.api.FeedbackAccepted;
 import com.simonrowe.factory.feedback.api.FeedbackWorkflowService;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.feedback.domain.FeedbackRequest;
+import com.simonrowe.factory.feedback.domain.GuidanceClosedRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
@@ -151,6 +152,11 @@ class GitHubWebhookControllerTest {
   }
 
   private static String closedPayload(final String... labels) {
+    return closedPayload("example", "project", true, labels);
+  }
+
+  private static String closedPayload(
+      final String owner, final String repository, final boolean merged, final String... labels) {
     String labelJson =
         Arrays.stream(labels)
             .map("{\"name\": \"%s\"}"::formatted)
@@ -160,16 +166,17 @@ class GitHubWebhookControllerTest {
           "action": "closed",
           "pull_request": {
             "number": 42,
+            "html_url": "https://github.com/%s/%s/pull/42",
             "draft": false,
-            "merged": true,
+            "merged": %s,
             "labels": [%s],
             "head": {"sha": "0123456789abcdef0123456789abcdef01234567"}
           },
-          "repository": {"name": "project", "owner": {"login": "example"}},
+          "repository": {"name": "%s", "owner": {"login": "%s"}},
           "installation": {"id": 999}
         }
         """
-        .formatted(labelJson);
+        .formatted(owner, repository, merged, labelJson, repository, owner);
   }
 
   private static String workflowRunPayload(
@@ -357,14 +364,75 @@ class GitHubWebhookControllerTest {
   }
 
   @Test
-  void agentFeedbackLabelledPullRequestIsNeverHarvested() throws Exception {
+  void agentFeedbackLabelledPullRequestIsNeverHarvestedButClosesItsTicket() throws Exception {
+    when(feedbackWorkflowService.startGuidanceClosed(any()))
+        .thenReturn(new FeedbackAccepted("guidance-closed-example-project-42", true));
+    String payload = closedPayload("agent-feedback");
+
+    deliver(payload, sign(payload), "pull_request").andExpect(status().isAccepted());
+
+    verify(feedbackWorkflowService, never()).start(any());
+    ArgumentCaptor<GuidanceClosedRequest> captor =
+        ArgumentCaptor.forClass(GuidanceClosedRequest.class);
+    verify(feedbackWorkflowService).startGuidanceClosed(captor.capture());
+    assertThat(captor.getValue())
+        .isEqualTo(
+            new GuidanceClosedRequest(
+                "example", "project", 42, "https://github.com/example/project/pull/42", true));
+  }
+
+  @Test
+  void guidanceClosedUnmergedIsReportedAsUnmerged() throws Exception {
+    when(feedbackWorkflowService.startGuidanceClosed(any()))
+        .thenReturn(new FeedbackAccepted("guidance-closed-example-project-42", true));
+    String payload = closedPayload("example", "project", false, "agent-feedback");
+
+    deliver(payload, sign(payload), "pull_request").andExpect(status().isAccepted());
+
+    ArgumentCaptor<GuidanceClosedRequest> captor =
+        ArgumentCaptor.forClass(GuidanceClosedRequest.class);
+    verify(feedbackWorkflowService).startGuidanceClosed(captor.capture());
+    assertThat(captor.getValue().merged()).isFalse();
+  }
+
+  /**
+   * The feedback allowlist names source repositories. Guidance also lands in agent-setup, which
+   * is not one, and its pull requests must still close their tickets.
+   */
+  @Test
+  void agentSetupGuidanceIsFollowedUpEvenWhenTheRepoAllowlistOmitsIt() throws Exception {
+    mockMvc = buildMockMvc(feedbackProperties(true, List.of("example/project")));
+    when(feedbackWorkflowService.startGuidanceClosed(any()))
+        .thenReturn(new FeedbackAccepted("guidance-closed-simonjamesrowe-agent-setup-42", true));
+    String payload = closedPayload("simonjamesrowe", "agent-setup", true, "agent-feedback");
+
+    deliver(payload, sign(payload), "pull_request").andExpect(status().isAccepted());
+
+    verify(feedbackWorkflowService).startGuidanceClosed(any());
+  }
+
+  @Test
+  void guidanceFromRepositoryOutsideBothAllowlistsIsIgnored() throws Exception {
+    mockMvc = buildMockMvc(feedbackProperties(true, List.of("example/project")));
+    String payload = closedPayload("someone", "else", true, "agent-feedback");
+
+    deliver(payload, sign(payload), "pull_request")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("ignored"));
+
+    verify(feedbackWorkflowService, never()).startGuidanceClosed(any());
+  }
+
+  @Test
+  void guidanceIsNotFollowedUpWhileFeedbackIsDisabled() throws Exception {
+    mockMvc = buildMockMvc(feedbackProperties(false));
     String payload = closedPayload("agent-feedback");
 
     deliver(payload, sign(payload), "pull_request")
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.status").value("ignored"));
 
-    verify(feedbackWorkflowService, never()).start(any());
+    verify(feedbackWorkflowService, never()).startGuidanceClosed(any());
   }
 
   @Test

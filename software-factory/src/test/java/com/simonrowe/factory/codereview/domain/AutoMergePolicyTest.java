@@ -95,9 +95,129 @@ class AutoMergePolicyTest {
         .isEqualTo("labelled `no-auto-merge`");
   }
 
+  // --- pull requests the factory opened itself -------------------------------------------------
+
+  private static final List<String> AGENT_SETUP_GUIDANCE =
+      List.of("components/instructions/global.md", "components/skills/**");
+
+  /** The permission API answers `none` for an App's bot, so trust has to come from identity. */
   @Test
-  void feedbackGuidanceIsLeftToHuman() {
-    assertThat(decide(withLabels("agent-feedback"), CLEAN).reason()).contains("agent-feedback");
+  void theFactorysOwnPullRequestIsTrustedDespiteHavingNoPermission() {
+    assertThat(decide(fromThisApp(), CLEAN)).isEqualTo(MergeDecision.eligible());
+  }
+
+  @Test
+  void otherBotIsStillNotTrusted() {
+    AutoMergeState otherBot =
+        new AutoMergeState(
+            "PR_node", HEAD, false, false, "none", List.of(), 2, false, false, false);
+    assertThat(decide(otherBot, CLEAN).outcome()).isEqualTo(MergeDecision.Outcome.INELIGIBLE);
+  }
+
+  @Test
+  void factoryPullRequestFromForkIsStillRefused() {
+    AutoMergeState fork =
+        new AutoMergeState("PR_node", HEAD, false, true, "none", List.of(), 2, false, false, true);
+    assertThat(decide(fork, CLEAN).reason()).isEqualTo("the change comes from a fork");
+  }
+
+  @Test
+  void guidanceInsideItsAllowlistIsArmed() {
+    MergeDecision decision =
+        guidance(fromThisApp("agent-feedback"), List.of(
+            "components/instructions/global.md", "components/skills/x/SKILL.md"));
+    assertThat(decision).isEqualTo(MergeDecision.eligible());
+  }
+
+  /**
+   * MergeDisposition would call this path manual (nested and unrecognised). The guidance rule is
+   * what lets an agent-setup guidance change merge at all.
+   */
+  @Test
+  void guidanceIsClassifiedByItsAllowlistNotByThePathRules() {
+    assertThat(
+            AutoMergePolicy.decide(
+                true, fromThisApp(), CLEAN, HEAD,
+                () -> new ChangedFiles(List.of("components/instructions/global.md"), true))
+                .outcome())
+        .isEqualTo(MergeDecision.Outcome.INELIGIBLE);
+    assertThat(
+            guidance(fromThisApp("agent-feedback"), List.of("components/instructions/global.md")))
+        .isEqualTo(MergeDecision.eligible());
+  }
+
+  @Test
+  void guidanceThatStrayedOutsideItsAllowlistNamesThePath() {
+    MergeDecision decision =
+        guidance(fromThisApp("agent-feedback"), List.of(
+            "components/instructions/global.md", "install.sh"));
+    assertThat(decision.reason()).isEqualTo("`install.sh` is outside the guidance allowlist");
+  }
+
+  /**
+   * Root markdown is auto-merge under the path rules. The guidance rule is narrower, and a
+   * guidance pull request is held to it even where the path rules would have passed it.
+   */
+  @Test
+  void guidanceIsHeldToItsAllowlistEvenWhereThePathRulesWouldPass() {
+    MergeDecision decision =
+        AutoMergePolicy.decide(
+            true, fromThisApp("agent-feedback"), CLEAN, HEAD,
+            () -> new ChangedFiles(List.of("CLAUDE.md", "README.md"), true),
+            List.of("CLAUDE.md"));
+    assertThat(decision.reason()).isEqualTo("`README.md` is outside the guidance allowlist");
+  }
+
+  @Test
+  void personCannotSwapThePathRulesByAddingTheGuidanceLabel() {
+    assertThat(decide(withLabels("agent-feedback"), CLEAN).reason())
+        .isEqualTo("labelled `agent-feedback` but not opened by the factory");
+  }
+
+  @Test
+  void guidanceWithNoAllowlistQualifiesNothing() {
+    assertThat(guidance(fromThisApp("agent-feedback"), List.of("CLAUDE.md"), List.of()).reason())
+        .isEqualTo("`CLAUDE.md` is outside the guidance allowlist");
+  }
+
+  @Test
+  void theOptOutLabelStillBeatsGuidance() {
+    assertThat(
+            guidance(fromThisApp("agent-feedback", "no-auto-merge"),
+                List.of("components/instructions/global.md")).reason())
+        .isEqualTo("labelled `no-auto-merge`");
+  }
+
+  @Test
+  void redReviewStillBeatsGuidance() {
+    ReviewReport changes = new ReviewReport("No.", Verdict.REQUEST_CHANGES, List.of());
+    MergeDecision decision =
+        AutoMergePolicy.decide(
+            true, fromThisApp("agent-feedback"), changes, HEAD,
+            () -> new ChangedFiles(List.of("components/instructions/global.md"), true),
+            AGENT_SETUP_GUIDANCE);
+    assertThat(decision.reason()).isEqualTo("the `Code Review` check is red");
+  }
+
+  @Test
+  void anEmptyGuidanceChangeIsNotArmed() {
+    assertThat(guidance(fromThisApp("agent-feedback"), List.of()).reason())
+        .isEqualTo("the change touches no files");
+  }
+
+  private static MergeDecision guidance(final AutoMergeState state, final List<String> paths) {
+    return guidance(state, paths, AGENT_SETUP_GUIDANCE);
+  }
+
+  private static MergeDecision guidance(
+      final AutoMergeState state, final List<String> paths, final List<String> allowlist) {
+    return AutoMergePolicy.decide(
+        true, state, CLEAN, HEAD, () -> new ChangedFiles(paths, true), allowlist);
+  }
+
+  private static AutoMergeState fromThisApp(final String... labels) {
+    return new AutoMergeState(
+        "PR_node", HEAD, false, false, "none", List.of(labels), 2, false, false, true);
   }
 
   @Test

@@ -7,15 +7,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.AbsenceSweep;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
 import com.simonrowe.factory.linear.domain.Fingerprint;
 import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.domain.LinkedIssue;
 import com.simonrowe.factory.linear.domain.SweepReport;
 import com.simonrowe.factory.linear.domain.SweptIssue;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
-import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.logwatch.config.LogWatchTaskQueues;
 import com.simonrowe.factory.logwatch.domain.LogSignature;
 import com.simonrowe.factory.logwatch.domain.LogWatchRequest;
@@ -131,6 +132,21 @@ class LogWatchWorkflowTest {
     @Override
     public void attachUrl(final String issueId, final String url, final String title) {
       delegate.attachUrl(issueId, url, title);
+    }
+
+    @Override
+    public List<LinkedIssue> issuesLinkedTo(final String url) {
+      return delegate.issuesLinkedTo(url);
+    }
+
+    @Override
+    public void commentOn(final String issueId, final String body) {
+      delegate.commentOn(issueId, body);
+    }
+
+    @Override
+    public boolean complete(final String issueId, final String body) {
+      return delegate.complete(issueId, body);
     }
   }
 

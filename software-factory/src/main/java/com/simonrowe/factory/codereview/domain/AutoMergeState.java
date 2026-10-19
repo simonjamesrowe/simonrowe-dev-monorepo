@@ -21,6 +21,9 @@ import java.util.List;
  * @param changedFiles GitHub's own count, which a file listing must match to count as complete
  * @param autoMergeArmed whether auto-merge is currently enabled
  * @param autoMergeArmedByBot whether it was enabled by a bot account rather than a person
+ * @param authorIsThisApp whether the pull request was opened by this factory's own GitHub App.
+ *     The permission API answers {@code none} for an App's bot user, so without this the factory
+ *     could never trust the guidance and ticket pull requests it opens itself
  */
 public record AutoMergeState(
     String nodeId,
@@ -31,9 +34,26 @@ public record AutoMergeState(
     List<String> labels,
     int changedFiles,
     boolean autoMergeArmed,
-    boolean autoMergeArmedByBot) {
+    boolean autoMergeArmedByBot,
+    boolean authorIsThisApp) {
 
   public AutoMergeState {
     labels = labels == null ? List.of() : List.copyOf(labels);
+  }
+
+  /** A pull request opened by anyone but this App: every case before the App opened any. */
+  public AutoMergeState(
+      final String nodeId,
+      final String headSha,
+      final boolean draft,
+      final boolean crossRepository,
+      final String authorPermission,
+      final List<String> labels,
+      final int changedFiles,
+      final boolean autoMergeArmed,
+      final boolean autoMergeArmedByBot) {
+    this(
+        nodeId, headSha, draft, crossRepository, authorPermission, labels, changedFiles,
+        autoMergeArmed, autoMergeArmedByBot, false);
   }
 }
