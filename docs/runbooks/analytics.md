@@ -48,9 +48,16 @@ the local default.
 3. **Replay masks every form field everywhere.** On top of that:
    - `data-amp-mask` hides text (the visitor's own chat messages, snippet notes, Meals notes);
    - `data-amp-block` hides an element entirely (the whole `/admin` area, the Meals MCP token);
-   - CoParent's root carries `data-amp-mask` and its policy is `conservative` with every image
-     blocked, so a CoParent replay shows layout and clicks only. The same attribute keeps clicked
-     text out of CoParent's autocaptured events.
+   - CoParent's root carries `data-amp-mask` and its policy blocks every image, so a CoParent
+     replay shows layout and clicks only. The same attribute keeps clicked text out of CoParent's
+     autocaptured events.
+
+   **The mask *level* in code is only a fallback.** The project's masking setting in Amplitude
+   (Settings → Session Replay & Heatmaps, currently **Medium**) overrides `defaultMaskLevel`, and
+   the plugin passes no per-URL levels through. Selectors and the `data-amp-*` attributes are
+   kept alongside whatever is set remotely, so anything that must stay hidden is hidden by an
+   attribute, never by the level. CoParent depends on rendering nothing outside its masked root:
+   a portal (a modal library, say) would put its text outside the mask.
 4. **Signed-in visitors are identified by their Auth0 subject only.** The owner is tagged
    `is_owner=true`, never excluded (Meals has no other user). Filter it out in charts.
 
@@ -110,8 +117,9 @@ curl -s https://www.simonrowe.dev/amp/cfg/config/0000000000000000000000000000000
   but a `413` on `/amp/sr/` in the nginx logs means a large first snapshot did not. The fix is
   `client_max_body_size 12m;` in those blocks, which needs nginx recreated on the host (the
   config is a single-file bind mount).
-- **Replay quota.** The free plan's replay allowance is organisation-wide. Lower the sample rate
-  in Amplitude's Session Replay settings (no deploy) if it runs short.
+- **Replay quota.** The free plan includes 10,000 replay sessions a month, organisation-wide
+  (usage is on Settings → Session Replay & Heatmaps). Lower the sample rate there (no deploy) if
+  it runs short.
 
 ## Adding an event
 
@@ -121,12 +129,14 @@ curl -s https://www.simonrowe.dev/amp/cfg/config/0000000000000000000000000000000
    guard is needed.
 3. In tests, mock the module: `vi.mock('…/analytics/analytics', () => ({ track: vi.fn() }))`.
 
-## Setting it up (once)
+## Setup (done 2026-10-19)
 
-1. Sign up at **app.eu.amplitude.com** (the region is fixed at signup) and create the project.
-2. Add its API key as the `VITE_AMPLITUDE_API_KEY` repository secret. The next Publish bakes it in.
-3. Turn on Session Replay in the project and set the sample rate.
-4. Build the funnels; the starting set is listed in `specs/055-amplitude-analytics/plan.md`.
+- The organisation is on **app.eu.amplitude.com** (signed in with Google as simon.rowe@gmail.com),
+  with one project, `Default project`. The region is fixed at signup.
+- Its browser key is the `VITE_AMPLITUDE_API_KEY` repository secret; Publish bakes it into the
+  frontend image, so nothing is set on the Pi.
+- Session Replay capture is on for the project at 100%, masking Medium.
+- Still to do: build the funnels (the starting set is in `specs/055-amplitude-analytics/plan.md`).
 
 Google Analytics 4 (`react-ga4`, `VITE_GA_MEASUREMENT_ID`) was removed in the same change. It ran
 without consent.

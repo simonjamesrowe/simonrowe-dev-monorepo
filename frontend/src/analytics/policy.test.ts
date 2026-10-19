@@ -20,6 +20,22 @@ describe('replay policy', () => {
     expect(policy.blockSelector).toEqual(expect.arrayContaining(['img', 'iframe', 'canvas', 'video']))
   })
 
+  it('keeps every CoParent screen inside its masked root, because nothing else hides its text', () => {
+    // Amplitude's project setting overrides the mask level, so CoParent's text is hidden only by
+    // data-amp-mask on its root element. A portal renders outside that root, and its text would
+    // be visible in a replay.
+    const sources = import.meta.glob(['../coparent/**/*.{ts,tsx}', '!../coparent/**/*.test.{ts,tsx}'], {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }) as Record<string, string>
+    const files = Object.keys(sources)
+    expect(files.length).toBeGreaterThan(50)
+    const portalling = files.filter((file) => /createPortal|from 'react-modal'|@radix-ui|@headlessui/.test(sources[file]))
+    expect(portalling).toEqual([])
+    expect(sources['../coparent/main.tsx']).toMatch(/className="coparent-app" data-amp-mask/)
+  })
+
   it('passes each app its own policy and proxies replay through this origin', () => {
     const options = replayOptions('coparent', 'https://coparents.simonrowe.dev')
     expect(options.privacyConfig.defaultMaskLevel).toBe('conservative')

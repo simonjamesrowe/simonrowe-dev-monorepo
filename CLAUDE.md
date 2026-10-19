@@ -290,8 +290,10 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     the real SDK and fails if a query string reaches the wire: run it after any SDK upgrade.
     Analytics remote config is off too, so Amplitude's UI cannot switch on capture.
   - **Masking is markup:** `data-amp-mask` hides text, `data-amp-block` hides an element. The
-    `/admin` layout is blocked; CoParent's root is masked, its mask level is `conservative` and
-    every image is blocked.
+    `/admin` layout is blocked; CoParent's root is masked and every image is blocked. **The mask
+    level in code is only a fallback**: Amplitude's project setting overrides it, while selectors
+    and attributes survive. CoParent relies on rendering nothing outside its masked root (no
+    portals).
   - **Traffic goes through `/amp/e`, `/amp/sr/` and `/amp/cfg/` in `frontend/nginx.conf`** (ships
     in the image), to the EU hosts. `test-frontend-analytics-proxy.sh` ties them to the SDK's
     `PROXY_PATHS`. The outer proxy still has nginx's 1 MB body limit on the three non-www

@@ -10,6 +10,12 @@
  *
  * Mask levels are Amplitude's: `medium` masks every form field but leaves page text visible,
  * `conservative` masks all text as well.
+ *
+ * The level set here is only a fallback. The project's masking setting in Amplitude (Settings →
+ * Session Replay & Heatmaps) overrides `defaultMaskLevel` (remote wins in the replay SDK's
+ * joined config), and the plugin passes no per-URL levels through. Selectors are different: the
+ * SDK keeps ours alongside any set remotely. So anything that MUST stay hidden is hidden by a
+ * selector or attribute, never by the level alone.
  */
 export type AnalyticsApp = 'main' | 'term-time' | 'coparent' | 'meals'
 
@@ -30,8 +36,12 @@ export const REPLAY_POLICIES: Record<AnalyticsApp, ReplayPolicy> = {
   'term-time': { defaultMaskLevel: 'medium', maskSelector: MASKED, blockSelector: BLOCKED },
   // Family finances, receipts, bank statements and messages between parents. Every word is
   // masked and every image (receipts, avatars, statement previews) is blocked, so a CoParent
-  // replay shows layout and clicks and nothing that was on screen. The app's root also carries
-  // data-amp-mask, which is what keeps clicked text out of autocaptured events.
+  // replay shows layout and clicks and nothing that was on screen.
+  //
+  // What guarantees it is NOT the level below, which Amplitude's project setting overrides. It is
+  // `data-amp-mask` on the app's root (masking checks `closest('[data-amp-mask]')`, so it covers
+  // every element inside) plus these block selectors. CoParent renders nothing outside that root:
+  // no portals and no portal-based UI library. Adding one would put its text outside the mask.
   coparent: {
     defaultMaskLevel: 'conservative',
     maskSelector: MASKED,
