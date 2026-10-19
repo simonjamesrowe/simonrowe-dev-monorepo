@@ -52,7 +52,7 @@ export function FloatingAskPill() {
       <button
         aria-label="Ask Simon anything"
         className="ask-pill__button"
-        onClick={() => openChat()}
+        onClick={() => openChat(undefined, 'pill')}
         tabIndex={visible ? 0 : -1}
         type="button"
       >

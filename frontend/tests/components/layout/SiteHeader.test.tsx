@@ -151,7 +151,7 @@ describe('SiteHeader', () => {
     expect(ask).toHaveClass('top-nav__ask-ai')
     expect(ask).toHaveAccessibleName('Ask Simon anything')
     await user.click(ask)
-    expect(openChat).toHaveBeenCalledWith()
+    expect(openChat).toHaveBeenCalledWith(undefined, 'header')
   })
 
   it('keeps the search a visible field, focused by / and by Ctrl+K', () => {

@@ -87,7 +87,9 @@ export function AdminLayout() {
   const isActive = (path: string) => location.pathname.startsWith(path)
 
   return (
-    <div className="admin-layout">
+    // Blocked from session replay: the admin area is the owner's own, holds private drafts and
+    // notes, and would spend the free plan's replay quota on nobody's journey.
+    <div className="admin-layout" data-amp-block>
       <button
         className="admin-mobile-toggle"
         onClick={() => setSidebarOpen(true)}

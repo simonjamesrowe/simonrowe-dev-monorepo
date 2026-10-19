@@ -1,19 +1,12 @@
-import { useEffect } from 'react'
-
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { ProjectCard } from '../components/portfolio/ProjectCard'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { usePortfolio } from '../hooks/usePortfolio'
-import { trackPageView } from '../services/analytics'
 
 export function PortfolioPage() {
   const { projects, loading, error } = usePortfolio()
   usePageTitle('Portfolio')
-
-  useEffect(() => {
-    trackPageView('/portfolio')
-  }, [])
 
   return (
     <div className="portfolio-page">

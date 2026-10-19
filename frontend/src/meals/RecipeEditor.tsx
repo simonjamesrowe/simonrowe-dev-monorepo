@@ -3,12 +3,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Camera, Check, ChevronDown, Loader2, Minus, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
+import { track } from '../analytics/analytics'
 import { useMealsApi } from './data'
 import { shrinkImage } from './images'
 import { formatQty, nearNames, parseLine } from './logic'
 import { usePhoto } from './photos'
 import { RecipeImport } from './RecipeImport'
-import type { Category, IngredientLine, NewIngredient, Recipe, RecipeInput, Unit } from './types'
+import type { Category, IngredientLine, NewIngredient, Recipe, RecipeInput, RecipeSourceType, Unit } from './types'
 
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: 'breakfast', label: 'Breakfast' }, { key: 'main', label: 'Main' }, { key: 'snack', label: 'Snack' },
@@ -41,6 +42,11 @@ function toInput(r: Recipe): RecipeInput {
   }
 }
 
+type ImportedVia = 'link' | 'photo' | 'text'
+
+/** A book recipe arrives in a bundle, never through this editor, so it has no entry. */
+const IMPORTED_VIA: Partial<Record<RecipeSourceType, ImportedVia>> = { LINK: 'link', PHOTO: 'photo', TEXT: 'text' }
+
 function sourceNote(draft: RecipeInput): string | null {
   if (draft.sourceType === 'LINK' && draft.sourceUrl) {
     try {
@@ -67,6 +73,10 @@ export function RecipeEditor({ recipe, knownIngredients }: { recipe?: Recipe; kn
   const client = useQueryClient()
   const navigate = useNavigate()
   const [draft, setDraft] = useState<RecipeInput | null>(recipe ? toInput(recipe) : null)
+  // How a new recipe's draft was read, for analytics. Null for an edit or a recipe typed from
+  // blank, which is written rather than imported (its draft also says TEXT, so the draft alone
+  // cannot tell a paste from a blank form).
+  const [readVia, setReadVia] = useState<ImportedVia | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [upload, setUpload] = useState<Blob | null>(null)
@@ -113,6 +123,7 @@ export function RecipeEditor({ recipe, knownIngredients }: { recipe?: Recipe; kn
 
   function start(read: RecipeInput, photo: Blob | null) {
     setDraft(read)
+    setReadVia(IMPORTED_VIA[read.sourceType ?? 'TEXT'] ?? null)
     setUpload(photo)
     if (!photo && !read.photo && read.name.trim()) makePhoto(read)
   }
@@ -139,6 +150,7 @@ export function RecipeEditor({ recipe, knownIngredients }: { recipe?: Recipe; kn
           ?? { name, unit: lines.find((l) => l.name === name)?.unit ?? null, tier: 'tracked', aisle: 'Other' }),
       }
       const saved = recipe ? await api.updateRecipe(recipe.id, input) : await api.createRecipe(input)
+      if (!recipe && readVia) track('Recipe Imported', { via: readVia })
       await client.invalidateQueries({ queryKey: ['meals'] })
       navigate(`/recipes/${saved.id}`)
     } catch (e) {

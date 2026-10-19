@@ -112,6 +112,6 @@ describe('MobileNavSheet', () => {
 
     await user.click(screen.getByRole('button', { name: 'Ask Simon anything' }))
     expect(onClose).toHaveBeenCalled()
-    expect(openChat).toHaveBeenCalledWith()
+    expect(openChat).toHaveBeenCalledWith(undefined, 'mobile')
   })
 })

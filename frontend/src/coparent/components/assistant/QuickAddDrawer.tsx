@@ -9,6 +9,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { Drawer } from 'vaul';
 
+import { track } from '../../../analytics/analytics';
 import {
   useAnalyseAssistantInput,
   useAssistantBatch,
@@ -175,6 +176,10 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
     }
     try {
       const created = await analyse.mutateAsync({ familyId, text, image });
+      // Guarded so a reply without its action list can never turn a working analysis into the
+      // catch below (which keeps the parent on the capture step) for the sake of a count.
+      const itemCount = Array.isArray(created.actions) ? created.actions.length : 0;
+      track('Quick Add Used', { itemCount, withPhoto: image !== null });
       if (image) setBatchImages((current) => ({ ...current, [created.id]: image }));
       setBatchId(created.id);
       setText('');

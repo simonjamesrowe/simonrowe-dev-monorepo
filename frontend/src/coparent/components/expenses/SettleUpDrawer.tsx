@@ -1,6 +1,7 @@
 import { Check, Copy, Info, RotateCcw, Share2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { track } from '../../../analytics/analytics';
 import { useRecordSettlement } from '../../hooks/api';
 import type { Parent } from '../../lib/api/client';
 import { apiErrorMessage } from '../../lib/api/errorMessage';
@@ -115,6 +116,7 @@ export function SettleUpDrawer({
       const failed = results.filter((result) => result.outcome === 'failed').length;
       const claimed = results.filter((result) => result.outcome === 'claimed').length;
       const settled = results.filter((result) => result.outcome === 'reimbursed' || result.outcome === 'confirmed').length;
+      if (results.length > failed) track('Settlement Recorded', { expenseCount: results.length - failed });
       showToast({
         variant: failed ? 'error' : 'success',
         title: failed ? `${failed} could not be settled` : 'Settled up',

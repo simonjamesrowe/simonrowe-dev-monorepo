@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { track } from '../analytics/analytics'
 import { useMealsApi, useMine } from './data'
 import { formatQty, TAGS } from './logic'
 import { Sheet, Stars } from './ui'
@@ -39,7 +40,12 @@ export function CookedSheet({ recipe, portions, onClose, onSaved }: {
 
   function save() {
     cooked.mutate({ recipeId: recipe.id, portions, score, again, tags, notes: notes.trim(), deductions: inKitchen },
-      { onSuccess: onSaved })
+      {
+        onSuccess: () => {
+          track('Recipe Cooked')
+          onSaved()
+        },
+      })
   }
 
   return (

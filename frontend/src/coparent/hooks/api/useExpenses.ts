@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { track } from '../../../analytics/analytics';
 import { apiClient } from '../../lib/api/client';
 import type {
   Expense,
@@ -50,10 +51,12 @@ export function useSettlements(familyId: string | undefined) {
 /** Every expense change moves the list, the summary and possibly a settle-up, so all are refetched. */
 function useExpenseMutation<TVariables extends { familyId: string }, TResult>(
   mutationFn: (variables: TVariables) => Promise<TResult>,
+  onSuccess?: (data: TResult, variables: TVariables) => void,
 ) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
+    onSuccess: onSuccess ? (data, variables) => onSuccess(data, variables) : undefined,
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: expenseKeys.list(variables.familyId) });
       queryClient.invalidateQueries({ queryKey: expenseKeys.summary(variables.familyId) });
@@ -111,6 +114,12 @@ export function useExpenseTransition() {
           note: note ?? null,
         })
       ).data,
+    // Here rather than at each button, so the detail drawer, the dashboard and the list's bulk
+    // Agree (one call per row) all count the same way. The note is never sent.
+    (_expense, { transition }) => {
+      if (transition === 'agree') track('Expense Agreed', { count: 1 });
+      else if (transition === 'dispute') track('Expense Disputed');
+    },
   );
 }
 

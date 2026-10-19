@@ -1,5 +1,11 @@
-import { createContext, useCallback, useContext, useState } from 'react'
+import { createContext, useCallback, useContext, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+
+import { track } from '../analytics/analytics'
+import type { EventProperties } from '../analytics/events'
+
+/** Where the visitor opened chat from: hero pill, floating pill, header button, header search, phone menu. */
+export type ChatOpenSource = Exclude<EventProperties<'Chat Opened'>['source'], 'tour'>
 
 interface ChatContextValue {
   chatOpen: boolean
@@ -7,7 +13,7 @@ interface ChatContextValue {
   recaptchaVerified: boolean
   showRecaptcha: boolean
   tourChatAwaitingResponse: boolean
-  openChat: (query?: string) => void
+  openChat: (query?: string, source?: ChatOpenSource) => void
   closeChat: () => void
   handleRecaptchaVerified: () => void
   cancelRecaptcha: () => void
@@ -23,11 +29,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [recaptchaVerified, setRecaptchaVerified] = useState(false)
   const [showRecaptcha, setShowRecaptcha] = useState(false)
   const [tourChatAwaitingResponse, setTourChatAwaitingResponse] = useState(false)
+  // Held across the reCAPTCHA step, so the open is credited to where it started.
+  const openSource = useRef<ChatOpenSource>('header')
 
-  const openChat = useCallback((query?: string) => {
+  const openChat = useCallback((query?: string, source: ChatOpenSource = 'header') => {
     setChatQuery(query ?? null)
+    openSource.current = source
     if (recaptchaVerified) {
       setChatOpen(true)
+      track('Chat Opened', { source })
     } else {
       setShowRecaptcha(true)
     }
@@ -43,6 +53,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setRecaptchaVerified(true)
     setShowRecaptcha(false)
     setChatOpen(true)
+    track('Chat Opened', { source: openSource.current })
   }, [])
 
   const cancelRecaptcha = useCallback(() => {
@@ -58,6 +69,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setChatQuery(query ?? null)
     setChatOpen(true)
     setTourChatAwaitingResponse(true)
+    track('Chat Opened', { source: 'tour' })
   }, [])
 
   const completeTourChatResponse = useCallback(() => {

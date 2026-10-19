@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 
+import { track } from '../analytics/analytics'
 import { CookedSheet } from './CookedSheet'
 import { MINE, useDeleteRating, useKitchenHasFood, useMealsApi, useMine, useUpNext } from './data'
 import { averageScore, ratingsFor, scaledLine, sourceOf } from './logic'
@@ -41,6 +42,7 @@ export function RecipePage({ recipe, ratings, ingredients }: Props) {
   const source = sourceOf(recipe)
 
   useEffect(() => { window.scrollTo(0, 0) }, [recipe.id])
+  useEffect(() => { track('Recipe Viewed', { recipeId: recipe.id }) }, [recipe.id])
   useEffect(() => { if (queued) setPortions(queued.portions) }, [queued])
 
   function changePortions(next: number) {
@@ -145,7 +147,7 @@ export function RecipePage({ recipe, ratings, ingredients }: Props) {
                   {h.tags.map((t) => <span key={t} className="meals-tag">{t}</span>)}
                   <button type="button" className="meals-icon-button meals-icon-button--small" aria-label="Delete this rating"
                     onClick={() => deleteRating.mutate(h.id)}><Trash2 size={14} /></button>
-                  {h.notes && <p>{h.notes}</p>}
+                  {h.notes && <p data-amp-mask>{h.notes}</p>}
                 </li>
               ))}
             </ul>

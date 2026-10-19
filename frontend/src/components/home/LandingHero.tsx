@@ -121,7 +121,7 @@ export function LandingHero({ profile, content }: LandingHeroProps) {
         <button
           className="landing-hero__pill tour-home-chat"
           data-ask-anchor
-          onClick={() => openChat()}
+          onClick={() => openChat(undefined, 'hero')}
           type="button"
         >
           <span aria-hidden="true" className="landing-hero__pill-icon"><Sparkles size={18} /></span>

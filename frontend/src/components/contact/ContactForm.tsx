@@ -3,6 +3,7 @@ import ReCAPTCHA from 'react-google-recaptcha'
 import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
+import { track } from '../../analytics/analytics'
 import { ContactApiError, submitContactForm } from '../../services/contactApi'
 import { buildContactFormSchema, type ContactFormData } from './contactFormSchema'
 import { FormField } from './FormField'
@@ -44,6 +45,8 @@ export function ContactForm() {
     try {
       await submitContactForm(data)
       setSubmitSuccess(true)
+      // Nothing from the form itself: every field is personal or free text.
+      track('Contact Form Submitted')
       reset()
       recaptchaRef.current?.reset()
     } catch (err) {

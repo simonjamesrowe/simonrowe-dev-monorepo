@@ -275,6 +275,32 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 055-amplitude-analytics: **All four apps send analytics and session replays to Amplitude (EU,
+  free plan), only after the visitor accepts a consent bar.** Google Analytics 4, which ran with
+  no consent, is gone. Load-bearing bits:
+  - **Nothing loads before consent, and nothing at all without `VITE_AMPLITUDE_API_KEY`** (unset
+    locally, so no banner either). `frontend/src/analytics/analytics.ts` is the only module apps
+    import; the SDK (`amplitude.ts`) is a dynamic import after Accept. **Tests that render a
+    component calling `track` must mock `analytics/analytics`.**
+  - **`events.ts` is a runtime schema with no free-text kind.** `track` drops undeclared
+    properties, and `id` values must match `^[A-Za-z0-9_:.-]{1,128}$`. Add an event there first.
+  - **Any Amplitude plugin that edits events after ours undoes the URL scrub.** Page URL
+    enrichment and event-property attribution both put `?q=` search text back on every event, so
+    the first is off and the second records user properties only. `analyticsWire.test.ts` drives
+    the real SDK and fails if a query string reaches the wire: run it after any SDK upgrade.
+    Analytics remote config is off too, so Amplitude's UI cannot switch on capture.
+  - **Masking is markup:** `data-amp-mask` hides text, `data-amp-block` hides an element. The
+    `/admin` layout is blocked; CoParent's root is masked and every image is blocked. **The mask
+    level in code is only a fallback**: Amplitude's project setting overrides it, while selectors
+    and attributes survive. CoParent relies on rendering nothing outside its masked root (no
+    portals).
+  - **Traffic goes through `/amp/e`, `/amp/sr/` and `/amp/cfg/` in `frontend/nginx.conf`** (ships
+    in the image), to the EU hosts. `test-frontend-analytics-proxy.sh` ties them to the SDK's
+    `PROXY_PATHS`. The outer proxy still has nginx's 1 MB body limit on the three non-www
+    hostnames: a `413` on `/amp/sr/` means replay needs `client_max_body_size` there.
+  - Consent is one `sr_consent` cookie on `.simonrowe.dev`. Pass vanilla-cookieconsent a
+    `domain` only when there is one: an explicit `undefined` made every Reject throw.
+  See `docs/runbooks/analytics.md` and `specs/055-amplitude-analytics/plan.md`.
 - playlist-read-along: **The player highlights the word being spoken, and its sentence**, for
   summaries and posts, on the playlist card and (behind a "Read along" toggle) the phone sheet.
   Load-bearing bits:

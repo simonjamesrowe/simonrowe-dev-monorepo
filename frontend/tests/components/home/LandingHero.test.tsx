@@ -59,7 +59,7 @@ describe('LandingHero', () => {
     expect(pill).toHaveClass('tour-home-chat')
     expect(pill).toHaveAttribute('data-ask-anchor')
     await user.click(pill)
-    expect(openChat).toHaveBeenCalledWith()
+    expect(openChat).toHaveBeenCalledWith(undefined, 'hero')
 
     await user.click(screen.getByRole('button', { name: /Take a tour/ }))
     expect(startTour).toHaveBeenCalledTimes(1)

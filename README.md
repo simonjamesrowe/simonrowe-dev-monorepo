@@ -129,7 +129,7 @@ Each third-party integration has a step-by-step guide:
 | [Google Cloud TTS](docs/setup/google-cloud-tts.md) | Narration audio |
 | [Google Drive](docs/google-drive-setup.md) | Off-site backup storage |
 | [reCAPTCHA](docs/recaptcha-setup.md) | Contact form and chat gating |
-| [Google Analytics](docs/google-analytics-setup.md) | Site analytics |
+| [Analytics](docs/runbooks/analytics.md) | Amplitude analytics, session replay and the consent banner |
 
 ---
 

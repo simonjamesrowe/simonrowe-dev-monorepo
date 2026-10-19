@@ -14,6 +14,7 @@ import {
   yearsLabel,
   type CalendarRange,
 } from '../calendarModel'
+import { track } from '../../analytics/analytics'
 import {
   CalendarUnavailableError,
   fetchSchoolCalendar,
@@ -22,6 +23,9 @@ import {
 } from '../schoolCalendarApi'
 
 const RANGE_STORAGE_KEY = 'term-time-calendar-range'
+
+/** Which part of the pane an event was picked from, for analytics. */
+type PaneSection = 'today' | 'heads-up' | 'day'
 
 /**
  * How old the calendar may be before a returning tab reloads it.
@@ -114,7 +118,10 @@ export function UpcomingPanel({ yearGroups, onAsk }: UpcomingPanelProps) {
     writeRange(next)
   }
 
-  const ask = (event: CalendarEvent) => onAsk(questionAbout(event))
+  const ask = (event: CalendarEvent, section: PaneSection) => {
+    track('Calendar Event Clicked', { eventType: event.type, section })
+    onAsk(questionAbout(event))
+  }
 
   return (
     <aside className="school-upcoming" aria-labelledby="school-upcoming-title">
@@ -177,7 +184,11 @@ export function UpcomingPanel({ yearGroups, onAsk }: UpcomingPanelProps) {
                 <ul className="school-upcoming__list">
                   {view.today.map((event) => (
                     <li key={event.id}>
-                      <EventButton event={event} today={state.calendar.today} onAsk={ask} />
+                      <EventButton
+                        event={event}
+                        today={state.calendar.today}
+                        onAsk={(picked) => ask(picked, 'today')}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -192,7 +203,7 @@ export function UpcomingPanel({ yearGroups, onAsk }: UpcomingPanelProps) {
                       <button
                         type="button"
                         className="school-upcoming__heads-up-item"
-                        onClick={() => ask(event)}
+                        onClick={() => ask(event, 'heads-up')}
                         aria-label={`${headsUpLabel(event.type)}, ${formatSpan(event)}: ${
                           event.title
                         }. Ask about this`}
@@ -222,7 +233,11 @@ export function UpcomingPanel({ yearGroups, onAsk }: UpcomingPanelProps) {
                 <ul className="school-upcoming__list">
                   {day.events.map((event) => (
                     <li key={event.id}>
-                      <EventButton event={event} today={state.calendar.today} onAsk={ask} />
+                      <EventButton
+                        event={event}
+                        today={state.calendar.today}
+                        onAsk={(picked) => ask(picked, 'day')}
+                      />
                     </li>
                   ))}
                 </ul>

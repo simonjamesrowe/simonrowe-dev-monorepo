@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { track } from '../../../analytics/analytics';
 import type {
   Conversation,
   CreateMessageConversationRequest,
@@ -41,6 +42,7 @@ export function useCreateMessageConversation() {
       return { ...data, familyId };
     },
     onSuccess: (data) => {
+      track('Message Sent', { kind: 'message' });
       queryClient.invalidateQueries({ queryKey: conversationKeys.list(data.familyId) });
     },
   });
@@ -61,6 +63,7 @@ export function useCreatePermissionConversation() {
       return { ...data, familyId };
     },
     onSuccess: (data) => {
+      track('Message Sent', { kind: 'permission' });
       queryClient.invalidateQueries({ queryKey: conversationKeys.list(data.familyId) });
     },
   });
@@ -82,6 +85,7 @@ export function useSendMessage() {
       return { ...data, familyId };
     },
     onSuccess: (data) => {
+      track('Message Sent', { kind: 'message' });
       queryClient.invalidateQueries({ queryKey: conversationKeys.list(data.familyId) });
     },
   });

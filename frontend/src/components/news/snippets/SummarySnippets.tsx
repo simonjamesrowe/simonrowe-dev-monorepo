@@ -394,7 +394,7 @@ export function SummarySnippets({
                 type="button"
               >
                 <span className="summary-snippets__quote">{snippet.exact}</span>
-                {snippet.note && <span className="summary-snippets__note">{snippet.note}</span>}
+                {snippet.note && <span className="summary-snippets__note" data-amp-mask>{snippet.note}</span>}
                 {snippet.tags.length > 0 && (
                   <span className="summary-snippets__tags">
                     {snippet.tags.map(tag => <span className="snippet-tag" key={tag}>#{tag}</span>)}

@@ -4,6 +4,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 
+import { AnalyticsIdentity } from '../analytics/AnalyticsIdentity';
+import { initAnalytics } from '../analytics/analytics';
 import { AUTH0_AUDIENCE, AUTH0_DOMAIN } from '../config/auth';
 import App from './App';
 import { ToastProvider } from './components/ui/ToastProvider';
@@ -44,12 +46,18 @@ if (auth0Audience) {
   authorizationParams.audience = auth0Audience;
 }
 
+initAnalytics('coparent');
+
 function AppProviders() {
   return (
     <QueryClientProvider client={queryClient}>
+      <AnalyticsIdentity />
       <ToastProvider>
         <BrowserRouter>
-          <div className="coparent-app">
+          {/* Everything in CoParent is private to a family, so the whole app is masked: replay
+              shows no text and autocapture records no clicked text. Images are blocked by
+              REPLAY_POLICIES.coparent. */}
+          <div className="coparent-app" data-amp-mask>
             <App />
           </div>
         </BrowserRouter>

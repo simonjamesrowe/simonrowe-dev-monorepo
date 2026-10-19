@@ -1,6 +1,9 @@
 import { Check, Share2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
+import { track } from '../../analytics/analytics'
+import type { EventProperties } from '../../analytics/events'
+
 /** How long the "Copied" confirmation stays up. */
 const CONFIRMATION_MS = 2000
 
@@ -12,6 +15,8 @@ interface ShareButtonProps {
   /** True to hide the text label, for rows that are already crowded at mobile width. */
   iconOnly?: boolean
   className?: string
+  /** What is being shared, for analytics. Required so a new call site cannot forget it. */
+  contentType: EventProperties<'Share Clicked'>['contentType']
 }
 
 /**
@@ -30,7 +35,7 @@ interface ShareButtonProps {
  * Cancelling the native sheet rejects with an `AbortError`. That is a person changing their
  * mind, not a failure, so it is swallowed.
  */
-export function ShareButton({ url, title, iconOnly, className }: ShareButtonProps) {
+export function ShareButton({ url, title, iconOnly, className, contentType }: ShareButtonProps) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -48,6 +53,7 @@ export function ShareButton({ url, title, iconOnly, className }: ShareButtonProp
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         await navigator.share({ title, url })
+        track('Share Clicked', { contentType, method: 'native' })
         return
       } catch (err) {
         // Dismissing the sheet is not a failure. Anything else falls through to the
@@ -60,13 +66,17 @@ export function ShareButton({ url, title, iconOnly, className }: ShareButtonProp
       try {
         await navigator.clipboard.writeText(url)
         confirmCopied()
+        track('Share Clicked', { contentType, method: 'copy' })
         return
       } catch {
         // Fall through — a denied clipboard permission is recoverable via execCommand.
       }
     }
 
-    if (copyViaTextarea(url)) confirmCopied()
+    if (copyViaTextarea(url)) {
+      confirmCopied()
+      track('Share Clicked', { contentType, method: 'copy' })
+    }
   }
 
   const label = copied ? 'Copied' : 'Share'

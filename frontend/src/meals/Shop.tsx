@@ -1,13 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, ClipboardCopy, PackageCheck, Plus, ShoppingBasket, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import { track } from '../analytics/analytics'
 import { useMine, useShopping } from './data'
 import { QuickAdd } from './QuickAdd'
 import { Empty, Loading, Sheet } from './ui'
 import type { Shop as ShopName, ShoppingItem } from './types'
 
 const SHOPS: ShopName[] = ['Ocado', 'Amazon', 'Deliveroo']
+
+/** The aisle the server files the owner's own typed extras under. */
+const ADDED_BY_YOU = 'Added by you'
 
 async function copy(text: string): Promise<boolean> {
   try {
@@ -36,6 +40,16 @@ export function Shop() {
   const removeExtra = useMine((api, name: string) => api.removeExtra(name))
   const delivered = useMine((api) => api.delivered())
   const clearBasket = useMine((api) => api.clearBasket())
+
+  // Once per visit, when the list first loads: ticking items refetches it, and each refetch is
+  // not another view.
+  const viewed = useRef(false)
+  const loadedCount = shopping.data ? shopping.data.items.length : null
+  useEffect(() => {
+    if (viewed.current || loadedCount === null) return
+    viewed.current = true
+    track('Shopping List Viewed', { itemCount: loadedCount })
+  }, [loadedCount])
 
   if (shopping.isLoading) return <Loading />
   const items = shopping.data?.items ?? []
@@ -90,7 +104,8 @@ export function Shop() {
       {items.length === 0 && <p className="meals-muted">You already have everything Up next needs.</p>}
 
       {[...groups].map(([aisle, list]) => (
-        <section key={aisle} className="meals-aisle">
+        // Extras are whatever the owner typed, so replay masks that aisle.
+        <section key={aisle} className="meals-aisle" data-amp-mask={aisle === ADDED_BY_YOU ? '' : undefined}>
           <h2 className="meals-aisle__title">{aisle}</h2>
           <ul className="meals-shop-list">
             {list.map((item) => (
@@ -109,7 +124,7 @@ export function Shop() {
                 </span>
                 <button type="button" className="meals-icon-button" aria-label={`Copy ${item.line.name}`}
                   onClick={() => copyText(item.line.name, item.line.name)}><ClipboardCopy size={16} /></button>
-                {aisle === 'Added by you' && (
+                {aisle === ADDED_BY_YOU && (
                   <button type="button" className="meals-icon-button" aria-label={`Remove ${item.line.name}`}
                     onClick={() => removeExtra.mutate(item.line.name)}><X size={16} /></button>
                 )}

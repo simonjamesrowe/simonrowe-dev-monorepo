@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { track } from '../analytics/analytics'
 import { BlogDetail } from '../components/blog/BlogDetail'
 import { ErrorMessage } from '../components/common/ErrorMessage'
 import { LoadingIndicator } from '../components/common/LoadingIndicator'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { fetchBlogById } from '../services/blogApi'
-import { trackPageView } from '../services/analytics'
 import type { BlogDetail as BlogDetailType } from '../types/blog'
 
 export function BlogDetailPage() {
@@ -28,8 +28,6 @@ export function BlogDetailPage() {
 
     let cancelled = false
 
-    trackPageView(`/blogs/${id}`)
-
     setLoading(true)
     setError(null)
 
@@ -37,6 +35,7 @@ export function BlogDetailPage() {
       .then((data) => {
         if (!cancelled) {
           setBlog(data)
+          track('Blog Viewed', { blogId: data.id })
         }
       })
       .catch((err: Error) => {

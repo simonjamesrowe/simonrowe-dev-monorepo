@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
+import { initAnalytics } from '../analytics/analytics'
 import { ThemeProvider } from '../contexts/ThemeContext'
 import App from './App'
 import '../styles.css'
@@ -18,6 +19,8 @@ import '../styles.css'
  * ThemeProvider shares the `theme-preference` key with the main site, so a visitor who set light
  * mode there arrives here in light mode.
  */
+initAnalytics('term-time')
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>

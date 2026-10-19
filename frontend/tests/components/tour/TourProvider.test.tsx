@@ -2,9 +2,12 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { track } from '../../../src/analytics/analytics'
 import { TourProvider } from '../../../src/components/tour/TourProvider'
 import { useTour } from '../../../src/hooks/useTour'
 import type { TourStep } from '../../../src/types/tour'
+
+vi.mock('../../../src/analytics/analytics', () => ({ track: vi.fn() }))
 
 vi.mock('../../../src/services/tourApi', () => ({
   fetchTourSteps: vi.fn(),
@@ -343,5 +346,53 @@ describe('TourProvider', () => {
     expect(screen.getByTestId('location-path')).toHaveTextContent('/about')
     // Every navigation mints a new location key, so an unchanged key means none happened.
     expect(screen.getByTestId('location-key')).toHaveTextContent(initialKey!)
+  })
+
+  describe('analytics', () => {
+    beforeEach(() => vi.mocked(track).mockClear())
+
+    async function startTour() {
+      vi.mocked(fetchTourSteps).mockResolvedValue([stepOne, stepTwo])
+      renderWithRouter()
+      act(() => {
+        screen.getByTestId('btn-start').click()
+      })
+      await waitFor(() => expect(screen.getByTestId('is-active')).toHaveTextContent('true'))
+    }
+
+    it('records the start and each step shown, numbered from one', async () => {
+      await startTour()
+      act(() => {
+        screen.getByTestId('btn-next').click()
+      })
+
+      expect(track).toHaveBeenCalledWith('Tour Started', { stepCount: 2 })
+      expect(track).toHaveBeenCalledWith('Tour Step Viewed', { step: 1 })
+      await waitFor(() => expect(track).toHaveBeenCalledWith('Tour Step Viewed', { step: 2 }))
+    })
+
+    it('records leaving before the end as a dismissal at that step', async () => {
+      await startTour()
+      act(() => {
+        screen.getByTestId('btn-exit').click()
+      })
+
+      expect(track).toHaveBeenCalledWith('Tour Dismissed', { step: 1 })
+      expect(track).not.toHaveBeenCalledWith('Tour Completed')
+    })
+
+    it('records leaving from the last step as a completion', async () => {
+      await startTour()
+      act(() => {
+        screen.getByTestId('btn-next').click()
+      })
+      await waitFor(() => expect(screen.getByTestId('step-index')).toHaveTextContent('1'))
+      act(() => {
+        screen.getByTestId('btn-exit').click()
+      })
+
+      expect(track).toHaveBeenCalledWith('Tour Completed')
+      expect(track).not.toHaveBeenCalledWith('Tour Dismissed', expect.anything())
+    })
   })
 })

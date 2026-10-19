@@ -131,7 +131,7 @@ export function SiteHeader({ groups }: SiteHeaderProps) {
 
           <div className="site-header__actions">
             <div className="site-header__search">
-              <SiteSearch compact onChatStart={openChat} />
+              <SiteSearch compact onChatStart={query => openChat(query, 'search')} />
               <kbd aria-hidden="true" className="site-header__search-hint">/</kbd>
             </div>
             <button
@@ -152,7 +152,7 @@ export function SiteHeader({ groups }: SiteHeaderProps) {
               aria-label="Ask Simon anything"
               className="site-header__ask top-nav__ask-ai"
               data-testid="open-chat"
-              onClick={() => openChat()}
+              onClick={() => openChat(undefined, 'header')}
               type="button"
             >
               <Sparkles aria-hidden="true" size={16} />

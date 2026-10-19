@@ -11,7 +11,6 @@ import { useDrawer } from '../hooks/useDrawer'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useProfile } from '../hooks/useProfile'
 import { useScrollToHash } from '../hooks/useScrollToHash'
-import { trackPageView } from '../services/analytics'
 
 /**
  * About: the profile, then roles, then skills — what used to be the separate Profile and
@@ -38,10 +37,6 @@ export function AboutPage() {
   // land short of the target once the profile pushes the sections down.
   useScrollToHash(!profileLoading)
   usePageTitle('About')
-
-  useEffect(() => {
-    trackPageView('/about')
-  }, [])
 
   // The full-width Connect section was replaced by a drawer, so `#contact` no longer has
   // an element to scroll to — it opens the drawer instead. That keeps every existing

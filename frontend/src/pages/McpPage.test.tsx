@@ -5,10 +5,6 @@ import { McpPage } from './McpPage'
 import type { McpClient } from '../services/mcpClient'
 import type { McpTool } from '../types/mcp'
 
-vi.mock('../services/analytics', () => ({
-  trackPageView: vi.fn(),
-}))
-
 const TOOLS: McpTool[] = [
   {
     name: 'searchBlogs',

@@ -39,7 +39,7 @@ export function BlogDetail({ blog }: BlogDetailProps) {
             Absent when the post has no share link yet, rather than offering a dead URL. */}
         {blog.shortUrl && (
           <div className="blog-detail__share">
-            <ShareButton title={blog.title} url={blog.shortUrl} />
+            <ShareButton contentType="blog" title={blog.title} url={blog.shortUrl} />
           </div>
         )}
         {blog.tags.length > 0 && (
