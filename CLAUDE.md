@@ -275,6 +275,26 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- visitor-ip-through-pinggy: **Nothing on the stack could see a visitor's IP address.** Measured
+  from Loki on 2026-10-19: every request reached the outer nginx from pinggy's Docker address
+  (`172.x`) with `xff="-"`. So the backend's per-IP rate limiter held every visitor in **one**
+  bucket, and Amplitude showed Country "-" for everyone. Worse, pinggy passes a client's own
+  `X-Forwarded-For` straight through, and the limiter keyed on its first entry, so a script
+  could take a fresh bucket per request (including on chat and summaries, which cost money).
+  Load-bearing bits:
+  - **pinggy starts with `x:xff`.** A free tunnel ignores it (tested: no header at all), so
+    whether the paid tunnel honours it is only provable in production: check `xff=` in the
+    nginx lines in Loki. pinggy is outside `FACTORY_DEPLOY_RECREATABLE`, so this change holds
+    back the deploy until it is applied by hand (`docs/runbooks/deploy.md`, "Recovering a
+    wedged checkout").
+  - **Downstream, trust `X-Real-IP`, never the first `X-Forwarded-For` entry.** The outer
+    nginx's `real_ip_recursive on` takes the right-most untrusted address, and every
+    `proxy_pass` in both nginx configs overwrites `X-Real-IP` with it, so a client cannot set it.
+    `RateLimitInterceptor.getClientIp` reads it; its test proves a forged chain gets no new bucket.
+  - **The frontend nginx adopts `X-Real-IP`** (`real_ip_header X-Real-IP` from the private
+    ranges), or everything through it (www's `/api/`, Amplitude's `/amp/`) names the outer proxy.
+    The `/amp/` routes send Amplitude only that address.
+  - `scripts/test/test-client-ip-chain.sh` pins all five links; each was mutation-checked.
 - 055-amplitude-analytics: **All four apps send analytics and session replays to Amplitude (EU,
   free plan), only after the visitor accepts a consent bar.** Google Analytics 4, which ran with
   no consent, is gone. Load-bearing bits:

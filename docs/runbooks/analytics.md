@@ -95,7 +95,8 @@ Ad blockers drop `*.amplitude.com`, so the SDK sends to the page's own origin an
 | `/amp/cfg/…` | `sr-client-cfg.eu.amplitude.com/…` (replay sampling config) |
 
 These are every host the SDK contacts once diagnostics are off. Each route verifies the upstream
-certificate, strips the site's cookies and passes the visitor's `X-Forwarded-For`, which Amplitude
+certificate, strips the site's cookies and passes the visitor's address as `X-Forwarded-For` (and
+nothing else from the chain that arrived), which Amplitude
 geolocates by. `scripts/test/test-frontend-analytics-proxy.sh` ties the nginx routes to the SDK's
 `PROXY_PATHS`. The Vite dev server mirrors the three routes.
 
@@ -109,14 +110,19 @@ curl -s https://www.simonrowe.dev/amp/cfg/config/0000000000000000000000000000000
 
 ## Things to watch after deploy
 
-- **Geolocation.** If every visitor shows as London, Amplitude is not reading `X-Forwarded-For`
-  through the proxy. Location is then lost; nothing else breaks.
-- **Replay uploads on Term Time, CoParent and Meals.** The outer proxy
-  (`config/nginx/nginx-proxy.conf`) allows 12 MB bodies on www but nginx's default 1 MB on those
-  three hostnames. Replay batches are gzipped and split at 2 MB uncompressed, so they should fit,
-  but a `413` on `/amp/sr/` in the nginx logs means a large first snapshot did not. The fix is
-  `client_max_body_size 12m;` in those blocks, which needs nginx recreated on the host (the
-  config is a single-file bind mount).
+- **Geolocation: Country "-" on every event means no visitor address is reaching Amplitude.**
+  Amplitude does honour `X-Forwarded-For` (verified 2026-10-19: a direct event carrying
+  `8.8.8.8` geolocated to the United States). At launch every event showed "-" because pinggy
+  sent no visitor address at all, so the whole stack saw pinggy's Docker address. pinggy now
+  starts with `x:xff`; `scripts/test/test-client-ip-chain.sh` guards the rest of the chain.
+  Check it in Loki: the outer nginx logs `xff="..."` on every line, and `xff="-"` means pinggy
+  is still sending nothing.
+- **Replay uploads fit the outer proxy's limits (measured).** The first replay batch of a visit
+  carries the full page snapshot. On www's home page, the heaviest page, it was 171 KB gzipped
+  (2026-10-19), against nginx's default 1 MB body limit on the Term Time, CoParent and Meals
+  hostnames (www allows 12 MB). A `413` on `/amp/sr/` in the nginx logs would mean a page has
+  outgrown it; the fix is `client_max_body_size 12m;` in those blocks, which needs nginx
+  recreated on the host (the config is a single-file bind mount).
 - **Replay quota.** The free plan includes 10,000 replay sessions a month, organisation-wide
   (usage is on Settings → Session Replay & Heatmaps). Lower the sample rate there (no deploy) if
   it runs short.

@@ -195,30 +195,48 @@ class RateLimitInterceptorTest {
   }
 
   @Test
-  void preHandleUsesForwardedForHeaderAsClientIp() throws Exception {
-    final MockHttpServletRequest request = new MockHttpServletRequest();
-    request.setRequestURI("/chat/stream");
-    request.addHeader("X-Forwarded-For", "203.0.113.5, 10.0.0.1");
-    request.setRemoteAddr("10.0.0.1");
+  void preHandleKeysOnTheRealIpNginxSet() throws Exception {
+    // Same proxy hop, different visitors: each gets their own bucket.
+    for (int i = 0; i < 5; i++) {
+      assertThat(interceptor.preHandle(
+          proxiedChatRequest("198.51.100.1", null), new MockHttpServletResponse(), new Object()))
+          .isTrue();
+    }
 
-    final MockHttpServletResponse response = new MockHttpServletResponse();
-
-    final boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isTrue();
+    assertThat(interceptor.preHandle(
+        proxiedChatRequest("198.51.100.1", null), new MockHttpServletResponse(), new Object()))
+        .isFalse();
+    assertThat(interceptor.preHandle(
+        proxiedChatRequest("198.51.100.2", null), new MockHttpServletResponse(), new Object()))
+        .isTrue();
   }
 
   @Test
-  void preHandleFallsBackToRemoteAddrWhenNoForwardedFor() throws Exception {
-    final MockHttpServletRequest request = new MockHttpServletRequest();
-    request.setRequestURI("/chat/stream");
-    request.setRemoteAddr("203.0.113.99");
+  void preHandleIgnoresForgedForwardedForSoScriptsCannotTakeFreshBuckets() throws Exception {
+    // One visitor inventing a new left-most X-Forwarded-For entry on every request.
+    for (int i = 0; i < 5; i++) {
+      assertThat(interceptor.preHandle(
+          proxiedChatRequest("198.51.100.7", "203.0.113." + i + ", 198.51.100.7"),
+          new MockHttpServletResponse(), new Object()))
+          .isTrue();
+    }
 
-    final MockHttpServletResponse response = new MockHttpServletResponse();
+    final MockHttpServletResponse limited = new MockHttpServletResponse();
+    assertThat(interceptor.preHandle(
+        proxiedChatRequest("198.51.100.7", "203.0.113.99, 198.51.100.7"), limited, new Object()))
+        .isFalse();
+    assertThat(limited.getStatus()).isEqualTo(429);
+  }
 
-    final boolean result = interceptor.preHandle(request, response, new Object());
+  @Test
+  void preHandleFallsBackToRemoteAddrWithoutRealIp() throws Exception {
+    final String clientIp = "203.0.113.50";
+    for (int i = 0; i < 5; i++) {
+      interceptor.preHandle(chatRequest(clientIp), new MockHttpServletResponse(), new Object());
+    }
 
-    assertThat(result).isTrue();
+    assertThat(interceptor.preHandle(
+        chatRequest(clientIp), new MockHttpServletResponse(), new Object())).isFalse();
   }
 
   @Test
@@ -275,6 +293,17 @@ class RateLimitInterceptorTest {
     final MockHttpServletRequest request = new MockHttpServletRequest();
     request.setRequestURI("/chat/stream");
     request.setRemoteAddr(remoteAddr);
+    return request;
+  }
+
+  /** A chat request as nginx delivers it: from its own container, carrying X-Real-IP. */
+  private static MockHttpServletRequest proxiedChatRequest(
+      final String realIp, final String forwardedFor) {
+    final MockHttpServletRequest request = chatRequest("172.18.0.15");
+    request.addHeader("X-Real-IP", realIp);
+    if (forwardedFor != null) {
+      request.addHeader("X-Forwarded-For", forwardedFor);
+    }
     return request;
   }
 
