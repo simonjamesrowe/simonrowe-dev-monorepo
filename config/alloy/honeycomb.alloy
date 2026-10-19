@@ -1,0 +1,103 @@
+// Shared by production and the opt-in local pilot. Only this branch is sanitized.
+// No logs/metrics, browser ingress, prompts, tool payloads or private identifiers.
+declare "pipeline" {
+  argument "enabled" { default = false }
+  argument "api_key" { default = "" }
+  argument "endpoint" { default = "https://api.honeycomb.io" }
+  argument "environment" { default = "development" }
+  argument "sample_percentage" { default = 10 }
+  // Absolute Unix seconds: restarts cannot extend a capture window. Zero is off.
+  argument "export_until" { default = 0 }
+
+  export "input" { value = otelcol.processor.filter.gate.input }
+
+  otelcol.processor.filter "gate" {
+    error_mode = "propagate"
+    traces {
+      span = [
+        string.format("%t", !argument.enabled.value || argument.api_key.value == ""),
+        string.format("UnixSeconds(Now()) >= %d", argument.export_until.value),
+        `resource.attributes["service.name"] != "simonrowe-backend"`,
+        // This Alloy version cannot clear link attributes; omit linked spans in the pilot.
+        `Len(links) > 0`,
+        `IsMatch(attributes["http.route"], "^/actuator(/|$)")`,
+      ]
+      // Span events can include exception messages/prompts and cost extra events.
+      spanevent = ["true"]
+    }
+    output { traces = [otelcol.processor.probabilistic_sampler.traces.input] }
+  }
+
+  otelcol.processor.probabilistic_sampler "traces" {
+    sampling_percentage = argument.sample_percentage.value
+    hash_seed = 1979
+    output { traces = [otelcol.processor.transform.sanitize.input] }
+  }
+
+  otelcol.processor.transform "sanitize" {
+    // Fail closed: a malformed value must never bypass content removal.
+    error_mode = "propagate"
+    trace_statements {
+      context = "resource"
+      statements = [
+        `keep_keys(attributes, ["service.name", "service.version"])`,
+        string.format("set(attributes[\"deployment.environment.name\"], %q)", argument.environment.value),
+        `truncate_all(attributes, 128)`,
+      ]
+    }
+    trace_statements {
+      context = "scope"
+      statements = [`keep_keys(attributes, [])`]
+    }
+    trace_statements {
+      context = "span"
+      statements = [
+        `keep_keys(attributes, ["http.request.method", "http.method", "http.route", "http.response.status_code", "http.status_code", "error.type", "db.system", "db.system.name", "db.operation", "db.operation.name", "gen_ai.operation.name", "gen_ai.system", "gen_ai.provider.name", "gen_ai.request.model", "gen_ai.response.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.prompt_tokens", "gen_ai.usage.completion_tokens", "spring.ai.kind"])`,
+        `truncate_all(attributes, 256)`,
+        // Span names/status/links are content carriers too, not just attributes.
+        `set(name, "operation")`,
+        `set(name, attributes["db.operation"]) where attributes["db.operation"] != nil`,
+        `set(name, attributes["db.operation.name"]) where attributes["db.operation.name"] != nil`,
+        `set(name, attributes["gen_ai.operation.name"]) where attributes["gen_ai.operation.name"] != nil`,
+        `set(name, attributes["http.route"]) where attributes["http.route"] != nil`,
+        `set(status.message, "")`,
+        `set(trace_state, "")`,
+        // This is an independent fixed probability after any SDK sampling.
+        // Do not claim totals are corrected for upstream drops.
+        string.format("set(attributes[\"SampleRate\"], %v)", 100 / argument.sample_percentage.value),
+        `set(attributes["app.module"], "site") where attributes["http.route"] != nil`,
+        `set(attributes["app.module"], "coparent") where IsMatch(attributes["http.route"], "^/api/coparent(/|$)")`,
+        `set(attributes["app.module"], "school") where IsMatch(attributes["http.route"], "^/api/school(/|$)")`,
+        `set(attributes["app.module"], "meals") where IsMatch(attributes["http.route"], "^/api/meals(/|$)")`,
+        `set(attributes["app.module"], "admin") where IsMatch(attributes["http.route"], "^/api/admin(/|$)")`,
+      ]
+    }
+    output { traces = [otelcol.processor.batch.honeycomb.input] }
+  }
+
+  otelcol.processor.batch "honeycomb" {
+    timeout = "1s"
+    send_batch_size = 128
+    send_batch_max_size = 128
+    output { traces = [otelcol.exporter.otlphttp.honeycomb.input] }
+  }
+
+  otelcol.exporter.otlphttp "honeycomb" {
+    // Honeycomb supports OTLP/HTTP JSON; integration tests inspect this exact wire format.
+    encoding = "json"
+    client {
+      endpoint = argument.endpoint.value
+      headers = { "x-honeycomb-team" = argument.api_key.value }
+      timeout = "5s"
+    }
+    sending_queue {
+      enabled = true
+      num_consumers = 2
+      queue_size = 64
+    }
+    retry_on_failure {
+      enabled = true
+      max_elapsed_time = "30s"
+    }
+  }
+}

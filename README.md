@@ -96,6 +96,8 @@ project in `frontend/`. Shared JVM dependency versions live in
 | [Software factory](docs/software-factory.md) | The four agent modules, task queues, container split |
 | [Temporal code reviewer](docs/temporal-code-reviewer.md) | Original design rationale and operational boundaries for code review |
 | [Model usage audit](docs/model-usage.md) | Every place this app calls a model, and where the model id is set |
+| [Honeycomb proposal](docs/honeycomb-observability-plan.md) | Current telemetry audit, span context, staged integration and ingest budget |
+- [Honeycomb Free pilot runbook](docs/runbooks/honeycomb-observability.md) — configuration, validation and rollback.
 | [`specs/`](specs/) | Per-feature specs, plans and research (spec-driven development) |
 | [`docs/superpowers/`](docs/superpowers/) | Design docs and implementation plans for individual changes |
 | [`designs/`](designs/) | Visual design system, colour and type tokens, page explorations |
