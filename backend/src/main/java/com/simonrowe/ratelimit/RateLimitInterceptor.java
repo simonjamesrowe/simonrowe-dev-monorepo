@@ -138,12 +138,16 @@ public class RateLimitInterceptor implements HandlerInterceptor {
   /**
    * The visitor's address, as nginx resolved it.
    *
-   * <p>X-Real-IP, never the first entry of X-Forwarded-For. pinggy passes a client's own
-   * X-Forwarded-For through untouched, so its left-most entry is whatever the client chose to
+   * <p>X-Real-IP, never X-Forwarded-For. pinggy passes a client's own X-Forwarded-For through
+   * untouched and adds nothing of its own, so that header holds whatever the client chose to
    * send, and keying on it let a script take a fresh bucket for every request by inventing a new
-   * address. nginx's real_ip takes the right-most untrusted address instead, and every
-   * proxy_pass in both nginx configs overwrites X-Real-IP with it, so a client cannot set it.
-   * The backend publishes no port, so nothing reaches it except through nginx.
+   * address. Every proxy_pass in both nginx configs overwrites X-Real-IP with an address nginx
+   * observed itself, so a client cannot set it. The backend publishes no port, so nothing
+   * reaches it except through nginx.
+   *
+   * <p>Today that address is pinggy's for every visitor (it sends no visitor address), so all
+   * visitors share one bucket. That is the accepted cost of not being spoofable; see
+   * config/nginx/nginx-proxy.conf.
    */
   private String getClientIp(final HttpServletRequest request) {
     final String realIp = request.getHeader("X-Real-IP");

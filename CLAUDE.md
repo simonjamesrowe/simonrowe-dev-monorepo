@@ -298,26 +298,29 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     consumers index a published book and remove an unpublished one. The 4-hourly syncs are the
     backstop, and the site index syncs at startup, which is what indexes the seeded books: V062
     publishes nothing. Authors are indexed in `company`, so searching an author finds their books.
-- visitor-ip-through-pinggy: **Nothing on the stack could see a visitor's IP address.** Measured
-  from Loki on 2026-10-19: every request reached the outer nginx from pinggy's Docker address
-  (`172.x`) with `xff="-"`. So the backend's per-IP rate limiter held every visitor in **one**
-  bucket, and Amplitude showed Country "-" for everyone. Worse, pinggy passes a client's own
-  `X-Forwarded-For` straight through, and the limiter keyed on its first entry, so a script
-  could take a fresh bucket per request (including on chat and summaries, which cost money).
-  Load-bearing bits:
-  - **pinggy starts with `x:xff`.** A free tunnel ignores it (tested: no header at all), so
-    whether the paid tunnel honours it is only provable in production: check `xff=` in the
-    nginx lines in Loki. pinggy is outside `FACTORY_DEPLOY_RECREATABLE`, so this change holds
-    back the deploy until it is applied by hand (`docs/runbooks/deploy.md`, "Recovering a
-    wedged checkout").
-  - **Downstream, trust `X-Real-IP`, never the first `X-Forwarded-For` entry.** The outer
-    nginx's `real_ip_recursive on` takes the right-most untrusted address, and every
-    `proxy_pass` in both nginx configs overwrites `X-Real-IP` with it, so a client cannot set it.
-    `RateLimitInterceptor.getClientIp` reads it; its test proves a forged chain gets no new bucket.
-  - **The frontend nginx adopts `X-Real-IP`** (`real_ip_header X-Real-IP` from the private
-    ranges), or everything through it (www's `/api/`, Amplitude's `/amp/`) names the outer proxy.
-    The `/amp/` routes send Amplitude only that address.
-  - `scripts/test/test-client-ip-chain.sh` pins all five links; each was mutation-checked.
+- visitor-ip-through-pinggy (#261, then stop-trusting-forwarded-for): **Nothing on the stack can
+  see a visitor's IP address, and that is now deliberate.** pinggy sends no visitor address:
+  verified on 2026-10-19 on the production tunnel, with and without its `x:xff` option, every
+  request reaches the outer nginx from pinggy's Docker address with no `X-Forwarded-For`. What
+  pinggy does do is pass a client's **own** `X-Forwarded-For` through, and the outer nginx used to
+  trust that header (`real_ip` from the Docker ranges), so a client chose the address nginx logged
+  and the backend rate-limited on. Verified in production: `X-Forwarded-For: 6.6.6.6` was logged
+  as client 6.6.6.6, so a script could take a fresh bucket per request, including on chat and
+  summaries, which cost money. Load-bearing bits:
+  - **The outer nginx trusts no forwarded header.** `$remote_addr` stays pinggy's address, every
+    `proxy_pass` in both nginx configs overwrites `X-Real-IP` with it, and
+    `RateLimitInterceptor.getClientIp` reads `X-Real-IP`, never `X-Forwarded-For`. **The accepted
+    cost: every visitor shares one rate-limit bucket**, which is what honest visitors already got,
+    and Amplitude cannot geolocate anyone (Country "-"). A browser-supplied address would not
+    help: anything the client sends, it can forge.
+  - **pinggy's `x:xff` is inert and stays only to avoid a held-back deploy.** Removing it changes
+    pinggy's config hash, and pinggy is outside `FACTORY_DEPLOY_RECREATABLE`. Drop it the next
+    time pinggy is recreated anyway.
+  - **Changing `config/nginx/nginx-proxy.conf` needs nginx recreated by hand** (single-file bind
+    mount, so the running container keeps the old inode): `docker compose -f
+    docker-compose.prod.yml up -d --force-recreate --no-deps nginx`.
+  - `scripts/test/test-client-ip-chain.sh` fails if `X-Forwarded-For` is trusted again or any
+    proxied location stops overwriting `X-Real-IP`; mutation-checked.
 - 055-amplitude-analytics: **All four apps send analytics and session replays to Amplitude (EU,
   free plan), only after the visitor accepts a consent bar.** Google Analytics 4, which ran with
   no consent, is gone. Load-bearing bits:
