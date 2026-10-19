@@ -1070,18 +1070,15 @@ services:
     # longer holds and this should be revisited rather than assumed correct.
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=1
-    # `x:xff` asks pinggy to send the visitor's address as X-Forwarded-For. Without it, as
-    # measured from Loki on 2026-10-19, every request reached nginx from pinggy's own Docker
-    # address with no X-Forwarded-For at all: the backend's per-IP rate limiter held every
-    # visitor in one bucket, and Amplitude could not geolocate anyone. Two things NOT proven:
-    #   - A free (anonymous) tunnel ignores this option and adds no header, so whether the
-    #     paid tunnel behind PINGGY_TOKEN honours it is only knowable in production. Check the
-    #     nginx `xff="..."` field in Loki after recreating pinggy.
-    #   - pinggy passes a client's own X-Forwarded-For straight through. nginx's real_ip
-    #     takes the right-most untrusted address, so a forged entry to the LEFT of the one
-    #     pinggy appends is ignored; the backend reads only the X-Real-IP nginx sets.
-    # pinggy is not in FACTORY_DEPLOY_RECREATABLE, so a change here is applied by hand:
-    # docs/runbooks/deploy.md ("Recovering a wedged checkout").
+    # `x:xff` is INERT: it is meant to make pinggy send the visitor's address as
+    # X-Forwarded-For, and it does not. Verified 2026-10-19 on the production tunnel after a
+    # recreate with this exact command: requests still arrived with no X-Forwarded-For (a free
+    # tunnel behaves the same). pinggy does pass a client's OWN X-Forwarded-For through, which
+    # is why config/nginx/nginx-proxy.conf no longer trusts that header at all.
+    # It stays only because removing it changes pinggy's config hash: pinggy is not in
+    # FACTORY_DEPLOY_RECREATABLE, so that would hold back the deploy and need a hand recreate
+    # of the tunnel every hostname runs through (docs/runbooks/deploy.md, "Recovering a wedged
+    # checkout"), for no change in behaviour. Drop it the next time pinggy is recreated anyway.
     command:
       - x:xff
       - --token

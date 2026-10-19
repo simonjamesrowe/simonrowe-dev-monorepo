@@ -110,13 +110,14 @@ curl -s https://www.simonrowe.dev/amp/cfg/config/0000000000000000000000000000000
 
 ## Things to watch after deploy
 
-- **Geolocation: Country "-" on every event means no visitor address is reaching Amplitude.**
-  Amplitude does honour `X-Forwarded-For` (verified 2026-10-19: a direct event carrying
-  `8.8.8.8` geolocated to the United States). At launch every event showed "-" because pinggy
-  sent no visitor address at all, so the whole stack saw pinggy's Docker address. pinggy now
-  starts with `x:xff`; `scripts/test/test-client-ip-chain.sh` guards the rest of the chain.
-  Check it in Loki: the outer nginx logs `xff="..."` on every line, and `xff="-"` means pinggy
-  is still sending nothing.
+- **No geolocation, by design: Country is "-" on every event.** Amplitude does honour
+  `X-Forwarded-For` (verified 2026-10-19: a direct event carrying `8.8.8.8` geolocated to the
+  United States), but pinggy never sends the visitor's address (not even with its `x:xff`
+  option, tested on the production tunnel), and the only `X-Forwarded-For` that reaches nginx is
+  one the client wrote. So nginx trusts none, and every address downstream is pinggy's. See
+  `config/nginx/nginx-proxy.conf`. Getting locations back needs an ingress that supplies a
+  trustworthy client address (e.g. Cloudflare Tunnel's `CF-Connecting-IP`); a browser-supplied
+  one could be forged.
 - **Replay uploads fit the outer proxy's limits (measured).** The first replay batch of a visit
   carries the full page snapshot. On www's home page, the heaviest page, it was 171 KB gzipped
   (2026-10-19), against nginx's default 1 MB body limit on the Term Time, CoParent and Meals
