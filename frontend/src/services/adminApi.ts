@@ -691,6 +691,108 @@ export async function reorderAdminPortfolio(
 }
 
 // ---------------------------------------------------------------------------
+// Reading list
+// ---------------------------------------------------------------------------
+
+export interface AdminBook {
+  id: string
+  slug: string
+  title: string
+  subtitle: string | null
+  authors: string[]
+  publishedYear: number | null
+  category: string
+  summary: string
+  description: string | null
+  note: string | null
+  coverImage: { url: string } | null
+  purchaseUrl: string | null
+  sourceLabel: string | null
+  sourceUrl: string | null
+  displayOrder: number
+  published: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+/** Every editable field; `displayOrder` null on create appends the book to the end. */
+export type AdminBookInput = Omit<AdminBook, 'id' | 'createdAt' | 'updatedAt' | 'displayOrder'> & {
+  displayOrder: number | null
+}
+
+export async function fetchAdminBooks(getAccessToken: GetAccessToken): Promise<AdminBook[]> {
+  const token = await getAccessToken()
+  return handleResponse<AdminBook[]>(await authFetch(`${ADMIN_URL}/books`, token))
+}
+
+export async function fetchAdminBook(getAccessToken: GetAccessToken, id: string): Promise<AdminBook> {
+  const token = await getAccessToken()
+  return handleResponse<AdminBook>(await authFetch(`${ADMIN_URL}/books/${id}`, token))
+}
+
+export async function createAdminBook(getAccessToken: GetAccessToken, data: AdminBookInput): Promise<AdminBook> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/books`, token, jsonOptions(data as unknown as Record<string, unknown>, 'POST'),
+  )
+  return handleResponse<AdminBook>(response)
+}
+
+export async function updateAdminBook(
+  getAccessToken: GetAccessToken,
+  id: string,
+  data: AdminBookInput,
+): Promise<AdminBook> {
+  const token = await getAccessToken()
+  const response = await authFetch(
+    `${ADMIN_URL}/books/${id}`, token, jsonOptions(data as unknown as Record<string, unknown>, 'PUT'),
+  )
+  return handleResponse<AdminBook>(response)
+}
+
+export async function deleteAdminBook(getAccessToken: GetAccessToken, id: string): Promise<void> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/books/${id}`, token, { method: 'DELETE' })
+  return handleNoContent(response)
+}
+
+/** A stored book as the editor sends it back: every field, so a save can never drop one. */
+export function toAdminBookInput(book: AdminBook): AdminBookInput {
+  return {
+    slug: book.slug,
+    title: book.title,
+    subtitle: book.subtitle,
+    authors: book.authors,
+    publishedYear: book.publishedYear,
+    category: book.category,
+    summary: book.summary,
+    description: book.description,
+    note: book.note,
+    coverImage: book.coverImage,
+    purchaseUrl: book.purchaseUrl,
+    sourceLabel: book.sourceLabel,
+    sourceUrl: book.sourceUrl,
+    displayOrder: book.displayOrder,
+    published: book.published,
+  }
+}
+
+/** Publishes or unpublishes one book, sending every other field back unchanged. */
+export async function setAdminBookPublished(
+  getAccessToken: GetAccessToken,
+  book: AdminBook,
+  published: boolean,
+): Promise<AdminBook> {
+  return updateAdminBook(getAccessToken, book.id, { ...toAdminBookInput(book), published })
+}
+
+export async function reorderAdminBooks(getAccessToken: GetAccessToken, orderedIds: string[]): Promise<void> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/books/reorder`, token, jsonOptions({ orderedIds }, 'PATCH'))
+  return handleNoContent(response)
+}
+
+// ---------------------------------------------------------------------------
 // Social media
 // ---------------------------------------------------------------------------
 

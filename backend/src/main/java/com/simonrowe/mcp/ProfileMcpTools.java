@@ -223,9 +223,10 @@ public class ProfileMcpTools {
 
   @WithSpan
   @Tool(description = """
-      Search across all site content — blogs, jobs, skills, news, and \
-      events. Returns grouped results by content type. Use this for broad or general \
-      questions that might span multiple areas of Simon's portfolio.""")
+      Search across all site content — blogs, jobs, skills, news, events \
+      and the books on Simon's reading list. Returns grouped results by content type. \
+      Use this for broad or general questions that might span multiple areas of \
+      Simon's portfolio.""")
   public GroupedSearchResponse searchSite(
       @ToolParam(description = "Search keywords to match across all site content")
       final String query) {
@@ -233,7 +234,7 @@ public class ProfileMcpTools {
       return searchService.siteSearch(query);
     } catch (Exception e) {
       LOG.error("Site search failed for query: {}", query, e);
-      return new GroupedSearchResponse(List.of(), List.of(), List.of(), List.of(), List.of());
+      return GroupedSearchResponse.empty();
     }
   }
 

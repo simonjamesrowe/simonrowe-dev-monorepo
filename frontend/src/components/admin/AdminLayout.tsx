@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
+  BookOpen,
   Briefcase,
   CircuitBoard,
   Code,
@@ -35,6 +36,7 @@ const navItems = [
   { path: '/admin/home-page', label: 'Home page', icon: <House size={18} /> },
   { path: '/admin/profile', label: 'Profile', icon: <User size={18} /> },
   { path: '/admin/portfolio', label: 'Portfolio', icon: <LayoutGrid size={18} /> },
+  { path: '/admin/books', label: 'Reading list', icon: <BookOpen size={18} /> },
   { path: '/admin/skills', label: 'Skills', icon: <Code size={18} /> },
   { path: '/admin/jobs', label: 'Jobs', icon: <Briefcase size={18} /> },
   { path: '/admin/tags', label: 'Tags', icon: <Tag size={18} /> },

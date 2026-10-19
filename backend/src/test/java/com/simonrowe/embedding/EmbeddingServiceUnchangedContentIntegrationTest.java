@@ -13,6 +13,8 @@ import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.BlogRepository;
+import com.simonrowe.books.Book;
+import com.simonrowe.books.BookRepository;
 import com.simonrowe.employment.JobRepository;
 import com.simonrowe.search.elasticsearch.ElasticsearchJsonpMapperConfig;
 import com.simonrowe.skills.SkillGroupRepository;
@@ -64,6 +66,7 @@ class EmbeddingServiceUnchangedContentIntegrationTest {
 
   private final CountingEmbeddingModel model = new CountingEmbeddingModel();
   private final List<AggregatedArticle> articles = new ArrayList<>();
+  private final List<Book> books = new ArrayList<>();
   private String index;
   private EmbeddingService service;
 
@@ -95,6 +98,8 @@ class EmbeddingServiceUnchangedContentIntegrationTest {
 
     final AggregatedArticleRepository articleRepository = mock(AggregatedArticleRepository.class);
     when(articleRepository.findByVisibleTrueOrderByPublishedDateDesc()).thenReturn(articles);
+    final BookRepository bookRepository = mock(BookRepository.class);
+    when(bookRepository.findAllByOrderByDisplayOrderAscTitleAsc()).thenReturn(books);
     service = new EmbeddingService(
         store,
         new EmbeddingConfig().tokenTextSplitter(),
@@ -105,6 +110,7 @@ class EmbeddingServiceUnchangedContentIntegrationTest {
         mock(AdminCodeExampleRepository.class),
         articleRepository,
         mock(AggregatedEventRepository.class),
+        bookRepository,
         client,
         index);
   }
@@ -209,6 +215,35 @@ class EmbeddingServiceUnchangedContentIntegrationTest {
     sync();
 
     assertThat(model.calls.get()).isGreaterThan(afterFirst);
+  }
+
+  private static Book book(final boolean published) {
+    return new Book("k1", "release-it", "Release It!", null, List.of("Michael T. Nygard"), 2007,
+        "Delivery and production", "Patterns for production.", "Circuit breakers.",
+        "Why it is here.", null, null, null, null, 0, published,
+        Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"));
+  }
+
+  @Test
+  @DisplayName("a published book reaches the chat's context, and leaves it when unpublished")
+  void publishedBooksAreEmbeddedAndDraftsRemoved() throws Exception {
+    books.add(book(true));
+    sync();
+
+    assertThat(chunksFor("book_k1")).isEqualTo(1);
+    final var hit = client.search(s -> s.index(index).query(q -> q.term(
+        t -> t.field("metadata.sourceId.keyword").value("book_k1"))), java.util.Map.class)
+        .hits().hits().getFirst().source();
+    assertThat(hit.get("content").toString())
+        .startsWith("Release It! by Michael T. Nygard, on Simon's reading list")
+        .contains("Why it is here.", "Circuit breakers.");
+    assertThat(((java.util.Map<?, ?>) hit.get("metadata")).get("url"))
+        .isEqualTo("/reading?book=release-it");
+
+    books.set(0, book(false));
+    sync();
+
+    assertThat(chunksFor("book_k1")).isZero();
   }
 
   /** A deterministic model that counts how many times it was asked for vectors. */

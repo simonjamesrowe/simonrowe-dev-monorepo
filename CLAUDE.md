@@ -275,6 +275,29 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- reading-list: **`/reading` is a CMS-managed list of recommended books** (`com.simonrowe.books`,
+  collection `books`, `V062CreateBooks`), under Insights in the header, edited at `/admin/books`.
+  Each card shows the cover, authors and a summary with a buy link; the drawer (`?book=<slug>`)
+  adds the markdown description, a "Why it's on my list" note and a "Found via" credit.
+  Load-bearing bits:
+  - **`GET /api/books` returns everything the drawer shows**, so a deep link needs no second
+    request and there is no per-book endpoint.
+  - **V062 seeds all thirty books from Trisha Gee's "Shiny New Tools Won't Fix Your Problem"
+    reading list, sixteen published and fourteen as drafts** to switch on from the admin list.
+    Copy is `seed/books/books.json`; covers are `seed/books/covers/*.jpg`, imported through
+    `MediaService.importFile` under `seed:books/<file>`. It inserts only absent slugs, so it
+    never overwrites a CMS edit; the rollback removes only rows whose `updatedAt` still equals
+    `createdAt`.
+  - Buy links are plain `amazon.co.uk/dp/<ASIN>` addresses, deliberately without the talk's
+    affiliate tag. "Buy on Amazon" is decided by parsing the host (`purchaseLabel`).
+  - `publishedYear` is the work's first publication, not the edition being sold.
+  - In the backup and restore; `RestoreService.ensureBookIndexes()` puts the unique slug index back.
+  - **Books are in the site search (a "Books" group, so the MCP `searchSite` tool too) and in the
+    chat's vector context.** Both use `book_<id>` ids, so a book can never overwrite a blog's
+    document. `BookService` publishes `ContentType.BOOK` on every save and delete, and both Kafka
+    consumers index a published book and remove an unpublished one. The 4-hourly syncs are the
+    backstop, and the site index syncs at startup, which is what indexes the seeded books: V062
+    publishes nothing. Authors are indexed in `company`, so searching an author finds their books.
 - visitor-ip-through-pinggy: **Nothing on the stack could see a visitor's IP address.** Measured
   from Loki on 2026-10-19: every request reached the outer nginx from pinggy's Docker address
   (`172.x`) with `xff="-"`. So the backend's per-IP rate limiter held every visitor in **one**

@@ -1,5 +1,6 @@
 import {
   Activity,
+  BookOpen,
   Box,
   Briefcase,
   LayoutGrid,
@@ -62,6 +63,7 @@ export const NAV_GROUPS: NavGroup[] = [
         description: 'What is happening across AI and engineering',
         icon: Newspaper,
       },
+      { label: 'Reading list', to: '/reading', description: 'Books I recommend, and why', icon: BookOpen },
     ],
   },
   {

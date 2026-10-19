@@ -182,6 +182,8 @@ public class DataOperationsController {
         total += embeddingService.embedAllArticles();
         operationsService.updateProgress("Embedding events...", 92);
         total += embeddingService.embedAllEvents();
+        operationsService.updateProgress("Embedding books...", 96);
+        total += embeddingService.embedAllBooks();
         operationsService.completeOperation(
             "Re-embedded " + total + " items successfully");
       } catch (Exception ex) {

@@ -39,11 +39,14 @@ class SearchControllerTest {
         List.of(new SearchResult(
             "Java", "/images/skills/java.png", "/skills")),
         List.of(),
-        List.of());
+        List.of(),
+        List.of(new SearchResult(
+            "Release It!", "/uploads/release-it.jpg", "/reading?book=release-it")));
     when(searchService.siteSearch(anyString())).thenReturn(response);
 
     mockMvc.perform(get("/api/search").param("q", "java"))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.books[0].url").value("/reading?book=release-it"))
         .andExpect(jsonPath("$.blogs[0].name").value("Java Blog"))
         .andExpect(jsonPath("$.skills[0].name").value("Java"));
   }

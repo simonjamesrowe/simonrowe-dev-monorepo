@@ -35,6 +35,7 @@ const NewsEventsPage = named(() => import('./pages/NewsEventsPage'), 'NewsEvents
 const McpPage = named(() => import('./pages/McpPage'), 'McpPage')
 const StatusPage = named(() => import('./pages/StatusPage'), 'StatusPage')
 const PlaylistPage = named(() => import('./pages/PlaylistPage'), 'PlaylistPage')
+const ReadingPage = named(() => import('./pages/ReadingPage'), 'ReadingPage')
 const PortfolioPage = named(() => import('./pages/PortfolioPage'), 'PortfolioPage')
 const PortfolioProjectPage = named(() => import('./pages/PortfolioProjectPage'), 'PortfolioProjectPage')
 const NotFoundPage = named(() => import('./pages/NotFoundPage'), 'NotFoundPage')
@@ -60,6 +61,8 @@ const SchoolEventsAdmin = named(() => import('./pages/admin/SchoolEventsAdmin'),
 const SchoolNotesAdmin = named(() => import('./pages/admin/SchoolNotesAdmin'), 'SchoolNotesAdmin')
 const ProfileAdmin = named(() => import('./pages/admin/ProfileAdmin'), 'ProfileAdmin')
 const HomePageAdmin = named(() => import('./pages/admin/HomePageAdmin'), 'HomePageAdmin')
+const BooksAdmin = named(() => import('./pages/admin/BooksAdmin'), 'BooksAdmin')
+const BookEditor = named(() => import('./pages/admin/BookEditor'), 'BookEditor')
 const PortfolioAdmin = named(() => import('./pages/admin/PortfolioAdmin'), 'PortfolioAdmin')
 const PortfolioProjectEditor = named(() => import('./pages/admin/PortfolioProjectEditor'), 'PortfolioProjectEditor')
 const SkillGroupEditor = named(() => import('./pages/admin/SkillGroupEditor'), 'SkillGroupEditor')
@@ -210,6 +213,7 @@ function App() {
         <Route element={<PublicLayout><BlogListingPage /></PublicLayout>} path="/blogs" />
         <Route element={<PublicLayout><BlogDetailPage /></PublicLayout>} path="/blogs/:id" />
         <Route element={<PublicLayout><NewsEventsPage /></PublicLayout>} path="/news-events" />
+        <Route element={<PublicLayout><ReadingPage /></PublicLayout>} path="/reading" />
         <Route element={<PublicLayout><McpPage /></PublicLayout>} path="/mcp" />
         <Route element={<PublicLayout><StatusPage /></PublicLayout>} path="/status" />
         <Route element={<PublicLayout><PlaylistPage /></PublicLayout>} path="/playlist" />
@@ -237,6 +241,8 @@ function App() {
           <Route path="home-page" element={<HomePageAdmin />} />
           <Route path="portfolio" element={<PortfolioAdmin />} />
           <Route path="portfolio/:id" element={<PortfolioProjectEditor />} />
+          <Route path="books" element={<BooksAdmin />} />
+          <Route path="books/:id" element={<BookEditor />} />
           <Route path="tags" element={<TagsAdmin />} />
           <Route path="tour-steps" element={<TourStepsAdmin />} />
           <Route path="tour-steps/:id" element={<TourStepEditor />} />

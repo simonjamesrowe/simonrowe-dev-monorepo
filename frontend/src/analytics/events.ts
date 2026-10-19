@@ -36,6 +36,8 @@ export const EVENTS = {
   'Tour Dismissed': { step: 'count' },
   'Contact Form Submitted': {},
   'Portfolio Project Viewed': { slug: 'id' },
+  'Book Opened': { slug: 'id' },
+  'Book Purchase Clicked': { slug: 'id', from: ['card', 'drawer'] },
   'Favourite Toggled': { contentType: ['article', 'event'], favourited: 'flag' },
 
   // Term Time

@@ -524,7 +524,7 @@ class ProfileMcpToolsTest {
   }
 
   private static GroupedSearchResponse emptyGroupedSearchResponse() {
-    return new GroupedSearchResponse(List.of(), List.of(), List.of(), List.of(), List.of());
+    return GroupedSearchResponse.empty();
   }
 
   private static JobSummaryDto sampleJobSummaryDto() {

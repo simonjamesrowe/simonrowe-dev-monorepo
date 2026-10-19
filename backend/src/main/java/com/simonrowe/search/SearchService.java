@@ -29,6 +29,9 @@ public class SearchService {
   private static final Logger LOG = LoggerFactory.getLogger(SearchService.class);
   private static final int MIN_QUERY_LENGTH = 2;
 
+  /** How many groups the site search returns: blogs, jobs, skills, news, events and books. */
+  private static final int GROUP_COUNT = 6;
+
   /**
    * The site index's searchable fields, weighted so a title match beats a body match.
    *
@@ -82,11 +85,11 @@ public class SearchService {
   public GroupedSearchResponse siteSearch(final String query) {
     String sanitized = sanitizeQuery(query);
     if (sanitized.length() < MIN_QUERY_LENGTH) {
-      return new GroupedSearchResponse(List.of(), List.of(), List.of(), List.of(), List.of());
+      return GroupedSearchResponse.empty();
     }
 
     try {
-      int totalSize = maxResultsPerGroup * 5;
+      int totalSize = maxResultsPerGroup * GROUP_COUNT;
       SearchResponse<SiteSearchDocument> response = client.search(s -> s
               .index(ElasticsearchConfig.SITE_SEARCH_INDEX)
               .size(totalSize)
@@ -113,10 +116,12 @@ public class SearchService {
       List<SearchResult> events = toSearchResults(
           grouped.getOrDefault("event", List.of()), doc -> onSiteUrl(doc, "event_", "event"));
 
-      return new GroupedSearchResponse(blogs, jobs, skills, news, events);
+      List<SearchResult> books = toSearchResults(grouped.getOrDefault("book", List.of()));
+
+      return new GroupedSearchResponse(blogs, jobs, skills, news, events, books);
     } catch (IOException e) {
       LOG.error("Site search failed for query: {}", sanitized, e);
-      return new GroupedSearchResponse(List.of(), List.of(), List.of(), List.of(), List.of());
+      return GroupedSearchResponse.empty();
     }
   }
 

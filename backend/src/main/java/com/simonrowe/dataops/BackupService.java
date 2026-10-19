@@ -74,6 +74,8 @@ public class BackupService {
       "home_page",
       // Portfolio projects, edited in the CMS. A lost row loses its copy and its order.
       "portfolio_projects",
+      // The Reading list, edited in the CMS. A lost row loses its copy, notes and order.
+      "books",
       // The newsletter review queue's decisions. Without them every story already dismissed
       // or promoted inside the mailbox look-back window would be offered again.
       "newsletter_candidates",

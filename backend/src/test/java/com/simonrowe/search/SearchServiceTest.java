@@ -339,6 +339,23 @@ class SearchServiceTest {
 
   @SuppressWarnings("unchecked")
   @Test
+  void siteSearchGroupsBooksUnderTheirOwnHeadingAtTheirReadingListAddress() throws Exception {
+    stubSiteHits(new SiteSearchDocument(
+        "book_b1", "Release It!", "book", "Patterns for production.", null,
+        "Michael T. Nygard", "/uploads/b1.jpg", "/reading?book=release-it", null));
+
+    GroupedSearchResponse result = searchService.siteSearch("nygard");
+
+    assertThat(result.books()).singleElement().satisfies(book -> {
+      assertThat(book.name()).isEqualTo("Release It!");
+      assertThat(book.url()).isEqualTo("/reading?book=release-it");
+      assertThat(book.image()).isEqualTo("/uploads/b1.jpg");
+    });
+    assertThat(result.blogs()).isEmpty();
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test
   void siteSearchKeepsTheIndexedUrlWhenTheIdHasNoContentId() throws Exception {
     stubSiteHits(new SiteSearchDocument(
         "news_", "An article", "news", "Summary", null, "Publisher",

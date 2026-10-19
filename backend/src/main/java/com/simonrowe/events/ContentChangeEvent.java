@@ -21,6 +21,7 @@ public record ContentChangeEvent(
     SKILL,
     CODE_EXAMPLE,
     AGGREGATED_ARTICLE,
-    AGGREGATED_EVENT
+    AGGREGATED_EVENT,
+    BOOK
   }
 }
