@@ -1,41 +1,11 @@
 <!--
-  Sync Impact Report
-  ==================
-  Version change: 1.11.0 → 2.0.0 (MAJOR)
-
-  Modified principles:
-    - Principle II: Modern Java & React Stack
-      REDEFINED: the "Docker redeploy MUST be available from the
-      admin UI / the backend MUST use ProcessBuilder to execute
-      Docker Compose CLI commands" rule is REMOVED and replaced
-      by a rule stating the opposite: deployment is performed by
-      a dedicated container, and the container serving the public
-      API MUST hold no host-level container access.
-
-      Why MAJOR: this is a principle redefinition, not an
-      expansion. The old rule mandated a mechanism that forced
-      the internet-facing API container to hold
-      /var/run/docker.sock (root-equivalent on the host) plus
-      copies of docker-compose.prod.yml and .env. That mechanism
-      was never trusted in practice and is deleted by feature
-      036-auto-deploy-on-merge. The replacement is stated
-      positively so a future change reaching for a backend
-      ProcessBuilder is refused by the constitution rather than
-      by anyone's memory.
-
-  Added sections: None
-
-  Removed sections:
-    - Technology Stack Constraints: the "Docker redeploy" row is
-      replaced by a "Deployment" row naming the deployer
-      container and the Temporal deploy queue.
-
-  Templates requiring updates: None. (At 2.0.0 this listed the
-  SpecKit plan/spec/tasks templates; SpecKit has since been
-  removed and this file moved from .specify/memory/ to docs/.
-  No principle changed with the move.)
-
-  Follow-up TODOs: None
+  Sync Impact Report: 2.0.0 → 3.0.0 (MAJOR), 2026-10-19.
+  Principle IV redefines the general trace destination from Tempo to Honeycomb
+  Free. Tempo is disabled in the deployed configuration; Honeycomb reuses the
+  existing OTel/Alloy pipeline. AI traces remain in Langfuse and logs in Loki.
+  No Java agent, new application telemetry SDK, paid plan or browser export is
+  required by this amendment. Related: docs/runbooks/honeycomb-observability.md.
+  Templates requiring updates: none (SpecKit removed).
 -->
 
 # simonrowe-dev-monorepo Constitution
@@ -242,7 +212,8 @@ Debugging MUST NOT require SSH access or log tailing on hosts.
   native images.
 - Grafana Alloy MUST be the telemetry collector in production.
   It receives OTLP traces from the backend on port 4317 (gRPC)
-  and forwards them to Grafana Cloud Tempo. It also collects
+  and forwards sanitized, volume-controlled traces to Honeycomb Free when
+  enabled. AI traces MUST retain their separate Langfuse pipeline. It also collects
   Docker container logs and forwards them to Grafana Cloud Loki.
   Configuration lives at `/config/alloy/config.alloy`.
 - Portainer CE MUST provide a container management UI in
@@ -465,4 +436,4 @@ defined above.
   principles. Violations MUST be resolved before merge unless
   explicitly justified in a Complexity Tracking table.
 
-**Version**: 2.0.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-08-26
+**Version**: 3.0.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-10-19

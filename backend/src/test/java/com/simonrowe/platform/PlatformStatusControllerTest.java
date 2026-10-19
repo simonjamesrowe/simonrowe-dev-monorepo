@@ -43,6 +43,7 @@ class PlatformStatusControllerTest extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.components[?(@.name == 'mongodb')].tag").value("8"))
         .andExpect(jsonPath("$.components[?(@.name == 'backend')]").isEmpty())
-        .andExpect(jsonPath("$.components[?(@.name == 'alloy')].floating").value(true));
+        .andExpect(jsonPath("$.components[?(@.name == 'alloy')].tag").value("v1.19.2"))
+        .andExpect(jsonPath("$.components[?(@.name == 'alloy')].floating").value(false));
   }
 }

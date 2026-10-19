@@ -210,17 +210,24 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
 
   alloy:
-    image: grafana/alloy:latest
+    image: grafana/alloy:v1.19.2
     depends_on:
       - langfuse
     ports:
       # Published so the backend running on the HOST can export OTLP to it.
       - "4317:4317"
     environment:
+      HONEYCOMB_ENABLED: ${HONEYCOMB_LOCAL_ENABLED:-false}
+      HONEYCOMB_API_KEY: ${HONEYCOMB_LOCAL_API_KEY:-}
+      HONEYCOMB_OTLP_ENDPOINT: ${HONEYCOMB_OTLP_ENDPOINT:-https://api.honeycomb.io}
+      HONEYCOMB_ENVIRONMENT: development
+      HONEYCOMB_SAMPLE_PERCENTAGE: ${HONEYCOMB_LOCAL_SAMPLE_PERCENTAGE:-10}
+      HONEYCOMB_EXPORT_UNTIL: ${HONEYCOMB_LOCAL_EXPORT_UNTIL:-0}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
     volumes:
       - ./config/alloy/config.local.alloy:/etc/alloy/config.alloy:ro
+      - ./config/alloy/honeycomb.alloy:/etc/alloy/honeycomb.alloy:ro
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345

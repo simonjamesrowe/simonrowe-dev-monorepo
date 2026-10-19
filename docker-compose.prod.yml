@@ -1107,7 +1107,7 @@ services:
       retries: 3
 
   alloy:
-    image: grafana/alloy:latest
+    image: grafana/alloy:v1.19.2
     # Memory cap. Measured steady-state PSS on the Pi is noted per service; limits
     # carry roughly 2x headroom. NOTE: these are INERT until the kernel memory
     # cgroup is enabled - see scripts/enable-memory-cgroup.sh. Until then Docker
@@ -1118,6 +1118,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./config/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./config/alloy/honeycomb.alloy:/etc/alloy/honeycomb.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # --storage.path below. WITHOUT this volume it resolves to the container's
       # writable layer, so every recreate destroys the read cursors - see the

@@ -20,15 +20,16 @@ class ProdImageCatalogTest {
     assertThat(components)
         .contains(new PlatformComponent("mongodb", "mongo", "8", false))
         .contains(new PlatformComponent("elasticsearch", "elasticsearch", "9.4.5", false))
+        .contains(new PlatformComponent("alloy", "grafana/alloy", "v1.19.2", false))
         .contains(new PlatformComponent("langfuse", "langfuse/langfuse", "3.212.0", false));
   }
 
   @Test
   void marksFloatingTagsRatherThanInventingVersion() {
-    PlatformComponent alloy = component("alloy");
+    PlatformComponent searxng = component("searxng");
 
-    assertThat(alloy.tag()).isEqualTo("latest");
-    assertThat(alloy.floating()).isTrue();
+    assertThat(searxng.tag()).isEqualTo("latest");
+    assertThat(searxng.floating()).isTrue();
   }
 
   @Test

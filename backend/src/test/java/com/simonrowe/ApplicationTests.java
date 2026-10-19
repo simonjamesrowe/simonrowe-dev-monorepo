@@ -26,7 +26,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest
 @ActiveProfiles("test")
 @Testcontainers
-@Import(AbstractIntegrationTest.OpenAiCompatibleModelFactoryTestConfig.class)
+@Import({AbstractIntegrationTest.OpenAiCompatibleModelFactoryTestConfig.class,
+    KafkaListenerTestConfiguration.class})
 class ApplicationTests {
 
   @MockitoBean

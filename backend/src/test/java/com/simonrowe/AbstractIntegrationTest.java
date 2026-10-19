@@ -29,7 +29,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 @SpringBootTest
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
-@Import(AbstractIntegrationTest.OpenAiCompatibleModelFactoryTestConfig.class)
+@Import({AbstractIntegrationTest.OpenAiCompatibleModelFactoryTestConfig.class,
+    KafkaListenerTestConfiguration.class})
 public abstract class AbstractIntegrationTest {
 
   @MockitoBean
