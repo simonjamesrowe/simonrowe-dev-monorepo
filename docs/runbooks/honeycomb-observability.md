@@ -19,6 +19,9 @@ and route-derived `app.module`. Child spans without a route have no inferred mod
 
 Allowed fields are service identity/version, route template, method/status/error
 type, database system/operation, model/provider/operation and token counts.
+For Spring Boot server spans only, the pipeline maps Micrometer's `uri` route
+template, `method` and `status` to HTTP semantic fields before the actuator filter.
+Client spans and other instrumentation scopes never receive this mapping.
 Prompts, completions, tool arguments, SQL, raw URLs, headers, user/family/session
 IDs and exception messages are excluded. This is a trusted backend pipeline;
 collector ports must never be exposed to untrusted browser payloads. Existing
@@ -61,8 +64,9 @@ traffic before budget accounting is implemented. Do not upgrade the plan.
 
 ## Validate and deploy
 
-1. Run `bash scripts/test/test-honeycomb.sh` with Docker. It validates both real
-   configs and exercises the pinned Alloy against local HTTP sinks: content
+1. Run `bash scripts/test/test-honeycomb.sh` with Docker. It starts both real
+   configs (the `validate` command alone does not evaluate runtime expressions)
+   and exercises the pinned Alloy against local HTTP sinks: content
    removal, parentage, actuator/link filtering, unchanged Langfuse content and
    disabled/missing-key/expired combinations. It sends nothing to Honeycomb.
 2. Follow [production deployment](deploy.md) and the production

@@ -9,7 +9,24 @@ declare "pipeline" {
   // Absolute Unix seconds: restarts cannot extend a capture window. Zero is off.
   argument "export_until" { default = 0 }
 
-  export "input" { value = otelcol.processor.filter.gate.input }
+  export "input" { value = otelcol.processor.transform.spring_http.input }
+
+  otelcol.processor.transform "spring_http" {
+    error_mode = "propagate"
+    trace_statements {
+      context = "span"
+      // Spring's server convention puts the route template in uri. Client uri
+      // and http.url can contain private paths: never promote those fields.
+      conditions = [`scope.name == "org.springframework.boot" and kind == SPAN_KIND_SERVER`]
+      statements = [
+        `set(attributes["http.route"], attributes["uri"]) where attributes["http.route"] == nil and attributes["uri"] != nil`,
+        `set(attributes["http.request.method"], attributes["method"]) where attributes["http.request.method"] == nil and attributes["method"] != nil`,
+        `set(attributes["http.response.status_code"], Int(attributes["status"])) where attributes["http.response.status_code"] == nil and IsMatch(attributes["status"], "^[1-5][0-9]{2}$")`,
+      ]
+    }
+    // Normalize before filtering so Micrometer actuator spans are excluded too.
+    output { traces = [otelcol.processor.filter.gate.input] }
+  }
 
   otelcol.processor.filter "gate" {
     error_mode = "propagate"

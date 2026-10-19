@@ -89,7 +89,7 @@ def check_startup(config, settings):
         subprocess.run(["docker", "rm", "-f", name], stdout=subprocess.DEVNULL, check=False)
 
 
-def exercise(sink_port, enabled=True, key="test-key", expiry=None, percentage=100):
+def exercise(sink_port, enabled=True, key="test-key", expiry=None, percentage=100, spring_http=False):
     received.clear()
     expiry = int(time.time()) + 60 if expiry is None else expiry
     name = "honeycomb-test-" + uuid.uuid4().hex[:12]
@@ -156,6 +156,26 @@ otelcol.exporter.otlphttp "langfuse" {{
                                 "spans": [parent, child, health, linked]}],
             }]}
 
+            if spring_http:
+                parent["attributes"] = attrs(**{
+                    "uri": "/api/coparent/events/{id}", "method": "GET", "status": "200",
+                    "http.url": SECRET, "langfuse.trace.input": SECRET,
+                })
+                health["attributes"] = attrs(uri="/actuator/health", method="GET", status="200")
+                scope = payload["resourceSpans"][0]["scopeSpans"][0]
+                scope["scope"]["name"] = "org.springframework.boot"
+                # Same field on a client span or a different instrumentation scope
+                # is not Spring's server route template and must never be promoted.
+                client = copy.deepcopy(parent)
+                client.update(spanId="4123456789abcdef", kind=3,
+                              attributes=attrs(uri=SECRET, method="GET", status="200"))
+                scope["spans"].append(client)
+                untrusted = copy.deepcopy(client)
+                untrusted.update(spanId="5123456789abcdef", kind=2)
+                payload["resourceSpans"][0]["scopeSpans"].append({
+                    "scope": {"name": "other"}, "spans": [untrusted],
+                })
+
             if percentage != 100:
                 # Different requests retain/drop together even when each trace has two spans.
                 sampled_payload = []
@@ -195,8 +215,15 @@ otelcol.exporter.otlphttp "langfuse" {{
                     assert 0 < len(by_trace) < 200
                     assert all(len(pair) == 2 for pair in by_trace.values())
                     exported = next(iter(by_trace.values()))
-                assert len(exported) == 2, exported
-                assert {s["spanId"] for s in exported} == {parent["spanId"], child["spanId"]}
+                expected_ids = {parent["spanId"], child["spanId"]}
+                if spring_http:
+                    expected_ids.update({client["spanId"], untrusted["spanId"]})
+                    for item in exported:
+                        if item["spanId"] in (client["spanId"], untrusted["spanId"]):
+                            assert item["name"] == "operation"
+                            assert not any(a["key"].startswith("http.") for a in item["attributes"])
+                assert len(exported) == len(expected_ids), exported
+                assert {s["spanId"] for s in exported} == expected_ids
                 actual_child = next(s for s in exported if s["spanId"] == child["spanId"])
                 assert actual_child["parentSpanId"] == parent["spanId"]
                 assert actual_child["traceId"] == exported[0]["traceId"]
@@ -204,6 +231,10 @@ otelcol.exporter.otlphttp "langfuse" {{
                 actual_parent = next(s for s in exported if s["spanId"] == parent["spanId"])
                 values = {a["key"]: a["value"] for a in actual_parent["attributes"]}
                 assert values["app.module"]["stringValue"] == "coparent"
+                if spring_http:
+                    assert actual_parent["name"] == "/api/coparent/events/{id}"
+                    assert values["http.request.method"]["stringValue"] == "GET"
+                    assert int(values["http.response.status_code"]["intValue"]) == 200
                 assert actual_parent["status"]["code"] == 2
             else:
                 time.sleep(1.5)  # Beyond the actual 1s batch flush; negative export assertion.
@@ -235,7 +266,7 @@ if __name__ == "__main__":
             }, {"HONEYCOMB_SAMPLE_PERCENTAGE": "0", "HONEYCOMB_EXPORT_UNTIL": "1"}):
                 check_startup(config, settings)
                 print(f"PASS real Alloy startup {config}: {settings or 'defaults'}")
-        for settings in ({}, {"percentage": 10}, {"percentage": 0},
+        for settings in ({}, {"spring_http": True}, {"percentage": 10}, {"percentage": 0},
                          {"enabled": False, "percentage": 0},
                          {"enabled": False}, {"key": ""}, {"expiry": 1}):
             exercise(server.server_port, **settings)
