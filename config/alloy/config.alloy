@@ -6,7 +6,7 @@ honeycomb.pipeline "backend" {
   enabled = sys.env("HONEYCOMB_ENABLED") == "true"
   api_key = sys.env("HONEYCOMB_API_KEY")
   endpoint = coalesce(sys.env("HONEYCOMB_OTLP_ENDPOINT"), "https://api.honeycomb.io")
-  environment = coalesce(sys.env("HONEYCOMB_ENVIRONMENT"), "development")
+  environment = coalesce(sys.env("HONEYCOMB_ENVIRONMENT"), "production")
   sample_percentage = convert.number(coalesce(sys.env("HONEYCOMB_SAMPLE_PERCENTAGE"), "10"))
   export_until = convert.number(coalesce(sys.env("HONEYCOMB_EXPORT_UNTIL"), "0"))
 }
