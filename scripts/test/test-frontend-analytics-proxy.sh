@@ -12,8 +12,8 @@
 #   - every route goes to the EU data centre, not the US default;
 #   - the site's cookies are stripped (Amplitude has no business seeing them);
 #   - the upstream certificate is verified;
-#   - the visitor's X-Forwarded-For is passed on, without which Amplitude geolocates
-#     everyone to the Pi;
+#   - the visitor's address is passed as X-Forwarded-For (Amplitude geolocates by it), and
+#     only that address: the chain that arrived can hold a client-forged entry;
 #   - an unknown /amp/ path is a 404, not the SPA.
 #
 # Verified by hand against the real hosts on 2026-10-19: each route returned Amplitude's
@@ -63,7 +63,7 @@ while IFS='|' read -r name location host sdk_path; do
   check "forwards to $host" 'grep -qF "$host" <<<"$body"'
   check "strips the site's cookies" 'grep -qE "proxy_set_header[[:space:]]+Cookie[[:space:]]+\"\";" <<<"$body"'
   check "verifies the upstream certificate" 'grep -qE "proxy_ssl_verify[[:space:]]+on;" <<<"$body"'
-  check "passes the visitor's address" 'grep -qE "proxy_set_header[[:space:]]+X-Forwarded-For[[:space:]]+\\\$http_x_forwarded_for;" <<<"$body"'
+  check "passes only the verified visitor address" 'grep -qE "proxy_set_header[[:space:]]+X-Forwarded-For[[:space:]]+\\\$remote_addr;" <<<"$body"'
   check "the SDK sends to the same path ($sdk_path)" "grep -qF \"'$sdk_path'\" \"\$SDK\""
 done <<'ROUTES'
 events|location = /amp/e {|api.eu.amplitude.com|/amp/e
