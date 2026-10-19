@@ -57,21 +57,33 @@ describe('FactoryNodeDrawer', () => {
     expect(screen.getByText(/participates in no loop/i)).toBeInTheDocument()
   })
 
-  it('explains that the build agent is not yet staffed', () => {
-    render(<FactoryNodeDrawer node={{ ...node, key: 'build', label: 'Build agent', health: 'IDLE' }}
+  it('explains what the ticket agent does and that a hand-back is not a failure', () => {
+    render(<FactoryNodeDrawer node={{ ...node, key: 'build', label: 'Ticket agent' }}
       module={null} onClose={vi.fn()} />)
-    expect(screen.getByText(/not yet running/i)).toBeInTheDocument()
+    expect(screen.getByText(/builds nothing itself/i)).toBeInTheDocument()
+    expect(screen.getByText(/counts as completed, not failed/i)).toBeInTheDocument()
   })
 
-  it('labels the build node\'s count as waiting, never "In flight", and drops the 24h rows', () => {
-    // build's counts are the Linear backlog, not runs in progress: "In flight" implies work is
-    // running, and the two 24h rows carry no meaning for a ticket queue.
-    render(<FactoryNodeDrawer node={{ ...node, key: 'build', label: 'Build agent', health: 'IDLE' }}
+  it('counts the ticket agent\'s runs with the module wording', () => {
+    render(<FactoryNodeDrawer node={{ ...node, key: 'build', label: 'Ticket agent' }}
       module={null} onClose={vi.fn()} />)
-    expect(screen.getByText('Waiting')).toBeInTheDocument()
-    expect(screen.queryByText('In flight')).not.toBeInTheDocument()
-    expect(screen.queryByText(/Succeeded \(24h\)/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Failed \(24h\)/)).not.toBeInTheDocument()
+    expect(screen.getByText('In flight')).toBeInTheDocument()
+    expect(screen.getByText('Succeeded (24h)')).toBeInTheDocument()
+  })
+
+  it('renders each item\'s actions beside it', () => {
+    render(<FactoryNodeDrawer node={{ ...node, key: 'build', label: 'Ticket agent' }}
+      module={null} onClose={vi.fn()}
+      detail={{ nodeKey: 'build', items: [
+        { id: 'ticket-agent-SIM-1', title: 'SIM-1 · a', status: 'Attempt 1 of 3', at: null,
+          url: null, agent: 'running' },
+        { id: 'ticket-agent-SIM-2', title: 'SIM-2 · b', status: 'Merged', at: null, url: null },
+      ] }}
+      itemActions={(item) => item.agent === 'running'
+        ? <button type="button">Stop {item.id}</button>
+        : null} />)
+    expect(screen.getByRole('button', { name: 'Stop ticket-agent-SIM-1' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /SIM-2/ })).not.toBeInTheDocument()
   })
 
   it('keeps "In flight" and the 24h rows for a module node', () => {
@@ -269,14 +281,12 @@ describe('FactoryNodeDrawer', () => {
     expect(screen.queryByText(/No runs in the last 30 days/i)).not.toBeInTheDocument()
   })
 
-  it('does not claim a 30-day run window for the build node', () => {
-    // build runs on a machine this console cannot reach and has no Temporal workflow of its
-    // own; its counts (rendered above) are the real signal, not a "runs" list.
-    render(<FactoryNodeDrawer node={{ ...node, key: 'build', label: 'Build agent' }}
+  it('says plainly when no ticket has been handed to the agent', () => {
+    render(<FactoryNodeDrawer node={{ ...node, key: 'build', label: 'Ticket agent' }}
       module={null} onClose={vi.fn()} detail={{ nodeKey: 'build', items: [] }} />)
-    expect(screen.getByRole('heading', { name: 'Recent activity' })).toBeInTheDocument()
-    expect(screen.getByText(/counts above/i)).toBeInTheDocument()
-    expect(screen.queryByText(/No runs in the last 30 days/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Recent runs' })).toBeInTheDocument()
+    expect(screen.getByText(/No tickets handed to the agent in the last 30 days/i))
+      .toBeInTheDocument()
   })
 
   it('renders when an item started, not just its status', () => {

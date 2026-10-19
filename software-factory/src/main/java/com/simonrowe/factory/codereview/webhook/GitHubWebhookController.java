@@ -17,6 +17,9 @@ import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.feedback.domain.FeedbackRequest;
 import com.simonrowe.factory.feedback.domain.GuidanceClosedRequest;
 import com.simonrowe.factory.linear.config.LinearProperties;
+import com.simonrowe.factory.ticketagent.api.TicketAgentService;
+import com.simonrowe.factory.ticketagent.config.TicketAgentProperties;
+import com.simonrowe.factory.ticketagent.domain.ChecksSignal;
 import java.io.IOException;
 import java.util.Set;
 import org.springframework.beans.factory.ObjectProvider;
@@ -55,6 +58,8 @@ public class GitHubWebhookController {
    * triggering is off, which is the opposite of the independence the two flags exist to give.
    */
   private final ObjectProvider<DeployWorkflowService> deployWorkflowService;
+  private final TicketAgentProperties ticketAgentProperties;
+  private final TicketAgentService ticketAgentService;
 
   public GitHubWebhookController(
       final CodeReviewProperties properties,
@@ -65,7 +70,9 @@ public class GitHubWebhookController {
       final FeedbackProperties feedbackProperties,
       final DeployProperties deployProperties,
       final LinearProperties linearProperties,
-      final ObjectProvider<DeployWorkflowService> deployWorkflowService) {
+      final ObjectProvider<DeployWorkflowService> deployWorkflowService,
+      final TicketAgentProperties ticketAgentProperties,
+      final TicketAgentService ticketAgentService) {
     this.properties = properties;
     this.signatureVerifier = signatureVerifier;
     this.workflowService = workflowService;
@@ -75,6 +82,8 @@ public class GitHubWebhookController {
     this.deployProperties = deployProperties;
     this.linearProperties = linearProperties;
     this.deployWorkflowService = deployWorkflowService;
+    this.ticketAgentProperties = ticketAgentProperties;
+    this.ticketAgentService = ticketAgentService;
   }
 
   @PostMapping
@@ -144,6 +153,16 @@ public class GitHubWebhookController {
    * need to test {@code action} as well and no second condition to keep in step with GitHub.
    */
   private ResponseEntity<?> handleWorkflowRun(final JsonNode payload) {
+    if (isTicketAgentCi(payload)) {
+      JsonNode workflowRun = payload.path("workflow_run");
+      ticketAgentService.signalChecks(
+          workflowRun.path("head_branch").asText(),
+          new ChecksSignal(
+              workflowRun.path("head_sha").asText(),
+              workflowRun.path("conclusion").asText(),
+              workflowRun.path("id").asLong()));
+      return ResponseEntity.accepted().body(new WebhookResponse("signalled"));
+    }
     DeployWorkflowService service = deployWorkflowService.getIfAvailable();
     if (!deployProperties.triggerEnabled() || service == null) {
       return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
@@ -175,6 +194,9 @@ public class GitHubWebhookController {
     if (owner.isBlank() || repository.isBlank() || pullNumber < 1) {
       return ResponseEntity.badRequest().body(new WebhookResponse("malformed"));
     }
+    // Not a return: an agent pull request is still a reviewed pull request, and the feedback
+    // loop below may well learn from what the reviewer said about it.
+    signalAgentClosed(pullRequest, owner + "/" + repository);
     if (!feedbackProperties.enabled()) {
       return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
     }
@@ -190,6 +212,34 @@ public class GitHubWebhookController {
                 owner, repository, pullNumber, installationIdOf(payload), false,
                 linearProperties.enabled()));
     return ResponseEntity.accepted().body(accepted);
+  }
+
+  /**
+   * A finished run of the CI workflow on an agent branch of the agent's repository.
+   *
+   * <p>Any conclusion counts, not only success: the agent needs to hear about a red build to
+   * repair it. A run still in progress has no conclusion, which is what filters out the
+   * {@code requested} and {@code in_progress} deliveries.
+   */
+  private boolean isTicketAgentCi(final JsonNode payload) {
+    JsonNode workflowRun = payload.path("workflow_run");
+    return ticketAgentProperties.enabled()
+        && ticketAgentProperties.ciWorkflowName().equals(workflowRun.path("name").asText())
+        && !workflowRun.path("conclusion").asText("").isBlank()
+        && workflowRun.path("head_branch").asText("").startsWith(
+            ticketAgentProperties.branchPrefix())
+        && ticketAgentProperties.slug().equalsIgnoreCase(
+            ownerOf(payload) + "/" + repositoryOf(payload))
+        && !workflowRun.path("head_sha").asText("").isBlank();
+  }
+
+  private void signalAgentClosed(final JsonNode pullRequest, final String slug) {
+    String branch = pullRequest.path("head").path("ref").asText("");
+    if (ticketAgentProperties.enabled()
+        && branch.startsWith(ticketAgentProperties.branchPrefix())
+        && ticketAgentProperties.slug().equalsIgnoreCase(slug)) {
+      ticketAgentService.signalClosed(branch, pullRequest.path("merged").asBoolean(false));
+    }
   }
 
   /**

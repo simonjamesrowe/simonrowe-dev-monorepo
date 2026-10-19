@@ -27,8 +27,19 @@ public record FactoryFlowDetail(String nodeKey, List<Item> items) {
    * @param status its state, already normalised to a word an operator reads
    * @param at when it started or was last seen, or null
    * @param url somewhere to open it, or null
+   * @param agent where the ticket agent stands with this item: {@code with-agent} or {@code
+   *     stuck} for a Linear ticket, {@code running} for a live agent run, null otherwise. Carried
+   *     through for the console's "Send to agent", "Retry" and "Stop" buttons
    */
-  public record Item(String id, String title, String status, Instant at, String url) {
+  public record Item(
+      String id, String title, String status, Instant at, String url, String agent) {
+
+    /** Anything the ticket agent has no standing with. */
+    public Item(
+        final String id, final String title, final String status, final Instant at,
+        final String url) {
+      this(id, title, status, at, url, null);
+    }
   }
 
   /**

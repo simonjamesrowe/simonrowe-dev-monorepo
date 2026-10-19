@@ -14,6 +14,7 @@ GitHub/Claude/Linear credentials, and `deployer`, which holds
 | `deploy` | `deploy` | signed `workflow_run` webhook | Runs `restart-prod.sh` phases on `deployer`, with rollback, triage and reporting | [deploy.md](deploy.md) |
 | `linear` | `linear` | none — a sink, not a producer | Files `deploy` and `cvefix` findings into Linear exactly once per distinct problem | [linear.md](linear.md) |
 | `platformbackup` | `platform-backup` | paused nightly (02:00) Temporal schedule | Captures the four Postgres databases and ClickHouse from `deployer`, which has the socket | [platform-backup-restore.md](platform-backup-restore.md) |
+| `ticketagent` | `ticket-agent` | `factory:agent` label (paused 5-minute intake schedule) and the console | Makes the change a Linear ticket asks for with file tools only, opens a PR, and repairs a red CI up to three times, woken by `workflow_run` | [ticket-agent.md](ticket-agent.md) |
 
 `linear` is the odd one out on purpose: it has no trigger of its own and its
 task queue has **no workflow poller at all**, only an activity poller — see
@@ -690,7 +691,7 @@ its `workflow-packages`:
 
 | Queue | Polled by | Configured in |
 |---|---|---|
-| `code-review`, `review-feedback`, `cve-fix`, `logwatch`, `content-writing` | `software-factory` | `application.yml` |
+| `code-review`, `review-feedback`, `cve-fix`, `logwatch`, `content-writing`, `ticket-agent` | `software-factory` | `application.yml` |
 | `deploy`, `platform-backup` | `deployer` | `application-deployer.yml` (replaces the list) |
 | `linear` (activities only) | `software-factory` | `LinearActivitiesImpl`'s flag, not a package |
 

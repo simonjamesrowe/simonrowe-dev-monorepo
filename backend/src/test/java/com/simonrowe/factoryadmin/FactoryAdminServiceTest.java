@@ -52,7 +52,8 @@ class FactoryAdminServiceTest {
     assertThat(status.modules())
         .extracting(FactoryInstanceStatus.ModuleStatus::key)
         .containsExactly(
-            "codereview", "feedback", "cvefix", "deploy", "linear", "platformbackup", "logwatch");
+            "codereview", "feedback", "cvefix", "deploy", "linear", "platformbackup", "logwatch",
+            "ticketagent");
     assertThat(status.modules()).allMatch(module -> !module.ready());
     assertThat(status.modules()).allMatch(
         module -> "Owning factory service is unreachable".equals(module.diagnostic()));

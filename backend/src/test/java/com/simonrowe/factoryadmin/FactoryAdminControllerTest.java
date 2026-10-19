@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -163,6 +164,71 @@ class FactoryAdminControllerTest {
                     {"frontendCommit":"%s","confirmation":"REDEPLOY 0123456"}""".formatted(SHA)))
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.detail").value("Redeploying 0123456"));
+  }
+
+  @Test
+  void handsTicketToTheAgent() throws Exception {
+    when(service.startTicketAgent("SIM-107", false))
+        .thenReturn(new FactoryRunAccepted("ticket-agent-SIM-107", null, "Handed SIM-107"));
+
+    mockMvc.perform(
+            post(BASE + "/ticket-agent/runs")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ticket\":\" SIM-107 \"}"))
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.workflowId").value("ticket-agent-SIM-107"));
+  }
+
+  @Test
+  void carriesTheDryRunFlagForTicket() throws Exception {
+    when(service.startTicketAgent("SIM-107", true))
+        .thenReturn(new FactoryRunAccepted("ticket-agent-dry-run-SIM-107", null, "Dry"));
+
+    mockMvc.perform(
+            post(BASE + "/ticket-agent/runs")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ticket\":\"SIM-107\",\"dryRun\":true}"))
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.workflowId").value("ticket-agent-dry-run-SIM-107"));
+  }
+
+  @Test
+  void rejectsTicketRunWithNoTicket() throws Exception {
+    mockMvc.perform(
+            post(BASE + "/ticket-agent/runs")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ticket\":\" \"}"))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void stopsTicketRun() throws Exception {
+    when(service.stopTicketAgent("SIM-107"))
+        .thenReturn(new FactoryRunAccepted("ticket-agent-SIM-107", null, "Stopping SIM-107"));
+
+    mockMvc.perform(post(BASE + "/ticket-agent/runs/SIM-107/stop"))
+        .andExpect(status().isAccepted());
+  }
+
+  @Test
+  void refusesToStopSomethingThatIsNotTicket() throws Exception {
+    mockMvc.perform(post(BASE + "/ticket-agent/runs/SIM-107x/stop"))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void pausesTheTicketIntake() throws Exception {
+    when(service.setTicketIntake(true))
+        .thenReturn(new FactoryRunAccepted(null, null, "Ticket intake paused"));
+
+    mockMvc.perform(
+            post(BASE + "/ticket-agent/intake")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"paused\":true}"))
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.detail").value("Ticket intake paused"));
   }
 
   @Test

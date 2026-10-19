@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 import { AlertCircle, X } from 'lucide-react'
 
 import type {
-  FactoryFlowDetail, FactoryFlowNode, FactoryModuleStatus, FactoryNodeHealth,
-  FactoryScheduleStatus,
+  FactoryFlowDetail, FactoryFlowDetailItem, FactoryFlowNode, FactoryModuleStatus,
+  FactoryNodeHealth, FactoryScheduleStatus,
 } from '../../services/softwareFactoryApi'
 
 const HEALTH_LABELS: Record<FactoryNodeHealth, string> = {
@@ -30,10 +30,10 @@ const NODE_NOTES: Record<string, string> = {
     'Platform backup participates in no loop, so it is drawn off the ring rather than on it. '
     + 'Placing it on the ring would imply a feedback path that does not exist.',
   build:
-    'The build agent is declared but not yet running. It is designed to run on a developer '
-    + 'machine rather than the production host, so this node is derived entirely from Linear and '
-    + 'GitHub. Offline means work is waiting and nothing has picked it up; Idle means there is '
-    + 'nothing waiting.',
+    'The ticket agent works Linear tickets labelled factory:agent. It edits files only and builds '
+    + 'nothing itself: GitHub Actions runs CI, and a red build wakes it for another attempt, three '
+    + 'in all. A ticket it gives back to a person counts as completed, not failed; only a crashed '
+    + 'run counts as failed.',
   linear:
     'Linear is an artifact, and the badge on it is the health of the linear sink module. That '
     + 'module is the factory’s only activity-only task queue — nothing flows through '
@@ -86,19 +86,19 @@ const RUN_LIST_COPY: Record<string, RunListCopy> = {
     empty: 'No open pull requests.',
     unavailable: 'Open pull requests are not available from this console.',
   },
-  // production and build have no run list of their own — no Temporal workflow, no artifact
-  // reader — so their FlowDetail is always FlowDetail.empty(), never a "runs" list bounded by a
-  // 30-day retention window. Falling through to the module default stated a window and a noun
-  // ("runs") that never applied to either, on every normal page load.
+  // production has no run list of its own — no Temporal workflow, no artifact reader — so its
+  // FlowDetail is always FlowDetail.empty(), never a "runs" list bounded by a 30-day retention
+  // window. Falling through to the module default stated a window and a noun ("runs") that never
+  // applied, on every normal page load.
   production: {
     heading: 'Recent activity',
     empty: 'Production has no activity of its own here — see the platform status page.',
     unavailable: 'Activity is not available from this console.',
   },
   build: {
-    heading: 'Recent activity',
-    empty: 'The build agent has no run history here — its waiting work is the counts above.',
-    unavailable: 'Activity is not available from this console.',
+    heading: 'Recent runs',
+    empty: 'No tickets handed to the agent in the last 30 days.',
+    unavailable: 'Run history is not available from this console.',
   },
 }
 
@@ -112,24 +112,16 @@ const runListCopy = (nodeKey: string): RunListCopy =>
   RUN_LIST_COPY[nodeKey] ?? DEFAULT_RUN_LIST_COPY
 
 /**
- * The counts panel's row labels for one node. `build`'s `counts.inFlight` is the same Linear
- * backlog `linearCounts()` returns for the `linear` node itself — see
- * `FactoryFlowService.countsFor` — because the build agent runs on a machine this console cannot
- * reach, so its only signal is the ticket queue waiting for it. "In flight" says work is running;
- * build's entire point is that nothing is. `FactoryFlowGraph.countSummary` already solved this for
- * the graph badge ("N waiting"); this brings the drawer into line with it. The 24h rows are
- * suppressed for the same node: `ok24h`/`failed24h` there are tickets settled/never in a 24h
- * window, not runs succeeding or failing, and reusing that wording implies a distinction ("succeeded"
- * vs "failed") that does not exist for a ticket backlog.
+ * The counts panel's row labels for one node. Every node now counts real work the same way, so
+ * this is one shape; it stays a lookup so a node that ever needs its own wording gets it here
+ * rather than in an if-chain.
  */
 interface CountsLabels {
   inFlight: string
   show24h: boolean
 }
 
-const COUNTS_LABELS: Record<string, CountsLabels> = {
-  build: { inFlight: 'Waiting', show24h: false },
-}
+const COUNTS_LABELS: Record<string, CountsLabels> = {}
 
 const DEFAULT_COUNTS_LABELS: CountsLabels = { inFlight: 'In flight', show24h: true }
 
@@ -163,7 +155,7 @@ const FOCUSABLE_SELECTOR = [
 ].join(', ')
 
 export function FactoryNodeDrawer(
-  { node, module, onClose, detail, detailError, children }: {
+  { node, module, onClose, detail, detailError, itemActions, children }: {
     node: FactoryFlowNode | null
     module: FactoryModuleStatus | null
     onClose: () => void
@@ -178,6 +170,8 @@ export function FactoryNodeDrawer(
      * detail panel that could not be read must show an error, not a permanent, silent spinner.
      */
     detailError?: string | null
+    /** Controls for one listed item, such as Stop on a live agent run; nothing when null. */
+    itemActions?: (item: FactoryFlowDetailItem) => React.ReactNode
     children?: React.ReactNode
   },
 ) {
@@ -363,6 +357,7 @@ export function FactoryNodeDrawer(
                         <span className="factory-drawer__run-time">{formatTime(item.at)}</span>
                       </>
                     )}
+                    {itemActions?.(item)}
                   </li>
                 )
               })}

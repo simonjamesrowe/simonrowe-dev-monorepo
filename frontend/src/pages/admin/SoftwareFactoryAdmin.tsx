@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
+  Bot,
   CheckCircle2,
   CloudCog,
   Loader2,
+  Pause,
   Play,
   RefreshCw,
   ScanSearch,
   ScrollText,
   ShieldAlert,
+  Square,
   XCircle,
 } from 'lucide-react'
 
@@ -23,14 +26,19 @@ import {
   fetchFactoryFlowDetail,
   fetchRunProgress,
   fetchSoftwareFactoryStatus,
+  parseTicketReference,
+  setTicketIntake,
   startCodeReview,
   startDeploy,
   startFeedback,
   startLogWatchScan,
   startPlatformBackup,
+  startTicketAgent,
   startVulnerabilityScan,
+  stopTicketAgent,
   type FactoryFlow,
   type FactoryFlowDetail,
+  type FactoryFlowDetailItem,
   type FactoryModuleStatus,
   type FactoryRunAccepted,
   type FactoryRunProgress,
@@ -205,6 +213,8 @@ export function SoftwareFactoryAdmin() {
   const [run, setRun] = useState<ActiveRun | null>(null)
   const [reviewPullNumber, setReviewPullNumber] = useState('')
   const [pullNumber, setPullNumber] = useState('')
+  const [ticketInput, setTicketInput] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
   const [deployConfirmation, setDeployConfirmation] = useState('')
   const [confirmBackup, setConfirmBackup] = useState(false)
   const [refreshMs, setRefreshMs] = useState<number | null>(null)
@@ -268,6 +278,9 @@ export function SoftwareFactoryAdmin() {
   const deployPhrase = `REDEPLOY ${shortCommit}`
   const repository = status?.repository ?? 'the configured repository'
   const reviewNumber = parsePullNumber(reviewPullNumber)
+  const ticketIdentifier = parseTicketReference(ticketInput)
+  const ticketAgent = modules.get('ticketagent')
+  const intakePaused = ticketAgent?.schedule?.paused ?? null
   const feedbackNumber = parsePullNumber(pullNumber)
 
   const start = async (key: string, action: () => Promise<FactoryRunAccepted>) => {
@@ -283,6 +296,64 @@ export function SoftwareFactoryAdmin() {
     } finally {
       setPending(null)
     }
+  }
+
+  /**
+   * An action that starts no workflow of its own (pausing the intake, stopping a run): it reports
+   * a one-line notice instead of the run banner, which follows a workflow id.
+   */
+  const act = async (key: string, action: () => Promise<FactoryRunAccepted>) => {
+    try {
+      setPending(key)
+      setError(null)
+      setNotice(null)
+      const accepted = await action()
+      setNotice(accepted.detail)
+      await load()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Factory action failed')
+    } finally {
+      setPending(null)
+    }
+  }
+
+  /**
+   * The buttons on one listed item. On a Linear ticket: hand it over, or retry one handed back
+   * stuck. On a live agent run: stop it. Every other item gets none.
+   */
+  const itemActionsFor = (nodeKey: string) => (item: FactoryFlowDetailItem): React.ReactNode => {
+    if (!ticketAgent?.ready) return null
+    if (nodeKey === 'linear' && item.agent !== 'with-agent') {
+      const retry = item.agent === 'stuck'
+      return (
+        <button
+          className="admin-btn admin-btn--small factory-drawer__item-action"
+          disabled={pending !== null}
+          onClick={() => void start(`send-${item.id}`,
+            () => startTicketAgent(getAccessToken, item.id, false))}
+          type="button"
+          aria-label={`${retry ? 'Retry' : 'Send to agent'} ${item.id}`}
+        >
+          <Bot size={14} /> {retry ? 'Retry' : 'Send to agent'}
+        </button>
+      )
+    }
+    if (nodeKey === 'build' && item.agent === 'running') {
+      const identifier = item.id.replace(/^ticket-agent-/, '')
+      return (
+        <button
+          className="admin-btn admin-btn--small admin-btn--danger factory-drawer__item-action"
+          disabled={pending !== null}
+          onClick={() => void act(`stop-${identifier}`,
+            () => stopTicketAgent(getAccessToken, identifier))}
+          type="button"
+          aria-label={`Stop ${identifier}`}
+        >
+          <Square size={12} /> Stop
+        </button>
+      )
+    }
+    return null
   }
 
   /**
@@ -453,12 +524,60 @@ export function SoftwareFactoryAdmin() {
             ><CloudCog size={16} /> Redeploy {shortCommit}</button>
           </ActionPanel>
         )
+      case 'build':
+        return (
+          <ActionPanel title="Hand a ticket to the agent" description="Adds the factory:agent label in Linear, then starts the run. A dry run posts the would-be diff to the ticket and pushes nothing; it is the first thing to try on a new kind of ticket.">
+            <label className="factory-console__field">
+              Linear ticket
+              <input
+                placeholder="SIM-123 or a Linear URL"
+                value={ticketInput}
+                onChange={(event) => setTicketInput(event.target.value)}
+              />
+              <span
+                className={`factory-console__hint${
+                  ticketInput.trim() !== '' && ticketIdentifier === null
+                    ? ' factory-console__hint--bad'
+                    : ''}`}
+              >
+                {ticketInput.trim() === ''
+                  ? 'An identifier such as SIM-123, or the ticket\'s Linear URL'
+                  : ticketIdentifier ?? 'Not a Linear ticket identifier or URL'}
+              </span>
+            </label>
+            <div className="factory-console__button-row">
+              <button
+                className="admin-btn"
+                disabled={!ticketAgent?.ready || pending !== null || ticketIdentifier === null}
+                onClick={() => void start('ticket-dry',
+                  () => startTicketAgent(getAccessToken, ticketIdentifier as string, true))}
+                type="button"
+              >
+                {pending === 'ticket-dry'
+                  ? <Loader2 className="factory-console__spin" size={16} />
+                  : <ScanSearch size={16} />}
+                Dry run ticket
+              </button>
+              <button
+                className="admin-btn admin-btn--primary"
+                disabled={!ticketAgent?.ready || pending !== null || ticketIdentifier === null}
+                onClick={() => void start('ticket',
+                  () => startTicketAgent(getAccessToken, ticketIdentifier as string, false))}
+                type="button"
+              >
+                {pending === 'ticket'
+                  ? <Loader2 className="factory-console__spin" size={16} />
+                  : <Play size={16} />}
+                Start agent
+              </button>
+            </div>
+          </ActionPanel>
+        )
       case 'linear':
       case 'pull-request':
       case 'main':
       case 'production':
       case 'agent-setup':
-      case 'build':
         return null
       default:
         return null
@@ -501,10 +620,26 @@ export function SoftwareFactoryAdmin() {
           <ServiceState label="Factory" reachable={status?.factoryReachable ?? false} />
           <ServiceState label="Deployer" reachable={status?.deployerReachable ?? false} />
           <span className="factory-console__commit">production {shortCommit}</span>
+          {ticketAgent?.configured && intakePaused !== null && (
+            <span className="factory-console__intake">
+              Ticket intake · {intakePaused ? 'paused' : 'every 5 min'}
+              <button
+                className="admin-btn admin-btn--small"
+                disabled={!ticketAgent.ready || pending !== null}
+                onClick={() => void act('intake',
+                  () => setTicketIntake(getAccessToken, !intakePaused))}
+                type="button"
+              >
+                {intakePaused ? <Play size={12} /> : <Pause size={12} />}
+                {intakePaused ? 'Resume intake' : 'Pause intake'}
+              </button>
+            </span>
+          )}
         </div>
 
         {error && <div className="admin-error-banner"><AlertCircle size={16} /> {error}</div>}
         {run && <RunBanner run={run} />}
+        {notice && <p className="factory-console__notice" role="status">{notice}</p>}
 
         {flow && (
           <FactoryFlowGraph flow={flow} selected={selectedNode} onSelect={setSelectedNode} />
@@ -517,6 +652,7 @@ export function SoftwareFactoryAdmin() {
         onClose={() => setSelectedNode(null)}
         detail={selectedNodeDetail}
         detailError={selectedNodeDetailError}
+        itemActions={selectedNode ? itemActionsFor(selectedNode) : undefined}
       >
         {selectedNode && actionPanelFor(selectedNode)}
       </FactoryNodeDrawer>

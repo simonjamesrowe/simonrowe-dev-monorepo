@@ -69,18 +69,17 @@ describe('FactoryFlowGraph', () => {
     expect(new Set(names).size).toBe(names.length)
   })
 
-  it('describes the build node\'s count as waiting tickets, not "in flight"', () => {
-    // build's counts are the Linear backlog waiting for it, read verbatim from the same
-    // NodeCounts the linear node itself shows. The generic "in flight" wording would say things
-    // are RUNNING on a node whose entire point is that nothing is - visible on every normal page
-    // load where any ticket is open.
+  it('counts the ticket agent\'s runs like any other module', () => {
+    // The node used to show the Linear backlog as "N waiting", because no agent stood behind it.
+    // It now counts its own TicketAgentWorkflow runs, so it reads the same as every module.
     render(<FactoryFlowGraph
-      flow={flow([node('build', { label: 'Build agent', health: 'OFFLINE',
-        counts: { inFlight: 7, ok24h: 0, failed24h: 0 } })])}
+      flow={flow([node('build', { label: 'Ticket agent', health: 'READY',
+        counts: { inFlight: 1, ok24h: 3, failed24h: 0 } })])}
       selected={null} onSelect={vi.fn()} />)
 
-    expect(screen.getByRole('button', { name: /7 waiting/ })).toBeInTheDocument()
-    expect(screen.queryByText(/in flight/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /1 in flight, 3 ok, 0 failed/ }))
+      .toBeInTheDocument()
+    expect(screen.queryByText(/waiting/)).not.toBeInTheDocument()
   })
 
   it('reports a null count as unknown rather than as zero', () => {

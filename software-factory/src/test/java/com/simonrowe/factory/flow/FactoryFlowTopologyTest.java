@@ -11,6 +11,7 @@ import com.simonrowe.factory.flow.domain.Band;
 import com.simonrowe.factory.flow.domain.NodeDescriptor;
 import com.simonrowe.factory.flow.domain.NodeKind;
 import com.simonrowe.factory.logwatch.workflow.LogWatchWorkflow;
+import com.simonrowe.factory.ticketagent.workflow.TicketAgentWorkflow;
 import com.simonrowe.factory.platformbackup.workflow.PlatformBackupWorkflow;
 import java.util.List;
 import java.util.Objects;
@@ -82,7 +83,8 @@ class FactoryFlowTopologyTest {
         CveFixWorkflow.class.getSimpleName(),
         DeployWorkflow.class.getSimpleName(),
         PlatformBackupWorkflow.class.getSimpleName(),
-        LogWatchWorkflow.class.getSimpleName());
+        LogWatchWorkflow.class.getSimpleName(),
+        TicketAgentWorkflow.class.getSimpleName());
     Set<String> drawnWorkflowTypes = FactoryFlowTopology.NODES.stream()
         .map(NodeDescriptor::workflowType)
         .filter(Objects::nonNull)

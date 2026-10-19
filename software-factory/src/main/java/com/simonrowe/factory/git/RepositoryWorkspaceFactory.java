@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -43,6 +44,24 @@ public class RepositoryWorkspaceFactory {
       final Path workspaceRoot,
       final String prefix,
       final Consumer<String> heartbeat) {
+    return create(owner, repository, installationId, workspaceRoot, prefix, null, heartbeat);
+  }
+
+  /**
+   * Shallow-clones one branch of {@code owner/repository}, or the default branch when {@code
+   * branch} is null, into a temporary workspace.
+   *
+   * <p>A shallow clone is enough to commit on top of and push: the new commit's parent is the
+   * clone's tip, which the remote already has.
+   */
+  public RepositoryWorkspace create(
+      final String owner,
+      final String repository,
+      final Long installationId,
+      final Path workspaceRoot,
+      final String prefix,
+      final String branch,
+      final Consumer<String> heartbeat) {
     Path workspace = null;
     try {
       Path root = workspaceRoot.toAbsolutePath().normalize();
@@ -51,13 +70,7 @@ public class RepositoryWorkspaceFactory {
       Path checkout = workspace.resolve("repository");
       heartbeat.accept("Cloning " + owner + "/" + repository);
       runGit(
-          List.of(
-              "git", "clone", "--quiet", "--depth", "1",
-              "https://github.com/" + owner + "/" + repository + ".git",
-              checkout.toString()),
-          workspace,
-          installationId,
-          heartbeat);
+          cloneCommand(owner, repository, branch, checkout), workspace, installationId, heartbeat);
       ProcessRunner.ProcessResult head =
           runGit(
               List.of("git", "symbolic-ref", "--short", "HEAD"), checkout, installationId,
@@ -69,6 +82,35 @@ public class RepositoryWorkspaceFactory {
       }
       throw new IllegalStateException("Unable to prepare repository workspace", exception);
     }
+  }
+
+  static List<String> cloneCommand(
+      final String owner, final String repository, final String branch, final Path checkout) {
+    List<String> command =
+        new ArrayList<>(List.of("git", "clone", "--quiet", "--depth", "1"));
+    if (branch != null) {
+      command.add("--branch");
+      command.add(branch);
+    }
+    command.add("https://github.com/" + owner + "/" + repository + ".git");
+    command.add(checkout.toString());
+    return List.copyOf(command);
+  }
+
+  /**
+   * Everything the agent changed, as one unified diff, new files included.
+   *
+   * <p>Stages first, so an untracked file shows up; {@link #commitAndPush} stages again, which is
+   * a no-op on an already-staged tree.
+   */
+  public String stagedDiff(final RepositoryWorkspace workspace, final Consumer<String> heartbeat) {
+    runGit(List.of("git", "add", "--all"), workspace.repository(), null, heartbeat);
+    return runGit(
+            List.of("git", "diff", "--cached", "--no-color", "--no-ext-diff"),
+            workspace.repository(),
+            null,
+            heartbeat)
+        .standardOutput();
   }
 
   /** Paths touched in the workspace, repo-relative, from {@code git status --porcelain}. */
@@ -116,7 +158,8 @@ public class RepositoryWorkspaceFactory {
   }
 
   /**
-   * Branch, add, commit and force-push. Never invoked by an agent — Java only.
+   * Branch, add, commit and force-push. Never invoked by an agent — Java only. The force is safe
+   * because this branch namespace belongs to the factory: a re-drive replaces its own proposal.
    *
    * @return the pushed commit's sha, so a caller (such as the CVE-fix activity) can poll CI for
    *     this exact commit without a second round trip to GitHub
@@ -128,6 +171,29 @@ public class RepositoryWorkspaceFactory {
       final String authorName,
       final String authorEmail,
       final Long installationId,
+      final Consumer<String> heartbeat) {
+    return commitAndPush(
+        workspace, branch, message, authorName, authorEmail, installationId, true, heartbeat);
+  }
+
+  /**
+   * Branch, add, commit and push, forcing only when asked.
+   *
+   * <p>A first attempt forces, because the branch namespace is the factory's and a re-run replaces
+   * its own earlier proposal. A repair does not: it builds on the branch it cloned, and a plain
+   * push is refused if anything else was pushed there meanwhile, so a person's commit on the branch
+   * can never be overwritten by the agent.
+   *
+   * @return the pushed commit's sha
+   */
+  public String commitAndPush(
+      final RepositoryWorkspace workspace,
+      final String branch,
+      final String message,
+      final String authorName,
+      final String authorEmail,
+      final Long installationId,
+      final boolean force,
       final Consumer<String> heartbeat) {
     Path repo = workspace.repository();
     runGit(checkoutCommand(branch), repo, installationId, heartbeat);
@@ -146,14 +212,14 @@ public class RepositoryWorkspaceFactory {
             .standardOutput()
             .trim();
     heartbeat.accept("Pushing " + branch);
-    // --force: this branch namespace belongs to the factory; a re-drive or a repair iteration
-    // replaces its own earlier proposal.
-    runGit(
-        List.of("git", "push", "--force", "--quiet", "origin", "HEAD:refs/heads/" + branch),
-        repo,
-        installationId,
-        heartbeat);
+    runGit(pushCommand(branch, force), repo, installationId, heartbeat);
     return headSha;
+  }
+
+  static List<String> pushCommand(final String branch, final boolean force) {
+    return force
+        ? List.of("git", "push", "--force", "--quiet", "origin", "HEAD:refs/heads/" + branch)
+        : List.of("git", "push", "--quiet", "origin", "HEAD:refs/heads/" + branch);
   }
 
   private ProcessRunner.ProcessResult runGit(

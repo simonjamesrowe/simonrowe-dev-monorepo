@@ -74,8 +74,13 @@ public class GitHubCredentials {
    * reporting and every credentialed clone at once — silently, because reporting that failure
    * needs a token too. That asymmetry is the whole reason these are held apart from {@link
    * #REQUIRED_PERMISSIONS} and filtered against the installation's real grant before the mint.
+   *
+   * <p>{@code actions: read} lets the ticket agent read a failed CI job's log, which GitHub serves
+   * only with that permission even on a public repository. Without it the agent's repair brief
+   * names the failed job and step but not the error, which is a weaker brief, not an outage.
    */
-  private static final Map<String, String> OPTIONAL_PERMISSIONS = Map.of("checks", WRITE);
+  private static final Map<String, String> OPTIONAL_PERMISSIONS =
+      Map.of("checks", WRITE, "actions", "read");
 
   /** Ranks GitHub's access levels, so a granted {@code write} satisfies a needed {@code read}. */
   private static final Map<String, Integer> LEVEL_RANK =

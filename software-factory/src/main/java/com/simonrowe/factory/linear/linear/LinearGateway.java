@@ -6,6 +6,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.linear.domain.IssueStateType;
+import com.simonrowe.factory.linear.domain.LinearTicket;
 import com.simonrowe.factory.linear.domain.LinkedIssue;
 import com.simonrowe.factory.linear.domain.TrackedIssue;
 import java.io.IOException;
@@ -53,6 +54,34 @@ public class LinearGateway {
       query($url:String!){attachmentsForURL(url:$url){nodes{issue{id identifier url \
       state{type} attachments{nodes{url}}}}}}\
       """;
+
+  private static final String TICKET_FIELDS =
+      """
+      id identifier title description url priority createdAt state{name type} \
+      labels{nodes{name}}""";
+
+  private static final String TICKET_QUERY =
+      "query($id:String!){issue(id:$id){" + TICKET_FIELDS + "}}";
+
+  private static final String LABELLED_TICKETS_QUERY =
+      """
+      query($team:String!,$label:String!){issues(first:100,filter:{team:{key:{eq:$team}},\
+      labels:{name:{eqIgnoreCase:$label}},\
+      state:{type:{nin:["completed","canceled","duplicate"]}}}){nodes{%s}}}"""
+          .formatted(TICKET_FIELDS);
+
+  private static final String ADD_LABEL =
+      "mutation($id:String!,$labelId:String!){issueAddLabel(id:$id,labelId:$labelId){success}}";
+
+  private static final String REMOVE_LABEL =
+      """
+      mutation($id:String!,$labelId:String!){issueRemoveLabel(id:$id,labelId:$labelId)\
+      {success}}""";
+
+  private static final String CREATE_LABEL =
+      """
+      mutation($input:IssueLabelCreateInput!){issueLabelCreate(input:$input){success \
+      issueLabel{id name}}}""";
 
   private static final String CREATE_ISSUE =
       """
@@ -160,9 +189,14 @@ public class LinearGateway {
       for (JsonNode label : team.path("labels").path(FIELD_NODES)) {
         labels.put(label.path("name").asText(), label.path("id").asText());
       }
+      Map<String, String> stateIds = new HashMap<>();
+      for (JsonNode state : team.path("states").path(FIELD_NODES)) {
+        stateIds.putIfAbsent(state.path("name").asText(), state.path("id").asText());
+      }
       cachedTeam =
           new TeamContext(
-              team.path("id").asText(), triageStateId, completedStateId, Map.copyOf(labels));
+              team.path("id").asText(), triageStateId, completedStateId, Map.copyOf(labels),
+              Map.copyOf(stateIds));
       return cachedTeam;
     }
   }
@@ -234,6 +268,158 @@ public class LinearGateway {
               attachmentUrls));
     }
     return List.copyOf(issues.values());
+  }
+
+  /**
+   * Reads one ticket.
+   *
+   * @param idOrIdentifier the UUID or the human identifier, e.g. {@code SIM-42}; Linear accepts
+   *     either
+   * @return the ticket, or null when Linear has no such issue
+   * @throws LinearApiException on any API fault
+   */
+  public LinearTicket ticket(final String idOrIdentifier) {
+    JsonNode issue = execute(TICKET_QUERY, Map.of("id", idOrIdentifier)).path("issue");
+    return issue.isObject() ? toTicket(issue) : null;
+  }
+
+  /**
+   * Every open ticket on the team carrying a label, at most 100.
+   *
+   * @param labelName the label, matched ignoring case
+   * @return the tickets; empty when none
+   * @throws LinearApiException on any API fault
+   */
+  public List<LinearTicket> openTicketsLabelled(final String labelName) {
+    JsonNode nodes =
+        execute(LABELLED_TICKETS_QUERY, Map.of("team", properties.teamKey(), "label", labelName))
+            .path("issues")
+            .path(FIELD_NODES);
+    List<LinearTicket> tickets = new ArrayList<>();
+    for (JsonNode issue : nodes) {
+      tickets.add(toTicket(issue));
+    }
+    return List.copyOf(tickets);
+  }
+
+  /**
+   * Adds a label to a ticket, creating the label on the team first if it does not exist yet.
+   *
+   * @param issueId the Linear issue UUID
+   * @param labelName the label name
+   * @throws LinearApiException on any API fault
+   */
+  public void addLabel(final String issueId, final String labelName) {
+    String labelId = labelId(labelName, true);
+    JsonNode result =
+        execute(ADD_LABEL, Map.of("id", issueId, "labelId", labelId)).path("issueAddLabel");
+    if (!result.path(FIELD_SUCCESS).asBoolean(false)) {
+      throw new LinearApiException("Linear issueAddLabel reported failure", false);
+    }
+  }
+
+  /**
+   * Removes a label from a ticket. A label the team does not have is already absent.
+   *
+   * @param issueId the Linear issue UUID
+   * @param labelName the label name
+   * @throws LinearApiException on any API fault
+   */
+  public void removeLabel(final String issueId, final String labelName) {
+    String labelId = labelId(labelName, false);
+    if (labelId == null) {
+      return;
+    }
+    JsonNode result =
+        execute(REMOVE_LABEL, Map.of("id", issueId, "labelId", labelId)).path("issueRemoveLabel");
+    if (!result.path(FIELD_SUCCESS).asBoolean(false)) {
+      throw new LinearApiException("Linear issueRemoveLabel reported failure", false);
+    }
+  }
+
+  /**
+   * Moves a ticket to a state named on the team, such as {@code In Review}.
+   *
+   * <p>By name, not by type, because a team has two {@code started} states ({@code In Progress}
+   * and {@code In Review}) and the type alone cannot tell them apart.
+   *
+   * @param issueId the Linear issue UUID
+   * @param stateName the state's name
+   * @throws LinearApiException when the team has no state of that name, or on any API fault
+   */
+  public void moveToState(final String issueId, final String stateName) {
+    String stateId = teamContext().stateIds().get(stateName);
+    if (stateId == null) {
+      throw new LinearApiException(
+          "Team %s has no state named %s".formatted(properties.teamKey(), stateName), false);
+    }
+    updateIssue(issueId, null, stateId);
+  }
+
+  /**
+   * A label's id, looking past the cached team when it is missing.
+   *
+   * <p>{@link #teamContext()} caches labels for the process lifetime, so a label created after
+   * startup (by a person, or by this method) would otherwise stay invisible until a restart. A miss
+   * re-reads the team once before concluding the label does not exist.
+   */
+  private String labelId(final String labelName, final boolean create) {
+    String cached = findLabel(teamContext().labelIds(), labelName);
+    if (cached != null) {
+      return cached;
+    }
+    synchronized (this) {
+      cachedTeam = null;
+    }
+    TeamContext refreshed = teamContext();
+    String found = findLabel(refreshed.labelIds(), labelName);
+    if (found != null || !create) {
+      return found;
+    }
+    ObjectNode input = objectMapper.createObjectNode();
+    input.put("teamId", refreshed.teamId());
+    input.put("name", labelName);
+    JsonNode result =
+        execute(CREATE_LABEL, Map.of(VAR_INPUT, input)).path("issueLabelCreate");
+    String id = result.path("issueLabel").path("id").asText("");
+    if (!result.path(FIELD_SUCCESS).asBoolean(false) || id.isEmpty()) {
+      throw new LinearApiException("Linear issueLabelCreate reported failure", false);
+    }
+    log.info("Created Linear label {} on team {}", labelName, properties.teamKey());
+    synchronized (this) {
+      cachedTeam = refreshed.withLabel(labelName, id);
+    }
+    return id;
+  }
+
+  private static String findLabel(final Map<String, String> labelIds, final String labelName) {
+    for (Map.Entry<String, String> entry : labelIds.entrySet()) {
+      if (entry.getKey().equalsIgnoreCase(labelName)) {
+        return entry.getValue();
+      }
+    }
+    return null;
+  }
+
+  private static LinearTicket toTicket(final JsonNode issue) {
+    List<String> labels = new ArrayList<>();
+    for (JsonNode label : issue.path("labels").path(FIELD_NODES)) {
+      String name = label.path("name").asText("");
+      if (!name.isEmpty()) {
+        labels.add(name);
+      }
+    }
+    return new LinearTicket(
+        issue.path("id").asText(),
+        issue.path("identifier").asText(),
+        issue.path("title").asText(""),
+        issue.path("description").asText(""),
+        issue.path("url").asText(""),
+        IssueStateType.from(issue.path("state").path("type").asText(null)),
+        issue.path("state").path("name").asText(""),
+        labels,
+        issue.path("priority").asInt(0),
+        Instant.parse(issue.path("createdAt").asText("1970-01-01T00:00:00.000Z")));
   }
 
   /**
@@ -443,12 +629,35 @@ public class LinearGateway {
    *     worth failing on, whereas a completed state is needed only by the absence sweep, which
    *     must degrade to "close nothing" rather than take filing down with it
    * @param labelIds label name to label id, for the labels that exist on the team
+   * @param stateIds state name to state id, e.g. {@code In Progress}, for moving a ticket to a
+   *     state that is one of several of the same type
    */
   public record TeamContext(
       String teamId,
       String triageStateId,
       String completedStateId,
-      Map<String, String> labelIds) {
+      Map<String, String> labelIds,
+      Map<String, String> stateIds) {
+
+    public TeamContext {
+      labelIds = labelIds == null ? Map.of() : Map.copyOf(labelIds);
+      stateIds = stateIds == null ? Map.of() : Map.copyOf(stateIds);
+    }
+
+    /** A team whose states are known only by type, which is every caller but the ticket agent. */
+    public TeamContext(
+        final String teamId,
+        final String triageStateId,
+        final String completedStateId,
+        final Map<String, String> labelIds) {
+      this(teamId, triageStateId, completedStateId, labelIds, Map.of());
+    }
+
+    TeamContext withLabel(final String name, final String id) {
+      Map<String, String> labels = new HashMap<>(labelIds);
+      labels.put(name, id);
+      return new TeamContext(teamId, triageStateId, completedStateId, labels, stateIds);
+    }
   }
 
   /**

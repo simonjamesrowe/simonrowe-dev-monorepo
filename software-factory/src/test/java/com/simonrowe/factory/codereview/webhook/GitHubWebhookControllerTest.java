@@ -22,6 +22,10 @@ import com.simonrowe.factory.feedback.api.FeedbackWorkflowService;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.feedback.domain.FeedbackRequest;
 import com.simonrowe.factory.feedback.domain.GuidanceClosedRequest;
+import com.simonrowe.factory.testsupport.TicketAgentTestProperties;
+import com.simonrowe.factory.ticketagent.api.TicketAgentService;
+import com.simonrowe.factory.ticketagent.config.TicketAgentProperties;
+import com.simonrowe.factory.ticketagent.domain.ChecksSignal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
@@ -55,6 +59,9 @@ class GitHubWebhookControllerTest {
       Mockito.mock(FeedbackWorkflowService.class);
   private final DeployWorkflowService deployWorkflowService =
       Mockito.mock(DeployWorkflowService.class);
+  private final TicketAgentService ticketAgentService = Mockito.mock(TicketAgentService.class);
+  private final TicketAgentProperties ticketAgentProperties =
+      TicketAgentTestProperties.of(true, "example", "project");
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -87,7 +94,9 @@ class GitHubWebhookControllerTest {
             feedbackProperties,
             deployProperties,
             linearProperties(),
-            deployWorkflowServiceProvider(deployProperties.triggerEnabled()));
+            deployWorkflowServiceProvider(deployProperties.triggerEnabled()),
+            ticketAgentProperties,
+            ticketAgentService);
     return MockMvcBuilders.standaloneSetup(controller).build();
   }
 
@@ -445,6 +454,71 @@ class GitHubWebhookControllerTest {
         .andExpect(jsonPath("$.status").value("ignored"));
 
     verify(feedbackWorkflowService, never()).start(any());
+  }
+
+  // ---------------------------------------------------------------------------
+  // ticket agent: CI results and pull request closes on agent/ branches
+
+  @Test
+  void finishedCiRunOnAnAgentBranchSignalsItsTicket() throws Exception {
+    String payload = workflowRunPayload("CI", "failure", "agent/sim-107", "project");
+
+    deliver(payload, sign(payload), "workflow_run")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("signalled"));
+
+    ArgumentCaptor<ChecksSignal> signal = ArgumentCaptor.forClass(ChecksSignal.class);
+    verify(ticketAgentService).signalChecks(org.mockito.ArgumentMatchers.eq("agent/sim-107"),
+        signal.capture());
+    assertThat(signal.getValue().headSha()).isEqualTo(HEAD_SHA);
+    assertThat(signal.getValue().conclusion()).isEqualTo("failure");
+    verify(deployWorkflowService, never()).start(any(), any(), any());
+  }
+
+  @Test
+  void ciStillRunningOnAnAgentBranchSignalsNothing() throws Exception {
+    String payload = workflowRunPayload("CI", null, "agent/sim-107", "project");
+
+    deliver(payload, sign(payload), "workflow_run").andExpect(status().isAccepted());
+
+    verify(ticketAgentService, never()).signalChecks(any(), any());
+  }
+
+  @Test
+  void ciOnAnyOtherBranchOrRepositorySignalsNothing() throws Exception {
+    for (String payload :
+        List.of(
+            workflowRunPayload("CI", "success", "feat/sim-107", "project"),
+            workflowRunPayload("CI", "success", "agent/sim-107", "other-repo"),
+            workflowRunPayload("Publish", "success", "agent/sim-107", "project"))) {
+      deliver(payload, sign(payload), "workflow_run").andExpect(status().isAccepted());
+    }
+
+    verify(ticketAgentService, never()).signalChecks(any(), any());
+  }
+
+  @Test
+  void publishOnMainStillDeploysWithTheAgentSwitchedOn() throws Exception {
+    String payload = publishSucceededOnMain();
+
+    deliver(payload, sign(payload), "workflow_run").andExpect(status().isAccepted());
+
+    verify(deployWorkflowService).start(any(), any(), any());
+    verify(ticketAgentService, never()).signalChecks(any(), any());
+  }
+
+  @Test
+  void anAgentPullRequestClosingSignalsItsRunAndIsStillHarvested() throws Exception {
+    when(feedbackWorkflowService.start(any()))
+        .thenReturn(new FeedbackAccepted("review-feedback-example-project-42", true));
+    String payload =
+        closedPayload("example", "project", true).replace(
+            "\"head\": {\"sha\"", "\"head\": {\"ref\": \"agent/sim-107\", \"sha\"");
+
+    deliver(payload, sign(payload), "pull_request").andExpect(status().isAccepted());
+
+    verify(ticketAgentService).signalClosed("agent/sim-107", true);
+    verify(feedbackWorkflowService).start(any());
   }
 
   // ---------------------------------------------------------------------------

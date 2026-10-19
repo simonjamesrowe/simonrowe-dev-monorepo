@@ -4,7 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SoftwareFactoryAdmin } from '../../src/pages/admin/SoftwareFactoryAdmin'
 
-vi.mock('../../src/services/softwareFactoryApi', () => ({
+vi.mock('../../src/services/softwareFactoryApi', async (importOriginal) => ({
+  // Pure, so the real one: the console's hint and buttons are only as right as this parse.
+  parseTicketReference: (await importOriginal<
+    typeof import('../../src/services/softwareFactoryApi')>()).parseTicketReference,
+  startTicketAgent: vi.fn(),
+  stopTicketAgent: vi.fn(),
+  setTicketIntake: vi.fn(),
   fetchSoftwareFactoryStatus: vi.fn(),
   fetchFactoryFlow: vi.fn(),
   fetchFactoryFlowDetail: vi.fn(),
@@ -41,8 +47,11 @@ import {
   fetchFactoryFlowDetail,
   fetchRunProgress,
   fetchSoftwareFactoryStatus,
+  setTicketIntake,
   startCodeReview,
   startLogWatchScan,
+  startTicketAgent,
+  stopTicketAgent,
   startPlatformBackup,
   startVulnerabilityScan,
   type FactoryFlow,
@@ -60,6 +69,9 @@ const mockStartReview = vi.mocked(startCodeReview)
 const mockStartScan = vi.mocked(startVulnerabilityScan)
 const mockStartBackup = vi.mocked(startPlatformBackup)
 const mockStartLogScan = vi.mocked(startLogWatchScan)
+const mockStartTicket = vi.mocked(startTicketAgent)
+const mockStopTicket = vi.mocked(stopTicketAgent)
+const mockSetIntake = vi.mocked(setTicketIntake)
 const mockUseAuth = vi.mocked(useAuth)
 
 const getAccessToken = vi.fn().mockResolvedValue('test-token')
@@ -86,6 +98,13 @@ function module(
   }
 }
 
+function intakeSchedule(paused: boolean) {
+  return {
+    scheduleId: 'ticket-agent-intake', exists: true, paused, overlapPolicy: 'SKIP',
+    previousActionAt: null, nextActionAt: null, runningActions: 0, diagnostic: null,
+  }
+}
+
 function status(overrides: Partial<SoftwareFactoryStatus> = {}): SoftwareFactoryStatus {
   return {
     fetchedAt: '2026-08-28T09:00:00Z',
@@ -105,6 +124,7 @@ function status(overrides: Partial<SoftwareFactoryStatus> = {}): SoftwareFactory
       module('linear'),
       module('platformbackup'),
       module('logwatch'),
+      module('ticketagent', { schedule: intakeSchedule(true) }),
     ],
     ...overrides,
   }
@@ -113,7 +133,7 @@ function status(overrides: Partial<SoftwareFactoryStatus> = {}): SoftwareFactory
 /** Labels chosen so each node's accessible name is unambiguous in the tests below. */
 const NODE_LABELS: Record<string, string> = {
   linear: 'Linear',
-  build: 'Build agent',
+  build: 'Ticket agent',
   'pull-request': 'Pull request',
   codereview: 'Code review',
   main: 'Main',
@@ -589,12 +609,121 @@ describe('SoftwareFactoryAdmin', () => {
     expect(within(drawer).getByText(/counts unknown/i)).toBeInTheDocument()
   })
 
-  it('explains why the build agent node has no worker of its own', async () => {
+  it('hands a ticket to the agent only once the field names one', async () => {
+    mockStartTicket.mockResolvedValue({
+      workflowId: 'ticket-agent-SIM-107', runId: null, detail: 'Handed SIM-107 to the agent',
+    })
     renderConsoleWithFlow()
-    const drawer = await openDrawer(/Build agent/)
+    const drawer = await openDrawer(/Ticket agent/)
+    const start = within(drawer).getByRole('button', { name: 'Start agent' })
+    const dryRun = within(drawer).getByRole('button', { name: 'Dry run ticket' })
 
-    expect(within(drawer).getByText(/not yet running/i)).toBeInTheDocument()
-    expect(within(drawer).queryByRole('button', { name: /Dry run/ })).not.toBeInTheDocument()
+    expect(start).toBeDisabled()
+    expect(dryRun).toBeDisabled()
+    await userEvent.type(within(drawer).getByLabelText(/Linear ticket/), 'not a ticket')
+    expect(within(drawer).getByText('Not a Linear ticket identifier or URL')).toBeInTheDocument()
+    expect(start).toBeDisabled()
+
+    await userEvent.clear(within(drawer).getByLabelText(/Linear ticket/))
+    await userEvent.type(
+      within(drawer).getByLabelText(/Linear ticket/),
+      'https://linear.app/simonrowedev/issue/SIM-107/error-in-backend')
+    expect(within(drawer).getByText('SIM-107')).toBeInTheDocument()
+    await userEvent.click(start)
+
+    expect(mockStartTicket).toHaveBeenCalledWith(getAccessToken, 'SIM-107', false)
+  })
+
+  it('dry-runs a ticket without handing it over', async () => {
+    mockStartTicket.mockResolvedValue({
+      workflowId: 'ticket-agent-dry-run-SIM-107', runId: null, detail: 'Dry-running SIM-107',
+    })
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Ticket agent/)
+
+    await userEvent.type(within(drawer).getByLabelText(/Linear ticket/), 'sim-107')
+    await userEvent.click(within(drawer).getByRole('button', { name: 'Dry run ticket' }))
+
+    expect(mockStartTicket).toHaveBeenCalledWith(getAccessToken, 'SIM-107', true)
+  })
+
+  it('keeps the ticket buttons disabled while the agent is not ready', async () => {
+    mockFetchStatus.mockResolvedValue(status({
+      modules: [module('ticketagent', { ready: false, schedule: intakeSchedule(true) })],
+    }))
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Ticket agent/)
+
+    await userEvent.type(within(drawer).getByLabelText(/Linear ticket/), 'SIM-107')
+    expect(within(drawer).getByRole('button', { name: 'Start agent' })).toBeDisabled()
+    expect(within(drawer).getByRole('button', { name: 'Dry run ticket' })).toBeDisabled()
+  })
+
+  it('names the ticket buttons distinctly from every other dry run', async () => {
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Ticket agent/)
+
+    expect(within(drawer).queryByRole('button', { name: 'Dry run' })).not.toBeInTheDocument()
+    expect(within(drawer).getByRole('button', { name: 'Dry run ticket' })).toBeInTheDocument()
+  })
+
+  it('offers Send to agent and Retry on tickets, and nothing on one the agent holds', async () => {
+    mockFetchFlowDetail.mockResolvedValue({
+      nodeKey: 'linear',
+      items: [
+        { id: 'SIM-1', title: 'a', status: 'TRIAGE', at: null, url: null, agent: null },
+        { id: 'SIM-2', title: 'b', status: 'STARTED', at: null, url: null, agent: 'with-agent' },
+        { id: 'SIM-3', title: 'c', status: 'UNSTARTED', at: null, url: null, agent: 'stuck' },
+      ],
+    })
+    mockStartTicket.mockResolvedValue({
+      workflowId: 'ticket-agent-SIM-1', runId: null, detail: 'Handed SIM-1 to the agent',
+    })
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/^Linear/)
+
+    await userEvent.click(await within(drawer).findByRole('button', { name: 'Send to agent SIM-1' }))
+    expect(within(drawer).queryByRole('button', { name: /SIM-2/ })).not.toBeInTheDocument()
+    expect(within(drawer).getByRole('button', { name: 'Retry SIM-3' })).toBeInTheDocument()
+    expect(mockStartTicket).toHaveBeenCalledWith(getAccessToken, 'SIM-1', false)
+  })
+
+  it('stops a live run from the agent\'s run list', async () => {
+    mockFetchFlowDetail.mockResolvedValue({
+      nodeKey: 'build',
+      items: [
+        { id: 'ticket-agent-SIM-107', title: 'SIM-107 · ERROR', status: 'Attempt 2 of 3',
+          at: null, url: null, agent: 'running' },
+        { id: 'ticket-agent-SIM-90', title: 'SIM-90 · WARN', status: 'Merged',
+          at: null, url: null, agent: null },
+      ],
+    })
+    mockStopTicket.mockResolvedValue({
+      workflowId: 'ticket-agent-SIM-107', runId: null, detail: 'Stopping SIM-107',
+    })
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Ticket agent/)
+
+    await userEvent.click(await within(drawer).findByRole('button', { name: 'Stop SIM-107' }))
+    expect(within(drawer).queryByRole('button', { name: 'Stop SIM-90' })).not.toBeInTheDocument()
+    expect(mockStopTicket).toHaveBeenCalledWith(getAccessToken, 'SIM-107')
+    expect(await screen.findByText('Stopping SIM-107')).toBeInTheDocument()
+  })
+
+  it('resumes a paused intake, and offers to pause a running one', async () => {
+    mockSetIntake.mockResolvedValue({
+      workflowId: 'ticket-agent-intake', runId: null, detail: 'Ticket intake resumed',
+    })
+    renderConsoleWithFlow()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Resume intake' }))
+    expect(mockSetIntake).toHaveBeenCalledWith(getAccessToken, false)
+
+    mockFetchStatus.mockResolvedValue(status({
+      modules: [module('ticketagent', { schedule: intakeSchedule(false) })],
+    }))
+    await userEvent.click(screen.getByRole('button', { name: /Refresh/ }))
+    expect(await screen.findByRole('button', { name: 'Pause intake' })).toBeInTheDocument()
   })
 
   it('polls the flow at the chosen interval and stops when switched off', async () => {

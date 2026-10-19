@@ -61,6 +61,10 @@ spring:
         # factory.writing.enabled, true on software-factory only: it runs Claude Code on Simon's
         # subscription and has no business in the container holding the Docker socket.
         - com.simonrowe.factory.writing.workflow
+        # The activity gate is TicketAgentActivitiesImpl's @ConditionalOnProperty on
+        # factory.ticket-agent.enabled, true on software-factory only: it clones, runs an agent and
+        # pushes, none of which belongs in the container holding the Docker socket.
+        - com.simonrowe.factory.ticketagent.workflow
         # NOTE: the issue sink adds no entry here. This list drives @WorkflowImpl classpath
         # scanning only, and the `linear` queue has no @WorkflowImpl — its worker comes from
         # LinearActivitiesImpl's @ActivityImpl(taskQueues = ...) alone. `linear` is this
@@ -185,6 +189,34 @@ factory:
     timeout: ${FACTORY_WRITING_TIMEOUT:5m}
     workspace-root: ${FACTORY_WORKSPACE_ROOT:${java.io.tmpdir}/software-factory}
     max-prompt-chars: ${FACTORY_WRITING_MAX_PROMPT_CHARS:40000}
+  # The ticket agent: a person labels a Linear ticket `factory:agent`, and Claude Code makes the
+  # change with file tools only (no Bash: nothing builds or tests on the Pi), pushes an agent/
+  # branch and opens a pull request. CI's workflow_run webhook wakes it to repair a red build, up
+  # to max-attempts runs in all; the reviewer's auto-merge rules decide what merges unattended.
+  # Off here and in tests; production sets it on software-factory only. The intake schedule is
+  # created PAUSED: resume it from the console after dry-running a few tickets. See
+  # docs/runbooks/ticket-agent.md.
+  ticket-agent:
+    enabled: ${FACTORY_TICKET_AGENT_ENABLED:false}
+    owner: simonjamesrowe
+    repository: simonrowe-dev-monorepo
+    label: factory:agent
+    stuck-label: agent:stuck
+    branch-prefix: agent/
+    max-attempts: ${FACTORY_TICKET_AGENT_MAX_ATTEMPTS:3}
+    max-in-flight: ${FACTORY_TICKET_AGENT_MAX_IN_FLIGHT:1}
+    ci-workflow-name: CI
+    checks-wait: 2h
+    review-wait: 40m
+    merge-wait: 14d
+    workspace-root: ${FACTORY_WORKSPACE_ROOT:${java.io.tmpdir}/software-factory}
+    log-lines: 200
+    agent:
+      command: ${CLAUDE_COMMAND:claude}
+      model: ${FACTORY_TICKET_AGENT_MODEL:sonnet}
+      effort: ${FACTORY_TICKET_AGENT_EFFORT:medium}
+      max-turns: ${FACTORY_TICKET_AGENT_MAX_TURNS:60}
+      timeout: ${FACTORY_TICKET_AGENT_TIMEOUT:30m}
   cvefix:
     enabled: ${FACTORY_CVEFIX_ENABLED:false}
     owner: simonjamesrowe
