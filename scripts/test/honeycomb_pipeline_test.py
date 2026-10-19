@@ -54,7 +54,42 @@ def wait_for(condition, description):
     raise AssertionError(description)
 
 
-def exercise(sink_port, enabled=True, key="test-key", expiry=None, percentage=100):
+def check_startup(config, settings):
+    """Evaluate the real entrypoint: `alloy validate` skips runtime expressions."""
+    name = "honeycomb-startup-" + uuid.uuid4().hex[:12]
+    environment = {
+        "LANGFUSE_PUBLIC_KEY": "test", "LANGFUSE_SECRET_KEY": "test",
+        "GRAFANA_CLOUD_LOKI_ENDPOINT": "http://127.0.0.1:1/loki/api/v1/push",
+        "HONEYCOMB_OTLP_ENDPOINT": "http://127.0.0.1:1",
+        **settings,
+    }
+    flags = [part for key, value in environment.items() for part in ("-e", f"{key}={value}")]
+    try:
+        docker("create", "--name", name, "-p", "127.0.0.1::12345", *flags,
+               IMAGE, "run", "--server.http.listen-addr=0.0.0.0:12345", f"/etc/alloy/{config}")
+        # Copy before starting; no credentials, Docker socket or real telemetry.
+        docker("cp", f"{ROOT / 'config/alloy'}/.", f"{name}:/etc/alloy")
+        docker("start", name)
+        port = docker("port", name, "12345").rsplit(":", 1)[1]
+
+        def ready():
+            assert docker("inspect", "--format", "{{.State.Running}}", name) == "true"
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/-/ready", timeout=2) as response:
+                    return response.status == 200
+            except (urllib.error.URLError, OSError):
+                return False
+
+        wait_for(ready, f"{config} did not become ready")
+        assert "failed to evaluate config" not in docker("logs", name)
+    except Exception:
+        print(docker("logs", name))
+        raise
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], stdout=subprocess.DEVNULL, check=False)
+
+
+def exercise(sink_port, enabled=True, key="test-key", expiry=None, percentage=100, spring_http=False):
     received.clear()
     expiry = int(time.time()) + 60 if expiry is None else expiry
     name = "honeycomb-test-" + uuid.uuid4().hex[:12]
@@ -121,6 +156,26 @@ otelcol.exporter.otlphttp "langfuse" {{
                                 "spans": [parent, child, health, linked]}],
             }]}
 
+            if spring_http:
+                parent["attributes"] = attrs(**{
+                    "uri": "/api/coparent/events/{id}", "method": "GET", "status": "200",
+                    "http.url": SECRET, "langfuse.trace.input": SECRET,
+                })
+                health["attributes"] = attrs(uri="/actuator/health", method="GET", status="200")
+                scope = payload["resourceSpans"][0]["scopeSpans"][0]
+                scope["scope"]["name"] = "org.springframework.boot"
+                # Same field on a client span or a different instrumentation scope
+                # is not Spring's server route template and must never be promoted.
+                client = copy.deepcopy(parent)
+                client.update(spanId="4123456789abcdef", kind=3,
+                              attributes=attrs(uri=SECRET, method="GET", status="200"))
+                scope["spans"].append(client)
+                untrusted = copy.deepcopy(client)
+                untrusted.update(spanId="5123456789abcdef", kind=2)
+                payload["resourceSpans"][0]["scopeSpans"].append({
+                    "scope": {"name": "other"}, "spans": [untrusted],
+                })
+
             if percentage != 100:
                 # Different requests retain/drop together even when each trace has two spans.
                 sampled_payload = []
@@ -160,8 +215,15 @@ otelcol.exporter.otlphttp "langfuse" {{
                     assert 0 < len(by_trace) < 200
                     assert all(len(pair) == 2 for pair in by_trace.values())
                     exported = next(iter(by_trace.values()))
-                assert len(exported) == 2, exported
-                assert {s["spanId"] for s in exported} == {parent["spanId"], child["spanId"]}
+                expected_ids = {parent["spanId"], child["spanId"]}
+                if spring_http:
+                    expected_ids.update({client["spanId"], untrusted["spanId"]})
+                    for item in exported:
+                        if item["spanId"] in (client["spanId"], untrusted["spanId"]):
+                            assert item["name"] == "operation"
+                            assert not any(a["key"].startswith("http.") for a in item["attributes"])
+                assert len(exported) == len(expected_ids), exported
+                assert {s["spanId"] for s in exported} == expected_ids
                 actual_child = next(s for s in exported if s["spanId"] == child["spanId"])
                 assert actual_child["parentSpanId"] == parent["spanId"]
                 assert actual_child["traceId"] == exported[0]["traceId"]
@@ -169,6 +231,10 @@ otelcol.exporter.otlphttp "langfuse" {{
                 actual_parent = next(s for s in exported if s["spanId"] == parent["spanId"])
                 values = {a["key"]: a["value"] for a in actual_parent["attributes"]}
                 assert values["app.module"]["stringValue"] == "coparent"
+                if spring_http:
+                    assert actual_parent["name"] == "/api/coparent/events/{id}"
+                    assert values["http.request.method"]["stringValue"] == "GET"
+                    assert int(values["http.response.status_code"]["intValue"]) == 200
                 assert actual_parent["status"]["code"] == 2
             else:
                 time.sleep(1.5)  # Beyond the actual 1s batch flush; negative export assertion.
@@ -193,7 +259,14 @@ if __name__ == "__main__":
         for config in ("config.alloy", "config.local.alloy"):
             docker("run", "--rm", "-v", f"{ROOT / 'config/alloy'}:/etc/alloy:ro",
                    IMAGE, "validate", f"/etc/alloy/{config}")
-        for settings in ({}, {"percentage": 10}, {"percentage": 0},
+            for settings in ({}, {
+                "HONEYCOMB_ENABLED": "true", "HONEYCOMB_API_KEY": "test-key",
+                "HONEYCOMB_SAMPLE_PERCENTAGE": "100",
+                "HONEYCOMB_EXPORT_UNTIL": str(int(time.time()) + 60),
+            }, {"HONEYCOMB_SAMPLE_PERCENTAGE": "0", "HONEYCOMB_EXPORT_UNTIL": "1"}):
+                check_startup(config, settings)
+                print(f"PASS real Alloy startup {config}: {settings or 'defaults'}")
+        for settings in ({}, {"spring_http": True}, {"percentage": 10}, {"percentage": 0},
                          {"enabled": False, "percentage": 0},
                          {"enabled": False}, {"key": ""}, {"expiry": 1}):
             exercise(server.server_port, **settings)
