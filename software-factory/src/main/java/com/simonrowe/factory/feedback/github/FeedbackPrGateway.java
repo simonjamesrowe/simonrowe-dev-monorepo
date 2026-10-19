@@ -6,6 +6,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
+import com.simonrowe.factory.git.PullRequestUrl;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -105,6 +106,23 @@ public class FeedbackPrGateway {
 
     // Step 4: Return html_url
     return htmlUrl;
+  }
+
+  /**
+   * Whether a pull request has merged.
+   *
+   * @param pullRequest the pull request
+   * @param installationId the App installation on its repository, or null for anonymous
+   * @return true when GitHub reports it merged
+   */
+  public boolean merged(final PullRequestUrl pullRequest, final Long installationId) {
+    String path =
+        "/repos/%s/%s/pulls/%d"
+            .formatted(pullRequest.owner(), pullRequest.repository(), pullRequest.number());
+    HttpResponse<String> response =
+        send("GET", path, null, credentials.accessToken(installationId));
+    requireSuccess(response, "GET", path);
+    return parseJson(response).path("merged").asBoolean(false);
   }
 
   /**

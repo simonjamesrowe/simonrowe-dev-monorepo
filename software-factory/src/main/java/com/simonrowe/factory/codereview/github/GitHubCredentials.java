@@ -90,6 +90,7 @@ public class GitHubCredentials {
   private final Map<Long, CachedToken> installationTokens = new ConcurrentHashMap<>();
   private final Map<Long, CachedToken> commentTokens = new ConcurrentHashMap<>();
   private volatile PrivateKey privateKey;
+  private volatile String appBotLogin;
 
   @Autowired
   public GitHubCredentials(
@@ -208,6 +209,58 @@ public class GitHubCredentials {
       throw new IllegalStateException("GitHub App installation lookup interrupted", exception);
     } catch (IOException | JacksonException exception) {
       throw new IllegalStateException("GitHub App installation lookup failed", exception);
+    }
+  }
+
+  /**
+   * The login GitHub gives this App's own commits and pull requests, {@code <slug>[bot]}.
+   *
+   * <p>Read from {@code GET /app} rather than configured. A configured login that was mistyped
+   * would match nothing and quietly stop the factory trusting its own pull requests, and one that
+   * named some other bot would trust that bot's. Cached once found, since an App's slug cannot
+   * change while it is installed; a failed lookup is not cached, so a transient fault costs one
+   * decision, not the process lifetime.
+   *
+   * @return the bot login, or null when no App is configured or GitHub could not be asked. Null
+   *     matches no author, which is the safe answer for a trust check
+   */
+  public String appBotLogin() {
+    String cached = appBotLogin;
+    if (cached != null || !appConfigured()) {
+      return cached;
+    }
+    try {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create(properties.github().apiBaseUrl() + "/app"))
+              .timeout(properties.github().requestTimeout())
+              .header("Accept", "application/vnd.github+json")
+              .header("Authorization", "Bearer " + createAppJwt(clock.instant()))
+              .header("X-GitHub-Api-Version", API_VERSION)
+              .header("User-Agent", "temporal-code-reviewer")
+              .GET()
+              .build();
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() < 200 || response.statusCode() >= 300) {
+        LOGGER.warn("GitHub App lookup returned {}; trusting no bot author", response.statusCode());
+        return null;
+      }
+      String slug = objectMapper.readTree(response.body()).path("slug").asText("");
+      if (slug.isBlank()) {
+        LOGGER.warn("GitHub App lookup carried no slug; trusting no bot author");
+        return null;
+      }
+      appBotLogin = slug + "[bot]";
+      return appBotLogin;
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      return null;
+    } catch (IOException | RuntimeException exception) {
+      // Broad on purpose: this answers a trust question, and every failure has the same safe
+      // answer. Letting one escape would fail the state read that also withdraws stale arms.
+      LOGGER.warn("GitHub App lookup failed; trusting no bot author", exception);
+      return null;
     }
   }
 

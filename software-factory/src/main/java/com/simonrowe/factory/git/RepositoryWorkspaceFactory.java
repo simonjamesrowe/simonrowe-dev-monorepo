@@ -4,11 +4,8 @@ import com.simonrowe.factory.codereview.agent.GitWorkspaceFactory;
 import com.simonrowe.factory.codereview.agent.ProcessRunner;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
 import java.io.IOException;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.PathMatcher;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -99,13 +96,7 @@ public class RepositoryWorkspaceFactory {
   /** Throws {@link IllegalStateException} when any changed path escapes the allowlist. */
   public static void validateAllowedPaths(
       final List<String> changedPaths, final List<String> allowedGlobs) {
-    FileSystem fileSystem = FileSystems.getDefault();
-    List<PathMatcher> matchers =
-        allowedGlobs.stream().map(glob -> fileSystem.getPathMatcher("glob:" + glob)).toList();
-    List<String> violations =
-        changedPaths.stream()
-            .filter(path -> matchers.stream().noneMatch(matcher -> matcher.matches(Path.of(path))))
-            .toList();
+    List<String> violations = PathGlobs.outside(changedPaths, allowedGlobs);
     if (!violations.isEmpty()) {
       throw new IllegalStateException(
           "Agent touched files outside the allowlist: " + String.join(", ", violations));

@@ -3,6 +3,8 @@ package com.simonrowe.factory.feedback.api;
 import com.simonrowe.factory.feedback.config.FeedbackTaskQueues;
 import com.simonrowe.factory.feedback.domain.FeedbackProgress;
 import com.simonrowe.factory.feedback.domain.FeedbackRequest;
+import com.simonrowe.factory.feedback.domain.GuidanceClosedRequest;
+import com.simonrowe.factory.feedback.workflow.GuidanceClosedWorkflow;
 import com.simonrowe.factory.feedback.workflow.ReviewFeedbackWorkflow;
 import io.temporal.api.enums.v1.WorkflowIdReusePolicy;
 import io.temporal.client.WorkflowClient;
@@ -40,6 +42,36 @@ public class FeedbackWorkflowService {
                 .build());
     try {
       WorkflowClient.start(workflow::harvest, request);
+      return new FeedbackAccepted(workflowId, true);
+    } catch (WorkflowExecutionAlreadyStarted exception) {
+      return new FeedbackAccepted(workflowId, false);
+    }
+  }
+
+  /**
+   * Starts the follow-up for a closed guidance pull request, once per pull request.
+   *
+   * <p>A redelivered webhook finds the first run and starts nothing; a run that failed (Linear or
+   * GitHub down) can be started again by the next delivery.
+   *
+   * @param request the closed pull request
+   * @return the workflow id, and whether this call started it
+   */
+  public FeedbackAccepted startGuidanceClosed(final GuidanceClosedRequest request) {
+    String workflowId =
+        "guidance-closed-%s-%s-%s"
+            .formatted(safe(request.owner()), safe(request.repository()), request.pullNumber());
+    GuidanceClosedWorkflow workflow =
+        workflowClient.newWorkflowStub(
+            GuidanceClosedWorkflow.class,
+            WorkflowOptions.newBuilder()
+                .setTaskQueue(FeedbackTaskQueues.REVIEW_FEEDBACK)
+                .setWorkflowId(workflowId)
+                .setWorkflowIdReusePolicy(
+                    WorkflowIdReusePolicy.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE_FAILED_ONLY)
+                .build());
+    try {
+      WorkflowClient.start(workflow::close, request);
       return new FeedbackAccepted(workflowId, true);
     } catch (WorkflowExecutionAlreadyStarted exception) {
       return new FeedbackAccepted(workflowId, false);

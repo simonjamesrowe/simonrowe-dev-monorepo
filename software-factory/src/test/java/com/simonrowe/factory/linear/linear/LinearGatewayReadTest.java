@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.linear.domain.IssueStateType;
+import com.simonrowe.factory.linear.domain.LinkedIssue;
 import com.simonrowe.factory.linear.domain.TrackedIssue;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -196,5 +197,31 @@ class LinearGatewayReadTest {
         .hasMessageContaining("nope")
         .extracting(e -> ((LinearApiException) e).retryable())
         .isEqualTo(false);
+  }
+
+  @Test
+  void linkedIssuesCarryEveryAttachmentAndAppearOnce() {
+    response =
+        """
+        {"data":{"attachmentsForURL":{"nodes":[
+          {"issue":{"id":"i1","identifier":"SIM-106","url":"https://linear/SIM-106",
+            "state":{"type":"triage"},
+            "attachments":{"nodes":[{"url":"https://github.com/o/r/pull/50"},
+                                    {"url":"https://factory/fingerprint/x"}]}}},
+          {"issue":{"id":"i1","identifier":"SIM-106","url":"https://linear/SIM-106",
+            "state":{"type":"triage"},"attachments":{"nodes":[]}}},
+          {"issue":{"id":"i2","identifier":"SIM-90","url":"https://linear/SIM-90",
+            "state":{"type":"completed"},"attachments":{"nodes":[]}}}]}}}
+        """;
+
+    List<LinkedIssue> issues = gateway().linkedIssues("https://github.com/o/r/pull/50");
+
+    assertThat(issues)
+        .containsExactly(
+            new LinkedIssue("i1", "SIM-106", "https://linear/SIM-106", IssueStateType.TRIAGE,
+                List.of("https://github.com/o/r/pull/50", "https://factory/fingerprint/x")),
+            new LinkedIssue("i2", "SIM-90", "https://linear/SIM-90", IssueStateType.COMPLETED,
+                List.of()));
+    assertThat(bodies.get(0)).contains("attachmentsForURL").contains("pull/50");
   }
 }

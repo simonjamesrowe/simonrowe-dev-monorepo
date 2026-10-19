@@ -3,11 +3,13 @@ package com.simonrowe.factory.linear.workflow;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
 import com.simonrowe.factory.linear.domain.IssueFiling;
@@ -20,7 +22,9 @@ import com.simonrowe.factory.linear.service.IssueResolver;
 import io.temporal.failure.ApplicationFailure;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 class LinearActivitiesImplTest {
 
@@ -31,7 +35,15 @@ class LinearActivitiesImplTest {
   private final IssueResolver resolver = mock(IssueResolver.class);
   private final LinearGateway gateway = mock(LinearGateway.class);
   private final LinearActivitiesImpl activities =
-      new LinearActivitiesImpl(filer, resolver, gateway);
+      new LinearActivitiesImpl(filer, resolver, gateway, properties(false));
+
+  private static LinearProperties properties(final boolean dryRun) {
+    return new LinearProperties(true, "key", null, "SIM", null, dryRun, null, null);
+  }
+
+  private static LinearGateway.TeamContext team(final String completedStateId) {
+    return new LinearGateway.TeamContext("team", "s-triage", completedStateId, Map.of());
+  }
 
   private static IssueFiling filing() {
     return new IssueFiling("deploy", List.of("recreate", "backend"), "t", "b", "d", "run-1", "w");
@@ -130,5 +142,49 @@ class LinearActivitiesImplTest {
 
     assertThatThrownBy(() -> activities.attachUrl("i9", PR_URL, TITLE))
         .isInstanceOf(LinearApiException.class);
+  }
+
+  @Test
+  void completeCommentsAndThenMovesTheIssueToTheCompletedState() {
+    when(gateway.teamContext()).thenReturn(team("s-done"));
+
+    assertThat(activities.complete("i9", "All merged.")).isTrue();
+
+    InOrder order = inOrder(gateway);
+    order.verify(gateway).addComment("i9", "All merged.");
+    order.verify(gateway).updateIssue("i9", null, "s-done");
+  }
+
+  @Test
+  void completeLeavesTheIssueAloneWhenTheTeamHasNoCompletedState() {
+    when(gateway.teamContext()).thenReturn(team(null));
+
+    assertThat(activities.complete("i9", "All merged.")).isFalse();
+
+    verify(gateway, never()).addComment(any(), any());
+    verify(gateway, never()).updateIssue(any(), any(), any());
+  }
+
+  @Test
+  void theSinksDryRunFlagStopsEveryTicketWrite() {
+    LinearActivitiesImpl dryRun =
+        new LinearActivitiesImpl(filer, resolver, gateway, properties(true));
+    when(gateway.teamContext()).thenReturn(team("s-done"));
+
+    assertThat(dryRun.complete("i9", "All merged.")).isFalse();
+    dryRun.commentOn("i9", "Waiting.");
+
+    verify(gateway, never()).addComment(any(), any());
+    verify(gateway, never()).updateIssue(any(), any(), any());
+  }
+
+  @Test
+  void issuesLinkedToMapsNonRetryableFaults() {
+    when(gateway.linkedIssues(PR_URL))
+        .thenThrow(new LinearApiException("Linear rejected the API key with 401", false));
+
+    assertThatThrownBy(() -> activities.issuesLinkedTo(PR_URL))
+        .isInstanceOf(ApplicationFailure.class)
+        .satisfies(e -> assertThat(((ApplicationFailure) e).isNonRetryable()).isTrue());
   }
 }

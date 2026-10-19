@@ -2,6 +2,9 @@ package com.simonrowe.factory.codereview.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -117,6 +120,50 @@ class AutoMergeGatewayTest {
                 3,
                 true,
                 true));
+  }
+
+  private static final String BOT = "simonrowe-software-factory[bot]";
+
+  private void botPullRequest(final String login, final String type) {
+    responses.put(
+        "GET " + PULL,
+        """
+        {"node_id": "PR_node", "draft": false, "user": {"login": "%s", "type": "%s"},
+         "changed_files": 1, "labels": [{"name": "agent-feedback"}],
+         "head": {"sha": "head-sha", "repo": {"full_name": "example/project"}},
+         "base": {"repo": {"full_name": "example/project"}}}
+        """
+            .formatted(login, type));
+  }
+
+  /** The permission API answers none for an App's bot; identity is what earns it trust. */
+  @Test
+  void recognisesThisAppAsTheAuthor() {
+    botPullRequest(BOT, "Bot");
+
+    assertThat(gateway(BOT).readState(pullRequest()).authorIsThisApp()).isTrue();
+  }
+
+  @Test
+  void anotherBotIsNotThisApp() {
+    botPullRequest("dependabot[bot]", "Bot");
+
+    assertThat(gateway(BOT).readState(pullRequest()).authorIsThisApp()).isFalse();
+  }
+
+  /** A user account cannot be named `x[bot]`, but the type check does not lean on that. */
+  @Test
+  void userWithTheBotsLoginIsNotThisApp() {
+    botPullRequest(BOT, "User");
+
+    assertThat(gateway(BOT).readState(pullRequest()).authorIsThisApp()).isFalse();
+  }
+
+  @Test
+  void anUnknownAppIdentityTrustsNoBot() {
+    botPullRequest(BOT, "Bot");
+
+    assertThat(gateway(null).readState(pullRequest()).authorIsThisApp()).isFalse();
   }
 
   @Test
@@ -332,5 +379,23 @@ class AutoMergeGatewayTest {
             new CodeReviewProperties.Api("token", null), "https://temporal.test");
     return new AutoMergeGateway(
         properties, new GitHubCredentials(properties, objectMapper), objectMapper);
+  }
+
+  private AutoMergeGateway gateway(final String appBotLogin) {
+    GitHubCredentials credentials = mock(GitHubCredentials.class);
+    when(credentials.accessToken(any())).thenReturn("");
+    when(credentials.appBotLogin()).thenReturn(appBotLogin);
+    CodeReviewProperties properties =
+        new CodeReviewProperties(
+            new CodeReviewProperties.Github(
+                "http://localhost:" + server.getAddress().getPort(),
+                "",
+                "",
+                "",
+                "",
+                Duration.ofSeconds(30)),
+            null,
+            new CodeReviewProperties.Api("token", null), "https://temporal.test");
+    return new AutoMergeGateway(properties, credentials, objectMapper);
   }
 }

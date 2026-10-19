@@ -402,6 +402,91 @@ class GitHubCredentialsTest {
     }
   }
 
+  @Test
+  void learnsItsOwnBotLoginFromTheAppAndAsksOnlyOnce(@TempDir final Path directory)
+      throws Exception {
+    KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    Path privateKey = writePrivateKey(directory, keyPair);
+    AtomicInteger requests = new AtomicInteger();
+    AtomicReference<String> authorization = new AtomicReference<>();
+    HttpServer server = appServer(200, "{\"slug\":\"simonrowe-software-factory\"}", requests,
+        authorization);
+
+    try {
+      GitHubCredentials credentials = appCredentials(server, privateKey);
+
+      assertThat(credentials.appBotLogin()).isEqualTo("simonrowe-software-factory[bot]");
+      assertThat(credentials.appBotLogin()).isEqualTo("simonrowe-software-factory[bot]");
+      assertThat(requests.get()).isEqualTo(1);
+      assertValidAppJwt(authorization.get().substring("Bearer ".length()), keyPair);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  /** A failed lookup trusts no bot, and is asked again next time rather than cached. */
+  @Test
+  void failedAppLookupTrustsNoBotAndIsRetried(@TempDir final Path directory) throws Exception {
+    KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    Path privateKey = writePrivateKey(directory, keyPair);
+    AtomicInteger requests = new AtomicInteger();
+    HttpServer server = appServer(500, "{}", requests, new AtomicReference<>());
+
+    try {
+      GitHubCredentials credentials = appCredentials(server, privateKey);
+
+      assertThat(credentials.appBotLogin()).isNull();
+      assertThat(credentials.appBotLogin()).isNull();
+      assertThat(requests.get()).isEqualTo(2);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void noAppMeansNoBotLogin() {
+    GitHubCredentials credentials =
+        new GitHubCredentials(
+            properties("https://api.github.com", "development-token", "", ""), objectMapper);
+
+    assertThat(credentials.appBotLogin()).isNull();
+  }
+
+  private GitHubCredentials appCredentials(final HttpServer server, final Path privateKey) {
+    return new GitHubCredentials(
+        properties(
+            "http://127.0.0.1:" + server.getAddress().getPort(),
+            "",
+            "Iv1.test-client",
+            privateKey.toString()),
+        objectMapper,
+        HttpClient.newHttpClient(),
+        Clock.fixed(NOW, ZoneOffset.UTC));
+  }
+
+  private static HttpServer appServer(
+      final int status,
+      final String body,
+      final AtomicInteger requests,
+      final AtomicReference<String> authorization)
+      throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/app",
+        exchange -> {
+          requests.incrementAndGet();
+          authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+          byte[] response = body.getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().add("Content-Type", "application/json");
+          exchange.sendResponseHeaders(status, response.length);
+          try (OutputStream output = exchange.getResponseBody()) {
+            output.write(response);
+          }
+        });
+    server.start();
+    return server;
+  }
+
   /** Local development has no App configured and must keep working against a public repository. */
   @Test
   void resolvesNoInstallationWhenNoAppIsConfigured() {

@@ -14,6 +14,8 @@ import com.simonrowe.factory.codereview.domain.ReviewRequest;
 import com.simonrowe.factory.codereview.github.AutoMergeGateway;
 import com.simonrowe.factory.codereview.github.CheckRunGateway;
 import com.simonrowe.factory.codereview.github.GitHubGateway;
+import com.simonrowe.factory.feedback.config.FeedbackProperties;
+import com.simonrowe.factory.feedback.domain.GuidancePaths;
 import io.temporal.activity.Activity;
 import io.temporal.spring.boot.ActivityImpl;
 import org.slf4j.Logger;
@@ -72,18 +74,21 @@ public class ReviewActivitiesImpl implements ReviewActivities {
   private final ReviewEngine reviewEngine;
   private final AutoMergeGateway autoMergeGateway;
   private final AutoMergeProperties autoMergeProperties;
+  private final FeedbackProperties feedbackProperties;
 
   public ReviewActivitiesImpl(
       final GitHubGateway gitHubGateway,
       final CheckRunGateway checkRunGateway,
       final ReviewEngine reviewEngine,
       final AutoMergeGateway autoMergeGateway,
-      final AutoMergeProperties autoMergeProperties) {
+      final AutoMergeProperties autoMergeProperties,
+      final FeedbackProperties feedbackProperties) {
     this.gitHubGateway = gitHubGateway;
     this.checkRunGateway = checkRunGateway;
     this.reviewEngine = reviewEngine;
     this.autoMergeGateway = autoMergeGateway;
     this.autoMergeProperties = autoMergeProperties;
+    this.feedbackProperties = feedbackProperties;
   }
 
   @Override
@@ -191,6 +196,8 @@ public class ReviewActivitiesImpl implements ReviewActivities {
         state,
         report,
         pullRequest.headSha(),
-        () -> autoMergeGateway.listFiles(pullRequest, state.changedFiles()));
+        () -> autoMergeGateway.listFiles(pullRequest, state.changedFiles()),
+        GuidancePaths.forRepository(
+            pullRequest.owner(), pullRequest.repository(), feedbackProperties.agentSetupRepo()));
   }
 }

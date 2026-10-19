@@ -21,6 +21,7 @@ import com.simonrowe.factory.linear.domain.AbsenceSweep;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
 import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.domain.LinkedIssue;
 import com.simonrowe.factory.linear.domain.SweepReport;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.client.WorkflowFailedException;
@@ -308,6 +309,11 @@ class ReviewFeedbackWorkflowTest {
         final FeedbackRequest request, final DistillationOutcome distillationOutcome) {
       recordedOutcomes.add(distillationOutcome);
     }
+
+    @Override
+    public List<String> unmergedPullRequests(final List<String> pullRequestUrls) {
+      throw new UnsupportedOperationException("not under test");
+    }
   }
 
   private static final class FakeLinearActivities implements LinearActivities {
@@ -343,6 +349,21 @@ class ReviewFeedbackWorkflowTest {
     @Override
     public void attachUrl(final String issueId, final String url, final String title) {
       attachedUrls.add(url);
+    }
+
+    @Override
+    public List<LinkedIssue> issuesLinkedTo(final String url) {
+      throw new UnsupportedOperationException("not under test");
+    }
+
+    @Override
+    public void commentOn(final String issueId, final String body) {
+      throw new UnsupportedOperationException("not under test");
+    }
+
+    @Override
+    public boolean complete(final String issueId, final String body) {
+      throw new UnsupportedOperationException("not under test");
     }
   }
 }

@@ -20,6 +20,7 @@ import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
 import com.simonrowe.factory.linear.domain.FilingMode;
 import com.simonrowe.factory.linear.domain.IssueFiling;
+import com.simonrowe.factory.linear.domain.LinkedIssue;
 import com.simonrowe.factory.linear.domain.SweepReport;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.client.WorkflowFailedException;
@@ -216,6 +217,21 @@ class CveFixWorkflowTest {
     @Override
     public void attachUrl(final String issueId, final String url, final String title) {
       delegate.attachUrl(issueId, url, title);
+    }
+
+    @Override
+    public List<LinkedIssue> issuesLinkedTo(final String url) {
+      return delegate.issuesLinkedTo(url);
+    }
+
+    @Override
+    public void commentOn(final String issueId, final String body) {
+      delegate.commentOn(issueId, body);
+    }
+
+    @Override
+    public boolean complete(final String issueId, final String body) {
+      return delegate.complete(issueId, body);
     }
   }
 }

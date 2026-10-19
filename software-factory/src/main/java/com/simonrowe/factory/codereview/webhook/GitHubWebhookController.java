@@ -15,6 +15,7 @@ import com.simonrowe.factory.feedback.api.FeedbackAccepted;
 import com.simonrowe.factory.feedback.api.FeedbackWorkflowService;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.feedback.domain.FeedbackRequest;
+import com.simonrowe.factory.feedback.domain.GuidanceClosedRequest;
 import com.simonrowe.factory.linear.config.LinearProperties;
 import java.io.IOException;
 import java.util.Set;
@@ -174,9 +175,13 @@ public class GitHubWebhookController {
     if (owner.isBlank() || repository.isBlank() || pullNumber < 1) {
       return ResponseEntity.badRequest().body(new WebhookResponse("malformed"));
     }
-    if (!feedbackProperties.enabled()
-        || hasSkipLabel(pullRequest)
-        || !repoAllowed(owner + "/" + repository)) {
+    if (!feedbackProperties.enabled()) {
+      return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
+    }
+    if (hasSkipLabel(pullRequest)) {
+      return handleGuidanceClosed(payload, owner, repository, pullNumber);
+    }
+    if (!repoAllowed(owner + "/" + repository)) {
       return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
     }
     FeedbackAccepted accepted =
@@ -184,6 +189,32 @@ public class GitHubWebhookController {
             new FeedbackRequest(
                 owner, repository, pullNumber, installationIdOf(payload), false,
                 linearProperties.enabled()));
+    return ResponseEntity.accepted().body(accepted);
+  }
+
+  /**
+   * A guidance pull request closed: close its feedback ticket once all of them have merged.
+   *
+   * <p>Still never a harvest. The skip label is the loop guard that stops the distiller learning
+   * from its own pull requests, and that holds whatever happens here. Guidance pull requests land
+   * in {@code agent-setup} as well as the source repository, so the feedback repository
+   * allowlist, which names source repositories, would wrongly drop the {@code agent-setup} ones;
+   * the agent-setup repository is allowed alongside it.
+   */
+  private ResponseEntity<?> handleGuidanceClosed(
+      final JsonNode payload, final String owner, final String repository, final int pullNumber) {
+    String slug = owner + "/" + repository;
+    String url = payload.path("pull_request").path("html_url").asText("");
+    if (!linearProperties.enabled()
+        || url.isBlank()
+        || !(repoAllowed(slug) || slug.equalsIgnoreCase(feedbackProperties.agentSetupRepo()))) {
+      return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
+    }
+    FeedbackAccepted accepted =
+        feedbackWorkflowService.startGuidanceClosed(
+            new GuidanceClosedRequest(
+                owner, repository, pullNumber, url,
+                payload.path("pull_request").path("merged").asBoolean(false)));
     return ResponseEntity.accepted().body(accepted);
   }
 

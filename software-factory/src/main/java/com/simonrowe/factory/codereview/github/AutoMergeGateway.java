@@ -99,7 +99,10 @@ public class AutoMergeGateway {
     String token = token(pullRequest);
     JsonNode pull = getJson(pullRequestPath(pullRequest), token);
     String login = pull.path("user").path("login").asText("");
-    return toState(pull, authorPermission(pullRequest, login, token));
+    boolean authorIsThisApp =
+        "Bot".equals(pull.path("user").path("type").asText(""))
+            && login.equals(credentials.appBotLogin());
+    return toState(pull, authorPermission(pullRequest, login, token), authorIsThisApp);
   }
 
   /**
@@ -200,6 +203,11 @@ public class AutoMergeGateway {
    * other bot arms auto-merge on this repository, and one that did would simply be re-decided.
    */
   static AutoMergeState toState(final JsonNode pullRequest, final String authorPermission) {
+    return toState(pullRequest, authorPermission, false);
+  }
+
+  static AutoMergeState toState(
+      final JsonNode pullRequest, final String authorPermission, final boolean authorIsThisApp) {
     String baseRepository = pullRequest.path("base").path("repo").path("full_name").asText("");
     String headRepository = pullRequest.path("head").path("repo").path("full_name").asText("");
     List<String> labels = new ArrayList<>();
@@ -217,7 +225,8 @@ public class AutoMergeGateway {
         labels,
         pullRequest.path("changed_files").asInt(-1),
         armed,
-        armed && "Bot".equals(autoMerge.path("enabled_by").path("type").asText("")));
+        armed && "Bot".equals(autoMerge.path("enabled_by").path("type").asText("")),
+        authorIsThisApp);
   }
 
   private static void addIfPresent(final List<String> values, final String value) {

@@ -229,19 +229,38 @@ It arms only if **every** rule passes. The first rule to fail is the reason give
 3. The head is in this repository, not a fork. The repository is public, so a stranger's pull
    request with a clean review must never merge itself.
 4. The author has `write` or `admin` permission on the repository, read from
-   `GET /repos/{o}/{r}/collaborators/{login}/permission`. It is **not** read from
-   `author_association`: that field is computed for the viewer, and an App token cannot see a
-   private organisation membership. So it reported this repository's owner as `CONTRIBUTOR`, and
-   the first live pull request (#194) was refused. A permission that cannot be read counts as
-   `none`.
-5. It carries neither `no-auto-merge` (a person's opt-out) nor `agent-feedback` (feedback-loop
-   guidance edits agent instructions, which a human should merge).
+   `GET /repos/{o}/{r}/collaborators/{login}/permission`, **or** the author is this factory's own
+   GitHub App. It is **not** read from `author_association`: that field is computed for the
+   viewer, and an App token cannot see a private organisation membership. So it reported this
+   repository's owner as `CONTRIBUTOR`, and the first live pull request (#194) was refused. A
+   permission that cannot be read counts as `none`. The permission API also answers `none` for
+   an App's bot user, which is why the App is trusted by identity: the author is a `Bot` whose
+   login is `<slug>[bot]`, with the slug read from `GET /app` (`GitHubCredentials.appBotLogin`),
+   never configured. A failed lookup trusts no bot.
+5. It does not carry `no-auto-merge` (a person's opt-out).
 6. The `Code Review` conclusion is green: no `REQUEST_CHANGES` and no `CRITICAL`, the same rule as
    the check run.
 7. The live head is still the commit that was reviewed.
 8. **Every** changed path classifies `auto-merge`, including the old side of every rename, read
    from GitHub's `/pulls/{n}/files`. It is not read from the review workspace, whose list is
    filtered and capped. A listing that falls short of GitHub's `changed_files` count arms nothing.
+   **Guidance pull requests are the one exception** (labelled `agent-feedback` *and* opened by the
+   App): instead of the path rules, every path must be in the distiller's own allowlist for that
+   repository (`GuidancePaths`: `components/instructions/{global,monorepo-additions}.md` and
+   `components/skills/**` in `agent-setup`, root `CLAUDE.md` everywhere else). The distiller
+   checks the same list before it pushes. A person adding the label to their own pull request gets
+   "not opened by the factory" rather than a different set of path rules.
+
+Until 2026-10, `agent-feedback` was simply refused here. Every one of the ~23 guidance pull
+requests up to then was merged by hand unchanged, so they now merge themselves, and
+`GuidanceClosedWorkflow` closes their Linear ticket once every guidance pull request attached to
+it has merged (see `software-factory.md`, "Review feedback loop").
+
+**`agent-setup` needs its own gate before anything can auto-merge there.** Arming auto-merge on a
+repository with no required checks merges at once, before the review completes. So that
+repository needs a ruleset on `main` requiring `Code Review` and its `validate` checks, and
+**Allow auto-merge** switched on in its settings. Until both are done, arming there fails
+harmlessly (`ARM_FAILED`) and a human merges as before.
 
 Open `SUGGESTION` threads are deliberately not a rule. Required conversation resolution already
 holds the merge until each one is fixed or declined.
