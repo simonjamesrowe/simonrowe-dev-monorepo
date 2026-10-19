@@ -16,7 +16,8 @@ declare "pipeline" {
     traces {
       span = [
         string.format("%t", !argument.enabled.value || argument.api_key.value == ""),
-        string.format("UnixSeconds(Now()) >= %d", argument.export_until.value),
+        // JSON-decoded env numbers are floats; %d only accepts integer values.
+        string.format("UnixSeconds(Now()) >= %v", argument.export_until.value),
         `resource.attributes["service.name"] != "simonrowe-backend"`,
         // This Alloy version cannot clear link attributes; omit linked spans in the pilot.
         `Len(links) > 0`,

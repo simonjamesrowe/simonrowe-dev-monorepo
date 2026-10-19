@@ -54,6 +54,41 @@ def wait_for(condition, description):
     raise AssertionError(description)
 
 
+def check_startup(config, settings):
+    """Evaluate the real entrypoint: `alloy validate` skips runtime expressions."""
+    name = "honeycomb-startup-" + uuid.uuid4().hex[:12]
+    environment = {
+        "LANGFUSE_PUBLIC_KEY": "test", "LANGFUSE_SECRET_KEY": "test",
+        "GRAFANA_CLOUD_LOKI_ENDPOINT": "http://127.0.0.1:1/loki/api/v1/push",
+        "HONEYCOMB_OTLP_ENDPOINT": "http://127.0.0.1:1",
+        **settings,
+    }
+    flags = [part for key, value in environment.items() for part in ("-e", f"{key}={value}")]
+    try:
+        docker("create", "--name", name, "-p", "127.0.0.1::12345", *flags,
+               IMAGE, "run", "--server.http.listen-addr=0.0.0.0:12345", f"/etc/alloy/{config}")
+        # Copy before starting; no credentials, Docker socket or real telemetry.
+        docker("cp", f"{ROOT / 'config/alloy'}/.", f"{name}:/etc/alloy")
+        docker("start", name)
+        port = docker("port", name, "12345").rsplit(":", 1)[1]
+
+        def ready():
+            assert docker("inspect", "--format", "{{.State.Running}}", name) == "true"
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/-/ready", timeout=2) as response:
+                    return response.status == 200
+            except (urllib.error.URLError, OSError):
+                return False
+
+        wait_for(ready, f"{config} did not become ready")
+        assert "failed to evaluate config" not in docker("logs", name)
+    except Exception:
+        print(docker("logs", name))
+        raise
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], stdout=subprocess.DEVNULL, check=False)
+
+
 def exercise(sink_port, enabled=True, key="test-key", expiry=None, percentage=100):
     received.clear()
     expiry = int(time.time()) + 60 if expiry is None else expiry
@@ -193,6 +228,13 @@ if __name__ == "__main__":
         for config in ("config.alloy", "config.local.alloy"):
             docker("run", "--rm", "-v", f"{ROOT / 'config/alloy'}:/etc/alloy:ro",
                    IMAGE, "validate", f"/etc/alloy/{config}")
+            for settings in ({}, {
+                "HONEYCOMB_ENABLED": "true", "HONEYCOMB_API_KEY": "test-key",
+                "HONEYCOMB_SAMPLE_PERCENTAGE": "100",
+                "HONEYCOMB_EXPORT_UNTIL": str(int(time.time()) + 60),
+            }, {"HONEYCOMB_SAMPLE_PERCENTAGE": "0", "HONEYCOMB_EXPORT_UNTIL": "1"}):
+                check_startup(config, settings)
+                print(f"PASS real Alloy startup {config}: {settings or 'defaults'}")
         for settings in ({}, {"percentage": 10}, {"percentage": 0},
                          {"enabled": False, "percentage": 0},
                          {"enabled": False}, {"key": ""}, {"expiry": 1}):

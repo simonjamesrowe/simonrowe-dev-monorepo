@@ -7,8 +7,8 @@ honeycomb.pipeline "backend" {
   api_key = sys.env("HONEYCOMB_API_KEY")
   endpoint = coalesce(sys.env("HONEYCOMB_OTLP_ENDPOINT"), "https://api.honeycomb.io")
   environment = coalesce(sys.env("HONEYCOMB_ENVIRONMENT"), "development")
-  sample_percentage = convert.number(coalesce(sys.env("HONEYCOMB_SAMPLE_PERCENTAGE"), "10"))
-  export_until = convert.number(coalesce(sys.env("HONEYCOMB_EXPORT_UNTIL"), "0"))
+  sample_percentage = encoding.from_json(coalesce(sys.env("HONEYCOMB_SAMPLE_PERCENTAGE"), "10"))
+  export_until = encoding.from_json(coalesce(sys.env("HONEYCOMB_EXPORT_UNTIL"), "0"))
 }
 
 // =============================================================================
