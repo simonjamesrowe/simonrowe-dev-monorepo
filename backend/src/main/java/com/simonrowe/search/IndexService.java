@@ -12,6 +12,8 @@ import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogRepository;
 import com.simonrowe.blog.Tag;
+import com.simonrowe.books.Book;
+import com.simonrowe.books.BookRepository;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
 import com.simonrowe.media.MediaVariantResolver;
@@ -33,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -50,6 +53,7 @@ public class IndexService {
   private final MediaVariantResolver mediaVariantResolver;
   private final AggregatedArticleRepository articleRepository;
   private final AggregatedEventRepository eventRepository;
+  private final BookRepository bookRepository;
 
   public IndexService(
       final ElasticsearchClient client,
@@ -59,7 +63,8 @@ public class IndexService {
       final SkillRepository skillRepository,
       final MediaVariantResolver mediaVariantResolver,
       final AggregatedArticleRepository articleRepository,
-      final AggregatedEventRepository eventRepository
+      final AggregatedEventRepository eventRepository,
+      final BookRepository bookRepository
   ) {
     this.client = client;
     this.blogRepository = blogRepository;
@@ -69,6 +74,7 @@ public class IndexService {
     this.mediaVariantResolver = mediaVariantResolver;
     this.articleRepository = articleRepository;
     this.eventRepository = eventRepository;
+    this.bookRepository = bookRepository;
   }
 
   public void indexSiteDocument(final SiteSearchDocument document) throws IOException {
@@ -218,6 +224,38 @@ public class IndexService {
     );
   }
 
+  /**
+   * A book on the Reading list. The authors go in {@code company}, the field the site search
+   * already matches for a job's employer, so a search for an author finds their books. The
+   * address opens the book's drawer on {@code /reading}.
+   */
+  public SiteSearchDocument bookToSiteDocument(final Book book) {
+    String imageUrl = book.coverImage() != null
+        ? mediaVariantResolver.resolvePath(
+            book.coverImage().url(), "thumbnail", "small", "medium")
+        : null;
+    // The subtitle is searched but not shown: some run to twenty words, too long for a result.
+    String longDescription = Stream.of(book.subtitle(), book.note(), book.description())
+        .filter(text -> text != null && !text.isBlank())
+        .collect(Collectors.joining("\n\n"));
+    return new SiteSearchDocument(
+        bookSearchId(book.id()),
+        book.title(),
+        "book",
+        book.summary(),
+        longDescription,
+        String.join(", ", book.authors()),
+        imageUrl,
+        book.siteUrl(),
+        null
+    );
+  }
+
+  /** The book's document id in the site index, prefixed so it can never collide with a blog's. */
+  static String bookSearchId(final String bookId) {
+    return "book_" + bookId;
+  }
+
   public BlogSearchDocument blogToBlogDocument(final Blog blog) {
     List<String> tagNames = blog.tags() == null
         ? List.of()
@@ -300,6 +338,13 @@ public class IndexService {
         .toList();
     bulkIndexSiteDocuments(eventDocs);
     eventDocs.forEach(doc -> indexedIds.add(doc.id()));
+
+    List<SiteSearchDocument> bookDocs =
+        bookRepository.findByPublishedTrueOrderByDisplayOrderAscTitleAsc().stream()
+            .map(this::bookToSiteDocument)
+            .toList();
+    bulkIndexSiteDocuments(bookDocs);
+    bookDocs.forEach(doc -> indexedIds.add(doc.id()));
 
     cleanupOrphans(ElasticsearchConfig.SITE_SEARCH_INDEX, indexedIds);
     LOG.info("Full sync of site_search completed: {} documents indexed",
@@ -390,6 +435,14 @@ public class IndexService {
 
   public void deleteEventContent(final String eventId) throws IOException {
     deleteSiteDocument("event_" + eventId);
+  }
+
+  public void indexBookContent(final Book book) throws IOException {
+    indexSiteDocument(bookToSiteDocument(book));
+  }
+
+  public void deleteBookContent(final String bookId) throws IOException {
+    deleteSiteDocument(bookSearchId(bookId));
   }
 
   /**

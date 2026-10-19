@@ -19,6 +19,7 @@ const INTERNAL_PATH_PATTERNS: RegExp[] = [
   /^\/blogs$/,
   /^\/blogs\/[^/?#\s]+$/,
   /^\/news-events$/,
+  /^\/reading$/,
   /^\/portfolio$/,
   /^\/portfolio\/[a-z0-9-]+$/,
 ]

@@ -9,6 +9,13 @@ public record GroupedSearchResponse(
     List<SearchResult> jobs,
     List<SearchResult> skills,
     List<SearchResult> news,
-    List<SearchResult> events
+    List<SearchResult> events,
+    List<SearchResult> books
 ) {
+
+  /** Nothing found, or nothing searched for. */
+  public static GroupedSearchResponse empty() {
+    return new GroupedSearchResponse(List.of(), List.of(), List.of(), List.of(), List.of(),
+        List.of());
+  }
 }

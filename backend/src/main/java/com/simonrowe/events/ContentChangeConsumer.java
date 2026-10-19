@@ -6,6 +6,8 @@ import com.simonrowe.aggregation.AggregatedEvent;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogRepository;
+import com.simonrowe.books.Book;
+import com.simonrowe.books.BookRepository;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
@@ -37,6 +39,7 @@ public class ContentChangeConsumer {
   private final SkillRepository skillRepository;
   private final AggregatedArticleRepository articleRepository;
   private final AggregatedEventRepository eventRepository;
+  private final BookRepository bookRepository;
 
   public ContentChangeConsumer(
       final IndexService indexService,
@@ -45,7 +48,8 @@ public class ContentChangeConsumer {
       final SkillGroupRepository skillGroupRepository,
       final SkillRepository skillRepository,
       final AggregatedArticleRepository articleRepository,
-      final AggregatedEventRepository eventRepository
+      final AggregatedEventRepository eventRepository,
+      final BookRepository bookRepository
   ) {
     this.indexService = indexService;
     this.blogRepository = blogRepository;
@@ -54,6 +58,7 @@ public class ContentChangeConsumer {
     this.skillRepository = skillRepository;
     this.articleRepository = articleRepository;
     this.eventRepository = eventRepository;
+    this.bookRepository = bookRepository;
   }
 
   @RetryableTopic(
@@ -81,6 +86,7 @@ public class ContentChangeConsumer {
       case SKILL -> handleSkillCreateOrUpdate(event.contentId());
       case AGGREGATED_ARTICLE -> handleArticleCreateOrUpdate(event.contentId());
       case AGGREGATED_EVENT -> handleEventCreateOrUpdate(event.contentId());
+      case BOOK -> handleBookCreateOrUpdate(event.contentId());
       default -> LOG.warn("Unknown content type: {}", event.contentType());
     }
   }
@@ -92,6 +98,7 @@ public class ContentChangeConsumer {
       case SKILL -> indexService.deleteSkillContent(event.contentId());
       case AGGREGATED_ARTICLE -> indexService.deleteArticleContent(event.contentId());
       case AGGREGATED_EVENT -> indexService.deleteEventContent(event.contentId());
+      case BOOK -> indexService.deleteBookContent(event.contentId());
       default -> LOG.warn("Unknown content type for delete: {}", event.contentType());
     }
     LOG.info("Deleted {} {} from search index", event.contentType(), event.contentId());
@@ -158,6 +165,17 @@ public class ContentChangeConsumer {
     } else {
       indexService.deleteEventContent(contentId);
       LOG.info("Event {} not found or hidden, removed from search index", contentId);
+    }
+  }
+
+  private void handleBookCreateOrUpdate(final String contentId) throws IOException {
+    Optional<Book> book = bookRepository.findById(contentId);
+    if (book.isPresent() && book.get().published()) {
+      indexService.indexBookContent(book.get());
+      LOG.info("Indexed book {} in search index", contentId);
+    } else {
+      indexService.deleteBookContent(contentId);
+      LOG.info("Book {} not found or unpublished, removed from search index", contentId);
     }
   }
 }

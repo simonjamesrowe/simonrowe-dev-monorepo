@@ -64,6 +64,13 @@ export function SearchDropdown({ results, loading, hasResults, onResultClick }: 
           title="Events"
         />
       )}
+      {results?.books && results.books.length > 0 && (
+        <SearchResultGroup
+          onResultClick={onResultClick}
+          results={results.books}
+          title="Books"
+        />
+      )}
     </div>
   )
 }

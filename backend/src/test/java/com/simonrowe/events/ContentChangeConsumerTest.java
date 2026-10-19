@@ -13,6 +13,8 @@ import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogContentType;
 import com.simonrowe.blog.BlogRepository;
+import com.simonrowe.books.Book;
+import com.simonrowe.books.BookRepository;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
@@ -37,6 +39,7 @@ class ContentChangeConsumerTest {
   private SkillRepository skillRepository;
   private AggregatedArticleRepository articleRepository;
   private AggregatedEventRepository eventRepository;
+  private BookRepository bookRepository;
   private ContentChangeConsumer consumer;
 
   @BeforeEach
@@ -48,9 +51,10 @@ class ContentChangeConsumerTest {
     skillRepository = mock(SkillRepository.class);
     articleRepository = mock(AggregatedArticleRepository.class);
     eventRepository = mock(AggregatedEventRepository.class);
+    bookRepository = mock(BookRepository.class);
     consumer = new ContentChangeConsumer(
         indexService, blogRepository, jobRepository, skillGroupRepository, skillRepository,
-        articleRepository, eventRepository);
+        articleRepository, eventRepository, bookRepository);
   }
 
   @Test
@@ -210,5 +214,41 @@ class ContentChangeConsumerTest {
     consumer.handleContentChange(event);
 
     verify(indexService).indexJobContent(job);
+  }
+
+  private static Book book(final String id, final boolean published) {
+    return new Book(id, "slug-" + id, "Title", null, List.of("An Author"), null, "Shelf",
+        "Summary.", null, null, null, null, null, null, 0, published, Instant.now(),
+        Instant.now());
+  }
+
+  @Test
+  void publishedBookIsIndexed() throws Exception {
+    Book book = book("k1", true);
+    when(bookRepository.findById("k1")).thenReturn(Optional.of(book));
+
+    consumer.handleContentChange(new ContentChangeEvent(
+        EventType.UPDATED, ContentType.BOOK, "k1", Instant.now()));
+
+    verify(indexService).indexBookContent(book);
+  }
+
+  @Test
+  void unpublishedBookIsRemovedFromTheIndex() throws Exception {
+    when(bookRepository.findById("k2")).thenReturn(Optional.of(book("k2", false)));
+
+    consumer.handleContentChange(new ContentChangeEvent(
+        EventType.UPDATED, ContentType.BOOK, "k2", Instant.now()));
+
+    verify(indexService).deleteBookContent("k2");
+    verify(indexService, never()).indexBookContent(any());
+  }
+
+  @Test
+  void deletedBookIsRemovedFromTheIndex() throws Exception {
+    consumer.handleContentChange(new ContentChangeEvent(
+        EventType.DELETED, ContentType.BOOK, "k3", Instant.now()));
+
+    verify(indexService).deleteBookContent("k3");
   }
 }

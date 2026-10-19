@@ -21,6 +21,9 @@ import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogContentType;
 import com.simonrowe.blog.BlogRepository;
+import com.simonrowe.books.Book;
+import com.simonrowe.books.BookRepository;
+import com.simonrowe.common.Image;
 import com.simonrowe.blog.Tag;
 import com.simonrowe.common.Image;
 import com.simonrowe.employment.Job;
@@ -57,7 +60,28 @@ class IndexServiceTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
     indexService = new IndexService(
         esClient, blogRepository, jobRepository, skillGroupRepository, skillRepository,
-        mediaVariantResolver, articleRepository, eventRepository);
+        mediaVariantResolver, articleRepository, eventRepository, mock(BookRepository.class));
+  }
+
+  @Test
+  void bookDocumentNamesTheAuthorsAndOpensTheBookOnTheReadingList() {
+    Book book = new Book("k1", "release-it", "Release It!", "Design and Deploy",
+        List.of("Michael T. Nygard"), 2007, "Delivery and production", "Patterns.",
+        "The long description.", "Why it is here.", new Image("/uploads/k1.jpg", null, null,
+        null, null, null), "https://www.amazon.co.uk/dp/X", null, null, 0, true,
+        Instant.now(), Instant.now());
+
+    SiteSearchDocument doc = indexService.bookToSiteDocument(book);
+
+    assertThat(doc.id()).isEqualTo("book_k1");
+    assertThat(doc.type()).isEqualTo("book");
+    assertThat(doc.name()).isEqualTo("Release It!");
+    assertThat(doc.shortDescription()).isEqualTo("Patterns.");
+    assertThat(doc.longDescription())
+        .isEqualTo("Design and Deploy\n\nWhy it is here.\n\nThe long description.");
+    assertThat(doc.company()).isEqualTo("Michael T. Nygard");
+    assertThat(doc.image()).isEqualTo("/uploads/k1.jpg");
+    assertThat(doc.url()).isEqualTo("/reading?book=release-it");
   }
 
   @Test

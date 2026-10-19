@@ -10,6 +10,8 @@ import com.simonrowe.aggregation.AggregatedEvent;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogRepository;
+import com.simonrowe.books.Book;
+import com.simonrowe.books.BookRepository;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
 import com.simonrowe.skills.Skill;
@@ -76,6 +78,7 @@ public class EmbeddingService {
   private final AdminCodeExampleRepository codeExampleRepository;
   private final AggregatedArticleRepository articleRepository;
   private final AggregatedEventRepository eventRepository;
+  private final BookRepository bookRepository;
   private final ElasticsearchClient esClient;
   private final String indexName;
 
@@ -89,6 +92,7 @@ public class EmbeddingService {
       final AdminCodeExampleRepository codeExampleRepository,
       final AggregatedArticleRepository articleRepository,
       final AggregatedEventRepository eventRepository,
+      final BookRepository bookRepository,
       final ElasticsearchClient esClient,
       @Value("${spring.ai.vectorstore.elasticsearch.index-name:content-embeddings}")
       final String indexName
@@ -102,6 +106,7 @@ public class EmbeddingService {
     this.codeExampleRepository = codeExampleRepository;
     this.articleRepository = articleRepository;
     this.eventRepository = eventRepository;
+    this.bookRepository = bookRepository;
     this.esClient = esClient;
     this.indexName = indexName;
   }
@@ -287,6 +292,59 @@ public class EmbeddingService {
     return index(content.toString(), metadata, force);
   }
 
+  @WithSpan
+  public void embedBook(final Book book) {
+    embedBook(book, false);
+  }
+
+  /**
+   * A book on the Reading list, so the chat can say what Simon recommends and why. A draft is
+   * removed rather than embedded: an unpublished book must not reach an answer.
+   */
+  private boolean embedBook(final Book book, final boolean force) {
+    String sourceId = bookSourceId(book.id());
+    if (!book.published()) {
+      removeContent(sourceId);
+      LOG.info("Book {} is not published, skipping embedding", book.id());
+      return false;
+    }
+    String authors = String.join(", ", book.authors());
+    StringBuilder content = new StringBuilder();
+    content.append("%s by %s, on Simon's reading list (%s)".formatted(
+        book.title(), authors, book.category()));
+    for (String part : new String[] {book.subtitle(), book.summary(), book.note(),
+        book.description()}) {
+      if (part != null && !part.isBlank()) {
+        content.append("\n\n").append(part);
+      }
+    }
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("sourceId", sourceId);
+    metadata.put("sourceType", "book");
+    metadata.put("title", book.title() + " by " + authors);
+    metadata.put("url", book.siteUrl());
+    return index(content.toString(), metadata, force);
+  }
+
+  /** The {@code sourceId} a book's vectors are stored under, prefixed like news and events. */
+  public static String bookSourceId(final String bookId) {
+    return "book_" + bookId;
+  }
+
+  /**
+   * Re-embeds every book, published or not, whether or not it changed. Drafts are removed.
+   *
+   * @return how many books were embedded
+   */
+  public int embedAllBooks() {
+    return embedAllBooks(true);
+  }
+
+  private int embedAllBooks(final boolean force) {
+    List<Book> books = bookRepository.findAllByOrderByDisplayOrderAscTitleAsc();
+    return report("books", books, book -> embedBook(book, force));
+  }
+
   /**
    * Re-embeds every visible article, whether or not it changed.
    *
@@ -330,7 +388,8 @@ public class EmbeddingService {
           + embedAllSkills(false)
           + embedAllCodeExamples(false)
           + embedAllArticles(false)
-          + embedAllEvents(false);
+          + embedAllEvents(false)
+          + embedAllBooks(false);
       LOG.info("Full vector sync completed: {} items embedded", embedded);
     } catch (Exception ex) {
       LOG.error("Full vector sync failed", ex);

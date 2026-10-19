@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SiteSearch } from '../../../src/components/search/SiteSearch'
@@ -155,5 +155,30 @@ describe('SiteSearch', () => {
     await userEvent.keyboard('{Escape}')
 
     expect(screen.queryByText('Spring Blog')).not.toBeInTheDocument()
+  })
+
+  it('shows books on their own when they are all that matched, and opens one on the reading list', async () => {
+    vi.mocked(siteSearch).mockResolvedValue({
+      books: [{ name: 'Release It!', image: '/uploads/release-it.jpg', url: '/reading?book=release-it' }],
+    })
+    function Where() {
+      const location = useLocation()
+      return <p data-testid="where">{location.pathname + location.search}</p>
+    }
+    render(
+      <MemoryRouter>
+        <TourProvider><DrawerProvider>
+          <SiteSearch />
+          <Routes><Route element={<Where />} path="*" /></Routes>
+        </DrawerProvider></TourProvider>
+      </MemoryRouter>,
+    )
+
+    await userEvent.type(screen.getByLabelText('Search or ask a question'), 'nygard')
+
+    expect(await screen.findByText('Books')).toBeInTheDocument()
+    expect(screen.queryByText('No results found')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByText('Release It!'))
+    expect(screen.getByTestId('where')).toHaveTextContent('/reading?book=release-it')
   })
 })

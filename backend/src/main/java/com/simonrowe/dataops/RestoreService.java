@@ -33,6 +33,7 @@ import com.simonrowe.migration.changeunits.V058CreateMeals;
 import com.simonrowe.migration.changeunits.V059CreateMealsKitchen;
 import com.simonrowe.migration.changeunits.V060CreateMealFavourites;
 import com.simonrowe.migration.changeunits.V061CreateSnippets;
+import com.simonrowe.migration.changeunits.V062CreateBooks;
 import com.simonrowe.playlist.PlaylistSettings;
 import com.simonrowe.migration.changeunits.V040CreateSchoolCollections;
 import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
@@ -108,6 +109,8 @@ public class RestoreService {
       HomePage.COLLECTION,
       // No @DBRef; the unique slug index is put back by the post-import hook below.
       V048CreatePortfolioProjects.COLLECTION,
+      // No @DBRef; the unique slug index is put back by the post-import hook below.
+      V062CreateBooks.COLLECTION,
       // Points at aggregated_articles by plain id only. Its unique url index, which is what
       // stops a story being read twice, is put back by the post-import hook below.
       NewsletterCandidate.COLLECTION,
@@ -295,6 +298,7 @@ public class RestoreService {
         Map.entry(V056CreatePlaylist.COLLECTION, this::ensurePlaylistIndexes),
         Map.entry(SCHOOL_DOCUMENTS, this::ensureSchoolIndexes),
         Map.entry(V048CreatePortfolioProjects.COLLECTION, this::ensurePortfolioIndexes),
+        Map.entry(V062CreateBooks.COLLECTION, this::ensureBookIndexes),
         Map.entry(NewsletterCandidate.COLLECTION, this::ensureNewsletterCandidateIndexes),
         Map.entry(V049SeedTermTimeProjectPage.MEDIA_COLLECTION, this::ensureMediaIndexes),
         Map.entry(MealRating.COLLECTION, this::ensureMealIndexes),
@@ -484,6 +488,11 @@ public class RestoreService {
   void ensurePortfolioIndexes() {
     V048CreatePortfolioProjects.createIndexes(mongoTemplate);
     LOG.info("Recreated portfolio indexes after restore");
+  }
+
+  void ensureBookIndexes() {
+    V062CreateBooks.createIndexes(mongoTemplate);
+    LOG.info("Recreated reading list indexes after restore");
   }
 
   /**

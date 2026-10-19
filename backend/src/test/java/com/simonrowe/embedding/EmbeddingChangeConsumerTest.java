@@ -10,6 +10,8 @@ import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.BlogRepository;
+import com.simonrowe.books.Book;
+import com.simonrowe.books.BookRepository;
 import com.simonrowe.employment.JobRepository;
 import com.simonrowe.events.ContentChangeEvent;
 import com.simonrowe.events.ContentChangeEvent.ContentType;
@@ -17,6 +19,7 @@ import com.simonrowe.events.ContentChangeEvent.EventType;
 import com.simonrowe.skills.SkillGroupRepository;
 import com.simonrowe.skills.SkillRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +35,7 @@ class EmbeddingChangeConsumerTest {
   private EmbeddingService embeddingService;
   private AggregatedArticleRepository articleRepository;
   private AggregatedEventRepository eventRepository;
+  private BookRepository bookRepository;
   private EmbeddingChangeConsumer consumer;
 
   @BeforeEach
@@ -39,6 +43,7 @@ class EmbeddingChangeConsumerTest {
     embeddingService = mock(EmbeddingService.class);
     articleRepository = mock(AggregatedArticleRepository.class);
     eventRepository = mock(AggregatedEventRepository.class);
+    bookRepository = mock(BookRepository.class);
     consumer = new EmbeddingChangeConsumer(
         embeddingService,
         mock(BlogRepository.class),
@@ -46,7 +51,8 @@ class EmbeddingChangeConsumerTest {
         mock(SkillRepository.class),
         mock(SkillGroupRepository.class),
         articleRepository,
-        eventRepository);
+        eventRepository,
+        bookRepository);
   }
 
   @Test
@@ -63,6 +69,25 @@ class EmbeddingChangeConsumerTest {
 
     verify(embeddingService).removeContent("event_e1");
     verify(embeddingService, never()).removeContent("e1");
+  }
+
+  @Test
+  void deletedBookRemovesTheBookPrefixedVectors() {
+    consumer.handleContentChange(event(EventType.DELETED, ContentType.BOOK, "k1"));
+
+    verify(embeddingService).removeContent("book_k1");
+    verify(embeddingService, never()).removeContent("k1");
+  }
+
+  @Test
+  void savedBookIsHandedToTheEmbeddingService() {
+    Book book = new Book("k2", "slug", "Title", null, List.of("An Author"), null, "Shelf",
+        "Summary.", null, null, null, null, null, null, 0, true, Instant.now(), Instant.now());
+    when(bookRepository.findById("k2")).thenReturn(Optional.of(book));
+
+    consumer.handleContentChange(event(EventType.UPDATED, ContentType.BOOK, "k2"));
+
+    verify(embeddingService).embedBook(book);
   }
 
   @Test

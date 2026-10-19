@@ -71,6 +71,12 @@ class BackupCollectionsTest {
   }
 
   @Test
+  void readingListIsBackedUpAndRestored() throws ReflectiveOperationException {
+    assertThat(readList(BackupService.class, "BACKUP_COLLECTIONS")).contains("books");
+    assertThat(readList(RestoreService.class, "IMPORT_ORDER_INDEPENDENT")).contains("books");
+  }
+
+  @Test
   void newsletterReviewDecisionsAreBackedUpAndRestored() throws ReflectiveOperationException {
     assertThat(readList(BackupService.class, "BACKUP_COLLECTIONS"))
         .contains("newsletter_candidates");

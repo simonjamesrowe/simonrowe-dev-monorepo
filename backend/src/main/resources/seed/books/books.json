@@ -1,0 +1,569 @@
+{
+  "books": [
+    {
+      "slug": "vibe-coding",
+      "title": "Vibe Coding",
+      "subtitle": "Building Production-Grade Software With GenAI, Chat, Agents, and Beyond",
+      "authors": [
+        "Gene Kim",
+        "Steve Yegge"
+      ],
+      "publishedYear": 2025,
+      "category": "Engineering in the AI era",
+      "published": true,
+      "summary": "Two veterans of DevOps and developer tooling on what changes when AI writes most of the code, and which engineering disciplines matter more, not less, once it does.",
+      "description": "Gene Kim (*The Phoenix Project*, *The DevOps Handbook*) and Steve Yegge (Amazon, Google, Sourcegraph) set out how developers work with chat assistants and coding agents, from a single prompt up to several agents running in parallel. The developer becomes the head chef: setting direction, tasting everything, and owning what leaves the kitchen.\n\nThe book is enthusiastic about what AI makes possible, but most of its pages are about keeping that safe. Agents are fast, capable and fallible, so the old disciplines of small batches, fast feedback, version control and tests are what stop speed turning into damage.\n\n**Key ideas**\n\n- The upside is more than speed: work becomes more ambitious, more autonomous and more fun, and gives you more options.\n- Work at three loops: seconds to minutes with an assistant, hours across a session, days and weeks across a team.\n- The more autonomy an agent has, the more a mistake costs, so the guardrails have to grow with it.\n- You stay accountable for code you didn't type.",
+      "note": "This is the book closest to what I've been building on this site: a software factory in which Claude Code writes, reviews and ships changes, orchestrated by Temporal. Its central argument, that tests, small changes and fast feedback are what make agentic coding safe, is the lesson my own review loop keeps teaching me.",
+      "cover": "vibe-coding.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0F8C22MDN",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "modern-software-engineering",
+      "title": "Modern Software Engineering",
+      "subtitle": "Doing What Works to Build Better Software Faster",
+      "authors": [
+        "David Farley"
+      ],
+      "publishedYear": 2021,
+      "category": "Engineering in the AI era",
+      "published": true,
+      "summary": "Dave Farley argues that software engineering should be an empirical discipline: optimise for learning and for managing complexity, and most good practice follows from those two.",
+      "description": "Farley, co-author of *Continuous Delivery*, steps back from specific practices to ask what engineering means for software. His answer is two sets of habits. To get good at **learning** you work iteratively, seek fast feedback, build incrementally, experiment and stay empirical. To get good at **managing complexity** you value modularity, cohesion, separation of concerns, abstraction and loose coupling.\n\nTestability and deployability run through the whole book as the tools that make both possible. The foreword is by Trisha Gee.\n\n**Key ideas**\n\n- Engineering is applying an empirical, scientific approach to finding efficient, economical solutions to practical problems.\n- Speed and quality are not a trade-off; the habits that give one give the other.\n- If something is hard to test, that is design feedback.",
+      "note": "Trisha's talk leaned on this one, and it is the best answer to \"shiny new tools\". Generating code faster only helps if the system is built to learn quickly and to contain complexity. That is the frame I use when deciding where an AI agent should, and shouldn't, be let loose in a codebase.",
+      "cover": "modern-software-engineering.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B09GG6XKS4",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "tidy-first",
+      "title": "Tidy First?",
+      "subtitle": "A Personal Exercise in Empirical Software Design",
+      "authors": [
+        "Kent Beck"
+      ],
+      "publishedYear": 2023,
+      "category": "Engineering in the AI era",
+      "published": true,
+      "summary": "A short book on small structural changes, and on when to make them: before a change in behaviour, after it, later, or never.",
+      "description": "Kent Beck starts with a catalogue of *tidyings*: guard clauses, deleting dead code, normalising symmetries, explaining variables, reordering for reading, extracting helpers. Each is small enough to make safely in minutes.\n\nThe second part is about managing them: keep tidying separate from changes in behaviour, keep the batches small, and fit them into the rhythm of the work. The third part is theory. Software design is about coupling and cohesion, and whether to tidy first is an economic question about the time value of money and the value of keeping your options open.\n\n**Key ideas**\n\n- Structure changes and behaviour changes are different kinds of change, so make them in separate commits or pull requests.\n- The cost of software is roughly the cost of changing it, and that is dominated by coupling.\n- Tidying is cheap and reversible, so it doesn't need a big decision.",
+      "note": "You can read it in an afternoon. The rule I took from it, that structure changes and behaviour changes belong in separate pull requests, is exactly what makes AI-generated diffs reviewable, whether the reviewer is a person or my own review agent.",
+      "cover": "tidy-first.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0CL7ZMLWH",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "growing-object-oriented-software",
+      "title": "Growing Object-Oriented Software, Guided by Tests",
+      "subtitle": null,
+      "authors": [
+        "Steve Freeman",
+        "Nat Pryce"
+      ],
+      "publishedYear": 2009,
+      "category": "Testing and design",
+      "published": true,
+      "summary": "The book that showed how to grow a system test-first from the outside in, using mock objects to discover the roles and interfaces between objects.",
+      "description": "Freeman and Pryce, two of the people behind mock objects and jMock, describe test-driven development as a design technique for a whole system, not only single classes. You start with a *walking skeleton*, the thinnest slice that builds, deploys and runs end to end. An outer loop of acceptance tests then drives an inner loop of unit tests.\n\nMocks are used to design how objects talk to each other (\"mock roles, not objects\"), and a long worked example, the Auction Sniper, grows a real application this way. The final part, on *listening to the tests*, treats every awkward test as feedback on the design.\n\n**Key ideas**\n\n- Begin with a walking skeleton, so deployment and the end-to-end test exist from day one.\n- Use acceptance tests to say what done means, and unit tests to shape the code.\n- When a test is hard to write, the design is telling you something.",
+      "note": "TDD, Mockito and Testcontainers are all on my skills list, and this is the book behind how I use them. The walking skeleton is how I start a new module, and \"listen to the tests\" is still the best design feedback I know. Tests matter even more now, because they are what keeps a coding agent honest.",
+      "cover": "growing-object-oriented-software.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B002TIOYVW",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "test-driven-development-by-example",
+      "title": "Test-Driven Development: By Example",
+      "subtitle": null,
+      "authors": [
+        "Kent Beck"
+      ],
+      "publishedYear": 2002,
+      "category": "Testing and design",
+      "published": true,
+      "summary": "The original short introduction to test-driven development: red, green, refactor, worked through two examples in deliberately tiny steps.",
+      "description": "Part one builds a multi-currency money example one test at a time, showing how small each step can be. Part two builds an xUnit testing framework test-first. Part three collects the patterns: what to test next, how to get to green (*fake it*, *triangulate*, *obvious implementation*), and when to refactor.\n\nIt is a short book, and most of its value is in the rhythm it teaches rather than in the examples.\n\n**Key ideas**\n\n- Red, green, refactor, in that order, every time.\n- Choose the step size to match your confidence: tiny steps when unsure, bigger ones when the way is clear.\n- Keep a test list so the next step is always written down.",
+      "note": "Worth re-reading for the step size alone. When an agent is writing the code, faking it and triangulating are good ways to keep each change small enough to check.",
+      "cover": "test-driven-development-by-example.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0CW1JBTHM",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "working-effectively-with-legacy-code",
+      "title": "Working Effectively with Legacy Code",
+      "subtitle": null,
+      "authors": [
+        "Michael C. Feathers"
+      ],
+      "publishedYear": 2004,
+      "category": "Testing and design",
+      "published": true,
+      "summary": "Practical techniques for getting code without tests under test, so it can be changed safely. In Feathers' definition, legacy code is simply code without tests.",
+      "description": "Michael Feathers organises the book around the questions you ask when you are stuck: *I can't get this class into a test harness*, *I need to change a monster method*, *I don't understand the code well enough to change it*. The answers rely on a few central ideas: *seams* where behaviour can be changed without editing the code, *characterisation tests* that pin down what the code does today, and *sprout* and *wrap* techniques for adding new code alongside old.\n\nThe final part is a catalogue of more than twenty dependency-breaking techniques.\n\n**Key ideas**\n\n- To change code safely you need tests; to add tests you often need to change code. Seams break that loop.\n- Characterisation tests record what the system does today, not what it should do.\n- Make small, safe changes first, then refactor once tests are in place.",
+      "note": "Most of the systems I lead at work predate my teams. Characterisation tests and seams are how you make those systems safe to change, and safe to hand to an AI assistant, which will happily rewrite code it doesn't understand.",
+      "cover": "working-effectively-with-legacy-code.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B005OYHF0A",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "domain-driven-design",
+      "title": "Domain-Driven Design",
+      "subtitle": "Tackling Complexity in the Heart of Software",
+      "authors": [
+        "Eric Evans"
+      ],
+      "publishedYear": 2003,
+      "category": "Testing and design",
+      "published": true,
+      "summary": "The book that named the ubiquitous language, bounded contexts, aggregates and the rest of the vocabulary we use for modelling complex business domains.",
+      "description": "Eric Evans argues that the heart of most software is the business domain, and that the model of it deserves as much care as the code. Part one is about building a *ubiquitous language* with domain experts. Part two gives the building blocks: entities, value objects, services, aggregates, repositories and factories. Part three is about refactoring toward deeper insight.\n\nPart four, on strategic design, is often skipped and is arguably the most important: *bounded contexts*, context maps, anti-corruption layers and choosing the *core domain* to invest in.\n\n**Key ideas**\n\n- One model, one language, within an explicit boundary.\n- An aggregate is a consistency boundary, so change it as a whole.\n- Put your best design effort into the core domain, and buy or simplify the rest.",
+      "note": "Aggregates and bounded contexts are the backbone of the event-sourced services we build at work. The strategic-design half is the part I find most useful as a leader, because deciding where service boundaries go is also deciding where team boundaries go.",
+      "cover": "domain-driven-design.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B00794TAUG",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "building-evolutionary-architectures",
+      "title": "Building Evolutionary Architectures",
+      "subtitle": "Automated Software Governance",
+      "authors": [
+        "Neal Ford",
+        "Rebecca Parsons",
+        "Patrick Kua",
+        "Pramod Sadalage"
+      ],
+      "publishedYear": 2017,
+      "category": "Testing and design",
+      "published": true,
+      "summary": "How to make architecture something you can change on purpose, using fitness functions: automated checks that an architectural characteristic still holds.",
+      "description": "The Thoughtworks authors treat architecture as something that has to keep changing, and ask how to stop it decaying while it does. Their main tool is the *fitness function*: an automated test, metric or check that measures whether the system still has a property you care about, such as layering, coupling, performance or security.\n\nThe book covers the kinds of fitness function (atomic or holistic, triggered or continual), building for incremental change, choosing appropriate coupling, evolving data, and, in the second edition, using fitness functions for automated governance.\n\n**Key ideas**\n\n- Decide which architectural characteristics matter, then automate checks for them.\n- Run fitness functions in the deployment pipeline, so architectural drift breaks the build.\n- Small, reversible changes are what make evolution safe.",
+      "note": "Without knowing the name, I'd been writing fitness functions all over this site: tests that fail the build if a container gains the Docker socket, or if a workflow ends up polled by the wrong service. This book gives that habit a framework, and it matters more when agents are making changes faster than anyone can review the architecture by eye.",
+      "cover": "building-evolutionary-architectures.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0BN4T1P27",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "97-things-every-java-programmer",
+      "title": "97 Things Every Java Programmer Should Know",
+      "subtitle": "Collective Wisdom from the Experts",
+      "authors": [
+        "Kevlin Henney",
+        "Trisha Gee"
+      ],
+      "publishedYear": 2020,
+      "category": "Testing and design",
+      "published": true,
+      "summary": "Ninety-seven two-page essays from Java practitioners, edited by Kevlin Henney and Trisha Gee, on the language, the JVM, testing and the craft around them.",
+      "description": "Like the rest of the *97 Things* series, this is a collection of short essays from many contributors across the Java community. Each one makes a single point in about two pages, so you can open it anywhere.\n\nThe topics range from the language and its newer features, through the JVM, builds and testing, to working with other people and looking after your own career.",
+      "note": "Trisha co-edited it, so it belonged on the list. Java is still the language I reach for, and two-page essays are the right length for the train.",
+      "cover": "97-things-every-java-programmer.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B088P8GV8X",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "continuous-delivery",
+      "title": "Continuous Delivery",
+      "subtitle": "Reliable Software Releases through Build, Test, and Deployment Automation",
+      "authors": [
+        "Jez Humble",
+        "David Farley"
+      ],
+      "publishedYear": 2010,
+      "category": "Delivery and production",
+      "published": true,
+      "summary": "The book that defined the deployment pipeline: every change is built, tested and made releasable automatically, so releasing becomes a business decision rather than a technical event.",
+      "description": "Humble and Farley describe the *deployment pipeline*, an automated path from commit to production that every change goes through, and the practices around it: continuous integration, automated acceptance and non-functional testing, configuration management, managing infrastructure and data, and release strategies such as blue-green deployment and canary releases.\n\n**Key ideas**\n\n- Build your binaries once, and deploy the same artefact to every environment.\n- Deploy the same way everywhere, production included.\n- If it hurts, do it more often, and bring the pain forward.\n- Everyone is responsible for the delivery process.",
+      "note": "This site deploys itself on every merge to main, with a maintenance page, verification and automatic rollback, and most of the decisions behind that trace back to this book. Building once and deploying the same artefact everywhere is the rule the rollback path depends on.",
+      "cover": "continuous-delivery.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B003YMNVC0",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "accelerate",
+      "title": "Accelerate",
+      "subtitle": "The Science of Lean Software and DevOps: Building and Scaling High Performing Technology Organizations",
+      "authors": [
+        "Nicole Forsgren",
+        "Jez Humble",
+        "Gene Kim"
+      ],
+      "publishedYear": 2018,
+      "category": "Delivery and production",
+      "published": true,
+      "summary": "Four years of State of DevOps research, distilled into the four key delivery metrics and the 24 capabilities that drive software delivery and organisational performance.",
+      "description": "Part one presents the findings. Software delivery performance can be measured with four metrics: deployment frequency, lead time for changes, time to restore service, and change failure rate. High performers do well on all four at once, and that performance predicts how the organisation does. The authors identify 24 capabilities that drive it, across continuous delivery, architecture, product and process, lean management, and culture.\n\nPart two explains the research methods behind those claims. Part three is a case study of a transformation in practice.\n\n**Key ideas**\n\n- Speed and stability are not a trade-off; the best teams have both.\n- Measure outcomes, not output or busyness.\n- Loosely coupled architecture and generative culture are measurable drivers of performance.",
+      "note": "As a Head of Engineering, this is the book I'd hand to anyone asking how to measure a team without measuring the wrong thing. It also frames the current AI productivity debate: if code gets faster to write but lead time and change failure rate don't move, nothing has improved.",
+      "cover": "accelerate.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0F7HYPG1L",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "the-devops-handbook",
+      "title": "The DevOps Handbook",
+      "subtitle": "How to Create World-Class Agility, Reliability, & Security in Technology Organizations",
+      "authors": [
+        "Gene Kim",
+        "Jez Humble",
+        "Patrick Debois",
+        "John Willis",
+        "Nicole Forsgren"
+      ],
+      "publishedYear": 2016,
+      "category": "Delivery and production",
+      "published": true,
+      "summary": "The practical companion to The Phoenix Project: the Three Ways of flow, feedback and continual learning, and the technical practices that make them real.",
+      "description": "The book is organised around the *Three Ways*. **Flow**: make work visible, limit work in progress, build a deployment pipeline and make releases low-risk. **Feedback**: build telemetry, find problems as they happen, and use peer review and A/B testing. **Continual learning and experimentation**: blameless post-mortems, injecting failure, and turning local discoveries into improvements across the organisation.\n\nThere is also a section on building security and compliance into the daily work. The second edition updates the case studies and adds Nicole Forsgren's research.",
+      "note": "It is a good bridge between Continuous Delivery and Accelerate, covering the organisational side of what I've been automating. Its blameless post-mortems are the model I follow when writing up this site's own production incidents.",
+      "cover": "the-devops-handbook.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0F7J1WWQD",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "release-it",
+      "title": "Release It!",
+      "subtitle": "Design and Deploy Production-Ready Software",
+      "authors": [
+        "Michael T. Nygard"
+      ],
+      "publishedYear": 2007,
+      "category": "Delivery and production",
+      "published": true,
+      "summary": "War stories and patterns for software that survives production: timeouts, circuit breakers, bulkheads, and the many ways systems fail where they meet each other.",
+      "description": "Michael Nygard opens with real outages and works back to their causes. The *stability antipatterns* include integration points, chain reactions, cascading failures, blocked threads, unbounded result sets and slow responses. The *stability patterns* that counter them include timeouts, circuit breakers, bulkheads, steady state, fail fast and load shedding.\n\nThe second edition adds cloud and containers, deployment without downtime, and chaos engineering.\n\n**Key ideas**\n\n- Every integration point will eventually fail, so plan for it.\n- Steady state: anything that accumulates (logs, data, images) needs something that removes it.\n- Fail fast, and don't let one failure use up everyone's resources.",
+      "note": "Running this site on a Raspberry Pi has given me a small-scale tour of Nygard's antipatterns: a full disk taking the datastores down, healthchecks that went green while nothing was serving, and consumers stuck behind a broker that never recovered. Steady state, the rule that something must delete what you create, is one I learned the hard way with Docker images.",
+      "cover": "release-it.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0DGX43D9B",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "observability-engineering",
+      "title": "Observability Engineering",
+      "subtitle": "Achieving Production Excellence",
+      "authors": [
+        "Charity Majors",
+        "Liz Fong-Jones",
+        "George Miranda"
+      ],
+      "publishedYear": 2022,
+      "category": "Delivery and production",
+      "published": true,
+      "summary": "Why observability means being able to ask new questions of production without shipping new code, and why that needs wide, high-cardinality events rather than pre-aggregated metrics.",
+      "description": "The Honeycomb authors separate observability from monitoring. Monitoring answers questions you predicted in advance. Observability lets you debug problems you have never seen, by slicing rich structured events on any dimension.\n\nThe book covers structured events and tracing, high cardinality and dimensionality, debugging from first principles, service-level objectives and alerting on error-budget burn rate, observability-driven development, and growing an observability culture across teams.\n\n**Key ideas**\n\n- Instrument with wide events that carry as much context as you can afford.\n- Alert on symptoms that users feel (SLOs), not on every cause you can think of.\n- Observability is part of how you develop software, not only how you operate it.",
+      "note": "I've spent a lot of time on this site's telemetry: OpenTelemetry traces into Langfuse for the LLM calls, logs into Grafana Loki, and a log-watch agent that files tickets. This book is a useful corrective. Healthy dashboards prove little, and the questions you need to ask during an incident are rarely the ones you planned for.",
+      "cover": "observability-engineering.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B09ZQ6FHTT",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "peopleware",
+      "title": "Peopleware",
+      "subtitle": "Productive Projects and Teams",
+      "authors": [
+        "Tom DeMarco",
+        "Timothy Lister"
+      ],
+      "publishedYear": 1987,
+      "category": "Leading teams",
+      "published": true,
+      "summary": "The classic argument that software's hardest problems are sociological, not technical: workspace, interruptions, teams that jell, and managers who get out of the way.",
+      "description": "DeMarco and Lister draw on decades of consulting and their own productivity studies. They argue that the main causes of failed projects are people problems: noisy offices that destroy *flow*, management by pressure and deadline, and organisational habits that break up good teams (*teamicide*).\n\nTheir remedies are simple and still uncommon: protect concentration, hire well and keep people, let teams jell, and build a culture where people can make and admit mistakes. The third edition adds chapters on more recent topics.\n\n**Key ideas**\n\n- The major problems of our work are not so much technological as sociological.\n- Flow takes time to reach and seconds to lose.\n- You can't make a team jell, but you can stop preventing it.",
+      "note": "Nearly forty years old and still the most honest book about what makes engineering teams productive. Worth re-reading now that productivity is mostly discussed in tokens per second.",
+      "cover": "peopleware.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B00DY5A8X2",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "drive",
+      "title": "Drive",
+      "subtitle": "The Surprising Truth About What Motivates Us",
+      "authors": [
+        "Daniel H. Pink"
+      ],
+      "publishedYear": 2009,
+      "category": "Leading teams",
+      "published": true,
+      "summary": "Daniel Pink's case that for creative work, carrots and sticks backfire. People are driven by autonomy, mastery and purpose.",
+      "description": "Pink summarises decades of behavioural science research. Rewards that depend on performance work for routine, rule-following tasks, but for work that needs judgement and creativity they narrow focus and crowd out the motivation that comes from the work itself.\n\nHe proposes three elements of that *intrinsic* motivation: **autonomy** over task, time, technique and team; **mastery**, the urge to get better at something that matters; and **purpose**, working in service of something larger.\n\n**Key ideas**\n\n- Pay people enough to take the issue of money off the table, then design for intrinsic motivation.\n- \"If-then\" rewards are poor motivators for heuristic, creative work.\n- Autonomy, mastery and purpose are things you can design into a role.",
+      "note": "Autonomy, mastery and purpose is a framework I lean on when structuring teams and goals. It is also a useful lens on AI tooling: tools that take the mastery out of a job, or the autonomy away from it, cost more than they save.",
+      "cover": "drive.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0033TI4BW",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "extreme-programming-explained",
+      "title": "Extreme Programming Explained",
+      "subtitle": "Embrace Change",
+      "authors": [
+        "Kent Beck",
+        "Cynthia Andres"
+      ],
+      "publishedYear": 1999,
+      "category": "Testing and design",
+      "published": false,
+      "summary": "Kent Beck's statement of Extreme Programming: the values, principles and practices, including pairing, test-first, continuous integration and small releases, for teams that embrace change.",
+      "description": "The second edition reframes XP around five values (communication, simplicity, feedback, courage and respect), a set of principles, and primary and corollary practices such as pair programming, test-first programming, continuous integration, weekly and quarterly cycles, and incremental design.",
+      "note": null,
+      "cover": "extreme-programming-explained.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B00N1ZN6C0",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "agile-testing",
+      "title": "Agile Testing",
+      "subtitle": "A Practical Guide for Testers and Agile Teams",
+      "authors": [
+        "Lisa Crispin",
+        "Janet Gregory"
+      ],
+      "publishedYear": 2009,
+      "category": "Testing and design",
+      "published": false,
+      "summary": "How testers and testing fit into agile teams, organised around the agile testing quadrants.",
+      "description": "Crispin and Gregory cover the tester's role in a whole-team approach, the four agile testing quadrants (tests that support the team, tests that critique the product, technology-facing and business-facing), test automation strategy, and how testing activities fit into each iteration.",
+      "note": null,
+      "cover": "agile-testing.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B001QL5N4K",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "user-stories-applied",
+      "title": "User Stories Applied",
+      "subtitle": "For Agile Software Development",
+      "authors": [
+        "Mike Cohn"
+      ],
+      "publishedYear": 2004,
+      "category": "Product and organisations",
+      "published": false,
+      "summary": "A practical guide to writing, estimating, splitting and planning with user stories.",
+      "description": "Mike Cohn covers gathering stories through user role modelling and workshops, the INVEST criteria for a good story, acceptance tests as the confirmation of a story, estimating in story points, and release and iteration planning.",
+      "note": null,
+      "cover": "user-stories-applied.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0054KOL74",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "the-phoenix-project",
+      "title": "The Phoenix Project",
+      "subtitle": "A Novel about IT, DevOps, and Helping Your Business Win",
+      "authors": [
+        "Gene Kim",
+        "Kevin Behr",
+        "George Spafford"
+      ],
+      "publishedYear": 2013,
+      "category": "Delivery and production",
+      "published": false,
+      "summary": "A business novel in which an IT manager rescues a failing project by discovering the Three Ways and the four types of work.",
+      "description": "Bill Palmer is handed a late, critical project and an IT operation in constant firefighting. With the help of an eccentric board member, he learns to see IT work as a production line: identify the constraint, make work visible, limit work in progress, and tell apart business projects, internal projects, changes and unplanned work.",
+      "note": null,
+      "cover": "the-phoenix-project.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0F7HW5T91",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "the-mythical-man-month",
+      "title": "The Mythical Man-Month",
+      "subtitle": "Essays on Software Engineering",
+      "authors": [
+        "Frederick P. Brooks Jr."
+      ],
+      "publishedYear": 1975,
+      "category": "Leading teams",
+      "published": false,
+      "summary": "Essays on software project management, and the home of Brooks's law: adding people to a late software project makes it later.",
+      "description": "Drawn from Brooks's experience managing IBM's OS/360, the essays cover communication overhead, the surgical team, conceptual integrity, the second-system effect and planning to throw one away. The anniversary edition adds \"No Silver Bullet\" and Brooks's later reflections on it.",
+      "note": null,
+      "cover": "the-mythical-man-month.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B00B8USS14",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "design-patterns",
+      "title": "Design Patterns",
+      "subtitle": "Elements of Reusable Object-Oriented Software",
+      "authors": [
+        "Erich Gamma",
+        "Richard Helm",
+        "Ralph Johnson",
+        "John Vlissides"
+      ],
+      "publishedYear": 1994,
+      "category": "Testing and design",
+      "published": false,
+      "summary": "The “Gang of Four” catalogue of 23 object-oriented design patterns, grouped as creational, structural and behavioural.",
+      "description": "The book introduces a shared vocabulary for recurring designs (Factory Method, Strategy, Observer, Decorator, Composite and the rest), each with its intent, structure, participants and consequences, and argues for favouring object composition over class inheritance and programming to an interface.",
+      "note": null,
+      "cover": "design-patterns.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B000SEIBB8",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "head-first-design-patterns",
+      "title": "Head First Design Patterns",
+      "subtitle": "Building Extensible and Maintainable Object-Oriented Software",
+      "authors": [
+        "Eric Freeman",
+        "Elisabeth Robson"
+      ],
+      "publishedYear": 2004,
+      "category": "Testing and design",
+      "published": false,
+      "summary": "A visual, conversational introduction to the core design patterns and the object-oriented principles behind them, with examples in Java.",
+      "description": "The Head First format uses pictures, puzzles and repetition to teach the most commonly used patterns, and the design principles behind them such as encapsulating what varies and favouring composition. The second edition updates the examples for modern Java.",
+      "note": null,
+      "cover": "head-first-design-patterns.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B08P3X99QP",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "97-things-every-software-architect",
+      "title": "97 Things Every Software Architect Should Know",
+      "subtitle": "Collective Wisdom from the Experts",
+      "authors": [
+        "Richard Monson-Haefel"
+      ],
+      "publishedYear": 2009,
+      "category": "Testing and design",
+      "published": false,
+      "summary": "Short essays from practising architects on the judgement, communication and trade-offs behind the role.",
+      "description": "Edited by Richard Monson-Haefel, the essays cover simplicity, the cost of decisions, communicating with stakeholders, understanding the business, and the soft skills that separate a good architect from a good designer.",
+      "note": null,
+      "cover": "97-things-every-software-architect.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0026OR30S",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "the-software-craftsman",
+      "title": "The Software Craftsman",
+      "subtitle": "Professionalism, Pragmatism, Pride",
+      "authors": [
+        "Sandro Mancuso"
+      ],
+      "publishedYear": 2014,
+      "category": "Leading teams",
+      "published": false,
+      "summary": "Sandro Mancuso on software craftsmanship as a professional attitude: practices, careers, hiring, and building a culture of learning.",
+      "description": "Mancuso covers the craftsmanship movement and its manifesto, technical practices, owning your career, recruiting and interviewing craftsmen, and driving technical change in organisations that resist it.",
+      "note": null,
+      "cover": "the-software-craftsman.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B00QXAGIDO",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "the-lean-startup",
+      "title": "The Lean Startup",
+      "subtitle": "How Constant Innovation Creates Radically Successful Businesses",
+      "authors": [
+        "Eric Ries"
+      ],
+      "publishedYear": 2011,
+      "category": "Product and organisations",
+      "published": false,
+      "summary": "Build, measure, learn: minimum viable products and validated learning as a way to run a new venture under extreme uncertainty.",
+      "description": "Eric Ries treats a startup as an experiment. Ship a minimum viable product, measure what users actually do with actionable rather than vanity metrics, and decide to pivot or persevere, aiming to shorten each turn of the build-measure-learn loop.",
+      "note": null,
+      "cover": "the-lean-startup.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B005PR422K",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "the-pragmatic-programmer",
+      "title": "The Pragmatic Programmer",
+      "subtitle": "Your Journey to Mastery",
+      "authors": [
+        "David Thomas",
+        "Andrew Hunt"
+      ],
+      "publishedYear": 1999,
+      "category": "Testing and design",
+      "published": false,
+      "summary": "Lasting advice on the habits of an effective developer: DRY, orthogonality, tracer bullets, broken windows, and taking responsibility for your craft.",
+      "description": "Organised as short, numbered tips, the book covers the pragmatic philosophy, approach and tools, coding while you think, concurrency, and working in pragmatic teams and projects. The 20th anniversary edition rewrites much of the original for modern practice.",
+      "note": null,
+      "cover": "the-pragmatic-programmer.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B07VRS84D1",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "slow-productivity",
+      "title": "Slow Productivity",
+      "subtitle": "The Lost Art of Accomplishment Without Burnout",
+      "authors": [
+        "Cal Newport"
+      ],
+      "publishedYear": 2024,
+      "category": "Leading teams",
+      "published": false,
+      "summary": "Cal Newport's three principles for knowledge work: do fewer things, work at a natural pace, and obsess over quality.",
+      "description": "Newport argues that knowledge work has confused visible activity with productivity, and lays out a slower alternative, with practical tactics for limiting work in progress, stretching timelines and raising quality.",
+      "note": null,
+      "cover": "slow-productivity.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0CF16GTW9",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "organizational-physics",
+      "title": "Organizational Physics",
+      "subtitle": "The Science of Growing a Business",
+      "authors": [
+        "Lex Sisney"
+      ],
+      "publishedYear": 2013,
+      "category": "Product and organisations",
+      "published": false,
+      "summary": "A model of organisations as energy systems, applied to strategy, structure and decision rights in a growing business.",
+      "description": "Lex Sisney treats a business as a system that has to balance integration and entropy. He applies that model to strategy, organisational structure, decision-making and the styles of the people leading it.",
+      "note": null,
+      "cover": "organizational-physics.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0BSHDSB6Y",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    },
+    {
+      "slug": "ergodicity",
+      "title": "Ergodicity",
+      "subtitle": "How Irreversible Outcomes Affect Long-Term Performance in Work, Investing, Relationships, Sport, and Beyond",
+      "authors": [
+        "Luca Dellanna"
+      ],
+      "publishedYear": 2020,
+      "category": "Product and organisations",
+      "published": false,
+      "summary": "Why avoiding ruin matters more than maximising average returns: how irreversible outcomes shape long-term performance.",
+      "description": "Luca Dellanna explains ergodicity in plain language. The average outcome across many people is not what one person experiences over time, so strategies that look good on average can be ruinous when a single bad outcome cannot be undone.",
+      "note": null,
+      "cover": "ergodicity.jpg",
+      "purchaseUrl": "https://www.amazon.co.uk/dp/B0BL8JFMT8",
+      "sourceLabel": "Trisha Gee's reading list for “Shiny New Tools Won't Fix Your Problem”",
+      "sourceUrl": "https://trishagee.com/presentations/shiny-new-tools-wont-fix-your-problem"
+    }
+  ]
+}

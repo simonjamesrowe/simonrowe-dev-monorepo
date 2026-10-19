@@ -6,6 +6,8 @@ import com.simonrowe.aggregation.AggregatedEvent;
 import com.simonrowe.aggregation.AggregatedEventRepository;
 import com.simonrowe.blog.Blog;
 import com.simonrowe.blog.BlogRepository;
+import com.simonrowe.books.Book;
+import com.simonrowe.books.BookRepository;
 import com.simonrowe.employment.Job;
 import com.simonrowe.employment.JobRepository;
 import com.simonrowe.events.ContentChangeEvent;
@@ -37,6 +39,7 @@ public class EmbeddingChangeConsumer {
   private final SkillGroupRepository skillGroupRepository;
   private final AggregatedArticleRepository articleRepository;
   private final AggregatedEventRepository eventRepository;
+  private final BookRepository bookRepository;
 
   public EmbeddingChangeConsumer(
       final EmbeddingService embeddingService,
@@ -45,7 +48,8 @@ public class EmbeddingChangeConsumer {
       final SkillRepository skillRepository,
       final SkillGroupRepository skillGroupRepository,
       final AggregatedArticleRepository articleRepository,
-      final AggregatedEventRepository eventRepository
+      final AggregatedEventRepository eventRepository,
+      final BookRepository bookRepository
   ) {
     this.embeddingService = embeddingService;
     this.blogRepository = blogRepository;
@@ -54,6 +58,7 @@ public class EmbeddingChangeConsumer {
     this.skillGroupRepository = skillGroupRepository;
     this.articleRepository = articleRepository;
     this.eventRepository = eventRepository;
+    this.bookRepository = bookRepository;
   }
 
   @RetryableTopic(
@@ -84,6 +89,7 @@ public class EmbeddingChangeConsumer {
           AdminCodeExampleController directly""");
       case AGGREGATED_ARTICLE -> handleArticle(event.contentId());
       case AGGREGATED_EVENT -> handleEvent(event.contentId());
+      case BOOK -> handleBook(event.contentId());
       default -> LOG.warn("Unknown content type: {}", event.contentType());
     }
   }
@@ -101,8 +107,18 @@ public class EmbeddingChangeConsumer {
     return switch (event.contentType()) {
       case AGGREGATED_ARTICLE -> "news_" + event.contentId();
       case AGGREGATED_EVENT -> "event_" + event.contentId();
+      case BOOK -> EmbeddingService.bookSourceId(event.contentId());
       default -> event.contentId();
     };
+  }
+
+  private void handleBook(final String contentId) {
+    Optional<Book> book = bookRepository.findById(contentId);
+    if (book.isPresent()) {
+      embeddingService.embedBook(book.get());
+    } else {
+      embeddingService.removeContent(EmbeddingService.bookSourceId(contentId));
+    }
   }
 
   private void handleBlog(final String contentId) {
