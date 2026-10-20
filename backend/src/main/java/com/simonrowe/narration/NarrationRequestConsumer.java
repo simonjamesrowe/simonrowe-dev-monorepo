@@ -3,7 +3,10 @@ package com.simonrowe.narration;
 import com.simonrowe.events.NarrationRequestEvent;
 import com.simonrowe.narration.NarrationProvider.FailureKind;
 import com.simonrowe.narration.NarrationProvider.NarrationProviderException;
+import com.simonrowe.observability.OperationOutcome;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import java.time.Instant;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -26,6 +29,7 @@ public class NarrationRequestConsumer {
   private final NarrationRequestPublisher publisher;
   private final NarrationSynthesizer synthesizer;
   private final MeterRegistry meterRegistry;
+  private final ObservationRegistry observationRegistry;
 
   public NarrationRequestConsumer(
       final NarrationService narrationService,
@@ -36,7 +40,8 @@ public class NarrationRequestConsumer {
       final NarrationProperties properties,
       final NarrationRequestPublisher publisher,
       final NarrationSynthesizer synthesizer,
-      final MeterRegistry meterRegistry
+      final MeterRegistry meterRegistry,
+      final ObservationRegistry observationRegistry
   ) {
     this.narrationService = narrationService;
     this.narrationRepository = narrationRepository;
@@ -47,6 +52,7 @@ public class NarrationRequestConsumer {
     this.publisher = publisher;
     this.synthesizer = synthesizer;
     this.meterRegistry = meterRegistry;
+    this.observationRegistry = observationRegistry;
   }
 
   @KafkaListener(
@@ -55,9 +61,17 @@ public class NarrationRequestConsumer {
       concurrency = "${narration.consumer-concurrency:1}"
   )
   public void handle(final NarrationRequestEvent event) {
+    Observation.createNotStarted("narration.process", observationRegistry)
+        .contextualName("narration.generate")
+        .highCardinalityKeyValue("app.operation", "narration.generate")
+        .observe(() -> process(event));
+  }
+
+  private void process(final NarrationRequestEvent event) {
     Optional<Narration> claimed = narrationService.claim(
         event.narrationId(), Instant.now());
     if (claimed.isEmpty()) {
+      OperationOutcome.SKIPPED.record();
       return;
     }
     Narration narration = claimed.get();
@@ -128,6 +142,7 @@ public class NarrationRequestConsumer {
     } catch (RuntimeException ex) {
       LOG.error("Narration processing failed: narrationId={}", narration.id(), ex);
       markFailed(narration, "INTERNAL_FAILURE", true);
+      OperationOutcome.failed(ex);
     }
   }
 
@@ -158,6 +173,7 @@ public class NarrationRequestConsumer {
       sleep(properties.pollInterval().toMillis());
     }
     narration.markQueued(Instant.now());
+    OperationOutcome.QUEUED.record();
     narrationRepository.save(narration);
     publisher.publish(narration.id());
   }
@@ -193,6 +209,7 @@ public class NarrationRequestConsumer {
         return;
       }
       narration.markReady(stored, Instant.now());
+      OperationOutcome.SUCCESS.record();
       narrationRepository.save(narration);
       meterRegistry.counter("narration.jobs", "result", "ready").increment();
       meterRegistry.timer("narration.generation.duration")
@@ -212,6 +229,7 @@ public class NarrationRequestConsumer {
   ) {
     if (failure.kind() == FailureKind.AMBIGUOUS && duringStart) {
       narration.markUncertain("PROVIDER_OUTCOME_UNCERTAIN", Instant.now());
+      OperationOutcome.UNCERTAIN.record();
       narrationRepository.save(narration);
       meterRegistry.counter("narration.jobs", "result", "uncertain").increment();
       return;
@@ -219,12 +237,14 @@ public class NarrationRequestConsumer {
     if (!duringStart && narration.providerOperationName() != null
         && failure.kind() == FailureKind.SAFE_TO_RETRY) {
       narration.markQueued(Instant.now());
+      OperationOutcome.QUEUED.record();
       narrationRepository.save(narration);
       publisher.publish(narration.id());
       return;
     }
     markFailed(narration, failure.kind() == FailureKind.UNAVAILABLE
         ? "PROVIDER_UNAVAILABLE" : "PROVIDER_REJECTED", true);
+    OperationOutcome.failed(failure);
   }
 
   private void markFailed(
@@ -232,12 +252,18 @@ public class NarrationRequestConsumer {
       final String code,
       final boolean retryable
   ) {
+    if ("BUDGET_EXHAUSTED".equals(code)) {
+      OperationOutcome.REJECTED.record();
+    } else {
+      OperationOutcome.FAILED.record();
+    }
     narration.markFailed(code, retryable, Instant.now());
     narrationRepository.save(narration);
     meterRegistry.counter("narration.jobs", "result", "failed").increment();
   }
 
   private void markStale(final Narration narration) {
+    OperationOutcome.STALE.record();
     narration.markStale(Instant.now());
     narrationRepository.save(narration);
   }

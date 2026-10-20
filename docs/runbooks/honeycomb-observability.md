@@ -18,7 +18,9 @@ with route/operation names, clears status text and tracestate, and adds environm
 and route-derived `app.module`. Child spans without a route have no inferred module.
 
 Allowed fields are service identity/version, route template, method/status/error
-type, database system/operation, model/provider/operation and token counts.
+type, database system/operation, reviewed collection names, static repository/query
+identities, operation outcomes, reviewed Kafka topics/operations, model/provider/operation
+and token counts. Legacy database/messaging keys are normalized before sanitization.
 For Spring Boot server spans only, the pipeline maps Micrometer's `uri` route
 template, `method` and `status` to HTTP semantic fields before the actuator filter.
 Client spans and other instrumentation scopes never receive this mapping.
@@ -113,6 +115,54 @@ fresh matching evidence for every required check. Observed export/privacy/field
 failures are **FAIL**; missing evidence or access is **INCONCLUSIVE**; intentionally
 disabled/expired capture is **NOT RUN**, never a successful ingest check. This
 backend pilot does not verify browser, Kafka, STOMP or factory instrumentation.
+
+## Query, messaging and failure context
+
+The query-legibility increment uses Spring Data's repository factory/proxy hook to
+open an observation **around** selected read operations. Driver commands remain
+children of that observation. Only `BlogRepository`, `AdminBlogRepository`,
+`MediaAssetRepository` and `ShortLinkRepository` reads (`find`, `count`, `exists`)
+are included initially. `app.repository.method` and `app.query.name` are static
+code identities, never arguments, result documents or raw filters. For example,
+`BlogRepository.findByPublishedTrueOrderByCreatedDateDesc` identifies the existing
+query family; it does not establish which index MongoDB used. Diagnose plans
+separately with representative data and `explain`, and ship index changes through Mongock.
+
+Alloy composes names such as `find blogs`, a repository method, or
+`content-changes publish` only from the retained metadata. Its collection/topic
+lists deliberately omit dynamic namespaces. Original names, statement contents,
+payloads, message keys/IDs, arbitrary headers, exception messages and events remain
+excluded. Unknown metadata falls back to the generic operation name.
+
+The installed OTel starter already instruments Kafka producers and record
+listeners; do not enable Micrometer Kafka observations on top without removing
+the overlapping owner. `TracingIntegrationTest` exercises the real starter and
+bridge against real MongoDB/Kafka containers. The tested single-record flow has a
+producer child of the caller, a consumer child of the producer and no span links.
+This local evidence does **not** establish deployed Kafka coverage. Batch/fan-in
+and linked retry traces remain outside the collector's current link policy.
+
+Private model, school and narration executors and Data Ops common-pool submissions
+capture OTel context at submission, with scopes restored by the context wrappers.
+The Langfuse score executor uses the Framework context-propagating task decorator.
+These changes preserve context; they do not add browser, STOMP or factory spans.
+
+Summary and narration consumers open their own operation observations.
+`app.outcome` distinguishes success, skipped/unavailable/stale/rejected/queued
+work, failed operations and uncertain provider outcomes. Unexpected failure and
+uncertain outcomes set span ERROR with a bounded error type. A summary returned as
+FAILED because of missing source/content is an expected unavailable outcome;
+model/internal failures are errors even when caught. Narration budget rejection
+is expected, while provider/internal failures are errors. Existing retry, lease,
+acknowledgement and catch behaviour is preserved. An enqueue request may succeed
+while its processing child fails: do not mark every ancestor ERROR or count every
+failed span as a failed user request.
+
+Run both `:backend:check` and `bash scripts/test/test-honeycomb.sh` before deployment.
+The latter exercises the pinned Alloy wire payload, including legible metadata,
+parentage, error retention, private-content exclusion and an unchanged Langfuse
+sibling. A new deployment/capture must still meet the release and fresh evidence
+gates above; the earlier successful synchronous video is not proof of this increment.
 
 ## Agent access
 

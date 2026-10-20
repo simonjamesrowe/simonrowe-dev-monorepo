@@ -13,6 +13,7 @@ import com.simonrowe.school.model.SchoolLink;
 import com.simonrowe.school.model.SchoolLinkRepository;
 import com.simonrowe.school.model.SchoolSourceType;
 import com.simonrowe.school.model.Visibility;
+import io.opentelemetry.context.Context;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -128,11 +129,12 @@ public class SchoolNoteService {
    * application has no {@code @EnableAsync}, so an {@code @Async} method here would run
    * synchronously with no warning and block the request for the length of every fetch.
    */
-  private final ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
-    final Thread thread = new Thread(runnable, "school-note-links");
-    thread.setDaemon(true);
-    return thread;
-  });
+  private final ExecutorService executor = Context.taskWrapping(
+      Executors.newSingleThreadExecutor(runnable -> {
+        final Thread thread = new Thread(runnable, "school-note-links");
+        thread.setDaemon(true);
+        return thread;
+      }));
 
   @SuppressWarnings("checkstyle:ParameterNumber")
   public SchoolNoteService(

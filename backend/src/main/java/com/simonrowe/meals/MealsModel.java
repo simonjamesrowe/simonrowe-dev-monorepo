@@ -1,6 +1,7 @@
 package com.simonrowe.meals;
 
 import com.simonrowe.observability.LangfuseContentObservationFilter;
+import io.opentelemetry.context.Context;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +38,8 @@ public class MealsModel {
 
   static final Duration CALL_TIMEOUT = Duration.ofSeconds(45);
   static final Duration LONG_CALL_TIMEOUT = Duration.ofSeconds(90);
-  private static final ExecutorService CALLS = Executors.newVirtualThreadPerTaskExecutor();
+  private static final ExecutorService CALLS =
+      Context.taskWrapping(Executors.newVirtualThreadPerTaskExecutor());
 
   private final ChatModel chatModel;
   private final String model;
