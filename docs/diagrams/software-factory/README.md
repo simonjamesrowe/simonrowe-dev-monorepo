@@ -27,3 +27,9 @@ The initial page was verified locally at 1440px and 390px widths, including play
 WebVTT captions for every film. These are the launch previews (CMS edits may subsequently differ):
 
 [Desktop overview](previews/overview.webp) · [Mobile walkthrough](previews/walkthrough-mobile.webp)
+
+The cross-origin caption regression is covered by
+`cd frontend && npx playwright test e2e/portfolio.local.spec.ts --project=local` with the local
+frontend running. It intercepts the portfolio API and serves the real seeded overview film and a
+caption track from a separate test origin; it needs no backend. The assertion checks loaded cue
+text, because video playback alone succeeds even when the browser rejects the caption track.
