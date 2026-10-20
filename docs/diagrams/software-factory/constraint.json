@@ -1,0 +1,134 @@
+[
+  {
+    "type": "text",
+    "id": "title",
+    "x": 160,
+    "y": -100,
+    "text": "The constraint shapes the system",
+    "fontSize": 36
+  },
+  {
+    "type": "rectangle",
+    "id": "pi",
+    "x": 0,
+    "y": 0,
+    "width": 440,
+    "height": 220,
+    "backgroundColor": "#a5d8ff",
+    "groupIds": [
+      "pi"
+    ],
+    "label": {
+      "text": "Raspberry Pi 5 · ARM64\n16 GB · shared production host\nMemory cgroup off",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "edit",
+    "x": 0,
+    "y": 310,
+    "width": 440,
+    "height": 130,
+    "backgroundColor": "#d0bfff",
+    "groupIds": [
+      "pi"
+    ],
+    "label": {
+      "text": "Ticket agent\nRead · Glob · Grep · Edit · Write",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "actions",
+    "x": 650,
+    "y": 0,
+    "width": 430,
+    "height": 220,
+    "backgroundColor": "#b2f2bb",
+    "groupIds": [
+      "verification"
+    ],
+    "label": {
+      "text": "GitHub Actions\nResolve dependencies · compile\nTests · Testcontainers · checks",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "human",
+    "x": 650,
+    "y": 310,
+    "width": 430,
+    "height": 130,
+    "backgroundColor": "#fff3bf",
+    "groupIds": [
+      "decisions"
+    ],
+    "label": {
+      "text": "A person approves the ticket\nand merges sensitive changes",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "pi-edit",
+    "x": 220,
+    "y": 220,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        90
+      ]
+    ],
+    "start": {
+      "id": "pi"
+    },
+    "end": {
+      "id": "edit"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "edit-actions",
+    "x": 440,
+    "y": 360,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        210,
+        -200
+      ]
+    ],
+    "start": {
+      "id": "edit"
+    },
+    "end": {
+      "id": "actions"
+    }
+  },
+  {
+    "type": "text",
+    "id": "boundary",
+    "x": 470,
+    "y": 230,
+    "text": "push",
+    "fontSize": 20
+  },
+  {
+    "type": "text",
+    "id": "caption",
+    "x": 160,
+    "y": 500,
+    "text": "Small feedback loops, verified away from the Pi",
+    "fontSize": 26
+  }
+]

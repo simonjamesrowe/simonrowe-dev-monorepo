@@ -1,0 +1,202 @@
+[
+  {
+    "type": "text",
+    "id": "title",
+    "x": 230,
+    "y": -100,
+    "text": "Public vulnerability, human merge",
+    "fontSize": 36
+  },
+  {
+    "type": "text",
+    "id": "machine-title",
+    "x": 70,
+    "y": -30,
+    "text": "Machine work",
+    "fontSize": 26
+  },
+  {
+    "type": "text",
+    "id": "human-title",
+    "x": 650,
+    "y": -30,
+    "text": "Human decisions",
+    "fontSize": 26
+  },
+  {
+    "type": "rectangle",
+    "id": "scan",
+    "x": 0,
+    "y": 40,
+    "width": 430,
+    "height": 100,
+    "backgroundColor": "#a5d8ff",
+    "groupIds": [
+      "scan"
+    ],
+    "label": {
+      "text": "Dependency-Track → nightly scan\nOne consolidated Linear report",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "approve",
+    "x": 610,
+    "y": 40,
+    "width": 390,
+    "height": 100,
+    "backgroundColor": "#fff3bf",
+    "groupIds": [
+      "approval"
+    ],
+    "label": {
+      "text": "Choose and approve\na scoped backend fix",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "bump",
+    "x": 0,
+    "y": 250,
+    "width": 430,
+    "height": 100,
+    "backgroundColor": "#d0bfff",
+    "groupIds": [
+      "repair"
+    ],
+    "label": {
+      "text": "Ticket agent edits versions\nNo build on the Pi",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "verify",
+    "x": 0,
+    "y": 460,
+    "width": 430,
+    "height": 100,
+    "backgroundColor": "#b2f2bb",
+    "groupIds": [
+      "verification"
+    ],
+    "label": {
+      "text": "GitHub Actions + code reviewer\nChecks and dependency PR",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "merge",
+    "x": 610,
+    "y": 460,
+    "width": 390,
+    "height": 100,
+    "backgroundColor": "#fff3bf",
+    "groupIds": [
+      "merge"
+    ],
+    "label": {
+      "text": "no-auto-merge\nSimon reviews and merges",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "text",
+    "id": "npm-gap",
+    "x": 535,
+    "y": 250,
+    "text": "npm lockfile regeneration\nstill needs a person",
+    "fontSize": 24
+  },
+  {
+    "type": "arrow",
+    "id": "scan-approve",
+    "x": 430,
+    "y": 90,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        180,
+        0
+      ]
+    ],
+    "start": {
+      "id": "scan"
+    },
+    "end": {
+      "id": "approve"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "approve-bump",
+    "x": 610,
+    "y": 120,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        -180,
+        150
+      ]
+    ],
+    "start": {
+      "id": "approve"
+    },
+    "end": {
+      "id": "bump"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "bump-verify",
+    "x": 215,
+    "y": 350,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        110
+      ]
+    ],
+    "start": {
+      "id": "bump"
+    },
+    "end": {
+      "id": "verify"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "verify-merge",
+    "x": 430,
+    "y": 510,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        180,
+        0
+      ]
+    ],
+    "start": {
+      "id": "verify"
+    },
+    "end": {
+      "id": "merge"
+    }
+  }
+]
