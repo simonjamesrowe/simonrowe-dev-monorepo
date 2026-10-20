@@ -73,7 +73,13 @@ jobs:
 
   backend:
     name: Backend Build & Test
-    runs-on: ubuntu-latest
+    # ubuntu-22.04, not ubuntu-latest, until MongoDB 8.0.35 / 8.3.14 ships: runner
+    # image ubuntu24/20261018.339 runs kernel 7.0, and mongod 8.0.34 / 8.3.13 refuses
+    # to start on a kernel reporting 6.19+ (fatal id 12257600, SERVER-121912; it reads
+    # `uname -r` rather than the upstream version, SERVER-131779). Every Testcontainers
+    # Mongo test then fails after 60s. actions/runner-images#15005. Revert once
+    # `mongo:8` resolves to a fixed release.
+    runs-on: ubuntu-22.04
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.backend == 'true') }}
     steps:
@@ -175,7 +181,8 @@ jobs:
   # runner already has.
   software-factory:
     name: Software Factory Build & Test
-    runs-on: ubuntu-latest
+    # ubuntu-22.04 for the same reason as the backend job (mongod on kernel 7.0).
+    runs-on: ubuntu-22.04
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.factory == 'true' || needs.changes.outputs.shell == 'true') }}
     env:
