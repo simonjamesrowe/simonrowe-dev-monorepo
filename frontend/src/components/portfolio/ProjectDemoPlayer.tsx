@@ -15,7 +15,8 @@ function formatTimestamp(seconds: number): string {
  * A project's demo video with its chapter list. `preload="none"` so the page does not start
  * downloading several megabytes of video for a visitor who never presses play; the poster stands
  * in until they do. Captions are offered but off by default: shown over a screen recording they
- * cover the very thing being demonstrated. The player's CC control turns them on.
+ * cover the very thing being demonstrated. The player's CC control turns them on. Anonymous
+ * CORS mode lets the browser load captions from the API's separate origin in production.
  */
 export const ProjectDemoPlayer = forwardRef(function ProjectDemoPlayer(
   { demo }: ProjectDemoPlayerProps,
@@ -37,6 +38,7 @@ export const ProjectDemoPlayer = forwardRef(function ProjectDemoPlayer(
       <div className="project-demo__player">
         <video
           controls
+          crossOrigin="anonymous"
           playsInline
           poster={demo.posterUrl ? resolveMediaUrl(demo.posterUrl) : undefined}
           preload="none"

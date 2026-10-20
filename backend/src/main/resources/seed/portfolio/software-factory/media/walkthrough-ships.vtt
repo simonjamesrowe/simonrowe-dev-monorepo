@@ -1,0 +1,85 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:02.699
+This is a deliberately small documentation change.
+
+00:00:02.699 --> 00:00:06.694
+The vulnerability runbook still described the ticket agent as future work.
+
+00:00:06.694 --> 00:00:12.200
+I am correcting that through the same repository, reviewer and deployment pipeline as the application.
+
+00:00:13.400 --> 00:00:17.189
+The signed webhook starts a Temporal review of this exact commit.
+
+00:00:17.189 --> 00:00:20.395
+The reviewer publishes a check and any inline findings.
+
+00:00:20.395 --> 00:00:27.040
+A green verdict does not clear unresolved conversations: each still needs a fix, or an explanation and resolution.
+
+00:00:28.240 --> 00:00:31.883
+For an eligible documentation path, the reviewer can arm auto merge.
+
+00:00:31.883 --> 00:00:34.936
+It checks the changed paths and opt out labels each time.
+
+00:00:34.936 --> 00:00:40.240
+Infrastructure changes need a person, because merging here starts a real deployment against the Pi.
+
+00:00:41.440 --> 00:00:44.511
+The required checks passed, and GitHub merged the change.
+
+00:00:44.511 --> 00:00:46.289
+This is its matching Publish run.
+
+00:00:46.289 --> 00:00:48.552
+GitHub Actions provides the build machine.
+
+00:00:48.552 --> 00:00:53.240
+I have joined the actual milestones here; the film does not show the full elapsed wait.
+
+00:00:54.440 --> 00:01:00.837
+This change only touches documentation, so Publish re-tags the existing images instead of rebuilding the application.
+
+00:01:00.837 --> 00:01:04.337
+The release still gets its own commit tag and deployment record.
+
+00:01:04.337 --> 00:01:08.000
+The changed paths determine which images actually need a new build.
+
+00:01:09.200 --> 00:01:18.192
+In Temporal, the deployer keeps each phase visible: maintenance on, pull, recreate, verify, maintenance off, and then the public check.
+
+00:01:18.192 --> 00:01:24.120
+Its history records the real outcome of each step, including a rollback if one is needed.
+
+00:01:25.320 --> 00:01:29.196
+The final check reaches the public site, beyond the container boundary.
+
+00:01:29.196 --> 00:01:30.670
+Here it is serving traffic.
+
+00:01:30.670 --> 00:01:39.240
+Deployment also schedules a log scan after the observation window, so publishing an image and watching the resulting service are separate pieces of evidence.
+
+00:01:40.440 --> 00:01:41.969
+There is a slower loop too.
+
+00:01:41.969 --> 00:01:46.217
+Conversations on closed pull requests become lessons and proposed guidance.
+
+00:01:46.217 --> 00:01:50.804
+This earlier guidance pull request recorded a lesson about defensive null checks.
+
+00:01:50.804 --> 00:01:55.278
+It was merged by hand; current rules let eligible guidance merge automatically.
+
+00:01:55.278 --> 00:01:58.280
+Future reviews benefit from what previous ones found.
+
+00:01:59.480 --> 00:02:03.877
+That was a pull request moving through review, merge and a verified production deploy.
+
+00:02:03.877 --> 00:02:07.200
+The routine shipping work runs itself within rules I can inspect.

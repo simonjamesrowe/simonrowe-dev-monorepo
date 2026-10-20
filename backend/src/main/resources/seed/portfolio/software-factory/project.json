@@ -1,0 +1,102 @@
+{
+  "status": "LIVE",
+  "name": "Software Factory",
+  "tagline": "Small delivery loops on a Raspberry Pi, with human approval and verified changes.",
+  "liveUrl": "https://github.com/simonjamesrowe/simonrowe-dev-monorepo",
+  "image": {
+    "url": "{{media:hero.webp}}"
+  },
+  "headline": "Small loops.\nReal checks.\nOne Raspberry Pi.",
+  "summary": "A production delivery system that reviews pull requests, ships verified changes, watches the logs and turns approved tickets into small repairs. The Pi edits files; GitHub Actions builds and tests. I choose what the agent takes on and merge sensitive changes myself.",
+  "statement": {
+    "label": "Why I built it",
+    "text": "Running this site gave me the same repetitive work as a larger service: review a change, check the build, deploy it, watch for errors and deal with dependency findings. I wanted a system that closes those small loops and leaves its decisions visible.",
+    "points": [
+      {
+        "title": "The constraint",
+        "text": "A Raspberry Pi 5 already hosts the production stack. Code edits happen there; builds, dependency downloads and tests run on GitHub Actions."
+      },
+      {
+        "title": "The loops",
+        "text": "Review, merge, deploy and observe; report a vulnerability; turn an approved ticket into a checked repair; carry review lessons forward."
+      },
+      {
+        "title": "The gate",
+        "text": "Checks and review conversations must be clear. Infrastructure, dependency edits and changes that silence a symptom require a person to merge."
+      },
+      {
+        "title": "The decisions",
+        "text": "Machines do the noticing, ticketing, checking and routine shipping. I decide which tickets become work and which sensitive changes reach production."
+      }
+    ]
+  },
+  "exampleQuestions": [],
+  "highlights": [
+    {
+      "title": "The Pi edits; GitHub verifies",
+      "text": "A file-only ticket agent proposes small changes without building or downloading dependencies on the production host. GitHub Actions and the reviewer judge the exact commit.",
+      "imageUrl": "{{media:highlight-boundary.webp}}",
+      "imageAlt": "Diagram separating file edits on the Raspberry Pi from builds and tests on GitHub Actions."
+    },
+    {
+      "title": "A visible repair loop",
+      "text": "An approved Linear ticket becomes a pull request. A red check becomes the next brief, with three attempts in total. In Review means green checks; Done means merged.",
+      "imageUrl": "{{media:highlight-repair.webp}}",
+      "imageAlt": "Ticket repair loop showing approval, file edits, CI, the repair budget and the merge."
+    },
+    {
+      "title": "Sensitive merges stay human",
+      "text": "Dependency and build changes carry no-auto-merge, as do changes that silence a warning or disable a check. The npm lockfile limitation is documented rather than hidden.",
+      "imageUrl": "{{media:highlight-gates.webp}}",
+      "imageAlt": "CVE swimlane with the person approving the scoped fix and merging its dependency pull request."
+    }
+  ],
+  "demo": {
+    "title": "Small loops on a Raspberry Pi",
+    "summary": "The hardware constraint, the worker and deployer boundaries, and the production console connecting review, deployment, logwatch and approved ticket repairs.",
+    "videoUrl": "{{media:demo.mp4}}",
+    "captionsUrl": "{{media:demo.vtt}}",
+    "posterUrl": "{{media:demo-poster.jpg}}",
+    "chapters": [
+      {
+        "startSeconds": 0,
+        "label": "The Pi shapes the design"
+      },
+      {
+        "startSeconds": 27,
+        "label": "Worker and deployer boundaries"
+      },
+      {
+        "startSeconds": 57,
+        "label": "The production delivery loop"
+      },
+      {
+        "startSeconds": 85,
+        "label": "Approved repairs and human gates"
+      }
+    ]
+  },
+  "pages": [
+    {
+      "slug": "how-it-works",
+      "title": "How it works",
+      "navHint": "loops and decisions",
+      "summary": "How reviews, deploys, logwatch, vulnerability reports and approved repairs connect, and where a person decides.",
+      "body": "how-it-works.md"
+    },
+    {
+      "slug": "architecture",
+      "title": "Architecture",
+      "navHint": "Temporal and the Pi",
+      "summary": "One factory container, an isolated deployer, durable role queues and builds on GitHub Actions.",
+      "body": "architecture.md"
+    },
+    {
+      "slug": "walkthrough",
+      "title": "Walkthrough",
+      "navHint": "three short films",
+      "summary": "A pull request ships, a reported error becomes a repair, and a backend CVE gets patched.",
+      "body": "walkthrough.md"
+    }
+  ]
+}

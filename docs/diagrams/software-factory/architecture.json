@@ -1,0 +1,254 @@
+[
+  {
+    "type": "text",
+    "id": "title",
+    "x": 290,
+    "y": -110,
+    "text": "Inside the software factory",
+    "fontSize": 36
+  },
+  {
+    "type": "rectangle",
+    "id": "github",
+    "x": 0,
+    "y": 0,
+    "width": 270,
+    "height": 120,
+    "backgroundColor": "#a5d8ff",
+    "groupIds": [
+      "ingress"
+    ],
+    "label": {
+      "text": "GitHub\nsigned webhooks",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "ingress",
+    "x": 370,
+    "y": 0,
+    "width": 270,
+    "height": 120,
+    "backgroundColor": "#a5d8ff",
+    "groupIds": [
+      "ingress"
+    ],
+    "label": {
+      "text": "Cloudflare → tunnel\nnginx · exact route",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "factory",
+    "x": 760,
+    "y": 0,
+    "width": 380,
+    "height": 150,
+    "backgroundColor": "#d0bfff",
+    "groupIds": [
+      "workers"
+    ],
+    "label": {
+      "text": "software-factory\nWebhook receiver + workers\ngit + Claude Code",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "temporal",
+    "x": 760,
+    "y": 260,
+    "width": 380,
+    "height": 120,
+    "backgroundColor": "#fff3bf",
+    "groupIds": [
+      "orchestration"
+    ],
+    "label": {
+      "text": "Temporal\ndurable workflows + role queues",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "deployer",
+    "x": 760,
+    "y": 490,
+    "width": 380,
+    "height": 140,
+    "backgroundColor": "#ffc9c9",
+    "groupIds": [
+      "deployer"
+    ],
+    "label": {
+      "text": "deployer\nNo public ingress\nDocker socket + deploy queue",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "systems",
+    "x": 0,
+    "y": 260,
+    "width": 510,
+    "height": 120,
+    "backgroundColor": "#ffd8a8",
+    "groupIds": [
+      "external"
+    ],
+    "label": {
+      "text": "GitHub Actions · Linear\nLoki · Dependency-Track",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "queues",
+    "x": 0,
+    "y": 490,
+    "width": 510,
+    "height": 140,
+    "backgroundColor": "#c3fae8",
+    "groupIds": [
+      "orchestration"
+    ],
+    "label": {
+      "text": "code-review · review-feedback · cve-fix\nlogwatch · ticket-agent · linear\ndeploy · platform-backup",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "github-ingress",
+    "x": 270,
+    "y": 60,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        100,
+        0
+      ]
+    ],
+    "start": {
+      "id": "github"
+    },
+    "end": {
+      "id": "ingress"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "ingress-factory",
+    "x": 640,
+    "y": 60,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        120,
+        0
+      ]
+    ],
+    "start": {
+      "id": "ingress"
+    },
+    "end": {
+      "id": "factory"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "factory-temporal",
+    "x": 950,
+    "y": 150,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        110
+      ]
+    ],
+    "start": {
+      "id": "factory"
+    },
+    "end": {
+      "id": "temporal"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "deployer-temporal",
+    "x": 950,
+    "y": 490,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        -110
+      ]
+    ],
+    "start": {
+      "id": "deployer"
+    },
+    "end": {
+      "id": "temporal"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "systems-factory",
+    "x": 510,
+    "y": 310,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        250,
+        -200
+      ]
+    ],
+    "start": {
+      "id": "systems"
+    },
+    "end": {
+      "id": "factory"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "queues-temporal",
+    "x": 510,
+    "y": 550,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        250,
+        -190
+      ]
+    ],
+    "start": {
+      "id": "queues"
+    },
+    "end": {
+      "id": "temporal"
+    }
+  }
+]

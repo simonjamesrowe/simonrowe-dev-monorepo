@@ -1,0 +1,94 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:04.378
+Logwatch groups production errors by their emitting source and files a ticket.
+
+00:00:04.378 --> 00:00:12.067
+For this walkthrough I staged a ticket around a real, locally reproduced defect: an invalid build timestamp crashes the version response.
+
+00:00:12.067 --> 00:00:14.200
+The ticket makes that origin explicit.
+
+00:00:15.400 --> 00:00:18.358
+Before handing it work, I ask for a dry run.
+
+00:00:18.358 --> 00:00:23.668
+The agent reads the repository and proposes a narrow fix with regression tests.
+
+00:00:23.668 --> 00:00:26.357
+The diff comes back as a ticket comment.
+
+00:00:26.357 --> 00:00:29.920
+Nothing is pushed, and the ticket stays where it was.
+
+00:00:31.120 --> 00:00:32.800
+Here is the actual proposal.
+
+00:00:32.800 --> 00:00:38.620
+It catches an invalid instant, keeps a warning, and adds tests at both ends of the numeric range.
+
+00:00:38.620 --> 00:00:41.920
+I can inspect that scope before approving the real run.
+
+00:00:43.120 --> 00:00:47.093
+Starting it here records my approval by adding the factory agent label.
+
+00:00:47.093 --> 00:00:49.947
+In Progress means the agent has claimed the ticket.
+
+00:00:49.947 --> 00:00:54.480
+Linear remains the record; finishing an edit is only the beginning of the checks.
+
+00:00:55.680 --> 00:00:59.260
+The factory pushed these file edits and opened a pull request.
+
+00:00:59.260 --> 00:01:02.435
+The agent has no Bash tool and runs no build on the Pi.
+
+00:01:02.435 --> 00:01:08.440
+A push denylist protects secrets, deployment scripts, workflow configuration and the build tool wrapper.
+
+00:01:09.640 --> 00:01:13.978
+GitHub Actions builds and tests the exact commit, and the reviewer reads it.
+
+00:01:13.978 --> 00:01:17.973
+A rejection becomes the next repair brief, with three attempts in all.
+
+00:01:17.973 --> 00:01:20.084
+This diagram explains the retry path.
+
+00:01:20.084 --> 00:01:23.680
+The live checks determine whether this particular fix needs it.
+
+00:01:24.880 --> 00:01:27.328
+Temporal keeps the run and its waits durable.
+
+00:01:27.328 --> 00:01:31.790
+This is the real workflow for our staged ticket, rather than a progress animation.
+
+00:01:31.790 --> 00:01:37.720
+The agent has handed verification to GitHub, and a signal or the bounded polling wait brings back the result.
+
+00:01:38.920 --> 00:01:41.844
+The checks passed and the pull request merged.
+
+00:01:41.844 --> 00:01:44.513
+In Linear, Done follows that actual merge.
+
+00:01:44.513 --> 00:01:52.840
+The reviewer decides whether the changed paths permit auto merge; it does not rely on a model announcing that the work is finished.
+
+00:01:54.040 --> 00:01:56.876
+The repair handles bad metadata and keeps the warning.
+
+00:01:56.876 --> 00:02:00.921
+That distinction matters because a visitor can influence production log text.
+
+00:02:00.921 --> 00:02:04.440
+A change that silences something always needs a person to merge it.
+
+00:02:05.640 --> 00:02:09.713
+That was a reported defect becoming a checked fix and a completed ticket.
+
+00:02:09.713 --> 00:02:14.120
+The agent handles the small repair loop, while I choose which work it takes on.

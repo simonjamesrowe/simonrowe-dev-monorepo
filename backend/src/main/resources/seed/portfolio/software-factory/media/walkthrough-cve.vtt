@@ -1,0 +1,112 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:05.610
+There are no current backend findings to repair, so this is a historical case from the thirtieth of August.
+
+00:00:05.610 --> 00:00:09.174
+Pull request one thirty eight fixed real public dependency findings.
+
+00:00:09.174 --> 00:00:12.320
+It predates the ticket agent shown in the other walkthrough.
+
+00:00:13.520 --> 00:00:15.552
+One finding affected Commons Lang.
+
+00:00:15.552 --> 00:00:19.916
+The public advisory describes uncontrolled recursion on very long inputs.
+
+00:00:19.916 --> 00:00:24.817
+Version three point seventeen was affected; three point eighteen contains the fix.
+
+00:00:24.817 --> 00:00:29.240
+The advisory establishes the version boundary before any edit is proposed.
+
+00:00:30.440 --> 00:00:31.878
+This is the actual change.
+
+00:00:31.878 --> 00:00:36.524
+The Spring Boot dependency management in use then needed a managed version override.
+
+00:00:36.524 --> 00:00:40.948
+Changing a requested dependency version alone could still resolve the older one.
+
+00:00:40.948 --> 00:00:45.760
+The repair pins the effective version across the modules that contribute to the report.
+
+00:00:46.960 --> 00:00:49.903
+The same repair corrected the dependency report scope.
+
+00:00:49.903 --> 00:00:53.281
+It had included build and test tools as production components.
+
+00:00:53.281 --> 00:00:58.404
+Restricting that report to the runtime classpath separated deployed dependencies from tooling.
+
+00:00:58.404 --> 00:01:02.600
+A useful security loop needs an accurate inventory as well as a version bump.
+
+00:01:03.800 --> 00:01:07.429
+These are the final pull request checks for its exact head commit.
+
+00:01:07.429 --> 00:01:12.322
+Backend, frontend and software factory builds passed, alongside Code Review and analysis.
+
+00:01:12.322 --> 00:01:14.026
+The work was checked on GitHub.
+
+00:01:14.026 --> 00:01:18.040
+The hardware hosting production did not have to become the build machine.
+
+00:01:19.240 --> 00:01:22.314
+The historical record also includes a separate failure.
+
+00:01:22.314 --> 00:01:26.059
+CI on the merge commit failed one article summary concurrency test.
+
+00:01:26.059 --> 00:01:32.040
+That is a different run from the green pull request checks, and it remains part of the verification record.
+
+00:01:33.240 --> 00:01:34.895
+I merged the dependency change.
+
+00:01:34.895 --> 00:01:39.220
+The timeline records the human decision and the seven passed pull request checks.
+
+00:01:39.220 --> 00:01:41.996
+Publish subsequently succeeded for the merge commit.
+
+00:01:41.996 --> 00:01:46.160
+Those are distinct pieces of evidence, with their own outcomes and timestamps.
+
+00:01:47.360 --> 00:01:51.660
+Today the ticket agent can make the small version edit after my approval.
+
+00:01:51.660 --> 00:01:53.545
+I can inspect its dry run first.
+
+00:01:53.545 --> 00:01:58.729
+GitHub runs the verification, and every build or dependency edit receives no auto merge.
+
+00:01:58.729 --> 00:02:03.560
+This diagram explains the current policy; it is not a replay of that older repair.
+
+00:02:04.760 --> 00:02:06.798
+The ecosystem limit still matters.
+
+00:02:06.798 --> 00:02:09.375
+The current findings are frontend packages.
+
+00:02:09.375 --> 00:02:15.728
+An npm update needs its lockfile regenerated, including integrity hashes, and the ticket agent has no npm.
+
+00:02:15.728 --> 00:02:17.885
+Those repairs come back to a person.
+
+00:02:17.885 --> 00:02:22.320
+The Gradle version override we just inspected needs no generated lockfile.
+
+00:02:23.520 --> 00:02:28.540
+That was a real backend vulnerability repair, shown as historical evidence.
+
+00:02:28.540 --> 00:02:33.760
+Today the factory proposes small repairs, and the dependency merge stays mine.

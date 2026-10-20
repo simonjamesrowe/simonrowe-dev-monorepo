@@ -1,0 +1,238 @@
+[
+  {
+    "type": "text",
+    "id": "title",
+    "x": 230,
+    "y": -100,
+    "text": "A red check becomes the next brief",
+    "fontSize": 36
+  },
+  {
+    "type": "rectangle",
+    "id": "ticket",
+    "x": 0,
+    "y": 0,
+    "width": 300,
+    "height": 110,
+    "backgroundColor": "#fff3bf",
+    "groupIds": [
+      "approval"
+    ],
+    "label": {
+      "text": "Person approves a ticket\nfactory:agent",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "edit",
+    "x": 420,
+    "y": 0,
+    "width": 300,
+    "height": 110,
+    "backgroundColor": "#d0bfff",
+    "groupIds": [
+      "attempt"
+    ],
+    "label": {
+      "text": "Attempt\nfile edits on the Pi",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "checks",
+    "x": 840,
+    "y": 0,
+    "width": 310,
+    "height": 110,
+    "backgroundColor": "#b2f2bb",
+    "groupIds": [
+      "checks"
+    ],
+    "label": {
+      "text": "GitHub Actions + reviewer\nverify the exact commit",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "red",
+    "x": 840,
+    "y": 260,
+    "width": 310,
+    "height": 130,
+    "backgroundColor": "#ffc9c9",
+    "groupIds": [
+      "repair"
+    ],
+    "label": {
+      "text": "Red: failure brief\nNext attempt, up to 3 total\nThen return to a person",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "merge",
+    "x": 420,
+    "y": 260,
+    "width": 300,
+    "height": 130,
+    "backgroundColor": "#fff3bf",
+    "groupIds": [
+      "merge"
+    ],
+    "label": {
+      "text": "Green: In Review\nEligible auto-merge, or\nhuman dependency merge",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "rectangle",
+    "id": "done",
+    "x": 0,
+    "y": 260,
+    "width": 300,
+    "height": 130,
+    "backgroundColor": "#b2f2bb",
+    "groupIds": [
+      "complete"
+    ],
+    "label": {
+      "text": "Merged: Done\nPublish → deploy → watch",
+      "fontSize": 22
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "approve-edit",
+    "x": 300,
+    "y": 55,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        120,
+        0
+      ]
+    ],
+    "start": {
+      "id": "ticket"
+    },
+    "end": {
+      "id": "edit"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "edit-check",
+    "x": 720,
+    "y": 55,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        120,
+        0
+      ]
+    ],
+    "start": {
+      "id": "edit"
+    },
+    "end": {
+      "id": "checks"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "checks-red",
+    "x": 995,
+    "y": 110,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        150
+      ]
+    ],
+    "start": {
+      "id": "checks"
+    },
+    "end": {
+      "id": "red"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "red-edit",
+    "x": 840,
+    "y": 300,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        -220,
+        -190
+      ]
+    ],
+    "start": {
+      "id": "red"
+    },
+    "end": {
+      "id": "edit"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "checks-merge",
+    "x": 840,
+    "y": 90,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        -230,
+        170
+      ]
+    ],
+    "start": {
+      "id": "checks"
+    },
+    "end": {
+      "id": "merge"
+    }
+  },
+  {
+    "type": "arrow",
+    "id": "merge-done",
+    "x": 420,
+    "y": 325,
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        -120,
+        0
+      ]
+    ],
+    "start": {
+      "id": "merge"
+    },
+    "end": {
+      "id": "done"
+    }
+  }
+]
