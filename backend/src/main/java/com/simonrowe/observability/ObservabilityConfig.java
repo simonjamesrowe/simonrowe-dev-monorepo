@@ -1,7 +1,9 @@
 package com.simonrowe.observability;
 
+import io.micrometer.observation.ObservationRegistry;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -13,6 +15,13 @@ import org.springframework.web.client.RestClient;
 @Configuration
 @EnableConfigurationProperties(LangfuseProperties.class)
 public class ObservabilityConfig {
+
+  @Bean
+  static RepositoryTracing repositoryTracing(
+      final ObjectProvider<ObservationRegistry> registries) {
+    // Resolve the registry on invocation, not while post-processors are being registered.
+    return new RepositoryTracing(registries);
+  }
 
   /**
    * Deliberately unordered: the filter reads content from the observation context's own
@@ -35,6 +44,8 @@ public class ObservabilityConfig {
     executor.setMaxPoolSize(2);
     executor.setQueueCapacity(200);
     executor.setThreadNamePrefix("langfuse-score-");
+    executor.setTaskDecorator(
+        new org.springframework.core.task.support.ContextPropagatingTaskDecorator());
     executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
     executor.initialize();
     return executor;

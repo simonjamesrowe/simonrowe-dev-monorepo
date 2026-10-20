@@ -1,5 +1,6 @@
 package com.simonrowe.meals;
 
+import io.opentelemetry.context.Context;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -60,7 +61,8 @@ public class MealPhotoGenerator {
   private static final int HEIGHT = 1024;
   private static final float JPEG_QUALITY = 0.86f;
   private static final Logger LOG = LoggerFactory.getLogger(MealPhotoGenerator.class);
-  private static final ExecutorService CALLS = Executors.newVirtualThreadPerTaskExecutor();
+  private static final ExecutorService CALLS =
+      Context.taskWrapping(Executors.newVirtualThreadPerTaskExecutor());
 
   private final ImageModel imageModel;
   private final MealImageStore images;

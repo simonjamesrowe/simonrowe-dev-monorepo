@@ -1,5 +1,6 @@
 package com.simonrowe.dataops;
 
+import io.opentelemetry.context.Context;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -63,7 +64,9 @@ public class DataOperationsController {
   public ResponseEntity<DataOperation> startBackup() {
     requireDriveConnected();
     DataOperation operation = requireNoOperationInProgress(OperationType.BACKUP);
-    CompletableFuture.runAsync(() -> backupService.performBackup());
+    CompletableFuture.runAsync(Context.current().wrap(() -> {
+      backupService.performBackup();
+    }));
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
   }
 
@@ -126,7 +129,7 @@ public class DataOperationsController {
     requireDriveConnected();
     DataOperation operation = requireNoOperationInProgress(OperationType.RESTORE);
     CompletableFuture.runAsync(
-        () -> restoreService.performRestore(request.backupFileId()));
+        Context.current().wrap(() -> restoreService.performRestore(request.backupFileId())));
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
   }
 
@@ -139,7 +142,7 @@ public class DataOperationsController {
           "Confirmation phrase must be exactly: " + ClearRequest.REQUIRED_PHRASE);
     }
     DataOperation operation = requireNoOperationInProgress(OperationType.CLEAR);
-    CompletableFuture.runAsync(clearService::performClear);
+    CompletableFuture.runAsync(Context.current().wrap(clearService::performClear));
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
   }
 
@@ -147,7 +150,7 @@ public class DataOperationsController {
   public ResponseEntity<DataOperation> startRebuildIndex() {
     DataOperation operation =
         requireNoOperationInProgress(OperationType.REBUILD_INDEX);
-    CompletableFuture.runAsync(() -> {
+    CompletableFuture.runAsync(Context.current().wrap(() -> {
       try {
         operationsService.updateProgress("Rebuilding site search index...", 20);
         indexService.fullSyncSiteIndex();
@@ -159,7 +162,7 @@ public class DataOperationsController {
         operationsService.failOperation(
             "Index rebuild failed: " + ex.getMessage());
       }
-    });
+    }));
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
   }
 
@@ -167,7 +170,7 @@ public class DataOperationsController {
   public ResponseEntity<DataOperation> startReembed() {
     DataOperation operation =
         requireNoOperationInProgress(OperationType.REEMBED_CONTENT);
-    CompletableFuture.runAsync(() -> {
+    CompletableFuture.runAsync(Context.current().wrap(() -> {
       try {
         int total = 0;
         operationsService.updateProgress("Embedding blog posts...", 5);
@@ -191,7 +194,7 @@ public class DataOperationsController {
         operationsService.failOperation(
             "Re-embedding failed: " + ex.getMessage());
       }
-    });
+    }));
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(operation);
   }
 

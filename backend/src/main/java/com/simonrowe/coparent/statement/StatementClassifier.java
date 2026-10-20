@@ -47,7 +47,8 @@ public class StatementClassifier {
   private static final int MAX_TITLE = 120;
   private static final int MAX_REASON = 300;
   static final Duration CALL_TIMEOUT = Duration.ofSeconds(45);
-  private static final ExecutorService CALLS = Executors.newVirtualThreadPerTaskExecutor();
+  private static final ExecutorService CALLS =
+      io.opentelemetry.context.Context.taskWrapping(Executors.newVirtualThreadPerTaskExecutor());
 
   private static final String SYSTEM_PROMPT = """
       You review one separated parent's own bank and card transactions and pick out the ones

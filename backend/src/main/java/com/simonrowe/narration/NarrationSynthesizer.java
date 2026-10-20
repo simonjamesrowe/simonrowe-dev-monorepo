@@ -2,6 +2,7 @@ package com.simonrowe.narration;
 
 import com.simonrowe.narration.NarrationProvider.FailureKind;
 import com.simonrowe.narration.NarrationProvider.NarrationProviderException;
+import io.opentelemetry.context.Context;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -80,8 +81,8 @@ public class NarrationSynthesizer {
     }
     ByteArrayOutputStream combined = new ByteArrayOutputStream();
     List<Double> durations = new ArrayList<>(segments.size());
-    try (ExecutorService pool = Executors.newFixedThreadPool(
-        Math.min(properties.concurrency(), segments.size()))) {
+    try (ExecutorService pool = Context.taskWrapping(Executors.newFixedThreadPool(
+        Math.min(properties.concurrency(), segments.size())))) {
       List<Future<byte[]>> parts = new ArrayList<>(segments.size());
       for (String segment : segments) {
         parts.add(pool.submit(() -> synthesizeWithRetry(segment)));

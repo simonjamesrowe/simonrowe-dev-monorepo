@@ -43,7 +43,8 @@ class NarrationRequestConsumerTest {
     consumer = new NarrationRequestConsumer(service, repository,
         provider, storage, budget, NarrationBudgetServiceTest.properties(1_000_000),
         publisher, new NarrationSynthesizer(provider, new NarrationScriptChunker(),
-            timingsProperties()), metrics);
+            timingsProperties()), metrics,
+        io.micrometer.observation.ObservationRegistry.NOOP);
   }
 
   @Test

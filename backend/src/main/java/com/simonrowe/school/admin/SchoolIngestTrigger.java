@@ -2,6 +2,7 @@ package com.simonrowe.school.admin;
 
 import com.simonrowe.school.ingest.GmailIngestService;
 import com.simonrowe.school.ingest.SchoolIngestService;
+import io.opentelemetry.context.Context;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -42,11 +43,12 @@ public class SchoolIngestTrigger {
    * running a crawl beside a mail sync buys nothing. Daemon threads so a shutdown is not held
    * open by a half-finished crawl.
    */
-  private final ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
-    final Thread thread = new Thread(runnable, "school-ingest-trigger");
-    thread.setDaemon(true);
-    return thread;
-  });
+  private final ExecutorService executor = Context.taskWrapping(
+      Executors.newSingleThreadExecutor(runnable -> {
+        final Thread thread = new Thread(runnable, "school-ingest-trigger");
+        thread.setDaemon(true);
+        return thread;
+      }));
 
   public SchoolIngestTrigger(
       final SchoolIngestService ingestService, final GmailIngestService gmailIngestService) {

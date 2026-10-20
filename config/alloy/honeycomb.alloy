@@ -70,13 +70,31 @@ declare "pipeline" {
     trace_statements {
       context = "span"
       statements = [
-        `keep_keys(attributes, ["http.request.method", "http.method", "http.route", "http.response.status_code", "http.status_code", "error.type", "db.system", "db.system.name", "db.operation", "db.operation.name", "gen_ai.operation.name", "gen_ai.system", "gen_ai.provider.name", "gen_ai.request.model", "gen_ai.response.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.prompt_tokens", "gen_ai.usage.completion_tokens", "spring.ai.kind"])`,
+        // Normalize only known metadata fields; raw statements and message payloads stay excluded.
+        `set(attributes["db.collection.name"], attributes["db.mongodb.collection"]) where attributes["db.collection.name"] == nil`,
+        `set(attributes["messaging.destination.name"], attributes["messaging.destination"]) where attributes["messaging.destination.name"] == nil`,
+        `set(attributes["messaging.operation.name"], attributes["messaging.operation"]) where attributes["messaging.operation.name"] == nil`,
+        `keep_keys(attributes, ["http.request.method", "http.method", "http.route", "http.response.status_code", "http.status_code", "error.type", "db.system", "db.system.name", "db.operation", "db.operation.name", "gen_ai.operation.name", "gen_ai.system", "gen_ai.provider.name", "gen_ai.request.model", "gen_ai.response.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.prompt_tokens", "gen_ai.usage.completion_tokens", "spring.ai.kind", "db.collection.name", "app.repository.method", "app.query.name", "app.operation", "app.outcome", "messaging.system", "messaging.destination.name", "messaging.operation.name"])`,
         `truncate_all(attributes, 256)`,
+        // Only reviewed static namespaces and outcomes can become labels or names.
+        `delete_key(attributes, "db.collection.name") where attributes["db.collection.name"] != "blogs" and attributes["db.collection.name"] != "tags" and attributes["db.collection.name"] != "skills" and attributes["db.collection.name"] != "media_assets" and attributes["db.collection.name"] != "short_links" and attributes["db.collection.name"] != "article_summaries" and attributes["db.collection.name"] != "narrations"`,
+        `delete_key(attributes, "messaging.destination.name") where attributes["messaging.destination.name"] != "content-changes" and attributes["messaging.destination.name"] != "summary-requests" and attributes["messaging.destination.name"] != "narration-requests"`,
+        `delete_key(attributes, "messaging.system") where attributes["messaging.system"] != "kafka"`,
+        `delete_key(attributes, "messaging.operation.name") where attributes["messaging.operation.name"] != "publish" and attributes["messaging.operation.name"] != "send" and attributes["messaging.operation.name"] != "process" and attributes["messaging.operation.name"] != "receive"`,
+        `delete_key(attributes, "app.operation") where attributes["app.operation"] != "summary.generate" and attributes["app.operation"] != "narration.generate"`,
+        `delete_key(attributes, "app.outcome") where attributes["app.outcome"] != "success" and attributes["app.outcome"] != "failed" and attributes["app.outcome"] != "skipped" and attributes["app.outcome"] != "unavailable" and attributes["app.outcome"] != "queued" and attributes["app.outcome"] != "stale" and attributes["app.outcome"] != "rejected" and attributes["app.outcome"] != "uncertain"`,
+        // Repository/query IDs are constructed from code identifiers, never arguments.
+        `delete_key(attributes, "app.repository.method") where attributes["app.repository.method"] != nil and not IsMatch(attributes["app.repository.method"], "^(BlogRepository|AdminBlogRepository|MediaAssetRepository|ShortLinkRepository)[.](find|count|exists)[A-Za-z0-9]{0,160}$")`,
+        `delete_key(attributes, "app.query.name") where attributes["app.query.name"] != nil and not IsMatch(attributes["app.query.name"], "^(blogs|media_assets|short_links)[.](find|count|exists)[A-Za-z0-9]{0,160}$")`,
         // Span names/status/links are content carriers too, not just attributes.
         `set(name, "operation")`,
         `set(name, attributes["db.operation"]) where attributes["db.operation"] != nil`,
         `set(name, attributes["db.operation.name"]) where attributes["db.operation.name"] != nil`,
         `set(name, attributes["gen_ai.operation.name"]) where attributes["gen_ai.operation.name"] != nil`,
+        `set(name, Concat([name, attributes["db.collection.name"]], " ")) where attributes["db.collection.name"] != nil and (attributes["db.operation"] != nil or attributes["db.operation.name"] != nil)`,
+        `set(name, Concat([attributes["messaging.destination.name"], attributes["messaging.operation.name"]], " ")) where attributes["messaging.system"] == "kafka" and attributes["messaging.destination.name"] != nil and attributes["messaging.operation.name"] != nil`,
+        `set(name, attributes["app.repository.method"]) where attributes["app.repository.method"] != nil`,
+        `set(name, attributes["app.operation"]) where attributes["app.operation"] != nil`,
         `set(name, attributes["http.route"]) where attributes["http.route"] != nil`,
         `set(status.message, "")`,
         `set(trace_state, "")`,

@@ -27,7 +27,8 @@ class SummaryRequestConsumerTest {
   @BeforeEach
   void setUp() {
     metrics = new SimpleMeterRegistry();
-    consumer = new SummaryRequestConsumer(summaryService, metrics);
+    consumer = new SummaryRequestConsumer(summaryService, metrics,
+        io.micrometer.observation.ObservationRegistry.NOOP);
   }
 
   private static SummaryRequestEvent event() {

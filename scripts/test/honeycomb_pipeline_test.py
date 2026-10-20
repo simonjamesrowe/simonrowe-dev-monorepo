@@ -89,7 +89,7 @@ def check_startup(config, settings):
         subprocess.run(["docker", "rm", "-f", name], stdout=subprocess.DEVNULL, check=False)
 
 
-def exercise(sink_port, enabled=True, key="test-key", expiry=None, percentage=100, spring_http=False):
+def exercise(sink_port, enabled=True, key="test-key", expiry=None, percentage=100, spring_http=False, legible=False):
     received.clear()
     expiry = int(time.time()) + 60 if expiry is None else expiry
     name = "honeycomb-test-" + uuid.uuid4().hex[:12]
@@ -156,6 +156,38 @@ otelcol.exporter.otlphttp "langfuse" {{
                                 "spans": [parent, child, health, linked]}],
             }]}
 
+            legible_spans = []
+            if legible:
+                cases = [
+                    ("6123456789abcdef", "BlogRepository.findByIdAndPublishedTrue", {
+                        "app.repository.method": "BlogRepository.findByIdAndPublishedTrue",
+                        "app.query.name": "blogs.findByIdAndPublishedTrue",
+                        "db.collection.name": "blogs", "app.outcome": "success"}),
+                    ("7123456789abcdef", "find blogs", {
+                        "db.operation": "find", "db.mongodb.collection": "blogs"}),
+                    ("8123456789abcdef", "find media_assets", {
+                        "db.operation.name": "find", "db.collection.name": "media_assets"}),
+                    ("9123456789abcdef", "content-changes publish", {
+                        "messaging.system": "kafka", "messaging.destination": "content-changes",
+                        "messaging.operation": "publish"}),
+                    ("a123456789abcdef", "summary.generate", {
+                        "app.operation": "summary.generate", "app.outcome": "failed",
+                        "error.type": "operation.failed"}),
+                    ("b123456789abcdef", "operation", {
+                        "db.collection.name": SECRET,
+                        "app.repository.method": "BlogRepository.find" + "A" * 100_000 + "!",
+                        "app.query.name": SECRET, "app.operation": SECRET,
+                        "app.outcome": SECRET, "messaging.system": SECRET,
+                        "messaging.destination.name": SECRET,
+                        "messaging.operation.name": SECRET}),
+                ]
+                for span_id, expected_name, fields in cases:
+                    item = copy.deepcopy(parent)
+                    item.update(spanId=span_id, parentSpanId=parent["spanId"], kind=1,
+                                attributes=attrs(**fields))
+                    legible_spans.append((item, expected_name))
+                    payload["resourceSpans"][0]["scopeSpans"][0]["spans"].append(item)
+
             if spring_http:
                 parent["attributes"] = attrs(**{
                     "uri": "/api/coparent/events/{id}", "method": "GET", "status": "200",
@@ -216,6 +248,15 @@ otelcol.exporter.otlphttp "langfuse" {{
                     assert all(len(pair) == 2 for pair in by_trace.values())
                     exported = next(iter(by_trace.values()))
                 expected_ids = {parent["spanId"], child["spanId"]}
+                for item, expected_name in legible_spans:
+                    expected_ids.add(item["spanId"])
+                    actual = next(span for span in exported if span["spanId"] == item["spanId"])
+                    assert actual["name"] == expected_name, actual
+                    assert actual["parentSpanId"] == parent["spanId"]
+                    if expected_name == "summary.generate":
+                        values = {a["key"]: a["value"] for a in actual["attributes"]}
+                        assert values["app.outcome"]["stringValue"] == "failed"
+                        assert actual["status"]["code"] == 2
                 if spring_http:
                     expected_ids.update({client["spanId"], untrusted["spanId"]})
                     for item in exported:
@@ -266,7 +307,7 @@ if __name__ == "__main__":
             }, {"HONEYCOMB_SAMPLE_PERCENTAGE": "0", "HONEYCOMB_EXPORT_UNTIL": "1"}):
                 check_startup(config, settings)
                 print(f"PASS real Alloy startup {config}: {settings or 'defaults'}")
-        for settings in ({}, {"spring_http": True}, {"percentage": 10}, {"percentage": 0},
+        for settings in ({}, {"legible": True}, {"spring_http": True}, {"percentage": 10}, {"percentage": 0},
                          {"enabled": False, "percentage": 0},
                          {"enabled": False}, {"key": ""}, {"expiry": 1}):
             exercise(server.server_port, **settings)
