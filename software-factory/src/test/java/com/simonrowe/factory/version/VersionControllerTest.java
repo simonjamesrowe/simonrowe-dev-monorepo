@@ -62,4 +62,30 @@ class VersionControllerTest {
     assertThat(new VersionController(new BuildProperties(properties)).version().commitTime())
         .isNull();
   }
+
+  @Test
+  void treatsAnOutOfRangeMaximumCommitTimeAsUnknown() {
+    Properties properties = new Properties();
+    properties.put("commit", "840c311abcdef0123456789abcdef0123456789a");
+    properties.put("commitTime", String.valueOf(Long.MAX_VALUE));
+
+    FactoryVersion version = new VersionController(new BuildProperties(properties)).version();
+
+    assertThat(version.commit()).isEqualTo("840c311abcdef0123456789abcdef0123456789a");
+    assertThat(version.shortCommit()).isEqualTo("840c311");
+    assertThat(version.commitTime()).isNull();
+  }
+
+  @Test
+  void treatsAnOutOfRangeMinimumCommitTimeAsUnknown() {
+    Properties properties = new Properties();
+    properties.put("commit", "840c311abcdef0123456789abcdef0123456789a");
+    properties.put("commitTime", String.valueOf(Long.MIN_VALUE));
+
+    FactoryVersion version = new VersionController(new BuildProperties(properties)).version();
+
+    assertThat(version.commit()).isEqualTo("840c311abcdef0123456789abcdef0123456789a");
+    assertThat(version.shortCommit()).isEqualTo("840c311");
+    assertThat(version.commitTime()).isNull();
+  }
 }
