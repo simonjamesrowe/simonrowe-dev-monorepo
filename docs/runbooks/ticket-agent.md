@@ -31,13 +31,16 @@ starting, so Linear stays the one record of what was approved.
    cannot close their own fence.
 3. **Check, then push** (Java): every changed path against the denylist
    (`TicketAgentProperties.DEFAULT_DENIED_PATHS`: `.env*`, compose files, `config/**`,
-   `scripts/**`, `.github/**`, Gradle and Docker build files, `frontend/package*.json`). A hit
+   `scripts/**`, `.github/**`, `gradlew`, `gradlew.bat`, `gradle/wrapper/**` and Dockerfiles). A hit
    hands the ticket back and pushes nothing. The first attempt force-pushes (the namespace is the
    factory's); repairs push plainly, so a person's commit on the branch is never overwritten.
 4. **Silencing check**: if the diff adds a log-watch mute rule, lowers a logger, disables a test
    or suppresses a warning (`SilencingDetector`), the pull request gets `no-auto-merge`. The ticket
    quotes production log text a visitor can influence, and "mute this" is exactly what a crafted
-   line would ask for.
+   line would ask for. Build/dependency edits (`gradle/**`, root and module `build.gradle.kts`,
+   `settings.gradle.kts`, `frontend/package*.json`) also always get `no-auto-merge`, with the reason
+   added to the PR body. This checks the full PR, including rename sources, on every attempt so a
+   later repair cannot remove the label while an earlier dependency edit remains.
 5. **Wait**: the run sleeps until CI's `workflow_run` webhook signals the commit, or 2 hours pass.
    Either way it then reads both verdicts from GitHub (`readChecks`): the CI workflow and the
    `Code Review` check. When CI is green and the review still running, it re-reads every 2
@@ -50,6 +53,23 @@ starting, so Linear stays the one record of what was approved.
 
 A hand-back is a successful run, not a failed one. Only a crash (the agent itself failing) fails
 the Temporal workflow, after handing the ticket back.
+
+## Dependency edits and the accepted CI tradeoff
+
+The agent may edit dependency versions and build scripts; it still cannot run Gradle, npm, tests
+or downloads. GitHub Actions is the build machine. Every build/dependency change needs a person's
+merge, including `backend/build.gradle.kts`, which the path classifier otherwise permits.
+
+**Accepted tradeoff:** CI executes an edited build script on the PR branch with the PR's repository
+secrets (`SONAR_TOKEN`) before a person reads it. This is accepted because a person approves the
+ticket, a person merges the change, and the exposed analysis token is low-value. The merge label
+protects the merge decision; it does not prevent that earlier CI execution.
+
+**Known npm gap:** `package-lock.json` needs regenerating, including integrity hashes, after an npm
+bump. The agent has no npm. A `package.json`-only bump fails `npm ci`, and retries cannot regenerate
+the lockfile, so npm CVEs are handed back after the repair budget. A future workflow on `agent/**`
+branches could regenerate it. Backend CVE changes in `gradle/libs.versions.toml` or
+`backend/build.gradle.kts`'s `constraints {}` need no lockfile and can complete this loop.
 
 ## Dry runs
 

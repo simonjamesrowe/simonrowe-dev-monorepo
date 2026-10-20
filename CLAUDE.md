@@ -312,8 +312,13 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     Signals only wake the run; it always re-reads CI and the `Code Review` check from GitHub, and a
     2h timeout reads them anyway, so a lost delivery costs a delay, not a stuck ticket.
   - **The controls are on what is pushed and merged**, because the ticket quotes production log
-    lines a visitor can shape: a push denylist checked in Java, `no-auto-merge` on any diff that
-    only silences something (`SilencingDetector`), and the reviewer's ordinary merge rules.
+    lines a visitor can shape: a push denylist checked in Java (secrets, infra, wrappers and
+    Dockerfiles), `no-auto-merge` on any diff that silences something (`SilencingDetector`) or
+    touches build/dependency files, and the reviewer's ordinary merge rules. Dependency versions
+    and build scripts are pushable but always a person's merge; the full PR is checked on repairs.
+    Accepted: CI executes edited build scripts with `SONAR_TOKEN` before human review, because a
+    person approves the ticket and merges it, and the analysis token is low-value. npm CVEs are
+    handed back: the agent cannot regenerate `package-lock.json`; Gradle bumps need no lockfile.
   - **Linear is the record**: the label is the approval (the console adds it too), In Progress is
     claimed, In Review is green, Done is merged; a hand-back removes the label (adds
     `agent:stuck` on failure). A hand-back completes the workflow; only a crash fails it.

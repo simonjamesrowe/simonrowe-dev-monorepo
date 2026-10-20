@@ -75,14 +75,24 @@ public record TicketAgentProperties(
           ".github/**",
           "gradlew",
           "gradlew.bat",
+          "gradle/wrapper/**",
+          "Dockerfile*",
+          "**/Dockerfile*");
+
+  /**
+   * Pushable build/dependency files that always need a person's merge.
+   *
+   * <p>Accepted tradeoff: CI executes an edited build script with the PR's repository secrets
+   * (SONAR_TOKEN) before a person reads it. A person approves the ticket and merges the change;
+   * the exposed analysis token is low-value. The agent still cannot build or download anything.
+   */
+  public static final List<String> MANUAL_MERGE_PATHS =
+      List.of(
           "gradle/**",
           "build.gradle.kts",
           "**/build.gradle.kts",
           "settings.gradle.kts",
-          "Dockerfile*",
-          "**/Dockerfile*",
-          "frontend/package.json",
-          "frontend/package-lock.json");
+          "frontend/package*.json");
 
   public TicketAgentProperties {
     owner = blankTo(owner, "simonjamesrowe");

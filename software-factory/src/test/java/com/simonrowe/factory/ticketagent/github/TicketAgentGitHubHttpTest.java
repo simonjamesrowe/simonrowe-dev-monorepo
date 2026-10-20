@@ -153,6 +153,56 @@ class TicketAgentGitHubHttpTest {
   }
 
   @Test
+  void readsEveryPageAndTheSourceOfRenamedDependencyFiles() {
+    String firstPage = java.util.stream.IntStream.range(0, 100)
+        .mapToObj(index -> "{\"filename\":\"backend/A" + index + ".java\"}")
+        .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+    reply("GET " + REPO + "/pulls/271/files?per_page=100&page=1", 200, firstPage);
+    reply("GET " + REPO + "/pulls/271/files?per_page=100&page=2", 200, """
+        [{"filename":"docs/old-build.txt","previous_filename":"backend/build.gradle.kts"}]""");
+
+    assertThat(gitHub.changedPaths(271, 7L))
+        .hasSize(102).contains("backend/build.gradle.kts", "docs/old-build.txt", "backend/A0.java");
+  }
+
+  @Test
+  void fileReadFailuresCannotBeMistakenForAnOrdinaryCodeChange() {
+    String path = "GET " + REPO + "/pulls/271/files?per_page=100&page=1";
+    reply(path, 503, "{}");
+    assertThatThrownBy(() -> gitHub.changedPaths(271, 7L)).hasMessageContaining("503");
+    reply(path, 200, "{}");
+    assertThatThrownBy(() -> gitHub.changedPaths(271, 7L)).hasMessageContaining("not an array");
+  }
+
+  @Test
+  void cappedFileListCannotRemoveManualReview() {
+    String pageOfFiles = java.util.stream.IntStream.range(0, 100)
+        .mapToObj(index -> "{\"filename\":\"backend/A" + index + ".java\"}")
+        .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+    for (int page = 1; page <= 30; page++) {
+      reply("GET " + REPO + "/pulls/271/files?per_page=100&page=" + page, 200, pageOfFiles);
+    }
+
+    assertThatThrownBy(() -> gitHub.changedPaths(271, 7L)).hasMessageContaining("limit reached");
+  }
+
+  @Test
+  void explainsDependencyReviewOnceWithoutReplacingTheDescription() {
+    String path = REPO + "/pulls/271";
+    reply("GET " + path, 200, "{\"body\":\"Original description\"}");
+    reply("PATCH " + path, 200, "{}");
+
+    gitHub.noteDependencyReview(271, 7L);
+
+    String updatedBody = bodies.get(1);
+    assertThat(updatedBody).contains("Original description", "Human merge required",
+        "build or dependency files", "no-auto-merge");
+    reply("GET " + path, 200, updatedBody);
+    gitHub.noteDependencyReview(271, 7L);
+    assertThat(requests).containsExactly("GET " + path, "PATCH " + path, "GET " + path);
+  }
+
+  @Test
   void readsWhetherThePullRequestMergedOrIsArmed() {
     reply("GET " + REPO + "/pulls/271", 200,
         "{\"state\":\"open\",\"merged\":false,\"auto_merge\":{\"merge_method\":\"squash\"}}");
