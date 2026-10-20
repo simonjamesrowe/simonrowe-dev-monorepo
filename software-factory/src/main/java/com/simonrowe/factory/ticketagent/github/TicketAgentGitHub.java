@@ -259,11 +259,17 @@ public class TicketAgentGitHub {
     brief.append("## The code reviewer's check was red\n");
     String checkPath = reviewCheckPath(headSha);
     JsonNode checkRuns = parse(requireOk("GET", checkPath, send("GET", checkPath, null, token)));
+    // The newest run, as in checks(): a re-review replaces the verdict it is reporting on.
+    JsonNode newest = null;
     for (JsonNode check : checkRuns.path("check_runs")) {
-      JsonNode output = check.path("output");
+      if (newest == null || check.path("id").asLong() > newest.path("id").asLong()) {
+        newest = check;
+      }
+    }
+    if (newest != null) {
+      JsonNode output = newest.path("output");
       brief.append(output.path("title").asText("")).append('\n')
           .append(truncate(output.path("summary").asText(""), 4_000)).append('\n');
-      break;
     }
     String bot = credentials.appBotLogin();
     String commentsPath = repoPath() + "/pulls/" + pullNumber + "/comments?per_page=100";

@@ -329,7 +329,7 @@ class TicketAgentWorkflowTest {
   }
 
   /** Scripted activities, recording every call in order. */
-  static final class Fake implements TicketAgentActivities {
+  static class Fake implements TicketAgentActivities {
     private final LinearTicket ticket;
     final List<String> calls = Collections.synchronizedList(new ArrayList<>());
     final List<AttemptResult> attempts = new ArrayList<>();

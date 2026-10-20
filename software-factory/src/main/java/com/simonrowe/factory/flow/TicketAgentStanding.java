@@ -37,7 +37,8 @@ public class TicketAgentStanding {
   private final TicketAgentProperties properties;
   private final Clock clock;
   private Map<String, String> cached = Map.of();
-  private Instant cachedAt = Instant.EPOCH;
+  /** Null until the first successful read, so "never read" does not depend on the clock. */
+  private Instant cachedAt;
 
   @Autowired
   public TicketAgentStanding(
@@ -68,7 +69,7 @@ public class TicketAgentStanding {
       return Map.of();
     }
     Instant now = clock.instant();
-    if (now.isBefore(cachedAt.plus(TTL))) {
+    if (cachedAt != null && now.isBefore(cachedAt.plus(TTL))) {
       return cached;
     }
     try {

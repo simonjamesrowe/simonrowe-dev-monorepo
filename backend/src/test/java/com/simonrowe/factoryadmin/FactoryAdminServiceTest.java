@@ -294,6 +294,33 @@ class FactoryAdminServiceTest {
   }
 
   @Test
+  void handsTicketsToTheAgentOnlyWhileItIsReady() {
+    when(client.factoryStatus()).thenReturn(instance("software-factory", ready("ticketagent")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+    when(client.startTicketRun("SIM-107", false))
+        .thenReturn(new FactoryRunAccepted("ticket-agent-SIM-107", null, "Handed"));
+    when(client.stopTicketRun("SIM-107"))
+        .thenReturn(new FactoryRunAccepted("ticket-agent-SIM-107", null, "Stopping"));
+    when(client.setTicketIntake(true))
+        .thenReturn(new FactoryRunAccepted("ticket-agent-intake", null, "Paused"));
+
+    assertThat(service(SHA).startTicketAgent("SIM-107", false).workflowId())
+        .isEqualTo("ticket-agent-SIM-107");
+    assertThat(service(SHA).stopTicketAgent("SIM-107").detail()).isEqualTo("Stopping");
+    assertThat(service(SHA).setTicketIntake(true).detail()).isEqualTo("Paused");
+  }
+
+  @Test
+  void refusesTicketWhenTheAgentIsNotReady() {
+    when(client.factoryStatus()).thenReturn(instance("software-factory", disabled("ticketagent")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+
+    assertThatThrownBy(() -> service(SHA).startTicketAgent("SIM-107", true))
+        .isInstanceOf(ResponseStatusException.class);
+    verify(client, never()).startTicketRun(anyString(), anyBoolean());
+  }
+
+  @Test
   void refusesLogScanWhenLogWatchIsNotReady() {
     // Without this the workflow starts on a queue nothing polls: it does not fail, it sits in
     // Temporal looking accepted until an activity timeout.
