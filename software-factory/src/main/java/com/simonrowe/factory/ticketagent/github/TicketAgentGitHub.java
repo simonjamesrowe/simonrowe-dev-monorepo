@@ -49,6 +49,11 @@ public class TicketAgentGitHub {
   private static final String USER_AGENT = "simonrowe-ticket-agent";
   private static final int MAX_LINE_CHARS = 400;
   private static final int MAX_MATCHED_LINES = 40;
+  private static final String DEPENDENCY_REVIEW_NOTE =
+      """
+      Human merge required: this pull request changes build or dependency files. \
+      The ticket agent applies `no-auto-merge`; GitHub Actions verifies the change, \
+      and a person must merge it.""";
 
   /** Hosts GitHub sends job log downloads to. Anything else is not followed. */
   private static final List<String> LOG_HOST_SUFFIXES =
@@ -146,6 +151,44 @@ public class TicketAgentGitHub {
     HttpResponse<String> response = send("DELETE", path, null, token);
     if (response.statusCode() != 404) {
       requireOk("DELETE", path, response);
+    }
+  }
+
+  /** All paths in the full PR, including rename sources and every page of GitHub's file list. */
+  public List<String> changedPaths(final int number, final Long installationId) {
+    String token = credentials.accessToken(installationId);
+    List<String> paths = new ArrayList<>();
+    // GitHub caps this endpoint at 3,000 files. Fail closed at that cap rather than risk removing
+    // no-auto-merge when an unseen file changes a dependency.
+    for (int page = 1; page <= 30; page++) {
+      String path = "%s/pulls/%d/files?per_page=100&page=%d".formatted(repoPath(), number, page);
+      JsonNode files = parse(requireOk("GET", path, send("GET", path, null, token)));
+      if (!files.isArray()) {
+        throw new IllegalStateException("GitHub pull request files response was not an array");
+      }
+      for (JsonNode file : files) {
+        paths.add(file.path("filename").asText());
+        if (file.hasNonNull("previous_filename")) {
+          paths.add(file.path("previous_filename").asText());
+        }
+      }
+      if (files.size() < 100) {
+        return List.copyOf(paths);
+      }
+    }
+    throw new IllegalStateException("Pull request file limit reached; manual review required");
+  }
+
+  /** Records the reason for no-auto-merge once, preserving the existing PR description. */
+  public void noteDependencyReview(final int number, final Long installationId) {
+    String token = credentials.accessToken(installationId);
+    String path = repoPath() + "/pulls/" + number;
+    JsonNode pull = parse(requireOk("GET", path, send("GET", path, null, token)));
+    String body = pull.path("body").asText("");
+    if (!body.contains(DEPENDENCY_REVIEW_NOTE)) {
+      ObjectNode payload = objectMapper.createObjectNode()
+          .put("body", body + "\n\n" + DEPENDENCY_REVIEW_NOTE);
+      requireOk("PATCH", path, send("PATCH", path, payload, token));
     }
   }
 

@@ -23,11 +23,12 @@ class TicketAgentPropertiesTest {
             "scripts/restart-prod.sh",
             ".github/workflows/ci.yml",
             ".github/rulesets/main.json",
-            "build.gradle.kts",
-            "backend/build.gradle.kts",
-            "gradle/libs.versions.toml",
+            "gradlew",
+            "gradlew.bat",
+            "gradle/wrapper/gradle-wrapper.jar",
+            "gradle/wrapper/gradle-wrapper.properties",
             "Dockerfile.software-factory",
-            "frontend/package.json");
+            "frontend/Dockerfile");
     assertThat(PathGlobs.matching(denied, DENIED)).containsExactlyElementsOf(denied);
   }
 
@@ -43,6 +44,21 @@ class TicketAgentPropertiesTest {
             "docs/runbooks/logwatch.md",
             "CLAUDE.md");
     assertThat(PathGlobs.matching(allowed, DENIED)).isEmpty();
+  }
+
+  @Test
+  void buildAndDependencyFilesArePushableButRequireHumanMerge() {
+    List<String> dependencies = List.of(
+        "gradle/libs.versions.toml", "build.gradle.kts", "backend/build.gradle.kts",
+        "software-factory/build.gradle.kts", "settings.gradle.kts", "frontend/package.json",
+        "frontend/package-lock.json");
+
+    assertThat(PathGlobs.matching(dependencies, DENIED)).isEmpty();
+    assertThat(PathGlobs.matching(dependencies, TicketAgentProperties.MANUAL_MERGE_PATHS))
+        .containsExactlyElementsOf(dependencies);
+    assertThat(PathGlobs.matching(
+        List.of("backend/src/A.java", "frontend/src/App.tsx", "docs/build.gradle.kts.md"),
+        TicketAgentProperties.MANUAL_MERGE_PATHS)).isEmpty();
   }
 
   @Test

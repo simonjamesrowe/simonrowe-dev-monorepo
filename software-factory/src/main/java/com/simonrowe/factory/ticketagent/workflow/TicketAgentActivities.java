@@ -34,7 +34,10 @@ public interface TicketAgentActivities {
   PullRequestRef openPullRequest(
       String issueId, String branch, String title, String body, String ticketUrl);
 
-  /** Labels the pull request {@code no-auto-merge} exactly while its diff silences something. */
+  /**
+   * Labels {@code no-auto-merge} for silencing or any build/dependency file in the full PR diff.
+   * The activity name stays stable for Temporal histories recorded before dependency edits.
+   */
   @ActivityMethod
   void markSilencing(int pullNumber, boolean silencing);
 

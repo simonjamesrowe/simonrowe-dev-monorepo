@@ -229,7 +229,19 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
 
   @Override
   public void markSilencing(final int pullNumber, final boolean silencing) {
-    gitHub.setLabel(pullNumber, AutoMergePolicy.OPT_OUT_LABEL, silencing, gitHub.installationId());
+    Long installationId = gitHub.installationId();
+    // Protect the PR before reading paths; a failed or truncated read must leave it manual.
+    gitHub.setLabel(pullNumber, AutoMergePolicy.OPT_OUT_LABEL, true, installationId);
+    // Read the whole PR on every attempt: a Java-only repair must not remove the label from a
+    // branch whose earlier attempt changed a dependency. Include the old side of a rename too.
+    List<String> dependencies = PathGlobs.matching(
+        gitHub.changedPaths(pullNumber, installationId), TicketAgentProperties.MANUAL_MERGE_PATHS);
+    if (!silencing && dependencies.isEmpty()) {
+      gitHub.setLabel(pullNumber, AutoMergePolicy.OPT_OUT_LABEL, false, installationId);
+    }
+    if (!dependencies.isEmpty()) {
+      gitHub.noteDependencyReview(pullNumber, installationId);
+    }
   }
 
   @Override

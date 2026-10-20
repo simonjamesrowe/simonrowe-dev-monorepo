@@ -3,6 +3,7 @@ package com.simonrowe.factory.ticketagent.workflow;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -232,6 +233,55 @@ class TicketAgentActivitiesImplTest {
     assertThat(activities.readPullRequest(271).autoMergeArmed()).isTrue();
     activities.markSilencing(271, true);
     verify(gitHub).setLabel(271, "no-auto-merge", true, 7L);
+  }
+
+  @Test
+  void backendBuildScriptGetsNoAutoMergeEvenOnRepair() {
+    when(gitHub.changedPaths(271, 7L))
+        .thenReturn(List.of("backend/build.gradle.kts", "backend/src/main/java/A.java"));
+
+    activities.markSilencing(271, false);
+
+    verify(gitHub).setLabel(271, "no-auto-merge", true, 7L);
+    verify(gitHub).noteDependencyReview(271, 7L);
+  }
+
+  @Test
+  void ordinaryNonSilencingCodeRemovesTheLabel() {
+    when(gitHub.changedPaths(271, 7L)).thenReturn(List.of("backend/src/main/java/A.java"));
+
+    activities.markSilencing(271, false);
+
+    InOrder order = inOrder(gitHub);
+    order.verify(gitHub).setLabel(271, "no-auto-merge", true, 7L);
+    order.verify(gitHub).changedPaths(271, 7L);
+    order.verify(gitHub).setLabel(271, "no-auto-merge", false, 7L);
+    verify(gitHub, never()).noteDependencyReview(anyInt(), any());
+  }
+
+  @Test
+  void failedPathReadLeavesTheManualMergeLabelInPlace() {
+    when(gitHub.changedPaths(271, 7L)).thenThrow(new IllegalStateException("GitHub unavailable"));
+
+    assertThatThrownBy(() -> activities.markSilencing(271, false))
+        .hasMessageContaining("GitHub unavailable");
+
+    verify(gitHub).setLabel(271, "no-auto-merge", true, 7L);
+    verify(gitHub, never()).setLabel(271, "no-auto-merge", false, 7L);
+  }
+
+  @Test
+  void dependencyDryRunReturnsCatalogueDiffWithoutPushing() {
+    agentChanges(List.of("gradle/libs.versions.toml"));
+    when(workspaces.stagedDiff(workspace, NO_HEARTBEAT))
+        .thenReturn("+++ b/gradle/libs.versions.toml\n+netty = \"4.2.8.Final\"\n");
+
+    AttemptResult result = attempt(1, true);
+
+    assertThat(result.status()).isEqualTo(AttemptResult.Status.DRY_RUN);
+    assertThat(result.diff()).contains("gradle/libs.versions.toml");
+    verify(workspaces, never()).commitAndPush(any(), anyString(), anyString(), anyString(),
+        anyString(), any(), anyBoolean(), any());
   }
 
   @Test
