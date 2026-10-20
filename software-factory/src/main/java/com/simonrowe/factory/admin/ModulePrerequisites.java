@@ -5,6 +5,7 @@ import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.logwatch.config.LogWatchProperties;
+import com.simonrowe.factory.ticketagent.config.TicketAgentProperties;
 import com.simonrowe.factory.platformbackup.config.PlatformBackupProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,10 +42,12 @@ public class ModulePrerequisites {
   public static final String LINEAR = "linear";
   public static final String PLATFORM_BACKUP = "platformbackup";
   public static final String LOGWATCH = "logwatch";
+  public static final String TICKET_AGENT = "ticketagent";
 
   /** Display order, and the only place module keys are enumerated. */
   public static final List<String> KEYS =
-      List.of(CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP, LOGWATCH);
+      List.of(
+          CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP, LOGWATCH, TICKET_AGENT);
 
   /**
    * Human-readable names for the two host scripts, used only inside a diagnostic sentence. Kept
@@ -62,6 +65,7 @@ public class ModulePrerequisites {
   private final LinearProperties linearProperties;
   private final PlatformBackupProperties platformBackupProperties;
   private final LogWatchProperties logWatchProperties;
+  private final TicketAgentProperties ticketAgentProperties;
 
   public ModulePrerequisites(
       final FeedbackProperties feedbackProperties,
@@ -69,13 +73,15 @@ public class ModulePrerequisites {
       final DeployProperties deployProperties,
       final LinearProperties linearProperties,
       final PlatformBackupProperties platformBackupProperties,
-      final LogWatchProperties logWatchProperties) {
+      final LogWatchProperties logWatchProperties,
+      final TicketAgentProperties ticketAgentProperties) {
     this.feedbackProperties = feedbackProperties;
     this.cvefixProperties = cvefixProperties;
     this.deployProperties = deployProperties;
     this.linearProperties = linearProperties;
     this.platformBackupProperties = platformBackupProperties;
     this.logWatchProperties = logWatchProperties;
+    this.ticketAgentProperties = ticketAgentProperties;
   }
 
   /**
@@ -97,6 +103,7 @@ public class ModulePrerequisites {
       case LINEAR -> linearProperties.enabled();
       case PLATFORM_BACKUP -> platformBackupProperties.enabled();
       case LOGWATCH -> logWatchProperties.enabled();
+      case TICKET_AGENT -> ticketAgentProperties.enabled();
       default -> false;
     };
   }
@@ -124,6 +131,7 @@ public class ModulePrerequisites {
       case CVEFIX -> cvefixPrerequisites();
       case LINEAR -> linearPrerequisites();
       case LOGWATCH -> logWatchPrerequisites();
+      case TICKET_AGENT -> ticketAgentPrerequisites();
       case PLATFORM_BACKUP -> script(platformBackupProperties.script(), BACKUP_SCRIPT);
       case DEPLOY -> deployPrerequisites();
       // Code review needs no configuration beyond the GitHub App this container already
@@ -184,6 +192,16 @@ public class ModulePrerequisites {
       missing.add("Linear filing is disabled, so findings have nowhere to go");
     }
     return List.copyOf(missing);
+  }
+
+  /**
+   * The agent reads and writes tickets and labels directly, so without Linear it has neither work
+   * nor anywhere to report.
+   */
+  private List<String> ticketAgentPrerequisites() {
+    return linearProperties.enabled() && !linearProperties.apiKey().isBlank()
+        ? List.of()
+        : List.of("Linear filing is disabled or has no API key, and tickets are the agent's work");
   }
 
   /** Only the executing container needs the script; a trigger-only container does not. */

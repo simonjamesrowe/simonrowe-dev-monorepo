@@ -33,9 +33,15 @@ public class FactoryAdminService {
   private static final String LINEAR = "linear";
   private static final String PLATFORM_BACKUP = "platformbackup";
   private static final String LOGWATCH = "logwatch";
+  private static final String TICKET_AGENT = "ticketagent";
 
+  /**
+   * The authoritative module list on this side: a module missing here is dropped from the console
+   * entirely, whatever the factory reports.
+   */
   private static final List<String> ORDER =
-      List.of(CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP, LOGWATCH);
+      List.of(
+          CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP, LOGWATCH, TICKET_AGENT);
 
   /** Modules the deployer, not the factory, is the authority on. */
   private static final List<String> DEPLOYER_OWNED = List.of(DEPLOY, PLATFORM_BACKUP);
@@ -339,6 +345,42 @@ public class FactoryAdminService {
   public FactoryRunAccepted startLogWatchScan(final boolean dryRun) {
     requireReady(LOGWATCH);
     return proxy(() -> client.startLogWatchScan(dryRun));
+  }
+
+  /**
+   * Hands a ticket to the ticket agent, or dry-runs it.
+   *
+   * <p>A real run applies the {@code factory:agent} label in Linear, on the factory side, before it
+   * starts: the label stays the one record of what a person approved, whichever door they used.
+   *
+   * @param ticket {@code SIM-123} or the ticket's Linear URL
+   * @param dryRun post the would-be diff to the ticket and push nothing
+   * @return the accepted run
+   */
+  public FactoryRunAccepted startTicketAgent(final String ticket, final boolean dryRun) {
+    requireReady(TICKET_AGENT);
+    return proxy(() -> client.startTicketRun(ticket, dryRun));
+  }
+
+  /**
+   * Stops the ticket agent's live run on a ticket; the factory hands the ticket back and leaves
+   * any pull request as a draft.
+   *
+   * @param identifier {@code SIM-123}
+   * @return the acknowledgement
+   */
+  public FactoryRunAccepted stopTicketAgent(final String identifier) {
+    return proxy(() -> client.stopTicketRun(identifier));
+  }
+
+  /**
+   * Pauses or resumes the ticket agent's five-minute intake. Live runs carry on either way.
+   *
+   * @param paused true to pause
+   * @return the acknowledgement
+   */
+  public FactoryRunAccepted setTicketIntake(final boolean paused) {
+    return proxy(() -> client.setTicketIntake(paused));
   }
 
   /**

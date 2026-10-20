@@ -332,6 +332,15 @@ services:
       # `deployer`: WritingComposeTest fails the build if any FACTORY_WRITING_* appears there.
       FACTORY_WRITING_ENABLED: ${FACTORY_WRITING_ENABLED:-true}
       FACTORY_WRITING_MODEL: ${FACTORY_WRITING_MODEL:-haiku}
+      # The ticket agent: picks up Linear tickets labelled `factory:agent`, makes the change with
+      # file tools only and opens a pull request; CI's workflow_run webhook drives up to three
+      # repair attempts. On here so the console can dry-run and hand over tickets, but its
+      # five-minute intake schedule is created PAUSED, so nothing is picked up on its own until
+      # an operator resumes it from the console. Owner-triggered work only (a person adds the
+      # label), which is what the Claude subscription's terms allow. Deliberately NOT on
+      # `deployer`: TicketAgentComposeTest fails the build if any FACTORY_TICKET_AGENT_* appears
+      # there. See docs/runbooks/ticket-agent.md.
+      FACTORY_TICKET_AGENT_ENABLED: ${FACTORY_TICKET_AGENT_ENABLED:-true}
       # Issue-only scanning is on by default. It files one consolidated repository report in
       # Linear and never edits dependencies, pushes a branch, opens a PR or polls CI.
       FACTORY_CVEFIX_ENABLED: ${FACTORY_CVEFIX_ENABLED:-true}

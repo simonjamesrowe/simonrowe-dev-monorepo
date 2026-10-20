@@ -52,7 +52,8 @@ class FactoryAdminServiceTest {
     assertThat(status.modules())
         .extracting(FactoryInstanceStatus.ModuleStatus::key)
         .containsExactly(
-            "codereview", "feedback", "cvefix", "deploy", "linear", "platformbackup", "logwatch");
+            "codereview", "feedback", "cvefix", "deploy", "linear", "platformbackup", "logwatch",
+            "ticketagent");
     assertThat(status.modules()).allMatch(module -> !module.ready());
     assertThat(status.modules()).allMatch(
         module -> "Owning factory service is unreachable".equals(module.diagnostic()));
@@ -290,6 +291,33 @@ class FactoryAdminServiceTest {
     // The flag is the whole difference between a scan that files Linear tickets and one that
     // files nothing, so it must not be dropped or defaulted on the way through.
     verify(client).startLogWatchScan(true);
+  }
+
+  @Test
+  void handsTicketsToTheAgentOnlyWhileItIsReady() {
+    when(client.factoryStatus()).thenReturn(instance("software-factory", ready("ticketagent")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+    when(client.startTicketRun("SIM-107", false))
+        .thenReturn(new FactoryRunAccepted("ticket-agent-SIM-107", null, "Handed"));
+    when(client.stopTicketRun("SIM-107"))
+        .thenReturn(new FactoryRunAccepted("ticket-agent-SIM-107", null, "Stopping"));
+    when(client.setTicketIntake(true))
+        .thenReturn(new FactoryRunAccepted("ticket-agent-intake", null, "Paused"));
+
+    assertThat(service(SHA).startTicketAgent("SIM-107", false).workflowId())
+        .isEqualTo("ticket-agent-SIM-107");
+    assertThat(service(SHA).stopTicketAgent("SIM-107").detail()).isEqualTo("Stopping");
+    assertThat(service(SHA).setTicketIntake(true).detail()).isEqualTo("Paused");
+  }
+
+  @Test
+  void refusesTicketWhenTheAgentIsNotReady() {
+    when(client.factoryStatus()).thenReturn(instance("software-factory", disabled("ticketagent")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+
+    assertThatThrownBy(() -> service(SHA).startTicketAgent("SIM-107", true))
+        .isInstanceOf(ResponseStatusException.class);
+    verify(client, never()).startTicketRun(anyString(), anyBoolean());
   }
 
   @Test

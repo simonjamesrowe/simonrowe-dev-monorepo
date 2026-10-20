@@ -34,4 +34,16 @@ public final class PathGlobs {
         .filter(path -> matchers.stream().noneMatch(matcher -> matcher.matches(Path.of(path))))
         .toList();
   }
+
+  /**
+   * Every path at least one glob matches, in the order given.
+   *
+   * @param paths repository-relative paths
+   * @param globs the patterns
+   * @return the matching paths; empty when none match
+   */
+  public static List<String> matching(final List<String> paths, final List<String> globs) {
+    List<String> unmatched = outside(paths, globs);
+    return paths.stream().filter(path -> !unmatched.contains(path)).toList();
+  }
 }

@@ -222,6 +222,33 @@ public class FactoryAdminClient {
     return new FactoryRunAccepted(wire.workflowId(), wire.runId(), wire.detail());
   }
 
+  public FactoryRunAccepted startTicketRun(final String ticket, final boolean dryRun) {
+    RunAcceptedWire wire =
+        post("/api/ticket-agent/runs", Map.of("ticket", ticket, DRY_RUN, dryRun),
+            RunAcceptedWire.class);
+    return new FactoryRunAccepted(wire.workflowId(), wire.runId(), wire.detail());
+  }
+
+  public FactoryRunAccepted stopTicketRun(final String identifier) {
+    RunAcceptedWire wire =
+        factory
+            .post()
+            .uri("/api/ticket-agent/runs/{identifier}/stop", identifier)
+            .header(TOKEN_HEADER, token)
+            .retrieve()
+            .body(RunAcceptedWire.class);
+    if (wire == null) {
+      throw new RestClientException("The Software Factory accepted the request with no body");
+    }
+    return new FactoryRunAccepted(wire.workflowId(), wire.runId(), wire.detail());
+  }
+
+  public FactoryRunAccepted setTicketIntake(final boolean paused) {
+    RunAcceptedWire wire =
+        post("/api/ticket-agent/intake", Map.of("paused", paused), RunAcceptedWire.class);
+    return new FactoryRunAccepted(wire.workflowId(), wire.runId(), wire.detail());
+  }
+
   public FactoryRunProgress progress(final String workflowId) {
     return factory
         .get()

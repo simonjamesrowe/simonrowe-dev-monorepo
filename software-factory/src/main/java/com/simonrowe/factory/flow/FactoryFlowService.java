@@ -74,7 +74,7 @@ public class FactoryFlowService {
     NodeCounts counts = tracked ? countsFor(descriptor, linear) : null;
     FactoryStatusResponse.ModuleStatus module =
         descriptor.moduleKey() == null ? null : modules.get(descriptor.moduleKey());
-    NodeHealth health = health(descriptor, module, counts, linear, tracked);
+    NodeHealth health = health(module, counts, tracked);
     String diagnostic = module == null ? null : module.diagnostic();
     return new FlowNode(
         descriptor.key(), descriptor.kind(), descriptor.band(), descriptor.label(),
@@ -87,7 +87,7 @@ public class FactoryFlowService {
    * <p>{@code production} is the current node with none: no {@code moduleKey}, no {@code
    * workflowType}, and none of the artifact keys {@link #countsFor} knows how to read. Every other
    * artifact without a module — {@code pull-request}, {@code main}, {@code agent-setup} — has a
-   * GitHub-backed count, and {@code build} has Linear. This check and {@link #countsFor}'s switch
+   * GitHub-backed count. This check and {@link #countsFor}'s switch
    * must be kept in step: a key added to one without the other either throws away a real count or
    * reports a source that does not exist.
    */
@@ -96,7 +96,7 @@ public class FactoryFlowService {
       return true;
     }
     return switch (descriptor.key()) {
-      case FactoryFlowTopology.BUILD, "pull-request", "main", "agent-setup" -> true;
+      case "pull-request", "main", "agent-setup" -> true;
       default -> false;
     };
   }
@@ -104,12 +104,6 @@ public class FactoryFlowService {
   private NodeCounts countsFor(final NodeDescriptor descriptor, final NodeCounts linear) {
     if (descriptor.workflowType() != null) {
       return workflows.countsFor(descriptor.workflowType());
-    }
-    // The build agent runs on a machine this container cannot reach, so its counts are read
-    // entirely from the Linear backlog waiting for it — the same value health() below inspects,
-    // so a null Linear read renders as null counts here rather than a misleading zero.
-    if (FactoryFlowTopology.BUILD.equals(descriptor.key())) {
-      return linear;
     }
     return switch (descriptor.key()) {
       case FactoryFlowTopology.LINEAR_NODE -> linear;
@@ -123,19 +117,9 @@ public class FactoryFlowService {
   }
 
   private NodeHealth health(
-      final NodeDescriptor descriptor,
       final FactoryStatusResponse.ModuleStatus module,
       final NodeCounts counts,
-      final NodeCounts linear,
       final boolean tracked) {
-    if (FactoryFlowTopology.BUILD.equals(descriptor.key())) {
-      // Derived entirely from Linear: work waiting with nothing running means nothing is
-      // listening. Nothing waiting means nothing to do. They are different facts.
-      if (linear == null) {
-        return NodeHealth.UNAVAILABLE;
-      }
-      return linear.inFlight() > 0 ? NodeHealth.OFFLINE : NodeHealth.IDLE;
-    }
     if (!tracked) {
       return NodeHealth.NOT_TRACKED;
     }

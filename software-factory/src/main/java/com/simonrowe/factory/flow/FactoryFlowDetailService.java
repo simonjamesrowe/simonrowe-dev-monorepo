@@ -2,14 +2,20 @@ package com.simonrowe.factory.flow;
 
 import com.google.protobuf.Timestamp;
 import com.simonrowe.factory.flow.domain.NodeDescriptor;
+import io.temporal.api.common.v1.Payload;
+import io.temporal.api.enums.v1.WorkflowExecutionStatus;
 import io.temporal.api.workflow.v1.WorkflowExecutionInfo;
 import io.temporal.api.workflowservice.v1.ListWorkflowExecutionsRequest;
 import io.temporal.client.WorkflowClient;
+import io.temporal.common.converter.DataConverter;
+import io.temporal.common.converter.GlobalDataConverter;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -23,8 +29,8 @@ import org.springframework.stereotype.Service;
  * <p>Unlike {@link WorkflowCountsReader}, which counts every module in one shot per status band,
  * this reads only the one node an operator actually opened — a drawer that listed every module's
  * runs would be worse than useless. An unknown node key, and a node with no {@link
- * NodeDescriptor#workflowType()} and no artifact reader either (only {@code production} and
- * {@code build} today), resolve to {@link FlowDetail#empty(String)} rather than an exception: a
+ * NodeDescriptor#workflowType()} and no artifact reader either (only {@code production} today),
+ * resolve to {@link FlowDetail#empty(String)} rather than an exception: a
  * drawer that throws takes the whole page down for a detail panel. Those genuinely mean "there is
  * nothing here" — a workflow type this service never queries.
  *
@@ -50,9 +56,12 @@ public class FactoryFlowDetailService {
 
   /**
    * The artifact nodes {@link ArtifactCountsReader} can list. Every other node either has a
-   * Temporal workflow type ({@link #descriptorFor(String)}) or neither — {@code production} and
-   * {@code build}, which report {@link FlowDetail#empty(String)}.
+   * Temporal workflow type ({@link #descriptorFor(String)}) or neither — {@code production}, which
+   * reports {@link FlowDetail#empty(String)}.
    */
+  private static final Map<String, List<String>> EXTRA_LISTED_TYPES =
+      Map.of("feedback", List.of("GuidanceClosedWorkflow"));
+
   private static final Set<String> ARTIFACT_NODES_WITH_READERS =
       Set.of(FactoryFlowTopology.LINEAR_NODE, "pull-request", "main", "agent-setup");
 
@@ -66,6 +75,7 @@ public class FactoryFlowDetailService {
 
   private final WorkflowClient client;
   private final ArtifactCountsReader counts;
+  private final TicketAgentStanding standing;
 
   /**
    * Creates a service backed by Temporal for modules and {@link ArtifactCountsReader} for
@@ -73,10 +83,15 @@ public class FactoryFlowDetailService {
    *
    * @param client the Temporal client used to list a module's recent workflow executions
    * @param counts the reader for the four artifact nodes that carry their own list
+   * @param standing which tickets the ticket agent holds, for the Linear node's items
    */
-  public FactoryFlowDetailService(final WorkflowClient client, final ArtifactCountsReader counts) {
+  public FactoryFlowDetailService(
+      final WorkflowClient client,
+      final ArtifactCountsReader counts,
+      final TicketAgentStanding standing) {
     this.client = client;
     this.counts = counts;
+    this.standing = standing;
   }
 
   /**
@@ -108,7 +123,7 @@ public class FactoryFlowDetailService {
                   // unnecessary — standard visibility already returns executions newest-first by
                   // start time, verified empirically. Putting it back makes every drawer's run
                   // list fail silently again.
-                  .setQuery("WorkflowType = '" + descriptor.get().workflowType() + "'")
+                  .setQuery(typeQuery(descriptor.get()))
                   .setPageSize(MAX_ITEMS)
                   .build())
           .getExecutionsList();
@@ -124,6 +139,19 @@ public class FactoryFlowDetailService {
   }
 
   /**
+   * The visibility query for a node's runs. The feedback node also lists the guidance follow-ups,
+   * because "did my guidance merge and close its ticket" is the question its drawer answers; its
+   * counts stay the harvests alone.
+   */
+  static String typeQuery(final NodeDescriptor descriptor) {
+    List<String> types = new ArrayList<>(List.of(descriptor.workflowType()));
+    types.addAll(EXTRA_LISTED_TYPES.getOrDefault(descriptor.key(), List.of()));
+    return types.stream()
+        .map(type -> "WorkflowType = '" + type + "'")
+        .collect(Collectors.joining(" OR "));
+  }
+
+  /**
    * Routes an artifact node to {@link ArtifactCountsReader}, before the Temporal-backed module
    * path below is even considered.
    *
@@ -136,12 +164,25 @@ public class FactoryFlowDetailService {
       return Optional.empty();
     }
     List<FlowDetail.Item> items = switch (nodeKey) {
-      case FactoryFlowTopology.LINEAR_NODE -> counts.linearItems();
+      case FactoryFlowTopology.LINEAR_NODE -> withStanding(counts.linearItems());
       case "pull-request" -> counts.pullRequestItems();
       case "main" -> counts.mainItems();
       default -> counts.agentSetupItems();
     };
     return Optional.of(new FlowDetail(nodeKey, items));
+  }
+
+  /** Marks each ticket the agent holds or handed back stuck; null stays null. */
+  private List<FlowDetail.Item> withStanding(final List<FlowDetail.Item> items) {
+    if (items == null) {
+      return null;
+    }
+    Map<String, String> byIdentifier = standing.byIdentifier();
+    return items.stream()
+        .map(item -> byIdentifier.containsKey(item.id())
+            ? item.withAgent(byIdentifier.get(item.id()))
+            : item)
+        .toList();
   }
 
   /**
@@ -167,8 +208,63 @@ public class FactoryFlowDetailService {
       final NodeDescriptor descriptor, final WorkflowExecutionInfo execution) {
     String id = execution.getExecution().getWorkflowId();
     Instant startTime = toInstant(execution.getStartTime());
-    String title = descriptor.label() + " · " + TITLE_TIME.format(startTime);
-    return new FlowDetail.Item(id, title, execution.getStatus().name(), startTime, null);
+    String memoTitle = memo(execution, "title");
+    if (memoTitle == null || memoTitle.isBlank()) {
+      String title = descriptor.label() + " · " + TITLE_TIME.format(startTime);
+      return new FlowDetail.Item(id, title, execution.getStatus().name(), startTime, null);
+    }
+    return memoItem(id, startTime, execution, memoTitle);
+  }
+
+  /**
+   * A run that describes itself in its memo: the ticket agent upserts one at every phase, and
+   * the guidance follow-up once, with what it did to the ticket.
+   *
+   * <p>Read from the memo so the listing alone describes every row. Querying each run instead
+   * would replay every closed one on the Pi's worker, ten times a refresh.
+   */
+  private FlowDetail.Item memoItem(
+      final String id,
+      final Instant startTime,
+      final WorkflowExecutionInfo execution,
+      final String title) {
+    String detail = memo(execution, "detail");
+    String url = memo(execution, "url");
+    String status = detail == null ? execution.getStatus().name() : detail;
+    // A run that ended badly says so first; its last detail is what it was doing when it did.
+    if (execution.getStatus() != WorkflowExecutionStatus.WORKFLOW_EXECUTION_STATUS_RUNNING
+        && execution.getStatus() != WorkflowExecutionStatus.WORKFLOW_EXECUTION_STATUS_COMPLETED) {
+      status = execution.getStatus().name() + ": " + status;
+    }
+    // Only a live real run can be stopped: a dry run is over in one attempt, and its id says so.
+    boolean stoppable =
+        execution.getStatus() == WorkflowExecutionStatus.WORKFLOW_EXECUTION_STATUS_RUNNING
+            && memo(execution, "ticket") != null
+            && !id.startsWith("ticket-agent-dry-run-");
+    return new FlowDetail.Item(
+        id, title, status, startTime, url == null || url.isBlank() ? null : url,
+        stoppable ? FlowDetail.Item.RUNNING : null);
+  }
+
+  private String memo(final WorkflowExecutionInfo execution, final String field) {
+    Payload payload = execution.getMemo().getFieldsMap().get(field);
+    if (payload == null) {
+      return null;
+    }
+    try {
+      // Kept although the starter always validates its client options, which sets a converter:
+      // options built without validation carry none, and a null here would blank every row.
+      DataConverter converter = client.getOptions().getDataConverter();
+      if (converter == null) {
+        converter = GlobalDataConverter.get();
+      }
+      // Read as a string: every field the drawer shows is upserted as one, and asking the
+      // converter for Object would hand back whatever its JSON mapper chose for the type.
+      return converter.fromPayload(payload, String.class, String.class);
+    } catch (RuntimeException exception) {
+      LOG.debug("Unreadable memo field {} on {}", field, execution.getExecution().getWorkflowId());
+      return null;
+    }
   }
 
   private static Instant toInstant(final Timestamp timestamp) {

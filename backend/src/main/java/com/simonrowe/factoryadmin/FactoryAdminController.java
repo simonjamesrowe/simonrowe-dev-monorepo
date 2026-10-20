@@ -3,6 +3,8 @@ package com.simonrowe.factoryadmin;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -83,6 +85,24 @@ public class FactoryAdminController {
     return accepted(service.startLogWatchScan(request.dryRun()));
   }
 
+  @PostMapping("/ticket-agent/runs")
+  public ResponseEntity<FactoryRunAccepted> ticketRun(
+      @Valid @RequestBody final TicketRunRequest request) {
+    return accepted(service.startTicketAgent(request.ticket().trim(), request.dryRun()));
+  }
+
+  @PostMapping("/ticket-agent/runs/{identifier}/stop")
+  public ResponseEntity<FactoryRunAccepted> stopTicketRun(
+      @PathVariable @Pattern(regexp = TICKET_IDENTIFIER) final String identifier) {
+    return accepted(service.stopTicketAgent(identifier));
+  }
+
+  @PostMapping("/ticket-agent/intake")
+  public ResponseEntity<FactoryRunAccepted> ticketIntake(
+      @RequestBody final TicketIntakeRequest request) {
+    return accepted(service.setTicketIntake(request.paused()));
+  }
+
   @PostMapping("/deploys")
   public ResponseEntity<FactoryRunAccepted> deploy(
       @Valid @RequestBody final DeployRequest request) {
@@ -119,6 +139,27 @@ public class FactoryAdminController {
   }
 
   public record LogScanRequest(boolean dryRun) {
+  }
+
+  /**
+   * A Linear identifier: letters and digits, a dash, digits. Bounded on both sides, so the pattern
+   * cannot backtrack over long input.
+   */
+  static final String TICKET_IDENTIFIER = "^[A-Za-z][A-Za-z0-9]{0,15}-[0-9]{1,9}$";
+
+  /**
+   * A ticket to hand over: {@code SIM-123} or its Linear URL, which the factory parses by host.
+   *
+   * @param ticket the reference, at most 300 characters
+   * @param dryRun post the would-be diff and push nothing
+   */
+  public record TicketRunRequest(@NotBlank @Size(max = 300) String ticket, Boolean dryRun) {
+    public TicketRunRequest {
+      dryRun = dryRun != null && dryRun;
+    }
+  }
+
+  public record TicketIntakeRequest(boolean paused) {
   }
 
   public record DeployRequest(

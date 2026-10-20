@@ -186,4 +186,23 @@ class RepositoryWorkspaceFactoryTest {
     // tree with a nested subdirectory and a file inside it.
     assertThat(Files.exists(root)).isFalse();
   }
+
+  @Test
+  void clonesTheDefaultBranchOrNamedOne() {
+    assertThat(RepositoryWorkspaceFactory.cloneCommand("o", "r", null, java.nio.file.Path.of("/c")))
+        .containsExactly("git", "clone", "--quiet", "--depth", "1",
+            "https://github.com/o/r.git", "/c");
+    assertThat(RepositoryWorkspaceFactory.cloneCommand("o", "r", "agent/sim-1",
+            java.nio.file.Path.of("/c")))
+        .containsSubsequence("--branch", "agent/sim-1");
+  }
+
+  /** A repair must never overwrite what someone else pushed to the branch meanwhile. */
+  @Test
+  void onlyTheFirstAttemptForcesItsPush() {
+    assertThat(RepositoryWorkspaceFactory.pushCommand("agent/sim-1", true)).contains("--force");
+    assertThat(RepositoryWorkspaceFactory.pushCommand("agent/sim-1", false))
+        .doesNotContain("--force")
+        .endsWith("HEAD:refs/heads/agent/sim-1");
+  }
 }

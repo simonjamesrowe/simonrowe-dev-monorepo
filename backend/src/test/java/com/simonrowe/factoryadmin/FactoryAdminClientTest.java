@@ -337,6 +337,29 @@ class FactoryAdminClientTest {
     assertThat(client.factoryFlow().fetchedAt()).isNotNull();
   }
 
+  @Test
+  void handsTicketsToTheAgentStopsThemAndSwitchesTheIntake() throws IOException {
+    String accepted =
+        """
+        {"workflowId":"ticket-agent-SIM-107","runId":null,\
+        "detail":"Handed SIM-107 to the agent"}""";
+    startFactory(Map.of(
+        "/api/ticket-agent/runs", json(202, accepted),
+        "/api/ticket-agent/runs/SIM-107/stop", json(202, accepted),
+        "/api/ticket-agent/intake",
+        json(202, "{\"workflowId\":\"ticket-agent-intake\",\"detail\":\"paused\"}")));
+    startDeployer(Map.of());
+    FactoryAdminClient client = client();
+
+    assertThat(client.startTicketRun("SIM-107", true).workflowId())
+        .isEqualTo("ticket-agent-SIM-107");
+    assertThat(client.stopTicketRun("SIM-107").detail()).isEqualTo("Handed SIM-107 to the agent");
+    assertThat(client.setTicketIntake(true).detail()).isEqualTo("paused");
+
+    assertThat(bodiesSeen.get(0)).contains("\"ticket\":\"SIM-107\"").contains("\"dryRun\":true");
+    assertThat(bodiesSeen.get(2)).contains("\"paused\":true");
+  }
+
   private FactoryAdminClient client() {
     return new FactoryAdminClient(
         new FactoryAdminProperties(

@@ -67,39 +67,36 @@ class FactoryFlowServiceTest {
     assertThat(linear.counts()).isEqualTo(new NodeCounts(4, 1, 0));
   }
 
+  /**
+   * The regression. Until the ticket agent existed, this node's health came from Linear alone: any
+   * open ticket made it OFFLINE, so with eighteen tickets in Triage it was permanently red, and
+   * the red meant nothing.
+   */
   @Test
-  void reportsTheBuildNodeAsOfflineWhenWorkIsWaitingAndNothingHasRun() {
-    // The build agent lives on a laptop the Pi cannot reach. Empty is not the same as offline:
-    // work waiting with nothing moving is OFFLINE, nothing waiting is IDLE.
-    givenStatus();
-    when(artifacts.linearCounts()).thenReturn(new NodeCounts(3, 0, 0));
+  void anOpenLinearBacklogNoLongerMakesTheTicketAgentOffline() {
+    givenStatus(module("ticketagent", true, true, null));
+    when(artifacts.linearCounts()).thenReturn(new NodeCounts(18, 0, 0));
+    when(workflows.countsFor("TicketAgentWorkflow")).thenReturn(NodeCounts.NONE);
 
     FlowNode build = node(service().flow(), "build");
-    assertThat(build.health()).isEqualTo(NodeHealth.OFFLINE);
-    // The waiting count must appear on the badge that says OFFLINE, not read as zero beside it.
-    assertThat(build.counts()).isEqualTo(new NodeCounts(3, 0, 0));
-  }
-
-  @Test
-  void reportsTheBuildNodeAsIdleWhenThereIsNothingWaiting() {
-    givenStatus();
-    when(artifacts.linearCounts()).thenReturn(NodeCounts.NONE);
-
-    FlowNode build = node(service().flow(), "build");
-    assertThat(build.health()).isEqualTo(NodeHealth.IDLE);
+    assertThat(build.health()).isEqualTo(NodeHealth.READY);
     assertThat(build.counts()).isEqualTo(NodeCounts.NONE);
   }
 
   @Test
-  void reportsTheBuildNodeAsUnavailableWithNullCountsWhenLinearCannotBeRead() {
-    // A null must never render as a zero: an unreadable Linear is UNAVAILABLE, and the counts
-    // that would otherwise sit next to that badge must say "unknown", not "nothing waiting".
-    givenStatus();
-    when(artifacts.linearCounts()).thenReturn(null);
+  void theTicketAgentIsCountedFromItsOwnWorkflows() {
+    givenStatus(module("ticketagent", true, true, null));
+    when(workflows.countsFor("TicketAgentWorkflow")).thenReturn(new NodeCounts(1, 3, 0));
 
-    FlowNode build = node(service().flow(), "build");
-    assertThat(build.health()).isEqualTo(NodeHealth.UNAVAILABLE);
-    assertThat(build.counts()).isNull();
+    assertThat(node(service().flow(), "build").counts()).isEqualTo(new NodeCounts(1, 3, 0));
+  }
+
+  @Test
+  void switchedOffTicketAgentReadsDisabled() {
+    givenStatus(module("ticketagent", false, false, "Disabled by configuration"));
+    when(workflows.countsFor("TicketAgentWorkflow")).thenReturn(NodeCounts.NONE);
+
+    assertThat(node(service().flow(), "build").health()).isEqualTo(NodeHealth.DISABLED);
   }
 
   @Test
@@ -125,7 +122,8 @@ class FactoryFlowServiceTest {
         module("deploy", true, true, null),
         module("linear", true, true, null),
         module("platformbackup", true, true, null),
-        module("logwatch", true, true, null)));
+        module("logwatch", true, true, null),
+        module("ticketagent", true, true, null)));
     for (FactoryStatusResponse.ModuleStatus override : overrides) {
       modules.removeIf(existing -> existing.key().equals(override.key()));
       modules.add(override);

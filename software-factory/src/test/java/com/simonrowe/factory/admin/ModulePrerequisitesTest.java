@@ -7,6 +7,7 @@ import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.logwatch.config.LogWatchProperties;
+import com.simonrowe.factory.testsupport.TicketAgentTestProperties;
 import com.simonrowe.factory.platformbackup.config.PlatformBackupProperties;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -199,7 +200,8 @@ class ModulePrerequisitesTest {
         new LinearProperties(
             linear, linearApiKey, null, linearTeamKey, null, false, null, null),
         new PlatformBackupProperties(backup, backupScript, null, null),
-        new LogWatchProperties(false, 0, 0, null, 0, 0, null, null, null, null, null));
+        new LogWatchProperties(false, 0, 0, null, 0, 0, null, null, null, null, null),
+        TicketAgentTestProperties.of(false));
   }
 
   private ModulePrerequisites deployPrerequisites(
@@ -211,7 +213,8 @@ class ModulePrerequisitesTest {
         deployProperties(enabled, triggerEnabled, script),
         new LinearProperties(false, null, null, null, null, false, null, null),
         new PlatformBackupProperties(false, null, null, null),
-        new LogWatchProperties(false, 0, 0, null, 0, 0, null, null, null, null, null));
+        new LogWatchProperties(false, 0, 0, null, 0, 0, null, null, null, null, null),
+        TicketAgentTestProperties.of(false));
   }
 
   private static DeployProperties deployProperties(

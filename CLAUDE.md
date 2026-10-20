@@ -275,6 +275,27 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 056-factory-ticket-agent: **The software factory picks up Linear tickets a person labels
+  `factory:agent`, makes the change and opens a pull request** (`com.simonrowe.factory.ticketagent`,
+  queue `ticket-agent`, software-factory only). Load-bearing bits:
+  - **Nothing builds on the Pi.** Claude Code gets `Read`/`Glob`/`Grep`/`Edit`/`Write` and no
+    `Bash`. GitHub Actions is the build: CI's `workflow_run` webhook signals the run
+    (`ticket-agent-<ID>`), a red build becomes the next attempt's brief, three attempts in all.
+    Signals only wake the run; it always re-reads CI and the `Code Review` check from GitHub, and a
+    2h timeout reads them anyway, so a lost delivery costs a delay, not a stuck ticket.
+  - **The controls are on what is pushed and merged**, because the ticket quotes production log
+    lines a visitor can shape: a push denylist checked in Java, `no-auto-merge` on any diff that
+    only silences something (`SilencingDetector`), and the reviewer's ordinary merge rules.
+  - **Linear is the record**: the label is the approval (the console adds it too), In Progress is
+    claimed, In Review is green, Done is merged; a hand-back removes the label (adds
+    `agent:stuck` on failure). A hand-back completes the workflow; only a crash fails it.
+  - **The intake schedule is created paused** (`ticket-agent-intake`, 5 min); resume it from the
+    console after dry runs. Dry runs post the diff to the ticket and change nothing.
+  - **Console:** the Build agent node is now the ticket agent (it used to read `OFFLINE` whenever
+    any ticket was open). Runs are listed from a memo each run upserts, never by querying them.
+    `FlowDetail.Item.agent` (`with-agent`/`stuck`/`running`) drives Send to agent, Retry and Stop.
+  - Job logs need the App's optional `actions: read`; without it the brief has job and step names
+    only. See `docs/runbooks/ticket-agent.md`.
 - feedback-guidance-auto-merge: **Guidance pull requests from the feedback loop merge themselves,
   and their Linear ticket closes when the last one does.** All ~23 before this were merged by hand
   unchanged, and their tickets sat in Triage afterwards. Load-bearing bits:

@@ -18,7 +18,10 @@ import java.util.List;
  */
 public final class FactoryFlowTopology {
 
-  /** The build agent's node key. It has no module on this side: see specs/045-build-agent. */
+  /**
+   * The ticket agent's node key. Still {@code build}, the key 044 drew it under, so a saved
+   * selection or a link to the node keeps working; its module is {@code ticketagent}.
+   */
   public static final String BUILD = "build";
 
   /** The Linear artifact node. Carries the activity-only linear module's health as a badge. */
@@ -33,7 +36,8 @@ public final class FactoryFlowTopology {
               ModulePrerequisites.CVEFIX, "CveFixWorkflow"),
           new NodeDescriptor(LINEAR_NODE, NodeKind.ARTIFACT, Band.PLAN, "Linear",
               ModulePrerequisites.LINEAR, null),
-          new NodeDescriptor(BUILD, NodeKind.MODULE, Band.BUILD, "Build agent", null, null),
+          new NodeDescriptor(BUILD, NodeKind.MODULE, Band.BUILD, "Ticket agent",
+              ModulePrerequisites.TICKET_AGENT, "TicketAgentWorkflow"),
           new NodeDescriptor("pull-request", NodeKind.ARTIFACT, Band.BUILD, "Pull request",
               null, null),
           new NodeDescriptor("codereview", NodeKind.MODULE, Band.BUILD, "Code review",
@@ -60,13 +64,17 @@ public final class FactoryFlowTopology {
           // satisfied. So this edge is "arms", never "merges", and `pull-request -> main` below
           // stays the edge a merge actually travels.
           new FlowEdge("codereview", "main", "arms auto-merge", Loop.FAST),
+          // CI's workflow_run webhook wakes the agent to repair a red build. This loop is the
+          // whole reason the agent can run without building anything itself.
+          new FlowEdge("pull-request", BUILD, "CI red: repair (max 3)", Loop.FAST),
 
           new FlowEdge("production", "logwatch", "reads Loki", Loop.MAIN),
           new FlowEdge("logwatch", LINEAR_NODE, "files signature", Loop.MAIN),
           new FlowEdge("main", "cvefix", "publishes SBOMs", Loop.MAIN),
           new FlowEdge("cvefix", LINEAR_NODE, "files vulnerabilities", Loop.MAIN),
-          new FlowEdge(LINEAR_NODE, BUILD, "approved: factory:build", Loop.MAIN),
+          new FlowEdge(LINEAR_NODE, BUILD, "approved: factory:agent", Loop.MAIN),
           new FlowEdge(BUILD, "pull-request", "opens", Loop.MAIN),
+          new FlowEdge(BUILD, LINEAR_NODE, "done on merge, or handed back", Loop.MAIN),
           new FlowEdge("pull-request", "main", "merges when green", Loop.MAIN),
           new FlowEdge("main", "deploy", "Publish webhook", Loop.MAIN),
           new FlowEdge("deploy", "production", "recreates", Loop.MAIN),
@@ -75,6 +83,8 @@ public final class FactoryFlowTopology {
 
           new FlowEdge("pull-request", "feedback", "on close", Loop.SLOW),
           new FlowEdge("feedback", "agent-setup", "guidance pull request", Loop.SLOW),
+          // Guidance pull requests merge themselves when every path is in the distill allowlist.
+          new FlowEdge("codereview", "agent-setup", "arms auto-merge", Loop.SLOW),
           new FlowEdge("agent-setup", BUILD, "shapes the agent", Loop.SLOW),
           new FlowEdge("agent-setup", "codereview", "shapes the reviewer", Loop.SLOW));
 

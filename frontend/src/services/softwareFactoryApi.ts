@@ -24,6 +24,7 @@ export interface FactoryModuleStatus {
     | 'linear'
     | 'platformbackup'
     | 'logwatch'
+    | 'ticketagent'
   displayName: string
   /** null when the container that owns this module could not be asked for its flag. */
   configured: boolean | null
@@ -155,6 +156,62 @@ export const startDeploy = (
   body: JSON.stringify({ frontendCommit, confirmation }),
 })
 
+/**
+ * Hands a Linear ticket to the ticket agent, or dry-runs it.
+ *
+ * A real run adds the `factory:agent` label in Linear before it starts, so the label stays the one
+ * record of what was approved whichever door the approval came through. A dry run posts the
+ * would-be diff to the ticket and pushes nothing.
+ */
+export const startTicketAgent = (
+  getAccessToken: GetAccessToken,
+  ticket: string,
+  dryRun: boolean,
+) => request<FactoryRunAccepted>(getAccessToken, '/ticket-agent/runs', {
+  method: 'POST',
+  body: JSON.stringify({ ticket, dryRun }),
+})
+
+/** Stops a live run: the ticket goes back to a person and any pull request becomes a draft. */
+export const stopTicketAgent = (getAccessToken: GetAccessToken, identifier: string) =>
+  request<FactoryRunAccepted>(
+    getAccessToken,
+    `/ticket-agent/runs/${encodeURIComponent(identifier)}/stop`,
+    { method: 'POST' },
+  )
+
+/** Pauses or resumes the five-minute intake. Live runs carry on either way. */
+export const setTicketIntake = (getAccessToken: GetAccessToken, paused: boolean) =>
+  request<FactoryRunAccepted>(getAccessToken, '/ticket-agent/intake', {
+    method: 'POST',
+    body: JSON.stringify({ paused }),
+  })
+
+/**
+ * The Linear identifier a pasted value names: `SIM-123`, or a Linear URL with `/issue/SIM-123`.
+ * Mirrors the factory's own parse, which is the one that decides; this only lets the console say
+ * what it understood before sending.
+ */
+export const parseTicketReference = (value: string): string | null => {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  let candidate = trimmed
+  if (trimmed.includes('/')) {
+    try {
+      const url = new URL(trimmed)
+      if (url.protocol !== 'https:' || url.hostname !== 'linear.app') return null
+      const segments = url.pathname.split('/')
+      const index = segments.indexOf('issue')
+      if (index < 0 || index + 1 >= segments.length) return null
+      candidate = segments[index + 1]
+    } catch {
+      return null
+    }
+  }
+  const upper = candidate.toUpperCase()
+  return /^[A-Z][A-Z0-9]{0,15}-[0-9]{1,9}$/.test(upper) ? upper : null
+}
+
 export const fetchRunProgress = (getAccessToken: GetAccessToken, workflowId: string) =>
   request<FactoryRunProgress>(getAccessToken, `/runs/${encodeURIComponent(workflowId)}`)
 
@@ -214,6 +271,12 @@ export interface FactoryFlowDetailItem {
   status: string
   at: string | null
   url: string | null
+  /**
+   * Where the ticket agent stands with this item. A Linear ticket: `with-agent` while the agent
+   * holds it, `stuck` once it handed it back after failing. One of the agent's own runs: `running`
+   * while it is live. Null otherwise; absent from older servers, which reads the same.
+   */
+  agent?: 'with-agent' | 'stuck' | 'running' | null
 }
 
 export interface FactoryFlowDetail {
@@ -221,7 +284,7 @@ export interface FactoryFlowDetail {
   /**
    * The work behind this node, newest first.
    *
-   * Only a node with no list of its own at all (`production`/`build`, or an unrecognised key)
+   * Only a node with no list of its own at all (`production`, or an unrecognised key)
    * reports `[]` unconditionally — there is genuinely nothing this console could ever list there.
    * Every other node distinguishes "could not read this" from "read it and found nothing": a
    * module's Temporal query failing, an artifact node's own reader (`linear`, `pull-request`,
