@@ -3,18 +3,18 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { AlertCircle, Copy, Heart, Highlighter, NotebookPen } from 'lucide-react'
 
-import { useAuth } from '../../../auth/useAuth'
+import { useAuth } from '../../auth/useAuth'
 import {
   createSnippet,
   deleteSnippet,
   fetchSnippetsFor,
   fetchSnippetTags,
   updateSnippet,
-} from '../../../services/snippetsApi'
-import type { ArticleResponse } from '../../../types/news'
-import type { Snippet, TagCount } from '../../../types/snippets'
+} from '../../services/snippetsApi'
+import type { Snippet, TagCount } from '../../types/snippets'
 import { citation, copyText } from './snippetCitation'
 import { SnippetPopover, type SnippetAnchor } from './SnippetPopover'
+import type { SnippetSource } from './snippetSource'
 import {
   caretAt,
   locate,
@@ -27,15 +27,16 @@ import {
   type Quote,
 } from './snippetText'
 
-interface SummarySnippetsProps {
-  article: ArticleResponse
-  /** The rendered summary, which this layer reads and highlights but never changes. */
-  proseRef: RefObject<HTMLDivElement | null>
-  /** The summary's markdown when it is READY, otherwise null: there is nothing to select. */
-  summaryBody: string | null
-  isFavourite: boolean
-  onFavourite: () => void
-  /** Tells the page how many snippets this article now has, for the card's badge. */
+interface SnippetLayerProps {
+  source: SnippetSource
+  /** The rendered text, which this layer reads and highlights but never changes. */
+  proseRef: RefObject<HTMLElement | null>
+  /** The markdown when there is something to select (a READY summary, a post), else null. */
+  body: string | null
+  /** Offered after the first snippet of an article that is not hearted. Omit for no offer. */
+  isFavourite?: boolean
+  onFavourite?: () => void
+  /** Tells the page how many snippets this content now has, for the card's badge. */
   onCountChange?: (contentId: string, count: number) => void
 }
 
@@ -68,18 +69,20 @@ function rangeAnchor(range: Range | null, fallback: Element): SnippetAnchor {
 }
 
 /**
- * Snippets in the summary drawer (spec 054): select a passage to keep it, click a highlight
- * to edit its note and tags, and see everything kept from this article listed under the
- * summary. Rendered only for the site admin; nobody else ever calls the snippets API.
+ * Snippets (spec 054), in the news summary drawer and under a blog post: select a passage to
+ * keep it, click a highlight to edit its note and tags, and see everything kept from it listed
+ * underneath. Rendered only for the site admin; nobody else ever calls the snippets API.
  *
  * Highlights are drawn with the CSS Custom Highlight API, so React's DOM for the summary is
  * never touched. Where the API is missing the marks are skipped and the list still works.
  */
-export function SummarySnippets({
-  article, proseRef, summaryBody, isFavourite, onFavourite, onCountChange,
-}: SummarySnippetsProps) {
+export function SnippetLayer({
+  source, proseRef, body, isFavourite = true, onFavourite, onCountChange,
+}: SnippetLayerProps) {
+  const noun = source.sourceType === 'BLOG' ? 'post' : 'summary'
+  const { sourceType, contentId } = source
   const { getAccessToken } = useAuth()
-  // The load below reads the token through a ref, so it runs once per article rather than
+  // The load below reads the token through a ref, so it runs once per source rather than
   // once per render of a caller whose token function is not stable.
   const tokenRef = useRef(getAccessToken)
   tokenRef.current = getAccessToken
@@ -121,7 +124,7 @@ export function SummarySnippets({
     setOpen(null)
     setNudge(false)
     const token = () => tokenRef.current()
-    fetchSnippetsFor(token, article.id)
+    fetchSnippetsFor(token, contentId, sourceType)
       .then(found => {
         if (cancelled) return
         setSnippets(found)
@@ -137,16 +140,16 @@ export function SummarySnippets({
     return () => {
       cancelled = true
     }
-  }, [article.id])
+  }, [contentId, sourceType])
 
   useEffect(() => {
-    if (loaded) onCountChange?.(article.id, snippets.length)
-  }, [loaded, snippets.length, article.id, onCountChange])
+    if (loaded) onCountChange?.(contentId, snippets.length)
+  }, [loaded, snippets.length, contentId, onCountChange])
 
   // A selection settles before the toolbar appears: `selectionchange` fires for every
   // character a drag passes, and on a phone for every nudge of a handle.
   useEffect(() => {
-    if (!summaryBody) return
+    if (!body) return
     let timer: number | undefined
     const check = () => {
       const prose = proseRef.current
@@ -174,16 +177,17 @@ export function SummarySnippets({
       window.clearTimeout(timer)
       document.removeEventListener('selectionchange', onSelectionChange)
     }
-  }, [summaryBody, proseRef])
+  }, [body, proseRef])
 
-  // The toolbar is fixed to the viewport, so a scroll of the drawer would leave it behind.
+  // The toolbar is fixed to the viewport, so a scroll would leave it behind: the drawer's
+  // body for a summary, the page itself for a post. Scroll does not bubble, so this listens
+  // in the capture phase, which sees both.
   useEffect(() => {
-    const scroller = proseRef.current?.closest('.drawer__body')
-    if (!scroller) return
+    if (!body) return
     const hide = () => setPending(null)
-    scroller.addEventListener('scroll', hide)
-    return () => scroller.removeEventListener('scroll', hide)
-  }, [proseRef, summaryBody])
+    window.addEventListener('scroll', hide, { capture: true, passive: true })
+    return () => window.removeEventListener('scroll', hide, { capture: true })
+  }, [body])
 
   // Below the selection rather than above, so it clears the phone's own copy/paste callout.
   useLayoutEffect(() => {
@@ -203,7 +207,7 @@ export function SummarySnippets({
 
   useEffect(() => {
     const prose = proseRef.current
-    if (!prose || !summaryBody || !supportsHighlights()) return
+    if (!prose || !body || !supportsHighlights()) return
     const text = readProse(prose)
     const groups: Record<(typeof HIGHLIGHTS)[number], Range[]> = {
       snippet: [], 'snippet-focus': [], 'snippet-new': [],
@@ -220,7 +224,7 @@ export function SummarySnippets({
     return () => {
       for (const name of HIGHLIGHTS) CSS.highlights.delete(name)
     }
-  }, [snippets, summaryBody, open?.id, flashId, proseRef])
+  }, [snippets, body, open?.id, flashId, proseRef])
 
   const openSnippet = useCallback((id: string, anchor: SnippetAnchor) => {
     setPending(null)
@@ -231,8 +235,10 @@ export function SummarySnippets({
   // a snippet by where in the text it landed.
   useEffect(() => {
     const prose = proseRef.current
-    if (!prose || !summaryBody) return
+    if (!prose || !body) return
     const onClick = (event: MouseEvent) => {
+      // A link inside a highlight is followed, not mistaken for a click on the snippet.
+      if (event.target instanceof Element && event.target.closest('a')) return
       const selection = document.getSelection()
       if (selection && !selection.isCollapsed) return
       const caret = caretAt(event.clientX, event.clientY)
@@ -250,7 +256,7 @@ export function SummarySnippets({
     }
     prose.addEventListener('click', onClick)
     return () => prose.removeEventListener('click', onClick)
-  }, [proseRef, summaryBody, openSnippet])
+  }, [proseRef, body, openSnippet])
 
   const clearSelection = () => {
     document.getSelection()?.removeAllRanges()
@@ -273,7 +279,8 @@ export function SummarySnippets({
     setBusy(true)
     try {
       const saved = await createSnippet(getAccessToken, {
-        contentId: article.id,
+        sourceType,
+        contentId,
         exact: pending.exact,
         prefix: pending.prefix,
         suffix: pending.suffix,
@@ -284,7 +291,7 @@ export function SummarySnippets({
       setFlashId(saved.id)
       window.clearTimeout(flashTimer.current)
       flashTimer.current = window.setTimeout(() => setFlashId(null), FLASH_MS)
-      if (first && !isFavourite) setNudge(true)
+      if (first && onFavourite && !isFavourite) setNudge(true)
       if (withNote) openSnippet(saved.id, anchor)
       else say('Snippet saved')
     } catch (error) {
@@ -297,12 +304,13 @@ export function SummarySnippets({
   const copyUnsaved = async () => {
     if (!pending) return
     const copied = await copyText(citation({
+      sourceType,
       exact: pending.exact,
-      articleTitle: article.title,
-      sourceName: article.sourceName,
-      author: article.author,
-      originalUrl: article.originalUrl,
-      articlePublishedAt: article.publishedDate,
+      articleTitle: source.title,
+      sourceName: source.sourceName,
+      author: source.author,
+      originalUrl: source.url,
+      articlePublishedAt: source.publishedAt,
     }))
     clearSelection()
     say(copied ? 'Copied with citation (not saved)' : 'Could not copy. Select the text and copy it yourself.')
@@ -335,7 +343,7 @@ export function SummarySnippets({
   // Ordered as they appear in the text; any no longer in it go last, oldest first.
   const ordered = (() => {
     const prose = proseRef.current
-    const text = prose && summaryBody ? readProse(prose).text : ''
+    const text = prose && body ? readProse(prose).text : ''
     return snippets
       .map((snippet, index) => ({ snippet, index, at: text ? locate(text, snippet) : -1 }))
       .sort((a, b) => {
@@ -347,7 +355,7 @@ export function SummarySnippets({
 
   const openSnippetRecord = open ? snippets.find(snippet => snippet.id === open.id) : undefined
 
-  if (!summaryBody && snippets.length === 0 && !loadError) return null
+  if (!body && snippets.length === 0 && !loadError) return null
 
   return (
     <section aria-label="Your snippets" className="summary-snippets">
@@ -358,7 +366,7 @@ export function SummarySnippets({
         <Link className="summary-snippets__all" to="/admin/snippets">All snippets</Link>
       </div>
 
-      {nudge && (
+      {nudge && onFavourite && (
         <div className="summary-snippets__nudge">
           <span>Heart this article too, so it is in your Favourites?</span>
           <span className="summary-snippets__nudge-actions">
@@ -380,7 +388,7 @@ export function SummarySnippets({
 
       {!loadError && snippets.length === 0 && loaded && (
         <p className="summary-snippets__empty">
-          Select any passage in the summary to keep it as a snippet.
+          Select any passage in the {noun} to keep it as a snippet.
         </p>
       )}
 
@@ -403,7 +411,7 @@ export function SummarySnippets({
                 {!snippet.inCurrentSummary && (
                   <span className="summary-snippets__stale">
                     <AlertCircle aria-hidden="true" size={12} />
-                    No longer in the current summary. Your copy is kept.
+                    No longer in the current {noun}. Your copy is kept.
                   </span>
                 )}
               </button>

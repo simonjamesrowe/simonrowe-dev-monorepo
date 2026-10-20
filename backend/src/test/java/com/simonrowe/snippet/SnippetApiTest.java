@@ -71,7 +71,7 @@ class SnippetApiTest extends AbstractIntegrationTest {
 
   @Test
   void keepsPassageWithArticleDetailsTheServerLooksUp() throws Exception {
-    mockMvc.perform(json(post(URL), new CreateSnippetRequest("pr",
+    mockMvc.perform(json(post(URL), new CreateSnippetRequest(null, "pr",
             "engineers should review what it is required to do", "Martin says ", ".\n\nReq",
             " For the review slide ", List.of("Platform Eng Talk", "#platform-eng-talk"))))
         .andExpect(status().isCreated())
@@ -130,10 +130,10 @@ class SnippetApiTest extends AbstractIntegrationTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value(
             "A snippet can be at most 2,000 characters. Select a shorter passage."));
-    mockMvc.perform(json(post(URL), new CreateSnippetRequest("pr",
+    mockMvc.perform(json(post(URL), new CreateSnippetRequest(null, "pr",
             "engineers should", "p".repeat(65), "", null, null)))
         .andExpect(status().isBadRequest());
-    mockMvc.perform(json(post(URL), new CreateSnippetRequest("pr",
+    mockMvc.perform(json(post(URL), new CreateSnippetRequest(null, "pr",
             "engineers should", "", "", "n".repeat(2_001), null)))
         .andExpect(status().isBadRequest());
     assertThat(snippetRepository.count()).isZero();
@@ -290,7 +290,7 @@ class SnippetApiTest extends AbstractIntegrationTest {
   private Snippet keepFor(final String contentId, final String exact, final String note,
       final List<String> tags) throws Exception {
     String response = mockMvc.perform(json(post(URL),
-            new CreateSnippetRequest(contentId, exact, "", "", note, tags)))
+            new CreateSnippetRequest(null, contentId, exact, "", "", note, tags)))
         .andExpect(status().isCreated())
         .andReturn().getResponse().getContentAsString();
     String id = objectMapper.readTree(response).get("id").asString();
@@ -312,7 +312,7 @@ class SnippetApiTest extends AbstractIntegrationTest {
   }
 
   private static CreateSnippetRequest request(final String contentId, final String exact) {
-    return new CreateSnippetRequest(contentId, exact, "", "", null, null);
+    return new CreateSnippetRequest(null, contentId, exact, "", "", null, null);
   }
 
   private static JwtRequestPostProcessor owner() {

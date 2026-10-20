@@ -9,7 +9,24 @@ vi.mock('../../src/services/blogApi', () => ({
   fetchBlogById: vi.fn(),
 }))
 
+// Snippets are the admin's alone: the role is switched per test, and the API is always
+// mocked so an unmocked fetch can never reach the production API the test env points at.
+let isAdmin = false
+
+vi.mock('../../src/auth/useAdminRole', () => ({
+  useAdminRole: () => isAdmin,
+}))
+
+vi.mock('../../src/services/snippetsApi', () => ({
+  fetchSnippetsFor: vi.fn(),
+  fetchSnippetTags: vi.fn(),
+  createSnippet: vi.fn(),
+  updateSnippet: vi.fn(),
+  deleteSnippet: vi.fn(),
+}))
+
 import { fetchBlogById } from '../../src/services/blogApi'
+import { fetchSnippetsFor, fetchSnippetTags } from '../../src/services/snippetsApi'
 
 const blog: BlogDetail = {
   id: 'b-1',
@@ -35,7 +52,31 @@ function renderDetail(path = '/blogs/b-1') {
 
 describe('BlogDetailPage', () => {
   beforeEach(() => {
+    isAdmin = false
     vi.mocked(fetchBlogById).mockReset()
+    vi.mocked(fetchSnippetsFor).mockReset().mockResolvedValue([])
+    vi.mocked(fetchSnippetTags).mockReset().mockResolvedValue([])
+  })
+
+  it('offers the admin snippets of the post, under it', async () => {
+    isAdmin = true
+    vi.mocked(fetchBlogById).mockResolvedValue(blog)
+
+    renderDetail()
+
+    expect(await screen.findByRole('region', { name: 'Your snippets' })).toBeInTheDocument()
+    expect(fetchSnippetsFor).toHaveBeenCalledWith(expect.any(Function), 'b-1', 'BLOG')
+  })
+
+  it('shows anyone else the post as before, without calling the snippets API', async () => {
+    vi.mocked(fetchBlogById).mockResolvedValue(blog)
+
+    renderDetail()
+
+    await screen.findByRole('heading', { level: 1, name: 'Spring Boot Tips' })
+    expect(screen.queryByRole('region', { name: 'Your snippets' })).not.toBeInTheDocument()
+    expect(fetchSnippetsFor).not.toHaveBeenCalled()
+    expect(fetchSnippetTags).not.toHaveBeenCalled()
   })
 
   it('renders loading state initially', () => {

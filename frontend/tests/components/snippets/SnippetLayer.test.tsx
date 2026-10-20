@@ -4,17 +4,20 @@ import { createRef } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { NewsSummaryDrawer } from '../../../../src/components/news/NewsSummaryDrawer'
-import { SummarySnippets } from '../../../../src/components/news/snippets/SummarySnippets'
-import type { ArticleSummaryResponse } from '../../../../src/types/articleSummary'
-import type { ArticleResponse } from '../../../../src/types/news'
-import type { Snippet } from '../../../../src/types/snippets'
+import { MarkdownRenderer } from '../../../src/components/blog/MarkdownRenderer'
+import { NewsSummaryDrawer } from '../../../src/components/news/NewsSummaryDrawer'
+import { SnippetLayer } from '../../../src/components/snippets/SnippetLayer'
+import { postSource, summarySource } from '../../../src/components/snippets/snippetSource'
+import type { ArticleSummaryResponse } from '../../../src/types/articleSummary'
+import type { BlogDetail as BlogDetailType } from '../../../src/types/blog'
+import type { ArticleResponse } from '../../../src/types/news'
+import type { Snippet } from '../../../src/types/snippets'
 
-vi.mock('../../../../src/auth/useAuth', () => ({
+vi.mock('../../../src/auth/useAuth', () => ({
   useAuth: () => ({ getAccessToken: tokenFn }),
 }))
 
-vi.mock('../../../../src/services/snippetsApi', () => ({
+vi.mock('../../../src/services/snippetsApi', () => ({
   fetchSnippetsFor: vi.fn(),
   fetchSnippetTags: vi.fn(),
   createSnippet: vi.fn(),
@@ -30,7 +33,7 @@ import {
   fetchSnippetsFor,
   fetchSnippetTags,
   updateSnippet,
-} from '../../../../src/services/snippetsApi'
+} from '../../../src/services/snippetsApi'
 
 const ARTICLE: ArticleResponse = {
   id: 'pr',
@@ -93,13 +96,13 @@ function renderDrawer({ isFavourite = true } = {}) {
         onToggleFavourite={vi.fn()}
         proseRef={proseRef}
         snippetLayer={(
-          <SummarySnippets
-            article={ARTICLE}
+          <SnippetLayer
+            body={BODY}
             isFavourite={isFavourite}
             onCountChange={onCountChange}
             onFavourite={onFavourite}
             proseRef={proseRef}
-            summaryBody={BODY}
+            source={summarySource(ARTICLE)}
           />
         )}
         summary={READY}
@@ -130,7 +133,7 @@ function select(fragment: string) {
   throw new Error(`"${fragment}" is not in the summary`)
 }
 
-describe('SummarySnippets', () => {
+describe('SnippetLayer in the summary drawer', () => {
   beforeEach(() => {
     vi.mocked(fetchSnippetsFor).mockReset().mockResolvedValue([])
     vi.mocked(fetchSnippetTags).mockReset().mockResolvedValue([{ tag: 'talk', count: 3 }])
@@ -148,7 +151,9 @@ describe('SummarySnippets', () => {
     select('engineers should review')
     await userEvent.click(await screen.findByRole('button', { name: 'Highlight' }))
 
+    expect(fetchSnippetsFor).toHaveBeenCalledWith(expect.any(Function), 'pr', 'ARTICLE_SUMMARY')
     expect(createSnippet).toHaveBeenCalledWith(tokenFn, {
+      sourceType: 'ARTICLE_SUMMARY',
       contentId: 'pr',
       exact: 'engineers should review',
       prefix: 'Martin says ',
@@ -207,12 +212,12 @@ describe('SummarySnippets', () => {
     render(
       <MemoryRouter>
         <div className="news-summary__prose" ref={el => { proseHolder.current = el }}><p>{long}</p></div>
-        <SummarySnippets
-          article={ARTICLE}
+        <SnippetLayer
+          body={long}
           isFavourite
           onFavourite={vi.fn()}
           proseRef={proseHolder}
-          summaryBody={long}
+          source={summarySource(ARTICLE)}
         />
       </MemoryRouter>,
     )
@@ -285,3 +290,100 @@ describe('SummarySnippets', () => {
 })
 
 const proseHolder: { current: HTMLDivElement | null } = { current: null }
+
+const POST: BlogDetailType = {
+  id: 'b-1',
+  title: 'Measuring Engineering',
+  shortDescription: 'About measuring',
+  content: 'Most teams **measure the wrong thing**.\n\n| Metric | Why |\n| --- | --- |\n'
+    + '| Lines of code | It rewards volume |\n\nVerification is the bottleneck now.',
+  featuredImageUrl: null,
+  createdDate: '2024-06-01T10:00:00Z',
+  tags: [],
+  skills: [],
+  contentType: 'ENGINEERING',
+}
+
+/** The post rendered as the blog page renders it (BlogDetail's own wiring is tested there). */
+function renderPost() {
+  const proseRef = createRef<HTMLDivElement>()
+  render(
+    <MemoryRouter>
+      <div className="blog-detail__content" ref={proseRef}>
+        <MarkdownRenderer content={POST.content} />
+      </div>
+      <SnippetLayer body={POST.content} proseRef={proseRef} source={postSource(POST)} />
+    </MemoryRouter>,
+  )
+}
+
+/** Selects from the start of one fragment to the end of another, across blocks. */
+function selectAcross(from: string, to: string) {
+  const prose = document.querySelector('.blog-detail__content') as HTMLElement
+  const nodes: Text[] = []
+  const walker = document.createTreeWalker(prose, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node as Text)
+  const start = nodes.find(node => node.data.includes(from))!
+  const end = nodes.find(node => node.data.includes(to))!
+  const range = document.createRange()
+  range.setStart(start, start.data.indexOf(from))
+  range.setEnd(end, end.data.indexOf(to) + to.length)
+  const selection = document.getSelection()!
+  selection.removeAllRanges()
+  selection.addRange(range)
+  act(() => { document.dispatchEvent(new Event('selectionchange')) })
+}
+
+describe('SnippetLayer under a blog post', () => {
+  beforeEach(() => {
+    vi.mocked(fetchSnippetsFor).mockReset().mockResolvedValue([])
+    vi.mocked(fetchSnippetTags).mockReset().mockResolvedValue([])
+    vi.mocked(createSnippet).mockReset()
+  })
+
+  it('keeps a passage across a table as a post snippet, with no offer to heart anything', async () => {
+    vi.mocked(createSnippet).mockResolvedValue(snippet({
+      id: 'new', sourceType: 'BLOG', contentId: 'b-1', exact: 'Lines of code', note: '', tags: [],
+    }))
+    renderPost()
+    await screen.findByText('Select any passage in the post to keep it as a snippet.')
+    expect(fetchSnippetsFor).toHaveBeenCalledWith(expect.any(Function), 'b-1', 'BLOG')
+
+    selectAcross('Lines of code', 'It rewards')
+    await userEvent.click(await screen.findByRole('button', { name: 'Highlight' }))
+
+    // Table cells are blocks, as the server reads them, so the quote keeps them apart.
+    expect(createSnippet).toHaveBeenCalledWith(tokenFn, expect.objectContaining({
+      sourceType: 'BLOG',
+      contentId: 'b-1',
+      exact: 'Lines of code\n\nIt rewards',
+    }))
+    expect(await screen.findByText('Snippet saved')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Heart it' })).not.toBeInTheDocument()
+  })
+
+  it('cites a copied passage as the post, not as an AI summary', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+    renderPost()
+    await screen.findByText('Select any passage in the post to keep it as a snippet.')
+
+    selectAcross('Verification', 'bottleneck')
+    await userEvent.click(await screen.findByRole('button', { name: 'Copy with citation' }))
+
+    expect(writeText).toHaveBeenCalledWith(
+      '> Verification is the bottleneck\n\n'
+      + '— Simon Rowe, "Measuring Engineering" (simonrowe.dev, 1 Jun 2024)\n'
+      + `  ${window.location.origin}/blogs/b-1`)
+  })
+
+  it('says a kept passage is no longer in the post once it is edited', async () => {
+    vi.mocked(fetchSnippetsFor).mockResolvedValue([snippet({
+      sourceType: 'BLOG', contentId: 'b-1', exact: 'An older sentence.', inCurrentSummary: false,
+    })])
+    renderPost()
+
+    expect(await screen.findByText('No longer in the current post. Your copy is kept.'))
+      .toBeInTheDocument()
+  })
+})

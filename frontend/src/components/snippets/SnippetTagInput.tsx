@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 import { X } from 'lucide-react'
 
-import type { TagCount } from '../../../types/snippets'
+import type { TagCount } from '../../types/snippets'
 import { normaliseTag } from './snippetCitation'
 
 interface SnippetTagInputProps {

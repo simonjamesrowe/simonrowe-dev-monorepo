@@ -8,7 +8,7 @@ import java.util.List;
  *
  * @param id the snippet id
  * @param sourceType what it was taken from
- * @param contentId the aggregated article id
+ * @param contentId the aggregated article id, or the blog id
  * @param exact the quote
  * @param prefix the text before it
  * @param suffix the text after it
@@ -21,8 +21,10 @@ import java.util.List;
  * @param articlePublishedAt when the article was published, may be null
  * @param createdAt when the snippet was kept
  * @param updatedAt when its note or tags last changed
- * @param inCurrentSummary whether the article's current summary still contains the quote
- * @param articleAvailable whether the article can still be opened on the news page
+ * @param inCurrentSummary whether the article's current summary, or the post as it reads now,
+ *     still contains the quote
+ * @param articleAvailable whether the article can still be opened on the news page, or the
+ *     post is still published
  */
 public record SnippetResponse(
     String id,

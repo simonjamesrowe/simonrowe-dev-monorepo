@@ -173,6 +173,27 @@ describe('SnippetsAdmin', () => {
     expect(screen.getByRole('button', { name: /Open summary/ })).toBeDisabled()
   })
 
+  it('links a post snippet back to the post and cites it as the post', async () => {
+    vi.mocked(searchSnippets).mockResolvedValue(page([
+      snippet('post', {
+        sourceType: 'BLOG', contentId: 'b-1', articleTitle: 'Measuring Engineering',
+        sourceName: 'simonrowe.dev', author: 'Simon Rowe', inCurrentSummary: false,
+      }),
+      snippet('draft', { sourceType: 'BLOG', contentId: 'b-2', articleAvailable: false }),
+    ]))
+    renderPage()
+
+    expect(await screen.findByText('not in current post')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('Quote post'))
+    const panel = screen.getByRole('complementary', { name: 'Snippet details' })
+    expect(within(panel).getByRole('link', { name: /Open post/ })).toHaveAttribute('href', '/blogs/b-1')
+    expect(within(panel).getByText(/^From/)).toBeInTheDocument()
+    expect(within(panel).queryByText(/AI summary of/)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('Quote draft'))
+    expect(screen.getByRole('button', { name: /Open post/ })).toBeDisabled()
+  })
+
   it('deletes only after the delete is confirmed', async () => {
     vi.mocked(deleteSnippet).mockResolvedValue(undefined)
     renderPage()

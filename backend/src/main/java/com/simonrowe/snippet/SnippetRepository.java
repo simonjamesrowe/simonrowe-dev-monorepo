@@ -5,5 +5,6 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface SnippetRepository extends MongoRepository<Snippet, String> {
 
-  List<Snippet> findByContentIdOrderByCreatedAtAsc(String contentId);
+  List<Snippet> findBySourceTypeAndContentIdOrderByCreatedAtAsc(
+      SnippetSourceType sourceType, String contentId);
 }

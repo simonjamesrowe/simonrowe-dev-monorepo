@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  BookOpen,
   ChevronDown,
   Copy,
   Download,
@@ -13,13 +14,13 @@ import {
 } from 'lucide-react'
 
 import { useAuth } from '../../auth/useAuth'
-import { SnippetTagInput } from '../../components/news/snippets/SnippetTagInput'
+import { SnippetTagInput } from '../../components/snippets/SnippetTagInput'
 import {
   citation,
   copyText,
   exportMarkdown,
   formatCitationDate,
-} from '../../components/news/snippets/snippetCitation'
+} from '../../components/snippets/snippetCitation'
 import {
   deleteSnippet,
   fetchSnippetSources,
@@ -87,7 +88,8 @@ function downloadMarkdown(markdown: string) {
 }
 
 /**
- * Every passage kept from a news summary (spec 054), searchable and ready to copy into a talk.
+ * Every passage kept from a news summary or a blog post (spec 054), searchable and ready to
+ * copy into a talk.
  *
  * Bulk actions only ever touch snippets that are on screen: the selection is intersected with
  * what the current filters show, so changing a filter never copies something hidden.
@@ -244,8 +246,8 @@ export function SnippetsAdmin() {
           </h1>
         </div>
         <p className="snippets-admin__intro">
-          Passages kept from news summaries. Only you can see these. Select text in any summary
-          on News &amp; Events to add one.
+          Passages kept from news summaries and blog posts. Only you can see these. Select text
+          in any summary on News &amp; Events, or in any post on the blog, to add one.
         </p>
 
         <div className="snippets-admin__filters">
@@ -341,7 +343,7 @@ export function SnippetsAdmin() {
             ) : (
               <p>
                 No snippets yet. Open a summary on <Link to="/news-events">News &amp; Events</Link>
-                {' '}and select a passage to keep it.
+                {' '}or a post on the <Link to="/blogs">blog</Link>, and select a passage to keep it.
               </p>
             )}
           </div>
@@ -377,9 +379,11 @@ export function SnippetsAdmin() {
                   {!snippet.inCurrentSummary && (
                     <span
                       className="snippets-admin__stale"
-                      title="The summary was regenerated and this text is no longer in it. Your copy is kept."
+                      title={snippet.sourceType === 'BLOG'
+                        ? 'The post was edited and this text is no longer in it. Your copy is kept.'
+                        : 'The summary was regenerated and this text is no longer in it. Your copy is kept.'}
                     >
-                      not in current summary
+                      {snippet.sourceType === 'BLOG' ? 'not in current post' : 'not in current summary'}
                     </span>
                   )}
                   {snippet.tags.length > 0 && (
@@ -427,8 +431,8 @@ export function SnippetsAdmin() {
           <>
             <h2 className="snippets-admin__detail-title">Snippet</h2>
             <p className="snippets-admin__detail-empty">
-              Pick a snippet to edit its note and tags, copy it, or go back to the summary it came
-              from. Tick several and use Copy as Markdown to drop a talk&apos;s reading list into
+              Pick a snippet to edit its note and tags, copy it, or go back to the summary or post
+              it came from. Tick several and use Copy as Markdown to drop a talk&apos;s reading list into
               your notes.
             </p>
           </>
@@ -485,6 +489,11 @@ function SnippetDetail({ snippet, suggestions, onSave, onDelete, onCopy }: Snipp
   const details = [snippet.author, snippet.sourceName, formatCitationDate(snippet.articlePublishedAt)]
     .filter(Boolean)
     .join(' · ')
+  const post = snippet.sourceType === 'BLOG'
+  const openLabel = post ? 'Open post' : 'Open summary'
+  const openPath = post
+    ? `/blogs/${encodeURIComponent(snippet.contentId)}`
+    : `/news-events?article=${encodeURIComponent(snippet.contentId)}`
 
   const run = async (action: () => Promise<void>) => {
     setSaving(true)
@@ -513,11 +522,11 @@ function SnippetDetail({ snippet, suggestions, onSave, onDelete, onCopy }: Snipp
       />
       <SnippetTagInput onChange={setTags} suggestions={suggestions} tags={tags} />
       <div className="snippets-admin__citation">
-        AI summary of <strong>{snippet.articleTitle}</strong>
+        {post ? 'From' : 'AI summary of'} <strong>{snippet.articleTitle}</strong>
         {details && <><br />{details}</>}
         <br />
         <a href={snippet.originalUrl} rel="noopener noreferrer" target="_blank">
-          Original article <ExternalLink aria-hidden="true" size={12} />
+          {post ? 'The post' : 'Original article'} <ExternalLink aria-hidden="true" size={12} />
         </a>
       </div>
       {failure && <p className="error" role="alert">{failure}</p>}
@@ -534,20 +543,21 @@ function SnippetDetail({ snippet, suggestions, onSave, onDelete, onCopy }: Snipp
           <Copy aria-hidden="true" size={14} /> Copy
         </button>
         {snippet.articleAvailable ? (
-          <Link
-            className="button button--secondary"
-            to={`/news-events?article=${encodeURIComponent(snippet.contentId)}`}
-          >
-            <Sparkles aria-hidden="true" size={14} /> Open summary
+          <Link className="button button--secondary" to={openPath}>
+            {post ? <BookOpen aria-hidden="true" size={14} /> : <Sparkles aria-hidden="true" size={14} />}
+            {' '}{openLabel}
           </Link>
         ) : (
           <button
             className="button button--secondary"
             disabled
-            title="The article is no longer on the site. The snippet and its citation are kept."
+            title={post
+              ? 'The post is not published. The snippet and its citation are kept.'
+              : 'The article is no longer on the site. The snippet and its citation are kept.'}
             type="button"
           >
-            <Sparkles aria-hidden="true" size={14} /> Open summary
+            {post ? <BookOpen aria-hidden="true" size={14} /> : <Sparkles aria-hidden="true" size={14} />}
+            {' '}{openLabel}
           </button>
         )}
         <button

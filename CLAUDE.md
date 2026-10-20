@@ -275,6 +275,34 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- blog-snippets: **Snippets now work on blog posts too**, not just news summaries: the admin
+  selects text in any post at `/blogs/:id` and keeps it, and it lands in `/admin/snippets`
+  beside the summary ones. `SnippetSourceType.BLOG`, `contentId` = blog id, no migration (spec 054
+  §11). Load-bearing bits:
+  - **A post quote is checked against the post as the blog page renders it**
+    (`SnippetText.renderedPostText`), not as a summary renders. The blog page runs `remark-gfm` and
+    `rehype-raw`, so the server parses with the commonmark GFM tables and strikethrough
+    extensions, reads raw HTML's visible text with jsoup, treats a table cell as a block, and
+    leaves out image alt text and Mermaid source (neither is selectable text on the page). The
+    browser side (`snippetText.ts`) skips text under `svg`, `style` and `script` to match.
+    Without these, a quote across a table or an image is a 422. Checked on 12 production posts
+    (every table, image and iframe post): the browser's text and the server's were identical.
+    A quote across a GFM footnote marker would still be refused; no post uses one.
+  - **Lookups are by `sourceType` and `contentId`**: `GET …/snippets?contentId=&sourceType=` and
+    `/counts?sourceType=` default to `ARTICLE_SUMMARY`, and `CreateSnippetRequest.sourceType`
+    defaults to it when omitted, so an article and a post never see each other's snippets.
+    `withState` reads posts through a projection (`PostText`), because loading whole `Blog`s
+    resolves every tag and skill `@DBRef`.
+  - **A post is cited as Simon's writing, never as an AI summary**: `— Simon Rowe, "Title"
+    (simonrowe.dev, date)` and the post's `/blogs/<id>` address (not its share link, which counts
+    clicks). Weekly digests are cited the same way: they are published in his voice. The `.md`
+    export says quotes are AI-written only when some are. The `article*` fields keep their names
+    and hold the post's details; `summaryId` is null.
+  - **The snippet components moved to `components/snippets/`**, and `SummarySnippets` became
+    `SnippetLayer`, which takes a `SnippetSource` (`summarySource`/`postSource`). `BlogDetail`
+    gets the same `snippetLayer`/`proseRef` slots as the news drawer. **Tests that render the
+    blog detail page must mock `services/snippetsApi`** (and `auth/useAdminRole` to switch role).
+  - Drafts can be quoted (only the admin can); the console then shows "Open post" disabled.
 - 056-factory-ticket-agent: **The software factory picks up Linear tickets a person labels
   `factory:agent`, makes the change and opens a pull request** (`com.simonrowe.factory.ticketagent`,
   queue `ticket-agent`, software-factory only). Load-bearing bits:

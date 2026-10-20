@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, Copy, Trash2 } from 'lucide-react'
 
-import type { Snippet, TagCount } from '../../../types/snippets'
+import type { Snippet, TagCount } from '../../types/snippets'
 import { SnippetTagInput } from './SnippetTagInput'
 
 export interface SnippetAnchor {
