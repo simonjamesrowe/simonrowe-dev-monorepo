@@ -109,5 +109,8 @@ container with a missing poller cannot execute the scan.
   `linear_issues` Mongo record.
 - No scheduled run: inspect `cve-fix-daily` in Temporal and confirm whether an operator paused it.
 
-Do not repair findings with an ad-hoc factory command. The planned Linear-to-repair workflow is a
-separate future feature.
+A person can approve a scoped repair through the [ticket agent](ticket-agent.md): inspect a
+**Dry run ticket**, then add `factory:agent` or use **Start agent**. The scan itself never grants
+that approval. Build and dependency edits always carry `no-auto-merge` and require a human merge.
+Backend version edits need no lockfile; npm repairs still come back to a person because the agent
+cannot regenerate `package-lock.json`. Do not repair findings with an ad-hoc factory command.
