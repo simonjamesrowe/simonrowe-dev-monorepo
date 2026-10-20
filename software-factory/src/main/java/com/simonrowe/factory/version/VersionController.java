@@ -1,5 +1,6 @@
 package com.simonrowe.factory.version;
 
+import java.time.DateTimeException;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,7 +78,15 @@ public class VersionController {
       return null;
     }
     // The Gradle task writes 0 when git was unavailable, to keep the output deterministic.
-    return epochSeconds == 0L ? null : Instant.ofEpochSecond(epochSeconds);
+    if (epochSeconds == 0L) {
+      return null;
+    }
+    try {
+      return Instant.ofEpochSecond(epochSeconds);
+    } catch (final DateTimeException e) {
+      LOG.warn("Out-of-range commitTime in build-info.properties: {}", value, e);
+      return null;
+    }
   }
 
   private String property(final String key) {
