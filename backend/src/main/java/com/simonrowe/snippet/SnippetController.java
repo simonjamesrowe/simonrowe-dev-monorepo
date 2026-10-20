@@ -25,9 +25,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Snippets kept from news summaries (spec 054). Private to the site owner: everything is under
- * {@code /api/admin}, which {@code SecurityConfig} limits to the admin role, so nothing here is
- * ever served to a visitor, unlike favourites.
+ * Snippets kept from news summaries and blog posts (spec 054). Private to the site owner:
+ * everything is under {@code /api/admin}, which {@code SecurityConfig} limits to the admin
+ * role, so nothing here is ever served to a visitor, unlike favourites.
  */
 @RestController
 @RequestMapping("/api/admin/snippets")
@@ -41,14 +41,18 @@ public class SnippetController {
   }
 
   /**
-   * One article's snippets, all of them, for the summary drawer.
+   * One article's or post's snippets, all of them, for the summary drawer or the post page.
    *
-   * @param contentId the aggregated article id
+   * @param contentId the aggregated article id, or the blog id
+   * @param sourceType what the content is; an article summary when omitted
    * @return the snippets, oldest first
    */
   @GetMapping(params = "contentId")
-  public List<SnippetResponse> forContent(@RequestParam final String contentId) {
-    return snippetService.forContent(contentId);
+  public List<SnippetResponse> forContent(
+      @RequestParam final String contentId,
+      @RequestParam(defaultValue = "ARTICLE_SUMMARY") final SnippetSourceType sourceType
+  ) {
+    return snippetService.forContent(sourceType, contentId);
   }
 
   /**
@@ -87,11 +91,14 @@ public class SnippetController {
   /**
    * How many snippets each article has, for the badges on the news cards.
    *
-   * @return article id to count, only articles with at least one
+   * @param sourceType which kind of content to count; article summaries when omitted
+   * @return content id to count, only content with at least one
    */
   @GetMapping("/counts")
-  public Map<String, Long> counts() {
-    return snippetService.countsByContent();
+  public Map<String, Long> counts(
+      @RequestParam(defaultValue = "ARTICLE_SUMMARY") final SnippetSourceType sourceType
+  ) {
+    return snippetService.countsByContent(sourceType);
   }
 
   /**
@@ -105,7 +112,7 @@ public class SnippetController {
   }
 
   /**
-   * Every publisher a snippet came from.
+   * Every publisher a snippet came from, {@code simonrowe.dev} for blog posts.
    *
    * @return the source names
    */

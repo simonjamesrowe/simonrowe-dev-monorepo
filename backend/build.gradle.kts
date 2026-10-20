@@ -270,6 +270,10 @@ dependencies {
     // openpdf above WRITES pdfs; it cannot read text out of one.
     implementation(libs.pdfbox)
     implementation(libs.commonmark)
+    // Blog snippets check a quote against the post as the blog page renders it, and that
+    // renderer runs remark-gfm: without these a table or ~~strike~~ reads differently.
+    implementation(libs.commonmark.ext.gfm.tables)
+    implementation(libs.commonmark.ext.gfm.strikethrough)
     implementation(libs.spring.boot.starter.mail)
     implementation(libs.spring.ai.starter.model.openai)
     implementation(libs.spring.ai.starter.mcp.server.webmvc)

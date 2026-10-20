@@ -69,6 +69,40 @@ class SnippetTextTest {
         .isEqualTo("Heading First. Quoted. Last.");
   }
 
+  /**
+   * A post is read as the blog page renders it: GFM tables and strikethrough, raw HTML's
+   * visible text, and nothing for an image's alt text or a Mermaid diagram's source.
+   */
+  @Test
+  void rendersPostAsTheBlogPageShowsIt() {
+    String post = """
+        Intro **bold**.
+
+        ![alt words](/uploads/x.png)
+
+        | A | B |
+        | --- | --- |
+        | one | ~~two~~ |
+
+        <details><summary>More</summary></details>
+
+        ```mermaid
+        graph TD; X-->Y
+        ```
+
+        ```java
+        int x = 1;
+        ```
+        """;
+
+    assertThat(SnippetText.renderedPostText(post))
+        .isEqualTo("Intro bold. A B one two More int x = 1;");
+    assertThat(SnippetText.postContains(post, "one\n\ntwo")).isTrue();
+    assertThat(SnippetText.postContains(post, "alt words")).isFalse();
+    assertThat(SnippetText.postContains(post, "graph TD")).isFalse();
+    assertThat(SnippetText.postContains(null, "anything")).isFalse();
+  }
+
   @ParameterizedTest(name = "\"{0}\" -> \"{1}\"")
   @CsvSource(delimiter = '|', textBlock = """
       Platform Eng Talk     | platform-eng-talk

@@ -231,8 +231,8 @@ popover, "Your snippets", card badges) and Admin → Snippets.
 * A private MCP tool (`/api/snippets/mcp`, personal tokens, the same approach as the meals MCP
   server, **never** a `ToolCallbackProvider` bean) so Claude Code can pull a tag's snippets while
   drafting a deck or a blog post.
-* Snippets from blog posts and Term Time documents (the `sourceType` field already allows for
-  it).
+* Snippets from Term Time documents (the `sourceType` field already allows for it). Blog posts
+  are done: see §11.
 * An **Export as slides** option that builds a `.pptx` of one quote per slide with its citation.
 * Notes on a whole article rather than a passage (Q4).
 
@@ -244,3 +244,33 @@ popover, "Your snippets", card badges) and Admin → Snippets.
 * **Q2. "Copy with citation" in the drawer copies without saving.** It says so ("not saved").
 * **Q3. No highlight colours.** Tags do the same job and can be searched.
 * **Q4. Notes on a whole article: not built.** Listed under §9 for later.
+
+## 11. Snippets from blog posts
+
+Built after the first pull request. The admin selects text in any post at `/blogs/:id`, with the
+same toolbar, highlights, popover and "Your snippets" list, placed under the post. Everyone else
+gets the post unchanged, and the snippets API is never called for them.
+
+* **`sourceType: BLOG`, `contentId` = the blog id.** No migration: existing rows are all
+  `ARTICLE_SUMMARY`, and every lookup (`?contentId=`, `/counts`) now takes a `sourceType` that
+  defaults to it, as does `POST` when the field is omitted.
+* **The quote is checked against the post as the blog page renders it.** That page runs
+  `remark-gfm` and `rehype-raw`, so the server parses posts with the GFM tables and strikethrough
+  extensions, reads raw HTML's visible text, treats a table cell as a block, and skips image alt
+  text and Mermaid source. The browser skips text inside `svg`, `style` and `script`, so a
+  diagram's labels are not prose either. Across the 64 posts in production on 2026-10-20: 6 have
+  tables and 26 images, none uses a footnote, and the only raw HTML outside a code block is
+  three YouTube iframes. For 12 of them (all nine with a table or an iframe, and three plain
+  ones), the whole post's text as Chromium read it with `snippetText.ts` was identical to the
+  server's rendering, so any selection in them passes the check. A quote across a GFM footnote
+  marker would be refused, since the marker reads differently on each side.
+* **Citation:** `— Simon Rowe, "Title" (simonrowe.dev, 1 Jun 2024)` and the post's own address.
+  It is the site's own writing, so there is no "AI summary of". Weekly digests are cited the
+  same way, because they are published in Simon's voice. The `.md` export notes AI-written quotes
+  only when the selection contains summary snippets.
+* **Console:** a post snippet's panel says "From" rather than "AI summary of", links "Open post"
+  (disabled for a draft), and its stale marker reads "not in current post". The source filter
+  already separates them: posts are `simonrowe.dev`.
+* Drafts can be quoted, since only the author can get there.
+* Not built: snippet count badges on blog cards.
+

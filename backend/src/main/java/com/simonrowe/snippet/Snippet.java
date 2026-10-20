@@ -6,23 +6,26 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 /**
- * A passage the site owner kept from an AI summary, with an optional note and tags (spec 054).
+ * A passage the site owner kept from an AI summary or a blog post, with an optional note and
+ * tags (spec 054).
  *
  * <p><b>The quote is a copy, not only a pointer.</b> {@code exact} holds the text itself, so a
- * snippet still reads correctly after its summary is regenerated, the article is pruned or
- * the summary format version changes, and it is what goes into a slide. {@code prefix} and
- * {@code suffix} are only there to find the passage again in the rendered summary, which is
- * done by matching text, never by character offsets.
+ * snippet still reads correctly after its summary is regenerated, the article is pruned, the
+ * summary format version changes or the post is edited, and it is what goes into a slide.
+ * {@code prefix} and {@code suffix} are only there to find the passage again in the rendered
+ * text, which is done by matching text, never by character offsets.
  *
- * <p>The article fields are copied in when the snippet is made, so the citation survives the
- * article and the console can search one collection with no join.
+ * <p>The source's details are copied in when the snippet is made, so the citation survives
+ * the source and the console can search one collection with no join. The {@code article*}
+ * fields keep their names for a blog post too: they hold the post's title, the site as the
+ * source, Simon as the author, the post's address and its date.
  *
  * <p>Indexes are created by {@code V061CreateSnippets}: {@code auto-index-creation} is off.
  *
  * @param id generated id
  * @param sourceType what kind of content the passage came from
- * @param contentId the aggregated article id
- * @param summaryId the summary the passage was taken from
+ * @param contentId the aggregated article id, or the blog id for {@link SnippetSourceType#BLOG}
+ * @param summaryId the summary the passage was taken from; null for a blog post
  * @param exact the quote, as rendered text
  * @param prefix up to {@link SnippetText#CONTEXT_LENGTH} characters before it
  * @param suffix up to {@link SnippetText#CONTEXT_LENGTH} characters after it

@@ -1,3 +1,5 @@
+import type { ReactNode, RefObject } from 'react'
+
 import type { BlogDetail as BlogDetailType } from '../../types/blog'
 import { formatDate } from '../../utils/dateFormat'
 import { ShareButton } from '../common/ShareButton'
@@ -8,9 +10,15 @@ const PLACEHOLDER_IMAGE = '/images/blogs/placeholder.svg'
 
 interface BlogDetailProps {
   blog: BlogDetailType
+  /**
+   * Slot for the admin's snippets (spec 054), rendered under the post. Like the news drawer,
+   * this knows nothing about snippets: it only hands over the rendered post through `proseRef`.
+   */
+  snippetLayer?: ReactNode
+  proseRef?: RefObject<HTMLDivElement | null>
 }
 
-export function BlogDetail({ blog }: BlogDetailProps) {
+export function BlogDetail({ blog, snippetLayer, proseRef }: BlogDetailProps) {
   const imageUrl = blog.featuredImageUrl ?? PLACEHOLDER_IMAGE
   const formattedDate = formatDate(blog.createdDate)
 
@@ -64,9 +72,10 @@ export function BlogDetail({ blog }: BlogDetailProps) {
           </div>
         )}
       </div>
-      <div className="blog-detail__content">
+      <div className="blog-detail__content" ref={proseRef}>
         <MarkdownRenderer content={blog.content} />
       </div>
+      {snippetLayer}
     </article>
   )
 }

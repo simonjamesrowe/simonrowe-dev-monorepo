@@ -12,8 +12,9 @@ import { NewsFilterBar } from '../components/news/NewsFilterBar'
 import { NewsSummaryDrawer } from '../components/news/NewsSummaryDrawer'
 import { SummaryNarration } from '../components/news/SummaryNarration'
 import { SummaryButton } from '../components/news/SummaryButton'
-import { SnippetCountBadge } from '../components/news/snippets/SnippetCountBadge'
-import { SummarySnippets } from '../components/news/snippets/SummarySnippets'
+import { SnippetCountBadge } from '../components/snippets/SnippetCountBadge'
+import { SnippetLayer } from '../components/snippets/SnippetLayer'
+import { summarySource } from '../components/snippets/snippetSource'
 import { track } from '../analytics/analytics'
 import { useAdminRole } from '../auth/useAdminRole'
 import { useArticleSummaries } from '../hooks/useArticleSummaries'
@@ -765,8 +766,8 @@ export function NewsEventsPage() {
           onToggleFavourite={() => void newsFavourites.toggleFavourite(summaryArticle.id)}
           proseRef={summaryProseRef}
           snippetLayer={isAdmin ? (
-            <SummarySnippets
-              article={summaryArticle}
+            <SnippetLayer
+              body={readySummaryBody(summaries.summaryFor(summaryArticle.id))}
               isFavourite={newsFavourites.isFavourite(summaryArticle.id)}
               onCountChange={snippetCounts.setCount}
               onFavourite={() => {
@@ -775,7 +776,7 @@ export function NewsEventsPage() {
                 }
               }}
               proseRef={summaryProseRef}
-              summaryBody={readySummaryBody(summaries.summaryFor(summaryArticle.id))}
+              source={summarySource(summaryArticle)}
             />
           ) : undefined}
           summary={summaries.summaryFor(summaryArticle.id)}

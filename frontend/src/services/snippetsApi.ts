@@ -10,6 +10,7 @@ import type {
   Snippet,
   SnippetPage,
   SnippetQuery,
+  SnippetSourceType,
   TagCount,
 } from '../types/snippets'
 
@@ -23,13 +24,14 @@ function jsonBody(data: unknown, method: string): RequestInit {
   }
 }
 
-/** Every snippet kept from one article, oldest first. */
+/** Every snippet kept from one article or post, oldest first. */
 export async function fetchSnippetsFor(
   getAccessToken: GetAccessToken,
   contentId: string,
+  sourceType: SnippetSourceType = 'ARTICLE_SUMMARY',
 ): Promise<Snippet[]> {
   const token = await getAccessToken()
-  const params = new URLSearchParams({ contentId })
+  const params = new URLSearchParams({ contentId, sourceType })
   return handleResponse<Snippet[]>(await authFetch(`${SNIPPETS_URL}?${params}`, token))
 }
 

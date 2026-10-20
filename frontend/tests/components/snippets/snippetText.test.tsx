@@ -9,7 +9,7 @@ import {
   quoteFromRange,
   rangeFor,
   readProse,
-} from '../../../../src/components/news/snippets/snippetText'
+} from '../../../src/components/snippets/snippetText'
 
 const BODY = [
   'Martin says engineers should **review what it is required** to do.',
@@ -56,6 +56,21 @@ function rangeBetween(root: Node, from: string, to: string): Range {
 }
 
 describe('readProse', () => {
+  it('leaves out a diagram\'s labels and other text a reader cannot select as prose', () => {
+    const { container } = render(
+      <div>
+        <p>Before the diagram.</p>
+        <div className="mermaid-diagram">
+          <svg><text>Node A</text><foreignObject><div><span>Label</span></div></foreignObject></svg>
+        </div>
+        <style>{'.x { color: red }'}</style>
+        <p>After it.</p>
+      </div>,
+    )
+
+    expect(readProse(container.firstElementChild!).text).toBe('Before the diagram.\n\nAfter it.')
+  })
+
   it('joins blocks with a blank line and drops the markup between them', () => {
     const { prose } = renderSummary()
 

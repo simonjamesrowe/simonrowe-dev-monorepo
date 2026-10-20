@@ -1,5 +1,5 @@
 /**
- * The rendered summary as one string, and the way between that string and the DOM.
+ * The rendered summary or post as one string, and the way between that string and the DOM.
  *
  * A snippet is stored as text (`exact`, plus a little `prefix` and `suffix`) and found again by
  * searching for that text, never by character offsets, so it survives the summary being
@@ -18,6 +18,12 @@ const BLOCK_TAGS = new Set([
 ])
 /** Containers whose whitespace-only text is markup layout, not words a reader sees. */
 const LAYOUT_PARENTS = new Set(['UL', 'OL', 'BLOCKQUOTE', 'TABLE', 'THEAD', 'TBODY', 'TR'])
+/**
+ * Text that is in the DOM but is not prose a reader selects: a post's Mermaid diagram is an
+ * SVG whose labels are text nodes, and raw HTML can carry a style or script element. The server
+ * leaves the same things out when it checks a quote.
+ */
+const NOT_PROSE = 'svg, style, script'
 
 interface Segment {
   node: Text
@@ -48,6 +54,10 @@ function blockOf(node: Node, root: Element): Element | null {
   return null
 }
 
+function isNotProse(node: Text): boolean {
+  return node.parentElement?.closest(NOT_PROSE) != null
+}
+
 function isLayoutWhitespace(node: Text, root: Element): boolean {
   if (node.data.trim() !== '') return false
   const parent = node.parentElement
@@ -66,7 +76,9 @@ export function readProse(root: Element): ProseText {
   const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const textNode = node as Text
-    if (textNode.data.length === 0 || isLayoutWhitespace(textNode, root)) continue
+    if (textNode.data.length === 0 || isLayoutWhitespace(textNode, root) || isNotProse(textNode)) {
+      continue
+    }
     const block = blockOf(textNode, root)
     if (segments.length > 0 && block !== lastBlock) text += '\n\n'
     const start = text.length

@@ -1,7 +1,14 @@
-/** A passage kept from an AI summary (spec 054). Only the site admin ever sees these. */
+/** What a snippet is taken from: an article's AI summary, or one of the site's own posts. */
+export type SnippetSourceType = 'ARTICLE_SUMMARY' | 'BLOG'
+
+/**
+ * A passage kept from an AI summary or a blog post (spec 054). Only the site admin ever sees
+ * these. For a post the `article*` fields hold the post's title, address and date.
+ */
 export interface Snippet {
   id: string
-  sourceType: 'ARTICLE_SUMMARY'
+  sourceType: SnippetSourceType
+  /** The aggregated article id, or the blog id. */
   contentId: string
   /** The quote itself, as rendered text. Paragraph breaks are kept as a blank line. */
   exact: string
@@ -18,13 +25,17 @@ export interface Snippet {
   articlePublishedAt: string | null
   createdAt: string
   updatedAt: string
-  /** False once a regenerated summary no longer contains the quote. The quote is kept. */
+  /**
+   * False once a regenerated summary, or an edited post, no longer contains the quote. The
+   * quote is kept.
+   */
   inCurrentSummary: boolean
-  /** False when the article was pruned or hidden, so its summary cannot be opened. */
+  /** False when the article was pruned or hidden, or the post is unpublished. */
   articleAvailable: boolean
 }
 
 export interface NewSnippet {
+  sourceType: SnippetSourceType
   contentId: string
   exact: string
   prefix: string
