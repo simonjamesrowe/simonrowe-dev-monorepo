@@ -16,9 +16,9 @@ final class HomePageDefaults {
       "Leading engineering teams.",
       "Building AI-native systems.",
       """
-      Lately I've been building a software factory: autonomous agents across the whole \
-      software development lifecycle, from code review and CVE fixes to deploys and \
-      monitoring, with improvement loops that learn from every pull request.""",
+      Lately I've been building a software factory: agents that review my pull requests, \
+      fix vulnerable dependencies, deploy every merge and read the logs afterwards, and that \
+      learn from every code review.""",
       new Cta("See my experience", "/about#roles"),
       new Cta("Get in touch", "/about#contact"),
       true,

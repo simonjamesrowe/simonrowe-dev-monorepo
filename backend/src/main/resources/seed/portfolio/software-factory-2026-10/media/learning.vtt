@@ -1,0 +1,46 @@
+WEBVTT
+
+00:00:02.822 --> 00:00:05.995
+The factory reviews every pull request, including mine.
+
+00:00:05.995 --> 00:00:12.342
+On this one it found a critical bug: a dry run of the log scan would still have closed real tickets in Linear.
+
+00:00:14.023 --> 00:00:16.873
+It was right, and I fixed it before it merged.
+
+00:00:16.873 --> 00:00:19.103
+So far, that's ordinary code review.
+
+00:00:21.648 --> 00:00:27.328
+When a pull request closes, the factory reads the whole review and asks whether there is a lesson worth keeping.
+
+00:00:27.328 --> 00:00:33.768
+Here there was, so it opened this pull request against the instructions every agent reads in this repository, in its own words.
+
+00:00:36.606 --> 00:00:39.719
+It says what it learned and links the review it came from.
+
+00:00:39.719 --> 00:00:45.246
+It goes through the same checks as code, and guidance pull requests like this one now merge themselves.
+
+00:00:49.023 --> 00:00:55.663
+The same lesson is in agent-setup, the instructions every agent session loads on my machines, before it writes a line.
+
+00:00:59.146 --> 00:01:01.589
+It keeps doing it: thirty four lessons so far.
+
+00:01:01.589 --> 00:01:03.235
+The newest merged this evening.
+
+00:01:03.235 --> 00:01:09.660
+A review caught a change that could lower a dependency's version, so now the vulnerability fix instructions say never to.
+
+00:01:09.660 --> 00:01:14.226
+Each one is a mistake caught once and written down, so the agents don't make it again.
+
+00:01:15.534 --> 00:01:20.274
+That was the learning loop: review comments that turn into rules the agents follow.
+
+00:01:20.274 --> 00:01:25.414
+Most of what code review teaches is lost when the pull request merges, and here it's kept.

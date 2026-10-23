@@ -280,6 +280,16 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- software-factory-page-refresh: **The Software Factory page has new copy and two new films**
+  (the console tour and the learning loop), replacing the overview and three walkthroughs, and
+  the home page lede now names what the factory does. `V066RefreshSoftwareFactoryProjectPage`
+  writes it through the new `PortfolioPageSeed.replaceWhere`, which updates a **launched** page
+  only while it still carries the earlier seed's headline, so a CMS edit is never overwritten. A
+  revision reads its own seed directory (`software-factory-2026-10/`) but keys media under the
+  slug, so a file sharing a name with V063's resolves to the asset already in the library. Use the
+  same pattern for the next revision of any project page. Film sources are in
+  `~/workspace/simonjamesrowe/demos/software-factory-{console,learning}/`. The CVE-through-the-loop
+  film is still to come: it needs a real backend finding and the ticket intake resumed.
 - static-analysis-to-linear: **SonarCloud no longer analyses pull requests; the software factory
   files `main`'s findings in Linear instead.** The `Static Analysis` CI job (never required,
   advisory gate) ran after all three build jobs and took ~2 or ~16 minutes, which held the `CI`

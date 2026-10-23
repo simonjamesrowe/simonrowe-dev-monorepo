@@ -1,0 +1,79 @@
+WEBVTT
+
+00:00:01.201 --> 00:00:03.714
+This is the control room for my software factory.
+
+00:00:03.714 --> 00:00:09.201
+It runs on the same Raspberry Pi as this website, and it does the delivery work around every change I make.
+
+00:00:10.715 --> 00:00:15.842
+Log watch reads the production logs every night, and again five minutes after every deploy.
+
+00:00:15.842 --> 00:00:18.715
+Anything new that keeps happening becomes a ticket.
+
+00:00:20.228 --> 00:00:25.242
+The vulnerability scan checks every library the site ships against the public advisory databases.
+
+00:00:25.242 --> 00:00:28.188
+When a fix exists, it files a ticket to bump the version.
+
+00:00:29.700 --> 00:00:37.220
+Static analysis reads the SonarCloud report on main every night, and files new code quality problems in Linear, a few at a time.
+
+00:00:38.736 --> 00:00:42.056
+Those tickets land in Linear, on the same board I plan from.
+
+00:00:43.570 --> 00:00:46.483
+The ticket agent picks up the tickets it's allowed to take.
+
+00:00:46.483 --> 00:00:53.050
+It edits files on the Pi, opens a pull request, and gets three goes at turning the build green before it hands the ticket back to me.
+
+00:00:54.570 --> 00:00:58.281
+Every pull request, mine or the agent's, gets an automated code review.
+
+00:00:58.281 --> 00:01:03.770
+GitHub Actions builds and tests it, and every finding has to be fixed or answered before anything merges.
+
+00:01:05.282 --> 00:01:08.122
+When everything is green, the reviewer can merge it.
+
+00:01:08.122 --> 00:01:11.071
+Backend code, docs and version bumps merge themselves.
+
+00:01:11.071 --> 00:01:13.802
+Anything that touches infrastructure waits for me.
+
+00:01:15.324 --> 00:01:19.971
+Every merge deploys, whether it's a new feature, a bug fix or a security patch.
+
+00:01:19.971 --> 00:01:27.324
+The deployer pulls the new images, restarts what changed, checks the site from the outside, and rolls back if it isn't right.
+
+00:01:28.844 --> 00:01:31.837
+When a pull request closes, Feedback reads the review.
+
+00:01:31.837 --> 00:01:39.484
+If there's a lesson in it, it opens a pull request against the agents' instructions in agent-setup, so they don't make that mistake twice.
+
+00:01:40.994 --> 00:01:47.154
+Off to one side, Platform backup copies the databases the factory itself depends on to Google Drive every night.
+
+00:01:48.961 --> 00:01:55.401
+Since February I've shipped a hundred and thirty six features through this pipeline, and cleared eighty two vulnerability findings.
+
+00:01:56.606 --> 00:01:58.471
+The other two films show it working.
+
+00:01:58.471 --> 00:02:02.927
+In one, a vulnerability goes from the nightly scan to production with nobody involved.
+
+00:02:02.927 --> 00:02:06.606
+In the other, a review comment becomes a permanent rule for the agents.
+
+00:02:07.915 --> 00:02:14.112
+That was my software factory's console: every loop, from spotting a problem to shipping the fix, on one screen.
+
+00:02:14.112 --> 00:02:18.355
+Machines do the chores, and the rules for what needs me are written in code.

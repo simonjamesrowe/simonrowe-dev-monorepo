@@ -42,6 +42,7 @@ final class PortfolioPageSeed {
   private static final Pattern MEDIA_TOKEN = Pattern.compile("\\{\\{media:([a-z0-9.-]++)}}");
 
   private final String slug;
+  private final String seedDirName;
   private final String name;
   private final Map<String, String> media;
   private final Document restoredOnRollback;
@@ -55,14 +56,25 @@ final class PortfolioPageSeed {
    */
   PortfolioPageSeed(final String slug, final String name, final Map<String, String> media,
       final Document restoredOnRollback) {
+    this(slug, slug, name, media, restoredOnRollback);
+  }
+
+  /**
+   * A later revision of a page, read from {@code seed/portfolio/<seedDirName>/}. Media keys stay
+   * under the slug, so a file a revision shares with the first seed (same name) resolves to the
+   * asset already in the library instead of a second copy.
+   */
+  PortfolioPageSeed(final String slug, final String seedDirName, final String name,
+      final Map<String, String> media, final Document restoredOnRollback) {
     this.slug = slug;
+    this.seedDirName = seedDirName;
     this.name = name;
     this.media = Map.copyOf(media);
     this.restoredOnRollback = new Document(restoredOnRollback);
   }
 
   String seedDir() {
-    return "seed/portfolio/" + slug + "/";
+    return "seed/portfolio/" + seedDirName + "/";
   }
 
   String legacyIdPrefix() {
@@ -75,11 +87,23 @@ final class PortfolioPageSeed {
 
   /** Imports the media and writes the page, if the project is still Coming soon. */
   void apply(final MongoTemplate mongoTemplate, final MediaService mediaService) {
+    replaceWhere(mongoTemplate, mediaService, new Document("status", "COMING_SOON"));
+  }
+
+  /**
+   * Imports the media and writes the page, but only on this project's row while it also matches
+   * {@code condition}: the state an earlier unit left it in, so a CMS edit is never overwritten.
+   *
+   * @return whether the row matched and was written
+   */
+  boolean replaceWhere(final MongoTemplate mongoTemplate, final MediaService mediaService,
+      final Document condition) {
     V049SeedTermTimeProjectPage.createMediaIndexes(mongoTemplate);
-    Document stillComingSoon = new Document("slug", slug).append("status", "COMING_SOON");
+    Document target = new Document("slug", slug);
+    target.putAll(condition);
     if (mongoTemplate.getCollection(V048CreatePortfolioProjects.COLLECTION)
-        .countDocuments(stillComingSoon) == 0) {
-      return;
+        .countDocuments(target) == 0) {
+      return false;
     }
     Map<String, String> paths = new LinkedHashMap<>();
     media.forEach((file, type) -> {
@@ -90,7 +114,13 @@ final class PortfolioPageSeed {
     Document fields = seedFields(paths::get);
     fields.append("updatedAt", Date.from(Instant.now()));
     mongoTemplate.getCollection(V048CreatePortfolioProjects.COLLECTION)
-        .updateOne(stillComingSoon, new Document("$set", fields));
+        .updateOne(target, new Document("$set", fields));
+    return true;
+  }
+
+  /** The headline this seed writes, which later units use to tell an untouched page. */
+  String headline() {
+    return seedFields(file -> file).getString("headline");
   }
 
   /**

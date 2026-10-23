@@ -1,0 +1,92 @@
+{
+  "status": "LIVE",
+  "name": "Software Factory",
+  "tagline": "My delivery pipeline runs itself, on a Raspberry Pi.",
+  "liveUrl": "https://github.com/simonjamesrowe/simonrowe-dev-monorepo",
+  "image": {
+    "url": "{{media:hero.webp}}"
+  },
+  "headline": "It reviews, fixes and ships.\nI set the rules.",
+  "summary": "Software Factory reviews every pull request, deploys every merge, reads the production logs and patches vulnerable dependencies on its own. It runs on the same Raspberry Pi as this site; GitHub Actions does the building and testing. Routine changes ship without me. Anything that touches infrastructure, or is more than a version bump, waits for me.",
+  "statement": {
+    "label": "Why I built it",
+    "text": "Running this site meant doing the same chores as a much bigger service: review the change, wait for the build, deploy it, watch the logs, patch dependencies. I wanted to see how much of that an agent could do safely if the rules were written in code and it worked in a small box.",
+    "points": [
+      {
+        "title": "The constraint",
+        "text": "The Pi already runs production, so the agent edits files there and GitHub Actions does every build and test."
+      },
+      {
+        "title": "The loops",
+        "text": "Find a problem, write the ticket, fix it, check it, ship it, watch it. And learn from every review."
+      },
+      {
+        "title": "The gate",
+        "text": "Every check must pass and every review comment must be answered. A dependency bump merges itself only if nothing but version numbers changed."
+      },
+      {
+        "title": "My part",
+        "text": "I set the rules and merge anything that touches infrastructure or switches a warning off."
+      }
+    ]
+  },
+  "exampleQuestions": [],
+  "highlights": [
+    {
+      "title": "The Pi edits, GitHub builds",
+      "text": "The agent can read and edit files, and nothing else. It can't run a build, a test or a download on the machine serving this site. GitHub Actions does all of that for every commit.",
+      "imageUrl": "{{media:highlight-boundary.webp}}",
+      "imageAlt": "Diagram separating file edits on the Raspberry Pi from builds and tests on GitHub Actions."
+    },
+    {
+      "title": "Vulnerabilities fix themselves",
+      "text": "Every night the scan files a ticket for each library with a safe fix. The agent bumps the version, and if nothing but version numbers changed, it merges and deploys without me.",
+      "imageUrl": "{{media:highlight-cve.jpg}}",
+      "imageAlt": "The live Software Factory console with the vulnerability scan highlighted."
+    },
+    {
+      "title": "It learns from its reviews",
+      "text": "When a review catches a mistake, the factory opens a pull request against the agents' instructions so it doesn't happen again. Thirty-four lessons so far.",
+      "imageUrl": "{{media:highlight-learning.jpg}}",
+      "imageAlt": "Merged agent-feedback pull requests in the agent-setup repository, opened by the factory."
+    }
+  ],
+  "demo": {
+    "title": "The console, box by box",
+    "summary": "Every loop on one screen, from spotting a problem to shipping the fix.",
+    "videoUrl": "{{media:console.mp4}}",
+    "captionsUrl": "{{media:console.vtt}}",
+    "posterUrl": "{{media:console-poster.jpg}}",
+    "chapters": [
+      { "startSeconds": 0, "label": "The console" },
+      { "startSeconds": 10, "label": "Finding problems" },
+      { "startSeconds": 43, "label": "Making the fix" },
+      { "startSeconds": 64, "label": "Merging and shipping" },
+      { "startSeconds": 88, "label": "Learning" },
+      { "startSeconds": 108, "label": "So far" }
+    ]
+  },
+  "pages": [
+    {
+      "slug": "how-it-works",
+      "title": "How it works",
+      "navHint": "the loops",
+      "summary": "What each part does, from a log line or an advisory to a deployed fix, and where I come in.",
+      "body": "how-it-works.md"
+    },
+    {
+      "slug": "architecture",
+      "title": "Architecture",
+      "navHint": "Temporal and the Pi",
+      "summary": "One factory container, a separate deployer, Temporal for the waiting, and GitHub Actions for the building.",
+      "body": "architecture.md"
+    },
+    {
+      "slug": "walkthrough",
+      "title": "Walkthrough",
+      "navHint": "films",
+      "summary": "The learning loop on real pull requests. A vulnerability through the whole loop is next.",
+      "body": "walkthrough.md"
+    }
+  ]
+}
