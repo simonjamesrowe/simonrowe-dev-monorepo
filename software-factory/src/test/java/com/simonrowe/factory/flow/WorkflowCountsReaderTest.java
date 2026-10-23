@@ -6,12 +6,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.simonrowe.factory.flow.domain.NodeCounts;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.temporal.api.workflowservice.v1.CountWorkflowExecutionsRequest;
 import io.temporal.api.workflowservice.v1.CountWorkflowExecutionsResponse;
 import io.temporal.api.workflowservice.v1.WorkflowServiceGrpc.WorkflowServiceBlockingStub;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowClientOptions;
 import io.temporal.serviceclient.WorkflowServiceStubs;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -49,6 +52,42 @@ class WorkflowCountsReaderTest {
     when(stub.countWorkflowExecutions(any())).thenThrow(new RuntimeException("unavailable"));
 
     assertThat(new WorkflowCountsReader(clientWith(stub)).countsFor("LogWatchWorkflow")).isNull();
+  }
+
+  /** The regression: Temporal throttles a burst of counts, and one refusal hid a whole node. */
+  @Test
+  void retriesThrottledCountsAfterPausing() {
+    WorkflowServiceBlockingStub stub = mock(WorkflowServiceBlockingStub.class);
+    StatusRuntimeException throttled = new StatusRuntimeException(Status.RESOURCE_EXHAUSTED);
+    when(stub.countWorkflowExecutions(any()))
+        .thenThrow(throttled)
+        .thenReturn(CountWorkflowExecutionsResponse.newBuilder().setCount(2).build());
+    List<Duration> pauses = new ArrayList<>();
+
+    NodeCounts counts =
+        new WorkflowCountsReader(clientWith(stub), pauses::add).countsFor("TicketAgentWorkflow");
+
+    assertThat(counts).isEqualTo(new NodeCounts(2, 2, 2));
+    assertThat(pauses).containsExactly(Duration.ofMillis(300));
+  }
+
+  @Test
+  void givesUpOnPersistentThrottlingAndOnOtherErrorsAtOnce() {
+    WorkflowServiceBlockingStub throttledStub = mock(WorkflowServiceBlockingStub.class);
+    when(throttledStub.countWorkflowExecutions(any()))
+        .thenThrow(new StatusRuntimeException(Status.RESOURCE_EXHAUSTED));
+    List<Duration> pauses = new ArrayList<>();
+    assertThat(new WorkflowCountsReader(clientWith(throttledStub), pauses::add)
+        .countsFor("TicketAgentWorkflow")).isNull();
+    assertThat(pauses).hasSize(WorkflowCountsReader.THROTTLE_RETRIES);
+
+    WorkflowServiceBlockingStub downStub = mock(WorkflowServiceBlockingStub.class);
+    when(downStub.countWorkflowExecutions(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
+    List<Duration> none = new ArrayList<>();
+    assertThat(new WorkflowCountsReader(clientWith(downStub), none::add)
+        .countsFor("TicketAgentWorkflow")).isNull();
+    assertThat(none).isEmpty();
   }
 
   private WorkflowCountsReader readerReturning(
