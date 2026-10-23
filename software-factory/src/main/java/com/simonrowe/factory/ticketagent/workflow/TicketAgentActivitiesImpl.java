@@ -241,6 +241,9 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
     gitHub.setLabel(pullNumber, AutoMergePolicy.OPT_OUT_LABEL, true, installationId);
     // Read the whole PR on every attempt: a Java-only repair must not remove the label from a
     // branch whose earlier attempt changed a dependency. Include the old side of a rename too.
+    // The head is read before the listing and again after it (in versionsOnly), so the diff and
+    // the file contents judged together are provably from one commit.
+    final String head = gitHub.headSha(pullNumber, installationId);
     List<DependencyPins.FileDiff> files = gitHub.changedFiles(pullNumber, installationId);
     List<String> paths = new ArrayList<>();
     for (DependencyPins.FileDiff file : files) {
@@ -261,7 +264,8 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
       gitHub.setLabel(pullNumber, AutoMergePolicy.OPT_OUT_LABEL, false, installationId);
       return;
     }
-    if (vulnerabilityRepair && versionsOnly(pullNumber, files, dependencies, installationId)) {
+    if (vulnerabilityRepair
+        && versionsOnly(pullNumber, head, files, dependencies, installationId)) {
       // The reviewer re-checks the same diff itself before arming; this only stops the agent
       // from vetoing a merge the review rules would allow.
       gitHub.setLabel(pullNumber, AutoMergePolicy.OPT_OUT_LABEL, false, installationId);
@@ -277,17 +281,22 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
    */
   private boolean versionsOnly(
       final int pullNumber,
+      final String head,
       final List<DependencyPins.FileDiff> files,
       final List<String> dependencies,
       final Long installationId) {
     if (!dependencies.stream().allMatch(DependencyPins::isPinFile)) {
       return false;
     }
+    if (head == null || head.isBlank()
+        || !head.equals(gitHub.headSha(pullNumber, installationId))) {
+      LOGGER.info("PR #{} moved while its files were read; leaving it for a person", pullNumber);
+      return false;
+    }
     List<DependencyPins.FileDiff> pins = files.stream()
         .filter(file -> DependencyPins.isPinFile(file.path())
             || DependencyPins.isPinFile(file.previousPath()))
         .toList();
-    String head = gitHub.headSha(pullNumber, installationId);
     DependencyPins.Verdict verdict =
         DependencyPins.check(pins, path -> gitHub.pinFileAt(path, head, installationId));
     if (!verdict.versionsOnly()) {

@@ -299,6 +299,18 @@ class TicketAgentActivitiesImplTest {
     verify(gitHub, never()).noteDependencyReview(anyInt(), any());
   }
 
+  /** The diff and the files it is checked against must come from one commit. */
+  @Test
+  void pullRequestThatMovesDuringTheReadNeedsSomeone() {
+    when(gitHub.changedFiles(271, 7L)).thenReturn(List.of(OVERRIDE_BUMP));
+    when(gitHub.headSha(271, 7L)).thenReturn("sha1", "sha2");
+
+    activities.markMergePolicy(271, false, true);
+
+    verify(gitHub, never()).setLabel(271, "no-auto-merge", false, 7L);
+    verify(gitHub).noteDependencyReview(271, 7L);
+  }
+
   /** The same diff on any other ticket still needs a person. */
   @Test
   void versionOnlyBumpOnOrdinaryTicketStillNeedsSomeone() {
