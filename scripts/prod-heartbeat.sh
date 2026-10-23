@@ -36,6 +36,9 @@ set -uo pipefail
 #    `false` when the apiserver cannot fetch Auth0's discovery document - which is
 #    how the 2026-09 DNS outage presented, and is an end-to-end test of outbound
 #    DNS from inside the stack that no status code shows.
+# 4. When every hostname is unreachable but logs are still arriving, it asks Loki
+#    whether pinggy is refusing its own token, and names that or "the tunnel" as
+#    the fault, so the alert says where to look.
 
 LOKI_ENDPOINT=${GRAFANA_CLOUD_LOKI_ENDPOINT:-}
 LOKI_USER=${GRAFANA_CLOUD_LOKI_USER:-}
@@ -72,33 +75,23 @@ report() {
   echo "$1"
 }
 
-# ---------------------------------------------------------------------------
-# 1. Log freshness
-# ---------------------------------------------------------------------------
-check_logs() {
-  if [[ -z "$LOKI_ENDPOINT" || -z "$LOKI_USER" || -z "$LOKI_TOKEN" ]]; then
-    problems+=("logs: cannot check - GRAFANA_CLOUD_LOKI_ENDPOINT/_USER/GRAFANA_CLOUD_API_KEY not set")
-    report "FAIL  logs: Loki credentials are not configured"
-    return
-  fi
-
+# Runs an instant LogQL query that sums to one number. Prints the count, `http:<code>`
+# when Loki did not answer 200, or `error` for an answer that is not a count.
+loki_count() {
   # The configured endpoint is alloy's PUSH url and already ends in /loki/api/v1
   # (see LokiClient.queryBase() in software-factory for the same trap).
-  local base="${LOKI_ENDPOINT%/push}"
-  local query="sum(count_over_time(${LOKI_SELECTOR}[${LOG_SILENCE_MINUTES}m]))"
-  local code
+  local base="${LOKI_ENDPOINT%/push}" code
+  : > "$TMP/loki.json"
   code=$(curl -s -o "$TMP/loki.json" -w '%{http_code}' -m 30 \
     -u "$LOKI_USER:$LOKI_TOKEN" -G "$base/query" \
-    --data-urlencode "query=$query") || true
+    --data-urlencode "query=$1") || true
 
   if [[ "$code" != "200" ]]; then
-    problems+=("logs: cannot check - Loki answered HTTP ${code:-000}")
-    report "FAIL  logs: Loki query failed (HTTP ${code:-000})"
+    echo "http:${code:-000}"
     return
   fi
 
-  local count
-  count=$(python3 - "$TMP/loki.json" <<'PY'
+  python3 - "$TMP/loki.json" <<'PY'
 import json, sys
 try:
     with open(sys.argv[1]) as fh:
@@ -120,7 +113,28 @@ try:
 except Exception:
     print("error")
 PY
-)
+}
+
+# ---------------------------------------------------------------------------
+# 1. Log freshness
+# ---------------------------------------------------------------------------
+logs_flowing=false
+
+check_logs() {
+  if [[ -z "$LOKI_ENDPOINT" || -z "$LOKI_USER" || -z "$LOKI_TOKEN" ]]; then
+    problems+=("logs: cannot check - GRAFANA_CLOUD_LOKI_ENDPOINT/_USER/GRAFANA_CLOUD_API_KEY not set")
+    report "FAIL  logs: Loki credentials are not configured"
+    return
+  fi
+
+  local count
+  count="$(loki_count "sum(count_over_time(${LOKI_SELECTOR}[${LOG_SILENCE_MINUTES}m]))")"
+  if [[ "$count" == http:* ]]; then
+    problems+=("logs: cannot check - Loki answered HTTP ${count#http:}")
+    report "FAIL  logs: Loki query failed (HTTP ${count#http:})"
+    return
+  fi
+
   # Anything that is not a plain number is an unreadable answer. Comparing it
   # with -gt would fall through to "nothing received", reporting a parsing
   # problem as a silent stack.
@@ -128,6 +142,7 @@ PY
     problems+=("logs: cannot check - Loki returned an unreadable or failed response")
     report "FAIL  logs: unreadable Loki response"
   elif [[ "$count" -gt 0 ]]; then
+    logs_flowing=true
     report "ok    logs: $count lines in the last ${LOG_SILENCE_MINUTES}m"
   else
     problems+=("logs: NOTHING received from the stack in ${LOG_SILENCE_MINUTES}m - shipping has stopped or the Pi is offline")
@@ -192,11 +207,37 @@ check_endpoints() {
     IFS='|' read -r name url expect <<< "${entry%|*}"
     problems+=("$name: $result - $url")
     report "FAIL  $name: $result"
+    [[ "$result" == "HTTP 000"* ]] && unreachable=$((unreachable + 1))
   done
+}
+
+# ---------------------------------------------------------------------------
+# 4. Which fault, when nothing answers but the stack is alive
+# ---------------------------------------------------------------------------
+# Every hostname unreachable while the stack is still shipping logs means the Pi
+# and its containers are fine and the way in is not: the pinggy tunnel. On
+# 2026-10-22 that was pinggy refusing its own token ("A tunnel with the same
+# token is already active") for 24 hours, a fault no restart fixes. pinggy ships
+# its logs to Loki, so the alarm can name it rather than leave it to be found.
+unreachable=0
+PINGGY_SELECTOR=${PINGGY_SELECTOR:-'{container="simonrowe-dev-monorepo-pinggy-1"}'}
+
+diagnose_ingress() {
+  [[ "$logs_flowing" == true && "$unreachable" -eq "${#ENDPOINTS[@]}" ]] || return 0
+  local refusals
+  refusals="$(loki_count "sum(count_over_time(${PINGGY_SELECTOR} |~ \"same token|temporarily blocked\" [15m]))")"
+  if [[ "$refusals" =~ ^[0-9]+$ && "$refusals" -gt 0 ]]; then
+    problems+=("pinggy: the tunnel token is held by another session ($refusals refusals in 15m) - set PINGGY_TOKEN=<token>+force in the Pi's .env, then 'docker compose -f docker-compose.prod.yml up -d --no-deps pinggy'")
+    report "FAIL  pinggy: token held by another session ($refusals refusals in 15m)"
+  else
+    problems+=("ingress: every hostname is unreachable while the stack is still logging - the pinggy tunnel is down, not the stack")
+    report "FAIL  ingress: every hostname unreachable, stack still logging"
+  fi
 }
 
 check_logs
 check_endpoints
+diagnose_ingress
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {

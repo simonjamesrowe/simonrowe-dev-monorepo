@@ -25,13 +25,15 @@ mkdir -p "$STUBS"
 #   FAKE_DOWN    = substring of a URL that returns 503
 #   FAKE_RECOVER = after this many calls to a FAKE_DOWN url, it serves again
 #   FAKE_TIMEOUT = substring of a URL that times out: writes nothing, prints 000
-# Every URL requested is appended to $CALLS.
+#   FAKE_PINGGY  = count Loki returns for the pinggy token-refusal query (default 0)
+# Every URL requested is appended to $CALLS, and every Loki query to $CALLS.queries.
 cat >"$STUBS/curl" <<'EOF'
 #!/usr/bin/env bash
-out=/dev/null url=""
+out=/dev/null url="" query=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -o) out="$2"; shift ;;
+    query=*) query="${1#query=}" ;;
     http*) url="$1" ;;
   esac
   shift
@@ -41,6 +43,10 @@ if [[ -n "${FAKE_TIMEOUT:-}" && "$url" == *"$FAKE_TIMEOUT"* ]]; then
   printf 000; exit 28
 fi
 if [[ "$url" == */loki/api/v1/query ]]; then
+  echo "$query" >> "$CALLS.queries"
+  if [[ "$query" == *pinggy* ]]; then
+    printf '{"status":"success","data":{"result":[{"metric":{},"value":[1,"%s"]}]}}' "${FAKE_PINGGY:-0}" >"$out"; printf 200; exit 0
+  fi
   case "${FAKE_LOKI:-42}" in
     empty)  echo '{"status":"success","data":{"resultType":"vector","result":[]}}' >"$out"; printf 200 ;;
     401)    echo 'invalid scope' >"$out"; printf 401 ;;
@@ -80,6 +86,7 @@ check() {
 # run [VAR=value ...] - sets $out and $rc
 run() {
   : >"$TMP/calls"
+  : >"$TMP/calls.queries"
   rm -f "$TMP/counter"
   out="$(env -u GITHUB_STEP_SUMMARY PATH="$STUBS:$PATH" CALLS="$TMP/calls" COUNTER="$TMP/counter" \
     GRAFANA_CLOUD_LOKI_ENDPOINT="https://logs.example.test/loki/api/v1/push" \
@@ -141,6 +148,31 @@ run FAKE_DOWN=www.simonrowe.dev
 check "a hostname still 503 after every attempt fails, naming it" \
   "[[ $rc -ne 0 ]] && grep -q 'www: HTTP 503 (want 200) - https://www.simonrowe.dev/' <<<\"\$out\""
 check "and only that one" "[[ \$(grep -c '^FAIL' <<<\"\$out\") -eq 1 ]]"
+
+# ---------------------------------------------------------------------------
+echo "  everything unreachable while logs flow: the alert names the tunnel"
+# ---------------------------------------------------------------------------
+run FAKE_TIMEOUT=simonrowe.dev FAKE_PINGGY=12
+check "pinggy refusing its token is named, with the +force remedy" \
+  "[[ $rc -ne 0 ]] && grep -q 'pinggy: the tunnel token is held by another session (12 refusals in 15m)' <<<\"\$out\" && grep -q 'PINGGY_TOKEN=<token>+force' <<<\"\$out\""
+check "the pinggy query reads pinggy's container for the refusal phrases" \
+  "grep -q 'simonrowe-dev-monorepo-pinggy-1' '$TMP/calls.queries' && grep -q 'same token|temporarily blocked' '$TMP/calls.queries'"
+
+run FAKE_TIMEOUT=simonrowe.dev FAKE_PINGGY=0
+check "with no refusals it still says the tunnel, not the stack, is down" \
+  "[[ $rc -ne 0 ]] && grep -q 'ingress: every hostname is unreachable while the stack is still logging' <<<\"\$out\" && ! grep -q 'held by another session' <<<\"\$out\""
+
+run FAKE_TIMEOUT=simonrowe.dev FAKE_LOKI=empty
+check "with logs silent too (Pi offline), it makes no ingress claim" \
+  "[[ $rc -ne 0 ]] && ! grep -qE 'ingress:|pinggy:' <<<\"\$out\" && [[ \$(grep -c pinggy '$TMP/calls.queries') -eq 0 ]]"
+
+run FAKE_DOWN=www.simonrowe.dev
+check "one hostname down is not an ingress fault" \
+  "! grep -qE 'ingress:|pinggy:' <<<\"\$out\" && [[ \$(grep -c pinggy '$TMP/calls.queries') -eq 0 ]]"
+
+run FAKE_TIMEOUT=www.simonrowe.dev
+check "one hostname timing out is not an ingress fault either" \
+  "! grep -qE 'ingress:|pinggy:' <<<\"\$out\""
 
 echo
 printf '  %d checks, %d failures\n' "$checks" "$failures"

@@ -155,6 +155,47 @@ To settle it properly: recreate `pinggy` by hand while watching
 clean recreate reconnects, add `pinggy` to the allowlist and cite that
 observation in the comment.
 
+### pinggy token conflict (2026-10-22 outage)
+
+One `PINGGY_TOKEN` allows one live tunnel. At 08:22 UTC on 2026-10-22 pinggy
+logged `Connection Reset`. Its reconnect was refused with
+`Too many failed connection attempts for this token ... temporarily blocked`, and
+from then on with `A tunnel with the same token ... is already active`, every
+~2 seconds for 24 hours. Every other container was healthy, and the stack kept
+shipping logs to Loki throughout. From outside, `www`, `api` and the rest fail the
+TLS handshake at pinggy's edge (HTTP 000, curl exit 35), while the bare
+`simonrowe.dev` still returns Cloudflare's 301.
+
+Restarting pinggy reconnects with the same token and is refused again; the
+retries also keep the token blocked. Reconciling the stack starts nothing that
+matters. Both ran every few minutes for the whole day and kept the Pi's load
+average near 12. The fix was `+force` on the token, which tells pinggy to end the
+other session:
+
+```bash
+cd ~/workspace/simonjamesrowe/simonrowe-dev-monorepo
+sed -i -E '/\+force"?$/!s/^(PINGGY_TOKEN=)("?)([^"]*)("?)$/\1\2\3+force\4/' .env
+docker compose -f docker-compose.prod.yml up -d --no-deps pinggy   # recreate: the token is in `command:`
+docker compose -f docker-compose.prod.yml logs --since 1m pinggy | grep -a 'Success'
+```
+
+The Pi's `.env` now keeps `+force` permanently, so pinggy ends any stale session
+of its own when it reconnects. The cost: any other host started with the same
+token takes the tunnel from the Pi, and the two will keep taking it from each
+other. Never run the production stack elsewhere with the production token. If
+the conflict comes back with `+force` already set, something else is using the
+token.
+
+What watches for it now:
+
+- **The watchdog (layer 1)** reads pinggy's last 5 minutes of log before
+  restarting it. If either phrase is there, it logs `CRIT` naming the remedy and
+  skips the pinggy restart and the stack reconcile
+  (`scripts/test/test-monitor-prod-pinggy-conflict.sh`).
+- **The heartbeat** reports `pinggy: the tunnel token is held by another session`
+  in its outage issue, from the same log in Loki
+  ([prod-heartbeat.md](prod-heartbeat.md)).
+
 ### Testing a change to the watchdog
 
 **Use `DRY_RUN=1`.** Every remediation path shells out to `docker compose`, so
@@ -287,7 +328,8 @@ If the log is full of `CRIT` instead, the stack reconcile is not helping. Check
 host connectivity (`curl -I https://google.com`), container states
 (`docker compose -f docker-compose.prod.yml ps -a` — anything in `Created` or
 `Restarting`), the pinggy token (`docker compose -f docker-compose.prod.yml logs pinggy`;
-one token allows one active tunnel, reclaim with `PINGGY_TOKEN=<token>+force`), and
+one token allows one active tunnel, see
+[pinggy token conflict](#pinggy-token-conflict-2026-10-22-outage)), and
 [status.pinggy.io](https://status.pinggy.io).
 
 ## Disk full (2026-09-28 outage)

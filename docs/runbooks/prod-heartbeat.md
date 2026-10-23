@@ -2,7 +2,18 @@
 
 `.github/workflows/prod-heartbeat.yml` runs `scripts/prod-heartbeat.sh` every 15
 minutes on GitHub's runners. When production looks wrong the run fails, and
-GitHub emails the failure to whoever last changed the workflow's `cron` line.
+`scripts/prod-heartbeat-alert.sh` opens a GitHub issue labelled `prod-down`,
+assigned to `simonrowe` (`ALERT_ASSIGNEE` in the workflow), listing what failed.
+The next passing run closes it with a recovery note.
+
+It used to rely on GitHub emailing a failed scheduled run to whoever last changed
+the `cron` line. On 2026-10-22 every run failed for 24 hours and no such email
+arrived. Assigning an issue always notifies the assignee, through their GitHub
+notification settings (web, the mobile app, email). If GitHub mail is filtered
+out of the inbox, the mobile app's push is the one to rely on.
+
+There is one issue per outage: while a `prod-down` issue is open, failing runs
+file nothing more. To re-arm the alert by hand, close the issue.
 
 ## Why it runs off the Pi
 
@@ -31,6 +42,8 @@ Two outages have had exactly that shape:
 | `logs` | Loki has no lines from `simonrowe-dev-monorepo-*` containers in the last 30 minutes | Log shipping has stopped. alloy has no DNS (`scripts/enable-docker-dns.sh --verify` on the Pi), the Grafana Cloud quota is spent (a `429` in `docker logs alloy`), or the Pi is offline. Every hostname failing as well points to the Pi being offline |
 | `logs: cannot check` | Loki returned an error or an unreadable answer | The GitHub secrets are wrong or the token was rotated; it does **not** mean prod is fine |
 | each hostname | Not the expected status after ~5 minutes of retries | The service behind it is down, or the whole Pi/tunnel is (all of them fail together). The retries absorb a normal deploy's maintenance page; a 503 that outlasts them means the page was left up |
+| `pinggy: the tunnel token is held by another session` | Every hostname is unreachable, logs are still arriving, and pinggy's log in Loki has `same token ... is already active` or `temporarily blocked` in the last 15 minutes | Another session holds `PINGGY_TOKEN`, and restarting cannot fix it. See [prod-monitoring.md](prod-monitoring.md#pinggy-token-conflict-2026-10-22-outage) |
+| `ingress: every hostname is unreachable while the stack is still logging` | As above, without the token errors | The tunnel is down while the stack is fine. Read pinggy's log in Loki (`{container="simonrowe-dev-monorepo-pinggy-1"}`), then [status.pinggy.io](https://status.pinggy.io) |
 | `dependency-track sign-in` | `/api/v1/oidc/available` is not `true` | The apiserver cannot fetch Auth0's discovery document: almost always outbound DNS. `docker logs <apiserver> \| grep UnknownHost` confirms it; restarting the container fixes it |
 
 Run it by hand from a laptop at any time, with the Loki values from the shared
@@ -72,5 +85,8 @@ done'
 - GitHub disables scheduled workflows in a repository with no activity for 60
   days. That is not a risk for this repository today, but a disabled heartbeat is
   silent too. The workflow page says so.
-- It emails on every failed run (every ~15 minutes during an outage). That is
-  deliberate: an alarm that only fires once is easy to miss.
+- It notifies once per outage (when the issue opens), not on every failed run.
+  Each run's own summary is still on the workflow page.
+- The "Close the outage issue" step is `continue-on-error`, so a GitHub API
+  failure there cannot turn a passing heartbeat red. A stuck-open issue only
+  means the next outage is not announced; close it by hand.
