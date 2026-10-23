@@ -275,6 +275,22 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- aihero-content-source: **Matt Pocock's AI Hero posts are a News & Events source** (`AI Hero`,
+  strategy `AI_HERO`, `AiHeroScraper`, seeded and backfilled from 2026-01-01 by
+  `V064SeedAndBackfillAiHero`). Load-bearing bits:
+  - **Plain `RSS` would flood the page.** The feed held 195 items on 2026-10-23 and 75 were posts:
+    the rest are dictionary entries, skill pages, changelogs (at two addresses), lists,
+    workshops and landing pages, with no `<category>` to filter on.
+  - **The site's markdown twin decides what is a post.** `/<slug>.md` answers `text/markdown`
+    with a frontmatter `type`; only `post`/`article` is kept, and anything with no twin (404) is
+    dropped. Its body is the full article, so summaries are written from the post. Before any
+    fetch, items must be one path segment on the feed's origin, not `skills-<name>` (skill pages
+    say `type: post` too, so the slug is the only signal), and not already held.
+  - **`AiHeroScraper.PUBLISHED_FLOOR` applies on every run**, because `runAggregation` has no
+    date cutoff: without it the first scheduled run ingests every post back to 2024. Feed dates
+    are last-edited, so an older post edited after the floor still arrives, dated by the edit.
+  - Images are the post's own `og:image` (a cover, or the site's `/api/og` title card), so none
+    are generated.
 - blog-snippets: **Snippets now work on blog posts too**, not just news summaries: the admin
   selects text in any post at `/blogs/:id` and keeps it, and it lands in `/admin/snippets`
   beside the summary ones. `SnippetSourceType.BLOG`, `contentId` = blog id, no migration (spec 054
