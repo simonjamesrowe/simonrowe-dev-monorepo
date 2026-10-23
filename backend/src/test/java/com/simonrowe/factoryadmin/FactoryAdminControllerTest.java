@@ -142,6 +142,21 @@ class FactoryAdminControllerTest {
   }
 
   @Test
+  void carriesTheStaticAnalysisDryRunFlagThrough() throws Exception {
+    when(service.startStaticAnalysisScan(anyBoolean()))
+        .thenReturn(new FactoryRunAccepted("static-analysis-manual-1", "run-3", "accepted"));
+
+    mockMvc.perform(
+            post(BASE + "/static-analysis-scans")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"dryRun\":true}"))
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.workflowId").value("static-analysis-manual-1"));
+
+    verify(service).startStaticAnalysisScan(true);
+  }
+
+  @Test
   void requiresBothTheCommitAndTheConfirmationForDeploy() throws Exception {
     mockMvc.perform(
             post(BASE + "/deploys")

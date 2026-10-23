@@ -94,4 +94,38 @@ describe('edgePath', () => {
     expect(Math.sign(a.x - midline)).not.toBe(0)
     expect(Math.sign(a.x - midline)).toBe(-Math.sign(b.x - midline))
   })
+
+  it('draws static analysis into linear and in from main without crossing another node', () => {
+    // The fourth feeder of the hub. Its line in from `main` is the longest on the ring and runs
+    // past `cvefix`, so check every sampled point along both edges against every other node's
+    // box rather than just the endpoints.
+    const edges: FactoryFlowEdge[] = [
+      { from: 'main', to: 'staticanalysis', label: 'SonarCloud analyses main', loop: 'MAIN' },
+      { from: 'staticanalysis', to: 'linear', label: 'files findings', loop: 'MAIN' },
+    ]
+
+    for (const edge of edges) {
+      const { start, end } = endpointsOf(edgePath(edge, edges))
+      expect(outsideBox(start, NODE_POSITIONS[edge.from])).toBe(true)
+      expect(outsideBox(end, NODE_POSITIONS[edge.to])).toBe(true)
+      for (let i = 0; i <= 100; i += 1) {
+        const t = i / 100
+        const point = { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t }
+        for (const [key, center] of Object.entries(NODE_POSITIONS)) {
+          if (key === edge.from || key === edge.to) continue
+          expect(outsideBox(point, center), `${edge.from} -> ${edge.to} crosses ${key}`).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('places static analysis clear of every other node', () => {
+    const own = NODE_POSITIONS.staticanalysis
+    for (const [key, center] of Object.entries(NODE_POSITIONS)) {
+      if (key === 'staticanalysis') continue
+      const apart = Math.abs(own.x - center.x) >= 2 * NODE_HALF_WIDTH
+        || Math.abs(own.y - center.y) >= 2 * NODE_HALF_HEIGHT
+      expect(apart, `staticanalysis overlaps ${key}`).toBe(true)
+    }
+  })
 })

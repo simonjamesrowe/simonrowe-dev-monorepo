@@ -57,6 +57,9 @@ spring:
         # The activity gate is LogWatchActivitiesImpl's @ConditionalOnProperty on
         # factory.logwatch.enabled, which keeps the Grafana read credential out of the deployer.
         - com.simonrowe.factory.logwatch.workflow
+        # The activity gate is StaticAnalysisActivitiesImpl's @ConditionalOnProperty on
+        # factory.staticanalysis.enabled, true on software-factory only.
+        - com.simonrowe.factory.staticanalysis.workflow
         # The activity gate is ContentWritingActivitiesImpl's @ConditionalOnProperty on
         # factory.writing.enabled, true on software-factory only: it runs Claude Code on Simon's
         # subscription and has no business in the container holding the Docker socket.
@@ -369,6 +372,9 @@ factory:
       logwatch:
         label: "factory:logwatch"
         priority: 2
+      staticanalysis:
+        label: "factory:staticanalysis"
+        priority: 3
   logwatch:
     # Off by default like every other module. True on `software-factory` ONLY: `deployer` runs
     # the same image and must stay false, which is what keeps the Grafana read credential out of
@@ -494,6 +500,38 @@ factory:
       # informative but never absent.
       base-url: ${FACTORY_LOGWATCH_ALLOY_URL:http://alloy:12345}
       request-timeout: 5s
+  staticanalysis:
+    # Reads SonarCloud's latest analysis of main nightly and files new-code findings in Linear,
+    # because pull requests are no longer analysed: the Static Analysis CI job runs on pushes to
+    # main only (see docs/runbooks/static-analysis.md). Off by default like every other module;
+    # true on `software-factory` only. It holds no credential, but a second container polling the
+    # queue on a different build is the version-skew trap logwatch fell into.
+    enabled: ${FACTORY_STATICANALYSIS_ENABLED:false}
+    # The project is public and every read answers anonymously. Set a SonarCloud user token here
+    # only if the project is ever made private.
+    sonar-token: ${FACTORY_STATICANALYSIS_SONAR_TOKEN:}
+    sonar-base-url: https://sonarcloud.io
+    organization: simonjamesrowe
+    project-key: simonjamesrowe_simonrowe-dev-monorepo
+    branch: main
+    github-api-base-url: ${GITHUB_API_URL:https://api.github.com}
+    owner: simonjamesrowe
+    repository: simonrowe-dev-monorepo
+    # One finding group is one rule in one module (or one failing quality-gate condition), and
+    # one ticket. Five a night is what a person approving tickets for the agent can keep up with;
+    # the rest are named to the absence sweep so their tickets are not closed while they wait.
+    max-per-run: ${FACTORY_STATICANALYSIS_MAX_PER_RUN:5}
+    # The floor for code smells only. Bugs and vulnerabilities are filed at any severity.
+    minimum-severity: ${FACTORY_STATICANALYSIS_MIN_SEVERITY:MAJOR}
+    # How long main's head may go unanalysed before the analysis is called stale. The analysis
+    # lands about twenty minutes after a merge, so six hours means the CI job did not run.
+    analysis-grace: ${FACTORY_STATICANALYSIS_ANALYSIS_GRACE:6h}
+    resolve-when-clear: ${FACTORY_STATICANALYSIS_RESOLVE_WHEN_CLEAR:true}
+    # Twelve hours, not log watch's seven days: a fresh, complete analysis is not intermittent the
+    # way logs are, so a finding it no longer reports is gone. Under the daily interval, so the
+    # next scheduled run closes what this one stopped seeing.
+    resolve-after: ${FACTORY_STATICANALYSIS_RESOLVE_AFTER:12h}
+    request-timeout: 30s
   platform-backup:
     # Off by default, and true only on the `deployer` service. This flag registers
     # PlatformBackupActivitiesImpl, which is the only thing that lets a container execute the

@@ -272,6 +272,25 @@ class FactoryAdminClientTest {
   }
 
   @Test
+  void startsStaticAnalysisScanWithTheTokenAndTheDryRunFlag() throws IOException {
+    startFactory(Map.of(
+        "/api/static-analysis-scans",
+        json(202, """
+            {"workflowId":"static-analysis-manual-1","runId":"run-3",\
+            "detail":"Static analysis dry run accepted"}\
+            """)));
+    startDeployer(Map.of());
+
+    FactoryRunAccepted accepted = client().startStaticAnalysisScan(true);
+
+    assertThat(accepted.workflowId()).isEqualTo("static-analysis-manual-1");
+    assertThat(accepted.runId()).isEqualTo("run-3");
+    assertThat(accepted.detail()).isEqualTo("Static analysis dry run accepted");
+    assertThat(tokensSeen.get("factory:/api/static-analysis-scans")).isEqualTo(TOKEN);
+    assertThat(bodiesSeen).containsExactly("{\"dryRun\":true}");
+  }
+
+  @Test
   void readsRunProgress() throws IOException {
     startFactory(
         Map.of(

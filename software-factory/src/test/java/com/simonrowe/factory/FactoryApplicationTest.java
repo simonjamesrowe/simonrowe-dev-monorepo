@@ -9,6 +9,7 @@ import com.simonrowe.factory.deploy.persistence.DeployIndexInitializer;
 import com.simonrowe.factory.deploy.workflow.DeployActivitiesImpl;
 import com.simonrowe.factory.feedback.workflow.ReviewFeedbackWorkflowImpl;
 import com.simonrowe.factory.logwatch.workflow.LogWatchWorkflowImpl;
+import com.simonrowe.factory.staticanalysis.workflow.StaticAnalysisWorkflowImpl;
 import com.simonrowe.factory.writing.workflow.ContentWritingWorkflowImpl;
 import io.temporal.spring.boot.autoconfigure.template.WorkersTemplate;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,7 @@ class FactoryApplicationTest {
             ReviewFeedbackWorkflowImpl.class,
             CveFixWorkflowImpl.class,
             LogWatchWorkflowImpl.class,
+            StaticAnalysisWorkflowImpl.class,
             ContentWritingWorkflowImpl.class);
   }
 }

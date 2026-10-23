@@ -47,8 +47,8 @@ JSON carries no comments, so the reasoning lives here.
 
 | Check | Why it is **not** required |
 | --- | --- |
-| `Static Analysis` | The `sonar` job is `continue-on-error: true`, so it reports success even when the scanner is broken. Required, it would be purely decorative — a green tick that means nothing. |
-| `SonarCloud Code Analysis` | Requiring it makes the quality gate blocking, which contradicts the deliberate unset `sonar.qualitygate.wait` and leaves no legitimate escape hatch for a false positive. Constitution Principle III bans manual overrides of quality gates, so a rule that must sometimes be broken is the wrong rule. |
+| `Static Analysis` | Since 2026-10-23 it does not run on pull requests at all, only on pushes to `main`, so required it would be permanently absent and block every merge. It was excluded before that too: the job is `continue-on-error: true`, so its success meant nothing. Its findings now arrive as Linear tickets from the factory's `staticanalysis` module ([static-analysis.md](static-analysis.md)). |
+| `SonarCloud Code Analysis` | No longer posted on pull requests, for the same reason. It was excluded because requiring it makes the quality gate blocking, with no legitimate escape hatch for a false positive. |
 | `evaluate` | `paths:`-filtered in `evals.yml`, so its normal state on an unrelated pull request is *absent* — and a required check that is absent blocks forever. |
 
 ### Other settings
@@ -66,8 +66,8 @@ JSON carries no comments, so the reasoning lives here.
 Repository settings, applied separately: `allow_auto_merge: true`, `allow_merge_commit: false`,
 `allow_rebase_merge: false` — making CLAUDE.md's long-standing squash-only claim actually true.
 
-**Conversation resolution applies to *all* threads**, including any you open yourself and any
-SonarCloud posts inline. It is a real gate, not a bot gate.
+**Conversation resolution applies to *all* threads**, including any you open yourself. It is a
+real gate, not a bot gate.
 
 ---
 
@@ -410,10 +410,9 @@ Live in `simonjamesrowe/agent-setup` under `components/skills/` — the **source
   began arming auto-merge:** its step 7 still runs `gh pr merge --auto`. That arms as the person
   running the skill, and the reviewer never withdraws a person's arm, so the skill's arm would
   outlive every later push. The skill should read and report the reviewer's decision instead of
-  making its own. Also: remove the stale claim that
-  `Static Analysis` fails on every pull request because SonarCloud Automatic Analysis is enabled.
-  That is out of date — PR 122 shows `Static Analysis` and `SonarCloud Code Analysis` both green,
-  so the project is on CI-based analysis.
+  making its own. Also: **drop SonarQube as a pull-request signal.** Since 2026-10-23 pull
+  requests are not analysed, so a loop that waits for a SonarQube check waits for one that never
+  comes. Sonar findings arrive as `factory:staticanalysis` Linear tickets instead.
 - **`code-review-triage`** — gains "red `Code Review` check" as a trigger alongside silence.
 
 ---
@@ -422,5 +421,6 @@ Live in `simonjamesrowe/agent-setup` under `components/skills/` — the **source
 
 - [software-factory.md](software-factory.md) — check-run semantics, thread reconciliation, the
   `checks: write` rollout trap, and how to tell a down reviewer from a red one
-- [static-analysis.md](static-analysis.md) — why the Sonar checks are advisory
+- [static-analysis.md](static-analysis.md) — why Sonar analyses `main` only, and how its
+  findings reach Linear
 - [deploy.md](deploy.md) — what an auto-merge to `main` sets in motion

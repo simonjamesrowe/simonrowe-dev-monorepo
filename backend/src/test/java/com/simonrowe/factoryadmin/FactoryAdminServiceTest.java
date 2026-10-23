@@ -53,7 +53,7 @@ class FactoryAdminServiceTest {
         .extracting(FactoryInstanceStatus.ModuleStatus::key)
         .containsExactly(
             "codereview", "feedback", "cvefix", "deploy", "linear", "platformbackup", "logwatch",
-            "ticketagent");
+            "staticanalysis", "ticketagent");
     assertThat(status.modules()).allMatch(module -> !module.ready());
     assertThat(status.modules()).allMatch(
         module -> "Owning factory service is unreachable".equals(module.diagnostic()));
@@ -294,6 +294,21 @@ class FactoryAdminServiceTest {
   }
 
   @Test
+  void startsStaticAnalysisScanAndPassesTheDryRunFlagThrough() {
+    when(client.factoryStatus())
+        .thenReturn(instance("software-factory", ready("staticanalysis")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+    when(client.startStaticAnalysisScan(anyBoolean()))
+        .thenReturn(new FactoryRunAccepted("static-analysis-manual-1", "run-1", "accepted"));
+
+    assertThat(service(SHA).startStaticAnalysisScan(true).workflowId())
+        .isEqualTo("static-analysis-manual-1");
+
+    // As with log watch, the flag decides whether findings reach Linear at all.
+    verify(client).startStaticAnalysisScan(true);
+  }
+
+  @Test
   void handsTicketsToTheAgentOnlyWhileItIsReady() {
     when(client.factoryStatus()).thenReturn(instance("software-factory", ready("ticketagent")));
     when(client.deployerStatus()).thenReturn(instance("deployer"));
@@ -330,6 +345,33 @@ class FactoryAdminServiceTest {
     assertThatThrownBy(() -> service(SHA).startLogWatchScan(false))
         .isInstanceOf(ResponseStatusException.class);
     verify(client, never()).startLogWatchScan(anyBoolean());
+  }
+
+  @Test
+  void refusesStaticAnalysisScanWhenTheModuleIsNotReady() {
+    when(client.factoryStatus())
+        .thenReturn(instance("software-factory", disabled("staticanalysis")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+
+    assertThatThrownBy(() -> service(SHA).startStaticAnalysisScan(false))
+        .isInstanceOf(ResponseStatusException.class);
+    verify(client, never()).startStaticAnalysisScan(anyBoolean());
+  }
+
+  @Test
+  void namesTheStaticAnalysisModuleWhenTheFactoryOmitsIt() {
+    // A factory image older than the module answers without it. The row must still appear, named,
+    // rather than vanish or read as a bare key.
+    when(client.factoryStatus()).thenReturn(instance("software-factory", ready("logwatch")));
+    when(client.deployerStatus()).thenReturn(instance("deployer"));
+
+    FactoryInstanceStatus.ModuleStatus module = service(SHA).status().modules().stream()
+        .filter(candidate -> "staticanalysis".equals(candidate.key()))
+        .findFirst()
+        .orElseThrow();
+
+    assertThat(module.displayName()).isEqualTo("Static analysis");
+    assertThat(module.ready()).isFalse();
   }
 
   @Test

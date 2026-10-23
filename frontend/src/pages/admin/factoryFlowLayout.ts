@@ -9,16 +9,19 @@ import type { FactoryFlowEdge } from '../../services/softwareFactoryApi'
  */
 export const FACTORY_FLOW_ORDER = [
   'linear', 'build', 'pull-request', 'codereview', 'main', 'deploy', 'production',
-  'logwatch', 'cvefix', 'feedback', 'agent-setup', 'platformbackup',
+  'logwatch', 'cvefix', 'staticanalysis', 'feedback', 'agent-setup', 'platformbackup',
 ]
 
 /** Fixed grid positions, in an arbitrary 1000x520 viewBox the SVG scales from. */
 export const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
   // Laid out as a horseshoe rather than a scatter: the main ring runs clockwise
   // linear -> build -> pull-request -> main -> deploy -> production -> logwatch -> linear,
-  // with `linear` as the left-hand hub because three edges feed it (logwatch, cvefix and a
-  // failed deploy). Its three feeders sit down the bottom edge so they fan in without crossing.
-  // The slow loop lives along the top, clear of the ring.
+  // with `linear` as the left-hand hub because four edges feed it (logwatch, cvefix,
+  // staticanalysis and a failed deploy). The three module feeders sit along the bottom row so
+  // they fan in without crossing a node. `staticanalysis` takes the bottom-left corner, directly
+  // under `linear`, so its own edge into the hub is a short vertical; at y=420 the long line in
+  // from `main` still clears `cvefix`'s top-left corner by ~14 units, where any lower spot
+  // would clip that box. The slow loop lives along the top, clear of the ring.
   'agent-setup': { x: 100, y: 60 },
   feedback: { x: 300, y: 60 },
   codereview: { x: 560, y: 60 },
@@ -26,6 +29,7 @@ export const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
   'pull-request': { x: 560, y: 185 },
   main: { x: 790, y: 185 },
   linear: { x: 100, y: 300 },
+  staticanalysis: { x: 100, y: 420 },
   deploy: { x: 900, y: 300 },
   cvefix: { x: 300, y: 420 },
   logwatch: { x: 520, y: 420 },

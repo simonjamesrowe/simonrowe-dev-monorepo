@@ -7,6 +7,7 @@ import {
   startDeploy,
   startFeedback,
   startPlatformBackup,
+  startStaticAnalysisScan,
   startVulnerabilityScan,
 } from '../../src/services/softwareFactoryApi'
 
@@ -102,6 +103,16 @@ describe('softwareFactoryApi', () => {
     await startPlatformBackup(getAccessToken, true)
 
     expect(fetchMock().mock.calls[0][1]?.body).toBe(JSON.stringify({ dryRun: true }))
+  })
+
+  it('posts the dry-run mode to the static-analysis scan path', async () => {
+    fetchMock().mockResolvedValue(jsonResponse({ workflowId: 'static-analysis-manual-1' }))
+
+    await startStaticAnalysisScan(getAccessToken, false)
+
+    expect(String(fetchMock().mock.calls[0][0])).toContain('/static-analysis-scans')
+    expect(fetchMock().mock.calls[0][1]?.method).toBe('POST')
+    expect(fetchMock().mock.calls[0][1]?.body).toBe(JSON.stringify({ dryRun: false }))
   })
 
   it('sends both the commit and the typed confirmation on a deploy', async () => {

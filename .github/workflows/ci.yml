@@ -30,7 +30,7 @@ concurrency:
 jobs:
   # Decides which of the jobs below a pull request needs; see scripts/changed-areas.sh for the
   # rules. A push to main always builds everything: that run is what writes the Gradle cache
-  # every pull request restores, and what gives Static Analysis a whole-project baseline.
+  # every pull request restores, and it is the only run Static Analysis analyses.
   #
   # The skipping is done with job-level `if:`, never with workflow-level `paths:`. Three of
   # these jobs are required checks, and a required check whose workflow never ran is reported
@@ -242,6 +242,14 @@ jobs:
   # Static analysis for all three modules in one project. See
   # docs/runbooks/static-analysis.md.
   #
+  # Runs on pushes to main ONLY. It used to analyse every pull request too, after all three
+  # build jobs, and a pull-request analysis took either ~2 minutes or ~16 (a full re-analysis),
+  # which held the CI workflow open and made the ticket agent, which waits on the whole workflow,
+  # wait with it. It was never a required check and its gate was advisory. Findings now reach
+  # Linear instead: the software factory's `staticanalysis` module reads main's analysis nightly
+  # and files new-code findings as tickets, the same way the CVE scan does. A pull request gets
+  # no Sonar feedback before merge; that is the accepted cost.
+  #
   # It is a separate job for two reasons: frontend coverage is only reachable from a
   # Gradle-driven analysis via a cross-job artifact, and this job must not re-run any
   # test suite — coverage arrives as artifacts from the three jobs above.
@@ -256,10 +264,10 @@ jobs:
     # All three, not just backend and frontend: this job consumes software-factory's
     # coverage artifact too, and without the dependency it races the producing job.
     needs: [changes, backend, frontend, software-factory]
-    # On a pull request, only the modules whose jobs ran produced coverage. That is enough:
-    # a pull request analysis grades new code, and a module the change did not touch has none.
-    # Skipped outright when nothing that has source changed, and when any job failed.
-    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && (github.event_name == 'push' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.factory == 'true') }}
+    # Skipped when any job failed, because a failed job uploads no coverage. That leaves main
+    # unanalysed until the next green push, and the factory's staticanalysis module files a
+    # ticket saying so once main's head has gone six hours without an analysis.
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && github.event_name == 'push' }}
     continue-on-error: true
     # Job level, NOT step level. A step's `if:` is evaluated before that step's own
     # `env:` block is applied, so the previous step-level form could never evaluate
@@ -268,7 +276,7 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       HAS_BACKEND: ${{ needs.backend.result == 'success' }}
       HAS_FRONTEND: ${{ needs.frontend.result == 'success' }}
-      HAS_FACTORY: ${{ needs.software-factory.result == 'success' && (github.event_name == 'push' || needs.changes.outputs.factory == 'true') }}
+      HAS_FACTORY: ${{ needs.software-factory.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:

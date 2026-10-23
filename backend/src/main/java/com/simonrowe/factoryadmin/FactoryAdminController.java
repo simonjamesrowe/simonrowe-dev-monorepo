@@ -85,6 +85,12 @@ public class FactoryAdminController {
     return accepted(service.startLogWatchScan(request.dryRun()));
   }
 
+  @PostMapping("/static-analysis-scans")
+  public ResponseEntity<FactoryRunAccepted> staticAnalysisScan(
+      @RequestBody final StaticAnalysisScanRequest request) {
+    return accepted(service.startStaticAnalysisScan(request.dryRun()));
+  }
+
   @PostMapping("/ticket-agent/runs")
   public ResponseEntity<FactoryRunAccepted> ticketRun(
       @Valid @RequestBody final TicketRunRequest request) {
@@ -139,6 +145,9 @@ public class FactoryAdminController {
   }
 
   public record LogScanRequest(boolean dryRun) {
+  }
+
+  public record StaticAnalysisScanRequest(boolean dryRun) {
   }
 
   /**

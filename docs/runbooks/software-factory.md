@@ -691,7 +691,7 @@ its `workflow-packages`:
 
 | Queue | Polled by | Configured in |
 |---|---|---|
-| `code-review`, `review-feedback`, `cve-fix`, `logwatch`, `content-writing`, `ticket-agent` | `software-factory` | `application.yml` |
+| `code-review`, `review-feedback`, `cve-fix`, `logwatch`, `static-analysis`, `content-writing`, `ticket-agent` | `software-factory` | `application.yml` |
 | `deploy`, `platform-backup` | `deployer` | `application-deployer.yml` (replaces the list) |
 | `linear` (activities only) | `software-factory` | `LinearActivitiesImpl`'s flag, not a package |
 
@@ -719,7 +719,7 @@ To verify, the expected shape is one workflow poller per queue, whose identity
 matches the owning container's hostname:
 
 ```bash
-for q in code-review review-feedback cve-fix logwatch content-writing deploy platform-backup; do
+for q in code-review review-feedback cve-fix logwatch static-analysis content-writing deploy platform-backup; do
   docker run --rm --network simonrowe-dev-monorepo_default \
     temporalio/admin-tools:1.31.2 temporal task-queue describe \
     --address temporal:7233 --namespace default --task-queue "$q"
@@ -727,6 +727,21 @@ done
 docker inspect -f '{{.Config.Hostname}}' simonrowe-dev-monorepo-software-factory-1
 docker inspect -f '{{.Config.Hostname}}' simonrowe-dev-monorepo-deployer-1
 ```
+
+## Static analysis queue
+
+`com.simonrowe.factory.staticanalysis`, on `static-analysis`, polled by `software-factory` only
+(`FACTORY_STATICANALYSIS_ENABLED`, default `true`). Pull requests are no longer analysed by
+SonarCloud; this module reads `main`'s analysis every night at 03:00 UTC
+(`static-analysis-daily`, created active) and files each new-code finding group, one rule in one
+module or one failing quality-gate condition, as a `factory:staticanalysis` Linear ticket that a
+person can hand to the ticket agent. It checks the analysis is of `main`'s head first and files a
+"stopped analysing main" ticket instead of anything else when it is not. It needs no credential:
+the SonarCloud project is public. The console's flow diagram draws it as a third feeder into
+`linear`, beside log watch and the CVE scan.
+
+Everything about how it groups, caps, sweeps and what to do when it reports `STALE` is in
+[static-analysis.md](static-analysis.md) ("Findings reach Linear").
 
 ## Content writing queue
 

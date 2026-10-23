@@ -280,6 +280,35 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- static-analysis-to-linear: **SonarCloud no longer analyses pull requests; the software factory
+  files `main`'s findings in Linear instead.** The `Static Analysis` CI job (never required,
+  advisory gate) ran after all three build jobs and took ~2 or ~16 minutes, which held the `CI`
+  workflow open and with it the ticket agent, which waits on the whole workflow. It now runs on
+  pushes to `main` only, and `com.simonrowe.factory.staticanalysis` (queue `static-analysis`,
+  `software-factory` only, `FACTORY_STATICANALYSIS_ENABLED` default `true`, schedule
+  `static-analysis-daily` at 03:00 UTC, created active) reads that analysis nightly. Constitution
+  Principle III amended to 4.0.0. Load-bearing bits:
+  - **The analysis is judged before it is read.** SonarCloud keeps answering for its last
+    analysis, and the `sonar` job is skipped whenever a build job fails on `main`, so a stale
+    read looks exactly like a current one. Latest analysis revision vs `main`'s head on GitHub:
+    head unanalysed for over `analysis-grace` (6h) is `STALE`, filed as one
+    `source-health`/`STALE` ticket, and nothing else is filed or swept. GitHub unreachable does
+    not block a run. On 2026-10-23 `main` had been unanalysed since `5c893af3` (2026-10-20),
+    because its last two pushes were red.
+  - **One ticket per rule per module** (or per failing quality-gate condition), key parts
+    `rule`/module/rule key or `quality-gate`/metric, never the rule's name. Code smells below
+    `MAJOR` are not filed; bugs and vulnerabilities always are. Five per run, the rest named to
+    the absence sweep as present. `REFRESH` mode, like log watch.
+  - **The sweep closes after 12h, not 7 days**: a finding missing from a fresh, complete
+    analysis is gone, not quiet. Never on a stale analysis or a truncated issue read. A dry run
+    names every group as present, or its preview would report the whole backlog closable.
+  - **Declining a finding is cancelling its ticket** (the sink suppresses a cancelled
+    fingerprint), recorded in the runbook's Standing declines; never "won't fix" in SonarCloud.
+  - Operator: create the Linear label `factory:staticanalysis` (the sink does not create
+    producer labels), and drop SonarQube from `pr-review-loop`'s signals in `agent-setup`.
+  - SonarCloud's `main` new-code period still reads `previous_version` from 2026-08-26 although
+    `sonar.leak.period` is 30, so "new code" there keeps growing.
+  See `docs/runbooks/static-analysis.md` ("Findings reach Linear").
 - aihero-content-source: **Matt Pocock's AI Hero posts are a News & Events source** (`AI Hero`,
   strategy `AI_HERO`, `AiHeroScraper`, seeded and backfilled from 2026-01-01 by
   `V064SeedAndBackfillAiHero`). Load-bearing bits:

@@ -41,6 +41,7 @@ class FactoryWorkflowWorkersTest {
           "com.simonrowe.factory.feedback.workflow",
           "com.simonrowe.factory.cvefix.workflow",
           "com.simonrowe.factory.logwatch.workflow",
+          "com.simonrowe.factory.staticanalysis.workflow",
           "com.simonrowe.factory.writing.workflow",
           "com.simonrowe.factory.ticketagent.workflow");
 

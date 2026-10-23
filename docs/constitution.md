@@ -1,10 +1,15 @@
 <!--
-  Sync Impact Report: 2.0.0 → 3.0.0 (MAJOR), 2026-10-19.
-  Principle IV redefines the general trace destination from Tempo to Honeycomb
-  Free. Tempo is disabled in the deployed configuration; Honeycomb reuses the
-  existing OTel/Alloy pipeline. AI traces remain in Langfuse and logs in Loki.
-  No Java agent, new application telemetry SDK, paid plan or browser export is
-  required by this amendment. Related: docs/runbooks/honeycomb-observability.md.
+  Sync Impact Report: 3.0.0 → 4.0.0 (MAJOR), 2026-10-23.
+  Principle III redefines where SonarQube runs: on every push to `main`
+  instead of on every pull request, with new-code findings filed into Linear
+  nightly by the software factory's `staticanalysis` module. Rationale: the
+  pull-request analysis was never a required check and its gate was advisory,
+  but it ran after all three build jobs and took ~16 minutes about half the
+  time, holding the CI workflow open (and the ticket agent, which waits on the
+  whole workflow). Findings now arrive as tickets after merge rather than as a
+  slow, ignorable check before it. Related: docs/runbooks/static-analysis.md.
+  Previous: 2.0.0 → 3.0.0 (MAJOR), 2026-10-19, Principle IV moved general
+  traces from Tempo to Honeycomb Free.
   Templates requiring updates: none (SpecKit removed).
 -->
 
@@ -176,7 +181,11 @@ Manual overrides of quality gates are prohibited.
 - Code style MUST conform to the
   [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html).
 - JaCoCo MUST enforce minimum test coverage thresholds.
-- SonarQube MUST run static analysis on every PR.
+- SonarQube MUST analyse every push to `main`, and its new-code
+  findings MUST reach the issue tracker: the software factory's
+  `staticanalysis` module files them in Linear nightly, and files a
+  ticket of its own when `main` has gone unanalysed. Pull requests are
+  not analysed; the CI check that did so was advisory and slow.
 - CycloneDX (CDX) BOM MUST be generated for dependency tracking.
 - Testcontainers MUST be used for slice and integration tests —
   no mocked infrastructure for integration-level verification.
@@ -364,7 +373,7 @@ fish, or other shell languages MAY be used for project scripts.
 | Tracing      | OpenTelemetry Spring Boot Starter | Compile-time instrumentation |
 | Metrics      | Prometheus via Actuator           | Separate actuator port |
 | Coverage     | JaCoCo                            | Enforced thresholds    |
-| Analysis     | SonarQube                         | PR-level analysis      |
+| Analysis     | SonarQube                         | `main` analysis, findings filed nightly |
 | SBOM         | CycloneDX                         | Dependency tracking    |
 | Testing      | Testcontainers                    | Integration/slice      |
 | Style        | Google Java Style Guide           | Enforced via linter    |
@@ -436,4 +445,4 @@ defined above.
   principles. Violations MUST be resolved before merge unless
   explicitly justified in a Complexity Tracking table.
 
-**Version**: 3.0.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-10-19
+**Version**: 4.0.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-10-23

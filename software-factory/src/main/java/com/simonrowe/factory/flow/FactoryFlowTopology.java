@@ -34,6 +34,8 @@ public final class FactoryFlowTopology {
               ModulePrerequisites.LOGWATCH, "LogWatchWorkflow"),
           new NodeDescriptor("cvefix", NodeKind.MODULE, Band.OBSERVE, "Vulnerability scan",
               ModulePrerequisites.CVEFIX, "CveFixWorkflow"),
+          new NodeDescriptor("staticanalysis", NodeKind.MODULE, Band.OBSERVE, "Static analysis",
+              ModulePrerequisites.STATIC_ANALYSIS, "StaticAnalysisWorkflow"),
           new NodeDescriptor(LINEAR_NODE, NodeKind.ARTIFACT, Band.PLAN, "Linear",
               ModulePrerequisites.LINEAR, null),
           new NodeDescriptor(BUILD, NodeKind.MODULE, Band.BUILD, "Ticket agent",
@@ -72,6 +74,11 @@ public final class FactoryFlowTopology {
           new FlowEdge("logwatch", LINEAR_NODE, "files signature", Loop.MAIN),
           new FlowEdge("main", "cvefix", "publishes SBOMs", Loop.MAIN),
           new FlowEdge("cvefix", LINEAR_NODE, "files vulnerabilities", Loop.MAIN),
+          // SonarCloud analyses main on every push; the module reads that analysis nightly. Pull
+          // requests are no longer analysed, which is the point: Sonar's findings arrive as
+          // tickets after the merge instead of as a slow check before it.
+          new FlowEdge("main", "staticanalysis", "SonarCloud analyses main", Loop.MAIN),
+          new FlowEdge("staticanalysis", LINEAR_NODE, "files findings", Loop.MAIN),
           new FlowEdge(LINEAR_NODE, BUILD, "approved: factory:agent", Loop.MAIN),
           new FlowEdge(BUILD, "pull-request", "opens", Loop.MAIN),
           new FlowEdge(BUILD, LINEAR_NODE, "done on merge, or handed back", Loop.MAIN),

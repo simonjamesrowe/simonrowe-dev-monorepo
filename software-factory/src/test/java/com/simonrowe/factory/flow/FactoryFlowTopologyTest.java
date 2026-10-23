@@ -11,6 +11,7 @@ import com.simonrowe.factory.flow.domain.Band;
 import com.simonrowe.factory.flow.domain.NodeDescriptor;
 import com.simonrowe.factory.flow.domain.NodeKind;
 import com.simonrowe.factory.logwatch.workflow.LogWatchWorkflow;
+import com.simonrowe.factory.staticanalysis.workflow.StaticAnalysisWorkflow;
 import com.simonrowe.factory.ticketagent.workflow.TicketAgentWorkflow;
 import com.simonrowe.factory.platformbackup.workflow.PlatformBackupWorkflow;
 import java.util.List;
@@ -23,10 +24,10 @@ import org.junit.jupiter.api.Test;
 class FactoryFlowTopologyTest {
 
   @Test
-  void pinsTheTwelveNodes() {
+  void pinsTheThirteenNodes() {
     assertThat(FactoryFlowTopology.NODES).extracting(NodeDescriptor::key)
         .containsExactlyInAnyOrder(
-            "logwatch", "cvefix", "linear", "build", "pull-request", "codereview",
+            "logwatch", "cvefix", "staticanalysis", "linear", "build", "pull-request", "codereview",
             "main", "deploy", "production", "feedback", "agent-setup", "platformbackup");
   }
 
@@ -84,6 +85,7 @@ class FactoryFlowTopologyTest {
         DeployWorkflow.class.getSimpleName(),
         PlatformBackupWorkflow.class.getSimpleName(),
         LogWatchWorkflow.class.getSimpleName(),
+        StaticAnalysisWorkflow.class.getSimpleName(),
         TicketAgentWorkflow.class.getSimpleName());
     Set<String> drawnWorkflowTypes = FactoryFlowTopology.NODES.stream()
         .map(NodeDescriptor::workflowType)

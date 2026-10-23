@@ -6,6 +6,7 @@ import static com.simonrowe.factory.admin.ModulePrerequisites.DEPLOY;
 import static com.simonrowe.factory.admin.ModulePrerequisites.FEEDBACK;
 import static com.simonrowe.factory.admin.ModulePrerequisites.LINEAR;
 import static com.simonrowe.factory.admin.ModulePrerequisites.LOGWATCH;
+import static com.simonrowe.factory.admin.ModulePrerequisites.STATIC_ANALYSIS;
 import static com.simonrowe.factory.admin.ModulePrerequisites.PLATFORM_BACKUP;
 import static com.simonrowe.factory.admin.ModulePrerequisites.TICKET_AGENT;
 
@@ -19,6 +20,8 @@ import com.simonrowe.factory.feedback.config.FeedbackTaskQueues;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.logwatch.config.LogWatchTaskQueues;
 import com.simonrowe.factory.logwatch.schedule.LogWatchScheduleInitializer;
+import com.simonrowe.factory.staticanalysis.config.StaticAnalysisTaskQueues;
+import com.simonrowe.factory.staticanalysis.schedule.StaticAnalysisScheduleInitializer;
 import com.simonrowe.factory.ticketagent.config.TicketAgentTaskQueues;
 import com.simonrowe.factory.ticketagent.schedule.TicketAgentScheduleInitializer;
 import com.simonrowe.factory.platformbackup.config.PlatformBackupTaskQueues;
@@ -68,7 +71,7 @@ public class FactoryStatusService {
   /**
    * Describes every module from this container's point of view.
    *
-   * @return the status of all seven modules as this JVM sees them
+   * @return the status of every module as this JVM sees them
    */
   public FactoryStatusResponse status() {
     return new FactoryStatusResponse(
@@ -90,6 +93,9 @@ public class FactoryStatusService {
                 PlatformBackupScheduleInitializer.SCHEDULE_ID, true),
             module(LOGWATCH, "Log watch", LogWatchTaskQueues.LOG_WATCH,
                 "daily schedule and manual", LogWatchScheduleInitializer.SCHEDULE_ID, true),
+            module(STATIC_ANALYSIS, "Static analysis", StaticAnalysisTaskQueues.STATIC_ANALYSIS,
+                "daily schedule and manual", StaticAnalysisScheduleInitializer.SCHEDULE_ID,
+                true),
             module(TICKET_AGENT, "Ticket agent", TicketAgentTaskQueues.TICKET_AGENT,
                 "factory:agent label, five-minute intake and manual",
                 TicketAgentScheduleInitializer.SCHEDULE_ID, true)));
